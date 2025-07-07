@@ -48,5 +48,13 @@ pubspec.lock
 .env.local
 .env.*.local
 
+# Python virtual environment
+.venv/
+venv/
+
+# Local Flutter installation
+flutter/
+.flutter/
+
 # IDE workspace files
 *.code-workspace
