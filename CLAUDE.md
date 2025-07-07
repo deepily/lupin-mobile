@@ -38,11 +38,28 @@ Based on the mobile development options analysis, the following technologies are
 - **Device Integration**: Vibration, Bluetooth audio support
 - **Rapid Development**: Hot reload for fast iteration
 
+### TTS Technology Selection (Based on 2025.07.07 Research):
+- **Provider**: ElevenLabs (Flash v2.5 model)
+- **Latency**: ~75ms inference, 150-250ms total (meets 250-500ms target)
+- **Protocol**: WebSocket streaming with bidirectional support
+- **Audio Format**: PCM 44.1kHz (primary), MP3 fallback for compatibility
+- **Cost**: $5.00 per million characters
+- **Key Features**:
+  - Real-time streaming via WebSocket
+  - Low-latency Flash models optimized for conversational AI
+  - Cross-platform audio format support
+  - Connection pooling for scalability
+
 ## BACKEND INTEGRATION
 - **Primary Backend**: Lupin FastAPI server (runs on port 7999)
 - **WebSocket Endpoint**: Real-time communication with Lupin agents
 - **HTTP API**: RESTful endpoints for data exchange
 - **Audio Processing**: Server-side heavy lifting, client handles I/O
+- **TTS Proxy Architecture**:
+  - FastAPI WebSocket proxy to ElevenLabs streaming API
+  - Bidirectional audio streaming with minimal latency
+  - Connection pooling for concurrent TTS requests
+  - Audio chunk caching for frequently used phrases
 
 ## DEVELOPMENT COMMANDS
 ```bash
