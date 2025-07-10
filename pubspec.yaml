@@ -23,15 +23,15 @@ dependencies:
   web_socket_channel: ^2.4.0
   connectivity_plus: ^5.0.1
 
-  # Audio and Media (Web compatible)
-  # flutter_sound: ^9.2.13  # Disabled for web compatibility
-  # audioplayers: ^5.2.1    # Disabled for web compatibility
-  # permission_handler: ^11.0.1  # Disabled for web compatibility
+  # Audio and Media
+  flutter_sound: ^9.2.13
+  audioplayers: ^5.2.1
+  permission_handler: ^11.0.1
 
-  # Local Storage (Web compatible)
+  # Local Storage
   shared_preferences: ^2.2.2
-  # sqflite: ^2.3.0         # Disabled for web compatibility  
-  # path_provider: ^2.1.1   # Disabled for web compatibility
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
 
   # Utilities
   get_it: ^7.6.4

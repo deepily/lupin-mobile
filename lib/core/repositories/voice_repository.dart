@@ -4,13 +4,31 @@ import 'base_repository.dart';
 
 /// Repository interface for VoiceInput entities
 abstract class VoiceRepository extends BaseRepository<VoiceInput, String> {
-  /// Find voice inputs by session
+  /// Find voice inputs by session.
+  /// 
+  /// Requires:
+  ///   - sessionId must be non-empty string
+  ///   - sessionId must exist in the system
+  /// 
+  /// Ensures:
+  ///   - Returns all voice inputs for the given session
+  ///   - Results are ordered by creation time (newest first)
+  ///   - Empty list returned if no inputs found
   Future<List<VoiceInput>> findBySession(String sessionId);
   
   /// Find voice inputs by status
   Future<List<VoiceInput>> findByStatus(VoiceInputStatus status);
   
-  /// Find voice inputs by time range
+  /// Find voice inputs by time range.
+  /// 
+  /// Requires:
+  ///   - start must be before end
+  ///   - Both dates must be valid DateTime objects
+  /// 
+  /// Ensures:
+  ///   - Returns inputs where startedAt is within [start, end]
+  ///   - Results are ordered by startedAt ascending
+  ///   - Empty list returned if no inputs in range
   Future<List<VoiceInput>> findByTimeRange(DateTime start, DateTime end);
   
   /// Find voice inputs by transcription search
@@ -25,7 +43,22 @@ abstract class VoiceRepository extends BaseRepository<VoiceInput, String> {
   /// Get most common transcriptions
   Future<List<String>> getCommonTranscriptions({int limit = 10});
   
-  /// Update transcription
+  /// Update transcription for a voice input.
+  /// 
+  /// Requires:
+  ///   - voiceInputId must exist in repository
+  ///   - transcription must be non-empty string
+  ///   - confidence must be between 0.0 and 1.0
+  /// 
+  /// Ensures:
+  ///   - Voice input transcription is updated
+  ///   - Status is set to completed
+  ///   - CompletedAt timestamp is set
+  ///   - Updated entity is persisted and returned
+  /// 
+  /// Throws:
+  ///   - [NotFoundException] if voiceInputId doesn't exist
+  ///   - [ArgumentError] if confidence is out of range
   Future<VoiceInput> updateTranscription(
     String voiceInputId, 
     String transcription, 
@@ -44,7 +77,18 @@ abstract class VoiceRepository extends BaseRepository<VoiceInput, String> {
   /// Find incomplete voice inputs
   Future<List<VoiceInput>> findIncompleteInputs();
   
-  /// Cleanup old voice inputs
+  /// Cleanup old voice inputs.
+  /// 
+  /// Requires:
+  ///   - olderThan duration must be positive if provided
+  /// 
+  /// Ensures:
+  ///   - Deletes voice inputs older than specified duration
+  ///   - Default duration is 30 days if not specified
+  ///   - Audio data is deleted along with metadata
+  ///   - Returns count of deleted inputs
+  /// 
+  /// Note: This operation is irreversible
   Future<int> cleanupOldInputs({Duration? olderThan});
 }
 

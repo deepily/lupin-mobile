@@ -303,6 +303,9 @@ class CacheManager<T> {
     // In production, you'd track actual hits and misses
     return _memoryCache.isEmpty ? 0.0 : 0.85;
   }
+  
+  /// Get access to the memory cache (used by specialized cache implementations)
+  Map<String, CacheEntry<T>> get memoryCache => _memoryCache;
 }
 
 /// Cache statistics

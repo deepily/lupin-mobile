@@ -73,7 +73,7 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
         const Duration(milliseconds: 100),
         (timer) {
           if (_currentVoiceInput != null && !emit.isDone) {
-            final elapsed = DateTime.now().difference(_currentVoiceInput!.timestamp);
+            final elapsed = DateTime.now().difference(_currentVoiceInput!.startedAt);
             emit(VoiceRecording(
               voiceInput: _currentVoiceInput!,
               elapsed: elapsed,
@@ -97,7 +97,7 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
 
       if (_currentVoiceInput != null) {
         final now = DateTime.now();
-        final duration = now.difference(_currentVoiceInput!.timestamp);
+        final duration = now.difference(_currentVoiceInput!.startedAt);
         
         _currentVoiceInput = _currentVoiceInput!.copyWith(
           status: VoiceInputStatus.processing,

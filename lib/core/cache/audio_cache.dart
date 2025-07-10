@@ -143,7 +143,7 @@ class AudioCache {
     
     // Count by provider
     final providerStats = <String, int>{};
-    final metadataKeys = _metadataCache._memoryCache.keys;
+    final metadataKeys = _metadataCache.memoryCache.keys;
     
     for (final key in metadataKeys) {
       final parts = key.split('_');
@@ -166,7 +166,7 @@ class AudioCache {
   /// Clear cache for specific provider
   Future<void> clearProviderCache(String provider) async {
     // Find all entries for this provider
-    final metadataKeys = _metadataCache._memoryCache.keys
+    final metadataKeys = _metadataCache.memoryCache.keys
         .where((key) => key.startsWith('${provider}_'))
         .toList();
     
@@ -200,7 +200,7 @@ class AudioCache {
   /// Get cached phrases for provider
   Future<List<String>> getCachedPhrases(String provider) async {
     final phrases = <String>[];
-    final metadataKeys = _metadataCache._memoryCache.keys
+    final metadataKeys = _metadataCache.memoryCache.keys
         .where((key) => key.startsWith('${provider}_'));
     
     for (final key in metadataKeys) {

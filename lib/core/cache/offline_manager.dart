@@ -39,12 +39,12 @@ class OfflineManager {
     
     // Setup connectivity monitoring
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      _onConnectivityChanged,
+      (ConnectivityResult result) => _onConnectivityChanged([result]),
     );
     
     // Check initial connectivity
-    final results = await _connectivity.checkConnectivity();
-    _onConnectivityChanged(results);
+    final result = await _connectivity.checkConnectivity();
+    _onConnectivityChanged([result]);
   }
 
   /// Check if device is online

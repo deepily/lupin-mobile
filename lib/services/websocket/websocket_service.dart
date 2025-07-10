@@ -5,6 +5,10 @@ import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 
+/// WebSocket service for real-time communication with Lupin backend.
+/// 
+/// Manages WebSocket connections, reconnection logic, and message streaming.
+/// Follows the singleton pattern for consistent connection management.
 class WebSocketService {
   final Dio _dio;
   WebSocketChannel? _channel;
@@ -31,6 +35,21 @@ class WebSocketService {
     _messageController = StreamController<dynamic>.broadcast();
   }
 
+  /// Establishes WebSocket connection to the Lupin backend.
+  /// 
+  /// Requires:
+  ///   - WebSocket service must not already be connected
+  ///   - Backend API must be accessible
+  /// 
+  /// Ensures:
+  ///   - WebSocket connection is established if successful
+  ///   - Session ID is obtained and stored
+  ///   - Message stream is active and ready
+  ///   - Automatic reconnection is enabled
+  /// 
+  /// Throws:
+  ///   - [DioException] if session ID request fails
+  ///   - [WebSocketChannelException] if WebSocket connection fails
   Future<void> connect({String? userId}) async {
     if (_isConnected) {
       return;
@@ -41,6 +60,17 @@ class WebSocketService {
     await _establishConnection();
   }
 
+  /// Internal method to establish WebSocket connection.
+  /// 
+  /// Requires:
+  ///   - Valid session ID must be obtainable from backend
+  ///   - WebSocket endpoint must be accessible
+  /// 
+  /// Ensures:
+  ///   - Connection is established with proper authentication
+  ///   - Ping timer is started for keepalive
+  ///   - Message listeners are set up
+  ///   - Reconnection counter is reset on success
   Future<void> _establishConnection() async {
     try {
       // Step 1: Get session ID from FastAPI (like the web client does)
@@ -85,6 +115,17 @@ class WebSocketService {
     }
   }
 
+  /// Authenticates the WebSocket connection.
+  /// 
+  /// Requires:
+  ///   - userId must be non-empty string
+  ///   - WebSocket connection must be established
+  ///   - sessionId must be available
+  /// 
+  /// Ensures:
+  ///   - Authentication message is sent to backend
+  ///   - Mock token is generated for the user
+  ///   - Session ID is included in auth message
   Future<void> _authenticate(String userId) async {
     try {
       // Create mock auth token (like the web client does)
@@ -103,6 +144,18 @@ class WebSocketService {
     }
   }
 
+  /// Handles incoming WebSocket messages.
+  /// 
+  /// Requires:
+  ///   - Message must be either List<int> (binary) or JSON string
+  ///   - Message controller must be initialized
+  /// 
+  /// Ensures:
+  ///   - Binary messages are wrapped as audio chunks
+  ///   - JSON messages are parsed and forwarded
+  ///   - Authentication responses update session ID
+  ///   - Ping messages receive pong responses
+  ///   - All valid messages are added to stream
   void _handleMessage(dynamic message) {
     try {
       // Handle binary audio data
@@ -150,12 +203,28 @@ class WebSocketService {
     }
   }
 
+  /// Handles WebSocket errors.
+  /// 
+  /// Requires:
+  ///   - Error object from WebSocket stream
+  /// 
+  /// Ensures:
+  ///   - Connection status is set to disconnected
+  ///   - Reconnection is scheduled if enabled
+  ///   - Error is logged for debugging
   void _handleError(error) {
     print('[WebSocket] Error: $error');
     _isConnected = false;
     _scheduleReconnect();
   }
 
+  /// Handles WebSocket disconnection.
+  /// 
+  /// Ensures:
+  ///   - Connection status is updated
+  ///   - Ping timer is cancelled
+  ///   - Reconnection is scheduled if shouldReconnect is true
+  ///   - Resources are cleaned up properly
   void _handleDisconnection() {
     print('[WebSocket] Connection closed');
     _isConnected = false;

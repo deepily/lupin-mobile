@@ -73,7 +73,7 @@ class _RepositoryMixinExampleState extends State<RepositoryMixinExample>
         final voice = _recentVoices[index];
         return ListTile(
           title: Text(voice.transcription ?? 'No transcription'),
-          subtitle: Text(voice.timestamp.toString()),
+          subtitle: Text(voice.startedAt.toString()),
         );
       },
     );

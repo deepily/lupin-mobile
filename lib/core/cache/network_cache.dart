@@ -141,7 +141,7 @@ class NetworkCache {
 
   /// Invalidate cache for URL pattern
   Future<void> invalidateUrl(String urlPattern) async {
-    final allKeys = _responseCache._memoryCache.keys.toList();
+    final allKeys = _responseCache.memoryCache.keys.toList();
     
     for (final key in allKeys) {
       final response = await _responseCache.get(key);
@@ -155,7 +155,7 @@ class NetworkCache {
 
   /// Invalidate cache for specific method
   Future<void> invalidateMethod(String method) async {
-    final allKeys = _responseCache._memoryCache.keys.toList();
+    final allKeys = _responseCache.memoryCache.keys.toList();
     
     for (final key in allKeys) {
       final response = await _responseCache.get(key);
@@ -175,7 +175,7 @@ class NetworkCache {
     final methodStats = <String, int>{};
     final statusStats = <int, int>{};
     
-    for (final entry in _responseCache._memoryCache.entries) {
+    for (final entry in _responseCache.memoryCache.entries) {
       final response = entry.value.value;
       methodStats[response.method] = (methodStats[response.method] ?? 0) + 1;
       statusStats[response.statusCode] = (statusStats[response.statusCode] ?? 0) + 1;
@@ -193,7 +193,7 @@ class NetworkCache {
 
   /// Clear expired responses
   Future<void> clearExpired() async {
-    final allKeys = _responseCache._memoryCache.keys.toList();
+    final allKeys = _responseCache.memoryCache.keys.toList();
     int removedCount = 0;
     
     for (final key in allKeys) {

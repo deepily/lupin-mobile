@@ -1,19 +1,24 @@
 import 'dart:async';
 import 'dart:typed_data';
-// import 'package:audioplayers/audioplayers.dart';  // Disabled for web compatibility
+import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import '../websocket/websocket_service.dart';
 import '../../core/constants/app_constants.dart';
 
+/// Available TTS providers supported by the service.
 enum TTSProvider {
   openai,
   elevenlabs,
 }
 
+/// Text-to-Speech service for converting text to audio.
+/// 
+/// Manages TTS requests through WebSocket connection and handles
+/// audio playback using native audio players.
 class TTSService {
   final WebSocketService _webSocketService;
   final Dio _dio;
-  // final AudioPlayer _audioPlayer;  // Disabled for web compatibility
+  final AudioPlayer _audioPlayer = AudioPlayer();
   
   StreamController<String>? _statusController;
   StreamController<Uint8List>? _audioChunkController;
@@ -26,6 +31,16 @@ class TTSService {
   Stream<String> get statusStream => _statusController?.stream ?? const Stream.empty();
   Stream<Uint8List> get audioChunkStream => _audioChunkController?.stream ?? const Stream.empty();
 
+  /// Creates a new TTS service instance.
+  /// 
+  /// Requires:
+  ///   - webSocketService must be non-null and properly configured
+  ///   - dio must be non-null HTTP client instance
+  /// 
+  /// Ensures:
+  ///   - Service initialization starts automatically
+  ///   - Audio player is configured for low latency
+  ///   - WebSocket message listeners are established
   TTSService({
     required WebSocketService webSocketService,
     required Dio dio,
@@ -34,14 +49,24 @@ class TTSService {
     _initialize();
   }
 
+  /// Initializes the TTS service components.
+  /// 
+  /// Ensures:
+  ///   - Stream controllers are created and ready
+  ///   - Audio player is configured for optimal TTS playback
+  ///   - WebSocket message handlers are registered
+  ///   - Service status is set to initialized on success
+  /// 
+  /// Note: Errors during initialization are caught and reported
+  /// through the status stream rather than thrown.
   Future<void> _initialize() async {
     try {
       _statusController = StreamController<String>.broadcast();
       _audioChunkController = StreamController<Uint8List>.broadcast();
       
-      // Configure audio player for low latency (disabled for web compatibility)
-      // await _audioPlayer.setReleaseMode(ReleaseMode.stop);
-      // await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
+      // Configure audio player for low latency
+      await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
       
       // Listen to WebSocket messages for audio chunks
       _webSocketService.stream.listen((message) {
@@ -58,6 +83,15 @@ class TTSService {
     }
   }
 
+  /// Handles incoming WebSocket messages for TTS operations.
+  /// 
+  /// Requires:
+  ///   - message must be Map<String, dynamic> with 'type' field
+  /// 
+  /// Ensures:
+  ///   - Audio chunks are forwarded to playback
+  ///   - Status updates are sent to status stream
+  ///   - Errors are propagated to listeners
   void _handleWebSocketMessage(dynamic message) {
     if (message is Map<String, dynamic>) {
       switch (message['type']) {
@@ -81,6 +115,21 @@ class TTSService {
     }
   }
 
+  /// Converts text to speech using the specified provider.
+  /// 
+  /// Requires:
+  ///   - text must be non-empty string
+  ///   - Service must be initialized
+  ///   - WebSocket connection should be active
+  /// 
+  /// Ensures:
+  ///   - TTS request is sent to backend
+  ///   - Status stream is updated with progress
+  ///   - Audio chunks will be received via WebSocket
+  /// 
+  /// Throws:
+  ///   - [Exception] if service is not initialized
+  ///   - [DioException] if HTTP request fails
   Future<void> speak(String text, {TTSProvider? provider}) async {
     if (!_isInitialized) {
       throw Exception('TTS Service not initialized');
@@ -166,14 +215,25 @@ class TTSService {
     }
   }
 
+  /// Plays an audio chunk received from TTS service.
+  /// 
+  /// Requires:
+  ///   - audioData must be valid audio bytes
+  ///   - Audio player must be initialized
+  /// 
+  /// Ensures:
+  ///   - Audio chunk is played through device speakers
+  ///   - Chunk is added to audio stream for listeners
+  ///   - Errors are reported via status stream
   Future<void> playAudioChunk(Uint8List audioData) async {
     try {
       // Add chunk to stream for listeners
       _audioChunkController?.add(audioData);
       
-      // For direct playback, we would need to handle audio streaming
-      // This is a placeholder for the actual audio playback implementation
-      print('[TTS] Received audio chunk: ${audioData.length} bytes');
+      // Play the audio chunk using AudioPlayer
+      await _audioPlayer.play(BytesSource(audioData));
+      
+      print('[TTS] Playing audio chunk: ${audioData.length} bytes');
       
     } catch (e) {
       print('[TTS] Audio playback failed: $e');
@@ -183,9 +243,9 @@ class TTSService {
 
   Future<void> stopSpeaking() async {
     try {
-      // await _audioPlayer.stop();  // Disabled for web compatibility
+      await _audioPlayer.stop();
       _statusController?.add('stopped');
-      print('[TTS] Stop requested (web version)');
+      print('[TTS] Playback stopped');
     } catch (e) {
       print('[TTS] Stop failed: $e');
     }
@@ -193,9 +253,9 @@ class TTSService {
 
   Future<void> pauseSpeaking() async {
     try {
-      // await _audioPlayer.pause();  // Disabled for web compatibility
+      await _audioPlayer.pause();
       _statusController?.add('paused');
-      print('[TTS] Pause requested (web version)');
+      print('[TTS] Playback paused');
     } catch (e) {
       print('[TTS] Pause failed: $e');
     }
@@ -203,9 +263,9 @@ class TTSService {
 
   Future<void> resumeSpeaking() async {
     try {
-      // await _audioPlayer.resume();  // Disabled for web compatibility
+      await _audioPlayer.resume();
       _statusController?.add('resumed');
-      print('[TTS] Resume requested (web version)');
+      print('[TTS] Playback resumed');
     } catch (e) {
       print('[TTS] Resume failed: $e');
     }
@@ -221,7 +281,7 @@ class TTSService {
   }
 
   void dispose() {
-    // _audioPlayer.dispose();  // Disabled for web compatibility
+    _audioPlayer.dispose();
     _statusController?.close();
     _audioChunkController?.close();
     _statusController = null;
