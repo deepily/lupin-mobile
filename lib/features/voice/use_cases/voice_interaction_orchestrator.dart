@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math' as math;
 import '../../../core/use_cases/base_use_case.dart';
 import '../../../core/error_handling/error_handler.dart';
 import '../../../shared/models/models.dart';
@@ -328,6 +330,3 @@ class QuickVoiceInteractionUseCase extends ParameterizedUseCase<VoiceInteraction
   }
 }
 
-// Required for mock audio generation
-import 'dart:math' as Math;
-import 'dart:async';

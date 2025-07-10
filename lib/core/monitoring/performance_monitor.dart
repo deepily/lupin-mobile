@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:isolate';
 import '../storage/storage_manager.dart';
+import 'monitoring_models.dart';
 
 /// Comprehensive performance monitoring system
 class PerformanceMonitor {

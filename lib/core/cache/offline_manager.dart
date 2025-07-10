@@ -12,7 +12,7 @@ class OfflineManager {
   final Connectivity _connectivity = Connectivity();
   final Map<String, CacheManager> _cacheManagers = {};
   
-  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  late StreamSubscription _connectivitySubscription;
   final StreamController<OfflineEvent> _eventController = StreamController<OfflineEvent>.broadcast();
   
   bool _isOnline = true;
@@ -43,8 +43,8 @@ class OfflineManager {
     );
     
     // Check initial connectivity
-    final result = await _connectivity.checkConnectivity();
-    _onConnectivityChanged(result);
+    final results = await _connectivity.checkConnectivity();
+    _onConnectivityChanged(results);
   }
 
   /// Check if device is online

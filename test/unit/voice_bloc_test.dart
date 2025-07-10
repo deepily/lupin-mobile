@@ -1,11 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dio/dio.dart';
+import 'package:mockito/mockito.dart';
 import 'package:lupin_mobile/features/voice/domain/voice_bloc.dart';
 import 'package:lupin_mobile/features/voice/domain/voice_event.dart';
 import 'package:lupin_mobile/features/voice/domain/voice_state.dart';
 import 'package:lupin_mobile/services/network/http_service.dart';
+import 'package:lupin_mobile/services/tts/tts_service.dart';
+import 'package:lupin_mobile/core/repositories/voice_repository.dart';
+import 'package:lupin_mobile/core/repositories/session_repository.dart';
 import 'package:lupin_mobile/shared/models/models.dart';
+
+// Mock classes
+class MockTtsService extends Mock implements TtsService {}
+class MockVoiceRepository extends Mock implements VoiceRepository {}
+class MockSessionRepository extends Mock implements SessionRepository {}
 
 void main() {
   group('VoiceBloc', () {
@@ -14,7 +23,16 @@ void main() {
 
     setUp(() {
       httpService = HttpService(Dio());
-      voiceBloc = VoiceBloc(httpService: httpService);
+      // Create mock dependencies
+      final mockTtsService = MockTtsService();
+      final mockVoiceRepository = MockVoiceRepository();
+      final mockSessionRepository = MockSessionRepository();
+      
+      voiceBloc = VoiceBloc(
+        ttsService: mockTtsService,
+        voiceRepository: mockVoiceRepository,
+        sessionRepository: mockSessionRepository,
+      );
     });
 
     tearDown(() {
