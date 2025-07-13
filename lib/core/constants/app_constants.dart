@@ -14,8 +14,8 @@ class AppConstants {
   static const String wsQueueEndpoint = '/ws/queue';
   
   // API Endpoints
-  static const String apiGetAudio = '/api/get-audio';
-  static const String apiGetAudioElevenLabs = '/api/get-audio-elevenlabs';
+  static const String apiGetAudio = '/api/get-speech';
+  static const String apiGetAudioElevenLabs = '/api/get-speech-elevenlabs';
   static const String apiUploadTranscribe = '/api/upload-and-transcribe-mp3';
   
   // Audio Configuration

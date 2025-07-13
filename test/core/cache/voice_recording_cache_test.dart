@@ -2,11 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'dart:typed_data';
-import '../../../lib/core/cache/voice_recording_cache.dart';
-import '../../../lib/core/cache/offline_manager.dart';
-import '../../../lib/core/cache/cache_manager.dart';
-import '../../../lib/core/storage/storage_manager.dart';
-import '../../../lib/shared/models/models.dart';
+import 'package:lupin_mobile/core/cache/voice_recording_cache.dart';
+import 'package:lupin_mobile/core/cache/offline_manager.dart';
+import 'package:lupin_mobile/core/cache/cache_manager.dart';
+import 'package:lupin_mobile/core/cache/cache_policy.dart';
+import 'package:lupin_mobile/core/storage/storage_manager.dart';
+import 'package:lupin_mobile/shared/models/models.dart';
 
 // Generate mocks
 @GenerateMocks([
@@ -22,13 +23,11 @@ void main() {
     late MockOfflineManager mockOfflineManager;
     late MockCacheManager<VoiceRecordingData> mockRecordingCache;
     late MockCacheManager<TranscriptionData> mockTranscriptionCache;
-    late MockStorageManager mockStorageManager;
 
-    setUp(() {
+    setUp(() async {
       mockOfflineManager = MockOfflineManager();
       mockRecordingCache = MockCacheManager<VoiceRecordingData>();
       mockTranscriptionCache = MockCacheManager<TranscriptionData>();
-      mockStorageManager = MockStorageManager();
 
       // Mock the cache manager creation
       when(mockOfflineManager.getCacheManager<VoiceRecordingData>(
@@ -47,7 +46,7 @@ void main() {
         calculateSize: anyNamed('calculateSize'),
       )).thenReturn(mockTranscriptionCache);
 
-      cache = VoiceRecordingCache._(mockOfflineManager);
+      cache = await VoiceRecordingCache.createForTesting(mockOfflineManager);
     });
 
     group('Cache Recording', () {
@@ -281,14 +280,14 @@ void main() {
     group('Cache Statistics', () {
       test('should return accurate statistics', () async {
         // Arrange
-        final mockStats = CacheStats(
-          itemCount: 10,
-          totalSizeBytes: 5000,
-          hitRate: 0.8,
-        );
-        
         when(mockRecordingCache.getStats())
-            .thenReturn(mockStats);
+            .thenReturn(const CacheStats(
+              itemCount: 10,
+              totalSizeBytes: 5000,
+              expiredCount: 1,
+              hitRate: 0.8,
+              policy: CachePolicy.defaultPolicy,
+            ));
 
         // Act
         final stats = await cache.getStats();
@@ -508,15 +507,4 @@ VoiceInput _createMockVoiceInput() {
   );
 }
 
-// Mock class for cache stats (since it's not easily mockable)
-class CacheStats {
-  final int itemCount;
-  final int totalSizeBytes;
-  final double hitRate;
-
-  CacheStats({
-    required this.itemCount,
-    required this.totalSizeBytes,
-    required this.hitRate,
-  });
-}
+// Use the real VoiceRecordingCacheStats instead of a mock CacheStats

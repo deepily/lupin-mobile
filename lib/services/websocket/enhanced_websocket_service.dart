@@ -7,7 +7,11 @@ import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 
-/// Enhanced WebSocket service with improved message handling, queuing, and resilience
+/// Enhanced WebSocket service with improved message handling, queuing, and resilience.
+/// 
+/// Provides robust WebSocket connectivity with automatic reconnection, message queuing,
+/// priority handling, health monitoring, and comprehensive error recovery.
+/// Supports both text and binary message types with intelligent routing.
 class EnhancedWebSocketService {
   final Dio _dio;
   WebSocketChannel? _channel;
@@ -71,7 +75,23 @@ class EnhancedWebSocketService {
     _startQueueProcessor();
   }
   
-  /// Connect to WebSocket with enhanced error handling
+  /// Establishes WebSocket connection with enhanced error handling and resilience.
+  /// 
+  /// Requires:
+  ///   - Network connectivity must be available
+  ///   - Backend WebSocket endpoint must be accessible
+  ///   - userId (if provided) must be valid for authentication
+  /// 
+  /// Ensures:
+  ///   - Connection is established with session ID retrieval
+  ///   - Authentication is performed if userId is provided
+  ///   - Message queues are optionally cleared based on clearQueue parameter
+  ///   - Reconnection logic is initialized for future failures
+  /// 
+  /// Raises:
+  ///   - TimeoutException if connection establishment times out
+  ///   - WebSocketException if WebSocket connection fails
+  ///   - AuthenticationException if user authentication fails
   Future<void> connect({
     String? userId,
     Map<String, String>? headers,
@@ -356,7 +376,21 @@ class EnhancedWebSocketService {
     }
   }
   
-  /// Send message with enhanced queuing and retry logic
+  /// Sends message with enhanced queuing and retry logic.
+  /// 
+  /// Requires:
+  ///   - message must be a valid WebSocketMessage instance
+  ///   - priority must be a valid MessagePriority value
+  /// 
+  /// Ensures:
+  ///   - Message is sent immediately if connected and skipQueue is true
+  ///   - Message is queued with appropriate priority if not connected
+  ///   - High/critical priority messages use separate priority queue
+  ///   - Queue overflow protection prevents memory issues
+  /// 
+  /// Raises:
+  ///   - WebSocketException if direct send fails and skipQueue is true
+  ///   - No exceptions for queued messages (handled asynchronously)
   Future<void> sendMessage(
     WebSocketMessage message, {
     MessagePriority priority = MessagePriority.normal,
@@ -394,7 +428,23 @@ class EnhancedWebSocketService {
     }
   }
   
-  /// Send message and wait for response
+  /// Sends message and waits for a correlated response.
+  /// 
+  /// Requires:
+  ///   - message must be a valid WebSocketMessage instance
+  ///   - timeout (if provided) must be a positive duration
+  ///   - WebSocket connection must be active
+  /// 
+  /// Ensures:
+  ///   - Message is sent with a unique request ID
+  ///   - Response is awaited and matched by request ID
+  ///   - Timeout protection prevents indefinite waiting
+  ///   - Pending request is cleaned up on completion or timeout
+  /// 
+  /// Raises:
+  ///   - TimeoutException if response is not received within timeout
+  ///   - WebSocketException if message sending fails
+  ///   - ConnectionException if WebSocket is not connected
   Future<WebSocketMessage> sendMessageWithResponse(
     WebSocketMessage message, {
     Duration? timeout,
@@ -708,7 +758,19 @@ class EnhancedWebSocketService {
     return 'req_${DateTime.now().millisecondsSinceEpoch}_${_pendingRequests.length}';
   }
   
-  /// Get connection statistics
+  /// Retrieves comprehensive connection and performance statistics.
+  /// 
+  /// Requires:
+  ///   - Service must be instantiated (no connection required)
+  /// 
+  /// Ensures:
+  ///   - Returns current connection state and metadata
+  ///   - Includes queue sizes and pending request counts
+  ///   - Provides detailed performance metrics
+  ///   - Statistics reflect real-time service state
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (always returns valid stats)
   Map<String, dynamic> getConnectionStats() {
     return {
       'state': _connectionState.toString(),
@@ -724,7 +786,20 @@ class EnhancedWebSocketService {
     };
   }
   
-  /// Disconnect with cleanup
+  /// Disconnects WebSocket connection with comprehensive cleanup.
+  /// 
+  /// Requires:
+  ///   - Service must be instantiated (connection state irrelevant)
+  /// 
+  /// Ensures:
+  ///   - WebSocket connection is properly closed
+  ///   - All timers and periodic tasks are cancelled
+  ///   - Message queues are optionally cleared
+  ///   - Pending requests are completed with errors
+  ///   - Reconnection attempts are disabled
+  /// 
+  /// Raises:
+  ///   - No exceptions propagate (cleanup errors are suppressed)
   Future<void> disconnect({bool clearQueue = true}) async {
     _shouldReconnect = false;
     

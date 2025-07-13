@@ -168,7 +168,7 @@ class TTSService {
       
       // Use new parallel ElevenLabs endpoint
       final response = await _dio.post(
-        '${AppConstants.apiBaseUrl}/api/get-audio-elevenlabs',
+        '${AppConstants.apiBaseUrl}/api/get-speech-elevenlabs',
         data: {
           'session_id': sessionId,
           'text': text,

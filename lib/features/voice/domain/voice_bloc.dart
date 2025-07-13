@@ -8,6 +8,11 @@ import '../../../shared/models/models.dart';
 import 'voice_event.dart';
 import 'voice_state.dart';
 
+/// Voice interaction BLoC managing voice recording, transcription, and TTS.
+/// 
+/// Coordinates voice input processing through multiple stages: permission,
+/// recording, transcription, text editing, and TTS generation.
+/// Maintains voice interaction state and provides reactive updates to UI.
 class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
   final TtsService _ttsService;
   final VoiceRepository _voiceRepository;
@@ -34,6 +39,19 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
     on<VoiceSettingsUpdated>(_onSettingsUpdated);
   }
 
+  /// Handles voice permission request with platform-specific checks.
+  /// 
+  /// Requires:
+  ///   - event must be a valid VoicePermissionRequested instance
+  ///   - emit must be an active state emitter
+  /// 
+  /// Ensures:
+  ///   - Voice recording permissions are checked
+  ///   - State transitions to VoiceIdle with permission status
+  ///   - Permission denial emits VoicePermissionDenied state
+  /// 
+  /// Raises:
+  ///   - Emits VoicePermissionDenied if permission check fails
   Future<void> _onPermissionRequested(
     VoicePermissionRequested event,
     Emitter<VoiceState> emit,
@@ -47,6 +65,21 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
     }
   }
 
+  /// Initiates voice recording with session tracking and timer management.
+  /// 
+  /// Requires:
+  ///   - event must contain valid sessionId
+  ///   - Voice permissions must be granted
+  ///   - emit must be an active state emitter
+  /// 
+  /// Ensures:
+  ///   - New VoiceInput entity is created and persisted
+  ///   - Recording timer provides real-time elapsed time updates
+  ///   - State transitions to VoiceRecording with amplitude feedback
+  ///   - Recording session is properly tracked in repository
+  /// 
+  /// Raises:
+  ///   - Emits VoiceError if recording initialization fails
   Future<void> _onRecordingStarted(
     VoiceRecordingStarted event,
     Emitter<VoiceState> emit,
@@ -87,6 +120,21 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
     }
   }
 
+  /// Stops voice recording and initiates transcription processing.
+  /// 
+  /// Requires:
+  ///   - Active recording session must exist
+  ///   - _currentVoiceInput must be in recording state
+  ///   - emit must be an active state emitter
+  /// 
+  /// Ensures:
+  ///   - Recording timer is cancelled and cleaned up
+  ///   - Voice input duration is calculated and persisted
+  ///   - State transitions through processing to transcribed
+  ///   - Transcription confidence scores are recorded
+  /// 
+  /// Raises:
+  ///   - Emits VoiceError if recording stop or transcription fails
   Future<void> _onRecordingStopped(
     VoiceRecordingStopped event,
     Emitter<VoiceState> emit,
@@ -135,6 +183,20 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
     }
   }
 
+  /// Cancels active voice recording and cleans up resources.
+  /// 
+  /// Requires:
+  ///   - Active recording session may or may not exist
+  ///   - emit must be an active state emitter
+  /// 
+  /// Ensures:
+  ///   - Recording timer is cancelled immediately
+  ///   - Current voice input is marked as cancelled
+  ///   - State transitions to cancelled without processing
+  ///   - Resources are properly cleaned up
+  /// 
+  /// Raises:
+  ///   - Emits VoiceError only if critical cleanup fails
   Future<void> _onRecordingCancelled(
     VoiceRecordingCancelled event,
     Emitter<VoiceState> emit,

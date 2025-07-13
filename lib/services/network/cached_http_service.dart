@@ -4,12 +4,25 @@ import '../../core/cache/network_cache.dart';
 import '../../core/cache/offline_manager.dart';
 import 'http_service.dart';
 
-/// Enhanced HTTP service with caching and offline support
+/// Enhanced HTTP service with intelligent caching and offline support.
+/// 
+/// Extends the base HttpService to provide automatic response caching,
+/// offline request queuing, and stale cache fallback capabilities.
+/// Optimizes network usage and provides resilient connectivity.
 class CachedHttpService extends HttpService {
   late final NetworkCache _networkCache;
   late final OfflineManager _offlineManager;
   bool _initialized = false;
 
+  /// Creates a new cached HTTP service instance.
+  /// 
+  /// Requires:
+  ///   - dio must be a non-null, properly configured Dio instance
+  /// 
+  /// Ensures:
+  ///   - Service inherits all base HTTP functionality
+  ///   - Caching and offline components are initialized asynchronously
+  ///   - Service is ready for both online and offline operations
   CachedHttpService(Dio dio) : super(dio) {
     _initialize();
   }
@@ -30,7 +43,21 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// Enhanced GET request with caching
+  /// Performs a GET request with intelligent caching and offline support.
+  /// 
+  /// Requires:
+  ///   - path must be a valid API endpoint path
+  ///   - cacheTtl (if provided) must be a positive duration
+  /// 
+  /// Ensures:
+  ///   - Returns cached response if available and fresh
+  ///   - Falls back to network request if cache miss or stale
+  ///   - Caches successful responses for future requests
+  ///   - Queues request if offline and no cache available
+  /// 
+  /// Raises:
+  ///   - DioException if offline and no cached response available
+  ///   - NetworkException if request fails and no stale cache
   @override
   Future<Response<T>> get<T>(
     String path, {
@@ -109,7 +136,21 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// Enhanced POST request with optional caching
+  /// Performs a POST request with optional caching for idempotent operations.
+  /// 
+  /// Requires:
+  ///   - path must be a valid API endpoint path
+  ///   - data must be serializable if caching is enabled
+  ///   - useCache should only be true for idempotent POST operations
+  /// 
+  /// Ensures:
+  ///   - Returns cached response if available and useCache is true
+  ///   - Queues request if offline for later processing
+  ///   - Caches successful responses only for idempotent operations
+  /// 
+  /// Raises:
+  ///   - DioException if offline (request is queued)
+  ///   - NetworkException if request fails and no cache available
   @override
   Future<Response<T>> post<T>(
     String path, {
@@ -191,7 +232,19 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// Session management with caching
+  /// Retrieves session ID with short-term caching for efficiency.
+  /// 
+  /// Requires:
+  ///   - Backend session endpoint must be available
+  /// 
+  /// Ensures:
+  ///   - Returns cached session ID if available and fresh (5 min TTL)
+  ///   - Fetches new session ID if cache miss or expired
+  ///   - Session ID is cached for subsequent requests
+  /// 
+  /// Raises:
+  ///   - DioException if session creation fails
+  ///   - NetworkException if offline and no cached session
   @override
   Future<Map<String, dynamic>> getSessionId() async {
     await _ensureInitialized();
@@ -209,7 +262,21 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// TTS request with caching
+  /// Requests ElevenLabs TTS with aggressive caching for identical text.
+  /// 
+  /// Requires:
+  ///   - sessionId must be a valid session identifier
+  ///   - text must be non-empty and suitable for TTS
+  ///   - Voice parameters must be within valid ranges
+  /// 
+  /// Ensures:
+  ///   - Returns cached audio if identical request exists (1 hour TTL)
+  ///   - Generates new audio for cache miss or expired entries
+  ///   - Audio response is cached to reduce API costs
+  /// 
+  /// Raises:
+  ///   - DioException if TTS generation fails
+  ///   - QuotaExceededException if ElevenLabs quota exceeded
   @override
   Future<Response> requestElevenLabsTTS({
     required String sessionId,
@@ -222,7 +289,7 @@ class CachedHttpService extends HttpService {
     
     try {
       final response = await post(
-        '/api/get-audio-elevenlabs',
+        '/api/get-speech-elevenlabs',
         data: {
           'session_id': sessionId,
           'text': text,
@@ -240,7 +307,20 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// OpenAI TTS request with caching
+  /// Requests OpenAI TTS with caching for cost optimization.
+  /// 
+  /// Requires:
+  ///   - sessionId must be a valid session identifier
+  ///   - text must be within OpenAI's character limits
+  /// 
+  /// Ensures:
+  ///   - Returns cached audio if identical text request exists (1 hour TTL)
+  ///   - Generates new audio for cache miss or expired entries
+  ///   - Audio response is cached to reduce API costs
+  /// 
+  /// Raises:
+  ///   - DioException if TTS generation fails
+  ///   - RateLimitException if OpenAI rate limits exceeded
   @override
   Future<Response> requestOpenAITTS({
     required String sessionId,
@@ -250,7 +330,7 @@ class CachedHttpService extends HttpService {
     
     try {
       final response = await post(
-        '/api/get-audio',
+        '/api/get-speech',
         data: {
           'session_id': sessionId,
           'text': text,
@@ -265,7 +345,18 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// Health check with caching
+  /// Performs health check with short-term caching to reduce server load.
+  /// 
+  /// Requires:
+  ///   - Network connectivity for fresh health checks
+  /// 
+  /// Ensures:
+  ///   - Returns cached health status if checked recently (2 min TTL)
+  ///   - Performs fresh health check for expired cache
+  ///   - Never throws exceptions (returns false on failure)
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (all errors result in false)
   @override
   Future<bool> checkHealth() async {
     await _ensureInitialized();
@@ -283,26 +374,72 @@ class CachedHttpService extends HttpService {
     }
   }
 
-  /// Clear cache for specific URL pattern
+  /// Clears cached responses matching the specified URL pattern.
+  /// 
+  /// Requires:
+  ///   - urlPattern must be a valid URL pattern or exact path
+  /// 
+  /// Ensures:
+  ///   - All cached responses matching the pattern are removed
+  ///   - Subsequent requests will bypass cache for matching URLs
+  ///   - Cache statistics are updated to reflect removal
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (operation is always safe)
   Future<void> clearCacheForUrl(String urlPattern) async {
     await _ensureInitialized();
     await _networkCache.invalidateUrl(urlPattern);
   }
 
-  /// Clear all HTTP cache
+  /// Clears all cached HTTP responses and resets cache state.
+  /// 
+  /// Requires:
+  ///   - Cache system must be initialized
+  /// 
+  /// Ensures:
+  ///   - All cached responses are permanently removed
+  ///   - Cache storage is reset to initial empty state
+  ///   - Memory and disk cache are both cleared
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (operation is always safe)
   Future<void> clearAllCache() async {
     await _ensureInitialized();
     await _networkCache.clearAll();
   }
 
-  /// Get cache statistics
+  /// Retrieves comprehensive statistics about cache performance.
+  /// 
+  /// Requires:
+  ///   - Cache system must be initialized
+  /// 
+  /// Ensures:
+  ///   - Returns detailed cache metrics including hit rates
+  ///   - Includes storage usage and entry counts
+  ///   - Statistics reflect current cache state accurately
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (returns empty stats on error)
   Future<Map<String, dynamic>> getCacheStats() async {
     await _ensureInitialized();
     final stats = await _networkCache.getStats();
     return stats.toJson();
   }
 
-  /// Process queued requests when back online
+  /// Processes all queued requests when network connectivity is restored.
+  /// 
+  /// Requires:
+  ///   - Device must be online (offline requests are ignored)
+  ///   - Queued requests must have valid request data
+  /// 
+  /// Ensures:
+  ///   - All queued requests are processed in order
+  ///   - Successfully processed requests are removed from queue
+  ///   - Failed requests remain in queue for retry
+  /// 
+  /// Raises:
+  ///   - Individual request failures are logged but don't stop processing
+  ///   - No exceptions propagate from this method
   Future<void> processQueuedRequests() async {
     await _ensureInitialized();
     

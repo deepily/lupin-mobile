@@ -332,7 +332,11 @@ class ErrorHandlingResult {
   });
 }
 
-/// Global error handler for the application
+/// Centralized error handling system with recovery mechanisms and analytics.
+/// 
+/// Provides comprehensive error handling with structured error types, recovery
+/// strategies, interceptors, and user-friendly error presentation.
+/// Ensures application resilience and maintainable error management.
 class ErrorHandler {
   static ErrorHandler? _instance;
   static ErrorHandler get instance => _instance ?? (_instance = ErrorHandler._());
@@ -343,7 +347,20 @@ class ErrorHandler {
   final List<ErrorInterceptor> _interceptors = [];
   final Map<Type, ErrorRecoveryProvider> _recoveryProviders = {};
 
-  /// Initialize error handler
+  /// Initializes global error handling for Flutter and async errors.
+  /// 
+  /// Requires:
+  ///   - Flutter framework must be properly initialized
+  ///   - Application must be in a valid state to register error handlers
+  /// 
+  /// Ensures:
+  ///   - Flutter framework errors are captured and handled
+  ///   - Uncaught async errors are intercepted and processed
+  ///   - Default recovery providers are registered for common error types
+  ///   - Error reporting is configured for production environments
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (initialization is defensive)
   static void initialize() {
     final handler = ErrorHandler.instance;
     
@@ -362,19 +379,59 @@ class ErrorHandler {
     handler._registerDefaultRecoveryProviders();
   }
 
-  /// Add error interceptor
+  /// Registers error interceptor for custom error handling logic.
+  /// 
+  /// Requires:
+  ///   - interceptor must be a valid implementation of ErrorInterceptor
+  ///   - interceptor must handle errors without causing additional errors
+  /// 
+  /// Ensures:
+  ///   - Interceptor is added to the processing chain
+  ///   - Interceptors are executed in registration order
+  ///   - Early interceptors can short-circuit error handling
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (registration is always safe)
   static void addInterceptor(ErrorInterceptor interceptor) {
     instance._interceptors.add(interceptor);
   }
 
-  /// Register recovery provider for specific error type
+  /// Registers recovery provider for specific error type.
+  /// 
+  /// Requires:
+  ///   - T must be a valid AppError subclass
+  ///   - provider must implement ErrorRecoveryProvider interface
+  ///   - provider must provide meaningful recovery actions
+  /// 
+  /// Ensures:
+  ///   - Recovery provider is registered for error type T
+  ///   - Provider will be consulted for errors of type T
+  ///   - Custom recovery actions will be available for specific errors
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (registration is always safe)
   static void registerRecoveryProvider<T extends AppError>(
     ErrorRecoveryProvider provider,
   ) {
     instance._recoveryProviders[T] = provider;
   }
 
-  /// Handle application error
+  /// Processes application error with comprehensive handling and recovery.
+  /// 
+  /// Requires:
+  ///   - error must be a valid error object (any type accepted)
+  ///   - stackTrace (if provided) should correspond to the error
+  ///   - context (if provided) should contain relevant error context
+  /// 
+  /// Ensures:
+  ///   - Error is processed through interceptor chain
+  ///   - Appropriate logging is performed based on error severity
+  ///   - Recovery actions are identified and provided
+  ///   - User-friendly error messages are generated
+  /// 
+  /// Raises:
+  ///   - No exceptions propagate (error handler is defensive)
+  ///   - Returns ErrorHandlingResult indicating success/failure
   static Future<ErrorHandlingResult> handleError(
     Object error, {
     StackTrace? stackTrace,

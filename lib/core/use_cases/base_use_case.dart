@@ -2,14 +2,42 @@ import 'dart:async';
 import '../error_handling/error_handler.dart';
 import '../logging/logger.dart';
 
-/// Base class for all use cases
+/// Base class for all application use cases with error handling and logging.
+/// 
+/// Provides structured business logic execution with consistent error handling,
+/// logging, and result wrapping. Ensures separation of concerns and testability.
 abstract class UseCase<Type, Params> {
   final TaggedLogger _logger = Logger.tagged('UseCase');
 
-  /// Execute the use case with parameters
+  /// Executes the core business logic with provided parameters.
+  /// 
+  /// Requires:
+  ///   - params must be valid for the specific use case implementation
+  ///   - Use case must be in a valid state for execution
+  /// 
+  /// Ensures:
+  ///   - Business logic is executed according to use case requirements
+  ///   - Returns UseCaseResult wrapping success data or failure error
+  ///   - No side effects beyond intended business logic
+  /// 
+  /// Raises:
+  ///   - May throw exceptions which are caught by execute() wrapper
   Future<UseCaseResult<Type>> call(Params params);
 
-  /// Execute the use case with error handling
+  /// Executes use case with comprehensive error handling and logging.
+  /// 
+  /// Requires:
+  ///   - params must be provided (can be NoParams for parameterless use cases)
+  ///   - Logger must be properly initialized
+  /// 
+  /// Ensures:
+  ///   - All exceptions are caught and converted to UseCaseResult.failure
+  ///   - Execution is logged with appropriate detail level
+  ///   - Returns consistent UseCaseResult regardless of execution outcome
+  ///   - Performance and success metrics are tracked
+  /// 
+  /// Raises:
+  ///   - No exceptions propagate (all are caught and wrapped)
   Future<UseCaseResult<Type>> execute(Params params) async {
     try {
       _logger.debug('Executing ${runtimeType} with params: $params');
@@ -109,9 +137,23 @@ class NoParams {
   String toString() => 'NoParams()';
 }
 
-/// Base class for parameterized use cases
+/// Base class for use cases requiring parameter validation.
+/// 
+/// Extends UseCase with automatic parameter validation before execution.
+/// Ensures data integrity and provides early error detection.
 abstract class ParameterizedUseCase<Type, Params> extends UseCase<Type, Params> {
-  /// Validate parameters before execution
+  /// Validates parameters before use case execution.
+  /// 
+  /// Requires:
+  ///   - params must be the correct type for the use case
+  /// 
+  /// Ensures:
+  ///   - Returns null if parameters are valid
+  ///   - Returns AppError describing validation failure if invalid
+  ///   - Validation is performed before expensive business logic
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (returns error instead)
   AppError? validateParams(Params params) => null;
 
   @override
@@ -169,7 +211,20 @@ abstract class StreamUseCase<Type, Params> {
 class UseCaseExecutor {
   static final TaggedLogger _logger = Logger.tagged('UseCaseExecutor');
 
-  /// Execute multiple use cases in parallel
+  /// Executes multiple use cases concurrently for improved performance.
+  /// 
+  /// Requires:
+  ///   - useCases must be non-empty list of use case futures
+  ///   - Use cases must be independent (no interdependencies)
+  /// 
+  /// Ensures:
+  ///   - All use cases execute concurrently
+  ///   - Results are returned in the same order as input
+  ///   - Individual failures don't prevent other executions
+  ///   - Performance metrics are logged for monitoring
+  /// 
+  /// Raises:
+  ///   - May rethrow if Future.wait fails catastrophically
   static Future<List<UseCaseResult<dynamic>>> executeParallel(
     List<Future<UseCaseResult<dynamic>>> useCases,
   ) async {
@@ -193,7 +248,20 @@ class UseCaseExecutor {
     }
   }
 
-  /// Execute use cases in sequence
+  /// Executes use cases in sequence with early termination on failure.
+  /// 
+  /// Requires:
+  ///   - useCaseFactories must be non-empty list of use case factory functions
+  ///   - Factories must create properly configured use cases
+  /// 
+  /// Ensures:
+  ///   - Use cases execute in order until completion or first failure
+  ///   - Early termination on failure prevents unnecessary work
+  ///   - Results include all executed use cases up to failure point
+  ///   - Execution progress is logged for debugging
+  /// 
+  /// Raises:
+  ///   - Individual use case exceptions are caught and wrapped
   static Future<List<UseCaseResult<dynamic>>> executeSequential(
     List<Future<UseCaseResult<dynamic>> Function()> useCaseFactories,
   ) async {
@@ -230,7 +298,22 @@ class UseCaseExecutor {
     return results;
   }
 
-  /// Execute use case with retry logic
+  /// Executes use case with exponential backoff retry logic.
+  /// 
+  /// Requires:
+  ///   - useCaseFactory must create a properly configured use case
+  ///   - maxRetries must be non-negative
+  ///   - initialDelay must be positive
+  ///   - backoffMultiplier must be >= 1.0
+  /// 
+  /// Ensures:
+  ///   - Use case is retried up to maxRetries times on failure
+  ///   - Exponential backoff prevents overwhelming failed services
+  ///   - shouldRetry function (if provided) controls which errors are retried
+  ///   - Retry attempts and delays are logged for monitoring
+  /// 
+  /// Raises:
+  ///   - Returns final failure result after exhausting retries
   static Future<UseCaseResult<T>> executeWithRetry<T>(
     Future<UseCaseResult<T>> Function() useCaseFactory, {
     int maxRetries = 3,

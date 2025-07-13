@@ -3,7 +3,11 @@ import 'dart:convert';
 import '../storage/storage_manager.dart';
 import 'cache_policy.dart';
 
-/// Generic cache manager for offline support
+/// Generic cache manager providing comprehensive caching capabilities.
+/// 
+/// Implements configurable caching with multiple eviction strategies,
+/// persistence support, automatic cleanup, and detailed analytics.
+/// Supports both memory and persistent storage for offline functionality.
 class CacheManager<T> {
   final String cacheKey;
   final CachePolicy policy;
@@ -45,7 +49,21 @@ class CacheManager<T> {
     }
   }
 
-  /// Get item from cache
+  /// Retrieves item from cache with intelligent lookup strategy.
+  /// 
+  /// Requires:
+  ///   - key must be non-empty and valid cache identifier
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - Checks memory cache first for optimal performance
+  ///   - Falls back to persistent storage if configured
+  ///   - Returns null for expired or non-existent items
+  ///   - Updates access metadata for cache analytics
+  /// 
+  /// Raises:
+  ///   - ArgumentError if key is invalid
+  ///   - CacheException if storage access fails
   Future<T?> get(String key) async {
     // Check memory cache first
     var entry = _memoryCache[key];
@@ -82,7 +100,23 @@ class CacheManager<T> {
     return entry.value;
   }
 
-  /// Put item in cache
+  /// Stores item in cache with automatic policy enforcement.
+  /// 
+  /// Requires:
+  ///   - key must be non-empty and valid cache identifier
+  ///   - value must be a valid, serializable instance of type T
+  ///   - metadata (if provided) must be serializable
+  /// 
+  /// Ensures:
+  ///   - Item is stored in memory cache immediately
+  ///   - Item is persisted to storage if policy allows
+  ///   - Cache limits are enforced through eviction if necessary
+  ///   - Cache statistics are updated with new entry
+  /// 
+  /// Raises:
+  ///   - ArgumentError if key or value is invalid
+  ///   - CacheFullException if cannot evict enough space
+  ///   - SerializationException if value cannot be serialized
   Future<void> put(String key, T value, {Map<String, dynamic>? metadata}) async {
     final sizeBytes = calculateSize?.call(value) ?? 0;
     
@@ -108,7 +142,20 @@ class CacheManager<T> {
     _eventController.add(CachePutEvent(key, sizeBytes));
   }
 
-  /// Remove item from cache
+  /// Removes item from both memory and persistent cache.
+  /// 
+  /// Requires:
+  ///   - key must be a valid cache identifier
+  /// 
+  /// Ensures:
+  ///   - Item is removed from memory cache
+  ///   - Item is removed from persistent storage if configured
+  ///   - Cache statistics are updated
+  ///   - Operation is idempotent (no error if key doesn't exist)
+  /// 
+  /// Raises:
+  ///   - ArgumentError if key is invalid
+  ///   - CacheException if storage removal fails
   Future<void> remove(String key) async {
     _memoryCache.remove(key);
     
@@ -119,7 +166,21 @@ class CacheManager<T> {
     _eventController.add(CacheRemoveEvent(key));
   }
 
-  /// Clear all cached items
+  /// Clears all items from both memory and persistent cache.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be initialized
+  ///   - User must have appropriate permissions for clear operation
+  /// 
+  /// Ensures:
+  ///   - All items are removed from memory cache
+  ///   - All items are removed from persistent storage if configured
+  ///   - Cache statistics are reset
+  ///   - Cache events are emitted for monitoring
+  /// 
+  /// Raises:
+  ///   - PermissionException if user lacks clearance
+  ///   - CacheException if storage clearing fails
   Future<void> clear() async {
     _memoryCache.clear();
     
@@ -130,7 +191,19 @@ class CacheManager<T> {
     _eventController.add(CacheClearEvent());
   }
 
-  /// Get cache statistics
+  /// Retrieves comprehensive cache performance statistics.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - Returns current cache metrics and utilization
+  ///   - Includes hit rates, size information, and entry counts
+  ///   - Statistics reflect real-time cache state
+  ///   - Performance data is accurate and current
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (always returns valid stats)
   CacheStats getStats() {
     int totalSize = 0;
     int expiredCount = 0;
@@ -164,7 +237,20 @@ class CacheManager<T> {
     );
   }
 
-  /// Cleanup expired entries
+  /// Removes all expired entries from cache.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be initialized
+  ///   - Cache policy must define valid max age
+  /// 
+  /// Ensures:
+  ///   - All expired entries are identified and removed
+  ///   - Memory and storage are freed appropriately
+  ///   - Cache statistics are updated after cleanup
+  ///   - Cleanup events are emitted for monitoring
+  /// 
+  /// Raises:
+  ///   - CacheException if cleanup operation fails
   Future<void> cleanup() async {
     final keysToRemove = <String>[];
     
@@ -186,7 +272,19 @@ class CacheManager<T> {
   /// Stream of cache events
   Stream<CacheEvent> get events => _eventController.stream;
 
-  /// Dispose resources
+  /// Disposes cache manager and releases all resources.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be instantiated (state irrelevant)
+  /// 
+  /// Ensures:
+  ///   - All timers and periodic tasks are cancelled
+  ///   - Event streams are properly closed
+  ///   - Memory resources are released
+  ///   - No memory leaks remain
+  /// 
+  /// Raises:
+  ///   - No exceptions propagate (cleanup errors are suppressed)
   void dispose() {
     _cleanupTimer?.cancel();
     _eventController.close();

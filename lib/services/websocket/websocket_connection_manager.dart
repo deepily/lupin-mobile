@@ -3,7 +3,11 @@ import 'dart:typed_data';
 import 'enhanced_websocket_service.dart';
 import 'websocket_message_router.dart';
 
-/// Comprehensive WebSocket connection manager that coordinates all WebSocket functionality
+/// Comprehensive WebSocket connection manager that coordinates all WebSocket functionality.
+/// 
+/// Provides a high-level interface for WebSocket operations, message routing,
+/// connection monitoring, health checks, and automatic error handling.
+/// Coordinates between EnhancedWebSocketService and WebSocketMessageRouter.
 class WebSocketConnectionManager {
   final EnhancedWebSocketService _webSocketService;
   final WebSocketMessageRouter _messageRouter;
@@ -134,7 +138,23 @@ class WebSocketConnectionManager {
     );
   }
   
-  /// Connect to WebSocket server
+  /// Establishes connection to WebSocket server with full coordination.
+  /// 
+  /// Requires:
+  ///   - Network connectivity must be available
+  ///   - Backend WebSocket endpoint must be accessible
+  ///   - userId (if provided) must be valid for authentication
+  /// 
+  /// Ensures:
+  ///   - WebSocket connection is established through underlying service
+  ///   - Message routing and event handling are active
+  ///   - Connection state listeners are notified of state changes
+  ///   - Error handling is active for all connection issues
+  /// 
+  /// Raises:
+  ///   - TimeoutException if connection establishment times out
+  ///   - WebSocketException if connection fails
+  ///   - AuthenticationException if user authentication fails
   Future<void> connect({
     String? userId,
     Map<String, String>? headers,
@@ -157,7 +177,23 @@ class WebSocketConnectionManager {
     await _webSocketService.disconnect(clearQueue: clearQueue);
   }
   
-  /// Send TTS request
+  /// Sends text-to-speech generation request with provider-specific settings.
+  /// 
+  /// Requires:
+  ///   - text must be non-empty and suitable for TTS generation
+  ///   - provider must be a valid TTS provider identifier ('openai' or 'elevenlabs')
+  ///   - voiceId (if provided) must be valid for the specified provider
+  ///   - settings must contain valid provider-specific parameters
+  /// 
+  /// Ensures:
+  ///   - TTS request message is properly formatted by message router
+  ///   - Message is sent with appropriate priority through WebSocket
+  ///   - Audio response will be available through audioChunks stream
+  ///   - TTS status updates will be available through ttsStatus stream
+  /// 
+  /// Raises:
+  ///   - WebSocketException if connection is not active
+  ///   - ValidationException if request parameters are invalid
   Future<void> sendTTSRequest({
     required String text,
     required String provider,
@@ -175,7 +211,24 @@ class WebSocketConnectionManager {
     await _webSocketService.sendMessage(message, priority: priority);
   }
   
-  /// Send TTS request and wait for audio completion
+  /// Sends TTS request and waits for complete audio response.
+  /// 
+  /// Requires:
+  ///   - text must be non-empty and suitable for TTS generation
+  ///   - provider must be a valid TTS provider identifier
+  ///   - timeout (if provided) must be reasonable for audio generation
+  ///   - WebSocket connection must be active
+  /// 
+  /// Ensures:
+  ///   - TTS request is sent with high priority
+  ///   - All audio chunks are collected and returned in order
+  ///   - Operation completes when last chunk is received or error occurs
+  ///   - Timeout protection prevents indefinite waiting
+  /// 
+  /// Raises:
+  ///   - TimeoutException if audio generation exceeds timeout
+  ///   - TTSException if audio generation fails
+  ///   - WebSocketException if connection is lost during generation
   Future<List<AudioChunkMessage>> sendTTSRequestAndWaitForAudio({
     required String text,
     required String provider,
@@ -348,7 +401,20 @@ class WebSocketConnectionManager {
     };
   }
   
-  /// Perform health check
+  /// Performs comprehensive health check of WebSocket connection and services.
+  /// 
+  /// Requires:
+  ///   - Connection manager must be initialized
+  ///   - Access to underlying service metrics
+  /// 
+  /// Ensures:
+  ///   - Returns detailed health status including connection state
+  ///   - Identifies specific issues with connection or message flow
+  ///   - Provides actionable statistics for troubleshooting
+  ///   - Health status reflects real-time service condition
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (returns health status with issues)
   Future<HealthCheckResult> performHealthCheck() async {
     final stats = _webSocketService.getConnectionStats();
     final metrics = _webSocketService.metrics;
@@ -486,7 +552,20 @@ class WebSocketConnectionManager {
     return 'Unknown error event';
   }
   
-  /// Dispose all resources
+  /// Disposes all resources and cleanly shuts down connection manager.
+  /// 
+  /// Requires:
+  ///   - Connection manager must be instantiated (state irrelevant)
+  /// 
+  /// Ensures:
+  ///   - All timers and periodic tasks are cancelled
+  ///   - All stream subscriptions are closed
+  ///   - Message subscriptions are cleaned up
+  ///   - Underlying services are properly disposed
+  ///   - Memory leaks are prevented
+  /// 
+  /// Raises:
+  ///   - No exceptions propagate (cleanup errors are suppressed)
   void dispose() {
     _connectionMonitorTimer?.cancel();
     _messageSubscription?.cancel();

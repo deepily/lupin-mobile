@@ -8,7 +8,11 @@ import '../../core/cache/audio_compression.dart';
 import '../../shared/models/models.dart';
 import '../tts/tts_service.dart';
 
-/// High-level audio cache management service
+/// High-level audio cache management service coordinating multiple cache layers.
+/// 
+/// Provides unified interface for TTS response caching, voice recording storage,
+/// audio compression, cache analytics, and intelligent eviction management.
+/// Optimizes audio storage and retrieval across the entire application.
 class AudioCacheManager {
   final AudioCache _audioCache;
   final VoiceRecordingCache _voiceRecordingCache;
@@ -35,6 +39,20 @@ class AudioCacheManager {
   Stream<AudioCacheStatus> get statusStream => _statusController.stream;
   Stream<AudioCacheManagerEvent> get eventStream => _eventController.stream;
   
+  /// Creates a new audio cache manager with configurable components.
+  /// 
+  /// Requires:
+  ///   - audioCache must be a properly initialized audio cache instance
+  ///   - voiceRecordingCache must be a configured voice recording cache
+  ///   - analytics must be a functional cache analytics instance
+  ///   - evictionManager must be a properly configured eviction manager
+  ///   - compression must be a working audio compression service
+  ///   - maxCacheSizeMB must be positive (defaults to 200MB)
+  /// 
+  /// Ensures:
+  ///   - All cache components are properly wired together
+  ///   - Configuration values are validated and stored
+  ///   - Service is ready for initialization
   AudioCacheManager({
     required AudioCache audioCache,
     required VoiceRecordingCache voiceRecordingCache,
@@ -55,7 +73,21 @@ class AudioCacheManager {
         _enablePrefetch = enablePrefetch,
         _commonPhrases = commonPhrases ?? _defaultCommonPhrases;
 
-  /// Initialize the cache manager
+  /// Initializes all cache components and sets up maintenance tasks.
+  /// 
+  /// Requires:
+  ///   - All injected cache components must be ready for initialization
+  ///   - Sufficient device storage must be available
+  /// 
+  /// Ensures:
+  ///   - All cache layers are properly initialized and functional
+  ///   - Maintenance tasks are scheduled for optimal performance
+  ///   - Common phrases are pre-cached if prefetch is enabled
+  ///   - Service status transitions to ready state
+  /// 
+  /// Raises:
+  ///   - CacheInitializationException if any component fails to initialize
+  ///   - StorageException if insufficient disk space available
   Future<void> initialize() async {
     if (_isInitialized) return;
     
@@ -92,7 +124,23 @@ class AudioCacheManager {
     }
   }
   
-  /// Cache TTS response
+  /// Caches TTS response with optional compression and analytics tracking.
+  /// 
+  /// Requires:
+  ///   - text must be non-empty and valid for TTS
+  ///   - provider must be a valid TTS provider identifier
+  ///   - chunks must be a non-empty list of valid audio chunks
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - Audio chunks are compressed if compression is enabled
+  ///   - TTS response is stored for future retrieval
+  ///   - Cache analytics are updated with storage metrics
+  ///   - Eviction is triggered if cache size limits are exceeded
+  /// 
+  /// Raises:
+  ///   - CompressionException if audio compression fails
+  ///   - CacheStorageException if storage operation fails
   Future<void> cacheTTSResponse({
     required String text,
     required String provider,
@@ -154,7 +202,22 @@ class AudioCacheManager {
     }
   }
   
-  /// Get cached TTS response
+  /// Retrieves cached TTS response with automatic decompression.
+  /// 
+  /// Requires:
+  ///   - text must be non-empty and match a cached entry
+  ///   - provider must be a valid TTS provider identifier
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - Returns cached audio chunks if available and valid
+  ///   - Compressed chunks are automatically decompressed
+  ///   - Cache hit is recorded in analytics
+  ///   - Returns null if no cached response exists
+  /// 
+  /// Raises:
+  ///   - DecompressionException if compressed audio cannot be decompressed
+  ///   - CacheRetrievalException if cache access fails
   Future<List<AudioChunk>?> getCachedTTSResponse({
     required String text,
     required String provider,
@@ -210,7 +273,22 @@ class AudioCacheManager {
     }
   }
   
-  /// Cache voice recording
+  /// Caches a voice recording with optional compression and metadata.
+  /// 
+  /// Requires:
+  ///   - voiceInput must be a valid voice input with non-empty ID
+  ///   - audioData must be non-empty audio data
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - Voice recording is compressed if compression is enabled and size > 2KB
+  ///   - Recording is stored with transcription and metadata
+  ///   - Cache analytics are updated with storage metrics
+  ///   - Eviction is triggered if cache size limits are exceeded
+  /// 
+  /// Raises:
+  ///   - CompressionException if audio compression fails
+  ///   - CacheStorageException if storage operation fails
   Future<void> cacheVoiceRecording({
     required VoiceInput voiceInput,
     required Uint8List audioData,
@@ -262,7 +340,21 @@ class AudioCacheManager {
     }
   }
   
-  /// Get cached voice recording
+  /// Retrieves cached voice recording with automatic decompression.
+  /// 
+  /// Requires:
+  ///   - recordingId must be a valid, non-empty recording identifier
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - Returns cached recording data if available
+  ///   - Compressed recordings are automatically decompressed
+  ///   - Cache hit is recorded in analytics
+  ///   - Returns null if no cached recording exists
+  /// 
+  /// Raises:
+  ///   - DecompressionException if compressed audio cannot be decompressed
+  ///   - CacheRetrievalException if cache access fails
   Future<VoiceRecordingData?> getCachedVoiceRecording(String recordingId) async {
     try {
       final data = await _voiceRecordingCache.getRecording(recordingId);
@@ -336,7 +428,20 @@ class AudioCacheManager {
     }
   }
   
-  /// Get cache statistics
+  /// Retrieves comprehensive cache statistics and performance metrics.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be initialized
+  ///   - All cache components must be accessible
+  /// 
+  /// Ensures:
+  ///   - Returns current cache usage statistics
+  ///   - Includes hit rates, compression ratios, and provider stats
+  ///   - Statistics reflect real-time cache state
+  ///   - Memory and storage usage are accurately calculated
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (returns empty stats on error)
   Future<AudioCacheStatistics> getStatistics() async {
     final audioStats = await _audioCache.getStats();
     final voiceStats = await _voiceRecordingCache.getStats();
@@ -357,7 +462,20 @@ class AudioCacheManager {
     );
   }
   
-  /// Clear cache for specific provider
+  /// Clears all cached content for a specific TTS provider.
+  /// 
+  /// Requires:
+  ///   - provider must be a valid TTS provider identifier
+  ///   - Cache manager must be initialized
+  /// 
+  /// Ensures:
+  ///   - All cached responses for the provider are removed
+  ///   - Provider statistics are reset to zero
+  ///   - Cache cleared event is emitted
+  ///   - Storage space is freed immediately
+  /// 
+  /// Raises:
+  ///   - CacheOperationException if cache clearing fails
   Future<void> clearProviderCache(String provider) async {
     try {
       await _audioCache.clearProviderCache(provider);
@@ -375,7 +493,20 @@ class AudioCacheManager {
     }
   }
   
-  /// Clear all caches
+  /// Clears all cached content across all providers and types.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be initialized
+  ///   - User must have confirmed the clear operation
+  /// 
+  /// Ensures:
+  ///   - All TTS responses and voice recordings are removed
+  ///   - All cache statistics are reset to zero
+  ///   - Storage space is completely freed
+  ///   - Cache cleared event is emitted
+  /// 
+  /// Raises:
+  ///   - CacheOperationException if cache clearing fails
   Future<void> clearAllCaches() async {
     try {
       await _audioCache.clearAll();
@@ -394,7 +525,20 @@ class AudioCacheManager {
     }
   }
   
-  /// Optimize caches
+  /// Performs comprehensive cache optimization and cleanup.
+  /// 
+  /// Requires:
+  ///   - Cache manager must be initialized
+  ///   - Sufficient system resources for optimization process
+  /// 
+  /// Ensures:
+  ///   - Expired entries are removed from all caches
+  ///   - Cache fragmentation is reduced through reorganization
+  ///   - Eviction is performed if cache exceeds size limits
+  ///   - Cache optimization event is emitted with freed space
+  /// 
+  /// Raises:
+  ///   - CacheOptimizationException if optimization process fails
   Future<void> optimizeCaches() async {
     try {
       _statusController.add(AudioCacheStatus.optimizing);

@@ -5,7 +5,11 @@ import 'audio_cache.dart';
 import 'voice_recording_cache.dart';
 import 'cache_analytics.dart';
 
-/// Manages cache eviction strategies
+/// Manages intelligent cache eviction with multiple strategies and analytics.
+/// 
+/// Coordinates cache cleanup across multiple cache types using configurable
+/// eviction strategies, automatic monitoring, and smart recommendations.
+/// Ensures optimal cache performance and resource utilization.
 class EvictionManager {
   final AudioCache _audioCache;
   final VoiceRecordingCache _voiceRecordingCache;
@@ -39,7 +43,19 @@ class EvictionManager {
     _initializeStrategies();
   }
   
-  /// Initialize eviction manager
+  /// Initializes eviction manager with periodic cleanup scheduling.
+  /// 
+  /// Requires:
+  ///   - All cache dependencies must be properly configured
+  ///   - System must have sufficient resources for periodic tasks
+  /// 
+  /// Ensures:
+  ///   - Periodic eviction timer is started
+  ///   - Eviction strategies are initialized and ready
+  ///   - Manager is ready to handle eviction requests
+  /// 
+  /// Raises:
+  ///   - InitializationException if dependencies are not available
   Future<void> initialize() async {
     if (_isInitialized) return;
     
@@ -51,7 +67,22 @@ class EvictionManager {
     _isInitialized = true;
   }
   
-  /// Run eviction based on current cache state
+  /// Executes cache eviction based on current utilization and strategy.
+  /// 
+  /// Requires:
+  ///   - currentSizeBytes must be non-negative
+  ///   - maxSizeBytes must be positive and greater than currentSizeBytes
+  ///   - strategy (if provided) must be a valid eviction strategy
+  /// 
+  /// Ensures:
+  ///   - Eviction is performed if utilization exceeds threshold or force is true
+  ///   - Target cache size is achieved through strategic item removal
+  ///   - Analytics are updated with eviction metrics
+  ///   - Eviction events are emitted for monitoring
+  /// 
+  /// Raises:
+  ///   - ArgumentError if size parameters are invalid
+  ///   - EvictionException if eviction process fails
   Future<EvictionResult> runEviction({
     required int currentSizeBytes,
     required int maxSizeBytes,
@@ -127,7 +158,22 @@ class EvictionManager {
     }
   }
   
-  /// Perform smart eviction based on usage patterns
+  /// Performs intelligent eviction using analytics-driven strategy selection.
+  /// 
+  /// Requires:
+  ///   - currentSizeBytes must be non-negative
+  ///   - maxSizeBytes must be positive
+  ///   - Analytics data must be available for pattern analysis
+  /// 
+  /// Ensures:
+  ///   - Optimal eviction strategy is selected based on usage patterns
+  ///   - High hit rate caches use LFU to preserve frequently accessed items
+  ///   - Low hit rate caches use TTL to clear old items
+  ///   - Medium hit rates default to LRU for balanced performance
+  /// 
+  /// Raises:
+  ///   - ArgumentError if size parameters are invalid
+  ///   - AnalyticsException if usage pattern analysis fails
   Future<EvictionResult> smartEviction({
     required int currentSizeBytes,
     required int maxSizeBytes,
@@ -156,7 +202,22 @@ class EvictionManager {
     );
   }
   
-  /// Emergency eviction when cache is critically full
+  /// Performs aggressive eviction for critical cache overflow situations.
+  /// 
+  /// Requires:
+  ///   - currentSizeBytes must indicate critical cache overflow
+  ///   - maxSizeBytes must be positive
+  ///   - Cache must be in critical state requiring immediate action
+  /// 
+  /// Ensures:
+  ///   - Large items are prioritized for removal to free maximum space
+  ///   - Eviction is forced regardless of utilization thresholds
+  ///   - Cache is reduced to safe operating levels quickly
+  ///   - System stability is preserved during memory pressure
+  /// 
+  /// Raises:
+  ///   - ArgumentError if size parameters are invalid
+  ///   - EmergencyEvictionException if critical cleanup fails
   Future<EvictionResult> emergencyEviction({
     required int currentSizeBytes,
     required int maxSizeBytes,
@@ -170,7 +231,21 @@ class EvictionManager {
     );
   }
   
-  /// Clean up expired entries
+  /// Removes all expired cache entries across all cache types.
+  /// 
+  /// Requires:
+  ///   - Cache policies must define valid expiration criteria
+  ///   - All cache types must be accessible
+  /// 
+  /// Ensures:
+  ///   - Expired entries are identified and removed from all caches
+  ///   - Memory and storage space is freed appropriately
+  ///   - Cleanup statistics are accurately tracked and reported
+  ///   - Cache health is improved through expired entry removal
+  /// 
+  /// Raises:
+  ///   - CacheAccessException if cache access fails
+  ///   - CleanupException if expired entry removal fails
   Future<EvictionResult> cleanupExpired() async {
     final startTime = DateTime.now();
     int totalItemsRemoved = 0;
@@ -203,7 +278,21 @@ class EvictionManager {
     );
   }
   
-  /// Get eviction recommendations
+  /// Analyzes cache state and provides intelligent eviction recommendations.
+  /// 
+  /// Requires:
+  ///   - All cache systems must be accessible for analysis
+  ///   - Analytics data must be available for pattern analysis
+  /// 
+  /// Ensures:
+  ///   - Returns prioritized list of eviction recommendations
+  ///   - Recommendations include estimated space savings
+  ///   - Each recommendation specifies optimal eviction strategy
+  ///   - Analysis considers hit rates, item age, and size patterns
+  /// 
+  /// Raises:
+  ///   - AnalysisException if cache analysis fails
+  ///   - No exceptions for empty recommendations
   Future<List<EvictionRecommendation>> getEvictionRecommendations() async {
     final recommendations = <EvictionRecommendation>[];
     
@@ -248,7 +337,19 @@ class EvictionManager {
   /// Get last cleanup time
   DateTime? get lastCleanupTime => _lastCleanupTime;
   
-  /// Dispose resources
+  /// Disposes eviction manager and releases all resources.
+  /// 
+  /// Requires:
+  ///   - Manager must be instantiated (state irrelevant)
+  /// 
+  /// Ensures:
+  ///   - Periodic eviction timer is cancelled
+  ///   - Event streams are properly closed
+  ///   - All strategy handlers are cleaned up
+  ///   - No memory leaks remain
+  /// 
+  /// Raises:
+  ///   - No exceptions propagate (cleanup errors are suppressed)
   void dispose() {
     _periodicEvictionTimer?.cancel();
     _eventController.close();

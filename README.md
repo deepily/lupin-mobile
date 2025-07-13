@@ -144,8 +144,8 @@ src/lupin-mobile/
 
 ### FastAPI Endpoints
 - **WebSocket**: `/ws/{session_id}` - Real-time communication
-- **TTS (OpenAI)**: `POST /api/get-audio` - OpenAI TTS streaming
-- **TTS (ElevenLabs)**: `POST /api/get-audio-elevenlabs` - ElevenLabs TTS streaming
+- **TTS (OpenAI)**: `POST /api/get-speech` - OpenAI TTS streaming
+- **TTS (ElevenLabs)**: `POST /api/get-speech-elevenlabs` - ElevenLabs TTS streaming
 - **Session Management**: `GET /api/get-session-id` - WebSocket session initialization
 
 ### WebSocket Authentication Flow

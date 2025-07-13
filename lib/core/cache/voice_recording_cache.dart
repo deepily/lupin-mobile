@@ -35,6 +35,11 @@ class VoiceRecordingCache {
     return _instance!;
   }
   
+  /// Create instance for testing (bypasses singleton)
+  static Future<VoiceRecordingCache> createForTesting(OfflineManager offlineManager) async {
+    return VoiceRecordingCache._(offlineManager);
+  }
+  
   /// Initialize voice recording cache
   void _initialize() {
     _recordingCache = _offlineManager.getCacheManager<VoiceRecordingData>(

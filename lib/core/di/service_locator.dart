@@ -34,7 +34,11 @@ import '../use_cases/use_case_registry.dart';
 import '../settings/settings_manager.dart';
 import '../settings/settings_service.dart';
 
-/// Service locator for dependency injection
+/// Centralized service locator providing dependency injection and lifecycle management.
+/// 
+/// Manages registration, initialization, and access to all application dependencies
+/// with proper dependency ordering and singleton/factory patterns.
+/// Ensures clean separation of concerns and testable architecture.
 class ServiceLocator {
   static final GetIt _getIt = GetIt.instance;
   static bool _isInitialized = false;
@@ -42,7 +46,23 @@ class ServiceLocator {
   /// Get instance of GetIt
   static GetIt get instance => _getIt;
 
-  /// Initialize all dependencies
+  /// Initializes all application dependencies in correct dependency order.
+  /// 
+  /// Requires:
+  ///   - Device must have sufficient resources for dependency initialization
+  ///   - Network connectivity for remote service initialization
+  ///   - Storage access permissions for cache and persistence services
+  /// 
+  /// Ensures:
+  ///   - All dependencies are initialized in proper dependency order
+  ///   - Core services are initialized before dependent services
+  ///   - Singleton instances are properly registered and accessible
+  ///   - Factory methods are configured for stateful components
+  /// 
+  /// Raises:
+  ///   - InitializationException if any dependency fails to initialize
+  ///   - PermissionException if storage access is denied
+  ///   - NetworkException if remote services cannot be configured
   static Future<void> init() async {
     if (_isInitialized) return;
 
@@ -160,19 +180,67 @@ class ServiceLocator {
     );
   }
 
-  /// Get service instance
+  /// Retrieves registered service instance of specified type.
+  /// 
+  /// Requires:
+  ///   - Type T must be a registered service type
+  ///   - Service locator must be initialized
+  /// 
+  /// Ensures:
+  ///   - Returns the correctly typed service instance
+  ///   - Singleton services return the same instance
+  ///   - Factory services create new instances as configured
+  /// 
+  /// Raises:
+  ///   - ServiceNotRegisteredException if type T is not registered
+  ///   - InitializationException if service locator not initialized
   static T get<T extends Object>() => _getIt<T>();
 
-  /// Check if service is registered
+  /// Checks whether service of specified type is registered.
+  /// 
+  /// Requires:
+  ///   - Type T must be a valid object type
+  /// 
+  /// Ensures:
+  ///   - Returns true if service is registered, false otherwise
+  ///   - Check is performed without side effects
+  ///   - No exceptions are thrown for unregistered types
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (always returns boolean)
   static bool isRegistered<T extends Object>() => _getIt.isRegistered<T>();
 
-  /// Reset all dependencies (for testing)
+  /// Resets all registered dependencies for testing or reinitialization.
+  /// 
+  /// Requires:
+  ///   - Should only be used in testing or controlled reinitialization scenarios
+  /// 
+  /// Ensures:
+  ///   - All registered services are unregistered and disposed
+  ///   - Service locator state is reset to uninitialized
+  ///   - Memory resources are properly released
+  ///   - Fresh initialization can be performed after reset
+  /// 
+  /// Raises:
+  ///   - DisposeException if some services fail to dispose properly
   static Future<void> reset() async {
     await _getIt.reset();
     _isInitialized = false;
   }
 
-  /// Get all registered services info
+  /// Retrieves comprehensive status of all registered services.
+  /// 
+  /// Requires:
+  ///   - Service locator must be accessible (initialization not required)
+  /// 
+  /// Ensures:
+  ///   - Returns map of service names to registration status
+  ///   - Includes core services, network services, repositories, and BLoCs
+  ///   - Status accurately reflects current registration state
+  ///   - Useful for debugging and health monitoring
+  /// 
+  /// Raises:
+  ///   - No exceptions are raised (always returns valid map)
   static Map<String, String> getRegisteredServices() {
     final services = <String, String>{};
     

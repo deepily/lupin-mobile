@@ -1,10 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
-import 'dart:async';
-import '../../../lib/core/monitoring/performance_monitor.dart';
-import '../../../lib/core/monitoring/monitoring_models.dart';
-import '../../../lib/core/storage/storage_manager.dart';
+import 'package:lupin_mobile/core/monitoring/performance_monitor.dart';
+import 'package:lupin_mobile/core/monitoring/monitoring_models.dart';
+import 'package:lupin_mobile/core/storage/storage_manager.dart';
 
 // Generate mocks
 @GenerateMocks([StorageManager])
@@ -19,7 +18,7 @@ void main() {
       mockStorage = MockStorageManager();
       
       // Mock storage responses
-      when(mockStorage.getString(any)).thenAnswer((_) async => null);
+      when(mockStorage.getString(any)).thenReturn(null);
       when(mockStorage.setString(any, any)).thenAnswer((_) async => true);
       
       monitor = await PerformanceMonitor.getInstance(
@@ -135,7 +134,6 @@ void main() {
       test('should create and use performance timer', () async {
         await monitor.startMonitoring();
         
-        bool eventRecorded = false;
         final timer = monitor.startTimer('timed_operation', category: 'test');
         
         // Simulate some work
