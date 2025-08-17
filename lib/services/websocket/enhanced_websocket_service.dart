@@ -14,7 +14,8 @@ import '../../core/constants/app_constants.dart';
 /// Supports both text and binary message types with intelligent routing.
 class EnhancedWebSocketService {
   final Dio _dio;
-  WebSocketChannel? _channel;
+  WebSocketChannel? _queueChannel;
+  WebSocketChannel? _audioChannel;
   
   // Message handling
   final StreamController<WebSocketMessage> _messageController = 
@@ -33,12 +34,22 @@ class EnhancedWebSocketService {
   Timer? _queueProcessTimer;
   Timer? _healthCheckTimer;
   
+  // Stream subscriptions
+  StreamSubscription? _queueSubscription;
+  StreamSubscription? _audioSubscription;
+  
   // Connection state
-  WebSocketConnectionState _connectionState = WebSocketConnectionState.disconnected;
+  WebSocketConnectionState _queueConnectionState = WebSocketConnectionState.disconnected;
+  WebSocketConnectionState _audioConnectionState = WebSocketConnectionState.disconnected;
   bool _shouldReconnect = true;
   int _reconnectAttempts = 0;
   DateTime? _lastConnectedTime;
   DateTime? _lastMessageTime;
+  
+  // Reconnection configuration
+  int _maxReconnectAttempts = 10;
+  Duration _baseReconnectDelay = const Duration(seconds: 1);
+  bool _isReconnecting = false;
   
   // Configuration
   static const int maxReconnectAttempts = 10;
@@ -59,9 +70,12 @@ class EnhancedWebSocketService {
   final WebSocketMetrics _metrics = WebSocketMetrics();
   
   // Public getters
-  bool get isConnected => _connectionState == WebSocketConnectionState.connected;
-  bool get isConnecting => _connectionState == WebSocketConnectionState.connecting;
-  WebSocketConnectionState get connectionState => _connectionState;
+  bool get isConnected => _queueConnectionState == WebSocketConnectionState.connected;
+  bool get isAudioConnected => _audioConnectionState == WebSocketConnectionState.connected;
+  bool get isConnecting => _queueConnectionState == WebSocketConnectionState.connecting || _audioConnectionState == WebSocketConnectionState.connecting;
+  bool get isBothConnected => isConnected && isAudioConnected;
+  WebSocketConnectionState get queueConnectionState => _queueConnectionState;
+  WebSocketConnectionState get audioConnectionState => _audioConnectionState;
   String? get sessionId => _sessionId;
   String? get userId => _userId;
   Stream<WebSocketMessage> get messageStream => _messageController.stream;
@@ -70,9 +84,17 @@ class EnhancedWebSocketService {
   int get queueSize => _messageQueue.length;
   int get priorityQueueSize => _priorityQueue.length;
   
+  // Base URL for WebSocket connections
+  String _baseUrl = 'ws://localhost:7999';
+  
   EnhancedWebSocketService(this._dio) {
     _startHealthCheck();
     _startQueueProcessor();
+  }
+  
+  /// Set the base URL for WebSocket connections
+  void setBaseUrl(String baseUrl) {
+    _baseUrl = baseUrl;
   }
   
   /// Establishes WebSocket connection with enhanced error handling and resilience.
@@ -96,17 +118,9 @@ class EnhancedWebSocketService {
     String? userId,
     Map<String, String>? headers,
     bool clearQueue = false,
+    bool connectQueue = true,
+    bool connectAudio = true,
   }) async {
-    if (_connectionState == WebSocketConnectionState.connected) {
-      return;
-    }
-    
-    if (_connectionState == WebSocketConnectionState.connecting) {
-      // Wait for current connection attempt
-      await _waitForConnection();
-      return;
-    }
-    
     _userId = userId;
     _shouldReconnect = true;
     
@@ -114,64 +128,126 @@ class EnhancedWebSocketService {
       _clearQueues();
     }
     
-    await _establishConnection(headers: headers);
+    // Connect queue WebSocket if requested and not already connected
+    if (connectQueue && _queueConnectionState != WebSocketConnectionState.connected) {
+      await _establishQueueConnection(headers: headers);
+    }
+    
+    // Connect audio WebSocket if requested and not already connected  
+    if (connectAudio && _audioConnectionState != WebSocketConnectionState.connected) {
+      await _establishAudioConnection(headers: headers);
+    }
   }
   
-  /// Enhanced connection establishment with better error handling
-  Future<void> _establishConnection({Map<String, String>? headers}) async {
-    _setConnectionState(WebSocketConnectionState.connecting);
+  /// Establishes queue WebSocket connection for main UI events
+  Future<void> _establishQueueConnection({Map<String, String>? headers}) async {
+    _setQueueConnectionState(WebSocketConnectionState.connecting);
     
     try {
       _metrics.connectionAttempts++;
       
-      // Step 1: Get session ID with retry logic
-      _sessionId = await _getSessionIdWithRetry();
+      // Step 1: Get session ID with retry logic (only once for both connections)
+      if (_sessionId == null) {
+        _sessionId = await _getSessionIdWithRetry();
+      }
       
-      // Step 2: Connect to WebSocket
-      final uri = Uri.parse('${AppConstants.wsBaseUrl}/ws/$_sessionId');
+      // Step 2: Connect to queue WebSocket
+      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
       
-      _eventController.add(WebSocketEvent.connecting(uri.toString()));
+      _eventController.add(WebSocketEvent.connecting('Queue: ${uri.toString()}'));
       
-      _channel = WebSocketChannel.connect(
+      _queueChannel = WebSocketChannel.connect(
         uri,
         protocols: ['lupin-mobile-v1'],
       );
       
       // Wait for connection with timeout
-      await _channel!.ready.timeout(
+      await _queueChannel!.ready.timeout(
         const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Connection timeout'),
+        onTimeout: () => throw TimeoutException('Queue connection timeout'),
       );
       
-      _setConnectionState(WebSocketConnectionState.connected);
+      _setQueueConnectionState(WebSocketConnectionState.connected);
       _lastConnectedTime = DateTime.now();
       _reconnectAttempts = 0;
       _metrics.successfulConnections++;
       
-      _eventController.add(WebSocketEvent.connected(_sessionId!));
+      _eventController.add(WebSocketEvent.connected('Queue: $_sessionId'));
       
-      // Start listening to messages
-      _channel!.stream.listen(
-        _handleIncomingMessage,
-        onError: _handleConnectionError,
-        onDone: _handleConnectionClosed,
+      // Start listening to queue messages
+      _queueChannel!.stream.listen(
+        (message) => _handleIncomingMessage(message, isAudioChannel: false),
+        onError: (error) => _handleConnectionError(error, isAudioChannel: false),
+        onDone: () => _handleConnectionClosed(isAudioChannel: false),
       );
       
-      // Step 3: Authenticate if user provided
+      // Step 3: Authenticate queue connection
       if (_userId != null) {
-        await _authenticateWithRetry(_userId!);
+        await _authenticateWithRetry(_userId!, isAudioChannel: false);
       }
       
-      // Step 4: Start periodic tasks
+      // Step 4: Start periodic tasks (only for queue connection)
       _startPingTimer();
       _processMessageQueue();
       
     } catch (e) {
       _metrics.failedConnections++;
-      _setConnectionState(WebSocketConnectionState.disconnected);
-      _eventController.add(WebSocketEvent.connectionFailed(e.toString()));
+      _setQueueConnectionState(WebSocketConnectionState.disconnected);
+      _eventController.add(WebSocketEvent.connectionFailed('Queue: $e'));
       
       await _scheduleReconnect();
+    }
+  }
+  
+  /// Establishes audio WebSocket connection for TTS streaming
+  Future<void> _establishAudioConnection({Map<String, String>? headers}) async {
+    _setAudioConnectionState(WebSocketConnectionState.connecting);
+    
+    try {
+      _metrics.connectionAttempts++;
+      
+      // Step 1: Ensure session ID is available
+      if (_sessionId == null) {
+        _sessionId = await _getSessionIdWithRetry();
+      }
+      
+      // Step 2: Connect to audio WebSocket
+      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsAudioEndpoint}/$_sessionId');
+      
+      _eventController.add(WebSocketEvent.connecting('Audio: ${uri.toString()}'));
+      
+      _audioChannel = WebSocketChannel.connect(
+        uri,
+        protocols: ['lupin-mobile-v1'],
+      );
+      
+      // Wait for connection with timeout
+      await _audioChannel!.ready.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Audio connection timeout'),
+      );
+      
+      _setAudioConnectionState(WebSocketConnectionState.connected);
+      _metrics.successfulConnections++;
+      
+      _eventController.add(WebSocketEvent.connected('Audio: $_sessionId'));
+      
+      // Start listening to audio messages
+      _audioChannel!.stream.listen(
+        (message) => _handleIncomingMessage(message, isAudioChannel: true),
+        onError: (error) => _handleConnectionError(error, isAudioChannel: true),
+        onDone: () => _handleConnectionClosed(isAudioChannel: true),
+      );
+      
+      // Step 3: Authentication is optional for audio channel
+      // Audio channel can be pre-registered via TTS API request
+      
+    } catch (e) {
+      _metrics.failedConnections++;
+      _setAudioConnectionState(WebSocketConnectionState.disconnected);
+      _eventController.add(WebSocketEvent.connectionFailed('Audio: $e'));
+      
+      // Audio connection failure is not critical, don't trigger reconnect
     }
   }
   
@@ -204,10 +280,10 @@ class EnhancedWebSocketService {
   }
   
   /// Enhanced authentication with retry logic
-  Future<void> _authenticateWithRetry(String userId, {int maxRetries = 3}) async {
+  Future<void> _authenticateWithRetry(String userId, {int maxRetries = 3, bool isAudioChannel = false}) async {
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        _authToken = 'enhanced_token_${userId}_${DateTime.now().millisecondsSinceEpoch}';
+        _authToken = 'Bearer mock_token_email_$userId';
         
         final authMessage = WebSocketMessage.authentication(
           token: _authToken!,
@@ -217,12 +293,13 @@ class EnhancedWebSocketService {
             'platform': 'flutter',
             'version': '1.0.0',
             'capabilities': ['audio', 'binary', 'compression'],
+            'channel': isAudioChannel ? 'audio' : 'queue',
           },
         );
         
         final response = await sendMessageWithResponse(authMessage, timeout: const Duration(seconds: 10));
         
-        if (response.type == 'auth_success') {
+        if (response.type == AppConstants.eventAuthSuccess) {
           _eventController.add(WebSocketEvent.authenticated(userId));
           return;
         } else {
@@ -241,7 +318,7 @@ class EnhancedWebSocketService {
   }
   
   /// Enhanced message handling with type safety and routing
-  void _handleIncomingMessage(dynamic rawMessage) {
+  void _handleIncomingMessage(dynamic rawMessage, {bool isAudioChannel = false}) {
     try {
       _lastMessageTime = DateTime.now();
       _metrics.messagesReceived++;
@@ -480,19 +557,24 @@ class EnhancedWebSocketService {
   
   /// Send message directly without queuing
   Future<void> _sendMessageDirectly(WebSocketMessage message) async {
-    if (!isConnected || _channel == null) {
-      throw Exception('WebSocket not connected');
+    // Determine which channel to use based on message type
+    final useAudioChannel = _isAudioMessage(message);
+    final channel = useAudioChannel ? _audioChannel : _queueChannel;
+    final isChannelConnected = useAudioChannel ? isAudioConnected : isConnected;
+    
+    if (!isChannelConnected || channel == null) {
+      throw Exception('WebSocket ${useAudioChannel ? "audio" : "queue"} channel not connected');
     }
     
     try {
       _metrics.messagesSent++;
       
       if (message.binaryData != null) {
-        _channel!.sink.add(message.binaryData!);
+        channel.sink.add(message.binaryData!);
         _metrics.binaryMessagesSent++;
       } else {
         final encoded = jsonEncode(message.toJson());
-        _channel!.sink.add(encoded);
+        channel.sink.add(encoded);
         _metrics.textMessagesSent++;
       }
       
@@ -501,6 +583,20 @@ class EnhancedWebSocketService {
       _eventController.add(WebSocketEvent.messageSendFailed(e.toString()));
       throw Exception('Failed to send message: $e');
     }
+  }
+  
+  /// Determines if a message should be sent through the audio channel
+  bool _isAudioMessage(WebSocketMessage message) {
+    const audioMessageTypes = {
+      AppConstants.eventAudioStreamingChunk,
+      AppConstants.eventAudioStreamingStatus,
+      AppConstants.eventAudioStreamingComplete,
+      'tts_request',
+      'voice_input',
+      'binary', // Binary data typically goes to audio channel
+    };
+    
+    return audioMessageTypes.contains(message.type) || message.binaryData != null;
   }
   
   /// Process message queue
@@ -548,38 +644,48 @@ class EnhancedWebSocketService {
   }
   
   /// Enhanced connection error handling
-  void _handleConnectionError(dynamic error) {
+  void _handleConnectionError(dynamic error, {bool isAudioChannel = false}) {
     _metrics.connectionErrors++;
-    _setConnectionState(WebSocketConnectionState.error);
     
-    _eventController.add(WebSocketEvent.connectionError(error.toString()));
-    
-    // Clean up
-    _pingTimer?.cancel();
-    
-    if (_shouldReconnect) {
-      _scheduleReconnect();
+    if (isAudioChannel) {
+      _setAudioConnectionState(WebSocketConnectionState.error);
+      _eventController.add(WebSocketEvent.connectionError('Audio: $error'));
+    } else {
+      _setQueueConnectionState(WebSocketConnectionState.error);
+      _eventController.add(WebSocketEvent.connectionError('Queue: $error'));
+      
+      // Only cancel ping timer for queue connection
+      _pingTimer?.cancel();
+      
+      if (_shouldReconnect) {
+        _scheduleReconnect();
+      }
     }
   }
   
   /// Enhanced connection closed handling
-  void _handleConnectionClosed() {
-    _setConnectionState(WebSocketConnectionState.disconnected);
-    _eventController.add(WebSocketEvent.disconnected());
-    
-    // Clean up
-    _pingTimer?.cancel();
-    
-    // Complete pending requests with error
-    for (final pendingRequest in _pendingRequests.values) {
-      pendingRequest.completer.completeError(
-        Exception('Connection closed'),
-      );
-    }
-    _pendingRequests.clear();
-    
-    if (_shouldReconnect) {
-      _scheduleReconnect();
+  void _handleConnectionClosed({bool isAudioChannel = false}) {
+    if (isAudioChannel) {
+      _setAudioConnectionState(WebSocketConnectionState.disconnected);
+      _eventController.add(WebSocketEvent.disconnected());
+    } else {
+      _setQueueConnectionState(WebSocketConnectionState.disconnected);
+      _eventController.add(WebSocketEvent.disconnected());
+      
+      // Only clean up ping timer for queue connection
+      _pingTimer?.cancel();
+      
+      // Complete pending requests with error (only for queue connection)
+      for (final pendingRequest in _pendingRequests.values) {
+        pendingRequest.completer.completeError(
+          Exception('Connection closed'),
+        );
+      }
+      _pendingRequests.clear();
+      
+      if (_shouldReconnect) {
+        _scheduleReconnect();
+      }
     }
   }
   
@@ -614,6 +720,374 @@ class EnhancedWebSocketService {
         _establishConnection();
       }
     });
+  }
+  
+  /// Establish WebSocket connections with robust error handling
+  Future<void> _establishConnection() async {
+    if (_isReconnecting) {
+      print('[WebSocket] Already reconnecting, skipping duplicate attempt');
+      return;
+    }
+    
+    _isReconnecting = true;
+    
+    try {
+      final queueUrl = '${_baseUrl}/ws/queue/${_sessionId ?? 'default'}';
+      final audioUrl = '${_baseUrl}/ws/audio/${_sessionId ?? 'default'}';
+      
+      print('[WebSocket] Establishing connections to $queueUrl and $audioUrl (attempt ${_reconnectAttempts + 1})');
+      
+      // Update connection states
+      _queueConnectionState = WebSocketConnectionState.connecting;
+      _audioConnectionState = WebSocketConnectionState.connecting;
+      
+      // Emit connecting events
+      _eventController.add(WebSocketEvent.connecting(queueUrl));
+      
+      // Establish queue connection
+      await _connectToQueue(queueUrl);
+      
+      // Establish audio connection
+      await _connectToAudio(audioUrl);
+      
+      // If we get here, both connections succeeded
+      _onConnectionSuccess();
+      
+    } catch (e) {
+      print('[WebSocket] Connection establishment failed: $e');
+      _onConnectionFailure(e.toString());
+    } finally {
+      _isReconnecting = false;
+    }
+  }
+  
+  /// Connect to queue WebSocket
+  Future<void> _connectToQueue(String url) async {
+    try {
+      print('[WebSocket] Connecting to queue: $url');
+      
+      // Cancel existing subscription first
+      await _queueSubscription?.cancel();
+      _queueSubscription = null;
+      
+      // Close existing connection if any
+      await _queueChannel?.sink.close();
+      _queueChannel = null;
+      
+      // Create new connection with timeout
+      _queueChannel = WebSocketChannel.connect(
+        Uri.parse(url),
+        // Add headers if needed for authentication
+      );
+      
+      // Wait for initial connection success using a separate completer
+      final connectionCompleter = Completer<void>();
+      bool isFirstMessage = true;
+      
+      // Set up message listener that handles both connection confirmation and ongoing messages
+      _queueSubscription = _queueChannel!.stream.listen(
+        (message) {
+          if (isFirstMessage) {
+            isFirstMessage = false;
+            print('[WebSocket] Received initial message on queue channel, connection confirmed');
+            if (!connectionCompleter.isCompleted) {
+              connectionCompleter.complete();
+            }
+          }
+          _handleQueueMessage(message);
+        },
+        onError: (error) {
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.completeError(error);
+          }
+          _handleQueueError(error);
+        },
+        onDone: () {
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.completeError(Exception('Connection closed during setup'));
+          }
+          _handleQueueDisconnection();
+        },
+      );
+      
+      // Send authentication message
+      _sendAuthenticationMessage(_queueChannel!, 'queue');
+      
+      // Wait for connection confirmation with timeout
+      await connectionCompleter.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Queue connection timeout', const Duration(seconds: 10)),
+      );
+      
+      _queueConnectionState = WebSocketConnectionState.connected;
+      _eventController.add(WebSocketEvent.queueConnected());
+      
+      print('[WebSocket] Queue connection established successfully');
+      
+    } catch (e) {
+      _queueConnectionState = WebSocketConnectionState.error;
+      _eventController.add(WebSocketEvent.queueConnectionFailed(e.toString()));
+      throw Exception('Queue connection failed: $e');
+    }
+  }
+  
+  /// Connect to audio WebSocket
+  Future<void> _connectToAudio(String url) async {
+    try {
+      print('[WebSocket] Connecting to audio: $url');
+      
+      // Cancel existing subscription first
+      await _audioSubscription?.cancel();
+      _audioSubscription = null;
+      
+      // Close existing connection if any
+      await _audioChannel?.sink.close();
+      _audioChannel = null;
+      
+      // Create new connection
+      _audioChannel = WebSocketChannel.connect(Uri.parse(url));
+      
+      // Wait for initial connection success using a separate completer
+      final connectionCompleter = Completer<void>();
+      bool isFirstMessage = true;
+      
+      // Set up message listener that handles both connection confirmation and ongoing messages
+      _audioSubscription = _audioChannel!.stream.listen(
+        (message) {
+          if (isFirstMessage) {
+            isFirstMessage = false;
+            print('[WebSocket] Received initial message on audio channel, connection confirmed');
+            if (!connectionCompleter.isCompleted) {
+              connectionCompleter.complete();
+            }
+          }
+          _handleAudioMessage(message);
+        },
+        onError: (error) {
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.completeError(error);
+          }
+          _handleAudioError(error);
+        },
+        onDone: () {
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.completeError(Exception('Connection closed during setup'));
+          }
+          _handleAudioDisconnection();
+        },
+      );
+      
+      // Send authentication message
+      _sendAuthenticationMessage(_audioChannel!, 'audio');
+      
+      // Wait for connection confirmation with timeout
+      await connectionCompleter.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Audio connection timeout', const Duration(seconds: 10)),
+      );
+      
+      _audioConnectionState = WebSocketConnectionState.connected;
+      _eventController.add(WebSocketEvent.audioConnected());
+      
+      print('[WebSocket] Audio connection established successfully');
+      
+    } catch (e) {
+      _audioConnectionState = WebSocketConnectionState.error;
+      _eventController.add(WebSocketEvent.audioConnectionFailed(e.toString()));
+      throw Exception('Audio connection failed: $e');
+    }
+  }
+  
+  /// Removed _waitForConnectionAck method as connection handling is now integrated directly into _connectToQueue and _connectToAudio
+  
+  /// Send authentication message
+  void _sendAuthenticationMessage(WebSocketChannel channel, String type) {
+    final authMessage = {
+      'type': 'auth_request',
+      'data': {
+        'user_id': _userId ?? 'anonymous',
+        'session_id': _sessionId ?? 'default',
+        'channel_type': type,
+        'timestamp': DateTime.now().toIso8601String(),
+      }
+    };
+    
+    try {
+      channel.sink.add(jsonEncode(authMessage));
+      print('[WebSocket] Sent authentication for $type channel');
+    } catch (e) {
+      print('[WebSocket] Failed to send authentication for $type: $e');
+    }
+  }
+  
+  /// Handle successful connection
+  void _onConnectionSuccess() {
+    print('[WebSocket] All connections established successfully');
+    _reconnectAttempts = 0;
+    _lastConnectedTime = DateTime.now();
+    _startHealthMonitoring();
+    _eventController.add(WebSocketEvent.fullyConnected());
+  }
+  
+  /// Handle connection failure and initiate reconnection
+  void _onConnectionFailure(String error) {
+    print('[WebSocket] Connection failed: $error');
+    _eventController.add(WebSocketEvent.connectionFailed(error));
+    
+    if (_shouldReconnect && _reconnectAttempts < _maxReconnectAttempts) {
+      _scheduleReconnection();
+    } else {
+      print('[WebSocket] Max reconnection attempts reached or reconnection disabled');
+      _eventController.add(WebSocketEvent.reconnectionGiveUp(_reconnectAttempts));
+    }
+  }
+  
+  /// Schedule reconnection with exponential backoff
+  void _scheduleReconnection() {
+    _reconnectAttempts++;
+    
+    // Calculate exponential backoff delay
+    final delay = Duration(
+      milliseconds: (_baseReconnectDelay.inMilliseconds * 
+                    (1 << (_reconnectAttempts - 1))).clamp(
+        _baseReconnectDelay.inMilliseconds,
+        30000, // Max 30 seconds
+      ),
+    );
+    
+    print('[WebSocket] Scheduling reconnection attempt $_reconnectAttempts in ${delay.inSeconds}s');
+    _eventController.add(WebSocketEvent.reconnectionScheduled(_reconnectAttempts, delay));
+    
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      print('[WebSocket] Attempting reconnection $_reconnectAttempts');
+      _eventController.add(WebSocketEvent.reconnectionAttempt(_reconnectAttempts));
+      _establishConnection();
+    });
+  }
+  
+  /// Start health monitoring
+  void _startHealthMonitoring() {
+    _startPingTimer();
+    _startConnectionMonitoring();
+  }
+  
+  /// Start connection monitoring
+  void _startConnectionMonitoring() {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _performHealthCheck();
+    });
+  }
+  
+  /// Perform connection health check
+  void _performHealthCheck() {
+    final now = DateTime.now();
+    
+    // Check if we've received messages recently
+    if (_lastMessageTime != null) {
+      final timeSinceLastMessage = now.difference(_lastMessageTime!);
+      if (timeSinceLastMessage > const Duration(minutes: 5)) {
+        print('[WebSocket] No messages received for ${timeSinceLastMessage.inMinutes} minutes, connection may be stale');
+        _eventController.add(WebSocketEvent.connectionStale(timeSinceLastMessage));
+        
+        // Trigger reconnection if connection seems dead
+        if (timeSinceLastMessage > const Duration(minutes: 10)) {
+          print('[WebSocket] Connection appears dead, triggering reconnection');
+          disconnect();
+          connect();
+        }
+      }
+    }
+    
+    // Check connection states
+    if (_queueConnectionState != WebSocketConnectionState.connected ||
+        _audioConnectionState != WebSocketConnectionState.connected) {
+      print('[WebSocket] Health check detected disconnected state, attempting reconnection');
+      connect();
+    }
+  }
+  
+  /// Handle queue message
+  void _handleQueueMessage(dynamic message) {
+    _lastMessageTime = DateTime.now();
+    _eventController.add(WebSocketEvent.messageReceived('queue', message.toString()));
+    
+    try {
+      if (message is String) {
+        final data = jsonDecode(message);
+        final webSocketMessage = WebSocketMessage.fromJson(data);
+        _messageController.add(webSocketMessage);
+      }
+    } catch (e) {
+      print('[WebSocket] Failed to parse queue message: $e');
+      _eventController.add(WebSocketEvent.messageParsingError(e.toString()));
+    }
+  }
+  
+  /// Handle audio message
+  void _handleAudioMessage(dynamic message) {
+    _lastMessageTime = DateTime.now();
+    _eventController.add(WebSocketEvent.messageReceived('audio', 'binary'));
+    
+    try {
+      if (message is List<int>) {
+        final audioData = Uint8List.fromList(message);
+        final audioMessage = WebSocketMessage.audioBinary(audioData);
+        _messageController.add(audioMessage);
+      } else if (message is String) {
+        final data = jsonDecode(message);
+        final webSocketMessage = WebSocketMessage.fromJson(data);
+        _messageController.add(webSocketMessage);
+      }
+    } catch (e) {
+      print('[WebSocket] Failed to process audio message: $e');
+      _eventController.add(WebSocketEvent.messageParsingError(e.toString()));
+    }
+  }
+  
+  /// Handle queue connection error
+  void _handleQueueError(dynamic error) {
+    print('[WebSocket] Queue connection error: $error');
+    _queueConnectionState = WebSocketConnectionState.error;
+    _eventController.add(WebSocketEvent.queueConnectionFailed(error.toString()));
+    
+    if (_shouldReconnect) {
+      _scheduleReconnection();
+    }
+  }
+  
+  /// Handle audio connection error
+  void _handleAudioError(dynamic error) {
+    print('[WebSocket] Audio connection error: $error');
+    _audioConnectionState = WebSocketConnectionState.error;
+    _eventController.add(WebSocketEvent.audioConnectionFailed(error.toString()));
+    
+    if (_shouldReconnect) {
+      _scheduleReconnection();
+    }
+  }
+  
+  /// Handle queue disconnection
+  void _handleQueueDisconnection() {
+    print('[WebSocket] Queue connection closed');
+    _queueConnectionState = WebSocketConnectionState.disconnected;
+    _eventController.add(WebSocketEvent.queueDisconnected());
+    
+    if (_shouldReconnect) {
+      _scheduleReconnection();
+    }
+  }
+  
+  /// Handle audio disconnection
+  void _handleAudioDisconnection() {
+    print('[WebSocket] Audio connection closed');
+    _audioConnectionState = WebSocketConnectionState.disconnected;
+    _eventController.add(WebSocketEvent.audioDisconnected());
+    
+    if (_shouldReconnect) {
+      _scheduleReconnection();
+    }
   }
   
   /// Wait for connection to complete
@@ -659,33 +1133,6 @@ class EnhancedWebSocketService {
     });
   }
   
-  /// Perform connection health check
-  void _performHealthCheck() {
-    if (!isConnected) return;
-    
-    final now = DateTime.now();
-    
-    // Check if we've received any messages recently
-    if (_lastMessageTime != null) {
-      final timeSinceLastMessage = now.difference(_lastMessageTime!);
-      if (timeSinceLastMessage > const Duration(minutes: 2)) {
-        _eventController.add(WebSocketEvent.healthCheckWarning(
-          'No messages received for ${timeSinceLastMessage.inMinutes} minutes',
-        ));
-      }
-    }
-    
-    // Check ping response time
-    if (_metrics.lastPongReceived != null) {
-      final pingAge = now.difference(_metrics.lastPongReceived!);
-      if (pingAge > const Duration(minutes: 1)) {
-        _eventController.add(WebSocketEvent.healthCheckWarning(
-          'No pong received for ${pingAge.inSeconds} seconds',
-        ));
-      }
-    }
-  }
-  
   /// Enhanced ping with better tracking
   void _startPingTimer() {
     _pingTimer?.cancel();
@@ -729,10 +1176,20 @@ class EnhancedWebSocketService {
     ));
   }
   
-  /// Set connection state and emit event
-  void _setConnectionState(WebSocketConnectionState state) {
-    final previousState = _connectionState;
-    _connectionState = state;
+  /// Set queue connection state and emit event
+  void _setQueueConnectionState(WebSocketConnectionState state) {
+    final previousState = _queueConnectionState;
+    _queueConnectionState = state;
+    
+    if (previousState != state) {
+      _eventController.add(WebSocketEvent.stateChanged(previousState, state));
+    }
+  }
+  
+  /// Set audio connection state and emit event
+  void _setAudioConnectionState(WebSocketConnectionState state) {
+    final previousState = _audioConnectionState;
+    _audioConnectionState = state;
     
     if (previousState != state) {
       _eventController.add(WebSocketEvent.stateChanged(previousState, state));
@@ -773,7 +1230,7 @@ class EnhancedWebSocketService {
   ///   - No exceptions are raised (always returns valid stats)
   Map<String, dynamic> getConnectionStats() {
     return {
-      'state': _connectionState.toString(),
+      'state': _queueConnectionState.toString(),
       'session_id': _sessionId,
       'user_id': _userId,
       'connected_at': _lastConnectedTime?.toIso8601String(),
@@ -813,16 +1270,28 @@ class EnhancedWebSocketService {
       _clearQueues();
     }
     
-    if (_channel != null) {
+    // Close queue channel
+    if (_queueChannel != null) {
       try {
-        await _channel!.sink.close(status.goingAway);
+        await _queueChannel!.sink.close(status.goingAway);
       } catch (e) {
         // Ignore close errors
       }
-      _channel = null;
+      _queueChannel = null;
     }
     
-    _setConnectionState(WebSocketConnectionState.disconnected);
+    // Close audio channel
+    if (_audioChannel != null) {
+      try {
+        await _audioChannel!.sink.close(status.goingAway);
+      } catch (e) {
+        // Ignore close errors
+      }
+      _audioChannel = null;
+    }
+    
+    _setQueueConnectionState(WebSocketConnectionState.disconnected);
+    _setAudioConnectionState(WebSocketConnectionState.disconnected);
     _sessionId = null;
     _authToken = null;
     
@@ -830,6 +1299,36 @@ class EnhancedWebSocketService {
   }
   
   /// Dispose resources
+  /// Configure service parameters
+  void configure({
+    String? baseUrl,
+    String? sessionId,
+    String? userId,
+  }) {
+    if (baseUrl != null) {
+      _baseUrl = baseUrl;
+    }
+    if (sessionId != null) {
+      _sessionId = sessionId;
+    }
+    if (userId != null) {
+      _userId = userId;
+    }
+  }
+  
+  /// Configure reconnection parameters
+  void configureReconnection({
+    int? maxAttempts,
+    Duration? baseDelay,
+  }) {
+    if (maxAttempts != null) {
+      _maxReconnectAttempts = maxAttempts;
+    }
+    if (baseDelay != null) {
+      _baseReconnectDelay = baseDelay;
+    }
+  }
+  
   void dispose() {
     disconnect(clearQueue: true);
     _messageController.close();
@@ -1006,6 +1505,32 @@ class WebSocketMessage {
     );
   }
   
+  factory WebSocketMessage.custom({
+    required String type,
+    Map<String, dynamic>? data,
+    Uint8List? binaryData,
+    Map<String, dynamic>? metadata,
+    String? requestId,
+    DateTime? timestamp,
+  }) {
+    return WebSocketMessage(
+      type: type,
+      data: data,
+      binaryData: binaryData,
+      metadata: metadata,
+      requestId: requestId,
+      timestamp: timestamp ?? DateTime.now(),
+    );
+  }
+  
+  factory WebSocketMessage.audioBinary(Uint8List audioData) {
+    return WebSocketMessage(
+      type: 'audio_chunk',
+      binaryData: audioData,
+      timestamp: DateTime.now(),
+    );
+  }
+  
   WebSocketMessage copyWith({
     String? type,
     Map<String, dynamic>? data,
@@ -1037,7 +1562,9 @@ class WebSocketMessage {
 
 /// WebSocket events for external monitoring
 abstract class WebSocketEvent {
-  final DateTime timestamp = DateTime.now();
+  final DateTime timestamp;
+  
+  WebSocketEvent() : timestamp = DateTime.now();
   
   factory WebSocketEvent.connecting(String url) = WebSocketConnectingEvent;
   factory WebSocketEvent.connected(String sessionId) = WebSocketConnectedEvent;
@@ -1060,115 +1587,186 @@ abstract class WebSocketEvent {
   factory WebSocketEvent.rateLimited({int? retryAfter, Map<String, dynamic>? details}) = WebSocketRateLimitedEvent;
   factory WebSocketEvent.healthCheckWarning(String warning) = WebSocketHealthCheckWarningEvent;
   factory WebSocketEvent.pingFailed(String error) = WebSocketPingFailedEvent;
+  factory WebSocketEvent.queueConnected() = WebSocketQueueConnectedEvent;
+  factory WebSocketEvent.audioConnected() = WebSocketAudioConnectedEvent;
+  factory WebSocketEvent.queueConnectionFailed(String error) = WebSocketQueueConnectionFailedEvent;
+  factory WebSocketEvent.audioConnectionFailed(String error) = WebSocketAudioConnectionFailedEvent;
+  factory WebSocketEvent.queueDisconnected() = WebSocketQueueDisconnectedEvent;
+  factory WebSocketEvent.audioDisconnected() = WebSocketAudioDisconnectedEvent;
+  factory WebSocketEvent.fullyConnected() = WebSocketFullyConnectedEvent;
+  factory WebSocketEvent.reconnectionScheduled(int attempt, Duration delay) = WebSocketReconnectionScheduledEvent;
+  factory WebSocketEvent.reconnectionAttempt(int attempt) = WebSocketReconnectionAttemptEvent;
+  factory WebSocketEvent.reconnectionGiveUp(int totalAttempts) = WebSocketReconnectionGiveUpEvent;
+  factory WebSocketEvent.connectionStale(Duration timeSinceLastMessage) = WebSocketConnectionStaleEvent;
+  factory WebSocketEvent.messageReceived(String channel, String content) = WebSocketMessageReceivedEvent;
 }
 
 // Event implementations
 class WebSocketConnectingEvent extends WebSocketEvent {
   final String url;
-  WebSocketConnectingEvent(this.url);
+  WebSocketConnectingEvent(this.url) : super();
 }
 
 class WebSocketConnectedEvent extends WebSocketEvent {
   final String sessionId;
-  WebSocketConnectedEvent(this.sessionId);
+  WebSocketConnectedEvent(this.sessionId) : super();
 }
 
 class WebSocketAuthenticatedEvent extends WebSocketEvent {
   final String userId;
-  WebSocketAuthenticatedEvent(this.userId);
+  WebSocketAuthenticatedEvent(this.userId) : super();
 }
 
 class WebSocketConnectionFailedEvent extends WebSocketEvent {
   final String error;
-  WebSocketConnectionFailedEvent(this.error);
+  WebSocketConnectionFailedEvent(this.error) : super();
 }
 
 class WebSocketConnectionErrorEvent extends WebSocketEvent {
   final String error;
-  WebSocketConnectionErrorEvent(this.error);
+  WebSocketConnectionErrorEvent(this.error) : super();
 }
 
 class WebSocketAuthenticationFailedEvent extends WebSocketEvent {
   final String error;
-  WebSocketAuthenticationFailedEvent(this.error);
+  WebSocketAuthenticationFailedEvent(this.error) : super();
 }
 
-class WebSocketDisconnectedEvent extends WebSocketEvent {}
+class WebSocketDisconnectedEvent extends WebSocketEvent {
+  WebSocketDisconnectedEvent() : super();
+}
 
 class WebSocketReconnectScheduledEvent extends WebSocketEvent {
   final int attempt;
   final Duration delay;
-  WebSocketReconnectScheduledEvent(this.attempt, this.delay);
+  WebSocketReconnectScheduledEvent(this.attempt, this.delay) : super();
 }
 
 class WebSocketReconnectGiveUpEvent extends WebSocketEvent {
   final int totalAttempts;
-  WebSocketReconnectGiveUpEvent(this.totalAttempts);
+  WebSocketReconnectGiveUpEvent(this.totalAttempts) : super();
 }
 
 class WebSocketStateChangedEvent extends WebSocketEvent {
   final WebSocketConnectionState from;
   final WebSocketConnectionState to;
-  WebSocketStateChangedEvent(this.from, this.to);
+  WebSocketStateChangedEvent(this.from, this.to) : super();
 }
 
 class WebSocketMessageParsingErrorEvent extends WebSocketEvent {
   final String error;
-  WebSocketMessageParsingErrorEvent(this.error);
+  WebSocketMessageParsingErrorEvent(this.error) : super();
 }
 
 class WebSocketMessageSendFailedEvent extends WebSocketEvent {
   final String error;
-  WebSocketMessageSendFailedEvent(this.error);
+  WebSocketMessageSendFailedEvent(this.error) : super();
 }
 
 class WebSocketQueuedMessageFailedEvent extends WebSocketEvent {
   final String messageType;
   final String error;
-  WebSocketQueuedMessageFailedEvent(this.messageType, this.error);
+  WebSocketQueuedMessageFailedEvent(this.messageType, this.error) : super();
 }
 
 class WebSocketAudioChunkReceivedEvent extends WebSocketEvent {
   final Uint8List? data;
   final Map<String, dynamic>? metadata;
-  WebSocketAudioChunkReceivedEvent({this.data, this.metadata});
+  WebSocketAudioChunkReceivedEvent({this.data, this.metadata}) : super();
 }
 
 class WebSocketAudioCompleteEvent extends WebSocketEvent {
   final String sessionId;
-  WebSocketAudioCompleteEvent(this.sessionId);
+  WebSocketAudioCompleteEvent(this.sessionId) : super();
 }
 
 class WebSocketTTSStatusEvent extends WebSocketEvent {
   final String status;
   final Map<String, dynamic>? details;
-  WebSocketTTSStatusEvent({required this.status, this.details});
+  WebSocketTTSStatusEvent({required this.status, this.details}) : super();
 }
 
 class WebSocketServerErrorEvent extends WebSocketEvent {
   final String error;
   final String? code;
-  WebSocketServerErrorEvent({required this.error, this.code});
+  WebSocketServerErrorEvent({required this.error, this.code}) : super();
 }
 
 class WebSocketServerStatusEvent extends WebSocketEvent {
   final String status;
   final Map<String, dynamic>? details;
-  WebSocketServerStatusEvent({required this.status, this.details});
+  WebSocketServerStatusEvent({required this.status, this.details}) : super();
 }
 
 class WebSocketRateLimitedEvent extends WebSocketEvent {
   final int? retryAfter;
   final Map<String, dynamic>? details;
-  WebSocketRateLimitedEvent({this.retryAfter, this.details});
+  WebSocketRateLimitedEvent({this.retryAfter, this.details}) : super();
 }
 
 class WebSocketHealthCheckWarningEvent extends WebSocketEvent {
   final String warning;
-  WebSocketHealthCheckWarningEvent(this.warning);
+  WebSocketHealthCheckWarningEvent(this.warning) : super();
 }
 
 class WebSocketPingFailedEvent extends WebSocketEvent {
   final String error;
-  WebSocketPingFailedEvent(this.error);
+  WebSocketPingFailedEvent(this.error) : super();
+}
+
+class WebSocketQueueConnectedEvent extends WebSocketEvent {
+  WebSocketQueueConnectedEvent() : super();
+}
+
+class WebSocketAudioConnectedEvent extends WebSocketEvent {
+  WebSocketAudioConnectedEvent() : super();
+}
+
+class WebSocketQueueConnectionFailedEvent extends WebSocketEvent {
+  final String error;
+  WebSocketQueueConnectionFailedEvent(this.error) : super();
+}
+
+class WebSocketAudioConnectionFailedEvent extends WebSocketEvent {
+  final String error;
+  WebSocketAudioConnectionFailedEvent(this.error) : super();
+}
+
+class WebSocketQueueDisconnectedEvent extends WebSocketEvent {
+  WebSocketQueueDisconnectedEvent() : super();
+}
+
+class WebSocketAudioDisconnectedEvent extends WebSocketEvent {
+  WebSocketAudioDisconnectedEvent() : super();
+}
+
+class WebSocketFullyConnectedEvent extends WebSocketEvent {
+  WebSocketFullyConnectedEvent() : super();
+}
+
+class WebSocketReconnectionScheduledEvent extends WebSocketEvent {
+  final int attempt;
+  final Duration delay;
+  WebSocketReconnectionScheduledEvent(this.attempt, this.delay) : super();
+}
+
+class WebSocketReconnectionAttemptEvent extends WebSocketEvent {
+  final int attempt;
+  WebSocketReconnectionAttemptEvent(this.attempt) : super();
+}
+
+class WebSocketReconnectionGiveUpEvent extends WebSocketEvent {
+  final int totalAttempts;
+  WebSocketReconnectionGiveUpEvent(this.totalAttempts) : super();
+}
+
+class WebSocketConnectionStaleEvent extends WebSocketEvent {
+  final Duration timeSinceLastMessage;
+  WebSocketConnectionStaleEvent(this.timeSinceLastMessage) : super();
+}
+
+class WebSocketMessageReceivedEvent extends WebSocketEvent {
+  final String channel;
+  final String content;
+  WebSocketMessageReceivedEvent(this.channel, this.content) : super();
 }

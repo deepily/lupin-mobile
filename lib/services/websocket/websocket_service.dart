@@ -35,6 +35,29 @@ class WebSocketService {
     _messageController = StreamController<dynamic>.broadcast();
   }
 
+  /// Validates session ID format as "adjective noun" with space.
+  /// 
+  /// Requires:
+  ///   - sessionId must be non-null string
+  /// 
+  /// Ensures:
+  ///   - Returns true if format matches "word word" pattern
+  ///   - Both words must be lowercase letters only
+  ///   - Exactly one space separator required
+  /// 
+  /// Examples of valid session IDs:
+  ///   - "wise penguin"
+  ///   - "clever dolphin" 
+  ///   - "happy turtle"
+  bool _isValidSessionFormat(String sessionId) {
+    final parts = sessionId.split(' ');
+    return parts.length == 2 && 
+           parts[0].isNotEmpty && 
+           parts[1].isNotEmpty &&
+           RegExp(r'^[a-z]+$').hasMatch(parts[0]) &&
+           RegExp(r'^[a-z]+$').hasMatch(parts[1]);
+  }
+
   /// Establishes WebSocket connection to the Lupin backend.
   /// 
   /// Requires:
@@ -78,10 +101,15 @@ class WebSocketService {
       final sessionData = sessionResponse.data;
       _sessionId = sessionData['session_id'];
       
-      print('[WebSocket] Got session ID: $_sessionId');
+      // Validate session ID format
+      if (_sessionId == null || !_isValidSessionFormat(_sessionId!)) {
+        throw Exception('Invalid session ID format received: $_sessionId. Expected "adjective noun" format.');
+      }
       
-      // Step 2: Connect to WebSocket with session ID in URL
-      final uri = Uri.parse('${AppConstants.wsBaseUrl}/ws/$_sessionId');
+      print('[WebSocket] Got valid session ID: $_sessionId');
+      
+      // Step 2: Connect to WebSocket with session ID in URL  
+      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
       
       _channel = WebSocketChannel.connect(uri);
       
@@ -124,17 +152,19 @@ class WebSocketService {
   /// 
   /// Ensures:
   ///   - Authentication message is sent to backend
-  ///   - Mock token is generated for the user
+  ///   - Bearer token is generated for the user
   ///   - Session ID is included in auth message
+  ///   - Subscribed events array is included (empty = receive all events)
   Future<void> _authenticate(String userId) async {
     try {
-      // Create mock auth token (like the web client does)
-      final authToken = 'mock_token_email_$userId';
+      // Create Bearer auth token matching server expectations
+      final authToken = 'Bearer mock_token_email_$userId';
       
       final authMessage = {
-        'type': 'auth',
+        'type': 'auth_request',
         'token': authToken,
         'session_id': _sessionId,
+        'subscribed_events': [], // Empty array = receive all events
       };
       
       await sendMessage(authMessage);
@@ -173,18 +203,22 @@ class WebSocketService {
       final decoded = jsonDecode(message);
       
       // Handle authentication response
-      if (decoded['type'] == 'auth_success') {
+      if (decoded['type'] == AppConstants.eventAuthSuccess) {
         _sessionId = decoded['session_id'];
         print('[WebSocket] Authentication successful, session: $_sessionId');
       }
       
+      if (decoded['type'] == AppConstants.eventAuthError) {
+        print('[WebSocket] Authentication failed: ${decoded['message'] ?? 'Unknown error'}');
+      }
+      
       // Handle ping/pong
-      if (decoded['type'] == 'ping') {
-        sendMessage({'type': 'pong'});
+      if (decoded['type'] == AppConstants.eventSysPing) {
+        sendMessage({'type': AppConstants.eventSysPong});
         return;
       }
       
-      if (decoded['type'] == 'pong') {
+      if (decoded['type'] == AppConstants.eventSysPong) {
         return;
       }
       
@@ -258,7 +292,7 @@ class WebSocketService {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(pingInterval, (timer) {
       if (_isConnected) {
-        sendMessage({'type': 'ping'});
+        sendMessage({'type': AppConstants.eventSysPing});
       }
     });
   }

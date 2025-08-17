@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'enhanced_websocket_service.dart';
 import 'websocket_message_router.dart';
+import 'websocket_subscription_manager.dart';
+import 'websocket_dynamic_subscription_controller.dart';
 
 /// Comprehensive WebSocket connection manager that coordinates all WebSocket functionality.
 /// 
@@ -11,6 +13,8 @@ import 'websocket_message_router.dart';
 class WebSocketConnectionManager {
   final EnhancedWebSocketService _webSocketService;
   final WebSocketMessageRouter _messageRouter;
+  final WebSocketSubscriptionManager _subscriptionManager;
+  late final WebSocketDynamicSubscriptionController _dynamicController;
   
   // Stream subscriptions
   StreamSubscription? _messageSubscription;
@@ -29,17 +33,22 @@ class WebSocketConnectionManager {
   WebSocketConnectionManager({
     required EnhancedWebSocketService webSocketService,
     required WebSocketMessageRouter messageRouter,
+    WebSocketSubscriptionManager? subscriptionManager,
     ConnectionManagerConfig? config,
   })  : _webSocketService = webSocketService,
         _messageRouter = messageRouter,
+        _subscriptionManager = subscriptionManager ?? WebSocketSubscriptionManager(webSocketService: webSocketService),
         _config = config ?? ConnectionManagerConfig.defaultConfig() {
     _initialize();
   }
   
   // Public getters
   bool get isConnected => _webSocketService.isConnected;
+  bool get isAudioConnected => _webSocketService.isAudioConnected;
   bool get isConnecting => _webSocketService.isConnecting;
-  WebSocketConnectionState get connectionState => _webSocketService.connectionState;
+  bool get isBothConnected => _webSocketService.isBothConnected;
+  WebSocketConnectionState get queueConnectionState => _webSocketService.queueConnectionState;
+  WebSocketConnectionState get audioConnectionState => _webSocketService.audioConnectionState;
   String? get sessionId => _webSocketService.sessionId;
   String? get userId => _webSocketService.userId;
   WebSocketMetrics get metrics => _webSocketService.metrics;
@@ -50,8 +59,29 @@ class WebSocketConnectionManager {
   Stream<VoiceInputMessage> get voiceInput => _messageRouter.voiceInput;
   Stream<ErrorMessage> get errors => _messageRouter.errors;
   
+  // New event streams
+  Stream<QueueUpdateMessage> get queueUpdates => _messageRouter.queueUpdates;
+  Stream<NotificationMessage> get notifications => _messageRouter.notifications;
+  Stream<SystemMessage> get systemMessages => _messageRouter.systemMessages;
+  Stream<AuthMessage> get authMessages => _messageRouter.authMessages;
+  
+  // Subscription management
+  WebSocketSubscriptionManager get subscriptionManager => _subscriptionManager;
+  Stream<SubscriptionChange> get subscriptionChanges => _subscriptionManager.subscriptionChanges;
+  Stream<EventFilterResult> get filterResults => _subscriptionManager.filterResults;
+  
+  // Dynamic subscription management
+  WebSocketDynamicSubscriptionController get dynamicController => _dynamicController;
+  Stream<SubscriptionRecommendation> get subscriptionRecommendations => _dynamicController.recommendations;
+  Stream<SubscriptionOptimization> get subscriptionOptimizations => _dynamicController.optimizations;
+  
   /// Initialize the connection manager
   void _initialize() {
+    // Initialize dynamic controller after this manager is created
+    _dynamicController = WebSocketDynamicSubscriptionController(
+      connectionManager: this,
+    );
+    
     _setupMessageRouting();
     _setupEventHandling();
     _setupDefaultHandlers();
@@ -61,9 +91,20 @@ class WebSocketConnectionManager {
   /// Set up message routing from WebSocket service to message router
   void _setupMessageRouting() {
     _messageSubscription = _webSocketService.messageStream.listen(
-      (message) => _messageRouter.routeMessage(message),
+      (message) => _routeMessageWithSubscriptionFiltering(message),
       onError: (error) => _handleRoutingError(error),
     );
+  }
+  
+  /// Route message with subscription filtering
+  Future<void> _routeMessageWithSubscriptionFiltering(WebSocketMessage message) async {
+    // Check if this event should be processed based on subscriptions and filters
+    if (_subscriptionManager.shouldProcessEvent(message.type, message.data)) {
+      await _messageRouter.routeMessage(message);
+    } else {
+      // Event was filtered out by subscription manager
+      print('[ConnectionManager] Event filtered: ${message.type}');
+    }
   }
   
   /// Set up event handling from WebSocket service
@@ -109,8 +150,8 @@ class WebSocketConnectionManager {
     // Handle connection status messages
     _messageRouter.registerHandler('connection_status', (message) async {
       _notifyStateListeners(ConnectionStateChange(
-        from: connectionState,
-        to: connectionState,
+        from: queueConnectionState,
+        to: queueConnectionState,
         details: message.data,
       ));
     });
@@ -159,17 +200,50 @@ class WebSocketConnectionManager {
     String? userId,
     Map<String, String>? headers,
     bool clearQueue = false,
+    bool connectQueue = true,
+    bool connectAudio = true,
   }) async {
     try {
       await _webSocketService.connect(
         userId: userId,
         headers: headers,
         clearQueue: clearQueue,
+        connectQueue: connectQueue,
+        connectAudio: connectAudio,
       );
     } catch (e) {
       _handleConnectionError(e);
       rethrow;
     }
+  }
+  
+  /// Connect only the queue WebSocket for main UI events
+  Future<void> connectQueue({
+    String? userId,
+    Map<String, String>? headers,
+    bool clearQueue = false,
+  }) async {
+    await connect(
+      userId: userId,
+      headers: headers,
+      clearQueue: clearQueue,
+      connectQueue: true,
+      connectAudio: false,
+    );
+  }
+  
+  /// Connect only the audio WebSocket for TTS streaming
+  Future<void> connectAudio({
+    String? userId,
+    Map<String, String>? headers,
+  }) async {
+    await connect(
+      userId: userId,
+      headers: headers,
+      clearQueue: false,
+      connectQueue: false,
+      connectAudio: true,
+    );
   }
   
   /// Disconnect from WebSocket server
@@ -421,9 +495,17 @@ class WebSocketConnectionManager {
     
     final issues = <String>[];
     
-    // Check connection state
+    // Check connection states
     if (!isConnected) {
-      issues.add('WebSocket not connected');
+      issues.add('Queue WebSocket not connected');
+    }
+    
+    if (!isAudioConnected) {
+      issues.add('Audio WebSocket not connected');
+    }
+    
+    if (!isBothConnected && isConnected) {
+      issues.add('Partial connection: Queue connected but Audio disconnected');
     }
     
     // Check message flow
@@ -465,43 +547,28 @@ class WebSocketConnectionManager {
     if (event is WebSocketConnectionErrorEvent ||
         event is WebSocketAuthenticationFailedEvent ||
         event is WebSocketConnectionFailedEvent) {
-      _messageRouter._errorController.add(ErrorMessage(
-        error: _getEventErrorMessage(event),
-        timestamp: event.timestamp,
-      ));
+      _messageRouter.addError(_getEventErrorMessage(event));
     }
   }
   
   /// Handle routing errors
   void _handleRoutingError(dynamic error) {
-    _messageRouter._errorController.add(ErrorMessage(
-      error: 'Message routing error: $error',
-      timestamp: DateTime.now(),
-    ));
+    _messageRouter.addError('Message routing error: $error');
   }
   
   /// Handle event errors
   void _handleEventError(dynamic error) {
-    _messageRouter._errorController.add(ErrorMessage(
-      error: 'Event handling error: $error',
-      timestamp: DateTime.now(),
-    ));
+    _messageRouter.addError('Event handling error: $error');
   }
   
   /// Handle connection errors
   void _handleConnectionError(dynamic error) {
-    _messageRouter._errorController.add(ErrorMessage(
-      error: 'Connection error: $error',
-      timestamp: DateTime.now(),
-    ));
+    _messageRouter.addError('Connection error: $error');
   }
   
   /// Handle subscription errors
   void _handleSubscriptionError(dynamic error) {
-    _messageRouter._errorController.add(ErrorMessage(
-      error: 'Subscription error: $error',
-      timestamp: DateTime.now(),
-    ));
+    _messageRouter.addError('Subscription error: $error');
   }
   
   /// Handle server notifications
@@ -552,6 +619,221 @@ class WebSocketConnectionManager {
     return 'Unknown error event';
   }
   
+  /// Get comprehensive connection status for both channels
+  Map<String, dynamic> getConnectionStatus() {
+    return {
+      'queue_connected': isConnected,
+      'audio_connected': isAudioConnected,
+      'both_connected': isBothConnected,
+      'queue_state': queueConnectionState.toString(),
+      'audio_state': audioConnectionState.toString(),
+      'session_id': sessionId,
+      'user_id': userId,
+      'connection_stats': getConnectionStats(),
+    };
+  }
+  
+  /// Wait for both connections to be established
+  Future<void> waitForBothConnections({Duration? timeout}) async {
+    final timeoutDuration = timeout ?? const Duration(seconds: 30);
+    final completer = Completer<void>();
+    
+    // Check if already connected
+    if (isBothConnected) {
+      completer.complete();
+      return completer.future;
+    }
+    
+    // Set up timeout
+    Timer(timeoutDuration, () {
+      if (!completer.isCompleted) {
+        completer.completeError(TimeoutException(
+          'Timeout waiting for both connections',
+          timeoutDuration,
+        ));
+      }
+    });
+    
+    // Listen for connection state changes
+    late StreamSubscription stateSubscription;
+    stateSubscription = _webSocketService.eventStream.listen((event) {
+      if (isBothConnected && !completer.isCompleted) {
+        stateSubscription.cancel();
+        completer.complete();
+      }
+    });
+    
+    return completer.future;
+  }
+  
+  /// Reconnect both channels with intelligent retry
+  Future<void> reconnectBoth({
+    String? userId,
+    Map<String, String>? headers,
+    bool clearQueue = false,
+  }) async {
+    // Disconnect first
+    await disconnect(clearQueue: clearQueue);
+    
+    // Wait a bit before reconnecting
+    await Future.delayed(const Duration(seconds: 2));
+    
+    // Reconnect both
+    await connect(
+      userId: userId ?? this.userId,
+      headers: headers,
+      clearQueue: clearQueue,
+      connectQueue: true,
+      connectAudio: true,
+    );
+  }
+  
+  // ============================================================================
+  // Subscription Management Methods
+  // ============================================================================
+  
+  /// Subscribe to all available events
+  Future<void> subscribeToAllEvents() async {
+    await _subscriptionManager.subscribeToAll();
+  }
+  
+  /// Subscribe to specific events only
+  Future<void> subscribeToSpecificEvents(Set<String> events) async {
+    await _subscriptionManager.subscribeToEvents(events);
+  }
+  
+  /// Subscribe to entire event categories (e.g., 'queue', 'audio', 'notifications')
+  Future<void> subscribeToEventCategories(Set<String> categories) async {
+    await _subscriptionManager.subscribeToCategories(categories);
+  }
+  
+  /// Add events to current subscription
+  Future<void> addEventSubscriptions(Set<String> events) async {
+    await _subscriptionManager.addEventSubscriptions(events);
+  }
+  
+  /// Remove events from current subscription
+  Future<void> removeEventSubscriptions(Set<String> events) async {
+    await _subscriptionManager.removeEventSubscriptions(events);
+  }
+  
+  /// Register an event filter for client-side filtering
+  void registerEventFilter(String eventType, EventFilter filter) {
+    _subscriptionManager.registerEventFilter(eventType, filter);
+  }
+  
+  /// Remove an event filter
+  void removeEventFilter(String eventType) {
+    _subscriptionManager.removeEventFilter(eventType);
+  }
+  
+  /// Get subscription statistics
+  Map<String, dynamic> getSubscriptionStats() {
+    return _subscriptionManager.getSubscriptionStats();
+  }
+  
+  /// Get available event categories
+  Map<String, List<String>> getEventCategories() {
+    return _subscriptionManager.getEventCategories();
+  }
+  
+  /// Quick setup for common subscription patterns
+  Future<void> setupBasicSubscriptions() async {
+    // Subscribe to essential events for basic functionality
+    await subscribeToEventCategories({'auth', 'system', 'audio'});
+  }
+  
+  Future<void> setupDevelopmentSubscriptions() async {
+    // Subscribe to all events for debugging/development
+    await subscribeToAllEvents();
+  }
+  
+  Future<void> setupProductionSubscriptions() async {
+    // Subscribe to minimal events for production efficiency
+    await subscribeToEventCategories({'auth', 'audio', 'notifications'});
+  }
+  
+  /// Auto-configure filters based on current user/session
+  void setupSmartFilters() {
+    final currentUserId = userId;
+    final currentSessionId = sessionId;
+    
+    if (currentUserId != null) {
+      registerEventFilter('queue_update', UserEventFilter(currentUserId));
+      registerEventFilter('notification', UserEventFilter(currentUserId));
+    }
+    
+    if (currentSessionId != null) {
+      registerEventFilter('session_specific', SessionEventFilter(currentSessionId));
+    }
+  }
+  
+  // ============================================================================
+  // Dynamic Subscription Management Methods
+  // ============================================================================
+  
+  /// Adjust subscriptions based on app state changes
+  Future<void> adjustSubscriptionsForAppState(AppState appState) async {
+    await _dynamicController.adjustSubscriptionsForAppState(appState);
+  }
+  
+  /// Add a contextual subscription that can be activated/deactivated
+  Future<void> addContextualSubscription(SubscriptionContext context) async {
+    await _dynamicController.addContextualSubscription(context);
+  }
+  
+  /// Remove a contextual subscription
+  Future<void> removeContextualSubscription(String contextName) async {
+    await _dynamicController.removeContextualSubscription(contextName);
+  }
+  
+  /// Activate a specific subscription context
+  Future<void> activateSubscriptionContext(String contextName) async {
+    await _dynamicController.activateContext(contextName);
+  }
+  
+  /// Deactivate a specific subscription context
+  Future<void> deactivateSubscriptionContext(String contextName) async {
+    await _dynamicController.deactivateContext(contextName);
+  }
+  
+  /// Get subscription analytics and insights
+  Map<String, dynamic> getSubscriptionAnalytics() {
+    return _dynamicController.getSubscriptionAnalytics();
+  }
+  
+  /// Enhanced connection workflow that sets up intelligent subscriptions
+  Future<void> connectWithIntelligentSubscriptions({
+    String? userId,
+    Map<String, String>? headers,
+    bool clearQueue = false,
+    AppState? initialAppState,
+    bool enableDynamicOptimization = true,
+  }) async {
+    // Connect normally first
+    await connect(
+      userId: userId,
+      headers: headers,
+      clearQueue: clearQueue,
+    );
+    
+    // Wait for both connections
+    await waitForBothConnections();
+    
+    // Set up smart filters
+    setupSmartFilters();
+    
+    // Adjust subscriptions based on app state
+    if (initialAppState != null) {
+      await adjustSubscriptionsForAppState(initialAppState);
+    } else {
+      // Default to development subscriptions
+      await setupDevelopmentSubscriptions();
+    }
+    
+    print('[ConnectionManager] Intelligent subscriptions configured for app state: $initialAppState');
+  }
+  
   /// Disposes all resources and cleanly shuts down connection manager.
   /// 
   /// Requires:
@@ -578,6 +860,8 @@ class WebSocketConnectionManager {
     _messageSubscriptions.clear();
     
     _stateListeners.clear();
+    _dynamicController.dispose();
+    _subscriptionManager.dispose();
     _messageRouter.dispose();
     _webSocketService.dispose();
   }
@@ -613,17 +897,17 @@ class ConnectionManagerConfig {
   
   factory ConnectionManagerConfig.production() {
     return const ConnectionManagerConfig(
-      enableLogging = false,
-      logBinaryMessages = false,
-      enableHealthChecks = true,
+      enableLogging: false,
+      logBinaryMessages: false,
+      enableHealthChecks: true,
     );
   }
   
   factory ConnectionManagerConfig.development() {
     return const ConnectionManagerConfig(
-      enableLogging = true,
-      logBinaryMessages = true,
-      maxBinaryLogSize = 200,
+      enableLogging: true,
+      logBinaryMessages: true,
+      maxBinaryLogSize: 200,
     );
   }
   
