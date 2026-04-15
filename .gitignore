@@ -56,5 +56,8 @@ venv/
 flutter/
 .flutter/
 
+# Auto-generated Flutter env file (machine-specific paths)
+ios/Flutter/flutter_export_environment.sh
+
 # IDE workspace files
 *.code-workspace
