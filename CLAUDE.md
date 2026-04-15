@@ -130,3 +130,45 @@ Based on the mobile development options analysis, the following technologies are
 - **Important**: This is a standalone repository that cannot be git-managed when working within the parent Lupin project
 - **Changes**: Can be made to files but git operations should be handled separately
 - **Dependencies**: Independent package management from parent project
+
+---
+
+## PLANNING-IS-PROMPTING WORKFLOWS
+
+Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow groups).
+
+**Configuration**:
+- Short Prefix: `[LUPIN-MOBILE]`
+- Project Name: Lupin Mobile
+- History file: `./history.md`
+- Archive directory: `./history/`
+- Backup source: `/mnt/DATA01/include/www.deepily.ai/projects/lupin/src/lupin-mobile/`
+- Backup destination: `/mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/`
+
+**Slash Commands Available** (under `.claude/commands/`):
+
+| Group | Commands |
+|-------|----------|
+| Session Management | `/plan-session-start`, `/plan-session-end`, `/plan-session-checkpoint` |
+| History Management | `/plan-history-management` |
+| TODO Management | `/plan-todo` |
+| Bug Fix Mode | `/plan-bug-fix-mode[-start/-continue/-close/-wrap]` |
+| Planning is Prompting Core | `/p-is-p-00-start-here`, `/p-is-p-01-planning`, `/p-is-p-02-documentation` |
+| Backup Infrastructure | `/plan-backup-check`, `/plan-backup`, `/plan-backup-write` |
+| Testing Workflows | `/plan-test-baseline`, `/plan-test-remediation`, `/plan-test-harness-update` |
+| Skills Management | `/plan-skills-management[-discover/-create/-edit/-audit/-delete]` |
+| Branch / PR / Merge | `/plan-branch-pr-and-merge` |
+| Workflow Audit | `/plan-workflow-audit` |
+| About | `/plan-about` |
+| Install / Uninstall Wizards | `/plan-install-wizard`, `/plan-uninstall-wizard` |
+
+**Behavioral Directives** (already established globally in `~/.claude/CLAUDE.md`):
+- Plan Serialization (serialize plans to `src/rnd/`)
+- Mermaid Diagrams
+
+**Canonical Workflows**: `$PLANNING_IS_PROMPTING_ROOT/workflow/*.md` — slash commands above are thin wrappers that load these.
+
+## SESSION WORKFLOWS
+
+**Session Start**: Use `/plan-session-start` or see planning-is-prompting → workflow/session-start.md
+**Session End**: Use `/plan-session-end` or see planning-is-prompting → workflow/session-end.md

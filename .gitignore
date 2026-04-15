@@ -1,5 +1,9 @@
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code local settings (keep slash commands tracked)
+.claude/*
+!.claude/commands/
+
+# Backup local exclusions (per-machine overrides)
+src/scripts/conf/rsync-exclude-local.txt
 
 # Private project configuration
 CLAUDE.local.md

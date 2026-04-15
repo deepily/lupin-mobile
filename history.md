@@ -1,5 +1,34 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.15 - Re-sync with Lupin v0.1.6 + Planning-is-Prompting Install
+
+### Session Summary
+- **Objective**: Reorient on the project after ~9 months idle, audit the gap between the mobile app and the now-much-larger Lupin backend, and bring the project under the planning-is-prompting workflow toolkit.
+- **Status**: ✅ COMPLETE — audit + per-tier plans committed; planning-is-prompting installed (full set).
+- **Branch created**: `2026.04.15-resync-with-lupin-v0.1.6` (off `2025.07.07-wip-mobile-phased-implementation`)
+
+### Work Performed
+1. **Lupin API audit** — pulled live `/openapi.json` (113 endpoints across 24 router groups, FastAPI v0.6.0 / Lupin v0.1.6); categorized into 28 functional groups; mobile coverage measured at 4 endpoints (~5%).
+2. **Mobile integration audit** — parallel Explore agents mapped REST + WebSocket usage across `lib/features/` and `lib/services/`. Confirmed only `/api/get-session-id`, `/api/get-speech`, `/api/get-speech-elevenlabs`, and `/api/upload-and-transcribe-mp3` are wired; `/ws/queue/{sid}` and `/ws/audio/{sid}` connected with 19 event types defined; notifications BLoC is skeleton-only; zero decision-proxy/Claude Code integration.
+3. **Migration directory** — created `src/rnd/v0.1.6-migration/` with master audit + per-tier plan docs (Tier 1 detailed, Tiers 2-4 stubbed).
+4. **Tier 1 scope locked** — login-only (4 of 10 `/auth/*` endpoints), single account, biometric unlock with password fallback, last-used email pre-fill, WS session persistence, server-context toggle (Dev :7999 ↔ Test :8000, default Dev), always-store refresh token.
+5. **Branch hygiene** — created today's date branch off WIP without merge ceremony; deleted `src/scripts/notify.sh`, untracked auto-generated `ios/Flutter/flutter_export_environment.sh` and added it to `.gitignore`.
+6. **planning-is-prompting installation** — ran installation-wizard end-to-end; installed all 13 workflow groups (30 slash commands), backup script + exclusions, gitignore for `.claude/*` (preserving `commands/`), CLAUDE.md workflows section.
+
+### Files Added / Modified
+- `src/rnd/v0.1.6-migration/` — README + 5 planning docs (committed: 9554ade)
+- `src/scripts/notify.sh` — DELETED, `.gitignore` += flutter env (committed: 28ce517)
+- `.claude/commands/` — 30 slash commands (uncommitted)
+- `src/scripts/backup.sh` + `src/scripts/conf/rsync-exclude.txt` — installed + customized (uncommitted)
+- `.gitignore`, `CLAUDE.md` — updated for planning-is-prompting (uncommitted)
+
+### Decisions for Future Sessions
+- Tier sequence: Tier 1 (auth + WS persistence) → Tier 2 (notifications + decision-proxy) → Tier 3 (queue/CJ Flow + Claude Code) → Tier 4 (agentic UIs).
+- Defer registration, password reset, change password, email verification UI to a later tier.
+- Backup destination: `/mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/`.
+
+---
+
 ## 2025.08.17 - Phase 4.5 Voice Input/Output Integration Complete
 
 ### Session Summary
