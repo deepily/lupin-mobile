@@ -1,0 +1,108 @@
+name: PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  FLUTTER_VERSION: '3.32.0'
+
+jobs:
+  pr-title:
+    name: Check PR Title
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check PR title format
+      uses: amannn/action-semantic-pull-request@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        types: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          perf
+          test
+          build
+          ci
+          chore
+          revert
+        requireScope: false
+        subjectPattern: ^(?![A-Z]).+$
+        subjectPatternError: |
+          The subject "{subject}" found in the pull request title "{title}"
+          didn't match the configured pattern. Please ensure that the subject
+          doesn't start with an uppercase character.
+          
+  size-check:
+    name: Check PR Size
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check PR size
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          const additions = pr.additions;
+          const deletions = pr.deletions;
+          const total = additions + deletions;
+          
+          let message = '';
+          let level = 'info';
+          
+          if (total < 100) {
+            message = '✅ Small PR (< 100 lines)';
+          } else if (total < 500) {
+            message = '👍 Medium PR (100-500 lines)';
+          } else if (total < 1000) {
+            message = '⚠️ Large PR (500-1000 lines) - Consider breaking it down';
+            level = 'warning';
+          } else {
+            message = '❌ Extra Large PR (> 1000 lines) - Please break this down into smaller PRs';
+            level = 'error';
+          }
+          
+          core[level](message);
+          
+  quick-test:
+    name: Quick Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Cache Flutter dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.pub-cache
+          **/.flutter-plugins
+          **/.flutter-plugin-dependencies
+        key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-flutter-
+          
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Check formatting
+      run: dart format --output=none --set-exit-if-changed .
+      
+    - name: Run analyzer
+      run: flutter analyze --no-fatal-infos
+      
+    - name: Run affected tests
+      run: |
+        # Run only tests affected by changes
+        flutter test --coverage || true

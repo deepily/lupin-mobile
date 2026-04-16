@@ -1,5 +1,9 @@
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code local settings (keep slash commands tracked)
+.claude/*
+!.claude/commands/
+
+# Backup local exclusions (per-machine overrides)
+src/scripts/conf/rsync-exclude-local.txt
 
 # Private project configuration
 CLAUDE.local.md
@@ -47,6 +51,17 @@ pubspec.lock
 .env
 .env.local
 .env.*.local
+
+# Python virtual environment
+.venv/
+venv/
+
+# Local Flutter installation
+flutter/
+.flutter/
+
+# Auto-generated Flutter env file (machine-specific paths)
+ios/Flutter/flutter_export_environment.sh
 
 # IDE workspace files
 *.code-workspace

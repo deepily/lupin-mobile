@@ -1,0 +1,122 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+env:
+  FLUTTER_VERSION: '3.32.0'
+  JAVA_VERSION: '11'
+
+jobs:
+  build:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run tests
+      run: flutter test
+      
+    - name: Update version in pubspec.yaml
+      run: |
+        sed -i "s/^version: .*/version: ${{ steps.version.outputs.version }}/" pubspec.yaml
+        
+    - name: Build Android release APK
+      run: flutter build apk --release --build-number=${{ github.run_number }}
+      
+    - name: Build Android App Bundle
+      run: flutter build appbundle --release --build-number=${{ github.run_number }}
+      
+    - name: Create release artifacts directory
+      run: mkdir -p release-artifacts
+      
+    - name: Copy artifacts
+      run: |
+        cp build/app/outputs/flutter-apk/app-release.apk release-artifacts/lupin-mobile-${{ steps.version.outputs.version }}.apk
+        cp build/app/outputs/bundle/release/app-release.aab release-artifacts/lupin-mobile-${{ steps.version.outputs.version }}.aab
+        
+    - name: Generate checksums
+      run: |
+        cd release-artifacts
+        sha256sum * > checksums.txt
+        
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-artifacts
+        path: release-artifacts/
+        
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: release-artifacts
+        path: release-artifacts/
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ needs.build.outputs.version }}
+        name: Release v${{ needs.build.outputs.version }}
+        body: |
+          ## Lupin Mobile v${{ needs.build.outputs.version }}
+          
+          ### What's Changed
+          - See [CHANGELOG.md](CHANGELOG.md) for details
+          
+          ### Installation
+          - Download the APK file below and install on your Android device
+          - For Google Play Store distribution, use the AAB file
+          
+          ### Checksums
+          See `checksums.txt` in the release assets
+        files: |
+          release-artifacts/*
+        draft: false
+        prerelease: false
