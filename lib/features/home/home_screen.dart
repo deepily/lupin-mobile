@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../agentic/domain/agentic_submission_bloc.dart';
+import '../agentic/presentation/agentic_hub_screen.dart';
 import '../auth/domain/auth_bloc.dart';
 import '../auth/domain/auth_event.dart';
 import '../auth/domain/auth_state.dart';
@@ -102,6 +104,18 @@ class LupinHomeScreen extends StatelessWidget {
               ) );
             }
           },
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          icon       : Icons.smart_toy_outlined,
+          title      : 'Agentic Jobs',
+          subtitle   : 'Submit deep research, podcast, presentation and more',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => BlocProvider.value(
+              value: context.read<AgenticSubmissionBloc>(),
+              child: const AgenticHubScreen(),
+            ),
+          ) ),
         ),
       ] ),
     );

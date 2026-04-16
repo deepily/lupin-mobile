@@ -37,6 +37,13 @@ dependencies:
   # Authentication
   local_auth: ^2.3.0
 
+  # Markdown rendering
+  flutter_markdown: ^0.7.3
+
+  # File sharing and opening
+  share_plus: ^10.0.0
+  open_file: ^3.3.2
+
   # Utilities
   get_it: ^7.6.4
   logger: ^2.0.2+1

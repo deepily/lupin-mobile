@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/service_locator.dart';
+import '../../agentic/data/agentic_repository.dart';
+import '../../agentic/domain/agentic_submission_bloc.dart';
+import '../../agentic/presentation/bug_fix_expediter_form.dart';
+import '../../artifacts/audio_artifact_player.dart';
+import '../../artifacts/markdown_report_viewer.dart';
+import '../../artifacts/slide_deck_viewer.dart';
 import '../data/queue_models.dart';
 import '../domain/queue_bloc.dart';
 import '../domain/queue_event.dart';
@@ -33,6 +40,61 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   void _resume() {
     context.read<QueueBloc>().add( QueueResumeJob( widget.job.jobId ) );
+  }
+
+  Future<void> _viewArtifact() async {
+    final job = widget.job;
+    final id  = job.jobId;
+    if ( id.startsWith( 'dr-' ) ) {
+      try {
+        final report = await ServiceLocator.instance<AgenticRepository>()
+            .fetchDeepResearchReport( id );
+        if ( mounted ) {
+          await Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => MarkdownReportViewer(
+              jobId        : id,
+              markdownText : report.markdownText,
+            ),
+          ) );
+        }
+      } catch ( e ) {
+        if ( mounted ) {
+          ScaffoldMessenger.of( context ).showSnackBar(
+            SnackBar( content: Text( 'Failed to load report: $e' ), backgroundColor: Colors.red ),
+          );
+        }
+      }
+    } else if ( id.startsWith( 'pg-' ) || id.startsWith( 'rp-' ) ) {
+      final path = job.reportPath ?? '';
+      if ( mounted ) {
+        await Navigator.of( context ).push( MaterialPageRoute(
+          builder: ( _ ) => AudioArtifactPlayer( jobId: id, audioPath: path ),
+        ) );
+      }
+    } else if ( id.startsWith( 'px-' ) || id.startsWith( 'rx-' ) ) {
+      final path = job.pptxPath ?? '';
+      if ( mounted ) {
+        await Navigator.of( context ).push( MaterialPageRoute(
+          builder: ( _ ) => SlideDeckViewer( jobId: id, deckPath: path ),
+        ) );
+      }
+    }
+  }
+
+  void _rerunWithFix() {
+    Navigator.of( context ).push( MaterialPageRoute(
+      builder: ( _ ) => BlocProvider(
+        create : ( _ ) => ServiceLocator.instance<AgenticSubmissionBloc>(),
+        child  : BugFixExpediterForm( deadJobId: widget.job.jobId ),
+      ),
+    ) );
+  }
+
+  bool get _hasArtifact {
+    final id = widget.job.jobId;
+    return id.startsWith( 'dr-' )
+        || id.startsWith( 'pg-' ) || id.startsWith( 'rp-' )
+        || id.startsWith( 'px-' ) || id.startsWith( 'rx-' );
   }
 
   void _showMessageInput() {
@@ -73,6 +135,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       appBar: AppBar(
         title   : Text( job.agentType ?? 'Job Detail' ),
         actions : [
+          if ( status == 'done' && _hasArtifact )
+            IconButton( icon: const Icon( Icons.article_outlined ), tooltip: 'View Artifact', onPressed: _viewArtifact ),
+          if ( status == 'dead' )
+            IconButton( icon: const Icon( Icons.bug_report_outlined ), tooltip: 'Re-run with Fix', onPressed: _rerunWithFix ),
           if ( status == 'running' )
             IconButton( icon: const Icon( Icons.cancel_outlined ), tooltip: 'Cancel', onPressed: _cancel ),
           if ( status == 'queued' && !job.paused )

@@ -9,6 +9,7 @@ import 'core/constants/app_themes.dart';
 import 'core/di/service_locator.dart';
 import 'features/auth/domain/auth_bloc.dart';
 import 'features/auth/presentation/auth_gate.dart';
+import 'features/agentic/domain/agentic_submission_bloc.dart';
 import 'features/claude_code/domain/claude_code_bloc.dart';
 import 'features/claude_code/domain/claude_code_event.dart';
 import 'features/decision_proxy/domain/decision_proxy_bloc.dart';
@@ -102,6 +103,9 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         ),
         BlocProvider<ClaudeCodeBloc>(
           create: ( _ ) => ServiceLocator.get<ClaudeCodeBloc>(),
+        ),
+        BlocProvider<AgenticSubmissionBloc>(
+          create: ( _ ) => ServiceLocator.get<AgenticSubmissionBloc>(),
         ),
       ],
       child: MaterialApp(

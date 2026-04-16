@@ -1,5 +1,56 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.16 - Tier 4 Complete: Agentic Job UIs + Artifact Viewers
+
+### Session Summary
+- **Objective**: Implement all 9 agentic job types as first-class mobile features (Tier 4 of v0.1.6 resync).
+- **Status**: ✅ All 6 phases complete; **140/140 unit tests passing** (was 100).
+- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+
+### Work Performed
+1. **Phase 0** — Serialized plan to `src/rnd/v0.1.6-migration/2026.04.16-tier-4-implementation-plan.md`.
+2. **Phase 1** — `pubspec.yaml` deps: `flutter_markdown ^0.7.3`, `share_plus ^10.0.0`, `open_file ^3.3.2`. 9 data model files covering all request/response shapes verified against live OpenAPI.
+3. **Phase 2** — `AgenticRepository` (10 typed methods) + `IoFileService` (binary fetch, cache, share, open).
+4. **Phase 3** — `AgenticSubmissionBloc` (single switch-dispatch BLoC for all 9 job types); `TfeResumeSuccess` as distinct state; DI wiring in `service_locator.dart` + `app.dart` MultiBlocProvider.
+5. **Phase 4** — `AgenticHubScreen` (9 cards) + 9 per-job form screens; `home_screen.dart` "Agentic Jobs" card added.
+6. **Phase 5** — `MarkdownReportViewer` (flutter_markdown + share), `AudioArtifactPlayer` (download + share), `SlideDeckViewer` (open-in-app + share); `JobDetailScreen` gets "View Artifact" button on `done` jobs (routed by job_id prefix `dr-`/`pg-`/`rp-`/`px-`/`rx-`) and "Re-run with Fix" button on `dead` jobs → `BugFixExpediterForm(deadJobId:)`.
+7. **Phase 6** — 40 new unit tests (models, repository, bloc); 140/140 passing.
+
+### Files Added
+- `lib/features/agentic/data/{agentic_common,deep_research,podcast,presentation,swe_team,bug_fix_expediter,test_suite,test_fix_expediter,chained}_models.dart`
+- `lib/features/agentic/data/agentic_repository.dart`
+- `lib/features/agentic/domain/{agentic_submission_event,agentic_submission_state,agentic_submission_bloc}.dart`
+- `lib/features/agentic/presentation/{agentic_hub,deep_research,podcast_generator,presentation_generator,swe_team,bug_fix_expediter,test_suite,test_fix_expediter,research_to_podcast,research_to_presentation}_form.dart` (and hub screen)
+- `lib/services/artifacts/io_file_service.dart`
+- `lib/features/artifacts/{markdown_report_viewer,audio_artifact_player,slide_deck_viewer}.dart`
+- `test/unit/agentic/{agentic_models,agentic_repository,agentic_submission_bloc}_test.dart`
+- `src/rnd/v0.1.6-migration/2026.04.16-tier-4-{agentic-uis-plan,implementation-plan}.md`
+
+### Files Modified
+- `pubspec.yaml` — flutter_markdown, share_plus, open_file added
+- `lib/app.dart` — AgenticSubmissionBloc added to MultiBlocProvider
+- `lib/core/di/service_locator.dart` — AgenticRepository, IoFileService, AgenticSubmissionBloc registered
+- `lib/features/home/home_screen.dart` — "Agentic Jobs" nav card added
+- `lib/features/queue/presentation/job_detail_screen.dart` — View Artifact + Re-run with Fix actions
+
+### Test Results
+| Suite | Before | After |
+|-------|--------|-------|
+| Tiers 1–3 unit | 100 | 100 |
+| Tier 4 models | 0 | 18 |
+| Tier 4 repository | 0 | 12 |
+| Tier 4 bloc | 0 | 10 |
+| **Total** | **100** | **140** |
+
+### Architecture Decisions
+- Single `AgenticRepository` (not 9 per-job repos) — mirrors Lupin's grouping of all agentic routers.
+- Single `AgenticSubmissionBloc` with switch dispatch — avoids 9 near-identical BLoCs.
+- `BugFixExpediterForm` launched from `JobDetailScreen` on dead jobs (deadJobId pre-filled) — better UX than asking users to type IDs manually.
+- `TfeResumeResponse` / `TfeResumeSuccess` as distinct types — resume returns extra fields (phaseName, resumeCount) not in the standard submit response.
+- Stats dashboard (`TimeSavedDashboard`, `StatsRepository`, `fl_chart`) **deferred** to a future tier.
+
+---
+
 ## 2026.04.16 - Tier 3 Complete: Queue / CJ Flow + Claude Code
 
 ### Session Summary

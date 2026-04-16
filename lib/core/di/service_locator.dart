@@ -38,6 +38,13 @@ import '../../features/claude_code/data/claude_code_repository.dart';
 import '../../features/queue/domain/queue_bloc.dart';
 import '../../features/claude_code/domain/claude_code_bloc.dart';
 
+// Tier 4 data layer
+import '../../features/agentic/data/agentic_repository.dart';
+import '../../services/artifacts/io_file_service.dart';
+
+// Tier 4 BLoCs
+import '../../features/agentic/domain/agentic_submission_bloc.dart';
+
 // Repositories
 import '../repositories/user_repository.dart';
 import '../repositories/session_repository.dart';
@@ -214,6 +221,14 @@ class ServiceLocator {
     _getIt.registerSingleton<ClaudeCodeRepository>(
       ClaudeCodeRepository(_getIt<Dio>()),
     );
+
+    // Tier 4 data layer — agentic job repo + IO file service.
+    _getIt.registerSingleton<AgenticRepository>(
+      AgenticRepository(_getIt<Dio>()),
+    );
+    _getIt.registerSingleton<IoFileService>(
+      IoFileService(_getIt<Dio>()),
+    );
   }
 
   /// Initialize repositories
@@ -285,6 +300,11 @@ class ServiceLocator {
     );
     _getIt.registerLazySingleton<ClaudeCodeBloc>(
       () => ClaudeCodeBloc(_getIt<ClaudeCodeRepository>()),
+    );
+
+    // Tier 4 BLoC — lazy singleton shared across all agentic submission forms.
+    _getIt.registerLazySingleton<AgenticSubmissionBloc>(
+      () => AgenticSubmissionBloc(_getIt<AgenticRepository>()),
     );
   }
 
