@@ -1,76 +1,56 @@
 import 'package:equatable/equatable.dart';
-import '../../../shared/models/job.dart';
+
+import '../data/queue_models.dart';
 
 abstract class QueueState extends Equatable {
-  final List<Job> todoJobs;
-  final List<Job> runningJobs;
-  final List<Job> completedJobs;
-  final List<Job> deadJobs;
-  final bool isConnected;
-  final String? error;
-
-  const QueueState({
-    this.todoJobs = const [],
-    this.runningJobs = const [],
-    this.completedJobs = const [],
-    this.deadJobs = const [],
-    this.isConnected = false,
-    this.error,
-  });
-
-  @override
-  List<Object?> get props => [
-        todoJobs,
-        runningJobs,
-        completedJobs,
-        deadJobs,
-        isConnected,
-        error,
-      ];
+  const QueueState();
+  @override List<Object?> get props => [];
 }
 
-class QueueInitial extends QueueState {}
+class QueueInitial extends QueueState {
+  const QueueInitial();
+}
 
 class QueueLoading extends QueueState {
-  const QueueLoading({
-    super.todoJobs,
-    super.runningJobs,
-    super.completedJobs,
-    super.deadJobs,
-    super.isConnected,
-  });
+  const QueueLoading();
 }
 
-class QueueLoaded extends QueueState {
-  const QueueLoaded({
-    required List<Job> todoJobs,
-    required List<Job> runningJobs,
-    required List<Job> completedJobs,
-    required List<Job> deadJobs,
-    required bool isConnected,
-  }) : super(
-          todoJobs: todoJobs,
-          runningJobs: runningJobs,
-          completedJobs: completedJobs,
-          deadJobs: deadJobs,
-          isConnected: isConnected,
-        );
+class QueueSnapshotLoaded extends QueueState {
+  final QueueResponse snapshot;
+  const QueueSnapshotLoaded( this.snapshot );
+  @override List<Object?> get props => [ snapshot.queueName, snapshot.totalJobs ];
+}
+
+class QueueHistoryLoaded extends QueueState {
+  final JobHistoryPage page;
+  const QueueHistoryLoaded( this.page );
+  @override List<Object?> get props => [ page.total, page.offset ];
+}
+
+class QueueInteractionsLoaded extends QueueState {
+  final JobInteractionsResponse data;
+  const QueueInteractionsLoaded( this.data );
+  @override List<Object?> get props => [ data.jobId, data.interactionCount ];
+}
+
+class QueueSubmitting extends QueueState {
+  const QueueSubmitting();
+}
+
+class QueueSubmitted extends QueueState {
+  final PushJobResponse response;
+  const QueueSubmitted( this.response );
+  @override List<Object?> get props => [ response.jobId ];
+}
+
+class QueueActionComplete extends QueueState {
+  final String message;
+  const QueueActionComplete( this.message );
+  @override List<Object?> get props => [ message ];
 }
 
 class QueueError extends QueueState {
-  const QueueError({
-    required String error,
-    List<Job> todoJobs = const [],
-    List<Job> runningJobs = const [],
-    List<Job> completedJobs = const [],
-    List<Job> deadJobs = const [],
-    bool isConnected = false,
-  }) : super(
-          todoJobs: todoJobs,
-          runningJobs: runningJobs,
-          completedJobs: completedJobs,
-          deadJobs: deadJobs,
-          isConnected: isConnected,
-          error: error,
-        );
+  final String message;
+  const QueueError( this.message );
+  @override List<Object?> get props => [ message ];
 }

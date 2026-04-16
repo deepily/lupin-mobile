@@ -30,6 +30,14 @@ import '../../features/decision_proxy/data/decision_proxy_repository.dart';
 import '../../features/notifications/domain/notification_bloc.dart';
 import '../../features/decision_proxy/domain/decision_proxy_bloc.dart';
 
+// Tier 3 data layer
+import '../../features/queue/data/queue_repository.dart';
+import '../../features/claude_code/data/claude_code_repository.dart';
+
+// Tier 3 BLoCs
+import '../../features/queue/domain/queue_bloc.dart';
+import '../../features/claude_code/domain/claude_code_bloc.dart';
+
 // Repositories
 import '../repositories/user_repository.dart';
 import '../repositories/session_repository.dart';
@@ -198,6 +206,14 @@ class ServiceLocator {
     _getIt.registerSingleton<DecisionProxyRepository>(
       DecisionProxyRepository(_getIt<Dio>()),
     );
+
+    // Tier 3 data layer — queue + claude code repos over the same shared Dio.
+    _getIt.registerSingleton<QueueRepository>(
+      QueueRepository(_getIt<Dio>()),
+    );
+    _getIt.registerSingleton<ClaudeCodeRepository>(
+      ClaudeCodeRepository(_getIt<Dio>()),
+    );
   }
 
   /// Initialize repositories
@@ -261,6 +277,14 @@ class ServiceLocator {
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(
       () => DecisionProxyBloc(_getIt<DecisionProxyRepository>()),
+    );
+
+    // Tier 3 BLoCs — lazy singletons.
+    _getIt.registerLazySingleton<QueueBloc>(
+      () => QueueBloc(_getIt<QueueRepository>()),
+    );
+    _getIt.registerLazySingleton<ClaudeCodeBloc>(
+      () => ClaudeCodeBloc(_getIt<ClaudeCodeRepository>()),
     );
   }
 

@@ -1,5 +1,50 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.16 - Tier 3 Complete: Queue / CJ Flow + Claude Code
+
+### Session Summary
+- **Objective**: Complete all 7 phases of Tier 3 (Queue / CJ Flow + Interactive Claude Code Sessions).
+- **Status**: ✅ All phases delivered; **100/100 unit tests passing** (was 63).
+- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+
+### Work Performed
+1. **Phase 4 UI** — `submit_job_sheet.dart` (bottom sheet, standard/agentic toggle), `chat_screen.dart` (bidirectional chat, status banner, interrupt/end controls), `session_list_screen.dart` (active session list, FAB dispatches), `dispatch_sheet.dart` (project path + BOUNDED/INTERACTIVE SegmentedButton).
+2. **Phase 5 WS integration** — Added `eventClaudeCodeMessage` + `eventClaudeCodeStateChange` constants to `app_constants.dart`; `app.dart` converted to `StatefulWidget` with `_wsSubscription` that routes queue events → `QueueExternalUpdate` and claude_code events → `ClaudeCodeExternalMessage`.
+3. **Phase 6 DI wiring** — `service_locator.dart`: `QueueRepository` + `ClaudeCodeRepository` registered as singletons; `QueueBloc` + `ClaudeCodeBloc` as lazy singletons. `app.dart` `MultiBlocProvider` includes both. `home_screen.dart` rebuilt as card-nav hub with Job Queue + Claude Code + Notifications + Trust entries.
+4. **Phase 7 unit tests** — 6 new test files (3 queue, 3 claude_code); 37 new cases covering models, repository, and BLoC layers. Two model bugs caught and fixed during test run (see below).
+5. **Bug fixes** — `ClaudeCodeDispatchRequest.project` changed from `required` to optional (dispatch sheet always had optional project); `JobHistoryEntry.metadataJson` type corrected to `String?` (backend sends JSON string, not parsed map).
+
+### Files Added
+- `lib/features/queue/presentation/submit_job_sheet.dart`
+- `lib/features/claude_code/presentation/chat_screen.dart`
+- `lib/features/claude_code/presentation/session_list_screen.dart`
+- `lib/features/claude_code/presentation/dispatch_sheet.dart`
+- `test/unit/queue/queue_models_test.dart`
+- `test/unit/queue/queue_repository_test.dart`
+- `test/unit/queue/queue_bloc_test.dart`
+- `test/unit/claude_code/claude_code_models_test.dart`
+- `test/unit/claude_code/claude_code_repository_test.dart`
+- `test/unit/claude_code/claude_code_bloc_test.dart`
+
+### Files Modified
+- `lib/app.dart` — StatefulWidget with WS → BLoC subscription wiring; QueueBloc + ClaudeCodeBloc added to MultiBlocProvider
+- `lib/core/constants/app_constants.dart` — Added `eventClaudeCodeMessage` + `eventClaudeCodeStateChange`
+- `lib/core/di/service_locator.dart` — Tier 3 repos + BLoCs registered
+- `lib/features/home/home_screen.dart` — Rebuilt as card-nav hub (replaced old TTS/WS debug screen)
+- `lib/features/claude_code/data/claude_code_models.dart` — `project` made optional; `toJson()` conditionally includes it
+- `lib/features/queue/data/queue_models.dart` — `metadataJson` type corrected to `String?`
+- `lib/features/queue/domain/queue_bloc.dart` — (previously written this session, unchanged here)
+
+### Test Results
+| Suite | Before | After |
+|-------|--------|-------|
+| Tier 1+2 unit | 63 | 63 |
+| Tier 3 queue | 0 | 17 |
+| Tier 3 claude_code | 0 | 20 |
+| **Total** | **63** | **100** |
+
+---
+
 ## 2026.04.16 - Legacy Test Triage + Phase 1 Baseline
 
 ### Session Summary

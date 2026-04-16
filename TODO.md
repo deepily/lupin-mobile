@@ -1,6 +1,6 @@
 # TODO
 
-Last updated: 2026-04-16 (Session: Legacy test triage + baseline green)
+Last updated: 2026-04-16 (Session: Tier 3 Complete — Queue/CJ Flow + Claude Code)
 
 ## Pending
 
@@ -16,15 +16,7 @@ Last updated: 2026-04-16 (Session: Legacy test triage + baseline green)
 - [ ] [LUPIN-MOBILE] `generate-gist` UI on ConversationScreen ("Summarize" action)
 - [ ] [LUPIN-MOBILE] TrustStateScreen drilldown (per-domain trust details)
 - [ ] [LUPIN-MOBILE] Decide whether to remove orphaned `lib/shared/models/notification_item.dart`
-
-### Tier 3 — Queue/CJ Flow + Interactive Claude Code (planned, ready to start)
-- [ ] [LUPIN-MOBILE] Build `lib/features/queue/data/queue_models.dart` + `queue_repository.dart` (14 endpoints)
-- [ ] [LUPIN-MOBILE] Build `lib/features/claude_code/data/claude_code_models.dart` + `claude_code_repository.dart` (5+1 endpoints)
-- [ ] [LUPIN-MOBILE] Verify exact response shapes for `/api/get-queue/*`, `/api/jobs/{id}/*`, `/api/claude-code/*` against router source (analogous to Tier 2's openapi+router trace)
-- [ ] [LUPIN-MOBILE] QueueBloc + QueueDashboardScreen + JobDetailScreen
-- [ ] [LUPIN-MOBILE] ClaudeCodeBloc + ChatScreen + DispatchSheet
-- [ ] [LUPIN-MOBILE] WS subscription for `claude_code_*` events (verify event names exist in app_constants.dart)
-- [ ] [LUPIN-MOBILE] Unit tests for Tier 3 data + BLoC layer
+- [ ] [LUPIN-MOBILE] Wire `NotificationsExternalUpdate` from WS (already bridged in app.dart but event type `notification_queue_update` not confirmed vs backend)
 
 ### Tier 4 — Agentic Job UIs (planned, blocked on Tier 3)
 - [ ] [LUPIN-MOBILE] Build per-job-type request/response models (deep_research, podcast, presentation, swe_team, bug_fix_expediter, test_suite, chained_*)
@@ -40,6 +32,13 @@ Last updated: 2026-04-16 (Session: Legacy test triage + baseline green)
 - [ ] [LUPIN-MOBILE] Resolve pre-existing `getIt` import in `home_screen.dart` (orphan from old wiring)
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] Tier 3 queue data layer: queue_models.dart + queue_repository.dart (14 endpoints) — 2026-04-16
+- [x] [LUPIN-MOBILE] Tier 3 Claude Code data layer: claude_code_models.dart + claude_code_repository.dart (6 endpoints) — 2026-04-16
+- [x] [LUPIN-MOBILE] Tier 3 BLoC layer: QueueBloc + ClaudeCodeBloc — 2026-04-16
+- [x] [LUPIN-MOBILE] Tier 3 UI: QueueDashboardScreen, JobDetailScreen, SubmitJobSheet, ChatScreen, SessionListScreen, DispatchSheet — 2026-04-16
+- [x] [LUPIN-MOBILE] Tier 3 WS integration: app.dart bridging claude_code_message/state_change → ClaudeCodeBloc; queue_*_update → QueueBloc — 2026-04-16
+- [x] [LUPIN-MOBILE] Tier 3 DI wiring: QueueRepository, ClaudeCodeRepository, QueueBloc, ClaudeCodeBloc in service_locator + app.dart MultiBlocProvider — 2026-04-16
+- [x] [LUPIN-MOBILE] Tier 3 unit tests: 37 new cases across 6 files (100/100 total) — 2026-04-16
 - [x] [LUPIN-MOBILE] `flutter pub get` + `flutter test test/unit/` — 63/63 pass — 2026-04-16
 - [x] [LUPIN-MOBILE] Legacy test triage: 21 quarantined, 6 confirmed green, 1 fixed — 2026-04-16
 - [x] [LUPIN-MOBILE] Decide whether to commit Tier 1 + Tier 2 as one bundle or two — deferred to next session — 2026-04-16

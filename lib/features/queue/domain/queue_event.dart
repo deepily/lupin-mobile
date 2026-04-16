@@ -1,53 +1,101 @@
 import 'package:equatable/equatable.dart';
-import '../../../shared/models/job.dart';
+
+import '../data/queue_models.dart';
 
 abstract class QueueEvent extends Equatable {
   const QueueEvent();
-
   @override
   List<Object?> get props => [];
 }
 
-class QueueStarted extends QueueEvent {}
+// ─── Load / refresh ──────────────────────────────────────────────────────────
 
-class QueueJobAdded extends QueueEvent {
-  final Job job;
-
-  const QueueJobAdded({required this.job});
-
-  @override
-  List<Object?> get props => [job];
+class QueueLoadSnapshot extends QueueEvent {
+  final String queueName;  // todo | run | done | dead
+  const QueueLoadSnapshot( this.queueName );
+  @override List<Object?> get props => [ queueName ];
 }
 
-class QueueJobStatusChanged extends QueueEvent {
+class QueueLoadHistory extends QueueEvent {
+  final String? status;
+  final String? jobType;
+  final int     limit;
+  final int     offset;
+  const QueueLoadHistory( { this.status, this.jobType, this.limit = 20, this.offset = 0 } );
+  @override List<Object?> get props => [ status, jobType, limit, offset ];
+}
+
+class QueueLoadInteractions extends QueueEvent {
   final String jobId;
-  final JobStatus newStatus;
-
-  const QueueJobStatusChanged({
-    required this.jobId,
-    required this.newStatus,
-  });
-
-  @override
-  List<Object?> get props => [jobId, newStatus];
+  const QueueLoadInteractions( this.jobId );
+  @override List<Object?> get props => [ jobId ];
 }
 
-class QueueJobSubmitted extends QueueEvent {
-  final String text;
-
-  const QueueJobSubmitted({required this.text});
-
-  @override
-  List<Object?> get props => [text];
+/// Fired by WS subscription manager when a queue event arrives.
+class QueueExternalUpdate extends QueueEvent {
+  final String queueName;
+  const QueueExternalUpdate( this.queueName );
+  @override List<Object?> get props => [ queueName ];
 }
 
-class QueueRefreshRequested extends QueueEvent {}
+// ─── Job submission ───────────────────────────────────────────────────────────
 
-class QueueJobDeleted extends QueueEvent {
+class QueueSubmitJob extends QueueEvent {
+  final PushJobRequest request;
+  const QueueSubmitJob( this.request );
+  @override List<Object?> get props => [ request ];
+}
+
+class QueueSubmitAgenticJob extends QueueEvent {
+  final PushAgenticRequest request;
+  const QueueSubmitAgenticJob( this.request );
+  @override List<Object?> get props => [ request ];
+}
+
+// ─── Job lifecycle ────────────────────────────────────────────────────────────
+
+class QueueCancelJob extends QueueEvent {
   final String jobId;
+  const QueueCancelJob( this.jobId );
+  @override List<Object?> get props => [ jobId ];
+}
 
-  const QueueJobDeleted({required this.jobId});
+class QueuePauseJob extends QueueEvent {
+  final String jobId;
+  const QueuePauseJob( this.jobId );
+  @override List<Object?> get props => [ jobId ];
+}
 
-  @override
-  List<Object?> get props => [jobId];
+class QueueResumeJob extends QueueEvent {
+  final String jobId;
+  const QueueResumeJob( this.jobId );
+  @override List<Object?> get props => [ jobId ];
+}
+
+class QueueDeleteJob extends QueueEvent {
+  final String queueName;
+  final String jobId;
+  const QueueDeleteJob( { required this.queueName, required this.jobId } );
+  @override List<Object?> get props => [ queueName, jobId ];
+}
+
+class QueueRetryJob extends QueueEvent {
+  final String jobId;
+  final String websocketId;
+  const QueueRetryJob( { required this.jobId, required this.websocketId } );
+  @override List<Object?> get props => [ jobId, websocketId ];
+}
+
+class QueueResumeFromCheckpoint extends QueueEvent {
+  final String idHash;
+  const QueueResumeFromCheckpoint( this.idHash );
+  @override List<Object?> get props => [ idHash ];
+}
+
+class QueueInjectMessage extends QueueEvent {
+  final String jobId;
+  final String message;
+  final String priority;
+  const QueueInjectMessage( { required this.jobId, required this.message, this.priority = 'normal' } );
+  @override List<Object?> get props => [ jobId, message, priority ];
 }

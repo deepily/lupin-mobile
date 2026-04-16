@@ -43,6 +43,10 @@ class AppConstants {
   static const String eventAuthError = 'auth_error';
   static const String eventConnect = 'connect';
   
+  // Claude Code Events
+  static const String eventClaudeCodeMessage     = 'claude_code_message';
+  static const String eventClaudeCodeStateChange = 'claude_code_state_change';
+
   // Control Events
   static const String eventUpdateSubscriptions = 'update_subscriptions';
   static const String eventSubscriptionUpdate = 'subscription_update';
