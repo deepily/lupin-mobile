@@ -1,5 +1,86 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.16 - Tier 2 Data Layer + UI + Tier 3/4 Plan Expansion
+
+### Session Summary
+- **Objective**: Implement Tier 2 (notifications + decision proxy) end-to-end and expand the Tier 3 + Tier 4 stubs into full plans while user is offline.
+- **Status**: ✅ Tier 2 data layer + BLoCs + UI scaffolds complete with unit/BLoC tests; Tier 3 + 4 plans fully expanded against live OpenAPI; all changes uncommitted (waiting for user review).
+- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+
+### Work Performed
+1. **Endpoint shape extraction** — fetched live `http://localhost:7999/openapi.json` (149KB) and traced both `notifications.py` + `decision_proxy.py` router responses one level into manager calls. Captured every dict-literal field name + type for hand-coded DTOs.
+2. **Notifications data layer** — 18 model classes (NotificationItem, ConversationMessage, SenderSummary, DateSummary, ProjectSession, GistResponse, NotifyDispatchResponse, NotificationResponseAck, request payloads + envelopes); `NotificationRepository` wraps all 17 endpoints with typed methods.
+3. **Decision-proxy data layer** — `TrustMode` enum + 11 model classes (ProxyDecision, PendingSummary, RatifyResponse, TrustStateItem, TrustModeStatus, TrustModeUpdateRequest/Response, AcknowledgeResponse, BatchIdResponse); `DecisionProxyRepository` wraps all 9 endpoints.
+4. **NotificationBloc rewrite** — replaced WS-only skeleton with repo-backed BLoC. Events: LoadInbox, LoadConversation, MarkPlayed, Respond, BulkDelete, DeleteConversation, ExternalUpdate. States carry sender/conversation context for refresh-on-WS-event.
+5. **DecisionProxyBloc** — new. Events: LoadDashboard, SetMode, Ratify, DeleteDecision, Acknowledge, LoadTrust. States carry mode + pending + summary + batch id.
+6. **Notifications UI** — `InboxScreen` (multi-sender list, swipe-to-delete, new_count badges, pull-to-refresh, bulk-delete confirmation), `ConversationScreen` (date-grouped messages, state chips, response button), `InteractivePromptSheet` (yes_no / multiple_choice / open_ended / open_ended_batch variants).
+7. **Decision-proxy UI** — `TrustDashboardScreen` with color-coded mode header, SegmentedButton mode picker (with downshift confirmation dialog), per-decision cards (approve/reject/delete), summary footer with batch acknowledge.
+8. **DI + app wiring** — registered both repos + both BLoCs in `service_locator.dart`; added MultiBlocProvider entries in `app.dart`; added Inbox/Trust/Logout AppBar actions to `home_screen.dart`.
+9. **Tests** — 6 new test files (`auth/_helpers/stub_dio.dart` shared adapter; notification_models, notification_repository, decision_proxy_models, decision_proxy_repository at unit level; notification_bloc, decision_proxy_bloc using `bloc_test`). 30+ cases total.
+10. **Plan expansion** — Tier 2 plan converted from stub to full active doc; Tier 3 plan expanded with all 14 queue + 5 Claude Code + 1 BOUNDED endpoints, models, UI surface, file paths; Tier 4 plan expanded with 11 agentic + 2 IO + 2 stats endpoints, per-job UI structure, artifact viewer strategy.
+
+### Files Added (22 new)
+- `lib/features/notifications/data/{notification_models,notification_repository}.dart`
+- `lib/features/decision_proxy/data/{decision_proxy_models,decision_proxy_repository}.dart`
+- `lib/features/decision_proxy/domain/{decision_proxy_event,decision_proxy_state,decision_proxy_bloc}.dart`
+- `lib/features/notifications/presentation/{inbox_screen,conversation_screen,interactive_prompt_sheet}.dart`
+- `lib/features/decision_proxy/presentation/trust_dashboard_screen.dart`
+- `test/unit/_helpers/stub_dio.dart`
+- `test/unit/notifications/{notification_models_test,notification_repository_test,notification_bloc_test}.dart`
+- `test/unit/decision_proxy/{decision_proxy_models_test,decision_proxy_repository_test,decision_proxy_bloc_test}.dart`
+
+### Files Modified (7)
+- `lib/core/di/service_locator.dart` — Tier 2 repos + BLoCs registered
+- `lib/app.dart` — MultiBlocProvider includes both Tier 2 BLoCs
+- `lib/features/home/home_screen.dart` — Inbox / Trust / Logout AppBar actions
+- `lib/features/notifications/domain/{notification_bloc,notification_event,notification_state}.dart` — full rewrite
+- `src/rnd/v0.1.6-migration/2026.04.15-tier-{2,3,4}-*.md` — plan stubs → full plans
+
+### Decisions for Future Sessions
+- Old `lib/shared/models/notification_item.dart` is now orphaned (no consumers) — leave for cleanup pass when convenient.
+- `home_screen.dart` has a pre-existing broken import (`getIt` from `main.dart`) — predates this session.
+- WebSocket→BLoC bridge for `NotificationsExternalUpdate` not yet wired (event added but not dispatched from WS layer).
+- Push notifications (FCM/APNs), local notification mirror, voice-first prompts all explicitly deferred per Tier 2 plan.
+
+---
+
+## 2026.04.15 - Tier 1 Auth + WS Persistence Implementation
+
+### Session Summary
+- **Objective**: Implement Tier 1 plan — replace mock auth with real JWT against Lupin v0.1.6, add biometric unlock, WS session persistence, and Dev↔Test server-context toggle.
+- **Status**: ✅ Code complete (all 12 plan steps built); tests written but unexecuted (no Flutter SDK in this env).
+- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+
+### Work Performed
+1. **pubspec.yaml** — added `flutter_secure_storage ^9.2.2`, `local_auth ^2.3.0`, `assets/config/` bundle.
+2. **`assets/config/server-contexts.json`** — bundled Dev/Test URL defaults.
+3. **Auth services (6 new files in `lib/services/auth/`)** — `ServerContextService`, `SecureCredentialStore`, `AuthRepository`, `AuthInterceptor` (401 refresh-and-retry), `BiometricGate`, `SessionPersistence`, `auth_token_provider`.
+4. **Auth UI (3 new files in `lib/features/auth/presentation/`)** — `LoginScreen` (email pre-fill + context badge), `BiometricPromptScreen`, `AuthGate` (routes by AuthBloc state).
+5. **AuthBloc rewrite** — replaced 3 TODO stubs with real backend calls via AuthRepository; added `AuthBiometricUnlockRequested` and `AuthServerContextChanged` events; states now carry `lastEmail`.
+6. **WebSocket real JWT** — replaced `mock_token_email_*` at `websocket_service.dart:161` and `enhanced_websocket_service.dart:286` with `readAccessToken()`.
+7. **`AppConstants`** — `apiBaseUrl`/`wsBaseUrl` now runtime-mutable; `ServerContextService` rewrites them on context switch.
+8. **DI wiring (`service_locator.dart`)** — registers all new services + AuthBloc; installs AuthInterceptor on Dio.
+9. **`app.dart`** — provides AuthBloc, wraps home screen in `AuthGate`.
+10. **Settings toggle** — `ServerContextToggle` widget with segmented button + confirmation dialog.
+11. **Unit tests (4 files, 16 cases)** — `auth_repository_test`, `auth_interceptor_test`, `auth_token_provider_test`, `server_context_service_test`.
+
+### Files Added (16 new)
+- `assets/config/server-contexts.json`
+- `lib/services/auth/{auth_token_provider,server_context_service,secure_credential_store,auth_repository,auth_interceptor,biometric_gate,session_persistence}.dart`
+- `lib/features/auth/presentation/{login_screen,biometric_prompt_screen,auth_gate}.dart`
+- `lib/features/settings/presentation/server_context_toggle.dart`
+- `test/unit/auth/{auth_repository_test,auth_interceptor_test,auth_token_provider_test,server_context_service_test}.dart`
+
+### Files Modified (7)
+- `pubspec.yaml`, `lib/core/constants/app_constants.dart`, `lib/core/di/service_locator.dart`, `lib/app.dart`, `lib/features/auth/domain/{auth_bloc,auth_event,auth_state}.dart`, `lib/services/websocket/{websocket_service,enhanced_websocket_service}.dart`
+
+### Decisions for Future Sessions
+- `mock_token_email_*` remains in `test/mocks/` (test-only stubs, not production code).
+- Dio baseUrl is snapshot at construction — context switch updates AppConstants but the singleton Dio keeps its old baseUrl until app restart; evaluate adding `Dio.options.baseUrl` mutation on switch.
+- Need `flutter pub get` + `flutter test test/unit/auth/` to validate.
+
+---
+
 ## 2026.04.15 - Re-sync with Lupin v0.1.6 + Planning-is-Prompting Install
 
 ### Session Summary

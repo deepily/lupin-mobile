@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
+import '../auth/auth_token_provider.dart';
 
 /// Enhanced WebSocket service with improved message handling, queuing, and resilience.
 /// 
@@ -283,7 +284,11 @@ class EnhancedWebSocketService {
   Future<void> _authenticateWithRetry(String userId, {int maxRetries = 3, bool isAudioChannel = false}) async {
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        _authToken = 'Bearer mock_token_email_$userId';
+        final accessToken = readAccessToken();
+        if (accessToken == null) {
+          throw Exception('No access token — login required before WS auth');
+        }
+        _authToken = 'Bearer $accessToken';
         
         final authMessage = WebSocketMessage.authentication(
           token: _authToken!,

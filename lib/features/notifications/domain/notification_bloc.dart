@@ -1,232 +1,166 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'dart:async';
-import '../../../shared/models/notification_item.dart';
-import '../../../services/websocket/websocket_service.dart';
-import '../../../services/tts/tts_service.dart';
+
+import '../data/notification_models.dart';
+import '../data/notification_repository.dart';
 import 'notification_event.dart';
 import 'notification_state.dart';
 
+/// Repository-backed inbox + conversation BLoC. Replaces the prior
+/// websocket-only skeleton with real REST integration against the
+/// 17-endpoint notifications API.
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
-  final WebSocketService _webSocketService;
-  final TTSService _ttsService;
-  StreamSubscription<dynamic>? _webSocketSubscription;
+  final NotificationRepository _repo;
 
-  NotificationBloc({
-    required WebSocketService webSocketService,
-    required TTSService ttsService,
-  })  : _webSocketService = webSocketService,
-        _ttsService = ttsService,
-        super(NotificationInitial()) {
-    on<NotificationStarted>(_onNotificationStarted);
-    on<NotificationReceived>(_onNotificationReceived);
-    on<NotificationRead>(_onNotificationRead);
-    on<NotificationDeleted>(_onNotificationDeleted);
-    on<NotificationClearAll>(_onNotificationClearAll);
-    on<NotificationMarkAllAsRead>(_onNotificationMarkAllAsRead);
-    on<NotificationSent>(_onNotificationSent);
+  // Track context so external updates can refresh the right view.
+  String? _activeUserEmail;
+  String? _activeSenderId;
+
+  NotificationBloc( this._repo ) : super( const NotificationsInitial() ) {
+    on<NotificationsLoadInbox>( _onLoadInbox );
+    on<NotificationsLoadConversation>( _onLoadConversation );
+    on<NotificationsMarkPlayed>( _onMarkPlayed );
+    on<NotificationsRespond>( _onRespond );
+    on<NotificationsBulkDelete>( _onBulkDelete );
+    on<NotificationsDeleteConversation>( _onDeleteConversation );
+    on<NotificationsExternalUpdate>( _onExternalUpdate );
   }
 
-  Future<void> _onNotificationStarted(
-    NotificationStarted event,
+  Future<void> _onLoadInbox(
+    NotificationsLoadInbox event,
     Emitter<NotificationState> emit,
   ) async {
-    emit(const NotificationLoading());
-
+    _activeUserEmail = event.userEmail;
+    emit( const NotificationsLoading() );
     try {
-      // TODO: Load notifications from local storage or API
-      final notifications = <NotificationItem>[];
-
-      // Start WebSocket connection for real-time notifications
-      await _webSocketService.connect();
-
-      // Listen to WebSocket messages
-      _webSocketSubscription = _webSocketService.stream.listen(
-        (message) => _handleWebSocketMessage(message),
+      final senders = await _repo.sendersVisible(
+        event.userEmail,
+        hours          : event.hours,
+        includeHidden  : event.includeHidden,
+        excludeOwnJobs : event.excludeOwnJobs,
       );
-
-      final unreadCount = notifications.where((n) => !n.isRead).length;
-
-      emit(NotificationLoaded(
-        notifications: notifications,
-        unreadCount: unreadCount,
-      ));
-    } catch (error) {
-      emit(NotificationError(error: error.toString()));
+      emit( NotificationsInboxLoaded(
+        senders   : senders,
+        userEmail : event.userEmail,
+      ) );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
     }
   }
 
-  Future<void> _onNotificationReceived(
-    NotificationReceived event,
+  Future<void> _onLoadConversation(
+    NotificationsLoadConversation event,
     Emitter<NotificationState> emit,
   ) async {
-    if (state is NotificationLoaded) {
-      final currentState = state as NotificationLoaded;
-      
-      final updatedNotifications = [
-        event.notification,
-        ...currentState.notifications,
-      ];
-
-      final unreadCount = updatedNotifications.where((n) => !n.isRead).length;
-
-      emit(NotificationLoaded(
-        notifications: updatedNotifications,
-        unreadCount: unreadCount,
-      ));
-
-      // Handle audio notification if needed
-      if (event.notification.hasAudio && event.notification.audioText != null) {
-        await _ttsService.speak(event.notification.audioText!);
-      }
-
-      // TODO: Show system notification
-      await _showSystemNotification(event.notification);
+    _activeUserEmail = event.userEmail;
+    _activeSenderId  = event.senderId;
+    emit( const NotificationsLoading() );
+    try {
+      final messages = await _repo.conversation(
+        event.senderId,
+        event.userEmail,
+        hours: event.hours,
+      );
+      emit( NotificationsConversationLoaded(
+        senderId  : event.senderId,
+        userEmail : event.userEmail,
+        messages  : messages,
+      ) );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
     }
   }
 
-  Future<void> _onNotificationRead(
-    NotificationRead event,
-    Emitter<NotificationState> emit,
-  ) async {
-    if (state is NotificationLoaded) {
-      final currentState = state as NotificationLoaded;
-      
-      final updatedNotifications = currentState.notifications.map((notification) {
-        if (notification.id == event.notificationId) {
-          return notification.copyWith(isRead: true);
-        }
-        return notification;
-      }).toList();
-
-      final unreadCount = updatedNotifications.where((n) => !n.isRead).length;
-
-      emit(NotificationLoaded(
-        notifications: updatedNotifications,
-        unreadCount: unreadCount,
-      ));
-    }
-  }
-
-  Future<void> _onNotificationDeleted(
-    NotificationDeleted event,
-    Emitter<NotificationState> emit,
-  ) async {
-    if (state is NotificationLoaded) {
-      final currentState = state as NotificationLoaded;
-      
-      final updatedNotifications = currentState.notifications
-          .where((notification) => notification.id != event.notificationId)
-          .toList();
-
-      final unreadCount = updatedNotifications.where((n) => !n.isRead).length;
-
-      emit(NotificationLoaded(
-        notifications: updatedNotifications,
-        unreadCount: unreadCount,
-      ));
-    }
-  }
-
-  Future<void> _onNotificationClearAll(
-    NotificationClearAll event,
-    Emitter<NotificationState> emit,
-  ) async {
-    emit(const NotificationLoaded(
-      notifications: [],
-      unreadCount: 0,
-    ));
-  }
-
-  Future<void> _onNotificationMarkAllAsRead(
-    NotificationMarkAllAsRead event,
-    Emitter<NotificationState> emit,
-  ) async {
-    if (state is NotificationLoaded) {
-      final currentState = state as NotificationLoaded;
-      
-      final updatedNotifications = currentState.notifications
-          .map((notification) => notification.copyWith(isRead: true))
-          .toList();
-
-      emit(NotificationLoaded(
-        notifications: updatedNotifications,
-        unreadCount: 0,
-      ));
-    }
-  }
-
-  Future<void> _onNotificationSent(
-    NotificationSent event,
+  Future<void> _onMarkPlayed(
+    NotificationsMarkPlayed event,
     Emitter<NotificationState> emit,
   ) async {
     try {
-      final notification = NotificationItem(
-        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-        title: _getTitleForType(event.type),
-        message: event.message,
-        type: event.type,
-        timestamp: DateTime.now(),
+      await _repo.markPlayed( event.notificationId );
+      // Re-emit current view so badges update.
+      _refreshCurrent( emit );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+    }
+  }
+
+  Future<void> _onRespond(
+    NotificationsRespond event,
+    Emitter<NotificationState> emit,
+  ) async {
+    emit( NotificationsResponding( event.notificationId ) );
+    try {
+      final ack = await _repo.respond( NotificationResponsePayload(
+        notificationId : event.notificationId,
+        responseValue  : event.responseValue,
+      ) );
+      // Best-effort mark-played; backend already does it but keep idempotent.
+      try { await _repo.markPlayed( event.notificationId ); } catch ( _ ) {}
+      emit( NotificationsResponseAcked( ack ) );
+      await _refreshCurrent( emit );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+    }
+  }
+
+  Future<void> _onBulkDelete(
+    NotificationsBulkDelete event,
+    Emitter<NotificationState> emit,
+  ) async {
+    try {
+      await _repo.bulkDelete(
+        event.userEmail,
+        hours          : event.hours,
+        excludeOwnJobs : event.excludeOwnJobs,
       );
+      add( NotificationsLoadInbox( userEmail: event.userEmail ) );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+    }
+  }
 
-      // Send notification to backend via WebSocket
-      if (_webSocketService.isConnected) {
-        _webSocketService.sendMessage({
-          'type': 'send_notification',
-          'notification': notification.toJson(),
-        });
+  Future<void> _onDeleteConversation(
+    NotificationsDeleteConversation event,
+    Emitter<NotificationState> emit,
+  ) async {
+    try {
+      await _repo.deleteConversation( event.senderId, event.userEmail );
+      add( NotificationsLoadInbox( userEmail: event.userEmail ) );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+    }
+  }
+
+  Future<void> _onExternalUpdate(
+    NotificationsExternalUpdate _,
+    Emitter<NotificationState> emit,
+  ) async {
+    await _refreshCurrent( emit );
+  }
+
+  /// Re-fetch the current view (inbox or conversation) without changing
+  /// emit ordering. No-op if there's no tracked context yet.
+  Future<void> _refreshCurrent( Emitter<NotificationState> emit ) async {
+    if ( _activeUserEmail == null ) return;
+    try {
+      if ( _activeSenderId != null && state is NotificationsConversationLoaded ) {
+        final msgs = await _repo.conversation(
+          _activeSenderId!,
+          _activeUserEmail!,
+        );
+        emit( NotificationsConversationLoaded(
+          senderId  : _activeSenderId!,
+          userEmail : _activeUserEmail!,
+          messages  : msgs,
+        ) );
+      } else if ( state is NotificationsInboxLoaded ) {
+        final senders = await _repo.sendersVisible( _activeUserEmail! );
+        emit( NotificationsInboxLoaded(
+          senders   : senders,
+          userEmail : _activeUserEmail!,
+        ) );
       }
-    } catch (error) {
-      emit(NotificationError(
-        error: 'Failed to send notification: ${error.toString()}',
-        notifications: state.notifications,
-        unreadCount: state.unreadCount,
-      ));
+    } on NotificationApiException catch ( _ ) {
+      // Keep last good state silently — refresh is best-effort.
     }
-  }
-
-  void _handleWebSocketMessage(dynamic message) {
-    if (message is Map<String, dynamic>) {
-      switch (message['type']) {
-        case 'notification':
-          final notification = NotificationItem.fromJson(message['notification']);
-          add(NotificationReceived(notification: notification));
-          break;
-        // Handle other message types as needed
-      }
-    }
-  }
-
-  Future<void> _showSystemNotification(NotificationItem notification) async {
-    // TODO: Implement platform-specific system notifications
-    // This could use flutter_local_notifications package
-  }
-
-  String _getTitleForType(NotificationType type) {
-    switch (type) {
-      case NotificationType.info:
-        return 'Information';
-      case NotificationType.warning:
-        return 'Warning';
-      case NotificationType.error:
-        return 'Error';
-      case NotificationType.success:
-        return 'Success';
-      case NotificationType.jobStarted:
-        return 'Job Started';
-      case NotificationType.jobCompleted:
-        return 'Job Completed';
-      case NotificationType.jobFailed:
-        return 'Job Failed';
-      case NotificationType.audioResponse:
-        return 'Audio Response';
-      default:
-        return 'Notification';
-    }
-  }
-
-  @override
-  Future<void> close() {
-    _webSocketSubscription?.cancel();
-    return super.close();
   }
 }

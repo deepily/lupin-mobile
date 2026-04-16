@@ -11,6 +11,24 @@ import '../../services/network/http_service.dart';
 import '../../services/network/cached_http_service.dart';
 import '../../services/websocket/websocket_service.dart';
 import '../../services/tts/tts_service.dart';
+import '../../services/auth/auth_interceptor.dart';
+import '../../services/auth/auth_repository.dart';
+import '../../services/auth/auth_token_provider.dart';
+import '../../services/auth/biometric_gate.dart';
+import '../../services/auth/secure_credential_store.dart';
+import '../../services/auth/server_context_service.dart';
+import '../../services/auth/session_persistence.dart';
+
+// Auth feature
+import '../../features/auth/domain/auth_bloc.dart';
+
+// Tier 2 data layer
+import '../../features/notifications/data/notification_repository.dart';
+import '../../features/decision_proxy/data/decision_proxy_repository.dart';
+
+// Tier 2 BLoCs
+import '../../features/notifications/domain/notification_bloc.dart';
+import '../../features/decision_proxy/domain/decision_proxy_bloc.dart';
 
 // Repositories
 import '../repositories/user_repository.dart';
@@ -106,6 +124,23 @@ class ServiceLocator {
     final settingsService = await SettingsService.getInstance();
     _getIt.registerSingleton<SettingsService>(settingsService);
 
+    // Server context (Dev ↔ Test) — loaded from bundled asset,
+    // updates AppConstants.apiBaseUrl / wsBaseUrl before Dio is configured.
+    final serverContext = await ServerContextService.load(sharedPreferences);
+    _getIt.registerSingleton<ServerContextService>(serverContext);
+
+    // Secure credential store (per-context refresh tokens, last-used email,
+    // WS session IDs). Kept as a singleton — contextId is passed per call.
+    _getIt.registerSingleton<SecureCredentialStore>(SecureCredentialStore());
+
+    // Biometric gate
+    _getIt.registerSingleton<BiometricGate>(BiometricGate());
+
+    // Session persistence for WS "wise penguin" IDs
+    _getIt.registerSingleton<SessionPersistence>(
+      SessionPersistence(_getIt<SecureCredentialStore>()),
+    );
+
     // Dio HTTP client
     final dio = Dio();
     _getIt.registerSingleton<Dio>(dio);
@@ -113,6 +148,27 @@ class ServiceLocator {
 
   /// Initialize services
   static Future<void> _initializeServices() async {
+    // Auth repository — uses the shared Dio. Constructed before HttpService
+    // so the auth interceptor (below) can reference it.
+    _getIt.registerSingleton<AuthRepository>(
+      AuthRepository(_getIt<Dio>()),
+    );
+
+    // Auth interceptor: injects Bearer token, refreshes on 401, persists
+    // rotated tokens via SecureCredentialStore.
+    final store   = _getIt<SecureCredentialStore>();
+    final context = _getIt<ServerContextService>();
+    _getIt<Dio>().interceptors.add(AuthInterceptor(
+      repo: _getIt<AuthRepository>(),
+      readRefreshToken: () => store.readRefreshToken(context.activeConfig.id),
+      onTokensRotated: (tokens) async {
+        await store.writeRefreshToken(context.activeConfig.id, tokens.refreshToken);
+      },
+      onRefreshFailed: () async {
+        clearAccessToken();
+      },
+    ));
+
     // HTTP Service
     _getIt.registerSingleton<HttpService>(
       HttpService(_getIt<Dio>()),
@@ -125,12 +181,21 @@ class ServiceLocator {
 
     // WebSocket Service
     _getIt.registerSingleton<WebSocketService>(
-      WebSocketService(),
+      WebSocketService(_getIt<Dio>()),
     );
 
     // TTS Service
     _getIt.registerSingleton<TtsService>(
       TtsService(_getIt<CachedHttpService>()),
+    );
+
+    // Tier 2 data layer — typed repos over the shared Dio (auth interceptor
+    // injects Bearer token automatically).
+    _getIt.registerSingleton<NotificationRepository>(
+      NotificationRepository(_getIt<Dio>()),
+    );
+    _getIt.registerSingleton<DecisionProxyRepository>(
+      DecisionProxyRepository(_getIt<Dio>()),
     );
   }
 
@@ -177,6 +242,24 @@ class ServiceLocator {
         voiceRepository: _getIt<VoiceRepository>(),
         sessionRepository: _getIt<SessionRepository>(),
       ),
+    );
+
+    // Auth BLoC — singleton so auth state survives widget rebuilds
+    _getIt.registerLazySingleton<AuthBloc>(
+      () => AuthBloc(
+        repo      : _getIt<AuthRepository>(),
+        store     : _getIt<SecureCredentialStore>(),
+        context   : _getIt<ServerContextService>(),
+        biometric : _getIt<BiometricGate>(),
+      ),
+    );
+
+    // Tier 2 BLoCs — lazy singletons so state survives navigation.
+    _getIt.registerLazySingleton<NotificationBloc>(
+      () => NotificationBloc(_getIt<NotificationRepository>()),
+    );
+    _getIt.registerLazySingleton<DecisionProxyBloc>(
+      () => DecisionProxyBloc(_getIt<DecisionProxyRepository>()),
     );
   }
 

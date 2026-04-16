@@ -4,6 +4,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
+import '../auth/auth_token_provider.dart';
 
 /// WebSocket service for real-time communication with Lupin backend.
 /// 
@@ -157,8 +158,13 @@ class WebSocketService {
   ///   - Subscribed events array is included (empty = receive all events)
   Future<void> _authenticate(String userId) async {
     try {
-      // Create Bearer auth token matching server expectations
-      final authToken = 'Bearer mock_token_email_$userId';
+      // Bearer auth token sourced from AuthBloc (set on login / refresh).
+      final accessToken = readAccessToken();
+      if (accessToken == null) {
+        print('[WebSocket] No access token available — auth skipped');
+        return;
+      }
+      final authToken = 'Bearer $accessToken';
       
       final authMessage = {
         'type': 'auth_request',

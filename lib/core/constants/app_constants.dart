@@ -6,8 +6,10 @@ class AppConstants {
   static const String appVersion = '1.0.0';
   
   // API Configuration
-  static const String apiBaseUrl = 'http://localhost:7999';
-  static const String wsBaseUrl = 'ws://localhost:7999';
+  // NOTE: These are runtime-mutable. ServerContextService rewrites them
+  // when the user toggles Dev ↔ Test in settings. Defaults match Dev.
+  static String apiBaseUrl = 'http://localhost:7999';
+  static String wsBaseUrl  = 'ws://localhost:7999';
   
   // WebSocket Endpoints
   static const String wsQueueEndpoint = '/ws/queue';

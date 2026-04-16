@@ -32,6 +32,10 @@ dependencies:
   shared_preferences: ^2.2.2
   sqflite: ^2.3.0
   path_provider: ^2.1.1
+  flutter_secure_storage: ^9.2.2
+
+  # Authentication
+  local_auth: ^2.3.0
 
   # Utilities
   get_it: ^7.6.4
@@ -64,6 +68,7 @@ flutter:
     - assets/audio/
     - assets/images/
     - assets/fonts/
+    - assets/config/
 
   # Fonts
   # fonts:

@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../../main.dart';
 import '../../services/tts/tts_service.dart';
 import '../../services/websocket/websocket_service.dart';
+import '../auth/domain/auth_bloc.dart';
+import '../auth/domain/auth_event.dart';
+import '../auth/domain/auth_state.dart';
+import '../decision_proxy/presentation/trust_dashboard_screen.dart';
+import '../notifications/presentation/inbox_screen.dart';
 
 class LupinHomeScreen extends StatefulWidget {
   const LupinHomeScreen({super.key});
@@ -88,6 +95,37 @@ class _LupinHomeScreenState extends State<LupinHomeScreen> {
       appBar: AppBar(
         title: const Text('Lupin Mobile'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            tooltip: 'Inbox',
+            icon: const Icon(Icons.inbox_outlined),
+            onPressed: () {
+              final s = context.read<AuthBloc>().state;
+              if (s is AuthAuthenticated) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => InboxScreen(userEmail: s.email),
+                ));
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'Trust',
+            icon: const Icon(Icons.shield_outlined),
+            onPressed: () {
+              final s = context.read<AuthBloc>().state;
+              if (s is AuthAuthenticated) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => TrustDashboardScreen(userEmail: s.email),
+                ));
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            onPressed: () => context.read<AuthBloc>().add(const AuthLogoutRequested()),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
