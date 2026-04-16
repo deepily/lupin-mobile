@@ -44,6 +44,7 @@ void main() {
       },
       build  : () => DecisionProxyBloc(repo),
       act    : (b) => b.add(const DecisionProxyLoadDashboard("u@x.y")),
+      wait   : const Duration(milliseconds: 50),
       expect : () => [
         isA<DecisionProxyLoading>(),
         isA<DecisionProxyDashboardLoaded>()
@@ -101,6 +102,7 @@ void main() {
       },
       build  : () => DecisionProxyBloc(repo),
       act    : (b) => b.add(const DecisionProxyLoadDashboard("u@x.y")),
+      wait   : const Duration(milliseconds: 50),
       expect : () => [
         isA<DecisionProxyLoading>(),
         isA<DecisionProxyError>().having((s) => s.message, "message", "down"),

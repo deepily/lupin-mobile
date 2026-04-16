@@ -159,7 +159,8 @@ class ServiceLocator {
     final store   = _getIt<SecureCredentialStore>();
     final context = _getIt<ServerContextService>();
     _getIt<Dio>().interceptors.add(AuthInterceptor(
-      repo: _getIt<AuthRepository>(),
+      dio  : _getIt<Dio>(),
+      repo : _getIt<AuthRepository>(),
       readRefreshToken: () => store.readRefreshToken(context.activeConfig.id),
       onTokensRotated: (tokens) async {
         await store.writeRefreshToken(context.activeConfig.id, tokens.refreshToken);

@@ -8,7 +8,8 @@ import 'auth_token_provider.dart';
 /// token and persisting the rotated pair (so the interceptor does not
 /// import AuthBloc or SecureCredentialStore directly).
 class AuthInterceptor extends Interceptor {
-  final AuthRepository _repo;
+  final Dio             _dio;
+  final AuthRepository  _repo;
   final Future<String?> Function() readRefreshToken;
   final Future<void>    Function( AuthTokens tokens ) onTokensRotated;
   final Future<void>    Function() onRefreshFailed;
@@ -16,11 +17,12 @@ class AuthInterceptor extends Interceptor {
   bool _refreshing = false;
 
   AuthInterceptor( {
+    required Dio dio,
     required AuthRepository repo,
     required this.readRefreshToken,
     required this.onTokensRotated,
     required this.onRefreshFailed,
-  } ) : _repo = repo;
+  } ) : _dio = dio, _repo = repo;
 
   @override
   void onRequest( RequestOptions options, RequestInterceptorHandler handler ) {
@@ -65,8 +67,7 @@ class AuthInterceptor extends Interceptor {
       retryOpts.extra[ "_auth_retried" ] = true;
       retryOpts.headers[ "Authorization" ] = "Bearer ${rotated.accessToken}";
 
-      final dio = Dio( BaseOptions( baseUrl: retryOpts.baseUrl ) );
-      final retry = await dio.fetch<dynamic>( retryOpts );
+      final retry = await _dio.fetch<dynamic>( retryOpts );
       handler.resolve( retry );
     } catch ( _ ) {
       await onRefreshFailed();

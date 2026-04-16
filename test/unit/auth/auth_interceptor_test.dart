@@ -62,6 +62,7 @@ void main() {
       dio.httpClientAdapter = adapter;
       repo = AuthRepository(dio);
       dio.interceptors.add(AuthInterceptor(
+        dio              : dio,
         repo             : repo,
         readRefreshToken : () async => null,
         onTokensRotated  : (t) async {},
@@ -81,6 +82,7 @@ void main() {
       dio.httpClientAdapter = adapter;
       repo = AuthRepository(dio);
       dio.interceptors.add(AuthInterceptor(
+        dio              : dio,
         repo             : repo,
         readRefreshToken : () async => null,
         onTokensRotated  : (t) async {},
@@ -112,6 +114,7 @@ void main() {
       dio.httpClientAdapter = adapter;
       repo = AuthRepository(dio);
       dio.interceptors.add(AuthInterceptor(
+        dio              : dio,
         repo             : repo,
         readRefreshToken : () async => "old-ref",
         onTokensRotated  : (t) async => rotated.add(t),
@@ -134,6 +137,7 @@ void main() {
       dio.httpClientAdapter = adapter;
       repo = AuthRepository(dio);
       dio.interceptors.add(AuthInterceptor(
+        dio              : dio,
         repo             : repo,
         readRefreshToken : () async => null,
         onTokensRotated  : (t) async {},
@@ -160,6 +164,7 @@ void main() {
       dio.httpClientAdapter = adapter;
       repo = AuthRepository(dio);
       dio.interceptors.add(AuthInterceptor(
+        dio              : dio,
         repo             : repo,
         readRefreshToken : () async => "old-ref",
         onTokensRotated  : (t) async => rotated.add(t),

@@ -1,12 +1,10 @@
 # TODO
 
-Last updated: 2026-04-16 (Session: Tier 2 implementation + Tier 3/4 planning)
+Last updated: 2026-04-16 (Session: Legacy test triage + baseline green)
 
 ## Pending
 
-### Verification (run when back at console)
-- [ ] [LUPIN-MOBILE] `flutter pub get` — picks up `flutter_secure_storage` + `local_auth` from Tier 1
-- [ ] [LUPIN-MOBILE] `flutter test test/unit/` — should pass all 30+ Tier 1 + Tier 2 cases
+### On-Device Verification (still pending)
 - [ ] [LUPIN-MOBILE] On-device smoke: launch app → log in → open Inbox → respond to a `cosa-voice` `ask_yes_no` end-to-end
 - [ ] [LUPIN-MOBILE] On-device smoke: open Trust Dashboard → verify mode shows + decisions list rendered
 - [ ] [LUPIN-MOBILE] Decide whether to commit Tier 1 + Tier 2 as one bundle or two separate commits
@@ -42,6 +40,9 @@ Last updated: 2026-04-16 (Session: Tier 2 implementation + Tier 3/4 planning)
 - [ ] [LUPIN-MOBILE] Resolve pre-existing `getIt` import in `home_screen.dart` (orphan from old wiring)
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] `flutter pub get` + `flutter test test/unit/` — 63/63 pass — 2026-04-16
+- [x] [LUPIN-MOBILE] Legacy test triage: 21 quarantined, 6 confirmed green, 1 fixed — 2026-04-16
+- [x] [LUPIN-MOBILE] Decide whether to commit Tier 1 + Tier 2 as one bundle or two — deferred to next session — 2026-04-16
 - [x] [LUPIN-MOBILE] Tier 2 data layer: models + repos for notifications + decision proxy — 2026-04-16
 - [x] [LUPIN-MOBILE] Tier 2 BLoC layer: NotificationBloc + DecisionProxyBloc — 2026-04-16
 - [x] [LUPIN-MOBILE] Tier 2 UI: InboxScreen, ConversationScreen, InteractivePromptSheet, TrustDashboardScreen — 2026-04-16

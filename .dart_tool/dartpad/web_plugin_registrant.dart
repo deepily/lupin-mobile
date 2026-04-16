@@ -8,6 +8,7 @@
 
 import 'package:audioplayers_web/audioplayers_web.dart';
 import 'package:connectivity_plus/src/connectivity_plus_web.dart';
+import 'package:flutter_secure_storage_web/flutter_secure_storage_web.dart';
 import 'package:flutter_sound_web/flutter_sound_web.dart';
 import 'package:permission_handler_html/permission_handler_html.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
@@ -17,6 +18,7 @@ void registerPlugins([final Registrar? pluginRegistrar]) {
   final Registrar registrar = pluginRegistrar ?? webPluginRegistrar;
   AudioplayersPlugin.registerWith(registrar);
   ConnectivityPlusWebPlugin.registerWith(registrar);
+  FlutterSecureStorageWeb.registerWith(registrar);
   FlutterSoundPlugin.registerWith(registrar);
   WebPermissionHandler.registerWith(registrar);
   SharedPreferencesPlugin.registerWith(registrar);

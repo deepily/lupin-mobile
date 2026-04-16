@@ -106,7 +106,6 @@ void main() {
       });
       
       test('should force strategy update', () {
-        final initialStrategy = adaptiveManager.currentStrategy;
         adaptiveManager.forceStrategyUpdate();
         // Strategy might not change but method should not throw
         expect(adaptiveManager.currentStrategy, isA<AdaptiveStrategy>());

@@ -31,6 +31,7 @@ void main() {
       },
       build  : () => NotificationBloc(repo),
       act    : (b) => b.add(const NotificationsLoadInbox(userEmail: "u@x.y")),
+      wait   : const Duration(milliseconds: 50),
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsInboxLoaded>()
@@ -55,6 +56,7 @@ void main() {
       act    : (b) => b.add(const NotificationsLoadConversation(
         senderId: "s-1", userEmail: "u@x.y",
       )),
+      wait   : const Duration(milliseconds: 50),
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsConversationLoaded>()
@@ -111,6 +113,7 @@ void main() {
       },
       build  : () => NotificationBloc(repo),
       act    : (b) => b.add(const NotificationsLoadInbox(userEmail: "u@x.y")),
+      wait   : const Duration(milliseconds: 50),
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsError>().having((s) => s.message, "message", "boom"),

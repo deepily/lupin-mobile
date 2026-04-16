@@ -109,13 +109,13 @@ class AdaptiveConnectionManager {
     // Broadcast changes if different
     if (_currentStrategy != previousStrategy) {
       print('[AdaptiveManager] Strategy changed: $previousStrategy -> $_currentStrategy');
-      _strategyController.add(_currentStrategy);
+      if (!_strategyController.isClosed) _strategyController.add(_currentStrategy);
       _recordAdaptationEvent('strategy_change', _currentStrategy.toString());
     }
-    
+
     if (_currentOptimization != previousOptimization) {
       print('[AdaptiveManager] Optimization changed: $previousOptimization -> $_currentOptimization');
-      _optimizationController.add(_currentOptimization);
+      if (!_optimizationController.isClosed) _optimizationController.add(_currentOptimization);
       _recordAdaptationEvent('optimization_change', _currentOptimization.toString());
     }
   }

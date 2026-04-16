@@ -1,5 +1,48 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.16 - Legacy Test Triage + Phase 1 Baseline
+
+### Session Summary
+- **Objective**: Establish green Tier 1+2 baseline; triage all 27 legacy test files; quarantine drift-broken tests.
+- **Status**: ✅ 54 Tier 1+2 tests green; 21 legacy files quarantined; 6 legacy files confirmed green; 1 legacy file fixed (adaptive_services).
+- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+
+### Work Performed
+1. **Phase 0** — `./flutter.sh pub get` succeeded; 14 deps updated (flutter_secure_storage, local_auth, bloc_test, etc.).
+2. **Phase 1** — Fixed AuthInterceptor production bug (retry used new Dio without stub adapter); added `dio:` param to constructor + 5 test instantiations; fixed 5 bloc test timing failures by adding `wait: 50ms`. Final result: **54/54 Tier 1+2 tests pass**.
+3. **Phase 2** — Ran all 27 legacy test files individually; categorized G/R/C; output to `src/rnd/v0.1.6-migration/2026.04.16-legacy-test-triage.log`.
+4. **Phase 3+4** — `git mv` 21 C-category files + 4 associated `.mocks.dart` to `test/legacy_quarantine/`; wrote `test/legacy_quarantine/README.md`.
+5. **Fix** — `adaptive_services_test.dart` (R-category): added `isClosed` guard in `AdaptiveConnectionManager._updateAdaptiveStrategy` (stream-after-dispose race condition); **19/19 pass**.
+6. **Phase 5** — `./flutter.sh test test/unit/` → **63/63 pass**; all 6 kept legacy files green (80 total); deleted stale `test_results.log` (Jul 2025).
+
+### Files Added
+- `test/legacy_quarantine/README.md` — quarantine index
+- `src/rnd/v0.1.6-migration/2026.04.16-legacy-test-triage.log` — per-file triage table
+
+### Files Modified
+- `lib/services/auth/auth_interceptor.dart` — added `Dio _dio` field; constructor `required Dio dio`; retry uses `_dio.fetch()` (production bug fix)
+- `lib/services/adaptive/adaptive_connection_manager.dart` — `isClosed` guard before stream add (stream-after-dispose race fix)
+- `lib/core/di/service_locator.dart` — `AuthInterceptor` DI updated with `dio:` param
+- `test/unit/auth/auth_interceptor_test.dart` — `dio:` param added to all 5 instantiations
+- `test/unit/notifications/notification_bloc_test.dart` — `wait: 50ms` added to 3 blocTests
+- `test/unit/decision_proxy/decision_proxy_bloc_test.dart` — `wait: 50ms` added to 2 blocTests
+- `test/adaptive_services_test.dart` — (kept, not quarantined; fix applied to production code)
+
+### Files Moved (quarantined)
+21 test files + 4 mocks → `test/legacy_quarantine/` (see README there for full list)
+
+### Files Deleted
+- `test_results.log` — stale Jul 2025 scan referencing old `genie-in-the-box/` paths
+
+### Triage Summary
+| Category | Count | Tests | Action |
+|----------|-------|-------|--------|
+| G (green) | 6 | 80 | Keep |
+| R (fixed) | 1 | 19 | Fix applied |
+| C (quarantine) | 21 | — | `git mv` to `test/legacy_quarantine/` |
+
+---
+
 ## 2026.04.16 - Tier 2 Data Layer + UI + Tier 3/4 Plan Expansion
 
 ### Session Summary
