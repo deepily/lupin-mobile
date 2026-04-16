@@ -4,21 +4,22 @@ A sophisticated Android mobile client for the Lupin AI assistant system, featuri
 
 ## 🚀 Project Status
 
-**95% Implementation Complete** ✅ - Ready for weekend final testing and deployment
+**Lupin v0.1.6 Resync — All 4 Tiers Complete** ✅ — On-device validation pending
 
-### Recent Achievements (2025.07.10)
-- ✅ **Android-First Conversion**: Native mobile dependencies enabled
-- ✅ **Code Quality**: Improved from 8,794 to 1,392 analysis issues (84% improvement)
-- ✅ **CI/CD Pipeline**: Complete GitHub Actions workflow for testing and releases
-- ✅ **Documentation**: Design by Contract documentation added throughout codebase
-- ✅ **TTS Integration**: Native AudioPlayer for low-latency audio streaming
+### What's New (2026-04-16 — v0.1.6 Resync)
+- ✅ **Tier 1 — Auth**: Real JWT auth, biometric unlock, WS persistence, Dev/Test toggle
+- ✅ **Tier 2 — Notifications + Decision Proxy**: InboxScreen, ConversationScreen, InteractivePromptSheet, TrustDashboardScreen, NotificationBloc, DecisionProxyBloc
+- ✅ **Tier 3 — Queue/CJ Flow + Claude Code**: QueueDashboardScreen, JobDetailScreen, SubmitJobSheet, ChatScreen, SessionListScreen, DispatchSheet, QueueBloc, ClaudeCodeBloc
+- ✅ **Tier 4 — Agentic Jobs**: AgenticHubScreen + 9 submission forms, AgenticRepository (10 endpoints), AgenticSubmissionBloc, IoFileService, MarkdownReportViewer, AudioArtifactPlayer, SlideDeckViewer
+- ✅ **Tests**: 140/140 unit tests passing
 
 ### Current Capabilities
-- **TTS Streaming**: Both OpenAI and ElevenLabs providers with WebSocket streaming
-- **Provider Switching**: Easy toggling between TTS services via test UI
-- **WebSocket Integration**: Session-based authentication and real-time communication
-- **Test Interface**: Comprehensive Flutter web UI hosted on FastAPI (port 7999)
-- **Cross-Platform**: Android, iOS, and web support
+- **Authentication**: JWT login, biometric unlock, WS session persistence
+- **Notifications / Decision Proxy**: Real-time inbox, interactive prompts, trust dashboard
+- **Queue / CJ Flow**: Live job queue, job detail with WS progress, Claude Code chat sessions
+- **Agentic Jobs**: Deep Research, Podcast, Presentation, SWE Team, Test Suite, chained R→Podcast/R→Presentation, Bug Fix Expediter, Test Fix Expediter submission forms
+- **Artifact Viewers**: Markdown report viewer, audio artifact player, slide deck viewer
+- **WebSocket**: Full WS bridge routing queue/CC events to BLoCs
 
 ## Architecture
 
@@ -110,35 +111,41 @@ src/lupin-mobile/
 - **[Development Configuration](CLAUDE.md)** - Claude Code configuration and development guidelines
 - **[Private Configuration](CLAUDE.local.md)** - Local development settings and preferences
 
-## Phase Implementation Status
+## v0.1.6 Resync Implementation Status
 
-### ✅ Phase 1: TTS Streaming Foundation (Completed 2025.07.07)
-- ElevenLabs WebSocket streaming integration
-- FastAPI parallel endpoint strategy
-- Flutter test UI with provider switching
-- Session-based WebSocket authentication
-- Cross-platform project structure
+### ✅ Tier 1 — Auth (Complete 2026-04-15)
+- JWT login/logout with token refresh
+- Biometric unlock (local_auth)
+- WS session persistence across app lifecycle
+- Dev/Test context toggle
 
-### 🔄 Phase 2: Audio Optimization (In Progress)
-- Platform-specific audio players (Android/iOS)
-- Audio buffer management and optimization
-- Caching system for frequently used phrases
-- Enhanced UI/UX for voice assistant interface
-- Performance monitoring and latency optimization
+### ✅ Tier 2 — Notifications + Decision Proxy (Complete 2026-04-16)
+- Inbox with flat conversation list
+- Interactive yes/no and multi-choice prompt sheet
+- Trust dashboard with domain/mode overview
+- NotificationBloc + DecisionProxyBloc
 
-### 📋 Phase 3: Production Features (Planned)
-- Connection retry logic and error recovery
-- Offline mode with cached audio
-- Voice selection and customization UI
-- Comprehensive latency monitoring
-- User preference management
+### ✅ Tier 3 — Queue / CJ Flow + Claude Code (Complete 2026-04-16)
+- Queue dashboard with live status badges
+- Job detail screen with WS-driven progress
+- Submit job sheet (12 agent types)
+- Claude Code chat + session list
+- WS bridge: queue/CC events → BLoCs
 
-### 📋 Phase 4: Advanced Features (Future)
-- Multi-language support
-- Voice cloning integration
-- Advanced caching strategies
-- Analytics and usage tracking
-- App store deployment
+### ✅ Tier 4 — Agentic Jobs (Complete 2026-04-16)
+- AgenticHubScreen + 9 job-type forms
+- Single AgenticRepository (10 endpoints)
+- AgenticSubmissionBloc → navigates to JobDetailScreen on success
+- IoFileService: binary download, cache, share, open-in-app
+- Artifact viewers: markdown / audio / slide deck
+- BugFixExpediter entry from dead job's JobDetailScreen
+
+### 📋 Pending Polish
+- On-device smoke tests
+- In-app audioplayers (currently download-and-share)
+- TimeSavedDashboard + StatsRepository (fl_chart — deferred)
+- NotificationsExternalUpdate WS wiring
+- Date-grouped ConversationScreen
 
 ## API Integration
 
@@ -178,4 +185,4 @@ Part of the Lupin AI assistant project ecosystem.
 
 ---
 
-*Last Updated: 2025.07.07 - Phase 1 TTS Implementation Complete*
+*Last Updated: 2026-04-16 — Lupin v0.1.6 Resync All 4 Tiers Complete (140/140 tests)*
