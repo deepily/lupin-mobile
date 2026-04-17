@@ -119,5 +119,33 @@ void main() {
         isA<NotificationsError>().having((s) => s.message, "message", "boom"),
       ],
     );
+
+    blocTest<NotificationBloc, NotificationState>(
+      "ExternalUpdate refreshes current inbox after WS event",
+      setUp: () {
+        var hitCount = 0;
+        adapter.handlers["GET /api/notifications/senders-visible/u@x.y"] = (_) {
+          hitCount++;
+          return jsonBody([
+            {"sender_id": "s-1", "last_activity": "2026-04-15T10:00:00Z",
+             "count": hitCount, "new_count": hitCount},
+          ]);
+        };
+      },
+      build  : () => NotificationBloc(repo),
+      act    : (b) async {
+        b.add(const NotificationsLoadInbox(userEmail: "u@x.y"));
+        await Future.delayed(const Duration(milliseconds: 50));
+        b.add(const NotificationsExternalUpdate());
+      },
+      wait   : const Duration(milliseconds: 150),
+      expect : () => [
+        isA<NotificationsLoading>(),
+        isA<NotificationsInboxLoaded>()
+          .having((s) => s.senders.single.count, "first count", 1),
+        isA<NotificationsInboxLoaded>()
+          .having((s) => s.senders.single.count, "refreshed count", 2),
+      ],
+    );
   });
 }

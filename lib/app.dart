@@ -15,6 +15,7 @@ import 'features/claude_code/domain/claude_code_event.dart';
 import 'features/decision_proxy/domain/decision_proxy_bloc.dart';
 import 'features/home/home_screen.dart';
 import 'features/notifications/domain/notification_bloc.dart';
+import 'features/notifications/domain/notification_event.dart';
 import 'features/queue/domain/queue_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
 import 'services/auth/server_context_service.dart';
@@ -71,6 +72,9 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
             ClaudeCodeExternalMessage( taskId: taskId, payload: data ),
           );
         }
+        break;
+      case AppConstants.eventNotificationQueueUpdate:
+        ServiceLocator.get<NotificationBloc>().add( const NotificationsExternalUpdate() );
         break;
     }
   }
