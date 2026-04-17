@@ -90,8 +90,21 @@ else
     exit 1
 fi
 
-print_info "Running: flutter build apk --debug"
-if flutter build apk --debug; then
+# Build dart-define flags for debug-only pre-filled login credentials.
+# Values flow shell env → --dart-define → compile time → baked into debug APK.
+# Never committed to git; stripped in release builds (gated by kDebugMode in auth_gate.dart).
+BUILD_DEFINES=()
+if [ -n "$LUPIN_DEV_EMAIL" ]; then
+    BUILD_DEFINES+=( --dart-define="LUPIN_DEV_EMAIL=$LUPIN_DEV_EMAIL" )
+    print_info "Baking LUPIN_DEV_EMAIL into debug APK"
+fi
+if [ -n "$LUPIN_DEV_PASSWORD" ]; then
+    BUILD_DEFINES+=( --dart-define="LUPIN_DEV_PASSWORD=$LUPIN_DEV_PASSWORD" )
+    print_info "Baking LUPIN_DEV_PASSWORD into debug APK (debug-only, kDebugMode-gated)"
+fi
+
+print_info "Running: flutter build apk --debug ${BUILD_DEFINES[*]}"
+if flutter build apk --debug "${BUILD_DEFINES[@]}"; then
     print_success "APK built successfully"
 else
     print_error "Flutter build failed"

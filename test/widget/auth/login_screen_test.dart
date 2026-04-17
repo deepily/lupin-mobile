@@ -54,5 +54,31 @@ void main() {
         const AuthLoginRequested( email: "u@x.y", password: "hunter2" ),
       ) ).called( 1 );
     });
+
+    testWidgets( "initialEmail + initialPassword pre-fill fields and submit sends them", ( tester ) async {
+      await tester.pumpWidget( testApp(
+        authBloc: auth,
+        child: LoginScreen(
+          initialEmail    : "dev@x.y",
+          initialPassword : "dev-pw",
+          serverContext   : ctx,
+        ),
+      ) );
+      expect(
+        ( tester.widget( find.byKey( const Key( TestKeys.loginEmailField    ) ) ) as TextFormField )
+          .controller?.text,
+        "dev@x.y",
+      );
+      expect(
+        ( tester.widget( find.byKey( const Key( TestKeys.loginPasswordField ) ) ) as TextFormField )
+          .controller?.text,
+        "dev-pw",
+      );
+      await tester.tap( find.byKey( const Key( TestKeys.loginSubmitButton ) ) );
+      await tester.pump();
+      verify( () => auth.add(
+        const AuthLoginRequested( email: "dev@x.y", password: "dev-pw" ),
+      ) ).called( 1 );
+    });
   });
 }

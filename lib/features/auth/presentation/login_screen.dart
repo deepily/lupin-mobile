@@ -9,11 +9,13 @@ import '../domain/auth_state.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialEmail;
+  final String? initialPassword;
   final ServerContextService serverContext;
 
   const LoginScreen( {
     super.key,
     this.initialEmail,
+    this.initialPassword,
     required this.serverContext,
   } );
 
@@ -23,13 +25,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _email;
-  final TextEditingController _password = TextEditingController();
+  late final TextEditingController _password;
   final GlobalKey<FormState> _form = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
-    _email = TextEditingController( text: widget.initialEmail ?? "" );
+    _email    = TextEditingController( text: widget.initialEmail    ?? "" );
+    _password = TextEditingController( text: widget.initialPassword ?? "" );
   }
 
   @override
