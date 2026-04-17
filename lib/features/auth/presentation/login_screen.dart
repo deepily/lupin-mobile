@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../../services/auth/server_context_service.dart';
 import '../domain/auth_bloc.dart';
 import '../domain/auth_event.dart';
@@ -79,6 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextFormField(
+                    key: const Key( TestKeys.loginEmailField ),
                     controller: _email,
                     decoration: const InputDecoration( labelText: "Email" ),
                     keyboardType: TextInputType.emailAddress,
@@ -88,6 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox( height: 16 ),
                   TextFormField(
+                    key: const Key( TestKeys.loginPasswordField ),
                     controller: _password,
                     decoration: const InputDecoration( labelText: "Password" ),
                     obscureText: true,
@@ -97,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox( height: 24 ),
                   FilledButton(
+                    key: const Key( TestKeys.loginSubmitButton ),
                     onPressed: busy ? null : _submit,
                     child: busy
                       ? const SizedBox(

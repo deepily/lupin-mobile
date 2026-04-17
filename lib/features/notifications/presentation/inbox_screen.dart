@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../data/notification_models.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
@@ -120,7 +121,7 @@ class _SenderTile extends StatelessWidget {
     final theme    = Theme.of( context );
     final newCount = sender.newCount ?? 0;
     return Dismissible(
-      key: ValueKey( sender.senderId ),
+      key: Key( '${TestKeys.inboxSenderTilePrefix}${sender.senderId}' ),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
