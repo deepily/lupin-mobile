@@ -3,9 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:lupin_mobile/features/agentic/domain/agentic_submission_bloc.dart';
+import 'package:lupin_mobile/features/agentic/domain/agentic_submission_event.dart';
+import 'package:lupin_mobile/features/agentic/domain/agentic_submission_state.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_bloc.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_event.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_state.dart';
+import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_bloc.dart';
+import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_event.dart';
+import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_state.dart';
+import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
+import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
+import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
 import 'package:lupin_mobile/services/auth/server_context_service.dart';
 
 /// Mocktail fallback registration — call once from main() of any test that
@@ -13,9 +22,18 @@ import 'package:lupin_mobile/services/auth/server_context_service.dart';
 void registerHarnessFallbacks() {
   registerFallbackValue( const AuthStarted() );
   registerFallbackValue( const AuthUnauthenticated() );
+  registerFallbackValue( const NotificationsLoadInbox( userEmail: "u@x.y" ) );
+  registerFallbackValue( const NotificationsInitial() );
+  registerFallbackValue( const DecisionProxyLoadDashboard( "u@x.y" ) );
+  registerFallbackValue( const DecisionProxyInitial() );
+  registerFallbackValue( const AgenticFormReset() );
+  registerFallbackValue( const AgenticSubmissionInitial() );
 }
 
-class MockAuthBloc extends MockBloc<AuthEvent, AuthState> implements AuthBloc {}
+class MockAuthBloc              extends MockBloc<AuthEvent, AuthState>                         implements AuthBloc {}
+class MockNotificationBloc      extends MockBloc<NotificationEvent, NotificationState>         implements NotificationBloc {}
+class MockDecisionProxyBloc     extends MockBloc<DecisionProxyEvent, DecisionProxyState>       implements DecisionProxyBloc {}
+class MockAgenticSubmissionBloc extends MockBloc<AgenticSubmissionEvent, AgenticSubmissionState> implements AgenticSubmissionBloc {}
 
 class MockServerContextService extends Mock implements ServerContextService {}
 
