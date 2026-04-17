@@ -3,13 +3,13 @@
   "contexts": {
     "dev": {
       "label": "DEV",
-      "baseUrl": "http://localhost:7999",
-      "wsUrl": "ws://localhost:7999"
+      "baseUrl": "http://10.0.2.2:7999",
+      "wsUrl": "ws://10.0.2.2:7999"
     },
     "test": {
       "label": "TEST",
-      "baseUrl": "http://localhost:8000",
-      "wsUrl": "ws://localhost:8000"
+      "baseUrl": "http://10.0.2.2:8000",
+      "wsUrl": "ws://10.0.2.2:8000"
     }
   }
 }

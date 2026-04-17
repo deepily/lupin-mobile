@@ -8,8 +8,11 @@ class AppConstants {
   // API Configuration
   // NOTE: These are runtime-mutable. ServerContextService rewrites them
   // when the user toggles Dev ↔ Test in settings. Defaults match Dev.
-  static String apiBaseUrl = 'http://localhost:7999';
-  static String wsBaseUrl  = 'ws://localhost:7999';
+  // 10.0.2.2 is the Android emulator's host-loopback alias (maps to the
+  // host's 127.0.0.1). For desktop/iOS we'd need localhost — revisit if
+  // we add those targets.
+  static String apiBaseUrl = 'http://10.0.2.2:7999';
+  static String wsBaseUrl  = 'ws://10.0.2.2:7999';
   
   // WebSocket Endpoints
   static const String wsQueueEndpoint = '/ws/queue';
