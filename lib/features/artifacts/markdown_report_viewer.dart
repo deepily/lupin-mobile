@@ -1,7 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-
-import '../../services/artifacts/io_file_service.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class MarkdownReportViewer extends StatelessWidget {
   final String jobId;
@@ -15,9 +17,10 @@ class MarkdownReportViewer extends StatelessWidget {
 
   Future<void> _share( BuildContext context ) async {
     try {
-      final svc  = IoFileService();
-      final file = await svc.downloadToCache( markdownText, '$jobId-report.md' );
-      await svc.shareToExternalApp( file );
+      final cacheDir = await getTemporaryDirectory();
+      final file     = File( '${cacheDir.path}/$jobId-report.md' );
+      await file.writeAsString( markdownText );
+      await Share.shareXFiles( [ XFile( file.path ) ] );
     } catch ( e ) {
       if ( context.mounted ) {
         ScaffoldMessenger.of( context ).showSnackBar(

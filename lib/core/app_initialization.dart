@@ -152,7 +152,7 @@ class AppInitialization {
       await Logger.flush();
 
       // Dispose services
-      ServiceLocator.dispose();
+      await ServiceLocator.reset();
 
       _initialized = false;
       _logger.info('Application shutdown completed');

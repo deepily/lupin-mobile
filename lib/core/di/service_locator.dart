@@ -10,7 +10,6 @@ import '../cache/cache_exports.dart';
 import '../../services/network/http_service.dart';
 import '../../services/network/cached_http_service.dart';
 import '../../services/websocket/websocket_service.dart';
-import '../../services/tts/tts_service.dart';
 import '../../services/auth/auth_interceptor.dart';
 import '../../services/auth/auth_repository.dart';
 import '../../services/auth/auth_token_provider.dart';
@@ -45,23 +44,12 @@ import '../../services/artifacts/io_file_service.dart';
 // Tier 4 BLoCs
 import '../../features/agentic/domain/agentic_submission_bloc.dart';
 
-// Repositories
-import '../repositories/user_repository.dart';
-import '../repositories/session_repository.dart';
-import '../repositories/job_repository.dart';
-import '../repositories/voice_repository.dart';
-import '../repositories/audio_repository.dart';
-import '../repositories/impl/user_repository_impl.dart';
-import '../repositories/impl/session_repository_impl.dart';
-import '../repositories/impl/job_repository_impl.dart';
-import '../repositories/impl/voice_repository_impl.dart';
-import '../repositories/impl/audio_repository_impl.dart';
-
-// BLoC
-import '../../features/voice/domain/voice_bloc.dart';
-
-// Use Cases
-import '../use_cases/use_case_registry.dart';
+// Legacy voice/audio/TTS/use-case-registry stack is disabled — the code in
+// lib/core/repositories/impl/{voice,audio}_repository_impl.dart and
+// lib/features/{voice,audio,session}/use_cases/ references symbols that don't
+// exist (TtsService, interfaces/*.dart, model fields). Tree-shaker skips these
+// files as long as nothing imports them from the active graph. If we ever need
+// voice/TTS again, fix those files first, then re-import here.
 
 // Settings
 import '../settings/settings_manager.dart';
@@ -200,11 +188,6 @@ class ServiceLocator {
       WebSocketService(_getIt<Dio>()),
     );
 
-    // TTS Service
-    _getIt.registerSingleton<TtsService>(
-      TtsService(_getIt<CachedHttpService>()),
-    );
-
     // Tier 2 data layer — typed repos over the shared Dio (auth interceptor
     // injects Bearer token automatically).
     _getIt.registerSingleton<NotificationRepository>(
@@ -231,51 +214,21 @@ class ServiceLocator {
     );
   }
 
-  /// Initialize repositories
+  /// Initialize repositories (legacy user/session/job/voice/audio stack is
+  /// disabled — see note on removed imports above).
   static Future<void> _initializeRepositories() async {
-    // User Repository
-    _getIt.registerSingleton<UserRepository>(
-      UserRepositoryImpl(),
-    );
-
-    // Session Repository
-    _getIt.registerSingleton<SessionRepository>(
-      SessionRepositoryImpl(),
-    );
-
-    // Job Repository
-    _getIt.registerSingleton<JobRepository>(
-      JobRepositoryImpl(),
-    );
-
-    // Voice Repository
-    _getIt.registerSingleton<VoiceRepository>(
-      VoiceRepositoryImpl(),
-    );
-
-    // Audio Repository
-    _getIt.registerSingleton<AudioRepository>(
-      AudioRepositoryImpl(),
-    );
+    // Tier 1-4 repositories are registered in _initializeServices() alongside
+    // the Dio they depend on. Nothing left to do here.
   }
 
-  /// Initialize use cases
+  /// Initialize use cases (legacy UseCaseRegistry disabled — broken).
   static Future<void> _initializeUseCases() async {
-    // Initialize use case registry
-    await UseCaseRegistry.initialize();
+    // No active use cases. Legacy voice/session use-cases stay on disk but
+    // are not compiled because nothing imports them.
   }
 
   /// Initialize BLoCs
   static Future<void> _initializeBLoCs() async {
-    // Voice BLoC (factory - new instance each time)
-    _getIt.registerFactory<VoiceBloc>(
-      () => VoiceBloc(
-        ttsService: _getIt<TtsService>(),
-        voiceRepository: _getIt<VoiceRepository>(),
-        sessionRepository: _getIt<SessionRepository>(),
-      ),
-    );
-
     // Auth BLoC — singleton so auth state survives widget rebuilds
     _getIt.registerLazySingleton<AuthBloc>(
       () => AuthBloc(
@@ -384,18 +337,7 @@ class ServiceLocator {
     services['HttpService'] = _getIt.isRegistered<HttpService>() ? 'Registered' : 'Not registered';
     services['CachedHttpService'] = _getIt.isRegistered<CachedHttpService>() ? 'Registered' : 'Not registered';
     services['WebSocketService'] = _getIt.isRegistered<WebSocketService>() ? 'Registered' : 'Not registered';
-    services['TtsService'] = _getIt.isRegistered<TtsService>() ? 'Registered' : 'Not registered';
-    
-    // Repositories
-    services['UserRepository'] = _getIt.isRegistered<UserRepository>() ? 'Registered' : 'Not registered';
-    services['SessionRepository'] = _getIt.isRegistered<SessionRepository>() ? 'Registered' : 'Not registered';
-    services['JobRepository'] = _getIt.isRegistered<JobRepository>() ? 'Registered' : 'Not registered';
-    services['VoiceRepository'] = _getIt.isRegistered<VoiceRepository>() ? 'Registered' : 'Not registered';
-    services['AudioRepository'] = _getIt.isRegistered<AudioRepository>() ? 'Registered' : 'Not registered';
-    
-    // BLoCs
-    services['VoiceBloc'] = _getIt.isRegistered<VoiceBloc>(instanceName: 'factory') ? 'Factory registered' : 'Not registered';
-    
+
     return services;
   }
 }
@@ -419,22 +361,4 @@ extension ServiceLocatorExtensions on ServiceLocator {
   
   /// Get WebSocket Service
   static WebSocketService get webSocketService => ServiceLocator.get<WebSocketService>();
-  
-  /// Get TTS Service
-  static TtsService get ttsService => ServiceLocator.get<TtsService>();
-  
-  /// Get User Repository
-  static UserRepository get userRepository => ServiceLocator.get<UserRepository>();
-  
-  /// Get Session Repository
-  static SessionRepository get sessionRepository => ServiceLocator.get<SessionRepository>();
-  
-  /// Get Job Repository
-  static JobRepository get jobRepository => ServiceLocator.get<JobRepository>();
-  
-  /// Get Voice Repository
-  static VoiceRepository get voiceRepository => ServiceLocator.get<VoiceRepository>();
-  
-  /// Get Audio Repository
-  static AudioRepository get audioRepository => ServiceLocator.get<AudioRepository>();
 }

@@ -39,9 +39,12 @@ class _DispatchSheetState extends State<DispatchSheet> {
     if ( _taskType == ClaudeCodeTaskType.interactive ) {
       context.read<ClaudeCodeBloc>().add( ClaudeCodeDispatch( request ) );
     } else {
+      final project = _projectCtrl.text.trim();
       context.read<ClaudeCodeBloc>().add(
         ClaudeCodeQueueSubmit(
-          ClaudeCodeQueueRequest( prompt: prompt, project: _projectCtrl.text.trim().isEmpty ? null : _projectCtrl.text.trim() ),
+          project.isEmpty
+              ? ClaudeCodeQueueRequest( prompt: prompt )
+              : ClaudeCodeQueueRequest( prompt: prompt, project: project ),
         ),
       );
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../services/artifacts/io_file_service.dart';
 
 /// Streams and plays an MP3 audio artifact from /api/io/file.
@@ -27,7 +28,7 @@ class _AudioArtifactPlayerState extends State<AudioArtifactPlayer> {
   Future<void> _downloadAndShare() async {
     setState( () => _downloading = true );
     try {
-      final svc  = IoFileService();
+      final svc  = ServiceLocator.instance<IoFileService>();
       final file = await svc.downloadToCache( widget.audioPath, '${widget.jobId}.mp3' );
       await svc.shareToExternalApp( file );
     } catch ( e ) {

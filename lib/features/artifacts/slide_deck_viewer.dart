@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../services/artifacts/io_file_service.dart';
 
 /// Metadata card + open-in-external-app for PPTX/PDF slide decks.
@@ -23,7 +24,7 @@ class _SlideDeckViewerState extends State<SlideDeckViewer> {
   Future<void> _open() async {
     setState( () => _loading = true );
     try {
-      final svc  = IoFileService();
+      final svc  = ServiceLocator.instance<IoFileService>();
       final file = await svc.downloadToCache( widget.deckPath, '${widget.jobId}.pptx' );
       await svc.openExternalApp( file );
     } catch ( e ) {
@@ -40,7 +41,7 @@ class _SlideDeckViewerState extends State<SlideDeckViewer> {
   Future<void> _share() async {
     setState( () => _loading = true );
     try {
-      final svc  = IoFileService();
+      final svc  = ServiceLocator.instance<IoFileService>();
       final file = await svc.downloadToCache( widget.deckPath, '${widget.jobId}.pptx' );
       await svc.shareToExternalApp( file );
     } catch ( e ) {

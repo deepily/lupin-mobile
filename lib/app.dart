@@ -17,7 +17,6 @@ import 'features/home/home_screen.dart';
 import 'features/notifications/domain/notification_bloc.dart';
 import 'features/queue/domain/queue_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
-import 'features/voice/domain/voice_bloc.dart';
 import 'services/auth/server_context_service.dart';
 import 'services/websocket/websocket_service.dart';
 
@@ -86,9 +85,6 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
   Widget build( BuildContext context ) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<VoiceBloc>(
-          create: ( _ ) => ServiceLocator.get<VoiceBloc>(),
-        ),
         BlocProvider<AuthBloc>(
           create: ( _ ) => ServiceLocator.get<AuthBloc>(),
         ),
