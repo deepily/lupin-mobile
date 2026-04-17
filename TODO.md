@@ -4,11 +4,12 @@ Last updated: 2026-04-17 (Session: Tracks C → A — WS hookup + testing playbo
 
 ## Pending
 
-### On-Device Verification (ready to run — no blockers)
-- [ ] [LUPIN-MOBILE] On-device smoke: launch app → log in → open Inbox → respond to a `cosa-voice` `ask_yes_no` end-to-end (exercises new Track C wiring)
-- [ ] [LUPIN-MOBILE] On-device smoke: open Trust Dashboard → verify mode shows + decisions list rendered
-- [ ] [LUPIN-MOBILE] On-device smoke: submit a dry-run DeepResearch job → verify it lands in JobDetailScreen
-- [ ] [LUPIN-MOBILE] On-device smoke: run `integration_test/smoke_hello_test.dart` via `flutter test integration_test/` on emulator
+### On-Device Sanity Pass (downgraded from "primary verification" — widget tests now cover the logic; device run confirms it renders on real hardware)
+- [ ] [LUPIN-MOBILE] Device sanity: log in + open Inbox (widget-level covered by `inbox_screen_test.dart` × 4 cases)
+- [ ] [LUPIN-MOBILE] Device sanity: respond to an ask_yes_no from Inbox (widget-level covered by `conversation_screen_test.dart` × 3 cases)
+- [ ] [LUPIN-MOBILE] Device sanity: Trust Dashboard renders (widget-level covered by `trust_dashboard_screen_test.dart` × 3 cases)
+- [ ] [LUPIN-MOBILE] Device sanity: DeepResearch dry-run submits (widget-level covered by `deep_research_form_test.dart` × 3 cases)
+- [ ] [LUPIN-MOBILE] Device sanity: run `integration_test/smoke_hello_test.dart` via `flutter test integration_test/` on emulator (proves scaffolding)
 
 ### Tier 2 — Notifications + Decision Proxy (polish remaining)
 - [ ] [LUPIN-MOBILE] Date-grouped view in ConversationScreen (uses `conversation-by-date` endpoint — currently using flat `conversation`)
@@ -34,6 +35,7 @@ Last updated: 2026-04-17 (Session: Tracks C → A — WS hookup + testing playbo
 - [ ] [LUPIN-MOBILE] Resolve pre-existing `getIt` import in `home_screen.dart` (orphan from old wiring)
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] Widget coverage for all three B-track smoke scenarios — inbox+external-update, conversation yes_no response, trust dashboard, DR dry-run submit (16 widget tests total) — 2026-04-17
 - [x] [LUPIN-MOBILE] Wire `NotificationsExternalUpdate` from WS message stream (`notification_queue_update` → NotificationBloc) — 2026-04-17
 - [x] [LUPIN-MOBILE] Testing playbook stage 1: mocktail + network_image_mock deps, TestKeys class, shared testApp harness, first widget test (login), integration_test/ scaffold — 2026-04-17
 - [x] [LUPIN-MOBILE] Rename `test/integration/` → `test/service_integration/` to avoid confusion with canonical `integration_test/` at project root — 2026-04-17
