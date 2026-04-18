@@ -1,11 +1,16 @@
 # TODO
 
-Last updated: 2026-04-17 (Session: Tracks C → A — WS hookup + testing playbook stage 1)
+Last updated: 2026-04-17 (Session: WS hookup + envelope fix + Stages 2/3 fixture-backed tests)
 
 ## Pending
 
-### On-Device Sanity Pass (downgraded from "primary verification" — widget tests now cover the logic; device run confirms it renders on real hardware)
-- [ ] [LUPIN-MOBILE] Device sanity: log in + open Inbox (widget-level covered by `inbox_screen_test.dart` × 4 cases)
+### Recently-Discovered Bugs (high priority)
+- [ ] [LUPIN-MOBILE] Fix `NotificationRepository.conversation()` + `conversationByDate()` URL encoding — sender IDs containing `/` (e.g. `peer-queue-watch/<uuid>`) break FastAPI path-param routing. Need `Uri.encodeComponent()` on `senderId` + `userEmail` in `notification_repository.dart:194,218,238`. Discovered while capturing fixtures on 2026-04-17.
+- [ ] [LUPIN-MOBILE] Investigate post-login behavior — user verified login works but flagged "may want to debug what happens after that" on 2026-04-17. Check first authenticated home screen, WS reconnect, inbox initial load.
+
+### On-Device Sanity Pass (login confirmed on device 2026-04-17; remaining sanity checks still open)
+- [x] [LUPIN-MOBILE] Device sanity: login works end-to-end (envelope fix verified on emulator) — 2026-04-17
+- [ ] [LUPIN-MOBILE] Device sanity: open Inbox (widget-level covered by `inbox_screen_test.dart` × 4 cases)
 - [ ] [LUPIN-MOBILE] Device sanity: respond to an ask_yes_no from Inbox (widget-level covered by `conversation_screen_test.dart` × 3 cases)
 - [ ] [LUPIN-MOBILE] Device sanity: Trust Dashboard renders (widget-level covered by `trust_dashboard_screen_test.dart` × 3 cases)
 - [ ] [LUPIN-MOBILE] Device sanity: DeepResearch dry-run submits (widget-level covered by `deep_research_form_test.dart` × 3 cases)
@@ -24,17 +29,23 @@ Last updated: 2026-04-17 (Session: Tracks C → A — WS hookup + testing playbo
 - [ ] [LUPIN-MOBILE] Wire audioplayers for in-app audio playback in AudioArtifactPlayer (currently download-and-share only)
 - [ ] [LUPIN-MOBILE] Podcast job: confirm server-side audio path field name for use in AudioArtifactPlayer
 
-### Testing Playbook — Stage 2+ (deferred with revisit triggers)
+### Testing Playbook — Stage 4+ (deferred with revisit triggers)
 - [ ] [LUPIN-MOBILE] Alchemist visual-regression goldens — revisit when inbox tile / DR form / trust chip sees ≥2 regressions in a month
 - [ ] [LUPIN-MOBILE] Patrol 4.x native-dialog support — revisit when app requests runtime permissions (mic, notifications) and smokes can't pass them via taps
 - [ ] [LUPIN-MOBILE] Maestro MCP flows — revisit after `integration_test/` has ≥5 flows and CI parallelization matters
-- [ ] [LUPIN-MOBILE] Apply TestKeys / `bySemanticsIdentifier` to Trust Dashboard + additional agentic forms (only inbox, login, DR form covered in stage 1)
-- [ ] [LUPIN-MOBILE] Add widget tests for Inbox tile + DR form (login covered in stage 1)
+- [ ] [LUPIN-MOBILE] Fixture coverage for agentic endpoints (DR submit, podcast, etc.) — Stages 2/3 covered auth/notifications/decision-proxy; agentic is the remaining domain
+- [ ] [LUPIN-MOBILE] CI job that runs `capture-*-fixtures.py` on a schedule + opens a PR when fixtures diff — catches silent backend drift
+- [ ] [LUPIN-MOBILE] Apply TestKeys / `bySemanticsIdentifier` to remaining agentic forms (podcast, presentation, SWE team, BFE, TFE, test suite, research-to-podcast, research-to-presentation)
+- [ ] [LUPIN-MOBILE] Widget tests for remaining agentic forms (DR + prompt sheet + trust dashboard approve/reject covered)
 
 ### Cross-cutting
 - [ ] [LUPIN-MOBILE] Resolve pre-existing `getIt` import in `home_screen.dart` (orphan from old wiring)
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] Stage 3 fixture expansion — shared `_fixture_lib.py`, notifications + decision-proxy capture scripts, 8 new fixtures, 6 repo tests converted, broader TestKeys (prompt yes/no, trust approve/reject), +6 widget tests — 2026-04-17
+- [x] [LUPIN-MOBILE] Stage 2 fixture-backed tests for auth — captured + redacted real `/auth/*` responses, drift detection demonstrated — 2026-04-17
+- [x] [LUPIN-MOBILE] Auth login envelope parse fix — `AuthRepository.login/refresh` now read `tokens` sub-object per real `LoginResponse`/`RefreshResponse` Pydantic shapes; malformed shapes throw `AuthException` instead of raw `TypeError`; added `AuthGate` widget test suite — 2026-04-17
+- [x] [LUPIN-MOBILE] Dev-only credential pre-fill via `LUPIN_DEV_EMAIL` + `LUPIN_DEV_PASSWORD` `--dart-define`, `kDebugMode`-gated — 2026-04-17
 - [x] [LUPIN-MOBILE] Widget coverage for all three B-track smoke scenarios — inbox+external-update, conversation yes_no response, trust dashboard, DR dry-run submit (16 widget tests total) — 2026-04-17
 - [x] [LUPIN-MOBILE] Wire `NotificationsExternalUpdate` from WS message stream (`notification_queue_update` → NotificationBloc) — 2026-04-17
 - [x] [LUPIN-MOBILE] Testing playbook stage 1: mocktail + network_image_mock deps, TestKeys class, shared testApp harness, first widget test (login), integration_test/ scaffold — 2026-04-17

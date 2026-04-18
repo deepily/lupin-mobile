@@ -1,5 +1,56 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.17 - WS hookup + auth envelope fix + fixture-backed tests + broader widget coverage
+
+### Session Summary
+- **Objective**: Complete the on-device verification loop for the v0.1.6 resync work, then close the loop on test infrastructure (playbook Stage 1 → Stage 3 fixtures).
+- **Status**: ✅ 169/169 unit + widget tests green. Login verified on-device. All server-side work uncommitted per user's explicit commit discipline.
+- **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+### Accomplishments
+1. **WebSocket hookup (Track C)** — wired `NotificationsExternalUpdate` dispatch in `app.dart` so `notification_queue_update` WS events now refresh the inbox without manual pull. +1 blocTest covering the refresh path.
+2. **Testing playbook Stage 1** — added `mocktail` + `network_image_mock`, `TestKeys` class, shared `testApp` harness, `integration_test/` scaffold, first widget test (login). Renamed stale `test/integration/` → `test/service_integration/`.
+3. **Widget coverage for three smoke scenarios** — `inbox_screen` (4 cases), `conversation_screen` (3 cases incl. yes_no response flow), `trust_dashboard_screen` (3 cases + 2 approve/reject), `deep_research_form` (3 cases incl. dry-run submit). On-device smokes downgraded from "primary verification" to "sanity pass".
+4. **Dev-only credential pre-fill** — `LUPIN_DEV_EMAIL` + `LUPIN_DEV_PASSWORD` via `--dart-define`, gated by `kDebugMode`, wired in `auth_gate.dart` + `login_screen.dart` + `build-and-deploy-lupin-mobile.sh`.
+5. **Auth login envelope fix** — `AuthRepository.login/refresh` were parsing flat tokens; real backend returns `LoginResponse`/`RefreshResponse` envelopes with `tokens` nested. Extracted `_parseTokensEnvelope` helper that throws `AuthException` on bad shape (no more raw `TypeError` swallowed by generic catch). Added `AuthGate` widget test suite covering the navigation contract.
+6. **Stage 2 fixture-backed tests (auth)** — captured real `/auth/*` responses via Python script, redacted JWTs + PII, wrote JSON fixtures. Drift detection verified by deliberate fixture mutation.
+7. **Stage 3 fixture expansion + broader TestKeys** — shared `_fixture_lib.py`, new capture scripts for notifications + decision-proxy, 8 new fixtures, 6 repository tests converted, keys applied to `InteractivePromptSheet` yes/no buttons + `_DecisionCard` approve/reject, new widget test for prompt sheet, approve/reject tests added to dashboard.
+
+### Files Added (24 new)
+- `src/scripts/_fixture_lib.py`, `capture-auth-fixtures.py`, `capture-notifications-fixtures.py`, `capture-decision-proxy-fixtures.py`
+- `test/fixtures/README.md`, `test/fixtures/auth/*.json` (4), `test/fixtures/notifications/*.json` (4), `test/fixtures/decision_proxy/*.json` (4)
+- `test/_helpers/fixture_loader.dart`, `test/_harness/test_app.dart`
+- `test/widget/auth/{login_screen,auth_gate}_test.dart`
+- `test/widget/notifications/{inbox_screen,conversation_screen,interactive_prompt_sheet}_test.dart`
+- `test/widget/decision_proxy/trust_dashboard_screen_test.dart`
+- `test/widget/agentic/deep_research_form_test.dart`
+- `integration_test/smoke_hello_test.dart`
+- `lib/core/testing/test_keys.dart`
+- `src/rnd/v0.1.7/2026.04.17-{tracks-c-b-a-implementation-plan,auth-login-envelope-parse-fix,stage-3-fixture-expansion-and-testkeys}.md`
+
+### Files Modified
+- `lib/app.dart`, `lib/features/auth/presentation/{login_screen,auth_gate}.dart`, `lib/services/auth/auth_repository.dart`, `lib/features/notifications/presentation/{inbox_screen,interactive_prompt_sheet}.dart`, `lib/features/decision_proxy/presentation/trust_dashboard_screen.dart`, `lib/features/agentic/presentation/deep_research_form.dart`
+- `pubspec.yaml` (mocktail + network_image_mock), `src/scripts/build-and-deploy-lupin-mobile.sh` (dart-define flags)
+- `test/unit/notifications/notification_{repository,bloc}_test.dart`, `test/unit/decision_proxy/decision_proxy_repository_test.dart`, `test/unit/auth/{auth_repository,auth_interceptor}_test.dart`
+- `TODO.md`
+
+### Files Renamed
+- `test/integration/` → `test/service_integration/` (2 files, non-canonical service-level notes, not the Flutter `integration_test/` at project root)
+
+### Test Results
+| Suite | Count |
+|-------|-------|
+| Unit   | 141 |
+| Widget | 28  |
+| **Total** | **169** |
+
+### Key Decisions / Insights
+- **Fixture-backed tests close the stub-drift gap** — the login envelope bug passed all unit tests because stubs matched the buggy parser, not the real backend. Captured fixtures + redaction script prevent that class of bug going forward.
+- **Flagged latent URL-encoding bug** in `NotificationRepository.conversation()`: interpolates `$senderId` without encoding, breaks on sender IDs containing `/` (e.g. `peer-queue-watch/<uuid>`). Fixture capture works around it by filtering slash-free senders. Separate fix needed; tracked in TODO.md.
+- **Commit discipline** — user explicitly pushed back on autonomous commits mid-session. Memory-persisted rule: only commit when user asks, regardless of plan content.
+
+---
+
 ## 2026.04.16 - Tier 4 Complete: Agentic Job UIs + Artifact Viewers
 
 ### Session Summary
