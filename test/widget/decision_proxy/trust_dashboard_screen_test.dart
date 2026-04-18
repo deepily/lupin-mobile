@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/decision_proxy/data/decision_proxy_models.dart';
 import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_bloc.dart';
 import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_event.dart';
@@ -124,6 +125,65 @@ void main() {
       await tester.pump();
 
       expect( find.text( "proxy down" ), findsOneWidget );
+    });
+
+    testWidgets( "tapping approve on a decision dispatches DecisionProxyRatify(approved: true)", ( tester ) async {
+      final decision = pd( "d-42" );
+      whenListen(
+        bloc,
+        Stream<DecisionProxyState>.fromIterable( [
+          DecisionProxyDashboardLoaded(
+            mode    : modeActive(),
+            pending : [ decision ],
+            summary : emptySummary(),
+          ),
+        ] ),
+        initialState: const DecisionProxyInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      expect( find.byKey( Key( '${TestKeys.trustDecisionCardPrefix}d-42' ) ), findsOneWidget );
+      await tester.tap( find.byKey( Key( '${TestKeys.trustDecisionApprovePrefix}d-42' ) ) );
+      await tester.pump();
+
+      final captured = verify( () => bloc.add( captureAny(
+        that: isA<DecisionProxyRatify>(),
+      ) ) ).captured;
+      // LoadDashboard fires on mount too, so we look for the Ratify specifically.
+      final ratify = captured.whereType<DecisionProxyRatify>().single;
+      expect( ratify.decisionId, "d-42" );
+      expect( ratify.approved,   isTrue );
+      expect( ratify.userEmail,  "u@x.y" );
+    });
+
+    testWidgets( "tapping reject on a decision dispatches DecisionProxyRatify(approved: false)", ( tester ) async {
+      final decision = pd( "d-43" );
+      whenListen(
+        bloc,
+        Stream<DecisionProxyState>.fromIterable( [
+          DecisionProxyDashboardLoaded(
+            mode    : modeActive(),
+            pending : [ decision ],
+            summary : emptySummary(),
+          ),
+        ] ),
+        initialState: const DecisionProxyInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      await tester.tap( find.byKey( Key( '${TestKeys.trustDecisionRejectPrefix}d-43' ) ) );
+      await tester.pump();
+
+      final captured = verify( () => bloc.add( captureAny(
+        that: isA<DecisionProxyRatify>(),
+      ) ) ).captured;
+      final ratify = captured.whereType<DecisionProxyRatify>().single;
+      expect( ratify.decisionId, "d-43" );
+      expect( ratify.approved,   isFalse );
     });
   });
 }

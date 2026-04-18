@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../data/decision_proxy_models.dart';
 import '../domain/decision_proxy_bloc.dart';
 import '../domain/decision_proxy_event.dart';
@@ -183,6 +184,7 @@ class _DecisionCard extends StatelessWidget {
   @override
   Widget build( BuildContext context ) {
     return Card(
+      key: Key( '${TestKeys.trustDecisionCardPrefix}${decision.id}' ),
       margin: const EdgeInsets.symmetric( horizontal: 12, vertical: 4 ),
       child: Padding(
         padding: const EdgeInsets.all( 12 ),
@@ -217,6 +219,7 @@ class _DecisionCard extends StatelessWidget {
             Row(
               children: [
                 IconButton(
+                  key: Key( '${TestKeys.trustDecisionRejectPrefix}${decision.id}' ),
                   tooltip: "Reject",
                   icon: const Icon( Icons.close ),
                   color: Colors.red,
@@ -229,6 +232,7 @@ class _DecisionCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  key: Key( '${TestKeys.trustDecisionApprovePrefix}${decision.id}' ),
                   tooltip: "Approve",
                   icon: const Icon( Icons.check ),
                   color: Colors.green,

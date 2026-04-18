@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 
@@ -121,6 +122,7 @@ class _YesNoBodyState extends State<_YesNoBody> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
+          key       : const Key( TestKeys.promptCommentField ),
           controller: _comment,
           decoration: const InputDecoration(
             labelText: "Optional comment",
@@ -133,6 +135,7 @@ class _YesNoBodyState extends State<_YesNoBody> {
           children: [
             Expanded(
               child: OutlinedButton(
+                key: const Key( TestKeys.promptNoButton ),
                 onPressed: () => widget.onSubmit( _withComment( "no" ) ),
                 child: const Text( "No" ),
               ),
@@ -140,6 +143,7 @@ class _YesNoBodyState extends State<_YesNoBody> {
             const SizedBox( width: 12 ),
             Expanded(
               child: FilledButton(
+                key: const Key( TestKeys.promptYesButton ),
                 onPressed: () => widget.onSubmit( _withComment( "yes" ) ),
                 child: const Text( "Yes" ),
               ),

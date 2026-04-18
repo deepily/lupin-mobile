@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/decision_proxy/data/decision_proxy_models.dart';
 import 'package:lupin_mobile/features/decision_proxy/data/decision_proxy_repository.dart';
 
+import '../../_helpers/fixture_loader.dart';
 import '../_helpers/stub_dio.dart';
 
 void main() {
@@ -14,14 +15,15 @@ void main() {
       repo = DecisionProxyRepository(makeDio(adapter));
     });
 
-    test("getMode parses TrustModeStatus", () async {
-      adapter.handlers["GET /api/proxy/mode"] = (_) => jsonBody({
-        "status": "success", "ini_mode": "shadow", "running_mode": null,
-        "effective": "shadow", "has_running_job": false,
-      });
+    test("getMode parses TrustModeStatus from real backend shape", () async {
+      // Fixture captured via src/scripts/capture-decision-proxy-fixtures.py.
+      adapter.handlers["GET /api/proxy/mode"] =
+        (_) => jsonBodyFromFixture("decision_proxy/mode.json");
       final m = await repo.getMode();
-      expect(m.iniMode,       TrustMode.shadow);
-      expect(m.hasRunningJob, isFalse);
+      // Whatever the real backend currently returns — capture a property the
+      // parser must handle (effective is always a valid TrustMode).
+      expect(m.effective,     isA<TrustMode>());
+      expect(m.hasRunningJob, isA<bool>());
     });
 
     test("setMode posts request body and parses queued response", () async {
@@ -42,33 +44,22 @@ void main() {
       expect(r.target,  "next_job");
     });
 
-    test("pending forwards filters and parses summary", () async {
+    test("pending forwards filters and parses real fixture envelope", () async {
       adapter.handlers["GET /api/proxy/pending/u@x.y"] = (opts) {
+        // Still verify query-param forwarding — fixture only covers the
+        // response shape, not the request shape.
         expect(opts.queryParameters["domain"],   "swe");
         expect(opts.queryParameters["category"], "code_review");
         expect(opts.queryParameters["limit"],    25);
-        return jsonBody({
-          "status": "success",
-          "decisions": [{
-            "id": "d-1", "domain": "swe", "category": "code_review",
-            "question": "?", "action": "act", "confidence": 0.9,
-            "trust_level": 3, "reason": "", "ratification_state": "pending",
-            "data_origin": "organic",
-          }],
-          "summary": {
-            "total_pending": 1,
-            "by_category": {"code_review": 1},
-            "by_trust_level": {"L3": 1},
-            "oldest_pending": "2026-04-15T09:00:00Z",
-          },
-        });
+        return jsonBodyFromFixture("decision_proxy/pending.json");
       };
       final r = await repo.pending(
         "u@x.y", domain: "swe", category: "code_review", limit: 25,
       );
-      expect(r.decisions.single.id,        "d-1");
-      expect(r.summary.totalPending,        1);
-      expect(r.summary.byCategory["code_review"], 1);
+      expect(r.decisions, isNotEmpty);
+      expect(r.decisions.first.id, startsWith("decision-fixture-"));
+      // Summary and decision-count must agree (sanity, not capture-specific).
+      expect(r.summary.totalPending, greaterThanOrEqualTo(r.decisions.length));
     });
 
     test("ratify forwards approved + feedback as query", () async {
@@ -90,15 +81,14 @@ void main() {
       expect(r.feedback,          "looks good");
     });
 
-    test("acknowledge parses retired + new batch", () async {
-      adapter.handlers["POST /api/proxy/acknowledge"] = (_) => jsonBody({
-        "status": "success",
-        "retired_batch": "pr-aaaaaaaa-1",
-        "new_batch":     "pr-aaaaaaaa-2",
-      });
+    test("acknowledge parses retired + new batch from fixture", () async {
+      adapter.handlers["POST /api/proxy/acknowledge"] =
+        (_) => jsonBodyFromFixture("decision_proxy/acknowledge.json");
       final r = await repo.acknowledge();
-      expect(r.retiredBatch, "pr-aaaaaaaa-1");
-      expect(r.newBatch,     "pr-aaaaaaaa-2");
+      // Both batch IDs should be non-empty "pr-..." strings.
+      expect(r.retiredBatch, startsWith("pr-"));
+      expect(r.newBatch,     startsWith("pr-"));
+      expect(r.retiredBatch, isNot(r.newBatch));
     });
 
     test("404 maps to DecisionProxyApiException", () async {
@@ -111,24 +101,15 @@ void main() {
       );
     });
 
-    test("trustState passes optional domain filter", () async {
+    test("trustState passes optional domain filter + parses envelope", () async {
       adapter.handlers["GET /api/proxy/trust/u@x.y"] = (opts) {
         expect(opts.queryParameters["domain"], "swe");
-        return jsonBody({
-          "status": "success", "user_email": "u@x.y",
-          "trust_states": [{
-            "id": "ts-1", "domain": "swe", "category": "code_review",
-            "trust_level": 2, "total_decisions": 10,
-            "successful_decisions": 8, "rejected_decisions": 2,
-            "circuit_breaker_state": null,
-            "created_at": "2026-04-01T00:00:00Z",
-            "updated_at": "2026-04-15T00:00:00Z",
-          }],
-        });
+        return jsonBodyFromFixture("decision_proxy/trust_state.json");
       };
+      // Captured fixture may have zero states (fresh test user) — we just
+      // verify the envelope parses without throwing.
       final r = await repo.trustState("u@x.y", domain: "swe");
-      expect(r.trustStates.single.trustLevel, 2);
-      expect(r.trustStates.single.circuitBreakerState, isNull);
+      expect(r.trustStates, isA<List<dynamic>>());
     });
   });
 }

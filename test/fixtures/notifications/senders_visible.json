@@ -1,0 +1,20 @@
+[
+  {
+    "count": 551,
+    "last_activity": "2025-01-01T00:00:00+00:00",
+    "new_count": 499,
+    "sender_id": "sender-fixture-0"
+  },
+  {
+    "count": 11,
+    "last_activity": "2025-01-01T00:00:00+00:00",
+    "new_count": 11,
+    "sender_id": "sender-fixture-1"
+  },
+  {
+    "count": 11,
+    "last_activity": "2025-01-01T00:00:00+00:00",
+    "new_count": 11,
+    "sender_id": "sender-fixture-2"
+  }
+]

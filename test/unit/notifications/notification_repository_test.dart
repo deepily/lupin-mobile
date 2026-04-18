@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 
+import '../../_helpers/fixture_loader.dart';
 import '../_helpers/stub_dio.dart';
 
 void main() {
@@ -55,37 +56,35 @@ void main() {
       expect(r.notifications.single.id, "n-1");
     });
 
-    test("conversation parses list of messages", () async {
-      adapter.handlers["GET /api/notifications/conversation/s-1/u@x.y"] = (_) =>
-        jsonBody([
-          {
-            "id": "c-1", "sender_id": "s-1", "message": "hello",
-            "type": "task", "priority": "low", "state": "delivered",
-            "is_hidden": false, "abstract": "",
-            "created_at": "2026-04-15T10:00:00Z",
-            "timestamp": "2026-04-15T10:00:00Z",
-            "response_requested": false,
-          },
-        ]);
+    test("conversation parses fixture of real ConversationMessage[] shape", () async {
+      // Fixture captured via src/scripts/capture-notifications-fixtures.py
+      // — 5 redacted messages from the real /api/notifications/conversation/...
+      adapter.handlers["GET /api/notifications/conversation/s-1/u@x.y"] =
+        (_) => jsonBodyFromFixture("notifications/conversation.json");
       final list = await repo.conversation("s-1", "u@x.y", hours: 24);
-      expect(list.single.id,    "c-1");
-      expect(list.single.state, "delivered");
+      expect(list, isNotEmpty);
+      expect(list.first.id, startsWith("msg-fixture-"));
+      expect(list.first.senderId, "sender-fixture-0");
+      // Every captured message has a `type` and `priority` — parser must
+      // accept the real backend's values, not just the ones we made up.
+      expect(list.every((m) => m.type.isNotEmpty),     isTrue);
+      expect(list.every((m) => m.priority.isNotEmpty), isTrue);
     });
 
-    test("conversationByDate parses date-keyed map", () async {
-      adapter.handlers["GET /api/notifications/conversation-by-date/s/u"] = (_) =>
-        jsonBody({
-          "2026-04-15": [{
-            "id": "n-1", "message": "x", "type": "task", "priority": "low",
-            "timestamp": "2026-04-15T11:00:00Z", "played": false, "play_count": 0,
-            "response_requested": false, "suppress_ding": false,
-            "display_qualifier_widget": false,
-          }],
-          "2026-04-14": [],
-        });
+    test("conversationByDate parses fixture of real date-keyed map", () async {
+      adapter.handlers["GET /api/notifications/conversation-by-date/s/u"] =
+        (_) => jsonBodyFromFixture("notifications/conversation_by_date.json");
       final m = await repo.conversationByDate("s", "u");
-      expect(m["2026-04-15"]!.single.id, "n-1");
-      expect(m["2026-04-14"], isEmpty);
+      // At least one recent date with at least one message per the capture caps.
+      expect(m.keys,  isNotEmpty);
+      final firstDateMessages = m.values.first;
+      expect(firstDateMessages, isNotEmpty);
+      // All message IDs match the redaction pattern.
+      for (final msgs in m.values) {
+        for (final item in msgs) {
+          expect(item.id, startsWith("msg-fixture-"));
+        }
+      }
     });
 
     test("respond posts json body and parses ack", () async {
