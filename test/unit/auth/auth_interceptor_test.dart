@@ -7,6 +7,8 @@ import 'package:lupin_mobile/services/auth/auth_interceptor.dart';
 import 'package:lupin_mobile/services/auth/auth_repository.dart';
 import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 
+import '../../_helpers/fixture_loader.dart';
+
 class _SequenceAdapter implements HttpClientAdapter {
   final List<ResponseBody Function(RequestOptions)> responses;
   final List<RequestOptions> captured = [];
@@ -100,14 +102,11 @@ void main() {
       adapter = _SequenceAdapter([
         // 1) original /api/me → 401
         (_) => _json({"detail": "expired"}, status: 401),
-        // 2) /auth/refresh → rotated tokens
-        (_) => _json({
-          "access_token"  : "fresh",
-          "refresh_token" : "new-ref",
-        }),
-        // 3) retried /api/me → 200
+        // 2) /auth/refresh → rotated tokens (fixture is the real RefreshResponse envelope)
+        (_) => jsonBodyFromFixture("auth/refresh_response.json"),
+        // 3) retried /api/me → 200 (with redacted fixture token)
         (opts) {
-          expect(opts.headers["Authorization"], "Bearer fresh");
+          expect(opts.headers["Authorization"], "Bearer fixture_access_token");
           return _json({"ok": true});
         },
       ]);
@@ -123,9 +122,9 @@ void main() {
 
       final res = await dio.get("/api/me");
       expect(res.statusCode, 200);
-      expect(rotated.single.accessToken,  "fresh");
-      expect(rotated.single.refreshToken, "new-ref");
-      expect(readAccessToken(), "fresh");
+      expect(rotated.single.accessToken,  "fixture_access_token");
+      expect(rotated.single.refreshToken, "fixture_refresh_token");
+      expect(readAccessToken(), "fixture_access_token");
       expect(refreshFailedCount, 0);
     });
 
@@ -154,12 +153,9 @@ void main() {
     test("does not retry twice (one refresh attempt per request)", () async {
       setAccessToken("stale");
       adapter = _SequenceAdapter([
-        (_) => _json({"detail": "expired"}, status: 401), // original
-        (_) => _json({
-          "access_token"  : "fresh",
-          "refresh_token" : "new-ref",
-        }),                                                // refresh
-        (_) => _json({"detail": "still 401"}, status: 401), // retry still fails
+        (_) => _json({"detail": "expired"}, status: 401),                 // original
+        (_) => jsonBodyFromFixture("auth/refresh_response.json"),         // refresh
+        (_) => _json({"detail": "still 401"}, status: 401),               // retry still fails
       ]);
       dio.httpClientAdapter = adapter;
       repo = AuthRepository(dio);
