@@ -59,7 +59,8 @@ void main() {
     test("conversation parses fixture of real ConversationMessage[] shape", () async {
       // Fixture captured via src/scripts/capture-notifications-fixtures.py
       // — 5 redacted messages from the real /api/notifications/conversation/...
-      adapter.handlers["GET /api/notifications/conversation/s-1/u@x.y"] =
+      // `@` percent-encodes to `%40` under Uri.encodeComponent.
+      adapter.handlers["GET /api/notifications/conversation/s-1/u%40x.y"] =
         (_) => jsonBodyFromFixture("notifications/conversation.json");
       final list = await repo.conversation("s-1", "u@x.y", hours: 24);
       expect(list, isNotEmpty);
@@ -109,6 +110,23 @@ void main() {
       expect(ack.responseValue, "yes");
     });
 
+    test("conversation URL-encodes senderId with `/` and userEmail with `@`", () async {
+      // Regression for the pre-fix bug where raw path interpolation caused
+      // FastAPI to split `peer-queue-watch/abc-def` into two segments.
+      adapter.handlers[
+        "GET /api/notifications/conversation/peer-queue-watch%2Fabc-def/u%40x.y"
+      ] = (_) => jsonBody( const [] );
+      final list = await repo.conversation(
+        "peer-queue-watch/abc-def", "u@x.y", hours: 24,
+      );
+      expect( list, isEmpty );
+      // Also verify the captured request used the encoded path, not raw.
+      final req = adapter.captured.single;
+      expect( req.path, contains( "peer-queue-watch%2Fabc-def" ) );
+      expect( req.path, contains( "u%40x.y" ) );
+      expect( req.path, isNot( contains( "peer-queue-watch/abc-def/u@x.y" ) ) );
+    });
+
     test("404 maps to NotificationApiException", () async {
       adapter.handlers["GET /api/notifications/none/next"] = (_) =>
         jsonBody({"detail": "not found"}, status: 404);
@@ -121,7 +139,7 @@ void main() {
     });
 
     test("bulkDelete parses deleted_count", () async {
-      adapter.handlers["DELETE /api/notifications/bulk/u@x.y"] = (opts) {
+      adapter.handlers["DELETE /api/notifications/bulk/u%40x.y"] = (opts) {
         expect(opts.queryParameters["hours"],            48);
         expect(opts.queryParameters["exclude_own_jobs"], true);
         return jsonBody({

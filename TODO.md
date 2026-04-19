@@ -1,12 +1,12 @@
 # TODO
 
-Last updated: 2026-04-17 (Session: WS hookup + envelope fix + Stages 2/3 fixture-backed tests)
+Last updated: 2026-04-19 (Session: URL-encoding fix + post-login investigation)
 
 ## Pending
 
 ### Recently-Discovered Bugs (high priority)
-- [ ] [LUPIN-MOBILE] Fix `NotificationRepository.conversation()` + `conversationByDate()` URL encoding — sender IDs containing `/` (e.g. `peer-queue-watch/<uuid>`) break FastAPI path-param routing. Need `Uri.encodeComponent()` on `senderId` + `userEmail` in `notification_repository.dart:194,218,238`. Discovered while capturing fixtures on 2026-04-17.
-- [ ] [LUPIN-MOBILE] Investigate post-login behavior — user verified login works but flagged "may want to debug what happens after that" on 2026-04-17. Check first authenticated home screen, WS reconnect, inbox initial load.
+- [ ] [LUPIN-MOBILE] **Wire WS lifecycle to auth state** — `WebSocketService.connect()` is never called post-login, so `NotificationsExternalUpdate` / queue updates / Claude Code messages silently do nothing at runtime. Add `BlocListener<AuthBloc>` in `lib/app.dart` that calls `ws.connect( userId: state.userId )` on `AuthAuthenticated` and `ws.disconnect()` on `AuthUnauthenticated` / `AuthError`. Detailed plan in `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`. Discovered 2026-04-19.
+- [ ] [LUPIN-MOBILE] Extend URL-encoding fix to `DecisionProxyRepository` — same bug class as notifications, two sites (`/api/proxy/pending/$userEmail`, `/api/proxy/trust/$userEmail`). Tiny fix, deferred from 2026-04-19 session scope.
 
 ### On-Device Sanity Pass (login confirmed on device 2026-04-17; remaining sanity checks still open)
 - [x] [LUPIN-MOBILE] Device sanity: login works end-to-end (envelope fix verified on emulator) — 2026-04-17
@@ -42,6 +42,8 @@ Last updated: 2026-04-17 (Session: WS hookup + envelope fix + Stages 2/3 fixture
 - [ ] [LUPIN-MOBILE] Resolve pre-existing `getIt` import in `home_screen.dart` (orphan from old wiring)
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] URL-encode all path params in `NotificationRepository` — top-level `_enc( String )` helper wrapping `Uri.encodeComponent`, applied to 11 interpolation sites across senderId / userEmail / userId / project / dateString. Regression test covers slash-bearing sender IDs + `@` in email. 170/170 tests green. — 2026-04-19
+- [x] [LUPIN-MOBILE] Post-login behavior investigation — code-read audit of `AuthGate` / `HomeScreen` / `app.dart` / `WebSocketService` / `AuthBloc`; surfaced concrete WS-lifecycle bug and queued as new high-priority TODO. Findings logged in `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`. — 2026-04-19
 - [x] [LUPIN-MOBILE] Stage 3 fixture expansion — shared `_fixture_lib.py`, notifications + decision-proxy capture scripts, 8 new fixtures, 6 repo tests converted, broader TestKeys (prompt yes/no, trust approve/reject), +6 widget tests — 2026-04-17
 - [x] [LUPIN-MOBILE] Stage 2 fixture-backed tests for auth — captured + redacted real `/auth/*` responses, drift detection demonstrated — 2026-04-17
 - [x] [LUPIN-MOBILE] Auth login envelope parse fix — `AuthRepository.login/refresh` now read `tokens` sub-object per real `LoginResponse`/`RefreshResponse` Pydantic shapes; malformed shapes throw `AuthException` instead of raw `TypeError`; added `AuthGate` widget test suite — 2026-04-17

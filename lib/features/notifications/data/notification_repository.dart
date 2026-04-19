@@ -10,6 +10,11 @@ class NotificationApiException implements Exception {
   String toString() => "NotificationApiException($statusCode): $message";
 }
 
+// Percent-encode a single path segment so values containing `/`, `@`, `+`,
+// spaces, etc. don't collapse into extra FastAPI path params.
+// Example: "peer-queue-watch/abc-def" -> "peer-queue-watch%2Fabc-def".
+String _enc( String s ) => Uri.encodeComponent( s );
+
 /// Typed wrapper over the 17-endpoint Lupin notifications API.
 /// Uses the shared Dio (auth interceptor injects Bearer automatically).
 class NotificationRepository {
@@ -56,7 +61,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/notifications/$userId",
+        "/api/notifications/${_enc( userId )}",
         queryParameters: {
           "include_played": includePlayed,
           if ( limit != null ) "limit": limit,
@@ -74,7 +79,7 @@ class NotificationRepository {
   Future<NextNotificationResponse> next( String userId ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/notifications/$userId/next",
+        "/api/notifications/${_enc( userId )}/next",
       );
       return NextNotificationResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
@@ -120,7 +125,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.delete<Map<String, dynamic>>(
-        "/api/notifications/bulk/$userEmail",
+        "/api/notifications/bulk/${_enc( userEmail )}",
         queryParameters: {
           if ( hours != null ) "hours": hours,
           "exclude_own_jobs": excludeOwnJobs,
@@ -141,7 +146,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.get<List<dynamic>>(
-        "/api/notifications/senders/$userEmail",
+        "/api/notifications/senders/${_enc( userEmail )}",
         queryParameters: { if ( hours != null ) "hours": hours },
       );
       return ( res.data ?? const [] )
@@ -164,7 +169,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.get<List<dynamic>>(
-        "/api/notifications/senders-visible/$userEmail",
+        "/api/notifications/senders-visible/${_enc( userEmail )}",
         queryParameters: {
           if ( hours != null ) "hours": hours,
           "include_hidden"  : includeHidden,
@@ -191,7 +196,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.get<List<dynamic>>(
-        "/api/notifications/conversation/$senderId/$userEmail",
+        "/api/notifications/conversation/${_enc( senderId )}/${_enc( userEmail )}",
         queryParameters: {
           if ( hours  != null ) "hours" : hours,
           if ( anchor != null ) "anchor": anchor,
@@ -215,7 +220,7 @@ class NotificationRepository {
   ) async {
     try {
       final res = await _dio.delete<Map<String, dynamic>>(
-        "/api/notifications/conversation/$senderId/$userEmail",
+        "/api/notifications/conversation/${_enc( senderId )}/${_enc( userEmail )}",
       );
       return ConversationDeleteResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
@@ -235,7 +240,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/notifications/conversation-by-date/$senderId/$userEmail",
+        "/api/notifications/conversation-by-date/${_enc( senderId )}/${_enc( userEmail )}",
         queryParameters: {
           if ( hours  != null ) "hours" : hours,
           if ( anchor != null ) "anchor": anchor,
@@ -268,7 +273,7 @@ class NotificationRepository {
   ) async {
     try {
       final res = await _dio.delete<Map<String, dynamic>>(
-        "/api/notifications/date/$senderId/$userEmail/$dateString",
+        "/api/notifications/date/${_enc( senderId )}/${_enc( userEmail )}/${_enc( dateString )}",
       );
       return DateDeleteResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
@@ -286,7 +291,7 @@ class NotificationRepository {
   } ) async {
     try {
       final res = await _dio.get<List<dynamic>>(
-        "/api/notifications/sender-dates/$senderId/$userEmail",
+        "/api/notifications/sender-dates/${_enc( senderId )}/${_enc( userEmail )}",
         queryParameters: { "include_hidden": includeHidden },
       );
       return ( res.data ?? const [] )
@@ -304,7 +309,7 @@ class NotificationRepository {
   Future<ActiveConversationResponse> activeConversation( String userEmail ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/notifications/active-conversation/$userEmail",
+        "/api/notifications/active-conversation/${_enc( userEmail )}",
       );
       return ActiveConversationResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
@@ -321,7 +326,7 @@ class NotificationRepository {
   ) async {
     try {
       final res = await _dio.get<List<dynamic>>(
-        "/api/notifications/project-sessions/$project/$userEmail",
+        "/api/notifications/project-sessions/${_enc( project )}/${_enc( userEmail )}",
       );
       return ( res.data ?? const [] )
           .whereType<Map>()

@@ -21,7 +21,7 @@ void main() {
     blocTest<NotificationBloc, NotificationState>(
       "LoadInbox emits Loading → InboxLoaded with senders",
       setUp: () {
-        adapter.handlers["GET /api/notifications/senders-visible/u@x.y"] = (_) =>
+        adapter.handlers["GET /api/notifications/senders-visible/u%40x.y"] = (_) =>
           jsonBody([
             {"sender_id": "s-1", "last_activity": "2026-04-15T10:00:00Z",
              "count": 3, "new_count": 1},
@@ -43,7 +43,7 @@ void main() {
     blocTest<NotificationBloc, NotificationState>(
       "LoadConversation emits Loading → ConversationLoaded",
       setUp: () {
-        adapter.handlers["GET /api/notifications/conversation/s-1/u@x.y"] = (_) =>
+        adapter.handlers["GET /api/notifications/conversation/s-1/u%40x.y"] = (_) =>
           jsonBody([
             {"id": "c-1", "sender_id": "s-1", "message": "hi",
              "type": "task", "priority": "low", "state": "delivered",
@@ -68,7 +68,7 @@ void main() {
       "Respond emits Responding → ResponseAcked → Conversation refresh",
       setUp: () {
         // Establish active conversation context first.
-        adapter.handlers["GET /api/notifications/conversation/s-1/u@x.y"] = (_) =>
+        adapter.handlers["GET /api/notifications/conversation/s-1/u%40x.y"] = (_) =>
           jsonBody([
             {"id": "c-1", "sender_id": "s-1", "message": "?",
              "type": "task", "priority": "low", "state": "delivered",
@@ -108,7 +108,7 @@ void main() {
     blocTest<NotificationBloc, NotificationState>(
       "API error emits NotificationsError",
       setUp: () {
-        adapter.handlers["GET /api/notifications/senders-visible/u@x.y"] = (_) =>
+        adapter.handlers["GET /api/notifications/senders-visible/u%40x.y"] = (_) =>
           jsonBody({"detail": "boom"}, status: 500);
       },
       build  : () => NotificationBloc(repo),
@@ -124,7 +124,7 @@ void main() {
       "ExternalUpdate refreshes current inbox after WS event",
       setUp: () {
         var hitCount = 0;
-        adapter.handlers["GET /api/notifications/senders-visible/u@x.y"] = (_) {
+        adapter.handlers["GET /api/notifications/senders-visible/u%40x.y"] = (_) {
           hitCount++;
           return jsonBody([
             {"sender_id": "s-1", "last_activity": "2026-04-15T10:00:00Z",
