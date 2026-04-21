@@ -9,6 +9,7 @@ import 'core/constants/app_themes.dart';
 import 'core/di/service_locator.dart';
 import 'features/auth/domain/auth_bloc.dart';
 import 'features/auth/presentation/auth_gate.dart';
+import 'features/auth/presentation/ws_lifecycle_listener.dart';
 import 'features/agentic/domain/agentic_submission_bloc.dart';
 import 'features/claude_code/domain/claude_code_bloc.dart';
 import 'features/claude_code/domain/claude_code_event.dart';
@@ -108,13 +109,23 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
           create: ( _ ) => ServiceLocator.get<AgenticSubmissionBloc>(),
         ),
       ],
-      child: MaterialApp(
-        title    : AppConstants.appName,
-        theme    : AppThemes.lightTheme,
-        darkTheme: AppThemes.darkTheme,
-        home     : AuthGate(
-          serverContext     : ServiceLocator.get<ServerContextService>(),
-          authenticatedChild: const LupinHomeScreen(),
+      child: WsLifecycleListener(
+        onAuthenticated: ( userId ) async {
+          final ws = ServiceLocator.get<WebSocketService>();
+          if ( !ws.isConnected ) await ws.connect( userId: userId );
+        },
+        onSignedOut: () async {
+          final ws = ServiceLocator.get<WebSocketService>();
+          if ( ws.isConnected ) await ws.disconnect();
+        },
+        child: MaterialApp(
+          title    : AppConstants.appName,
+          theme    : AppThemes.lightTheme,
+          darkTheme: AppThemes.darkTheme,
+          home     : AuthGate(
+            serverContext     : ServiceLocator.get<ServerContextService>(),
+            authenticatedChild: const LupinHomeScreen(),
+          ),
         ),
       ),
     );

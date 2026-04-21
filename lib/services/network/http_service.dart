@@ -24,28 +24,40 @@ class HttpService {
     _configureDio();
   }
   
+  /// Marker stored on the Dio's `options.extra` so a single shared Dio (e.g.
+  /// the DI singleton consumed by both `HttpService` and `CachedHttpService`)
+  /// is configured exactly once. Without this guard each subclass ctor would
+  /// re-add the logging interceptors, producing 2× log output per request
+  /// (and confusing any reader into thinking the request was dispatched twice).
+  static const String _configuredMarker = '_lupin_http_configured';
+
   void _configureDio() {
+    // Idempotent: if another HttpService instance already configured this
+    // Dio, skip — re-adding interceptors would double the logging output.
+    if (_dio.options.extra[_configuredMarker] == true) return;
+    _dio.options.extra[_configuredMarker] = true;
+
     // Configure base URL
     _dio.options.baseUrl = AppConstants.apiBaseUrl;
-    
+
     // Configure timeouts
     _dio.options.connectTimeout = const Duration(seconds: 10);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
     _dio.options.sendTimeout = const Duration(seconds: 30);
-    
+
     // Configure headers
     _dio.options.headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    
+
     // Add interceptors for logging and error handling
     _dio.interceptors.add(LogInterceptor(
       requestBody: true,
       responseBody: true,
       logPrint: (obj) => print('[HTTP] $obj'),
     ));
-    
+
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
         print('[HTTP] Request: ${options.method} ${options.uri}');

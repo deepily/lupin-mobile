@@ -45,7 +45,7 @@ void main() {
     });
 
     test("pending forwards filters and parses real fixture envelope", () async {
-      adapter.handlers["GET /api/proxy/pending/u@x.y"] = (opts) {
+      adapter.handlers["GET /api/proxy/pending/u%40x.y"] = (opts) {
         // Still verify query-param forwarding — fixture only covers the
         // response shape, not the request shape.
         expect(opts.queryParameters["domain"],   "swe");
@@ -102,7 +102,7 @@ void main() {
     });
 
     test("trustState passes optional domain filter + parses envelope", () async {
-      adapter.handlers["GET /api/proxy/trust/u@x.y"] = (opts) {
+      adapter.handlers["GET /api/proxy/trust/u%40x.y"] = (opts) {
         expect(opts.queryParameters["domain"], "swe");
         return jsonBodyFromFixture("decision_proxy/trust_state.json");
       };
@@ -110,6 +110,24 @@ void main() {
       // verify the envelope parses without throwing.
       final r = await repo.trustState("u@x.y", domain: "swe");
       expect(r.trustStates, isA<List<dynamic>>());
+    });
+
+    test("pending URL-encodes userEmail with `@` and `+`", () async {
+      // Regression for the DP parity of the NotificationRepository
+      // URL-encoding fix — raw path interpolation mangles `+aliases` and `@`.
+      adapter.handlers["GET /api/proxy/pending/first.last%2Balias%40x.y"] =
+        (_) => jsonBody({
+          "total_pending": 0, "decisions": const [],
+          "summary": {
+            "total_pending": 0, "by_domain": const {}, "by_category": const {},
+          },
+        });
+      final r = await repo.pending("first.last+alias@x.y");
+      expect(r.decisions, isEmpty);
+      // Verify the captured request used the encoded path, not raw.
+      final req = adapter.captured.single;
+      expect(req.path, contains("first.last%2Balias%40x.y"));
+      expect(req.path, isNot(contains("first.last+alias@x.y")));
     });
   });
 }

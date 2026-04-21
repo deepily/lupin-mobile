@@ -1,12 +1,11 @@
 # TODO
 
-Last updated: 2026-04-19 (Session: URL-encoding fix + post-login investigation)
+Last updated: 2026-04-20 (Session: WS lifecycle wiring + bug-fix-queue split)
+
+> **Scope**: Build-out work only — new features, polish, testing playbook stages,
+> deferred improvements. Known defects (things to *fix*) live in `bug-fix-queue.md`.
 
 ## Pending
-
-### Recently-Discovered Bugs (high priority)
-- [ ] [LUPIN-MOBILE] **Wire WS lifecycle to auth state** — `WebSocketService.connect()` is never called post-login, so `NotificationsExternalUpdate` / queue updates / Claude Code messages silently do nothing at runtime. Add `BlocListener<AuthBloc>` in `lib/app.dart` that calls `ws.connect( userId: state.userId )` on `AuthAuthenticated` and `ws.disconnect()` on `AuthUnauthenticated` / `AuthError`. Detailed plan in `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`. Discovered 2026-04-19.
-- [ ] [LUPIN-MOBILE] Extend URL-encoding fix to `DecisionProxyRepository` — same bug class as notifications, two sites (`/api/proxy/pending/$userEmail`, `/api/proxy/trust/$userEmail`). Tiny fix, deferred from 2026-04-19 session scope.
 
 ### On-Device Sanity Pass (login confirmed on device 2026-04-17; remaining sanity checks still open)
 - [x] [LUPIN-MOBILE] Device sanity: login works end-to-end (envelope fix verified on emulator) — 2026-04-17

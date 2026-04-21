@@ -1,5 +1,55 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.19 – 2026.04.20 | Session `1fb8dc65` — URL-encoding, WS lifecycle wiring, HTTP-interceptor idempotency, bug-fix-queue split
+
+### Session Summary
+- **Objective**: Close out the 2026-04-17 hot-bug list (URL-encoding + post-login investigation), then act on whatever the investigation surfaced.
+- **Outcome**: ✅ 4 bugs fixed, 1 cross-repo bug surfaced for parent Lupin. WS lifecycle wiring validated end-to-end on emulator (test `notify()` arrived in inbox in real time without pull-to-refresh). Bug tracker split from TODO.md per new convention. **178/178 unit + widget tests green** (was 169 at session start; +9 new).
+- **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+### Accomplishments
+1. **`NotificationRepository` URL-encoding** — top-level `_enc()` helper (`Uri.encodeComponent`) applied to all 11 path-interpolation sites (senderId / userEmail / userId / project / dateString). Regression test covers slash-bearing sender IDs + `@` in email. Updated 7 pre-existing handler keys in repo + bloc tests. Shipped as commit `ab2a56c`.
+2. **Post-login investigation** — code-read audit surfaced that `WebSocketService.connect()` was never invoked post-login; the `_dispatchWsEvent` router in `app.dart` was dead code at runtime. Findings serialized to `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`.
+3. **WS lifecycle wiring** — new `WsLifecycleListener` widget (`BlocListener<AuthBloc>` with `listenWhen` on `runtimeType` change) drives `ws.connect(userId:)` on `AuthAuthenticated` and `ws.disconnect()` on `AuthUnauthenticated`/`AuthError`. 5 widget-test cases covering the full transition matrix. Plan doc at `src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md`. Validated end-to-end on emulator.
+4. **`DecisionProxyRepository` URL-encoding parity** — same `_enc()` pattern applied to 3 sites (`pending`, `trust`, `decisions/$domain/$category`). +1 regression test.
+5. **Duplicate HTTP log output** — diagnosed as double `_configureDio()` on shared Dio: `CachedHttpService extends HttpService` + both get the same DI singleton, each adding `LogInterceptor`+`InterceptorsWrapper`. Fixed with `options.extra['_lupin_http_configured']` idempotency marker. +2 unit tests.
+6. **Bug tracker / TODO split** — new `bug-fix-queue.md` (v2.0 format, mirrors parent Lupin's convention); `TODO.md` scoped to build-out work only with a header documenting the split.
+
+### Files Added (7 new)
+- `lib/features/auth/presentation/ws_lifecycle_listener.dart`
+- `test/widget/auth/ws_lifecycle_listener_test.dart`
+- `test/unit/services/network/http_service_test.dart`
+- `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`
+- `src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md`
+- `bug-fix-queue.md`
+- *(the URL-encoding regression test additions are inline in existing files)*
+
+### Files Modified
+- `lib/app.dart` — wrapped `MaterialApp` with `WsLifecycleListener`
+- `lib/features/notifications/data/notification_repository.dart` — `_enc()` helper + 11 sites *(already shipped in `ab2a56c`)*
+- `lib/features/decision_proxy/data/decision_proxy_repository.dart` — `_enc()` helper + 3 sites
+- `lib/services/network/http_service.dart` — `_configureDio()` idempotency guard
+- `test/unit/notifications/notification_{repository,bloc}_test.dart` — 7 handler keys + regression test *(committed)*
+- `test/unit/decision_proxy/decision_proxy_{repository,bloc}_test.dart` — 3 handler keys + regression test
+- `TODO.md` — scoped to build-out; bug entries migrated to `bug-fix-queue.md`
+
+### Test Results
+| Suite | At session start | At session end |
+|-------|------------------|----------------|
+| Unit   | 141 | 150 |
+| Widget | 28  | 28  |
+| **Total** | **169** | **178** |
+
+### Key Decisions / Insights
+- **Logging ≠ dispatching**: the apparent "duplicate dispatch" in emulator logcat was duplicate *logging* caused by `CachedHttpService` extending `HttpService` on a shared Dio. Using `options.extra` as the idempotency sentinel keeps the guard on the Dio itself, not on the service class, so any future service re-configuring the same Dio is also safe.
+- **Bug-tracker convention**: split `bug-fix-queue.md` from `TODO.md` mirrors parent Lupin's format. TODO = *build*; bug-fix-queue = *fix*. Header on `TODO.md` documents the split so future sessions don't mistakenly file bugs there again.
+- **WS token rotation** left as follow-up: `WebSocketService._authenticate()` reads the token once at connect time; token refresh inside a held WS is NOT handled. Filed as cross-cutting follow-up in the plan doc.
+
+### Cross-Repo Surfaced
+- **Lupin backend `NotificationFifoQueue._emit_queue_update` AttributeError** — `POST /api/notifications/{id}/played` returns 500 in parent Lupin. Tracked in `bug-fix-queue.md` under "Cross-Repo" so lupin-mobile contributors see it, but the actual fix belongs in the parent repo (`src/cosa/rest/`).
+
+---
+
 ## 2026.04.17 - WS hookup + auth envelope fix + fixture-backed tests + broader widget coverage
 
 ### Session Summary

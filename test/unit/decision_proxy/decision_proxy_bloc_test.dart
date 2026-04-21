@@ -25,7 +25,7 @@ void main() {
           "status": "success", "ini_mode": "shadow", "running_mode": null,
           "effective": "shadow", "has_running_job": false,
         });
-        adapter.handlers["GET /api/proxy/pending/u@x.y"] = (_) => jsonBody({
+        adapter.handlers["GET /api/proxy/pending/u%40x.y"] = (_) => jsonBody({
           "status": "success",
           "decisions": [{
             "id": "d-1", "domain": "swe", "category": "code_review",
@@ -69,7 +69,7 @@ void main() {
           "running_mode": null, "effective": "active",
           "has_running_job": false,
         });
-        adapter.handlers["GET /api/proxy/pending/u@x.y"] = (_) {
+        adapter.handlers["GET /api/proxy/pending/u%40x.y"] = (_) {
           pendingHits++;
           return jsonBody({
             "status": "success",
