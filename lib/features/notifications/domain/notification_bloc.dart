@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../services/notification_audio/notification_audio_service.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
 import 'notification_event.dart';
@@ -9,13 +10,18 @@ import 'notification_state.dart';
 /// websocket-only skeleton with real REST integration against the
 /// 17-endpoint notifications API.
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
-  final NotificationRepository _repo;
+  final NotificationRepository        _repo;
+  final NotificationAudioService?     _audio;
 
   // Track context so external updates can refresh the right view.
   String? _activeUserEmail;
   String? _activeSenderId;
 
-  NotificationBloc( this._repo ) : super( const NotificationsInitial() ) {
+  NotificationBloc(
+    this._repo, {
+    NotificationAudioService? audio,
+  } ) : _audio = audio,
+        super( const NotificationsInitial() ) {
     on<NotificationsLoadInbox>( _onLoadInbox );
     on<NotificationsLoadConversation>( _onLoadConversation );
     on<NotificationsMarkPlayed>( _onMarkPlayed );
@@ -132,9 +138,21 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   }
 
   Future<void> _onExternalUpdate(
-    NotificationsExternalUpdate _,
+    NotificationsExternalUpdate event,
     Emitter<NotificationState> emit,
   ) async {
+    // Fire audio first (fire-and-forget) so a slow REST refetch doesn't delay
+    // the ding. Audio service handles priority filtering + suppress_ding +
+    // master-mute internally; bloc doesn't care.
+    final n = event.notification;
+    if ( n != null ) {
+      _audio?.handleIncoming(
+        priority     : n.priority,
+        message      : n.message,
+        title        : n.title,
+        suppressDing : n.suppressDing,
+      );
+    }
     await _refreshCurrent( emit );
   }
 

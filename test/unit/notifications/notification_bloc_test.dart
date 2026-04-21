@@ -5,8 +5,12 @@ import 'package:lupin_mobile/features/notifications/data/notification_repository
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../_helpers/stub_dio.dart';
+
+class _MockAudioService extends Mock implements NotificationAudioService {}
 
 void main() {
   group("NotificationBloc", () {
@@ -147,5 +151,60 @@ void main() {
           .having((s) => s.senders.single.count, "refreshed count", 2),
       ],
     );
+
+    test( "ExternalUpdate with urgent NotificationItem calls NotificationAudioService.handleIncoming", () async {
+      final audio = _MockAudioService();
+      when( () => audio.handleIncoming(
+        priority     : any( named: "priority" ),
+        message      : any( named: "message" ),
+        title        : any( named: "title" ),
+        suppressDing : any( named: "suppressDing" ),
+      ) ).thenAnswer( ( _ ) async {} );
+
+      final bloc = NotificationBloc( repo, audio: audio );
+
+      final urgent = NotificationItem(
+        id                     : "n-1",
+        message                : "Prod is down.",
+        title                  : "CRIT",
+        type                   : "alert",
+        priority               : "urgent",
+        timestamp              : DateTime( 2026, 4, 21 ),
+        played                 : false,
+        playCount              : 0,
+        responseRequested      : false,
+        suppressDing           : false,
+        displayQualifierWidget : false,
+      );
+
+      bloc.add( NotificationsExternalUpdate( notification: urgent ) );
+      await Future.delayed( const Duration( milliseconds: 50 ) );
+
+      verify( () => audio.handleIncoming(
+        priority     : "urgent",
+        message      : "Prod is down.",
+        title        : "CRIT",
+        suppressDing : false,
+      ) ).called( 1 );
+
+      await bloc.close();
+    } );
+
+    test( "ExternalUpdate with no notification does NOT call audio service", () async {
+      final audio = _MockAudioService();
+      final bloc  = NotificationBloc( repo, audio: audio );
+
+      bloc.add( const NotificationsExternalUpdate() );
+      await Future.delayed( const Duration( milliseconds: 50 ) );
+
+      verifyNever( () => audio.handleIncoming(
+        priority     : any( named: "priority" ),
+        message      : any( named: "message" ),
+        title        : any( named: "title" ),
+        suppressDing : any( named: "suppressDing" ),
+      ) );
+
+      await bloc.close();
+    } );
   });
 }

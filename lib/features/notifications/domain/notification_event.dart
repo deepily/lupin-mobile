@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../data/notification_models.dart';
+
 abstract class NotificationEvent extends Equatable {
   const NotificationEvent();
 
@@ -93,9 +95,16 @@ class NotificationsDeleteConversation extends NotificationEvent {
 }
 
 /// Used by the WebSocket bridge to nudge a refresh when a queue update
-/// event lands on the wire.
+/// event lands on the wire. When the event carries a full notification
+/// payload (the common case — backend `notification_queue_update` always
+/// includes the NotificationItem), the [notification] field is populated
+/// and the bloc dispatches audio on top of the standard refresh path.
 class NotificationsExternalUpdate extends NotificationEvent {
-  const NotificationsExternalUpdate();
+  final NotificationItem? notification;
+  const NotificationsExternalUpdate( { this.notification } );
+
+  @override
+  List<Object?> get props => [ notification?.id ];
 }
 
 /// Request a LLM-generated gist/summary of the currently-loaded conversation.

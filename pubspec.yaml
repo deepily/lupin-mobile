@@ -28,6 +28,10 @@ dependencies:
   audioplayers: ^5.2.1
   permission_handler: ^11.0.1
 
+  # Notification audio (foreground ding + on-device TTS for priority-driven alerts)
+  flutter_local_notifications: ^17.2.3
+  flutter_tts: ^4.2.0
+
   # Local Storage
   shared_preferences: ^2.2.2
   sqflite: ^2.3.0

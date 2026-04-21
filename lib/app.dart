@@ -15,6 +15,7 @@ import 'features/claude_code/domain/claude_code_bloc.dart';
 import 'features/claude_code/domain/claude_code_event.dart';
 import 'features/decision_proxy/domain/decision_proxy_bloc.dart';
 import 'features/home/home_screen.dart';
+import 'features/notifications/data/notification_models.dart';
 import 'features/notifications/domain/notification_bloc.dart';
 import 'features/notifications/domain/notification_event.dart';
 import 'features/queue/domain/queue_bloc.dart';
@@ -75,7 +76,19 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         }
         break;
       case AppConstants.eventNotificationQueueUpdate:
-        ServiceLocator.get<NotificationBloc>().add( const NotificationsExternalUpdate() );
+        // Backend emits `{"type": "notification_queue_update", "notification": {...}}`
+        // (see src/cosa/rest/websocket_manager.py `async_emit` / `emit_to_user`).
+        // Parse the payload so NotificationBloc can drive audio on top of the
+        // standard refetch path.
+        final rawNotif = data['notification'];
+        final notif = rawNotif is Map<String, dynamic>
+            ? NotificationItem.fromJson( rawNotif )
+            : ( rawNotif is Map
+                ? NotificationItem.fromJson( Map<String, dynamic>.from( rawNotif ) )
+                : null );
+        ServiceLocator.get<NotificationBloc>().add(
+          NotificationsExternalUpdate( notification: notif ),
+        );
         break;
     }
   }

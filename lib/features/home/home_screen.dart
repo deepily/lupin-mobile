@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/di/service_locator.dart';
+import '../../core/testing/test_keys.dart';
+import '../../services/notification_audio/notification_preferences.dart';
 import '../agentic/domain/agentic_submission_bloc.dart';
 import '../agentic/presentation/agentic_hub_screen.dart';
 import '../auth/domain/auth_bloc.dart';
@@ -12,6 +15,7 @@ import '../decision_proxy/presentation/trust_dashboard_screen.dart';
 import '../notifications/presentation/inbox_screen.dart';
 import '../queue/domain/queue_bloc.dart';
 import '../queue/presentation/queue_dashboard_screen.dart';
+import '../settings/presentation/notification_audio_settings_screen.dart';
 
 class LupinHomeScreen extends StatelessWidget {
   const LupinHomeScreen( { super.key } );
@@ -45,6 +49,16 @@ class LupinHomeScreen extends StatelessWidget {
                 ) );
               }
             },
+          ),
+          IconButton(
+            key      : const Key( TestKeys.homeSettingsButton ),
+            tooltip  : 'Settings',
+            icon     : const Icon( Icons.settings_outlined ),
+            onPressed: () => Navigator.of( context ).push( MaterialPageRoute(
+              builder: ( _ ) => NotificationAudioSettingsScreen(
+                prefs: ServiceLocator.get<NotificationPreferences>(),
+              ),
+            ) ),
           ),
           IconButton(
             tooltip  : 'Logout',

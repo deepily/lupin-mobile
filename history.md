@@ -1,11 +1,16 @@
 # LUPIN MOBILE - SESSION HISTORY
 
-## 2026.04.21 | Session `214c47b6` — Stage 4 agentic widget-test coverage + generate-gist UI
+## 2026.04.21 | Session `214c47b6` — Stage 4 agentic + generate-gist UI + notification audio
 
 #### Checkpoint | 2026.04.21 14:50 | Stage 4 agentic widget-test coverage + generate-gist UI
 
 **Files**: test_keys.dart, 8 agentic forms, 8 agentic widget test files, notification event/state/bloc, conversation_screen + test, test_app harness, TODO.md, plan doc (+1 manifest)
 **Commit**: 92852b6
+
+#### Checkpoint | 2026.04.21 17:15 | Notification audio-on-receipt (dings + on-device TTS for medium/high/urgent)
+
+**Files**: pubspec.yaml (+ `flutter_local_notifications` + `flutter_tts`), AndroidManifest.xml (`POST_NOTIFICATIONS`), 3 MP3 assets copied from Lupin web client into `android/app/src/main/res/raw/lupin_{medium,high,urgent}.mp3`, new `NotificationAudioService` + `NotificationPreferences`, new `NotificationAudioSettingsScreen` + gear-icon entry on home AppBar, extended `NotificationsExternalUpdate` event with `NotificationItem`, `app.dart` parses WS payload, `NotificationBloc._onExternalUpdate` triggers audio, DI wiring in `service_locator.dart`, +17 new tests (prefs + service + bloc + settings widget), plan doc `src/rnd/v0.1.7/2026.04.21-notification-audio-on-receipt-plan.md`, TODO.md (+1 manifest). Test count 206 → 223 green.
+**Commit**: 94f0d77
 
 ### Session Summary
 - **Objective**: Auto-pilot session while user was at lunch — close out Testing Playbook Stage 4 (TestKeys + widget tests for the 8 agentic forms that didn't yet have them) and deliver at least one Tier 2 polish feature. Skip anything requiring laptop / adb / on-device / manual testing.

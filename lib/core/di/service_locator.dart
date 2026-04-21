@@ -44,6 +44,10 @@ import '../../services/artifacts/io_file_service.dart';
 // Tier 4 BLoCs
 import '../../features/agentic/domain/agentic_submission_bloc.dart';
 
+// Notification audio (ding + TTS on high/urgent)
+import '../../services/notification_audio/notification_audio_service.dart';
+import '../../services/notification_audio/notification_preferences.dart';
+
 // Legacy voice/audio/TTS/use-case-registry stack is disabled — the code in
 // lib/core/repositories/impl/{voice,audio}_repository_impl.dart and
 // lib/features/{voice,audio,session}/use_cases/ references symbols that don't
@@ -212,6 +216,17 @@ class ServiceLocator {
     _getIt.registerSingleton<IoFileService>(
       IoFileService(_getIt<Dio>()),
     );
+
+    // Notification audio — preferences backed by SharedPreferences, service
+    // wraps flutter_local_notifications + flutter_tts. Channels register
+    // lazily on first handleIncoming() via initialize(); app startup also
+    // pre-warms the service (see main.dart).
+    _getIt.registerSingleton<NotificationPreferences>(
+      NotificationPreferences(_getIt<SharedPreferences>()),
+    );
+    _getIt.registerSingleton<NotificationAudioService>(
+      NotificationAudioService(prefs: _getIt<NotificationPreferences>()),
+    );
   }
 
   /// Initialize repositories (legacy user/session/job/voice/audio stack is
@@ -241,7 +256,10 @@ class ServiceLocator {
 
     // Tier 2 BLoCs — lazy singletons so state survives navigation.
     _getIt.registerLazySingleton<NotificationBloc>(
-      () => NotificationBloc(_getIt<NotificationRepository>()),
+      () => NotificationBloc(
+        _getIt<NotificationRepository>(),
+        audio: _getIt<NotificationAudioService>(),
+      ),
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(
       () => DecisionProxyBloc(_getIt<DecisionProxyRepository>()),

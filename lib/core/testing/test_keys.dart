@@ -72,4 +72,15 @@ class TestKeys {
   static const rxQueryField     = 'rx.query';
   static const rxDryRunSwitch   = 'rx.dryRun';
   static const rxSubmitButton   = 'rx.submit';
+
+  // Notification audio settings (six toggles)
+  static const settingsDingMedium   = 'settings.audio.dingMedium';
+  static const settingsDingHigh     = 'settings.audio.dingHigh';
+  static const settingsDingUrgent   = 'settings.audio.dingUrgent';
+  static const settingsSpeakHigh    = 'settings.audio.speakHigh';
+  static const settingsSpeakUrgent  = 'settings.audio.speakUrgent';
+  static const settingsMasterMute   = 'settings.audio.masterMute';
+
+  // Home screen AppBar
+  static const homeSettingsButton   = 'home.settings';
 }
