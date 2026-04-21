@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
@@ -130,6 +131,70 @@ void main() {
       await tester.pump();
 
       expect( find.text( "No messages" ), findsOneWidget );
+    });
+
+    testWidgets( "AppBar Summarize renders the icon button", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId  : "s-1",
+            userEmail : "u@x.y",
+            messages  : [ yesNoMsg( "c-1" ) ],
+          ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.convSummarizeButton ) ), findsOneWidget );
+    });
+
+    testWidgets( "tapping Summarize dispatches NotificationsGenerateGistRequested", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId  : "s-1",
+            userEmail : "u@x.y",
+            messages  : [ yesNoMsg( "c-1" ) ],
+          ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      await tester.tap( find.byKey( const Key( TestKeys.convSummarizeButton ) ) );
+      await tester.pump();
+
+      verify( () => bloc.add( any(
+        that: isA<NotificationsGenerateGistRequested>(),
+      ) ) ).called( 1 );
+    });
+
+    testWidgets( "NotificationsGistReady state shows the gist bottom sheet", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId  : "s-1",
+            userEmail : "u@x.y",
+            messages  : [ yesNoMsg( "c-1" ) ],
+          ),
+          const NotificationsGistReady( "Summary of the thread." ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pumpAndSettle();
+
+      expect( find.byKey( const Key( TestKeys.convGistSheet ) ), findsOneWidget );
+      expect( find.text( "Summary of the thread." ), findsOneWidget );
     });
   });
 }

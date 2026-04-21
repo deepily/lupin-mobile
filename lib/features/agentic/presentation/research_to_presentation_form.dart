@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../queue/data/queue_models.dart';
 import '../../queue/presentation/job_detail_screen.dart';
 import '../data/agentic_common_models.dart';
@@ -83,6 +84,7 @@ class _ResearchToPresentationFormState extends State<ResearchToPresentationForm>
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
             TextField(
+              key        : const Key( TestKeys.rxQueryField ),
               controller : _queryCtrl,
               minLines   : 3,
               maxLines   : 8,
@@ -130,12 +132,14 @@ class _ResearchToPresentationFormState extends State<ResearchToPresentationForm>
             ),
             const SizedBox( height: 8 ),
             SwitchListTile(
+              key      : const Key( TestKeys.rxDryRunSwitch ),
               title    : const Text( 'Dry run' ),
               value    : _dryRun,
               onChanged: ( v ) => setState( () => _dryRun = v ),
             ),
             const SizedBox( height: 24 ),
             FilledButton(
+              key      : const Key( TestKeys.rxSubmitButton ),
               onPressed: loading ? null : _submit,
               child: loading
                   ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) )

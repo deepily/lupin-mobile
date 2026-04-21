@@ -1,5 +1,74 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.21 | Session `214c47b6` — Stage 4 agentic widget-test coverage + generate-gist UI
+
+#### Checkpoint | 2026.04.21 14:50 | Stage 4 agentic widget-test coverage + generate-gist UI
+
+**Files**: test_keys.dart, 8 agentic forms, 8 agentic widget test files, notification event/state/bloc, conversation_screen + test, test_app harness, TODO.md, plan doc (+1 manifest)
+**Commit**: 92852b6
+
+### Session Summary
+- **Objective**: Auto-pilot session while user was at lunch — close out Testing Playbook Stage 4 (TestKeys + widget tests for the 8 agentic forms that didn't yet have them) and deliver at least one Tier 2 polish feature. Skip anything requiring laptop / adb / on-device / manual testing.
+- **Outcome**: ✅ **206/206 unit + widget tests green** (was 178 at session start; **+28 new tests**). 38 new `TestKeys` constants, 8 new widget test files, full `generate-gist` UI pipeline end-to-end.
+- **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+### Accomplishments
+1. **Plan serialized** — `src/rnd/v0.1.7/2026.04.21-stage-4-agentic-coverage-and-tier-2-polish.md` documents the re-ordered hands-free execution sequence, cost/value analysis for skipped fixture-capture phases, and the two TODO.md corrections discovered during exploration.
+2. **Stale TODO corrections**:
+   - `getIt` in `home_screen.dart` — confirmed already removed (grep-verified, only DI-canonical files reference `getIt`); marked done.
+   - `lib/shared/models/notification_item.dart` — turned out NOT to be orphan. Re-exported via `shared/models/models.dart` and imported by 20+ production files (voice bloc, audio cache, repositories). Two `NotificationItem` classes now coexist (old in `shared/models/`, new in `features/notifications/data/notification_models.dart`) for different layers. Reclassified TODO as "leave in place; revisit with voice/audio refactor".
+3. **TestKeys expansion** — 38 new constants added to `lib/core/testing/test_keys.dart` covering all 8 agentic forms (pg/px/sw/bfe/tfe/ts/rp/rx).
+4. **TestKeys wired into 8 agentic forms** — podcast, presentation, SWE team, Bug Fix Expediter, Test Fix Expediter, Test Suite (including prefix-suffixed checkbox keys for all 4 test types), Research→Podcast, Research→Presentation.
+5. **8 new widget test files** (`test/widget/agentic/`) — render + form-reset + required-field validation + valid-submit dispatch paths for all 8 forms. BFE test additionally verifies `deadJobId` constructor pre-fill. TSF test additionally verifies the "unchecking all types makes submit a no-op" path. 26 new test cases total.
+6. **`generate-gist` UI** — new `NotificationsGenerateGistRequested` event + `NotificationsGistLoading`/`NotificationsGistReady` states + bloc handler that pulls currently-loaded messages and posts to `POST /api/notifications/generate-gist`. `ConversationScreen` AppBar gets a **Summarize** icon button; `NotificationsGistReady` triggers a bottom-sheet rendering of the LLM summary (keyed `TestKeys.convGistSheet`). After the sheet closes, the bloc re-emits the prior `NotificationsConversationLoaded` so the message list stays intact.
+7. **3 new ConversationScreen widget tests** — Summarize button renders; tap dispatches the new event; `NotificationsGistReady` state materializes the gist bottom sheet.
+8. **Test harness updated** — `registerHarnessFallbacks()` now registers a fallback for `NotificationsGenerateGistRequested` so mocktail `any()` works against the new event type.
+9. **Auto-pilot hands-free pattern saved to memory** — when user signals away-status, re-order the queue to filter out any item needing their keyboard/laptop/device involvement.
+
+### Files Added (9 new)
+- `src/rnd/v0.1.7/2026.04.21-stage-4-agentic-coverage-and-tier-2-polish.md`
+- `test/widget/agentic/podcast_generator_form_test.dart`
+- `test/widget/agentic/presentation_generator_form_test.dart`
+- `test/widget/agentic/swe_team_form_test.dart`
+- `test/widget/agentic/bug_fix_expediter_form_test.dart`
+- `test/widget/agentic/test_fix_expediter_form_test.dart`
+- `test/widget/agentic/test_suite_form_test.dart`
+- `test/widget/agentic/research_to_podcast_form_test.dart`
+- `test/widget/agentic/research_to_presentation_form_test.dart`
+
+### Files Modified (12)
+- `lib/core/testing/test_keys.dart` — 38 new constants
+- `lib/features/agentic/presentation/{podcast_generator,presentation_generator,swe_team,bug_fix_expediter,test_fix_expediter,test_suite,research_to_podcast,research_to_presentation}_form.dart` — TestKeys wired to primary inputs + switches + submit buttons
+- `lib/features/notifications/domain/{notification_event,notification_state,notification_bloc}.dart` — gist event + states + handler
+- `lib/features/notifications/presentation/conversation_screen.dart` — Summarize AppBar action + `_showGistSheet` bottom-sheet rendering
+- `test/_harness/test_app.dart` — gist fallback registered
+- `test/widget/notifications/conversation_screen_test.dart` — 3 new tests for gist flow
+- `TODO.md` — stale entries corrected; new completions recorded
+
+### Test Results
+| Suite | At session start | At session end |
+|-------|------------------|----------------|
+| Unit   | 150 | 150 |
+| Widget | 28  | 56  |
+| **Total** | **178** | **206** |
+
+### Key Decisions / Insights
+- **Fixture-capture deferred with justification**: Unlike notifications/decision-proxy where real-backend fixtures caught the login envelope bug, agentic submit responses share ONE `AgenticSubmitResponse` envelope across all 10 endpoints. Capturing live fixtures would burn real LLM $$ (DR/podcast/presentation spawn real work) for marginal drift-detection value. Hand-stubbed envelopes in `agentic_repository_test.dart` are documented against the OpenAPI spec and left as-is.
+- **Gist flow kept one-shot state**: The bloc emits `NotificationsGistReady` transiently, then re-emits the prior `NotificationsConversationLoaded` so the underlying list view doesn't collapse. UI uses a `BlocConsumer` listener (not builder) for the bottom sheet so the conversation stays rendered under the modal.
+- **Double-emit pattern**: same pattern used for gist error handling — emit `NotificationsError(msg)` then re-emit prior state. No persistent "error banner" state; consistent with existing `_onRespond` flow.
+- **`NotificationItem` vs `ConversationMessage`**: the former is the canonical shape from the REST list endpoint; the latter is a flattened conversation-specific shape with delivery/state fields. They diverge enough that switching ConversationScreen to `conversation-by-date` requires unified rendering — deferred, logged in TODO.md with blocker note.
+- **TrustStateScreen drilldown** (from the original plan): deferred. More invasive (new screen, per-domain data shape) and of less immediate value than the gist delivery. Queued for user's return.
+
+### Out of Scope (not touched this session)
+- Device/emulator sanity pass (5 items in TODO.md) — laptop domain per memory
+- Cross-repo parent-Lupin `_emit_queue_update` fix — different repo
+- Stats dashboard / `fl_chart` integration
+- In-app audio playback wiring in `AudioArtifactPlayer`
+- Date-grouped ConversationScreen — blocked by model type divergence
+- TrustStateScreen drilldown — deferred for user review
+
+---
+
 ## 2026.04.19 – 2026.04.20 | Session `1fb8dc65` — URL-encoding, WS lifecycle wiring, HTTP-interceptor idempotency, bug-fix-queue split
 
 ### Session Summary

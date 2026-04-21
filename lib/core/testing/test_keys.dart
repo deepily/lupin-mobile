@@ -17,6 +17,8 @@ class TestKeys {
 
   // Conversation / InteractivePromptSheet
   static const convRespondButtonPrefix = 'conv.respond.'; // + messageId
+  static const convSummarizeButton     = 'conv.summarize';
+  static const convGistSheet           = 'conv.gistSheet';
   static const promptYesButton         = 'prompt.yes';
   static const promptNoButton          = 'prompt.no';
   static const promptCommentField      = 'prompt.comment';
@@ -30,4 +32,44 @@ class TestKeys {
   static const drQueryField     = 'dr.query';
   static const drDryRunCheckbox = 'dr.dryRun';
   static const drSubmitButton   = 'dr.submit';
+
+  // Podcast generator form (pg = podcast generator)
+  static const pgSourceField    = 'pg.source';
+  static const pgDryRunSwitch   = 'pg.dryRun';
+  static const pgSubmitButton   = 'pg.submit';
+
+  // Presentation generator form (px = presentation; avoids clash with pg)
+  static const pxSourceField       = 'px.source';
+  static const pxRenderOnlySwitch  = 'px.renderOnly';
+  static const pxDryRunSwitch      = 'px.dryRun';
+  static const pxSubmitButton      = 'px.submit';
+
+  // SWE Team form
+  static const swTaskField      = 'sw.task';
+  static const swSubmitButton   = 'sw.submit';
+
+  // Bug Fix Expediter form
+  static const bfeDeadJobIdField = 'bfe.deadJobId';
+  static const bfeDryRunSwitch   = 'bfe.dryRun';
+  static const bfeSubmitButton   = 'bfe.submit';
+
+  // Test Fix Expediter form (Resume-from flow)
+  static const tfeResumeFromField = 'tfe.resumeFrom';
+  static const tfeSubmitButton    = 'tfe.submit';
+
+  // Test Suite form (prefix suffixed with test type at use-site)
+  static const tsTestTypeCheckboxPrefix = 'ts.type.';  // + testType name
+  static const tsAutoFixSwitch          = 'ts.autoFix';
+  static const tsDryRunSwitch           = 'ts.dryRun';
+  static const tsSubmitButton           = 'ts.submit';
+
+  // Research → Podcast form (rp)
+  static const rpQueryField     = 'rp.query';
+  static const rpDryRunSwitch   = 'rp.dryRun';
+  static const rpSubmitButton   = 'rp.submit';
+
+  // Research → Presentation form (rx)
+  static const rxQueryField     = 'rx.query';
+  static const rxDryRunSwitch   = 'rx.dryRun';
+  static const rxSubmitButton   = 'rx.submit';
 }

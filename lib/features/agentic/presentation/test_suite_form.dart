@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../queue/data/queue_models.dart';
 import '../../queue/presentation/job_detail_screen.dart';
 import '../data/agentic_common_models.dart';
@@ -68,23 +69,27 @@ class _TestSuiteFormState extends State<TestSuiteForm> {
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
             Text( 'Test types', style: Theme.of( context ).textTheme.titleSmall ),
             ..._types.keys.map( ( k ) => CheckboxListTile(
+              key      : Key( '${TestKeys.tsTestTypeCheckboxPrefix}$k' ),
               title    : Text( k ),
               value    : _types[ k ],
               onChanged: ( v ) => setState( () => _types[ k ] = v ?? false ),
             ) ),
             const Divider(),
             SwitchListTile(
+              key      : const Key( TestKeys.tsAutoFixSwitch ),
               title    : const Text( 'Auto-fix on failure' ),
               value    : _autoFix,
               onChanged: ( v ) => setState( () => _autoFix = v ),
             ),
             SwitchListTile(
+              key      : const Key( TestKeys.tsDryRunSwitch ),
               title    : const Text( 'Dry run' ),
               value    : _dryRun,
               onChanged: ( v ) => setState( () => _dryRun = v ),
             ),
             const SizedBox( height: 24 ),
             FilledButton(
+              key      : const Key( TestKeys.tsSubmitButton ),
               onPressed: loading ? null : _submit,
               child: loading
                   ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) )

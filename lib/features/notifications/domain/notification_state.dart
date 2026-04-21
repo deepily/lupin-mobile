@@ -68,3 +68,19 @@ class NotificationsError extends NotificationState {
   @override
   List<Object?> get props => [ message ];
 }
+
+/// Transient state: gist generation is in flight. Emitted in parallel with
+/// the underlying [NotificationsConversationLoaded] (the UI uses a listener,
+/// not a builder, so the conversation list stays visible).
+class NotificationsGistLoading extends NotificationState {
+  const NotificationsGistLoading();
+}
+
+/// Gist result — UI shows in a bottom sheet.
+class NotificationsGistReady extends NotificationState {
+  final String gist;
+  const NotificationsGistReady( this.gist );
+
+  @override
+  List<Object?> get props => [ gist ];
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../data/notification_models.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
@@ -40,6 +41,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            key      : const Key( TestKeys.convSummarizeButton ),
+            tooltip  : "Summarize",
+            icon     : const Icon( Icons.summarize_outlined ),
+            onPressed: () => context.read<NotificationBloc>().add(
+              const NotificationsGenerateGistRequested(),
+            ),
+          ),
+        ],
       ),
       body: BlocConsumer<NotificationBloc, NotificationState>(
         listener: ( context, state ) {
@@ -47,6 +58,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             ScaffoldMessenger.of( context ).showSnackBar(
               const SnackBar( content: Text( "Response sent" ) ),
             );
+          } else if ( state is NotificationsGistReady ) {
+            _showGistSheet( context, state.gist );
           }
         },
         buildWhen: ( prev, next ) =>
@@ -76,6 +89,33 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ),
     );
   }
+}
+
+void _showGistSheet( BuildContext context, String gist ) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: ( _ ) => SafeArea(
+      child: SingleChildScrollView(
+        key: const Key( TestKeys.convGistSheet ),
+        padding: const EdgeInsets.all( 16 ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row( children: [
+              const Icon( Icons.summarize_outlined ),
+              const SizedBox( width: 8 ),
+              Text( "Summary", style: Theme.of( context ).textTheme.titleMedium ),
+            ] ),
+            const SizedBox( height: 12 ),
+            SelectableText( gist ),
+            const SizedBox( height: 16 ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _MessageCard extends StatelessWidget {

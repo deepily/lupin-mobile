@@ -23,6 +23,7 @@ void registerHarnessFallbacks() {
   registerFallbackValue( const AuthStarted() );
   registerFallbackValue( const AuthUnauthenticated() );
   registerFallbackValue( const NotificationsLoadInbox( userEmail: "u@x.y" ) );
+  registerFallbackValue( const NotificationsGenerateGistRequested() );
   registerFallbackValue( const NotificationsInitial() );
   registerFallbackValue( const DecisionProxyLoadDashboard( "u@x.y" ) );
   registerFallbackValue( const DecisionProxyInitial() );

@@ -23,6 +23,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<NotificationsBulkDelete>( _onBulkDelete );
     on<NotificationsDeleteConversation>( _onDeleteConversation );
     on<NotificationsExternalUpdate>( _onExternalUpdate );
+    on<NotificationsGenerateGistRequested>( _onGenerateGist );
   }
 
   Future<void> _onLoadInbox(
@@ -135,6 +136,28 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     Emitter<NotificationState> emit,
   ) async {
     await _refreshCurrent( emit );
+  }
+
+  Future<void> _onGenerateGist(
+    NotificationsGenerateGistRequested _,
+    Emitter<NotificationState> emit,
+  ) async {
+    final s = state;
+    if ( s is! NotificationsConversationLoaded ) return;
+    if ( s.messages.isEmpty ) return;
+    emit( const NotificationsGistLoading() );
+    try {
+      final gist = await _repo.generateGist( GistRequest(
+        messages  : s.messages.map( ( m ) => m.message                  ).toList(),
+        abstracts : s.messages.map( ( m ) => m.abstractText ?? ""       ).toList(),
+      ) );
+      emit( NotificationsGistReady( gist.gist ) );
+      // Restore the conversation view so the list stays visible after the sheet closes.
+      emit( s );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+      emit( s );
+    }
   }
 
   /// Re-fetch the current view (inbox or conversation) without changing

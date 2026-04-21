@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../queue/data/queue_models.dart';
 import '../../queue/presentation/job_detail_screen.dart';
 import '../data/agentic_common_models.dart';
@@ -74,6 +75,7 @@ class _SweTeamFormState extends State<SweTeamForm> {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
             TextField(
+              key        : const Key( TestKeys.swTaskField ),
               controller : _taskCtrl,
               minLines   : 4,
               maxLines   : 10,
@@ -103,6 +105,7 @@ class _SweTeamFormState extends State<SweTeamForm> {
             ),
             const SizedBox( height: 24 ),
             FilledButton(
+              key      : const Key( TestKeys.swSubmitButton ),
               onPressed: loading ? null : _submit,
               child: loading
                   ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) )

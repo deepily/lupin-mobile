@@ -97,3 +97,11 @@ class NotificationsDeleteConversation extends NotificationEvent {
 class NotificationsExternalUpdate extends NotificationEvent {
   const NotificationsExternalUpdate();
 }
+
+/// Request a LLM-generated gist/summary of the currently-loaded conversation.
+/// Only valid while a [NotificationsConversationLoaded] state holds messages;
+/// the bloc pulls messages straight from that state so the UI doesn't have to
+/// pass them in.
+class NotificationsGenerateGistRequested extends NotificationEvent {
+  const NotificationsGenerateGistRequested();
+}

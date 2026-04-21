@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../queue/data/queue_models.dart';
 import '../../queue/presentation/job_detail_screen.dart';
 import '../data/agentic_common_models.dart';
@@ -68,6 +69,7 @@ class _TestFixExpediterFormState extends State<TestFixExpediterForm> {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
             TextField(
+              key        : const Key( TestKeys.tfeResumeFromField ),
               controller : _resumeCtrl,
               decoration : const InputDecoration(
                 labelText : 'Job ID, plan path, or description *',
@@ -83,6 +85,7 @@ class _TestFixExpediterFormState extends State<TestFixExpediterForm> {
             ),
             const SizedBox( height: 24 ),
             FilledButton(
+              key      : const Key( TestKeys.tfeSubmitButton ),
               onPressed: loading ? null : _submit,
               child: loading
                   ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) )

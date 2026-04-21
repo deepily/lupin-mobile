@@ -1,6 +1,6 @@
 # TODO
 
-Last updated: 2026-04-20 (Session: WS lifecycle wiring + bug-fix-queue split)
+Last updated: 2026-04-21 (Session: Stage 4 agentic coverage + generate-gist UI)
 
 > **Scope**: Build-out work only — new features, polish, testing playbook stages,
 > deferred improvements. Known defects (things to *fix*) live in `bug-fix-queue.md`.
@@ -16,11 +16,11 @@ Last updated: 2026-04-20 (Session: WS lifecycle wiring + bug-fix-queue split)
 - [ ] [LUPIN-MOBILE] Device sanity: run `integration_test/smoke_hello_test.dart` via `flutter test integration_test/` on emulator (proves scaffolding)
 
 ### Tier 2 — Notifications + Decision Proxy (polish remaining)
-- [ ] [LUPIN-MOBILE] Date-grouped view in ConversationScreen (uses `conversation-by-date` endpoint — currently using flat `conversation`)
+- [ ] [LUPIN-MOBILE] Date-grouped view in ConversationScreen (uses `conversation-by-date` endpoint — currently using flat `conversation`; blocked by type divergence — by-date returns `NotificationItem`, flat returns `ConversationMessage` — needs unified rendering)
 - [ ] [LUPIN-MOBILE] Sender-dates drilldown screen (per-sender date browse)
-- [ ] [LUPIN-MOBILE] `generate-gist` UI on ConversationScreen ("Summarize" action)
+- [x] [LUPIN-MOBILE] `generate-gist` UI on ConversationScreen ("Summarize" action) — Summarize button + bottom sheet; `NotificationsGenerateGistRequested` event + `NotificationsGistLoading`/`Ready` states + bloc handler; 3 widget tests — 2026-04-21
 - [ ] [LUPIN-MOBILE] TrustStateScreen drilldown (per-domain trust details)
-- [ ] [LUPIN-MOBILE] Decide whether to remove orphaned `lib/shared/models/notification_item.dart`
+- [ ] [LUPIN-MOBILE] ~~Decide whether to remove orphaned `lib/shared/models/notification_item.dart`~~ — **Revised finding 2026-04-21**: NOT orphan. Re-exported via `lib/shared/models/models.dart` and imported by 20+ production files (voice bloc, audio cache, repositories, use cases). There are now two `NotificationItem` classes — the old shared one and a newer differently-shaped one in `features/notifications/data/notification_models.dart`. Migration would require touching voice/audio/cache layers. **Reclassified: leave in place; no action unless voice/audio/cache layers are refactored.**
 
 ### Tier 4 — Agentic (polish + deferred)
 - [ ] [LUPIN-MOBILE] TimeSavedDashboard + StatsRepository + StatsBloc (deferred from Tier 4)
@@ -34,13 +34,16 @@ Last updated: 2026-04-20 (Session: WS lifecycle wiring + bug-fix-queue split)
 - [ ] [LUPIN-MOBILE] Maestro MCP flows — revisit after `integration_test/` has ≥5 flows and CI parallelization matters
 - [ ] [LUPIN-MOBILE] Fixture coverage for agentic endpoints (DR submit, podcast, etc.) — Stages 2/3 covered auth/notifications/decision-proxy; agentic is the remaining domain
 - [ ] [LUPIN-MOBILE] CI job that runs `capture-*-fixtures.py` on a schedule + opens a PR when fixtures diff — catches silent backend drift
-- [ ] [LUPIN-MOBILE] Apply TestKeys / `bySemanticsIdentifier` to remaining agentic forms (podcast, presentation, SWE team, BFE, TFE, test suite, research-to-podcast, research-to-presentation)
-- [ ] [LUPIN-MOBILE] Widget tests for remaining agentic forms (DR + prompt sheet + trust dashboard approve/reject covered)
+- [x] [LUPIN-MOBILE] Apply TestKeys / `bySemanticsIdentifier` to remaining agentic forms (podcast, presentation, SWE team, BFE, TFE, test suite, research-to-podcast, research-to-presentation) — 38 new TestKeys constants applied across 8 forms — 2026-04-21
+- [x] [LUPIN-MOBILE] Widget tests for remaining agentic forms — 8 new test files (26 new test cases), all dispatch+validation paths covered — 2026-04-21
 
 ### Cross-cutting
-- [ ] [LUPIN-MOBILE] Resolve pre-existing `getIt` import in `home_screen.dart` (orphan from old wiring)
+- [x] [LUPIN-MOBILE] `getIt` import in `home_screen.dart` — verified **already removed** as of 2026-04-21 (confirmed by grep; only DI canonical files `service_locator.dart` + `use_case_registry.dart` reference `getIt`). — 2026-04-21
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] Stage 4 agentic widget-test coverage — TestKeys + widget tests for 8 remaining agentic forms (podcast, presentation, SWE team, BFE, TFE, test suite, research-to-podcast, research-to-presentation). 26 new test cases, 204+/204+ tests green. — 2026-04-21
+- [x] [LUPIN-MOBILE] `generate-gist` UI — Summarize button in ConversationScreen AppBar, bottom-sheet rendering of LLM-generated summary, full bloc pipeline (event/state/handler), 3 widget tests. — 2026-04-21
+- [x] [LUPIN-MOBILE] `getIt` orphan import in `home_screen.dart` — verified already removed (stale TODO). — 2026-04-21
 - [x] [LUPIN-MOBILE] URL-encode all path params in `NotificationRepository` — top-level `_enc( String )` helper wrapping `Uri.encodeComponent`, applied to 11 interpolation sites across senderId / userEmail / userId / project / dateString. Regression test covers slash-bearing sender IDs + `@` in email. 170/170 tests green. — 2026-04-19
 - [x] [LUPIN-MOBILE] Post-login behavior investigation — code-read audit of `AuthGate` / `HomeScreen` / `app.dart` / `WebSocketService` / `AuthBloc`; surfaced concrete WS-lifecycle bug and queued as new high-priority TODO. Findings logged in `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`. — 2026-04-19
 - [x] [LUPIN-MOBILE] Stage 3 fixture expansion — shared `_fixture_lib.py`, notifications + decision-proxy capture scripts, 8 new fixtures, 6 repo tests converted, broader TestKeys (prompt yes/no, trust approve/reject), +6 widget tests — 2026-04-17
