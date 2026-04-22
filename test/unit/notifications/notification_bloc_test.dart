@@ -6,11 +6,13 @@ import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dar
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../_helpers/stub_dio.dart';
 
 class _MockAudioService extends Mock implements NotificationAudioService {}
+class _MockTtsOrchestrator extends Mock implements TtsOrchestrator {}
 
 void main() {
   group("NotificationBloc", () {
@@ -203,6 +205,49 @@ void main() {
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
       ) );
+
+      await bloc.close();
+    } );
+
+    test( "ExternalUpdate with urgent notification ALSO calls TtsOrchestrator.enqueueIfSpeakable", () async {
+      final audio = _MockAudioService();
+      final tts   = _MockTtsOrchestrator();
+      when( () => audio.handleIncoming(
+        priority     : any( named: "priority" ),
+        message      : any( named: "message" ),
+        title        : any( named: "title" ),
+        suppressDing : any( named: "suppressDing" ),
+      ) ).thenAnswer( ( _ ) async {} );
+      when( () => tts.enqueueIfSpeakable(
+        priority : any( named: "priority" ),
+        message  : any( named: "message" ),
+        title    : any( named: "title" ),
+      ) ).thenReturn( null );
+
+      final bloc = NotificationBloc( repo, audio: audio, tts: tts );
+
+      final urgent = NotificationItem(
+        id                     : "n-42",
+        message                : "Prod is down.",
+        title                  : "CRIT",
+        type                   : "alert",
+        priority               : "urgent",
+        timestamp              : DateTime( 2026, 4, 21 ),
+        played                 : false,
+        playCount              : 0,
+        responseRequested      : false,
+        suppressDing           : false,
+        displayQualifierWidget : false,
+      );
+
+      bloc.add( NotificationsExternalUpdate( notification: urgent ) );
+      await Future.delayed( const Duration( milliseconds: 50 ) );
+
+      verify( () => tts.enqueueIfSpeakable(
+        priority : "urgent",
+        message  : "Prod is down.",
+        title    : "CRIT",
+      ) ).called( 1 );
 
       await bloc.close();
     } );

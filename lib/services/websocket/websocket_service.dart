@@ -194,11 +194,13 @@ class WebSocketService {
   ///   - All valid messages are added to stream
   void _handleMessage(dynamic message) {
     try {
-      // Handle binary audio data
+      // Handle binary audio data. Backend sends raw ElevenLabs PCM chunks
+      // (per src/cosa/rest/routers/speech.py websocket.send_bytes loop);
+      // wrap with the canonical backend event name so downstream handlers
+      // don't have to guess.
       if (message is List<int>) {
-        print('[WebSocket] Received binary audio data: ${message.length} bytes');
         _messageController?.add({
-          'type': 'audio_chunk',
+          'type': AppConstants.eventAudioStreamingChunk,
           'data': message,
           'provider': 'elevenlabs'
         });

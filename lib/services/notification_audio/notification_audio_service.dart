@@ -26,10 +26,6 @@ class NotificationAudioService {
   final NotificationPreferences         _prefs;
   bool _initialized = false;
 
-  /// 300ms gap between ding and TTS — matches web client behavior so the
-  /// ding sound finishes cleanly before speech starts.
-  static const _dingToSpeechGap = Duration( milliseconds: 300 );
-
   NotificationAudioService( {
     required NotificationPreferences prefs,
     FlutterLocalNotificationsPlugin? plugin,
@@ -95,14 +91,35 @@ class NotificationAudioService {
 
     await initialize();
 
-    final shouldDing  = !suppressDing && _dingEnabledFor( priority );
-    final shouldSpeak = _speechEnabledFor( priority );
+    final shouldDing = !suppressDing && _dingEnabledFor( priority );
 
     if ( shouldDing ) await _showDing( priority: priority, title: title, body: message );
 
-    if ( shouldSpeak ) {
-      // 300ms delay lets the ding finish before speech starts. Fire-and-forget.
-      Future.delayed( _dingToSpeechGap, () => _speak( title: title, body: message ) );
+    // Speech is NOT dispatched from here anymore. `TtsOrchestrator` owns
+    // all speech — ElevenLabs primary, `flutter_tts` fallback via
+    // [flutterTtsSpeak] below. The orchestrator is wired in
+    // `NotificationBloc._onExternalUpdate` alongside this ding call.
+  }
+
+  /// Fallback helper — called ONLY by `TtsOrchestrator` when ElevenLabs
+  /// is unavailable (quota exceeded, network error, WS disconnected).
+  /// Kept inside this service because it owns the `FlutterTts` singleton.
+  Future<void> flutterTtsSpeak( String text ) async {
+    try {
+      await _tts.stop();
+      await _tts.speak( text );
+    } catch ( _ ) {
+      // TTS engine may be unavailable on some devices; non-fatal.
+    }
+  }
+
+  /// Stop any in-flight `flutter_tts` utterance. Called by
+  /// `TtsOrchestrator` on urgent-preempt and user-cancel paths.
+  Future<void> stopFallbackSpeech() async {
+    try {
+      await _tts.stop();
+    } catch ( _ ) {
+      // Already-stopped is fine.
     }
   }
 
@@ -111,14 +128,6 @@ class NotificationAudioService {
       case 'medium' : return _prefs.dingOnMedium;
       case 'high'   : return _prefs.dingOnHigh;
       case 'urgent' : return _prefs.dingOnUrgent;
-      default       : return false;
-    }
-  }
-
-  bool _speechEnabledFor( String priority ) {
-    switch ( priority ) {
-      case 'high'   : return _prefs.speakOnHigh;
-      case 'urgent' : return _prefs.speakOnUrgent;
       default       : return false;
     }
   }
@@ -144,18 +153,6 @@ class NotificationAudioService {
     // so we hash to a stable 32-bit int.
     final id = ( title ?? body ).hashCode & 0x7fffffff;
     await _fln.show( id, title ?? 'Lupin', body, details );
-  }
-
-  Future<void> _speak( { required String body, String? title } ) async {
-    final text = ( title != null && title.isNotEmpty )
-        ? '$title. $body'
-        : body;
-    try {
-      await _tts.stop();  // cancel any in-flight speech; latest wins
-      await _tts.speak( text );
-    } catch ( _ ) {
-      // TTS engine may be unavailable on some devices; failures are non-fatal.
-    }
   }
 
   String _channelFor( String priority ) {

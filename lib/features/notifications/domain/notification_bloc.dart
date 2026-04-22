@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/notification_audio/notification_audio_service.dart';
+import '../../../services/tts/tts_orchestrator.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
 import 'notification_event.dart';
@@ -12,6 +13,7 @@ import 'notification_state.dart';
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final NotificationRepository        _repo;
   final NotificationAudioService?     _audio;
+  final TtsOrchestrator?              _tts;
 
   // Track context so external updates can refresh the right view.
   String? _activeUserEmail;
@@ -20,7 +22,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   NotificationBloc(
     this._repo, {
     NotificationAudioService? audio,
+    TtsOrchestrator?          tts,
   } ) : _audio = audio,
+        _tts   = tts,
         super( const NotificationsInitial() ) {
     on<NotificationsLoadInbox>( _onLoadInbox );
     on<NotificationsLoadConversation>( _onLoadConversation );
@@ -142,8 +146,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     Emitter<NotificationState> emit,
   ) async {
     // Fire audio first (fire-and-forget) so a slow REST refetch doesn't delay
-    // the ding. Audio service handles priority filtering + suppress_ding +
-    // master-mute internally; bloc doesn't care.
+    // the ding. Ding goes through NotificationAudioService (OS notification
+    // channel); speech goes through TtsOrchestrator (ElevenLabs primary,
+    // flutter_tts fallback). Both handle priority filtering + preferences
+    // internally; bloc doesn't care.
     final n = event.notification;
     if ( n != null ) {
       _audio?.handleIncoming(
@@ -151,6 +157,11 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         message      : n.message,
         title        : n.title,
         suppressDing : n.suppressDing,
+      );
+      _tts?.enqueueIfSpeakable(
+        priority : n.priority,
+        message  : n.message,
+        title    : n.title,
       );
     }
     await _refreshCurrent( emit );

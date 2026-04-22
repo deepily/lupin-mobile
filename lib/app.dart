@@ -21,6 +21,7 @@ import 'features/notifications/domain/notification_event.dart';
 import 'features/queue/domain/queue_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
 import 'services/auth/server_context_service.dart';
+import 'services/tts/streaming_tts_player.dart';
 import 'services/websocket/websocket_service.dart';
 
 class LupinMobileApp extends StatefulWidget {
@@ -89,6 +90,15 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         ServiceLocator.get<NotificationBloc>().add(
           NotificationsExternalUpdate( notification: notif ),
         );
+        break;
+      case AppConstants.eventAudioStreamingStatus:
+      case AppConstants.eventAudioStreamingChunk:
+      case AppConstants.eventAudioStreamingComplete:
+      case 'tts_error':
+        // Route ElevenLabs TTS audio pipeline events to the streaming
+        // player. Binary chunks arrive wrapped by WebSocketService as
+        // `{type: audio_streaming_chunk, data: List<int>}`.
+        ServiceLocator.get<StreamingTtsPlayer>().handleWsEvent( type, data );
         break;
     }
   }

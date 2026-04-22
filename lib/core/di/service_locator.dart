@@ -48,6 +48,10 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 import '../../services/notification_audio/notification_audio_service.dart';
 import '../../services/notification_audio/notification_preferences.dart';
 
+// Agent-narration TTS (ElevenLabs primary, flutter_tts fallback)
+import '../../services/tts/streaming_tts_player.dart';
+import '../../services/tts/tts_orchestrator.dart';
+
 // Legacy voice/audio/TTS/use-case-registry stack is disabled — the code in
 // lib/core/repositories/impl/{voice,audio}_repository_impl.dart and
 // lib/features/{voice,audio,session}/use_cases/ references symbols that don't
@@ -227,6 +231,28 @@ class ServiceLocator {
     _getIt.registerSingleton<NotificationAudioService>(
       NotificationAudioService(prefs: _getIt<NotificationPreferences>()),
     );
+
+    // Agent-narration TTS — slim ElevenLabs streaming player built against
+    // the shared Dio + WebSocket stream. Orchestrator (TtsOrchestrator,
+    // registered separately) decides when to call speak().
+    _getIt.registerSingleton<StreamingTtsPlayer>(
+      StreamingTtsPlayer(_getIt<Dio>()),
+    );
+
+    // FIFO queue + priority gate + urgent preempt + quota fallback in
+    // front of the TTS pipeline. NotificationBloc calls
+    // enqueueIfSpeakable() on every incoming notification; the
+    // orchestrator decides speech-worthiness and dispatches via either
+    // StreamingTtsPlayer (ElevenLabs) or NotificationAudioService
+    // (flutter_tts fallback).
+    _getIt.registerSingleton<TtsOrchestrator>(
+      TtsOrchestrator(
+        player   : _getIt<StreamingTtsPlayer>(),
+        fallback : _getIt<NotificationAudioService>(),
+        prefs    : _getIt<NotificationPreferences>(),
+        ws       : _getIt<WebSocketService>(),
+      ),
+    );
   }
 
   /// Initialize repositories (legacy user/session/job/voice/audio stack is
@@ -258,7 +284,8 @@ class ServiceLocator {
     _getIt.registerLazySingleton<NotificationBloc>(
       () => NotificationBloc(
         _getIt<NotificationRepository>(),
-        audio: _getIt<NotificationAudioService>(),
+        audio : _getIt<NotificationAudioService>(),
+        tts   : _getIt<TtsOrchestrator>(),
       ),
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(

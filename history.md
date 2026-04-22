@@ -1,6 +1,32 @@
 # LUPIN MOBILE - SESSION HISTORY
 
-## 2026.04.21 | Session `214c47b6` — Stage 4 agentic + generate-gist UI + notification audio
+## 2026.04.21 | Session `214c47b6` — Stage 4 agentic + generate-gist UI + notification audio + FCM defer + agent-narration TTS
+
+#### Session-End | 2026.04.21 22:10 | 237/237 tests green (was 178 at session start; +59 over the day)
+
+**Day scope** (four logical deliverables across the 10-hour session):
+1. **Auto-pilot phase (morning→lunch)**: Stage 4 agentic widget-test coverage + generate-gist UI — ~8 hr — see Checkpoint 1 below.
+2. **Foreground notification audio**: `NotificationAudioService` + channels + settings + flutter_tts — ~2 hr — Checkpoint 2 below.
+3. **FCM defer + R&D doc**: pulled cross-repo bug-queue item after investigation; preserved reasoning in `src/rnd/v0.1.7/2026.04.21-fcm-apns-push-considerations.md` — ~30 min — Checkpoint 3 below.
+4. **Agent-narration TTS (ElevenLabs primary + flutter_tts fallback)**: slim `StreamingTtsPlayer` + `TtsOrchestrator` (FIFO + urgent preempt + quota-fallback); `NotificationAudioService` refactored for split responsibilities; 14 new tests — ~3 hr — Checkpoint 4 below (this session-end commit).
+
+**Final test count**: 178 → 237 green (+59 total). No regressions.
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`.
+**Next session first-priority**: on-device verification of items #2 + #4 — see the "⭐ NEXT SESSION" banner at the top of TODO.md.
+
+---
+
+#### Checkpoint 4 | 2026.04.21 22:10 | Agent-narration TTS pipeline (ElevenLabs + flutter_tts fallback)
+
+**Files**: `lib/services/tts/streaming_tts_player.dart` (new, ~230 lines), `lib/services/tts/tts_orchestrator.dart` (new), `lib/services/notification_audio/notification_audio_service.dart` (refactored — removed auto-priority speech branch, exposed `flutterTtsSpeak()` + `stopFallbackSpeech()`), `lib/features/notifications/domain/notification_bloc.dart` (injected orchestrator), `lib/app.dart` (routes `audio_streaming_*` + `tts_error` to player), `lib/core/di/service_locator.dart` (registered new services), `lib/services/websocket/websocket_service.dart` (renamed binary wrapper to `audio_streaming_chunk`), `test/unit/services/tts/tts_orchestrator_test.dart` (new, 11 cases), `test/unit/notifications/notification_bloc_test.dart` (extended), `test/unit/services/notification_audio/notification_audio_service_test.dart` (rewrote for split responsibilities), `src/rnd/v0.1.7/2026.04.21-agent-narration-tts-plan.md` (new plan doc), TODO.md (+1 manifest). Test count 225 → 237 green.
+**Architecture note**: Abandoned the `EnhancedTTSService` revival approach after audit revealed 2,707-line dep chain (EnhancedWebSocketService + AdaptiveConnectionManager + AppLifecycleService) for marginal benefit. Legacy stack stays tree-shaken.
+**Commit**: [pending — this session-end commit]
+
+#### Checkpoint 3 | 2026.04.21 17:55 | FCM/APNs defer + R&D doc
+
+**Decision**: After filing a cross-repo bug-queue item requesting backend FCM/APNs support, user asked whether push can be self-hosted. Walk-through of landscape (FCM/APNs are OS-gatekeepers; realistic alternatives are silent-push relay, Android foreground service with persistent notification, or UnifiedPush/ntfy) converged on "too early in the project to commit to any of this." **Pulled the parent-Lupin bug-queue item**; captured investigation + 2026-04-21 defer decision + trigger conditions to revisit in `src/rnd/v0.1.7/2026.04.21-fcm-apns-push-considerations.md` (322 lines). Updated mobile `TODO.md` Phase 5 entries; updated `2026.04.21-notification-audio-on-receipt-plan.md` Phase 5 + Cross-Repo Dependency sections to point at the R&D doc.
+**Commit**: [pending — this session-end commit]
+**Cross-repo side-effect**: `/mnt/DATA01/include/www.deepily.ai/projects/lupin/bug-fix-queue.md` was edited (FCM entry removed); left uncommitted in parent repo per cross-repo git rules.
 
 #### Checkpoint | 2026.04.21 14:50 | Stage 4 agentic widget-test coverage + generate-gist UI
 

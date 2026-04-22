@@ -1,6 +1,99 @@
 # TODO
 
-Last updated: 2026-04-21 (Session: Stage 4 agentic coverage + generate-gist UI)
+Last updated: 2026-04-21 (Session: TTS orchestrator — ElevenLabs primary + flutter_tts fallback)
+
+---
+
+## ⭐ NEXT SESSION — START HERE: On-device verification of TTS + notification-audio pipelines
+
+All code for agent-narration TTS is written and unit-test-green (237/237).
+**None of it has run on a real device yet.** The next session's primary
+job is laptop + emulator validation of:
+
+1. **Notification audio (shipped in commit `180a4ba`, 2026-04-21)** —
+   dings and `flutter_tts` speech for high/urgent notifications. Never
+   verified on device.
+2. **Agent-narration TTS (shipped as Phase 1–5 this session, uncommitted)** —
+   `StreamingTtsPlayer` + `TtsOrchestrator`. Never run on device.
+
+### Why this is required before further work
+
+Both pipelines touch platform audio (`flutter_local_notifications`,
+`flutter_tts`, `audioplayers`), native Android channels (`lupin_medium`/
+`lupin_high`/`lupin_urgent`), and real backend WS audio streaming. Unit
+tests exercise the logic in isolation but can't exercise:
+- Actual audio playback quality
+- ElevenLabs voice arrival timing + PCM → WAV wrap correctness
+- Audio-focus interaction between the OS notification channel sound and
+  `audioplayers` concurrent playback
+- Android channel registration on first cold install
+- Priority-appropriate sound selection at real OS level
+
+### Environment prerequisites (user's laptop)
+
+- Android SDK + `adb` — present on user's laptop per memory rule; NOT on this dev server
+- Flutter toolchain (`./flutter.sh` works here too but emulator requires Android SDK)
+- Live Lupin backend reachable at `http://10.0.2.2:7999` (emulator host-loopback) — verify `POST /api/notify` works from laptop
+- Valid ElevenLabs API key configured on backend
+- Lupin-mobile sources synced via `rsync` (per dev-server/laptop split convention)
+
+### Build & deploy
+
+```bash
+# On laptop (after pulling latest via rsync):
+cd /path/to/lupin-mobile
+./src/scripts/build-and-deploy-lupin-mobile.sh   # per memory: this is the right entry point
+# or fall back to raw:
+./flutter.sh pub get
+./flutter.sh build apk --debug
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+```
+
+### Verification scenarios (in emulator, with Lupin backend live)
+
+**Dings** (tests notification_audio_service.dart):
+1. Trigger a `priority=medium` notification via `POST /api/notify` → expect single medium ding
+2. Trigger `priority=high` → expect high ding
+3. Trigger `priority=urgent` → expect urgent alert-tone ding
+4. Trigger with `suppress_ding=true` → expect silence
+
+**Speech — ElevenLabs primary path** (tests streaming_tts_player.dart + tts_orchestrator.dart):
+5. Trigger `priority=high` (with user pref `speakOnHigh=true`, the default) → expect ding then ElevenLabs voice speaking the title + message, ~300ms gap
+6. Trigger `priority=urgent` while priority=high is still speaking → expect urgent to preempt, stop the high utterance, and play the urgent message
+7. Fire two `priority=high` notifications rapidly → expect FIFO: first plays fully, then second plays (no overlap)
+
+**Speech — flutter_tts fallback path** (tests quota-exceeded branch):
+8. Inject a fake `tts_error` event with `error_code="quota_exceeded"` while a high utterance is in flight (either via backend stub OR by pointing at an exhausted ElevenLabs account for the duration of the test) → expect current utterance to re-speak via on-device `flutter_tts`, and subsequent notifications in the next 5 minutes to also route through `flutter_tts` without hitting ElevenLabs
+9. After 5 minutes elapse, fire another `priority=high` → expect ElevenLabs to be tried again
+
+**Settings integration**:
+10. Open Settings → toggle `master mute` on → fire urgent → expect total silence (no ding, no speech)
+11. Toggle `speakOnHigh=false` → fire high → expect ding but no speech
+
+### Expected gotchas / things to watch for
+
+- **Channel sound may not play on first install** — Android sometimes delays channel-sound activation until after the app is relaunched. If first-run urgent ding uses the default OS sound instead of `lupin_urgent.mp3`, uninstall + reinstall.
+- **Audio focus conflict** — when `audioplayers` (ElevenLabs path) starts playing, Android's OS may duck or stop the concurrent notification-channel ding. The 300ms gap pattern is meant to prevent this but might not be enough on all devices. If the ding gets cut short, consider either (a) increasing the gap, or (b) routing both sounds through `audioplayers` (abandoning the channel-sound approach).
+- **ElevenLabs first-byte latency** — web client target is 300ms; mobile may see similar or worse on cellular. If noticeable, log the `audio_streaming_status` loading→streaming transition timing to quantify.
+- **PCM→WAV wrap correctness** — verify the WAV header is readable by `audioplayers` on Android. If playback crashes or plays as noise, the `_wrapPcm24kAsWav` helper in `streaming_tts_player.dart` is the first place to look. Sample rate is 24000 Hz, 16-bit mono per ElevenLabs spec.
+- **Session ID mismatch** — the orchestrator reads `WebSocketService.sessionId` at speak-time. If WS isn't connected (user just opened app, hasn't authenticated), the orchestrator correctly falls back to `flutter_tts`. Verify this early-startup scenario.
+
+### Reference files (read these first)
+
+- Plan doc: `src/rnd/v0.1.7/2026.04.21-agent-narration-tts-plan.md` — full architecture + phase breakdown + Phase 1 course-correction rationale
+- Notification audio plan: `src/rnd/v0.1.7/2026.04.21-notification-audio-on-receipt-plan.md`
+- FCM deferral rationale: `src/rnd/v0.1.7/2026.04.21-fcm-apns-push-considerations.md`
+- New code to scan: `lib/services/tts/streaming_tts_player.dart`, `lib/services/tts/tts_orchestrator.dart`
+- Modified code: `lib/services/notification_audio/notification_audio_service.dart` (speech auto-branch removed), `lib/features/notifications/domain/notification_bloc.dart` (orchestrator injected), `lib/app.dart` (audio_streaming_* routing), `lib/core/di/service_locator.dart`
+
+### If device testing finds a regression
+
+Roll-forward preferred over roll-back: the new TTS code is gated by WS
+connection + user prefs, so it fails soft (falls back to flutter_tts or
+silent). Identify the regression, patch in a focused PR, re-run unit
+tests, re-verify on device.
+
+---
 
 > **Scope**: Build-out work only — new features, polish, testing playbook stages,
 > deferred improvements. Known defects (things to *fix*) live in `bug-fix-queue.md`.
@@ -22,15 +115,24 @@ Last updated: 2026-04-21 (Session: Stage 4 agentic coverage + generate-gist UI)
 - [ ] [LUPIN-MOBILE] TrustStateScreen drilldown (per-domain trust details)
 - [ ] [LUPIN-MOBILE] ~~Decide whether to remove orphaned `lib/shared/models/notification_item.dart`~~ — **Revised finding 2026-04-21**: NOT orphan. Re-exported via `lib/shared/models/models.dart` and imported by 20+ production files (voice bloc, audio cache, repositories, use cases). There are now two `NotificationItem` classes — the old shared one and a newer differently-shaped one in `features/notifications/data/notification_models.dart`. Migration would require touching voice/audio/cache layers. **Reclassified: leave in place; no action unless voice/audio/cache layers are refactored.**
 
+### Agent-narration TTS (new 2026-04-21)
+- [x] [LUPIN-MOBILE] Phase 0 — Plan serialized to `src/rnd/v0.1.7/2026.04.21-agent-narration-tts-plan.md` — 2026-04-21
+- [x] [LUPIN-MOBILE] Phase 1 — Built slim `StreamingTtsPlayer` (abandoned the legacy `EnhancedTTSService` revival; 2.7K lines of parallel WS infra would have been pulled in for no marginal benefit). Reuses live `WebSocketService` + `Dio`. Renamed binary-frame wrapper type to `audio_streaming_chunk`. — 2026-04-21
+- [x] [LUPIN-MOBILE] Phase 2 — `TtsOrchestrator`: FIFO queue + priority gate + urgent preempt + quota fallback (5min window) — 2026-04-21
+- [x] [LUPIN-MOBILE] Phase 3 — Removed auto-priority `flutter_tts` branch from `NotificationAudioService`; exposed `flutterTtsSpeak()` + `stopFallbackSpeech()` as orchestrator fallback helpers. Wired `TtsOrchestrator` into `NotificationBloc._onExternalUpdate`. — 2026-04-21
+- [x] [LUPIN-MOBILE] Phase 4 — 11 new orchestrator tests + 1 new bloc→tts test + rewrote notification_audio_service_test.dart for split responsibilities. — 2026-04-21
+- [ ] [LUPIN-MOBILE] On-device verify TTS: live ElevenLabs audio plays in the emulator (user's laptop); injected `quota_exceeded` falls back to `flutter_tts` cleanly.
+- [ ] [LUPIN-MOBILE] Future: ElevenLabs voice/config customization per agent/context (currently uses backend defaults only)
+- [ ] [LUPIN-MOBILE] Future: Cancel/replay UI for in-flight narration
+
 ### Notification audio-on-receipt (new 2026-04-21)
 - [x] [LUPIN-MOBILE] Phase 0 — Web client cross-check (low/medium/high/urgent policy aligned) + 3 MP3 assets copied from `src/fastapi_app/static/audio/` into `android/app/src/main/res/raw/lupin_{medium,high,urgent}.mp3`. Plan: `src/rnd/v0.1.7/2026.04.21-notification-audio-on-receipt-plan.md` — 2026-04-21
 - [x] [LUPIN-MOBILE] Phase 1 — `flutter_local_notifications` dep + `POST_NOTIFICATIONS` perm + 3 Android channels + `NotificationAudioService` + `NotificationPreferences` + `NotificationsExternalUpdate` extended with `NotificationItem` + `app.dart` parses payload + `NotificationBloc._onExternalUpdate` triggers audio — 2026-04-21
 - [x] [LUPIN-MOBILE] Phase 2 — `flutter_tts` dep + `speak()` method; 300ms delay ding→TTS; dispatch from `_maybePlayAudio` on high/urgent — 2026-04-21
 - [x] [LUPIN-MOBILE] Phase 3 — `NotificationAudioSettingsScreen` with 6 toggles; gear-icon entry from `home_screen.dart` AppBar — 2026-04-21
 - [x] [LUPIN-MOBILE] Phase 4 — Unit tests (prefs defaults+persistence; service priority-filter/suppress/mute/speech) + widget test (settings screen toggles) + blocTest extension (urgent item triggers audio) — 2026-04-21
-- [ ] [LUPIN-MOBILE] Cross-repo: file backend FCM/APNs integration item in parent Lupin `bug-fix-queue.md` (required before mobile Phase 5 background audio)
-- [ ] [LUPIN-MOBILE] Phase 5 — Background FCM handler (blocked on parent Lupin backend FCM)
-- [ ] [LUPIN-MOBILE] iOS parity for notification audio (deferred)
+- [x] [LUPIN-MOBILE] ~~Cross-repo: file backend FCM/APNs integration item in parent Lupin `bug-fix-queue.md`~~ — **PULLED 2026-04-21** per user decision; full investigation and defer rationale captured in `src/rnd/v0.1.7/2026.04.21-fcm-apns-push-considerations.md`. Parent Lupin queue no longer carries this as an action item.
+- [ ] [LUPIN-MOBILE] ~~Phase 5 — Background FCM handler~~ — **DEFERRED INDEFINITELY** per 2026-04-21 decision. Conditions for revisiting documented in R&D doc section 7. Mobile implementation notes remain in `2026.04.21-notification-audio-on-receipt-plan.md` Phase 5 (still accurate when triggered — switch to silent-relay variant per R&D recommendation).
 - [ ] [LUPIN-MOBILE] On-device verify: urgent notification plays correct MP3 + speaks message (laptop + emulator; user to run)
 
 ### Tier 4 — Agentic (polish + deferred)
