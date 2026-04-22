@@ -127,6 +127,69 @@ void main() {
     );
 
     blocTest<NotificationBloc, NotificationState>(
+      "LoadSenderDates emits Loading → SenderDatesLoaded with date summaries",
+      setUp: () {
+        adapter.handlers["GET /api/notifications/sender-dates/s-1/u%40x.y"] = (_) =>
+          jsonBody([
+            {"date": "2026-04-22", "count": 5, "new_count": 2},
+            {"date": "2026-04-21", "count": 3, "new_count": 0},
+          ]);
+      },
+      build  : () => NotificationBloc(repo),
+      act    : (b) => b.add(const NotificationsLoadSenderDates(
+        senderId: "s-1", userEmail: "u@x.y",
+      )),
+      wait   : const Duration(milliseconds: 50),
+      expect : () => [
+        isA<NotificationsLoading>(),
+        isA<NotificationsSenderDatesLoaded>()
+          .having((s) => s.dates.length,         "count",  2)
+          .having((s) => s.dates.first.date,     "first",  "2026-04-22")
+          .having((s) => s.dates.first.newCount, "newCount", 2),
+      ],
+    );
+
+    blocTest<NotificationBloc, NotificationState>(
+      "LoadConversationByDate emits Loading → ConversationByDateLoaded grouped by date",
+      setUp: () {
+        adapter.handlers["GET /api/notifications/conversation-by-date/s-1/u%40x.y"] = (_) =>
+          jsonBody({
+            "2026-04-22": [
+              {"id": "n-1", "message": "first",  "type": "task",
+               "priority": "low", "timestamp": "2026-04-22T10:00:00Z",
+               "played": false, "play_count": 0,
+               "response_requested": false, "suppress_ding": false,
+               "display_qualifier_widget": false},
+            ],
+            "2026-04-21": [
+              {"id": "n-2", "message": "second", "type": "task",
+               "priority": "high", "timestamp": "2026-04-21T10:00:00Z",
+               "played": true, "play_count": 1,
+               "response_requested": false, "suppress_ding": false,
+               "display_qualifier_widget": false},
+              {"id": "n-3", "message": "third",  "type": "task",
+               "priority": "high", "timestamp": "2026-04-21T11:00:00Z",
+               "played": false, "play_count": 0,
+               "response_requested": false, "suppress_ding": false,
+               "display_qualifier_widget": false},
+            ],
+          });
+      },
+      build  : () => NotificationBloc(repo),
+      act    : (b) => b.add(const NotificationsLoadConversationByDate(
+        senderId: "s-1", userEmail: "u@x.y",
+      )),
+      wait   : const Duration(milliseconds: 50),
+      expect : () => [
+        isA<NotificationsLoading>(),
+        isA<NotificationsConversationByDateLoaded>()
+          .having((s) => s.byDate.length,                   "dateGroups", 2)
+          .having((s) => s.byDate["2026-04-22"]?.length,    "n on 22",     1)
+          .having((s) => s.byDate["2026-04-21"]?.length,    "n on 21",     2),
+      ],
+    );
+
+    blocTest<NotificationBloc, NotificationState>(
       "ExternalUpdate refreshes current inbox after WS event",
       setUp: () {
         var hitCount = 0;

@@ -7,6 +7,7 @@ import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'interactive_prompt_sheet.dart';
+import 'sender_dates_screen.dart';
 
 class ConversationScreen extends StatefulWidget {
   final String senderId;
@@ -42,6 +43,29 @@ class _ConversationScreenState extends State<ConversationScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          IconButton(
+            key      : const Key( TestKeys.convDatesButton ),
+            tooltip  : "Browse by date",
+            icon     : const Icon( Icons.calendar_month_outlined ),
+            onPressed: () async {
+              final bloc = context.read<NotificationBloc>();
+              await Navigator.of( context ).push( MaterialPageRoute(
+                builder: ( _ ) => BlocProvider<NotificationBloc>.value(
+                  value: bloc,
+                  child: SenderDatesScreen(
+                    senderId  : widget.senderId,
+                    userEmail : widget.userEmail,
+                  ),
+                ),
+              ) );
+              if ( mounted ) {
+                bloc.add( NotificationsLoadConversation(
+                  senderId  : widget.senderId,
+                  userEmail : widget.userEmail,
+                ) );
+              }
+            },
+          ),
           IconButton(
             key      : const Key( TestKeys.convSummarizeButton ),
             tooltip  : "Summarize",

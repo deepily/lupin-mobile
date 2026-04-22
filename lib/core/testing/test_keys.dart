@@ -18,15 +18,29 @@ class TestKeys {
   // Conversation / InteractivePromptSheet
   static const convRespondButtonPrefix = 'conv.respond.'; // + messageId
   static const convSummarizeButton     = 'conv.summarize';
+  static const convDatesButton         = 'conv.dates';
   static const convGistSheet           = 'conv.gistSheet';
   static const promptYesButton         = 'prompt.yes';
   static const promptNoButton          = 'prompt.no';
   static const promptCommentField      = 'prompt.comment';
 
+  // Sender-dates drilldown
+  static const senderDatesTilePrefix          = 'senderDates.tile.';        // + date
+
+  // Conversation by date
+  static const convByDateSectionHeaderPrefix  = 'convByDate.section.';      // + date
+  static const convByDateItemPrefix           = 'convByDate.item.';         // + notificationId
+  static const convByDateRespondPrefix        = 'convByDate.respond.';      // + notificationId
+
   // Trust Dashboard — per-decision actions
   static const trustDecisionCardPrefix = 'trust.decision.';        // + decisionId
   static const trustDecisionApprovePrefix = 'trust.decision.approve.'; // + decisionId
   static const trustDecisionRejectPrefix  = 'trust.decision.reject.';  // + decisionId
+
+  // Trust State drilldown (per-domain trust details)
+  static const trustViewDetailsButton          = 'trust.viewDetails';
+  static const trustStateRowPrefix             = 'trust.state.row.';     // + '<domain>:<category>'
+  static const trustStateDomainHeaderPrefix    = 'trust.state.domain.';  // + domain
 
   // Deep research form
   static const drQueryField     = 'dr.query';
@@ -83,4 +97,12 @@ class TestKeys {
 
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';
+
+  // Audio artifact player (Phase 4a — in-app playback for pg-* / rp- jobs)
+  static const audioPlayerDownloadButton = 'audio.download';
+  static const audioPlayerPlayButton     = 'audio.play';
+  static const audioPlayerPauseButton    = 'audio.pause';
+  static const audioPlayerStopButton     = 'audio.stop';
+  static const audioPlayerShareButton    = 'audio.share';
+  static const audioPlayerSlider         = 'audio.slider';
 }

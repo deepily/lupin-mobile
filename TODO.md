@@ -1,6 +1,6 @@
 # TODO
 
-Last updated: 2026-04-21 (Session: TTS orchestrator — ElevenLabs primary + flutter_tts fallback)
+Last updated: 2026-04-22 (Session `40aa03d3`: Tier 2 + Tier 4 polish slate complete — 4 phases, 263/263 green)
 
 ---
 
@@ -109,10 +109,10 @@ tests, re-verify on device.
 - [ ] [LUPIN-MOBILE] Device sanity: run `integration_test/smoke_hello_test.dart` via `flutter test integration_test/` on emulator (proves scaffolding)
 
 ### Tier 2 — Notifications + Decision Proxy (polish remaining)
-- [ ] [LUPIN-MOBILE] Date-grouped view in ConversationScreen (uses `conversation-by-date` endpoint — currently using flat `conversation`; blocked by type divergence — by-date returns `NotificationItem`, flat returns `ConversationMessage` — needs unified rendering)
-- [ ] [LUPIN-MOBILE] Sender-dates drilldown screen (per-sender date browse)
+- [x] [LUPIN-MOBILE] Date-grouped `ConversationByDateScreen` (Option A: separate `_NotificationItemCard` for `NotificationItem` field set; sectioned by date desc; reachable via calendar AppBar action → `SenderDatesScreen` → date tile tap; 6 widget tests + 1 bloc test). — 2026-04-22
+- [x] [LUPIN-MOBILE] Sender-dates drilldown — `SenderDatesScreen` with calendar tile list, `newCount` badge; 5 widget tests + 1 bloc test; calendar AppBar action on `ConversationScreen`. — 2026-04-22
 - [x] [LUPIN-MOBILE] `generate-gist` UI on ConversationScreen ("Summarize" action) — Summarize button + bottom sheet; `NotificationsGenerateGistRequested` event + `NotificationsGistLoading`/`Ready` states + bloc handler; 3 widget tests — 2026-04-21
-- [ ] [LUPIN-MOBILE] TrustStateScreen drilldown (per-domain trust details)
+- [x] [LUPIN-MOBILE] `TrustStateScreen` drilldown — per-domain grouped trust-state list with circuit-breaker badge, "View trust details" action on `TrustDashboardScreen`; reuses existing `DecisionProxyLoadTrust` event/state/handler (no new bloc plumbing); 5 widget tests. — 2026-04-22
 - [ ] [LUPIN-MOBILE] ~~Decide whether to remove orphaned `lib/shared/models/notification_item.dart`~~ — **Revised finding 2026-04-21**: NOT orphan. Re-exported via `lib/shared/models/models.dart` and imported by 20+ production files (voice bloc, audio cache, repositories, use cases). There are now two `NotificationItem` classes — the old shared one and a newer differently-shaped one in `features/notifications/data/notification_models.dart`. Migration would require touching voice/audio/cache layers. **Reclassified: leave in place; no action unless voice/audio/cache layers are refactored.**
 
 ### Agent-narration TTS (new 2026-04-21)
@@ -136,10 +136,10 @@ tests, re-verify on device.
 - [ ] [LUPIN-MOBILE] On-device verify: urgent notification plays correct MP3 + speaks message (laptop + emulator; user to run)
 
 ### Tier 4 — Agentic (polish + deferred)
-- [ ] [LUPIN-MOBILE] TimeSavedDashboard + StatsRepository + StatsBloc (deferred from Tier 4)
-- [ ] [LUPIN-MOBILE] Add `fl_chart` dep when stats dashboard is implemented
-- [ ] [LUPIN-MOBILE] Wire audioplayers for in-app audio playback in AudioArtifactPlayer (currently download-and-share only)
-- [ ] [LUPIN-MOBILE] Podcast job: confirm server-side audio path field name for use in AudioArtifactPlayer
+- [scope decision 2026-04-22] **TimeSavedDashboard + StatsRepository + StatsBloc + `fl_chart`** — deferred indefinitely per user; not in any current slate. Re-add only on explicit request.
+- [x] [LUPIN-MOBILE] **Phase 4a**: Wire `audioplayers` for in-app audio playback in `AudioArtifactPlayer` — UI rebuilt around `AudioPlayer` + `DeviceFileSource`; extracted `AudioPlaybackController` interface for testability; calls `TtsOrchestrator.stopAll()` before play; preserved Share as overflow action; 7 widget tests (download, play, pause/resume, stop, share, empty-path). Plan: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`. — 2026-04-22
+- [ ] [LUPIN-MOBILE] On-device verify Phase 4a — load a podcast/research-podcast artifact (or any MP3 path until Phase 4b backend fix lands), test play/pause/stop/share + audio-focus interaction with TTS narration. Bucket with the existing TTS on-device verification.
+- [ ] [LUPIN-MOBILE] **Phase 4b (deferred, blocked on cross-repo)**: switch `JobDetailScreen` for `pg-*`/`rp-*` jobs to use real `audioPath` field — blocked on parent Lupin exposing `artifacts['audio_path']` in queue metadata. See `bug-fix-queue.md` Cross-Repo entry.
 
 ### Testing Playbook — Stage 4+ (deferred with revisit triggers)
 - [ ] [LUPIN-MOBILE] Alchemist visual-regression goldens — revisit when inbox tile / DR form / trust chip sees ≥2 regressions in a month
@@ -154,6 +154,8 @@ tests, re-verify on device.
 - [x] [LUPIN-MOBILE] `getIt` import in `home_screen.dart` — verified **already removed** as of 2026-04-21 (confirmed by grep; only DI canonical files `service_locator.dart` + `use_case_registry.dart` reference `getIt`). — 2026-04-21
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] Tier 2 + Tier 4 polish slate (session `40aa03d3`): TrustStateScreen drilldown + SenderDatesScreen + ConversationByDateScreen + AudioArtifactPlayer in-app playback rebuild. 4 phases, 22 widget tests + 2 bloc tests, 237→263 green. Plan: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`. — 2026-04-22
+- [x] [LUPIN-MOBILE] Cross-repo bug filed: parent Lupin `routers/queues.py:456,523` omits `artifacts['audio_path']` mapping for `pg-*`/`rp-*` jobs. Blocks Phase 4b. — 2026-04-22
 - [x] [LUPIN-MOBILE] Stage 4 agentic widget-test coverage — TestKeys + widget tests for 8 remaining agentic forms (podcast, presentation, SWE team, BFE, TFE, test suite, research-to-podcast, research-to-presentation). 26 new test cases, 204+/204+ tests green. — 2026-04-21
 - [x] [LUPIN-MOBILE] `generate-gist` UI — Summarize button in ConversationScreen AppBar, bottom-sheet rendering of LLM-generated summary, full bloc pipeline (event/state/handler), 3 widget tests. — 2026-04-21
 - [x] [LUPIN-MOBILE] `getIt` orphan import in `home_screen.dart` — verified already removed (stale TODO). — 2026-04-21

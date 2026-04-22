@@ -1,5 +1,87 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.22 | Session `40aa03d3` — Tier 2 + Tier 4 polish slate (4 phases)
+
+#### Session-End | 2026.04.22 | 263/263 non-legacy tests green (was 237 at session start; +26 across the slate)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan**: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md` (serialized from approved plan-mode output; 4 phases + 2 doc cleanups, scoped excluding TimeSavedDashboard per user)
+
+### Accomplishments
+
+1. **Phase 0 — Doc cleanup + cross-repo bug filing**
+   - `_emit_queue_update` parent-Lupin bug moved from Cross-Repo → Completed in `bug-fix-queue.md` (user confirmed fix landed in parent)
+   - **NEW** Cross-Repo entry filed: parent Lupin `routers/queues.py:456,523` queue-metadata mapping omits `artifacts['audio_path']` for `pg-*`/`rp-*` jobs (confirmed by direct read; podcast `job.py:281,398` writes the field, queue router never reads it). Blocks Phase 4b.
+   - `TODO.md` curated: `TimeSavedDashboard + StatsRepository + StatsBloc + fl_chart` removed and replaced with `[scope decision 2026-04-22]` line per user
+   - Plan serialized to `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`
+
+2. **Phase 1 — TrustStateScreen drilldown** (5 widget tests, 237→242)
+   - New `lib/features/decision_proxy/presentation/trust_state_screen.dart` — per-domain grouped trust-state list with circuit-breaker badge
+   - Reused already-shipped `DecisionProxyLoadTrust` event/state/handler (no new bloc plumbing)
+   - "View trust details" AppBar action wired on `TrustDashboardScreen` (re-loads dashboard on pop-back to handle `DecisionProxyTrustLoaded` → `DecisionProxyDashboardLoaded` state transition)
+
+3. **Phase 2+3 — SenderDates + ConversationByDate** (12 widget + 2 bloc tests, 242→256)
+   - 2 new bloc events (`NotificationsLoadSenderDates`, `NotificationsLoadConversationByDate`), 2 new states, 2 new handlers, +1 `_refreshCurrent()` branch for the by-date case
+   - `sender_dates_screen.dart` — date tile list with `newCount` badge
+   - `conversation_by_date_screen.dart` + `_NotificationItemCard` (Option A renderer per architectural decision — purpose-built for `NotificationItem`'s 44-field shape; rejects unifying with `ConversationMessage` to avoid cross-repo work)
+   - Calendar AppBar action on `ConversationScreen` → push `SenderDatesScreen`; date tile tap → push `ConversationByDateScreen` anchored to date
+
+4. **Phase 4a — AudioArtifactPlayer in-app playback** (7 widget tests, 256→263)
+   - Full rewrite of `lib/features/artifacts/audio_artifact_player.dart` around `audioplayers` + `DeviceFileSource`
+   - Extracted `AudioPlaybackController` interface so widget tests can mock it (audioplayers requires platform channels)
+   - State machine: idle → loading → ready → playing/paused → idle (+ error)
+   - Calls `TtsOrchestrator.stopAll()` before play to coordinate single audio stream
+   - Preserves `IoFileService.shareToExternalApp` as Share overflow action
+
+### Files Created (8)
+
+- `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md` (serialized plan)
+- `lib/features/decision_proxy/presentation/trust_state_screen.dart`
+- `test/widget/decision_proxy/trust_state_screen_test.dart`
+- `lib/features/notifications/presentation/sender_dates_screen.dart`
+- `test/widget/notifications/sender_dates_screen_test.dart`
+- `lib/features/notifications/presentation/conversation_by_date_screen.dart`
+- `test/widget/notifications/conversation_by_date_screen_test.dart`
+- `test/widget/artifacts/audio_artifact_player_test.dart`
+
+### Files Modified (10)
+
+- `bug-fix-queue.md`, `TODO.md`
+- `lib/core/testing/test_keys.dart` (+12 constants across phases)
+- `test/_harness/test_app.dart` (+3 mocktail fallbacks)
+- `lib/features/notifications/domain/notification_event.dart` (+2 events)
+- `lib/features/notifications/domain/notification_state.dart` (+2 states)
+- `lib/features/notifications/domain/notification_bloc.dart` (+2 handlers, +1 `_refreshCurrent` branch)
+- `lib/features/notifications/presentation/conversation_screen.dart` (calendar IconButton)
+- `lib/features/decision_proxy/presentation/trust_dashboard_screen.dart` (View trust details action)
+- `lib/features/artifacts/audio_artifact_player.dart` (full rewrite around `audioplayers`)
+- `test/widget/notifications/conversation_screen_test.dart` (+1 calendar-nav test)
+- `test/unit/notifications/notification_bloc_test.dart` (+2 blocTests)
+
+### Test Results
+
+| Suite | Start | End |
+|-------|-------|-----|
+| Unit + Widget + ServiceIntegration | 237 | 263 |
+
+Pre-existing 44 `legacy_quarantine/` failures unchanged (drift-broken tests; per memory rule, not regressions).
+
+### Key Decisions / Insights
+
+- **Option A for date-grouped renderer**: Purpose-built `_NotificationItemCard` instead of unifying `NotificationItem` (44 fields, no delivery state) and `ConversationMessage` (20 fields incl. `state`/`deliveredAt`/`respondedAt`/`responseValue`). Trade: by-date view shows priority/played/responseRequested but NOT a "responded at X with Y" badge. Avoids cross-repo work and zero risk to existing `_MessageCard` tests.
+- **`AudioPlaybackController` extraction**: Wrapping `audioplayers.AudioPlayer` behind a constructor-injected interface enables widget tests; otherwise platform channels block them. Real impl uses `DeviceFileSource(file.path)` (NOT `BytesSource`) since podcast MP3s can be multi-MB.
+- **Audio focus**: `AudioArtifactPlayer.play()` calls `TtsOrchestrator.stopAll()` first. Inverse direction (urgent TTS preempts playback) already covered by `_preemptForUrgent`. No orchestrator changes required.
+- **Phase 4a/4b split**: 4a builds the player UI now; 4b (field rename to `audioPath` in `JobSummary`) is gated on parent-Lupin merging the cross-repo `audio_path` mapping fix. Empty path = graceful no-op for now (filed as cross-repo bug).
+- **Pop-back state recovery (Phase 1)**: `TrustDashboardScreen`'s `BlocBuilder` falls through to `SizedBox.shrink()` when state is `DecisionProxyTrustLoaded`. Solution: `await Navigator.push()` then re-fire `DecisionProxyLoadDashboard` if mounted. Same pattern applied to `ConversationScreen` calendar nav.
+
+### Out of Scope (per user direction)
+
+- `TimeSavedDashboard / StatsRepository / StatsBloc / fl_chart` — explicitly deferred indefinitely
+- Phase 4b mobile field rename — gated on parent-Lupin backend fix
+- Cross-repo authoring of parent-Lupin `audio_path` fix (filed as cross-repo bug only)
+
+---
+
 ## 2026.04.21 | Session `214c47b6` — Stage 4 agentic + generate-gist UI + notification audio + FCM defer + agent-narration TTS
 
 #### Session-End | 2026.04.21 22:10 | 237/237 tests green (was 178 at session start; +59 over the day)

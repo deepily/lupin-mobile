@@ -10,6 +10,7 @@ import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dar
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
 import 'package:lupin_mobile/features/notifications/presentation/conversation_screen.dart';
+import 'package:lupin_mobile/features/notifications/presentation/sender_dates_screen.dart';
 
 import '../../_harness/test_app.dart';
 
@@ -174,6 +175,28 @@ void main() {
       verify( () => bloc.add( any(
         that: isA<NotificationsGenerateGistRequested>(),
       ) ) ).called( 1 );
+    });
+
+    testWidgets( "tapping calendar AppBar action pushes SenderDatesScreen", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId  : "s-1",
+            userEmail : "u@x.y",
+            messages  : [ yesNoMsg( "c-1" ) ],
+          ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      await tester.tap( find.byKey( const Key( TestKeys.convDatesButton ) ) );
+      await tester.pumpAndSettle();
+
+      expect( find.byType( SenderDatesScreen ), findsOneWidget );
     });
 
     testWidgets( "NotificationsGistReady state shows the gist bottom sheet", ( tester ) async {

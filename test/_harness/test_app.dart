@@ -24,8 +24,11 @@ void registerHarnessFallbacks() {
   registerFallbackValue( const AuthUnauthenticated() );
   registerFallbackValue( const NotificationsLoadInbox( userEmail: "u@x.y" ) );
   registerFallbackValue( const NotificationsGenerateGistRequested() );
+  registerFallbackValue( const NotificationsLoadSenderDates( senderId: "s", userEmail: "u@x.y" ) );
+  registerFallbackValue( const NotificationsLoadConversationByDate( senderId: "s", userEmail: "u@x.y" ) );
   registerFallbackValue( const NotificationsInitial() );
   registerFallbackValue( const DecisionProxyLoadDashboard( "u@x.y" ) );
+  registerFallbackValue( const DecisionProxyLoadTrust( userEmail: "u@x.y" ) );
   registerFallbackValue( const DecisionProxyInitial() );
   registerFallbackValue( const AgenticFormReset() );
   registerFallbackValue( const AgenticSubmissionInitial() );

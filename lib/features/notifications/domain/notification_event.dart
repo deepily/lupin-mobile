@@ -114,3 +114,39 @@ class NotificationsExternalUpdate extends NotificationEvent {
 class NotificationsGenerateGistRequested extends NotificationEvent {
   const NotificationsGenerateGistRequested();
 }
+
+/// List dates (with per-date counts) for a single sender's conversation.
+class NotificationsLoadSenderDates extends NotificationEvent {
+  final String senderId;
+  final String userEmail;
+  final bool   includeHidden;
+
+  const NotificationsLoadSenderDates( {
+    required this.senderId,
+    required this.userEmail,
+    this.includeHidden = false,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, userEmail, includeHidden ];
+}
+
+/// Load a sender's conversation grouped by date (YYYY-MM-DD keys).
+class NotificationsLoadConversationByDate extends NotificationEvent {
+  final String  senderId;
+  final String  userEmail;
+  final int?    hours;
+  final String? anchor;
+  final bool    includeHidden;
+
+  const NotificationsLoadConversationByDate( {
+    required this.senderId,
+    required this.userEmail,
+    this.hours,
+    this.anchor,
+    this.includeHidden = false,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, userEmail, hours, anchor, includeHidden ];
+}

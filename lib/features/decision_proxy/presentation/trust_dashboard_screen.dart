@@ -6,6 +6,7 @@ import '../data/decision_proxy_models.dart';
 import '../domain/decision_proxy_bloc.dart';
 import '../domain/decision_proxy_event.dart';
 import '../domain/decision_proxy_state.dart';
+import 'trust_state_screen.dart';
 
 class TrustDashboardScreen extends StatefulWidget {
   final String userEmail;
@@ -60,7 +61,28 @@ class _TrustDashboardScreenState extends State<TrustDashboardScreen> {
   @override
   Widget build( BuildContext context ) {
     return Scaffold(
-      appBar: AppBar( title: const Text( "Trust Dashboard" ) ),
+      appBar: AppBar(
+        title: const Text( "Trust Dashboard" ),
+        actions: [
+          IconButton(
+            key      : const Key( TestKeys.trustViewDetailsButton ),
+            tooltip  : "Trust details",
+            icon     : const Icon( Icons.list_alt ),
+            onPressed: () async {
+              final bloc = context.read<DecisionProxyBloc>();
+              await Navigator.of( context ).push( MaterialPageRoute(
+                builder: ( _ ) => BlocProvider<DecisionProxyBloc>.value(
+                  value: bloc,
+                  child: TrustStateScreen( userEmail: widget.userEmail ),
+                ),
+              ) );
+              if ( mounted ) {
+                bloc.add( DecisionProxyLoadDashboard( widget.userEmail ) );
+              }
+            },
+          ),
+        ],
+      ),
       body: BlocBuilder<DecisionProxyBloc, DecisionProxyState>(
         builder: ( context, state ) {
           if ( state is DecisionProxyLoading || state is DecisionProxyInitial ) {

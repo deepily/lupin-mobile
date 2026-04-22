@@ -34,6 +34,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<NotificationsDeleteConversation>( _onDeleteConversation );
     on<NotificationsExternalUpdate>( _onExternalUpdate );
     on<NotificationsGenerateGistRequested>( _onGenerateGist );
+    on<NotificationsLoadSenderDates>( _onLoadSenderDates );
+    on<NotificationsLoadConversationByDate>( _onLoadConversationByDate );
   }
 
   Future<void> _onLoadInbox(
@@ -189,6 +191,54 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     }
   }
 
+  Future<void> _onLoadSenderDates(
+    NotificationsLoadSenderDates event,
+    Emitter<NotificationState> emit,
+  ) async {
+    _activeUserEmail = event.userEmail;
+    _activeSenderId  = event.senderId;
+    emit( const NotificationsLoading() );
+    try {
+      final dates = await _repo.senderDates(
+        event.senderId,
+        event.userEmail,
+        includeHidden: event.includeHidden,
+      );
+      emit( NotificationsSenderDatesLoaded(
+        senderId  : event.senderId,
+        userEmail : event.userEmail,
+        dates     : dates,
+      ) );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+    }
+  }
+
+  Future<void> _onLoadConversationByDate(
+    NotificationsLoadConversationByDate event,
+    Emitter<NotificationState> emit,
+  ) async {
+    _activeUserEmail = event.userEmail;
+    _activeSenderId  = event.senderId;
+    emit( const NotificationsLoading() );
+    try {
+      final byDate = await _repo.conversationByDate(
+        event.senderId,
+        event.userEmail,
+        hours         : event.hours,
+        anchor        : event.anchor,
+        includeHidden : event.includeHidden,
+      );
+      emit( NotificationsConversationByDateLoaded(
+        senderId  : event.senderId,
+        userEmail : event.userEmail,
+        byDate    : byDate,
+      ) );
+    } on NotificationApiException catch ( e ) {
+      emit( NotificationsError( e.message ) );
+    }
+  }
+
   /// Re-fetch the current view (inbox or conversation) without changing
   /// emit ordering. No-op if there's no tracked context yet.
   Future<void> _refreshCurrent( Emitter<NotificationState> emit ) async {
@@ -203,6 +253,16 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           senderId  : _activeSenderId!,
           userEmail : _activeUserEmail!,
           messages  : msgs,
+        ) );
+      } else if ( _activeSenderId != null && state is NotificationsConversationByDateLoaded ) {
+        final byDate = await _repo.conversationByDate(
+          _activeSenderId!,
+          _activeUserEmail!,
+        );
+        emit( NotificationsConversationByDateLoaded(
+          senderId  : _activeSenderId!,
+          userEmail : _activeUserEmail!,
+          byDate    : byDate,
         ) );
       } else if ( state is NotificationsInboxLoaded ) {
         final senders = await _repo.sendersVisible( _activeUserEmail! );
