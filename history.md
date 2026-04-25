@@ -1,5 +1,67 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.04.24 | Session `0d54c763` — TTS overlap bug fix + on-device verify prep
+
+#### Session-End | 2026.04.24 | 273/273 non-legacy tests green (was 263 at session start; +10)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Runbook**: `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`
+
+### Accomplishments
+
+1. **TTS overlap bug audit + fix** (`lib/services/tts/streaming_tts_player.dart`)
+   - Root cause: `handleWsEvent` for `audio_streaming_complete` fired `_completeCtrl` immediately, but `_playPcmBuffer()` was not awaited. Orchestrator advanced its FIFO while audio was still playing → scenario #7 (two rapid highs) would interrupt the first utterance.
+   - Fix: extracted `StreamingTtsAudioPlayer` test seam (mirrors `AudioPlaybackController` pattern from `AudioArtifactPlayer`), gated `TtsCompleteEvent` emission on `onPlayerComplete` via a completer + identity guard so `stop()` (urgent preempt) doesn't emit a stray complete.
+
+2. **Quota-simulation dart-define hook** (same file)
+   - `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define, `kDebugMode`-gated, optional-constructor-override for tests. When true, `speak()` adds `debug_simulate_error: true` to the POST body. Backend `/api/get-speech-elevenlabs` already supports this flag (`speech.py:508,891`) and emits a `tts_error` WS event with `error_code=quota_exceeded`. Enables on-device scenario #8 without needing an exhausted ElevenLabs account.
+
+3. **Regression + flag-coverage test suite** (`test/unit/services/tts/streaming_tts_player_test.dart`)
+   - 10 new tests covering: complete-NOT-fired-before-onComplete, complete-IS-fired-after-onComplete, empty-buffer defensive, stop()-during-playback, preempt→next-utterance, isPlaying lifecycle, stray-event filter, tts_error mid-stream, simulateTtsError=true POST-body-inclusion, simulateTtsError=false POST-body-omission. Unit count: 177 → 187.
+
+4. **Scenario-firing script** (`src/scripts/fire-tts-scenarios.py`)
+   - 12-scenario Python script that POSTs each TODO.md scenario (lines 54-71) to `/api/notify`. Supports `--scenario all`, single-scenario, `--dry-run`, auto-fires s5b after s5 with 500ms rapid-fire gap. Uses `requests` (per CLAUDE.md no-curl rule). Loads API key from `$LUPIN_ROOT/src/conf/keys/notification-api-claude-code-dev`.
+
+5. **On-device verify runbook** (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`)
+   - Copy-paste-ready runbook for the laptop leg of the next session. Covers rsync → pub get → build → install → per-scenario checklist with expected behavior, adb logcat filters, stub-injection for s8, channel-sound gotcha, PCM→WAV verification.
+
+### Files Modified (2)
+
+- `lib/services/tts/streaming_tts_player.dart` — overlap fix + test seam + dart-define hook
+- `TODO.md` — will be updated at session-end to reflect next steps
+
+### Files Created (3)
+
+- `test/unit/services/tts/streaming_tts_player_test.dart`
+- `src/scripts/fire-tts-scenarios.py`
+- `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`
+
+### Test Results
+
+| Suite | Start | End |
+|-------|-------|-----|
+| Unit | 177 | 187 |
+| Widget + service_integration | 86 | 86 |
+| **Total** | **263** | **273** |
+
+Pre-existing 44 `legacy_quarantine/` failures unchanged (per memory rule, drift-broken quarantined tests, not regressions).
+
+### Key Decisions / Insights
+
+- **Mock/real contract divergence**: The 11 existing `TtsOrchestrator` tests mocked `StreamingTtsPlayer` entirely and emitted `completeCtrl` at the intended contract time. The real player violated the contract (fired complete on WS stream, not on playback end). Tests passed against the mock, but scenario #7 would have failed on-device. The new regression suite closes this gap by exercising the real player with a mocked `StreamingTtsAudioPlayer`.
+- **`_activePlaybackCompleter` identity guard**: chose field + capture-local + `identical()` check over a generation counter. Reason: completer + identity is idiomatic Dart for "supersede this async operation" and plays well with `stop()`'s need to wake hung awaits without emitting spurious complete events.
+- **Dev-flag over backend stub**: `debug_simulate_error` was already baked into the backend but the mobile client didn't expose it. Adding a `kDebugMode`-gated dart-define + optional constructor override is cleaner than a backend debug endpoint, confined to the mobile app, and automated via unit tests (per memory: "Automate smokes before recommending on-device manual testing").
+- **Script over curl**: `fire-tts-scenarios.py` uses `requests` per project CLAUDE.md's `NEVER use curl for API testing` rule. Dry-run mode validated the POST payload shape without mutating backend state.
+- **No commits**: uncommitted through this session per memory rule "user drives commit cadence". Session-end ritual handles the commit prompt with explicit user approval.
+
+### Out of Scope (deferred to next session)
+
+- On-device execution of the 10 TTS scenarios (laptop + emulator, user-driven)
+- Phase 4b (podcast `audio_path` field rename) — still blocked on parent-Lupin cross-repo fix
+- Hygiene follow-ups from commit `edaec79` (flutter pub get sanity, history.md one-liner decision, etc.) — not picked up this session
+
+---
+
 ## 2026.04.22 | Session `40aa03d3` — Tier 2 + Tier 4 polish slate (4 phases)
 
 #### Session-End | 2026.04.22 | 263/263 non-legacy tests green (was 237 at session start; +26 across the slate)

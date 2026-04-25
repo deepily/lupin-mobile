@@ -3,8 +3,39 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../../core/constants/app_constants.dart';
+
+/// Test seam — wraps the methods of `audioplayers.AudioPlayer` we use so
+/// that `StreamingTtsPlayer` can be unit-tested without the platform
+/// channels `audioplayers` requires. Production uses
+/// [_RealStreamingTtsAudioPlayer]; tests pass a Mocktail implementation.
+abstract class StreamingTtsAudioPlayer {
+  Stream<void> get onComplete;
+  Future<void> play( Uint8List wavBytes );
+  Future<void> stop();
+  Future<void> dispose();
+}
+
+class _RealStreamingTtsAudioPlayer implements StreamingTtsAudioPlayer {
+  final AudioPlayer _p = AudioPlayer();
+
+  @override Stream<void> get onComplete => _p.onPlayerComplete;
+
+  @override
+  Future<void> play( Uint8List wavBytes ) => _p.play( BytesSource( wavBytes ) );
+
+  @override
+  Future<void> stop() async {
+    try { await _p.stop(); } catch ( _ ) {
+      // audioplayers can throw on stop of an already-stopped player; ignore.
+    }
+  }
+
+  @override
+  Future<void> dispose() => _p.dispose();
+}
 
 /// Slim ElevenLabs TTS client for Lupin Mobile.
 ///
@@ -22,6 +53,12 @@ import '../../core/constants/app_constants.dart';
 ///      now we accumulate and play — ElevenLabs Flash latency + ~1-2s
 ///      text lengths make this imperceptible.)
 ///
+/// The `TtsCompleteEvent` broadcast fires ONLY after audio playback has
+/// actually finished (not when the WS stream signals done). The
+/// `TtsOrchestrator` treats complete as "safe to advance FIFO" — firing
+/// it before playback ends causes the next utterance's `play()` call to
+/// preempt the current one mid-sentence (audioplayers is a single voice).
+///
 /// Event contract (matches backend `src/cosa/rest/routers/speech.py`):
 ///   - `audio_streaming_status`  — `{status: "loading"|"streaming", text}`
 ///   - `audio_streaming_chunk`   — binary PCM (wrapped by WebSocketService
@@ -30,20 +67,46 @@ import '../../core/constants/app_constants.dart';
 ///   - `tts_error`               — `{error_code: "quota_exceeded"|...,
 ///                                   text, details}`
 class StreamingTtsPlayer {
-  final Dio _dio;
-  final AudioPlayer _player;
+  final Dio                      _dio;
+  final StreamingTtsAudioPlayer  _player;
+
+  /// Dev-only: when true, `speak()` includes `debug_simulate_error: true`
+  /// in the POST body. Backend (`/api/get-speech-elevenlabs`) sees the flag
+  /// and emits a `tts_error` WS event with `error_code=quota_exceeded`
+  /// instead of calling ElevenLabs. Used to verify the orchestrator's
+  /// quota-fallback path on-device without needing an exhausted account.
+  /// Sourced from the `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define and
+  /// gated on `kDebugMode`; forced off in release builds.
+  final bool _simulateTtsError;
 
   final StreamController<TtsStatusEvent>   _statusCtrl   = StreamController.broadcast();
   final StreamController<TtsCompleteEvent> _completeCtrl = StreamController.broadcast();
   final StreamController<TtsErrorEvent>    _errorCtrl    = StreamController.broadcast();
 
-  final List<int> _pcmBuffer = [];
-  bool _isActive = false;       // true between speak() send and complete/error
-  bool _isPlaying = false;      // true while audioplayers is actually playing
+  StreamSubscription<void>? _playerCompleteSub;
 
-  StreamingTtsPlayer( this._dio ) : _player = AudioPlayer() {
-    _player.onPlayerComplete.listen( ( _ ) {
+  final List<int> _pcmBuffer = [];
+  bool            _isActive            = false;  // true between speak() send and complete/error
+  bool            _isPlaying           = false;  // true while audio is actually playing
+  Completer<void>? _activePlaybackCompleter;     // signals end of current playback
+
+  /// Tests pass [simulateTtsError] explicitly; production reads the
+  /// `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define and requires `kDebugMode`.
+  StreamingTtsPlayer(
+    this._dio, {
+    StreamingTtsAudioPlayer? player,
+    bool?                    simulateTtsError,
+  } ) : _player           = player ?? _RealStreamingTtsAudioPlayer(),
+        _simulateTtsError = simulateTtsError ?? (
+          kDebugMode && const bool.fromEnvironment(
+            'LUPIN_DEV_SIMULATE_TTS_ERROR',
+            defaultValue: false,
+          )
+        ) {
+    _playerCompleteSub = _player.onComplete.listen( ( _ ) {
       _isPlaying = false;
+      final c = _activePlaybackCompleter;
+      if ( c != null && !c.isCompleted ) c.complete();
     } );
   }
 
@@ -75,7 +138,8 @@ class StreamingTtsPlayer {
         data: {
           'session_id': sessionId,
           'text'      : text,
-          if ( voiceId != null ) 'voice_id': voiceId,
+          if ( voiceId != null )  'voice_id'            : voiceId,
+          if ( _simulateTtsError ) 'debug_simulate_error' : true,
         },
       );
     } catch ( _ ) {
@@ -86,16 +150,20 @@ class StreamingTtsPlayer {
   }
 
   /// Stop any in-flight playback and clear buffered audio. Called by the
-  /// orchestrator's urgent-preempt path.
+  /// orchestrator's urgent-preempt path. A stopped utterance does NOT
+  /// fire `TtsCompleteEvent` — the caller invoked this precisely to
+  /// abandon it, so advancing the FIFO on its behalf would be wrong.
   Future<void> stop() async {
     _isActive = false;
     _pcmBuffer.clear();
-    try {
-      await _player.stop();
-    } catch ( _ ) {
-      // audioplayers can throw on stop of already-stopped player; ignore.
-    }
+    // Clear the field BEFORE awakening the hung completer; the identity
+    // check inside `_playPcmBuffer` will then see the field is no longer
+    // its completer and skip the complete emission.
+    final stale = _activePlaybackCompleter;
+    _activePlaybackCompleter = null;
+    await _player.stop();
     _isPlaying = false;
+    if ( stale != null && !stale.isCompleted ) stale.complete();
   }
 
   /// Called by `app.dart _dispatchWsEvent` when any of the four relevant
@@ -122,9 +190,11 @@ class StreamingTtsPlayer {
       case AppConstants.eventAudioStreamingComplete:
         // Play the accumulated PCM buffer. Backend sends PCM 24kHz; wrap
         // a minimal WAV header so audioplayers can interpret it.
-        _playPcmBuffer();
+        // `_playPcmBuffer` fires `_completeCtrl` itself AFTER playback
+        // actually finishes — firing here would advance the orchestrator's
+        // FIFO while audio was still playing, causing overlap.
         _isActive = false;
-        _completeCtrl.add( TtsCompleteEvent() );
+        _playPcmBuffer();
         break;
 
       case 'tts_error':
@@ -138,13 +208,39 @@ class StreamingTtsPlayer {
   }
 
   Future<void> _playPcmBuffer() async {
-    if ( _pcmBuffer.isEmpty ) return;
+    if ( _pcmBuffer.isEmpty ) {
+      // Defensive: no audio arrived but we got WS complete. Still signal
+      // complete so the orchestrator advances its FIFO.
+      _completeCtrl.add( const TtsCompleteEvent() );
+      return;
+    }
     final wav = _wrapPcm24kAsWav( Uint8List.fromList( _pcmBuffer ) );
     _pcmBuffer.clear();
     _isPlaying = true;
+
+    final myCompleter = Completer<void>();
+    _activePlaybackCompleter = myCompleter;
+
     try {
-      await _player.play( BytesSource( wav ) );
+      await _player.play( wav );
+      // Wait for the onComplete listener (in the constructor) to fire
+      // `myCompleter.complete()` after audio actually finishes. Without
+      // this gate, TtsCompleteEvent would fire while audio was still
+      // playing, causing the orchestrator to start the next utterance
+      // and preempt the current one mid-sentence.
+      await myCompleter.future;
+      // Identity check: if `stop()` ran while we were awaiting, it cleared
+      // the field (or a later speak replaced it). Only emit complete if
+      // we're still the active utterance.
+      if ( identical( _activePlaybackCompleter, myCompleter ) ) {
+        _activePlaybackCompleter = null;
+        _isPlaying               = false;
+        _completeCtrl.add( const TtsCompleteEvent() );
+      }
     } catch ( e ) {
+      if ( identical( _activePlaybackCompleter, myCompleter ) ) {
+        _activePlaybackCompleter = null;
+      }
       _isPlaying = false;
       _errorCtrl.add( TtsErrorEvent( errorCode: 'playback_failed', message: e.toString() ) );
     }
@@ -193,6 +289,7 @@ class StreamingTtsPlayer {
   ];
 
   Future<void> dispose() async {
+    await _playerCompleteSub?.cancel();
     await _player.dispose();
     await _statusCtrl.close();
     await _completeCtrl.close();

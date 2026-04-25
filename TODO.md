@@ -1,20 +1,26 @@
 # TODO
 
-Last updated: 2026-04-22 (Session `40aa03d3`: Tier 2 + Tier 4 polish slate complete — 4 phases, 263/263 green)
+Last updated: 2026-04-24 (Session `0d54c763`: TTS overlap bug fix + on-device verify prep — 263→273 tests green)
 
 ---
 
 ## ⭐ NEXT SESSION — START HERE: On-device verification of TTS + notification-audio pipelines
 
-All code for agent-narration TTS is written and unit-test-green (237/237).
-**None of it has run on a real device yet.** The next session's primary
-job is laptop + emulator validation of:
+**Dev-server prep now complete (session `0d54c763`, 2026-04-24)**:
+- TTS overlap bug fixed + regression tests (273/273 green)
+- `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define added for scenario #8
+- `src/scripts/fire-tts-scenarios.py` script ready
+- Copy-paste-ready runbook at `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`
+
+**Next session's laptop job**: follow the runbook to validate all 10 scenarios on emulator.
 
 1. **Notification audio (shipped in commit `180a4ba`, 2026-04-21)** —
    dings and `flutter_tts` speech for high/urgent notifications. Never
    verified on device.
-2. **Agent-narration TTS (shipped as Phase 1–5 this session, uncommitted)** —
-   `StreamingTtsPlayer` + `TtsOrchestrator`. Never run on device.
+2. **Agent-narration TTS (shipped as Phase 1–5 on 2026-04-21 +
+   overlap fix 2026-04-24)** — `StreamingTtsPlayer` + `TtsOrchestrator`.
+   Never run on device. Scenario #7 (FIFO rapid-fire) is the regression
+   test for the 2026-04-24 overlap fix — MUST pass or the fix regressed.
 
 ### Why this is required before further work
 
@@ -100,6 +106,12 @@ tests, re-verify on device.
 
 ## Pending
 
+### ⚡ First thing next session — hygiene-commit follow-ups (from 2026-04-23 gitignore cleanup, commit `edaec79`)
+- [ ] [LUPIN-MOBILE] Run `flutter pub get` sanity check — confirm the newly-untracked `.dart_tool/` regenerates cleanly on next build; catches any surprise from the un-track. Low risk since disk copies are intact, but worth a deliberate verification pass.
+- [ ] [LUPIN-MOBILE] Decide whether to add a `history.md` one-liner for commit `edaec79` — the chore is fully documented in the commit message itself; decision is: keep history.md for feature/bug work only, or backfill a one-liner for this cleanup.
+- [ ] [LUPIN-MOBILE] Decide whether to purge `build_runner.dart-3.8.0.snapshot` (~26MB binary) from git history — requires `git filter-repo` + force-push; permanently reduces clone size but rewrites history. Only worth it if the repo is mirrored/cloned frequently.
+- [ ] [LUPIN-MOBILE] Audit parent Lupin + other sub-repos (cosa, lupin-plugin-firefox) for the same gitignore gaps — consistency pass; may not apply since those aren't Flutter projects, but .claude-session.md / __pycache__ gaps might recur elsewhere. (Out of scope for lupin-mobile repo; would need to be done in each repo's own context.)
+
 ### On-Device Sanity Pass (login confirmed on device 2026-04-17; remaining sanity checks still open)
 - [x] [LUPIN-MOBILE] Device sanity: login works end-to-end (envelope fix verified on emulator) — 2026-04-17
 - [ ] [LUPIN-MOBILE] Device sanity: open Inbox (widget-level covered by `inbox_screen_test.dart` × 4 cases)
@@ -121,7 +133,11 @@ tests, re-verify on device.
 - [x] [LUPIN-MOBILE] Phase 2 — `TtsOrchestrator`: FIFO queue + priority gate + urgent preempt + quota fallback (5min window) — 2026-04-21
 - [x] [LUPIN-MOBILE] Phase 3 — Removed auto-priority `flutter_tts` branch from `NotificationAudioService`; exposed `flutterTtsSpeak()` + `stopFallbackSpeech()` as orchestrator fallback helpers. Wired `TtsOrchestrator` into `NotificationBloc._onExternalUpdate`. — 2026-04-21
 - [x] [LUPIN-MOBILE] Phase 4 — 11 new orchestrator tests + 1 new bloc→tts test + rewrote notification_audio_service_test.dart for split responsibilities. — 2026-04-21
-- [ ] [LUPIN-MOBILE] On-device verify TTS: live ElevenLabs audio plays in the emulator (user's laptop); injected `quota_exceeded` falls back to `flutter_tts` cleanly.
+- [x] [LUPIN-MOBILE] Overlap bug fix + `StreamingTtsAudioPlayer` test seam — `TtsCompleteEvent` now gated on `AudioPlayer.onPlayerComplete`, completer + identity guard so `stop()` doesn't emit a stray complete. 8 new regression tests + 2 flag-coverage tests. Unit count 177 → 187. — 2026-04-24 session `0d54c763`
+- [x] [LUPIN-MOBILE] Quota-simulation hook — `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define for scenario #8 (mobile injects `debug_simulate_error=true`, backend emits `tts_error`). — 2026-04-24 session `0d54c763`
+- [x] [LUPIN-MOBILE] Scenario-firing script — `src/scripts/fire-tts-scenarios.py` (12 scenarios, Python/`requests`, dry-run + single-scenario modes, auto-rapid-fire for FIFO test). — 2026-04-24 session `0d54c763`
+- [x] [LUPIN-MOBILE] On-device verify runbook — `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` (copy-paste-ready for laptop). — 2026-04-24 session `0d54c763`
+- [ ] [LUPIN-MOBILE] On-device verify TTS: live ElevenLabs audio plays in the emulator (user's laptop); injected `quota_exceeded` falls back to `flutter_tts` cleanly. **Scenario #7 is the regression test for the 2026-04-24 overlap fix.**
 - [ ] [LUPIN-MOBILE] Future: ElevenLabs voice/config customization per agent/context (currently uses backend defaults only)
 - [ ] [LUPIN-MOBILE] Future: Cancel/replay UI for in-flight narration
 
@@ -154,6 +170,7 @@ tests, re-verify on device.
 - [x] [LUPIN-MOBILE] `getIt` import in `home_screen.dart` — verified **already removed** as of 2026-04-21 (confirmed by grep; only DI canonical files `service_locator.dart` + `use_case_registry.dart` reference `getIt`). — 2026-04-21
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] TTS overlap bug fix + on-device verify prep (session `0d54c763`): `StreamingTtsAudioPlayer` test seam + playback-gated `TtsCompleteEvent` + `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define + 10 new regression/flag tests + `fire-tts-scenarios.py` script + runbook. 263→273 green. Runbook: `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`. — 2026-04-24
 - [x] [LUPIN-MOBILE] Tier 2 + Tier 4 polish slate (session `40aa03d3`): TrustStateScreen drilldown + SenderDatesScreen + ConversationByDateScreen + AudioArtifactPlayer in-app playback rebuild. 4 phases, 22 widget tests + 2 bloc tests, 237→263 green. Plan: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`. — 2026-04-22
 - [x] [LUPIN-MOBILE] Cross-repo bug filed: parent Lupin `routers/queues.py:456,523` omits `artifacts['audio_path']` mapping for `pg-*`/`rp-*` jobs. Blocks Phase 4b. — 2026-04-22
 - [x] [LUPIN-MOBILE] Stage 4 agentic widget-test coverage — TestKeys + widget tests for 8 remaining agentic forms (podcast, presentation, SWE team, BFE, TFE, test suite, research-to-podcast, research-to-presentation). 26 new test cases, 204+/204+ tests green. — 2026-04-21
