@@ -1,18 +1,29 @@
 # TODO
 
-Last updated: 2026-04-24 (Session `0d54c763`: TTS overlap bug fix + on-device verify prep — 263→273 tests green)
+Last updated: 2026-05-06 (Session `a756441c`: Mobile resync baseline + voice-persona plan-review CLOSED — 273 tests green, no code changes)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: On-device verification of TTS + notification-audio pipelines
+## ⭐ NEXT SESSION — START HERE: Phase 0 dispatch audit + voice-persona Phase 1.1
 
-**Dev-server prep now complete (session `0d54c763`, 2026-04-24)**:
-- TTS overlap bug fixed + regression tests (273/273 green)
-- `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define added for scenario #8
-- `src/scripts/fire-tts-scenarios.py` script ready
-- Copy-paste-ready runbook at `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`
+**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). Implementation is unblocked.
 
-**Next session's laptop job**: follow the runbook to validate all 10 scenarios on emulator.
+### Order of operations
+
+1. **Phase 0 — WS dispatch audit + regression test** (~1-2 sessions; Task #5)
+   - Plan: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/00-phase-0-dispatch-audit.md`
+   - **Pre-confirmed verdict** (per REUSE pre-pass): PARTIAL DRIFT — outer routing in `app.dart:80-91` is correct; only inner-`notification.type` discriminator pivot missing in `notification_bloc.dart:146-170`
+   - Action: extend `_onExternalUpdate` with `switch (notification.type)` block + add a regression test under `test/unit/`
+   - **Blocks**: voice-persona, conversation-mode, session-switcher
+
+2. **Voice-persona milestone (Phases 1.1 → 5)** (~5 days, 12 tasks; depends on Phase 0)
+   - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
+   - Entry pointer: `…/2026.05.06-mobile-port-plans/01-voice-persona-port-plan.md`
+   - Working contract: `voice-persona/00-working-contract.md` (FROZEN 2026-05-06)
+
+### Earlier next-session task — still pending, now bucketed
+
+- On-device verification of TTS + notification-audio pipelines (from session `0d54c763`) — bucketed into voice-persona Phase 5 per `Q6` (existing TTS runbook is the verification artifact). Will execute when voice-persona Phase 5 closes.
 
 1. **Notification audio (shipped in commit `180a4ba`, 2026-04-21)** —
    dings and `flutter_tts` speech for high/urgent notifications. Never

@@ -1,5 +1,75 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.05.06 | Session `a756441c` — Mobile resync baseline + voice-persona plan-review (CLOSED)
+
+#### Session-End | 2026.05.06 | Plan-review FULLY CLOSED — voice-persona milestone ready to implement (gated on Phase 0)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/` (4 top-level docs + `voice-persona/` Pattern A subdir of 5 docs)
+**Baseline**: `src/rnd/v0.1.7/2026.05.06-resync-baseline-mobile-vs-lupin.md`
+**Implementation doc**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md`
+
+### Accomplishments
+
+1. **Mobile-resync baseline** (`2026.05.06-resync-baseline-mobile-vs-lupin.md`)
+   - Identified 12-day drift between mobile (last commit `85b0452`, 2026-04-24) and parent Lupin/CoSA (~125 commits since)
+   - Themed analysis of three user-visible features (conversation mode, voice personas, focus/session-switcher) + the WS-event-cleanup migration silent-regression risk + retired endpoints + WS reconnect circuit-breaker
+
+2. **Mobile port plan slate** (`2026.05.06-mobile-port-plans/`)
+   - **`00-phase-0-dispatch-audit.md`** — WS dispatch audit prerequisite. Pre-confirmed PARTIAL DRIFT by REUSE pre-pass: outer routing in `app.dart:80-91` is correct; inner-type pivot missing in `notification_bloc.dart:146-170`
+   - **Voice-persona Pattern A doc-set** (under `voice-persona/`): 5 docs with all five plan-review conventions in place (working contract, Q1-Q9 FROZEN decisions, EXECUTOR-tagged tasks, no TBD/OSQ markers, no "Manual E2E" residue)
+   - **`02-conversation-mode-port-plan.md`** — skeleton; 4 UX directions sketched; awaits user direction
+   - **`03-session-switcher-port-plan.md`** (renamed from focus-mode) — user articulated direction (Slack/Discord/Telegram-style chat picker as primary nav paradigm); 4 widget patterns sketched
+
+3. **Three-pass plan-review on voice-persona milestone** (canonical workflow `<pip>/workflow/plan-review.md`)
+   - **REUSE pre-pass** — Explore agent: 12 findings, 6 fix categories applied. Big finds: `voice_id` parameter is already shipping at `streaming_tts_player.dart:130-131` (reuse-as-is, collapses Phase 4 Task 4.1); `app.dart:80-91` already routes outer envelope correctly (extend-existing for Phase 0 narrowing). Q7-Q9 promoted from Open sub-questions to FROZEN at this gate
+   - **Pass 1 Fitness** — Explore agent: 11 findings (F1-F11). User reviewed each individually via cosa-voice `ask_yes_no` + abstracts; approved all 11. 12 edits applied: Phase 1 sub-numbered as Tasks 1.1-1.5 with explicit dependency chain; null-defense contract; blocTest assertion shapes; badge wiring file paths; server ordering guarantee; emoji failure-mode contract; SIMULATE flag scope clarification. No Q1-Q9 challenged
+   - **Pass 2 Adversarial** — Explore agent: 8 wording-polish findings (F12-F19) + meta-finding F20 (13 bare checkboxes in Phase 0 §5 lacking EXECUTOR tags). User picked option (b) — F20 only; 4 edits tagged all 13 with `EXECUTOR: AI`. Convergence check passed: bare-checkbox grep returns 0 hits in Phase 0 §5; all `EXECUTOR: HUMAN` lines have same-line justifications
+
+4. **Session manifest** (`.claude-session.md`, gitignored)
+   - Multi-Session v2.0 manifest tracking all session-touched files
+
+### Files Created (10)
+
+- `src/rnd/v0.1.7/2026.05.06-resync-baseline-mobile-vs-lupin.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/00-phase-0-dispatch-audit.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/01-voice-persona-port-plan.md` (entry pointer)
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/02-conversation-mode-port-plan.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/03-session-switcher-port-plan.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-index.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-working-contract.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/03-decisions.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/04-testing-validation.md`
+
+### Test Results
+
+| Suite | Start | End |
+|-------|-------|-----|
+| Unit + widget + service_integration | 273 | 273 |
+
+No code changes this session; all work was planning + plan-review. Test count unchanged from prior session `0d54c763`.
+
+### Key Decisions / Insights
+
+- **Plan-review opt-in for Pattern 3**: Voice-persona is a Pattern 3 (Feature Development) plan; canonical mandate would be REUSE-only. User opted into the full three-pass review to harden the doc-set before implementation. Justified the upgrade to Pattern A right-sized doc-set (`voice-persona/` subdir).
+- **Phase 0 scope tightened by REUSE**: original Phase 0 plan touched WS service + app.dart + bloc; REUSE confirmed only the bloc handler needs the inner-type pivot. Pre-confirmed verdict embedded in §10 of audit doc.
+- **Q1-Q9 FROZEN decisions** anchor the milestone: Q1 (server-stamped persona, no mobile cache), Q2 (dashed border for `borrowed=true`), Q3 (optional `voice_id` parameter, server-fallback to Sam), Q4 (no `voice_id` for `flutter_tts` fallback path), Q5 (badge only, no theme sweep), Q6 (on-device verify bucketed in existing TTS runbook), Q7 (liberal fromJson), Q8 (badge in features/notifications), Q9 (DashedBorderPainter genuinely-new)
+- **Session-switcher direction shifted**: was hypothesized to be implicit on mobile; user articulated direction (purpose-built first-class widget set for switching between Claude Code instantiations across repos). This couples session-switcher to conversation-mode (mic-glyph overlay lives on switcher icons); recommended order: session-switcher BEFORE conversation-mode plan-out
+- **Cosa-voice MCP for one-at-a-time decisions**: Pass 1 walkthrough used `ask_yes_no` per finding with abstracts carrying details. Effective pattern for batch-decision sessions where each item warrants individual consideration
+
+### Out of Scope (deferred to next session)
+
+- Phase 0 dispatch audit execution (Task #5 in session manifest)
+- Voice-persona Phases 1.1-5 implementation
+- Conversation-mode UX direction selection + plan-mode + plan-review
+- Session-switcher widget pattern selection + plan-mode + plan-review (recommended to land BEFORE conversation-mode)
+- WS reconnect circuit-breaker handling (Tier-1 Mobile-Resync silent-regression item)
+- `/api/claude-code/dispatch` fossil cleanup
+- Doc-viewer scope=docs deep-link handling
+
+---
+
 ## 2026.04.24 | Session `0d54c763` — TTS overlap bug fix + on-device verify prep
 
 #### Session-End | 2026.04.24 | 273/273 non-legacy tests green (was 263 at session start; +10)
