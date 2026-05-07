@@ -99,22 +99,23 @@ Server stamps `voice_persona` onto **every outbound notification** for that sess
 
 ## 3. Phase 2 — WS Event Dispatch
 
-**Status**: PLANNED
-**Depends on**: Phase 0 (`../00-phase-0-dispatch-audit.md`) — inner-type dispatch table must already route by `notification.type` discriminator.
+**Status**: ✅ COMPLETE 2026-05-06 (session a756441c continuation, post-checkpoint `fd8fc18`)
+**Depends on**: Phase 0 (`../00-phase-0-dispatch-audit.md`) — inner-type dispatch table must already route by `notification.type` discriminator. ✅ landed in checkpoint `fd8fc18`.
+**Test delta**: 290 → 294 (+4 net new) — all 4 Pass-1-F3 assertion-shape blocTests in a new `notification_bloc_persona_test.dart`.
 
 ### Tasks
 
-- [ ] EXECUTOR: AI — Add bloc events to `lib/features/notifications/domain/notification_event.dart`:
-  - `NotificationsVoicePersonaAssigned(senderId, persona)`
-  - `NotificationsVoicePersonaReleased(senderId, personaName)`
-- [ ] EXECUTOR: AI — Extend `notification_state.dart` loaded states with `Map<String, VoicePersona> personasBySender` plus helper `VoicePersona? personaFor(String senderId)`. Per `Q1`, this map is for **header rendering only**, not for TTS dispatch.
-- [ ] EXECUTOR: AI — Inside `notification_bloc.dart` `_onExternalUpdate`, pivot on inner `notification.type`. Route persona-assigned → emit state with persona keyed in; persona-released → emit state with key removed. Other inner types fall through to existing logic.
-- [ ] EXECUTOR: AI — `blocTest` cases (with explicit assertion shapes per Pass 1 finding F3, applied 2026-05-06):
-  - **2.4.1** — assigned event arrives → `expect: [predicate((state) => state.personaFor(senderId) == persona)]`
-  - **2.4.2** — released event arrives → `expect: [predicate((state) => state.personaFor(senderId) == null)]`
-  - **2.4.3** — borrowed=true survives → after an unrelated state-change event, `state.personaFor(senderId) == persona && persona.borrowed == true`
-  - **2.4.4** — released for unknown sender is idempotent → `expect: []` (no state-change emit)
-- [ ] EXECUTOR: AI — Run `./flutter.sh test test/unit/features/notifications/domain/notification_bloc_test.dart` — assert all 4 new bloc test cases pass; existing 273 tests still green.
+- [x] EXECUTOR: AI — Add bloc events to `lib/features/notifications/domain/notification_event.dart`:
+  - `NotificationsVoicePersonaAssigned(senderId, persona)` — props: senderId + persona.voiceId
+  - `NotificationsVoicePersonaReleased(senderId, personaName)` — props: senderId + personaName
+- [x] EXECUTOR: AI — Extend `notification_state.dart` loaded states with `Map<String, VoicePersona> personasBySender` plus helper `VoicePersona? personaFor(String senderId)`. Per `Q1`, this map is for **header rendering only**, not for TTS dispatch. — implemented via `PersonaSnapshotMixin` shared by all 4 loaded states (`InboxLoaded`, `ConversationLoaded`, `SenderDatesLoaded`, `ConversationByDateLoaded`); each state has `personasBySender` field defaulting to const `{}`; `personaFor(senderId)` is a default mixin method.
+- [x] EXECUTOR: AI — Inside `notification_bloc.dart` `_onExternalUpdate`, pivot on inner `notification.type`. Route persona-assigned → emit state with persona keyed in; persona-released → emit state with key removed. Other inner types fall through to existing logic. — added 2 explicit cases (`voice_persona_assigned`, `voice_persona_released`) before the default-branch logger; both mutate `_personasBySender`; the existing `_refreshCurrent` emit picks up the snapshot. Bloc instance field `_personasBySender` + helper `_personasSnapshot()` (defensive `Map.unmodifiable` copy) added; threaded through 7 loaded-state emit sites (4 LoadX handlers + 3 `_refreshCurrent` cases). New private helper `_emitCurrentSnapshot(emit)` for the dedicated event handlers (test path).
+- [x] EXECUTOR: AI — `blocTest` cases (with explicit assertion shapes per Pass 1 finding F3, applied 2026-05-06):
+  - [x] **2.4.1** — assigned event arrives → `predicate<NotificationsInboxLoaded>((s) => s.personaFor("s-1") == _adam)` ✅
+  - [x] **2.4.2** — released event arrives → `predicate<...>((s) => s.personaFor("s-1") == null)` after assigned-then-released sequence ✅
+  - [x] **2.4.3** — borrowed=true survives → after `LoadInbox` re-emit, `s.personaFor("s-1")?.borrowed == true && voiceId == _bellaBorrowed.voiceId` ✅
+  - [x] **2.4.4** — released for unknown sender is idempotent → `expect: const <NotificationState>[]` (no emit) ✅
+- [x] EXECUTOR: AI — Run `./flutter.sh test test/unit/notifications/notification_bloc_persona_test.dart` — 4/4 pass. Full baseline-tracked: 290 → 294 ✅. Phase 0 regression test (`notification_bloc_dispatch_test.dart`) still green — its `voice_persona_assigned` test case still asserts no audio/TTS calls; the new explicit case branch doesn't fire audio/TTS (only mutates the persona map), so the assertion still holds.
 
 ### Risks (Phase 2)
 
@@ -255,9 +256,9 @@ Per `00-working-contract.md`, items 1+2 are AI-executable; item 3 is the only HU
 
 | Phase | Status | Date | Test count delta | Commit-hash placeholder | Progress note |
 |---|---|---|---|---|---|
-| 0 (prereq) | ✅ complete | 2026-05-06 | 273 → 276 (+3) | uncommitted (session a756441c continuation) | Verdict 🟡 partial drift confirmed live; `_onExternalUpdate` extended with `switch (n.type)` + default-branch logger. New file `test/unit/notifications/notification_bloc_dispatch_test.dart`. See `../00-phase-0-dispatch-audit.md`. |
-| 1 — data model | ✅ complete | 2026-05-06 | 276 → 290 (+14) | uncommitted (session a756441c continuation) | New: `voice_persona.dart` (87 lines, liberal fromJson + null-defense + `==`/`hashCode` on `voiceId`); `voice_persona_test.dart` (9 tests); fixture `notification-with-persona.json`. Modified: `notification_models.dart` (+`voicePersona` field); `notification_models_test.dart` (+4 tests covering present/absent/null/borrowed); `notification_repository_test.dart` (+2 fixture-backed round-trip tests). |
-| 2 — WS dispatch | ⏳ pending | | | | |
+| 0 (prereq) | ✅ complete | 2026-05-06 | 273 → 276 (+3) | fd8fc18 (checkpoint, session a756441c continuation) | Verdict 🟡 partial drift confirmed live; `_onExternalUpdate` extended with `switch (n.type)` + default-branch logger. New file `test/unit/notifications/notification_bloc_dispatch_test.dart`. See `../00-phase-0-dispatch-audit.md`. |
+| 1 — data model | ✅ complete | 2026-05-06 | 276 → 290 (+14) | fd8fc18 (checkpoint, session a756441c continuation) | New: `voice_persona.dart` (87 lines, liberal fromJson + null-defense + `==`/`hashCode` on `voiceId`); `voice_persona_test.dart` (9 tests); fixture `notification-with-persona.json`. Modified: `notification_models.dart` (+`voicePersona` field); `notification_models_test.dart` (+4 tests covering present/absent/null/borrowed); `notification_repository_test.dart` (+2 fixture-backed round-trip tests). |
+| 2 — WS dispatch | ✅ complete | 2026-05-06 | 290 → 294 (+4) | uncommitted (post-checkpoint `fd8fc18`) | New events `NotificationsVoicePersonaAssigned`/`Released`; `PersonaSnapshotMixin` on 4 loaded states; `_personasBySender` instance field on bloc + `_personasSnapshot()` defensive-copy helper threaded through 7 emit sites. `_onExternalUpdate` switch now has explicit voice-persona cases before the default-branch logger. New file `notification_bloc_persona_test.dart` with 4 Pass-1-F3 assertion-shape blocTests. |
 | 3 — UI badge | ⏳ pending | | | | |
 | 4 — TTS routing | ⏳ pending | | | | |
 | 5 — docs + verify | ⏳ pending | | | | |

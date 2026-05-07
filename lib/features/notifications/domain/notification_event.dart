@@ -150,3 +150,43 @@ class NotificationsLoadConversationByDate extends NotificationEvent {
   @override
   List<Object?> get props => [ senderId, userEmail, hours, anchor, includeHidden ];
 }
+
+/// Per-session voice/persona allocation arrived for [senderId]. Source of
+/// truth is the server bridge; mobile mirrors the persona into bloc state
+/// for header rendering only (per Q1 — TTS reads persona straight off the
+/// originating notification, not from this map).
+///
+/// Triggered via two paths:
+/// 1. Real WS: `notification_queue_update` envelope with inner
+///    `notification.type == "voice_persona_assigned"` — `_onExternalUpdate`
+///    dispatch routes here.
+/// 2. Test/programmatic: blocTest fires this event directly to verify the
+///    persona-map mutation contract (Phase 1 Task 2.4 cases).
+class NotificationsVoicePersonaAssigned extends NotificationEvent {
+  final String       senderId;
+  final VoicePersona persona;
+
+  const NotificationsVoicePersonaAssigned( {
+    required this.senderId,
+    required this.persona,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, persona.voiceId ];
+}
+
+/// Per-session persona was released (server-side SessionEnd cleared the
+/// bridge for this sender). Removes the entry from the bloc's persona map.
+/// Idempotent — released for a sender with no current persona is a no-op.
+class NotificationsVoicePersonaReleased extends NotificationEvent {
+  final String  senderId;
+  final String? personaName;  // informational only; bloc keys removal by senderId
+
+  const NotificationsVoicePersonaReleased( {
+    required this.senderId,
+    this.personaName,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, personaName ];
+}

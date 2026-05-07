@@ -19,6 +19,21 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   String? _activeUserEmail;
   String? _activeSenderId;
 
+  // Per-session persona snapshot keyed on senderId. Mutated from
+  // `voice_persona_assigned` / `voice_persona_released` events; rendered
+  // into every loaded state's `personasBySender` for header display
+  // (Phase 2 of the voice-persona milestone). Per Q1, this map is for
+  // header rendering only — TTS dispatch reads persona straight off the
+  // originating notification.
+  final Map<String, VoicePersona> _personasBySender = {};
+
+  /// Defensive snapshot of the persona map at every emit site.
+  /// `Map.unmodifiable` copies the current entries and freezes the result,
+  /// so a later mutation to `_personasBySender` cannot leak into a
+  /// previously-emitted state.
+  Map<String, VoicePersona> _personasSnapshot() =>
+      Map<String, VoicePersona>.unmodifiable( _personasBySender );
+
   NotificationBloc(
     this._repo, {
     NotificationAudioService? audio,
@@ -36,6 +51,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<NotificationsGenerateGistRequested>( _onGenerateGist );
     on<NotificationsLoadSenderDates>( _onLoadSenderDates );
     on<NotificationsLoadConversationByDate>( _onLoadConversationByDate );
+    on<NotificationsVoicePersonaAssigned>( _onVoicePersonaAssigned );
+    on<NotificationsVoicePersonaReleased>( _onVoicePersonaReleased );
   }
 
   Future<void> _onLoadInbox(
@@ -52,8 +69,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         excludeOwnJobs : event.excludeOwnJobs,
       );
       emit( NotificationsInboxLoaded(
-        senders   : senders,
-        userEmail : event.userEmail,
+        senders          : senders,
+        userEmail        : event.userEmail,
+        personasBySender : _personasSnapshot(),
       ) );
     } on NotificationApiException catch ( e ) {
       emit( NotificationsError( e.message ) );
@@ -74,9 +92,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         hours: event.hours,
       );
       emit( NotificationsConversationLoaded(
-        senderId  : event.senderId,
-        userEmail : event.userEmail,
-        messages  : messages,
+        senderId         : event.senderId,
+        userEmail        : event.userEmail,
+        messages         : messages,
+        personasBySender : _personasSnapshot(),
       ) );
     } on NotificationApiException catch ( e ) {
       emit( NotificationsError( e.message ) );
@@ -175,16 +194,99 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             title    : n.title,
           );
           break;
+        case "voice_persona_assigned":
+          // Server allocated a voice persona for this senderId. Mutate the
+          // persona map; the upcoming _refreshCurrent() emit will snapshot it
+          // into the next loaded state. Per Q1, no separate mobile cache —
+          // this map is for header rendering only.
+          final persona = n.voicePersona;
+          final sid     = n.senderId;
+          if ( persona != null && sid != null ) {
+            _personasBySender[ sid ] = persona;
+          }
+          break;
+        case "voice_persona_released":
+          // Server released the persona (SessionEnd cleared the bridge).
+          // Drop the entry; future renders see no persona for this senderId
+          // and fall back to no-badge behavior. Idempotent: removing a
+          // missing key is a no-op.
+          final sid = n.senderId;
+          if ( sid != null ) _personasBySender.remove( sid );
+          break;
         default:
-          // Unknown inner type — log so the gap is visible. Silent drop is the
-          // bug Phase 0 prevents. Future feature ports replace this branch with
-          // explicit cases (e.g., `voice_persona_assigned`).
+          // Unknown inner type — log so the gap is visible. Silent drop is
+          // the bug Phase 0 prevents. Future feature ports add cases above
+          // this default branch (conversation_mode_changed, focus_changed,
+          // etc.).
           // ignore: avoid_print
           print( "[NotificationBloc] Unknown notification.type: '${n.type}' (id=${n.id})" );
           break;
       }
     }
     await _refreshCurrent( emit );
+  }
+
+  /// Handler for the dedicated `NotificationsVoicePersonaAssigned` event.
+  /// Used by tests + any future programmatic dispatcher. The WS path goes
+  /// through `_onExternalUpdate` directly and shares the same map mutation,
+  /// so behavior is identical regardless of entry point.
+  Future<void> _onVoicePersonaAssigned(
+    NotificationsVoicePersonaAssigned event,
+    Emitter<NotificationState> emit,
+  ) async {
+    _personasBySender[ event.senderId ] = event.persona;
+    _emitCurrentSnapshot( emit );
+  }
+
+  /// Handler for the dedicated `NotificationsVoicePersonaReleased` event.
+  /// Idempotent: if the senderId has no current persona, the handler returns
+  /// without emitting (per Phase 2 test 2.4.4 — `expect: []` for unknown
+  /// release).
+  Future<void> _onVoicePersonaReleased(
+    NotificationsVoicePersonaReleased event,
+    Emitter<NotificationState> emit,
+  ) async {
+    if ( !_personasBySender.containsKey( event.senderId ) ) return;
+    _personasBySender.remove( event.senderId );
+    _emitCurrentSnapshot( emit );
+  }
+
+  /// Re-emit the current loaded state with an updated `personasBySender`
+  /// snapshot. No data refetch; only the persona map changes. States that
+  /// don't carry the snapshot (Initial / Loading / Error / Responding /
+  /// Gist*) are not re-emitted — the next loaded state will pick up the
+  /// fresh map on its own emit path.
+  void _emitCurrentSnapshot( Emitter<NotificationState> emit ) {
+    final s = state;
+    final snap = _personasSnapshot();
+    if ( s is NotificationsInboxLoaded ) {
+      emit( NotificationsInboxLoaded(
+        senders          : s.senders,
+        userEmail        : s.userEmail,
+        personasBySender : snap,
+      ) );
+    } else if ( s is NotificationsConversationLoaded ) {
+      emit( NotificationsConversationLoaded(
+        senderId         : s.senderId,
+        userEmail        : s.userEmail,
+        messages         : s.messages,
+        personasBySender : snap,
+      ) );
+    } else if ( s is NotificationsSenderDatesLoaded ) {
+      emit( NotificationsSenderDatesLoaded(
+        senderId         : s.senderId,
+        userEmail        : s.userEmail,
+        dates            : s.dates,
+        personasBySender : snap,
+      ) );
+    } else if ( s is NotificationsConversationByDateLoaded ) {
+      emit( NotificationsConversationByDateLoaded(
+        senderId         : s.senderId,
+        userEmail        : s.userEmail,
+        byDate           : s.byDate,
+        personasBySender : snap,
+      ) );
+    }
   }
 
   Future<void> _onGenerateGist(
@@ -223,9 +325,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         includeHidden: event.includeHidden,
       );
       emit( NotificationsSenderDatesLoaded(
-        senderId  : event.senderId,
-        userEmail : event.userEmail,
-        dates     : dates,
+        senderId         : event.senderId,
+        userEmail        : event.userEmail,
+        dates            : dates,
+        personasBySender : _personasSnapshot(),
       ) );
     } on NotificationApiException catch ( e ) {
       emit( NotificationsError( e.message ) );
@@ -248,9 +351,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         includeHidden : event.includeHidden,
       );
       emit( NotificationsConversationByDateLoaded(
-        senderId  : event.senderId,
-        userEmail : event.userEmail,
-        byDate    : byDate,
+        senderId         : event.senderId,
+        userEmail        : event.userEmail,
+        byDate           : byDate,
+        personasBySender : _personasSnapshot(),
       ) );
     } on NotificationApiException catch ( e ) {
       emit( NotificationsError( e.message ) );
@@ -268,9 +372,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           _activeUserEmail!,
         );
         emit( NotificationsConversationLoaded(
-          senderId  : _activeSenderId!,
-          userEmail : _activeUserEmail!,
-          messages  : msgs,
+          senderId         : _activeSenderId!,
+          userEmail        : _activeUserEmail!,
+          messages         : msgs,
+          personasBySender : _personasSnapshot(),
         ) );
       } else if ( _activeSenderId != null && state is NotificationsConversationByDateLoaded ) {
         final byDate = await _repo.conversationByDate(
@@ -278,15 +383,17 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           _activeUserEmail!,
         );
         emit( NotificationsConversationByDateLoaded(
-          senderId  : _activeSenderId!,
-          userEmail : _activeUserEmail!,
-          byDate    : byDate,
+          senderId         : _activeSenderId!,
+          userEmail        : _activeUserEmail!,
+          byDate           : byDate,
+          personasBySender : _personasSnapshot(),
         ) );
       } else if ( state is NotificationsInboxLoaded ) {
         final senders = await _repo.sendersVisible( _activeUserEmail! );
         emit( NotificationsInboxLoaded(
-          senders   : senders,
-          userEmail : _activeUserEmail!,
+          senders          : senders,
+          userEmail        : _activeUserEmail!,
+          personasBySender : _personasSnapshot(),
         ) );
       }
     } on NotificationApiException catch ( _ ) {

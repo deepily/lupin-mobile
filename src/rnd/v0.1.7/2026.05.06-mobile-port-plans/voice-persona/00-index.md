@@ -41,9 +41,9 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 
 ## Current Status
 
-**Active Phase**: Phase 2 (WS Event Dispatch) is next — Phases 0 + 1 closed
-**Progress**: 2/6 phases complete (Phase 0 prereq + Phase 1 data model)
-**Test count**: 290 baseline-tracked (was 273; +17 across Phase 0 + Phase 1)
+**Active Phase**: Phase 3 (UI badge) is next — Phases 0, 1, 2 closed
+**Progress**: 3/6 phases complete (Phase 0 prereq + Phase 1 data model + Phase 2 WS dispatch)
+**Test count**: 294 baseline-tracked (was 273; +21 across Phases 0–2)
 **Last Updated**: 2026-05-06
 
 ---
@@ -54,7 +54,7 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 |---|---|---|---|
 | 0 (prereq) | ✅ complete 2026-05-06 | [`../00-phase-0-dispatch-audit.md`](../00-phase-0-dispatch-audit.md) | 🟡 partial drift confirmed; `switch (n.type)` pivot landed in `_onExternalUpdate`. 273 → 276 |
 | 1 — Data model | ✅ complete 2026-05-06 | [01-implementation.md §2](01-implementation.md) | `VoicePersona` model + `NotificationItem.voicePersona` field + fixture + 14 new tests. 276 → 290 |
-| 2 — WS dispatch | ⏳ pending | [01-implementation.md §3](01-implementation.md) | Inner-type discriminator + bloc events + bloc state map (NEXT) |
+| 2 — WS dispatch | ✅ complete 2026-05-06 | [01-implementation.md §3](01-implementation.md) | 2 new bloc events + `PersonaSnapshotMixin` on 4 loaded states + bloc-instance persona map + 4 Pass-1-F3 blocTests. 290 → 294 |
 | 3 — UI badge | ⏳ pending | [01-implementation.md §4](01-implementation.md) | `PersonaBadge` widget + wiring into 3 surfaces |
 | 4 — TTS routing | ⏳ pending | [01-implementation.md §5](01-implementation.md) | `voice_id` parameter on `StreamingTtsPlayer.speak()` + orchestrator pipe-through |
 | 5 — Docs + verify | ⏳ pending | [01-implementation.md §6](01-implementation.md) | `TODO.md` / `history.md` updates + full test run |
@@ -63,6 +63,7 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 
 ## Recent Updates
 
+- **2026-05-06 (Phase 2 landed)**: Phase 2 WS dispatch executed post-checkpoint `fd8fc18`. New bloc events `NotificationsVoicePersonaAssigned`/`Released`; `PersonaSnapshotMixin` shared by 4 loaded states (`personaFor(senderId)` accessor); bloc-instance `_personasBySender` map + `_personasSnapshot()` defensive-copy helper threaded through 7 emit sites; `_onExternalUpdate` switch extended with explicit voice-persona cases (default-branch logger preserved for genuinely unknown types). 4 new blocTests in `notification_bloc_persona_test.dart` (2.4.1 assigned, 2.4.2 released, 2.4.3 borrowed-survives, 2.4.4 release-unknown idempotent). Baseline 290 → 294.
 - **2026-05-06 (Phase 1 landed)**: Phase 1 data model executed in same session continuation. New `voice_persona.dart` (liberal `fromJson` per Q7, null-defense per F1, equality keyed on `voiceId` per task 1.2). `NotificationItem` extended with `voicePersona` field. Fixture at `test/fixtures/notifications/notification-with-persona.json` (note: actual path is `test/fixtures/`, not `test/_fixtures/` — plan's path was a typo). 14 new tests across 3 files. Baseline 276 → 290.
 - **2026-05-06 (Phase 0 landed)**: Phase 0 dispatch audit + fix + regression test executed in session `a756441c` post-/clear continuation. `notification_bloc.dart:146-185` extended with `switch (n.type)` — whitelisted types route to existing audio+TTS path; default branch logs unknown types as canary for future migrations. New file `test/unit/notifications/notification_bloc_dispatch_test.dart` (3 tests, all green). Baseline-tracked test count: 273 → 276; quarantined-test count unchanged at 44. Voice-persona Phases 1.1-5 now actually unblocked (not just plan-review-unblocked).
 - **2026-05-06 (Pass 2 close)**: Pass 2 Adversarial complete (Task #9); 8 wording-polish findings + 1 meta-finding (F20). User picked option (b) — F20 only: tag the 13 bare checkboxes in `00-phase-0-dispatch-audit.md` §5 with `EXECUTOR: AI`. Plan-review FULLY CLOSED. Phase 0 implementation + voice-persona Phase 1.1-1.5 unblocked.

@@ -1,10 +1,10 @@
 # TODO
 
-Last updated: 2026-05-06 (Session `a756441c` continuation: Phase 0 + voice-persona Phase 1 LANDED — 290 baseline tests green; +17 across both phases; voice-persona Phase 2 is next)
+Last updated: 2026-05-06 (Session `a756441c` continuation: Phases 0 + 1 + 2 LANDED — 294 baseline tests green; +21 across all three phases; voice-persona Phase 3 (UI badge) is next)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: voice-persona Phase 2 (WS event dispatch)
+## ⭐ NEXT SESSION — START HERE: voice-persona Phase 3 (UI badge widget)
 
 **Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phase 0 dispatch audit is also CLOSED** (landed 2026-05-06 same session). Voice-persona Phases 1.1-5 are now actually unblocked.
 
@@ -24,10 +24,17 @@ Last updated: 2026-05-06 (Session `a756441c` continuation: Phase 0 + voice-perso
    - 14 new tests: voice_persona_test.dart (9), notification_models_test.dart (+3 net new), notification_repository_test.dart (+2 fixture-backed round-trip)
    - Test impact: 276 → 290 baseline; 44 quarantined unchanged
 
-3. **Voice-persona Phases 2 → 5** (~4 days, 7 tasks remaining) — START HERE NEXT SESSION
+3. **Voice-persona Phase 2 — WS event dispatch** ✅ DONE 2026-05-06 (session `a756441c` post-checkpoint)
+   - 2 new bloc events (`NotificationsVoicePersonaAssigned`/`Released`)
+   - `PersonaSnapshotMixin` on 4 loaded states; `personaFor(senderId)` accessor
+   - `_personasBySender` bloc instance field + `_personasSnapshot()` defensive copy threaded through 7 emit sites
+   - `_onExternalUpdate` switch extended with explicit voice-persona cases (default-branch logger preserved)
+   - 4 new blocTests (Pass-1-F3 assertion shapes): assigned, released, borrowed-survives, release-unknown idempotent
+   - Test impact: 290 → 294 baseline; 44 quarantined unchanged
+
+4. **Voice-persona Phases 3 → 5** (~3 days, 6 tasks remaining) — START HERE NEXT SESSION
    - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
-   - Working contract: `voice-persona/00-working-contract.md` (FROZEN 2026-05-06)
-   - **Next: Phase 2** in `01-implementation.md §3` — WS event dispatch: add `NotificationsVoicePersonaAssigned` / `NotificationsVoicePersonaReleased` events, extend bloc state with `Map<String, VoicePersona> personasBySender`, route inner-type pivot in `_onExternalUpdate` (the Phase 0 default branch becomes explicit cases)
+   - **Next: Phase 3** in `01-implementation.md §4` — UI badge: new `PersonaBadge` widget + `DashedBorderPainter` (Q9 genuinely-new) + 3 wiring sites (`_NotificationItemCard`, `ConversationScreen` header, inbox sender tile) + 5 widget tests + final acceptance review (EXECUTOR: HUMAN — subjective UX)
 
 ### Earlier next-session task — still pending, now bucketed
 

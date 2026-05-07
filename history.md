@@ -1,5 +1,89 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.05.06 (session-end batch) | Session `a756441c` — Voice-persona Phase 2 WS event dispatch (SESSION-END)
+
+#### Session-End | 2026.05.06 | Voice-persona Phase 2 LANDED — bloc state now carries `personasBySender` snapshot across all 4 loaded states; 290 → 294 baseline tests green; +4 Pass-1-F3 blocTests
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/` (unchanged from checkpoint `fd8fc18`)
+**Implementation doc**: `voice-persona/01-implementation.md` (§3 Phase 2 task checkboxes all `[x]`; §9 Execution Log Phase 2 row populated)
+**Continues from**: checkpoint `fd8fc18` (same session, post-/clear; Phases 0 + 1 already committed there)
+
+### Accomplishments
+
+1. **Voice-persona Phase 2 — WS event dispatch** (`voice-persona/01-implementation.md §3`)
+   - **2 new bloc events** in `notification_event.dart`:
+     - `NotificationsVoicePersonaAssigned(senderId, persona)` — props key on `senderId + persona.voiceId`
+     - `NotificationsVoicePersonaReleased(senderId, personaName)` — props key on `senderId + personaName`
+     - Both serve dual entry points: real-WS path (via `_onExternalUpdate` switch case) and test/programmatic path (via `bloc.add()`)
+   - **`PersonaSnapshotMixin` shared by all 4 loaded states** in `notification_state.dart`:
+     - `Map<String, VoicePersona> personasBySender` field (default const `{}`)
+     - `VoicePersona? personaFor(String senderId)` accessor
+     - Applied to: `NotificationsInboxLoaded`, `NotificationsConversationLoaded`, `NotificationsSenderDatesLoaded`, `NotificationsConversationByDateLoaded`
+     - `personasBySender` added to each state's `props` so Equatable detects map mutations
+   - **Bloc instance field + threading** in `notification_bloc.dart`:
+     - `_personasBySender` mutable map (source of truth across state transitions)
+     - `_personasSnapshot()` — `Map.unmodifiable(_personasBySender)` defensive copy at every emit site (prevents leaked mutations into already-emitted states)
+     - 2 new event handlers (`_onVoicePersonaAssigned`, `_onVoicePersonaReleased`) with idempotency guard for unknown-sender release
+     - `_emitCurrentSnapshot(emit)` helper — re-emits current loaded state with updated map (test-path entry)
+     - `_onExternalUpdate` switch extended with explicit `voice_persona_assigned` and `voice_persona_released` cases before the Phase 0 default-branch logger; default branch preserved as canary for genuinely unknown types
+     - `personasBySender:` threaded through all 7 emit sites: 4 `_onLoadX` handlers + 3 `_refreshCurrent` cases
+   - **4 Pass-1-F3 assertion-shape blocTests** in new file `notification_bloc_persona_test.dart`:
+     - **2.4.1** assigned event → `predicate<NotificationsInboxLoaded>((s) => s.personaFor("s-1") == _adam)`
+     - **2.4.2** assigned-then-released sequence → 2 emits, second has `personaFor("s-1") == null`
+     - **2.4.3** borrowed=true survives — fire `NotificationsLoadInbox` after assigned; persona retained on the freshly-emitted state with `borrowed == true`
+     - **2.4.4** released for unknown sender → `expect: const <NotificationState>[]` (no emit; idempotency)
+
+2. **Tracking document updates** (this session-end)
+   - `voice-persona/01-implementation.md` — Phase 2 §3 task checkboxes all `[x]` with executed-evidence; §9 Execution Log Phase 2 row populated with commit-hash placeholder
+   - `voice-persona/00-index.md` — Current Status (3/6 phases complete; 294 tests); Phase Summary table marked ✅; Recent Updates Phase 2 entry
+   - `TODO.md` — Phase 2 marked done; Phase 3 promoted to NEXT SESSION header
+   - `.claude-session.md` — Phase 2 touched-files block added (will be updated to status=committed after this session-end commit)
+   - `history.md` — this entry (session-end summary above the prior checkpoint entry)
+
+### Files Created (1)
+
+- `test/unit/notifications/notification_bloc_persona_test.dart` — 4 blocTest cases (Phase 2.4.1–2.4.4)
+
+### Files Modified (5)
+
+- `lib/features/notifications/domain/notification_event.dart` — +2 events (Assigned/Released)
+- `lib/features/notifications/domain/notification_state.dart` — +`PersonaSnapshotMixin` applied to 4 loaded states; +`personasBySender` field threaded through each
+- `lib/features/notifications/domain/notification_bloc.dart` — bloc instance field, snapshot helper, 2 event handlers, `_emitCurrentSnapshot`, `_onExternalUpdate` switch extension, 7 emit-site updates
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md` — §3 + §9 updates
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-index.md` — Current Status, Phase Summary, Recent Updates
+- `TODO.md` — Phase 2 done; Phase 3 next-up
+
+### Test Results
+
+| Suite | Pre-Phase-2 (post-checkpoint) | Post-Phase-2 | Δ |
+|---|---|---|---|
+| `test/unit/notifications/` (focused) | 42 ✅ | 46 ✅ | +4 |
+| Baseline (`test/unit/ test/widget/ test/service_integration/`) | 290 ✅ | **294 ✅** | +4 |
+| `test/legacy_quarantine/` (drift baseline) | 44 ❌ | 44 ❌ | unchanged |
+
+Cumulative session totals (post-/clear continuation, both commits combined):
+
+| Suite | Session start (post-/clear) | Phase 0 close | Phase 1 close | Phase 2 close (session-end) |
+|---|---|---|---|---|
+| Baseline | 273 ✅ | 276 ✅ | 290 ✅ | **294 ✅** (+21 cumulative) |
+
+### Key Decisions / Insights
+
+- **`PersonaSnapshotMixin` over per-state field repetition**: shared mixin eliminates 4-way duplication of the `personaFor` accessor; gives every loaded state the same query interface for free. Equatable's `props` still requires per-state listing of `personasBySender`, so the storage isn't fully DRY — but the read-path is.
+- **Defensive copy at every emit site**: `_personasSnapshot()` returns `Map.unmodifiable(_personasBySender)`, which COPIES + freezes. Prevents the bloc's mutable map from leaking into emitted states (where a later mutation would silently invalidate the state's snapshot semantics). Single helper centralizes the policy.
+- **Two entry points, one mutation site**: WS path (`_onExternalUpdate` switch case) and test path (dedicated event handler) both end up mutating `_personasBySender`. The WS path delegates re-emit to the existing `_refreshCurrent`; the test path uses a separate `_emitCurrentSnapshot` (no fetch). Keeps both flows simple and observable.
+- **Idempotency guard on release**: `_onVoicePersonaReleased` returns early if the senderId has no persona — matches Pass-1-F3 test 2.4.4's `expect: []` assertion. Without the guard, `Map.remove()` of an absent key would still trigger `_emitCurrentSnapshot()` and emit a (functionally-identical) state, breaking the no-emit contract.
+- **Phase 0 dispatch test still passes after explicit case migration**: the new `voice_persona_assigned` case branch only mutates the persona map; doesn't fire audio/TTS. The Phase 0 test's `verifyNever(audio)` + `verifyNever(tts)` assertions still hold. Confirmed by re-running the Phase 0 file alongside the Phase 2 file in the full baseline run.
+
+### Out of Scope (deferred to next session)
+
+- **Voice-persona Phase 3 — UI badge** (next): new `PersonaBadge` widget wrapping `CircleAvatar`; new `DashedBorderPainter` (Q9 genuinely-new — no existing CustomPainter); 3 wiring sites (`_NotificationItemCard` in `conversation_by_date_screen.dart`, `ConversationScreen` header, inbox sender tile in `inbox_screen.dart`); 5 widget tests; EXECUTOR: HUMAN final acceptance review for badge color/contrast in light + dark mode.
+- Voice-persona Phase 4 (TTS routing — collapsed to verify+comment per REUSE pre-pass), Phase 5 (docs + on-device verify) — gated on Phase 3.
+- Conversation-mode + session-switcher milestones — separate plans, gated on voice-persona close.
+
+---
+
 ## 2026.05.06 (post-/clear continuation) | Session `a756441c` — Phase 0 dispatch audit + voice-persona Phase 1 (CHECKPOINT)
 
 #### Checkpoint | 2026.05.06 | Phase 0 dispatch audit + voice-persona Phase 1 data model both LANDED (273 → 290 baseline tests; +17)
