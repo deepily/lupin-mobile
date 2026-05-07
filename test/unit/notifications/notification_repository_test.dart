@@ -150,5 +150,53 @@ void main() {
       final r = await repo.bulkDelete("u@x.y", hours: 48, excludeOwnJobs: true);
       expect(r.deletedCount, 12);
     });
+
+    test(
+      "list round-trips voice_persona stamped on a fixture envelope (Phase 1 Task 1.4)",
+      () async {
+        // Fixture: test/fixtures/notifications/notification-with-persona.json
+        // — single NotificationItem shape with full voice_persona dict (Adam,
+        // borrowed=false). Wrap it as a list-response envelope so the standard
+        // GET /api/notifications/{user} handler round-trips it.
+        final item = loadFixture("notifications/notification-with-persona.json");
+        adapter.handlers["GET /api/notifications/u-persona"] = (_) => jsonBody({
+          "status"            : "success",
+          "user_id"           : "u-persona",
+          "notification_count": 1,
+          "include_played"    : false,
+          "limit"             : 50,
+          "timestamp"         : "2026-04-28T20:35:00Z",
+          "notifications"     : [item],
+        });
+
+        final r = await repo.list("u-persona");
+        expect(r.notifications.length,                1);
+        final n = r.notifications.single;
+        expect(n.id,                                  "fixture-persona-1");
+        expect(n.voicePersona,                        isNotNull);
+        expect(n.voicePersona!.name,                  "Adam");
+        expect(n.voicePersona!.voiceId,               "pNInz6obpgDQGcFmaJgB");
+        expect(n.voicePersona!.color,                 "#3F51B5");
+        expect(n.voicePersona!.borrowed,              isFalse);
+        expect(n.voicePersona!.displayName,           "Adam");
+      },
+    );
+
+    test(
+      "list still parses persona-absent envelopes cleanly (Phase 1 Task 1.4 regression)",
+      () async {
+        // Confirms the persona-absent path didn't regress. The existing
+        // list_response.json fixture has notifications without voice_persona.
+        adapter.handlers["GET /api/notifications/u-no-persona"] = (_) =>
+          jsonBodyFromFixture("notifications/list_response.json");
+
+        final r = await repo.list("u-no-persona");
+        expect(r.status,        "success");
+        // list_response.json fixture has 0 notifications — that's fine; the
+        // assertion is "no throw on persona-less envelope," which the call
+        // returning successfully proves.
+        expect(r.notifications.length, 0);
+      },
+    );
   });
 }

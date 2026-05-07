@@ -1,25 +1,33 @@
 # TODO
 
-Last updated: 2026-05-06 (Session `a756441c`: Mobile resync baseline + voice-persona plan-review CLOSED — 273 tests green, no code changes)
+Last updated: 2026-05-06 (Session `a756441c` continuation: Phase 0 + voice-persona Phase 1 LANDED — 290 baseline tests green; +17 across both phases; voice-persona Phase 2 is next)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: Phase 0 dispatch audit + voice-persona Phase 1.1
+## ⭐ NEXT SESSION — START HERE: voice-persona Phase 2 (WS event dispatch)
 
-**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). Implementation is unblocked.
+**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phase 0 dispatch audit is also CLOSED** (landed 2026-05-06 same session). Voice-persona Phases 1.1-5 are now actually unblocked.
 
 ### Order of operations
 
-1. **Phase 0 — WS dispatch audit + regression test** (~1-2 sessions; Task #5)
-   - Plan: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/00-phase-0-dispatch-audit.md`
-   - **Pre-confirmed verdict** (per REUSE pre-pass): PARTIAL DRIFT — outer routing in `app.dart:80-91` is correct; only inner-`notification.type` discriminator pivot missing in `notification_bloc.dart:146-170`
-   - Action: extend `_onExternalUpdate` with `switch (notification.type)` block + add a regression test under `test/unit/`
-   - **Blocks**: voice-persona, conversation-mode, session-switcher
+1. **Phase 0 — WS dispatch audit + regression test** ✅ DONE 2026-05-06 (session `a756441c` continuation)
+   - Plan: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/00-phase-0-dispatch-audit.md` — §5 checkboxes all marked complete; §6 success criteria all met; §10 audit findings populated
+   - Verdict realized: 🟡 PARTIAL DRIFT (matches REUSE pre-confirm)
+   - Code change: `notification_bloc.dart:146-185` `_onExternalUpdate` extended with `switch (n.type)` — whitelisted types route to existing audio+TTS path; default branch logs unknown types
+   - New test: `test/unit/notifications/notification_bloc_dispatch_test.dart` (3 tests, all green)
+   - Test impact: 273 → 276 baseline (+3); 44 quarantined unchanged
 
-2. **Voice-persona milestone (Phases 1.1 → 5)** (~5 days, 12 tasks; depends on Phase 0)
+2. **Voice-persona Phase 1 — Data model** ✅ DONE 2026-05-06 (session `a756441c` continuation)
+   - New `lib/features/notifications/data/voice_persona.dart` — liberal `fromJson` per Q7, null-defense per F1, equality keyed on `voiceId`
+   - Modified `notification_models.dart` — `NotificationItem.voicePersona` field + `fromJson` reader (handles missing/null/object); re-exports `VoicePersona`
+   - Fixture `test/fixtures/notifications/notification-with-persona.json` (canonical Adam allocation)
+   - 14 new tests: voice_persona_test.dart (9), notification_models_test.dart (+3 net new), notification_repository_test.dart (+2 fixture-backed round-trip)
+   - Test impact: 276 → 290 baseline; 44 quarantined unchanged
+
+3. **Voice-persona Phases 2 → 5** (~4 days, 7 tasks remaining) — START HERE NEXT SESSION
    - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
-   - Entry pointer: `…/2026.05.06-mobile-port-plans/01-voice-persona-port-plan.md`
    - Working contract: `voice-persona/00-working-contract.md` (FROZEN 2026-05-06)
+   - **Next: Phase 2** in `01-implementation.md §3` — WS event dispatch: add `NotificationsVoicePersonaAssigned` / `NotificationsVoicePersonaReleased` events, extend bloc state with `Map<String, VoicePersona> personasBySender`, route inner-type pivot in `_onExternalUpdate` (the Phase 0 default branch becomes explicit cases)
 
 ### Earlier next-session task — still pending, now bucketed
 

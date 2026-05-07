@@ -147,24 +147,42 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     NotificationsExternalUpdate event,
     Emitter<NotificationState> emit,
   ) async {
-    // Fire audio first (fire-and-forget) so a slow REST refetch doesn't delay
-    // the ding. Ding goes through NotificationAudioService (OS notification
-    // channel); speech goes through TtsOrchestrator (ElevenLabs primary,
-    // flutter_tts fallback). Both handle priority filtering + preferences
-    // internally; bloc doesn't care.
+    // Inner-type discriminator pivot (Phase 0 dispatch audit, 2026-05-06).
+    // Server `notification_queue_update` envelopes carry the real event in
+    // `notification.type`. Future feature ports (voice-persona, conversation-mode,
+    // session-switcher) add cases here without further dispatch-table edits.
     final n = event.notification;
     if ( n != null ) {
-      _audio?.handleIncoming(
-        priority     : n.priority,
-        message      : n.message,
-        title        : n.title,
-        suppressDing : n.suppressDing,
-      );
-      _tts?.enqueueIfSpeakable(
-        priority : n.priority,
-        message  : n.message,
-        title    : n.title,
-      );
+      switch ( n.type ) {
+        case "task":
+        case "progress":
+        case "alert":
+        case "custom":
+        case "user_initiated_message":
+        case "session_topic":
+          // Ordinary user-facing notification. Ding via NotificationAudioService
+          // (OS channel); speech via TtsOrchestrator (ElevenLabs → flutter_tts).
+          // Both filter by priority + preferences internally; bloc doesn't gate.
+          _audio?.handleIncoming(
+            priority     : n.priority,
+            message      : n.message,
+            title        : n.title,
+            suppressDing : n.suppressDing,
+          );
+          _tts?.enqueueIfSpeakable(
+            priority : n.priority,
+            message  : n.message,
+            title    : n.title,
+          );
+          break;
+        default:
+          // Unknown inner type — log so the gap is visible. Silent drop is the
+          // bug Phase 0 prevents. Future feature ports replace this branch with
+          // explicit cases (e.g., `voice_persona_assigned`).
+          // ignore: avoid_print
+          print( "[NotificationBloc] Unknown notification.type: '${n.type}' (id=${n.id})" );
+          break;
+      }
     }
     await _refreshCurrent( emit );
   }

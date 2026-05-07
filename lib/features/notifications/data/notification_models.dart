@@ -5,6 +5,10 @@
 /// `cosa/rest/notification_fifo_queue.NotificationItem.to_dict()`.
 library;
 
+import 'voice_persona.dart';
+
+export 'voice_persona.dart' show VoicePersona;
+
 DateTime? _parseDt( dynamic v ) =>
     v == null ? null : DateTime.tryParse( v.toString() );
 
@@ -41,6 +45,11 @@ class NotificationItem {
   final Map<String, dynamic>? predictionHint;
   final bool     displayQualifierWidget;
   final String?  sessionName;
+  /// Per-session voice/persona allocation, server-stamped per Q1.
+  /// Null when the server did not stamp a persona (legacy envelopes,
+  /// pre-allocation events). Consumers null-check before use; absence flows
+  /// cleanly to Sam fallback per Q3.
+  final VoicePersona? voicePersona;
   final Map<String, dynamic> raw;
 
   const NotificationItem( {
@@ -71,10 +80,12 @@ class NotificationItem {
     this.predictionHint,
     required this.displayQualifierWidget,
     this.sessionName,
+    this.voicePersona,
     this.raw = const {},
   } );
 
   factory NotificationItem.fromJson( Map<String, dynamic> json ) {
+    final personaRaw = json["voice_persona"];
     return NotificationItem(
       id                      : json["id"].toString(),
       idHash                  : _as<String>( json["id_hash"] ),
@@ -103,6 +114,9 @@ class NotificationItem {
       predictionHint          : _as<Map<String, dynamic>>( json["prediction_hint"] ),
       displayQualifierWidget  : json["display_qualifier_widget"] == true,
       sessionName             : _as<String>( json["session_name"] ),
+      voicePersona            : personaRaw is Map
+          ? VoicePersona.fromJson( Map<String, dynamic>.from( personaRaw ) )
+          : null,
       raw                     : Map<String, dynamic>.from( json ),
     );
   }

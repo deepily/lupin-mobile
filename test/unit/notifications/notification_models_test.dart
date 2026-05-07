@@ -54,6 +54,80 @@ void main() {
       expect(n.responseType,    isNull);
       expect(n.responseOptions, isNull);
       expect(n.timeoutSeconds,  isNull);
+      // Phase 1 — voice_persona absent → null (legacy envelopes, pre-allocation)
+      expect(n.voicePersona,    isNull);
+    });
+
+    test("reads voice_persona when server stamps it (Q1)", () {
+      final n = NotificationItem.fromJson({
+        "id"        : "n-3",
+        "message"   : "Persona test",
+        "type"      : "task",
+        "priority"  : "low",
+        "timestamp" : "2026-04-28T20:33:42Z",
+        "played"    : false,
+        "play_count": 0,
+        "response_requested"      : false,
+        "suppress_ding"           : false,
+        "display_qualifier_widget": false,
+        "voice_persona": {
+          "name"        : "Adam",
+          "voice_id"    : "pNInz6obpgDQGcFmaJgB",
+          "icon"        : "🌑",
+          "color"       : "#3F51B5",
+          "borrowed"    : false,
+          "assigned_at" : "2026-04-28T20:33:42Z",
+          "display_name": "Adam",
+        },
+      });
+      expect(n.voicePersona,                    isNotNull);
+      expect(n.voicePersona!.name,              "Adam");
+      expect(n.voicePersona!.voiceId,           "pNInz6obpgDQGcFmaJgB");
+      expect(n.voicePersona!.icon,              "🌑");
+      expect(n.voicePersona!.color,             "#3F51B5");
+      expect(n.voicePersona!.borrowed,          isFalse);
+      expect(n.voicePersona!.displayName,       "Adam");
+    });
+
+    test("voice_persona null in envelope → voicePersona null on item", () {
+      // Server sends explicit null (not just omitted) — should still null-out
+      // cleanly, not throw.
+      final n = NotificationItem.fromJson({
+        "id"        : "n-4",
+        "message"   : "x",
+        "type"      : "task",
+        "priority"  : "low",
+        "timestamp" : "2026-04-15T12:00:00Z",
+        "played"    : false,
+        "play_count": 0,
+        "response_requested"      : false,
+        "suppress_ding"           : false,
+        "display_qualifier_widget": false,
+        "voice_persona"           : null,
+      });
+      expect(n.voicePersona, isNull);
+    });
+
+    test("borrowed=true persona reads through to voicePersona.borrowed", () {
+      final n = NotificationItem.fromJson({
+        "id"        : "n-5",
+        "message"   : "Pool exhausted",
+        "type"      : "task",
+        "priority"  : "low",
+        "timestamp" : "2026-04-28T20:33:42Z",
+        "played"    : false,
+        "play_count": 0,
+        "response_requested"      : false,
+        "suppress_ding"           : false,
+        "display_qualifier_widget": false,
+        "voice_persona": {
+          "name"     : "Bella",
+          "voice_id" : "EXAVITQu4vr4xnSDxMaL",
+          "borrowed" : true,
+        },
+      });
+      expect(n.voicePersona!.borrowed, isTrue);
+      expect(n.voicePersona!.voiceId,  "EXAVITQu4vr4xnSDxMaL");
     });
   });
 

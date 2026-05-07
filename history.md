@@ -1,5 +1,83 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.05.06 (post-/clear continuation) | Session `a756441c` — Phase 0 dispatch audit + voice-persona Phase 1 (CHECKPOINT)
+
+#### Checkpoint | 2026.05.06 | Phase 0 dispatch audit + voice-persona Phase 1 data model both LANDED (273 → 290 baseline tests; +17)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/` (unchanged from prior commit `e9fa8c9`)
+**Implementation doc**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md` (Phase 0 + 1 rows in §9 Execution Log populated)
+**Continues from**: commit `e9fa8c9` (same session, post-/clear)
+
+### Accomplishments
+
+1. **Phase 0 — WS dispatch audit + regression test** (`00-phase-0-dispatch-audit.md`)
+   - Live audit confirmed REUSE pre-pass verdict: 🟡 PARTIAL DRIFT — outer routing in `app.dart:79-93` correct; `notification_bloc.dart:146-170` `_onExternalUpdate` had no inner-`notification.type` pivot
+   - Fix: extended handler with `switch (n.type)` — whitelisted types (`task`/`progress`/`alert`/`custom`/`user_initiated_message`/`session_topic`) route to existing audio + TTS path; default branch logs unknown types as canary for future migrations
+   - New file `test/unit/notifications/notification_bloc_dispatch_test.dart` — 3 regression tests (voice_persona_assigned → no audio/TTS; some_unknown_type → graceful degradation; alert → existing path preserved)
+   - Audit-doc §10 populated with live findings; §5 EXECUTOR checkboxes marked `[x]` with executed-evidence; §6 success criteria all met; status banner ✅ COMPLETE
+   - Test impact: 273 → 276 (+3)
+
+2. **Voice-persona Phase 1 — Data model** (`voice-persona/01-implementation.md §2`)
+   - New `lib/features/notifications/data/voice_persona.dart` (87 lines) — liberal `fromJson` per Q7 (no enum validation), null-defense per F1 (missing/malformed fields → null, never throws), equality keyed on `voiceId` per Q3-driven contract, `toJson` round-trip helper
+   - Modified `notification_models.dart` — added `VoicePersona? voicePersona` field on `NotificationItem`; `fromJson` now reads `voice_persona` envelope key (handles map/null/missing); re-exports `VoicePersona` for callers
+   - New fixture `test/fixtures/notifications/notification-with-persona.json` — canonical Adam allocation (note: actual project layout is `test/fixtures/`, not the plan's `test/_fixtures/` typo; `_helpers/fixture_loader.dart:9` is the source of truth)
+   - 14 new tests across 3 files: `voice_persona_test.dart` (9: parse round-trip / borrowed=true / null-defense missing / null-defense malformed / forward-compat / equality 3 cases / toJson round-trip); `notification_models_test.dart` (+3 net new); `notification_repository_test.dart` (+2 fixture-backed round-trip per Phase 1 Task 1.4)
+   - Phase 1 §2 task checkboxes marked `[x]` with executed-evidence; §9 Execution Log Phase 0 + Phase 1 rows populated
+   - Test impact: 276 → 290 (+14)
+
+3. **Tracking document updates**
+   - `01-implementation.md` — Phase 0 + Phase 1 §9 rows populated with test deltas + uncommitted-status
+   - `00-index.md` — Current Status (2/6 phases complete; 290 tests); Phase Summary table marked ✅; two new Recent Updates entries
+   - `00-phase-0-dispatch-audit.md` — full §10 audit-findings block; §5 + §6 + status banner
+   - `TODO.md` — NEXT SESSION block reframed: Phase 0 ✅ done, Phase 1 ✅ done, Phase 2 promoted to header
+   - `.claude-session.md` (gitignored) — manifest extended with Phase 0 + Phase 1 file entries
+
+### Files Created (4)
+
+- `lib/features/notifications/data/voice_persona.dart`
+- `test/unit/notifications/voice_persona_test.dart`
+- `test/unit/notifications/notification_bloc_dispatch_test.dart`
+- `test/fixtures/notifications/notification-with-persona.json`
+
+### Files Modified (8)
+
+- `lib/features/notifications/domain/notification_bloc.dart` — `_onExternalUpdate` switch pivot
+- `lib/features/notifications/data/notification_models.dart` — `voicePersona` field on `NotificationItem`
+- `test/unit/notifications/notification_models_test.dart` — +3 new persona tests
+- `test/unit/notifications/notification_repository_test.dart` — +2 fixture-backed round-trip tests
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/00-phase-0-dispatch-audit.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-index.md`
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md`
+- `TODO.md`
+
+### Test Results
+
+| Suite | Pre-checkpoint | Post-Phase-0 | Post-Phase-1 |
+|---|---|---|---|
+| `test/unit/ test/widget/ test/service_integration/` | 273 ✅ | 276 ✅ | **290 ✅** |
+| `test/unit/notifications/` (focused) | 27 ✅ | 30 ✅ | **42 ✅** |
+| `test/legacy_quarantine/` (drift baseline) | 44 ❌ | 44 ❌ | 44 ❌ unchanged |
+
+Net: +17 tests, zero regressions, zero quarantined-test reactivations.
+
+### Key Decisions / Insights
+
+- **Phase 0 default-branch design**: chose Option A (whitelist-then-default-log) over Option B (default-fallthrough-to-existing) — A's value is the LOG, which is the canary that Phase 0 explicitly exists to install. Future feature ports replace the default branch with explicit cases.
+- **Plan path typo caught at execution time**: plan said `test/_fixtures/notifications/...` but the actual project layout is `test/fixtures/` (verified via `_helpers/fixture_loader.dart:9`). Corrected on the fly; documented in the Phase 1 §2 task 1.4 progress note. No design impact.
+- **Equality keyed on `voiceId` only**: same-voice-different-session personas compare equal. Documented as acceptable because the bloc state map keys on `senderId`, never on persona identity. Null-voiceId twins also compare equal (benign for "no persona" placeholders).
+- **Selective staging**: 2 pre-existing modified files in `src/rnd/v0.1.6-migration/` (from prior session, untouched by this work) excluded per the `.claude-session.md` v2.0 selective-staging rule.
+- **No commit between Phase 0 and Phase 1**: ran them back-to-back without intermediate commit, matching the user's "continue" cadence + the no-auto-commit memory rule. This single checkpoint commit captures both at once.
+
+### Out of Scope (deferred to next session)
+
+- **Voice-persona Phase 2 — WS event dispatch** (next): bloc events `NotificationsVoicePersonaAssigned(senderId, persona)` + `NotificationsVoicePersonaReleased(senderId, name)`; bloc state `Map<String, VoicePersona> personasBySender` + `personaFor(senderId)` helper; replace Phase 0 default-branch logger with explicit cases; 4 new blocTest cases. Plan: `voice-persona/01-implementation.md §3`.
+- Voice-persona Phase 3 (UI badge), Phase 4 (TTS routing), Phase 5 (docs + on-device verify) — gated on Phase 2.
+- Conversation-mode + session-switcher milestones — separate plans, gated on voice-persona close.
+- WS reconnect circuit-breaker, `/api/claude-code/dispatch` fossil cleanup, doc-viewer scope=docs deep-link — Tier-1 plumbing, separate slate.
+
+---
+
 ## 2026.05.06 | Session `a756441c` — Mobile resync baseline + voice-persona plan-review (CLOSED)
 
 #### Session-End | 2026.05.06 | Plan-review FULLY CLOSED — voice-persona milestone ready to implement (gated on Phase 0)

@@ -41,8 +41,9 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 
 ## Current Status
 
-**Active Phase**: None — design phase, plan-review pending
-**Progress**: 0% (no code written yet)
+**Active Phase**: Phase 2 (WS Event Dispatch) is next — Phases 0 + 1 closed
+**Progress**: 2/6 phases complete (Phase 0 prereq + Phase 1 data model)
+**Test count**: 290 baseline-tracked (was 273; +17 across Phase 0 + Phase 1)
 **Last Updated**: 2026-05-06
 
 ---
@@ -51,9 +52,9 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 
 | Phase | Status | Where | Notes |
 |---|---|---|---|
-| 0 (prereq) | ⏳ pending | [`../00-phase-0-dispatch-audit.md`](../00-phase-0-dispatch-audit.md) | Separate plan; WS dispatch audit blocks this milestone + the other two feature ports |
-| 1 — Data model | ⏳ pending | [01-implementation.md §2](01-implementation.md) | `VoicePersona` model + `NotificationItem` extension + fixture variants |
-| 2 — WS dispatch | ⏳ pending | [01-implementation.md §3](01-implementation.md) | Inner-type discriminator + bloc events + bloc state map |
+| 0 (prereq) | ✅ complete 2026-05-06 | [`../00-phase-0-dispatch-audit.md`](../00-phase-0-dispatch-audit.md) | 🟡 partial drift confirmed; `switch (n.type)` pivot landed in `_onExternalUpdate`. 273 → 276 |
+| 1 — Data model | ✅ complete 2026-05-06 | [01-implementation.md §2](01-implementation.md) | `VoicePersona` model + `NotificationItem.voicePersona` field + fixture + 14 new tests. 276 → 290 |
+| 2 — WS dispatch | ⏳ pending | [01-implementation.md §3](01-implementation.md) | Inner-type discriminator + bloc events + bloc state map (NEXT) |
 | 3 — UI badge | ⏳ pending | [01-implementation.md §4](01-implementation.md) | `PersonaBadge` widget + wiring into 3 surfaces |
 | 4 — TTS routing | ⏳ pending | [01-implementation.md §5](01-implementation.md) | `voice_id` parameter on `StreamingTtsPlayer.speak()` + orchestrator pipe-through |
 | 5 — Docs + verify | ⏳ pending | [01-implementation.md §6](01-implementation.md) | `TODO.md` / `history.md` updates + full test run |
@@ -62,6 +63,8 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 
 ## Recent Updates
 
+- **2026-05-06 (Phase 1 landed)**: Phase 1 data model executed in same session continuation. New `voice_persona.dart` (liberal `fromJson` per Q7, null-defense per F1, equality keyed on `voiceId` per task 1.2). `NotificationItem` extended with `voicePersona` field. Fixture at `test/fixtures/notifications/notification-with-persona.json` (note: actual path is `test/fixtures/`, not `test/_fixtures/` — plan's path was a typo). 14 new tests across 3 files. Baseline 276 → 290.
+- **2026-05-06 (Phase 0 landed)**: Phase 0 dispatch audit + fix + regression test executed in session `a756441c` post-/clear continuation. `notification_bloc.dart:146-185` extended with `switch (n.type)` — whitelisted types route to existing audio+TTS path; default branch logs unknown types as canary for future migrations. New file `test/unit/notifications/notification_bloc_dispatch_test.dart` (3 tests, all green). Baseline-tracked test count: 273 → 276; quarantined-test count unchanged at 44. Voice-persona Phases 1.1-5 now actually unblocked (not just plan-review-unblocked).
 - **2026-05-06 (Pass 2 close)**: Pass 2 Adversarial complete (Task #9); 8 wording-polish findings + 1 meta-finding (F20). User picked option (b) — F20 only: tag the 13 bare checkboxes in `00-phase-0-dispatch-audit.md` §5 with `EXECUTOR: AI`. Plan-review FULLY CLOSED. Phase 0 implementation + voice-persona Phase 1.1-1.5 unblocked.
 - **2026-05-06 (latest)**: Pass 1 Fitness complete (Task #8); user approved all 11 findings. 12 edits applied across `01-implementation.md`, `04-testing-validation.md`, `00-working-contract.md`. Phase 1 tasks renumbered as Task 1.1-1.5 with explicit dependency chain. Null-defense, blocTest assertion shapes, badge wiring file paths, server ordering guarantee, emoji failure-mode contract, and 5 other clarifications added. No Q1-Q9 challenged. Convergence check: 0 TBD hits, only "all resolved at REUSE" references for Open sub-question grep.
 - **2026-05-06 (later)**: REUSE pre-pass complete (Task #7); 6 fix categories applied. Phase 4 Task 4.1 collapsed (`voiceId` already wired). Phase 0 scope narrowed to bloc handler only. Q7/Q8/Q9 promoted from Open sub-questions to FROZEN. Prior-art section added below.

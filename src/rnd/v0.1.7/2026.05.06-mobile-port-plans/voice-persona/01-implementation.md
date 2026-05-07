@@ -71,16 +71,17 @@ Server stamps `voice_persona` onto **every outbound notification** for that sess
 
 ## 2. Phase 1 — Data Model
 
-**Status**: PLANNED
+**Status**: ✅ COMPLETE 2026-05-06 (session a756441c continuation, post-Phase-0)
 **Goal**: Mirror server's persona shape in Dart; extend `NotificationItem` with persona field; ensure fixtures cover both presence + absence.
+**Test delta**: 276 → 290 (+14 net new) across 3 test files — meets the §4 forecast for Phase 1.
 
 ### Tasks (sequential — Task 1.3 depends on 1.1; Task 1.4 depends on 1.3; Task 1.5 depends on 1.1, 1.2, 1.3)
 
-- [ ] **Task 1.1** — EXECUTOR: AI — Create `lib/features/notifications/data/voice_persona.dart`. Required fields: `name`, `voiceId`, `icon`, `color`, `borrowed`, `assignedAt`, `displayName`. `fromJson` is **liberal** per `Q7` (FROZEN at REUSE 2026-05-06) — no enum validation, accepts any string field. **Null-defense contract** (per Pass 1 finding F1, applied 2026-05-06): malformed or missing fields default to `null`; consumers (Phase 3 widgets, Phase 4 TTS dispatch) MUST null-check before use; throw nothing — degrade gracefully to no-persona behavior so server-stamp absence cleanly flows to Sam fallback per `Q3`.
-- [ ] **Task 1.2** (depends on 1.1) — EXECUTOR: AI — Override `==` and `hashCode` on `VoicePersona` keyed on `voiceId`.
-- [ ] **Task 1.3** (depends on 1.1) — EXECUTOR: AI — Extend `lib/features/notifications/data/notification_models.dart` `NotificationItem` with `VoicePersona? voicePersona` field; update `fromJson` to read `voice_persona` from envelope; preserve null when absent.
-- [ ] **Task 1.4** (depends on 1.3) — EXECUTOR: AI — Add fixture variant `test/_fixtures/notifications/notification-with-persona.json`; update an existing fixture to confirm persona-absent path still works.
-- [ ] **Task 1.5** (depends on 1.1, 1.2, 1.3) — EXECUTOR: AI — Run `./flutter.sh test test/unit/features/notifications/data/voice_persona_test.dart` — assert `fromJson` round-trip + equality + null-persona on `NotificationItem`.
+- [x] **Task 1.1** — EXECUTOR: AI — Create `lib/features/notifications/data/voice_persona.dart`. Required fields: `name`, `voiceId`, `icon`, `color`, `borrowed`, `assignedAt`, `displayName`. `fromJson` is **liberal** per `Q7` (FROZEN at REUSE 2026-05-06) — no enum validation, accepts any string field. **Null-defense contract** (per Pass 1 finding F1, applied 2026-05-06): malformed or missing fields default to `null`; consumers (Phase 3 widgets, Phase 4 TTS dispatch) MUST null-check before use; throw nothing — degrade gracefully to no-persona behavior so server-stamp absence cleanly flows to Sam fallback per `Q3`. — File created 87 lines; library doc-comment cross-references parent design + voice-persona milestone docs; null-defense honored via `_asStr` helper that returns null on type mismatch.
+- [x] **Task 1.2** (depends on 1.1) — EXECUTOR: AI — Override `==` and `hashCode` on `VoicePersona` keyed on `voiceId`. — implemented in same file; comment notes acceptable collision (same-voiceId different-session compares equal; bloc state map keys on senderId, not persona identity).
+- [x] **Task 1.3** (depends on 1.1) — EXECUTOR: AI — Extend `lib/features/notifications/data/notification_models.dart` `NotificationItem` with `VoicePersona? voicePersona` field; update `fromJson` to read `voice_persona` from envelope; preserve null when absent. — added field + constructor param + `fromJson` reader (liberal: handles map/null/missing); also re-exported `VoicePersona` from `notification_models.dart` for convenience.
+- [x] **Task 1.4** (depends on 1.3) — EXECUTOR: AI — Add fixture variant `test/fixtures/notifications/notification-with-persona.json`; update an existing fixture to confirm persona-absent path still works. — fixture created (canonical Adam allocation, borrowed=false); plan's `test/_fixtures/...` path was a typo — actual project layout uses `test/fixtures/` (per `_helpers/fixture_loader.dart:9`). Persona-absent path covered by reusing existing `list_response.json` fixture in regression test.
+- [x] **Task 1.5** (depends on 1.1, 1.2, 1.3) — EXECUTOR: AI — Run unit tests. — `./flutter.sh test test/unit/notifications/voice_persona_test.dart`: 9/9 pass. `./flutter.sh test test/unit/notifications/`: 42/42 pass (was 27 before this phase; +15 = 9 + 4 model + 2 repo). Full baseline-tracked suite (`test/unit/ test/widget/ test/service_integration/`): 290/290 pass.
 
 ### Risks (Phase 1)
 
@@ -254,8 +255,8 @@ Per `00-working-contract.md`, items 1+2 are AI-executable; item 3 is the only HU
 
 | Phase | Status | Date | Test count delta | Commit-hash placeholder | Progress note |
 |---|---|---|---|---|---|
-| 0 (prereq) | ⏳ pending | | | | See `../00-phase-0-dispatch-audit.md` |
-| 1 — data model | ⏳ pending | | | | |
+| 0 (prereq) | ✅ complete | 2026-05-06 | 273 → 276 (+3) | uncommitted (session a756441c continuation) | Verdict 🟡 partial drift confirmed live; `_onExternalUpdate` extended with `switch (n.type)` + default-branch logger. New file `test/unit/notifications/notification_bloc_dispatch_test.dart`. See `../00-phase-0-dispatch-audit.md`. |
+| 1 — data model | ✅ complete | 2026-05-06 | 276 → 290 (+14) | uncommitted (session a756441c continuation) | New: `voice_persona.dart` (87 lines, liberal fromJson + null-defense + `==`/`hashCode` on `voiceId`); `voice_persona_test.dart` (9 tests); fixture `notification-with-persona.json`. Modified: `notification_models.dart` (+`voicePersona` field); `notification_models_test.dart` (+4 tests covering present/absent/null/borrowed); `notification_repository_test.dart` (+2 fixture-backed round-trip tests). |
 | 2 — WS dispatch | ⏳ pending | | | | |
 | 3 — UI badge | ⏳ pending | | | | |
 | 4 — TTS routing | ⏳ pending | | | | |
