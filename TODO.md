@@ -1,12 +1,12 @@
 # TODO
 
-Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 BOTH LANDED — 308 baseline tests green; +14 over Phase 2 close; voice-persona Phase 5 (Docs + on-device verify) is next; both HUMAN acceptance gates bucketed into a single laptop+emulator session at Phase 5 close)
+Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 + Phase 5 ALL LANDED — voice-persona milestone is CODE-COMPLETE; 308 baseline tests green; +35 across Phases 0-4; HUMAN gate (laptop+emulator runbook vp1-vp7) is the only outstanding step)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: voice-persona Phase 5 (Docs + on-device verify, bundled HUMAN gates)
+## ⭐ NEXT SESSION — START HERE: voice-persona milestone HUMAN gate (laptop+emulator runbook execution)
 
-**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phases 0, 1, 2, 3, 4 are all CLOSED**. Voice-persona Phase 5 is the final phase — covers (a) milestone-close doc updates, (b) extension of the existing on-device TTS runbook to bundle BOTH outstanding HUMAN gates (Phase 3 visual badge contrast + Phase 4 persona-voice TTS verification) into a single laptop+emulator session per user direction 2026-05-07.
+**Voice-persona milestone is CODE-COMPLETE** as of 2026-05-07. All 6 phases AI-executable work has landed. The only remaining step is the HUMAN runbook execution on a real device — single laptop+emulator session running `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` §"Voice-persona milestone gate" steps vp1-vp7 (5 visual + 2 audible). Sign-off in the runbook closes the milestone.
 
 ### Order of operations
 
@@ -52,13 +52,14 @@ Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 BOTH LANDED 
    - 6 new tests: 3 in `streaming_tts_player_test.dart` (4.1 voiceId in body / 4.2 omitted when null / 4.3 borrowed body shape unchanged); 3 in `tts_orchestrator_test.dart` (4.4 persona piped from notification / 4.4b null voiceId defensive / 4.5 quota fallback omits voiceId per Q4+F11)
    - Test impact: 302 → 308 baseline (+6; plan estimated +5, the +1 is 4.4b defensive); 44 quarantined unchanged
 
-6. **Voice-persona Phase 5 — Docs + on-device verify** — START HERE NEXT SESSION
-   - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
-   - Update `00-index.md` Current Status to "milestone complete"; populate `01-implementation.md` §9 Phase 5 row; close `TODO.md` voice-persona entries; brief `history.md` accomplishment line
-   - Extend the existing on-device TTS runbook (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`) with a **persona-section** that consolidates BOTH outstanding HUMAN gates per user direction 2026-05-07:
-     - **Phase 3 visual acceptance**: badge color/contrast review in light + dark mode on real device (Phases 3.6 in `04-testing-validation.md`)
-     - **Phase 4 TTS persona verification**: confirm scenarios 5/6/7 speak with the assigned per-session voice rather than Sam (Q6 — bucketed with existing runbook)
-   - Single laptop+emulator session covers both gates
+6. **Voice-persona Phase 5 — Docs + on-device verify** ✅ AI complete 2026-05-07 (this session); ⏳ HUMAN gate pending
+   - All 5 AI tasks complete: TODO.md (this entry) + `00-index.md` Current Status to milestone code-complete + `01-implementation.md` §9 Phase 5 row populated + history.md session-end entry + 308 ✅ baseline confirmed + 44 ❌ quarantine unchanged + on-device runbook extended
+   - Runbook extension: 7 new acceptance steps (vp1-vp7) bundling BOTH outstanding HUMAN gates per user direction 2026-05-07
+     - vp1-vp5: Phase 3 visual gates (inbox / conversation header / by-date item / borrowed dashed / light+dark contrast)
+     - vp6-vp7: Phase 4 audible gates (persona timbre vs Sam / quota fallback uses device flutter_tts per Q4)
+     - Persona timbre cheat sheet for the 6-voice pool inline
+   - Test impact: 308 ✅ baseline confirmed (unchanged from Phase 4 close — Phase 5 is doc-only); 44 ❌ quarantine drift baseline unchanged
+   - **HUMAN gate** (single laptop+emulator session): execute `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` §"Voice-persona milestone gate" steps vp1-vp7; sign off in the runbook's progress log; that closes the milestone
 
 ### Earlier next-session task — still pending, now bucketed
 

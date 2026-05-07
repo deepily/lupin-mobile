@@ -1,5 +1,73 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.05.07 (checkpoint, post-Phase-4) | Session `c25dbc3e` — Voice-persona Phase 5 AI close + runbook extension (CHECKPOINT)
+
+#### Checkpoint | 2026.05.07 | Voice-persona milestone CODE-COMPLETE — Phase 5 AI portion landed; on-device runbook extended with vp1-vp7 acceptance steps bundling BOTH outstanding HUMAN gates; baseline 308 ✅ / 0 ❌ confirmed; 44 ❌ quarantine drift baseline unchanged
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/` (unchanged from prior checkpoint `a190b4f`)
+**Implementation doc**: `voice-persona/01-implementation.md` (§6 Phase 5 AI task checkboxes all `[x]`; HUMAN runbook task `[ ]` pending; §9 Phase 5 row populated)
+**Continues from**: checkpoint `a190b4f` (same session, post-Phase-4 close)
+
+### Accomplishments
+
+1. **Voice-persona Phase 5 — Documentation + Verify (AI portion)** (`voice-persona/01-implementation.md §6`)
+   - **Full baseline confirmed**: `./flutter.sh test test/unit/ test/widget/ test/service_integration/` returned `308 ✅ / 0 ❌`. Cumulative delta over the milestone: 273 → 308 (+35 across Phases 0-4). Original Phase 5 §6 task #3 forecast was "+10" — actuals exceeded due to defensive coverage in Phases 1-4.
+   - **Quarantine baseline confirmed**: `test/legacy_quarantine/` count is `0 +0 -44` — drift baseline unchanged from session `0d54c763`. No silent reactivations of legacy drift-broken tests. Per `<global>~/.claude/CLAUDE.md` legacy-quarantine rule.
+   - **On-device runbook extended** (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`): new "Voice-persona milestone gate (added 2026-05-07)" section between "After verify: reporting" and "Related files" — 7 acceptance steps + sign-off block + 6-voice persona timbre cheat sheet:
+     - **vp1** Inbox sender tile — colored badge with emoji renders for senders with allocated persona; fallback to legacy first-letter CircleAvatar for senders without persona; long-press tooltip shows `displayName`
+     - **vp2** ConversationScreen AppBar — 28px badge + senderId text in Row; persona color matches inbox tile for same sender
+     - **vp3** ConversationByDateScreen `_NotificationItemCard` — 24px badge inline directly right of priority chip
+     - **vp4** Borrowed-persona dashed border — visible when `borrowed=true`; "skipped — no borrowed persona" if not observable in run
+     - **vp5** Light + dark mode contrast — Phase 3 §3.6 HUMAN acceptance gate; F9 failure-mode contract holds (badge always renders persona color even if emoji renders as tofu); subjective sign-off: "distinguishable enough at a glance"
+     - **vp6** TTS persona-voice timbre — Phase 4 F5 HUMAN gate; re-fire scenarios s2 + s3 + s5/s5b; voice should match allocated persona (Adam = deep male / Bella = soft female / Domi = confident female / Antoni = mid-male / Rachel = smooth female / Arnold = gravelly male) NOT Sam (neutral fallback). Record persona name + perceived voice character per F5.
+     - **vp7** Quota fallback uses device `flutter_tts` — re-fire s8 with `LUPIN_DEV_SIMULATE_TTS_ERROR=true`; Q4 audible verification (different voice space — fallback uses on-device synthesizer voice, NOT any ElevenLabs persona)
+     - **Sign-off block**: 4 explicit checkboxes (all visual + audible ticked + persona name/character recorded + date/device/Android/APK-commit recorded)
+   - **Tracking-doc closes**:
+     - `01-implementation.md §6` — all 5 AI task checkboxes `[x]` with executed-evidence; HUMAN runbook task `[ ]` retained; §9 Phase 5 row populated with `308 ✅ / 0 ❌` baseline + `44 ❌` quarantine + uncommitted-status placeholder.
+     - `00-index.md` — Current Status promoted to "🎯 CODE-COMPLETE 2026-05-07"; Progress 6/6 (AI portion) with HUMAN gate noted; Phase Summary table all rows ✅; Recent Updates Phase-5-landed entry.
+     - `TODO.md` — header reframed as "milestone CODE-COMPLETE"; NEXT SESSION block now reads "voice-persona milestone HUMAN gate (laptop+emulator runbook execution)"; Phase 5 entry expanded with full task evidence; Phases 4-5 promoted from "next" to "done".
+   - **No code changes** in this Phase 5 batch — purely documentation + tracking + runbook extension.
+
+2. **Tracking document updates** (this checkpoint)
+   - `voice-persona/01-implementation.md` — §6 task checkboxes [x] for AI items, [ ] retained for HUMAN; §9 Phase 5 row populated
+   - `voice-persona/00-index.md` — Current Status to milestone code-complete; Phase Summary 6/6; Recent Updates Phase 5 entry
+   - `TODO.md` — milestone code-complete header; HUMAN runbook is sole NEXT-SESSION item
+   - `2026.04.24-on-device-tts-verify-runbook.md` — voice-persona section + persona milestone references in Related Files
+   - `.claude-session.md` — Phase 5 touched-files block under session `c25dbc3e`
+   - `history.md` — this entry
+
+### Files Modified (4)
+
+- `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` — voice-persona milestone gate section (vp1-vp7 + sign-off + 6-voice cheat sheet); Related Files section extended with persona milestone refs
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md` — §6 close + §9 Phase 5 row
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-index.md` — Current Status, Phase Summary, Recent Updates
+- `TODO.md` — milestone close + HUMAN gate as sole NEXT-SESSION item
+
+(No `lib/` or `test/` changes in this batch — Phase 5 is doc-only.)
+
+### Test Results
+
+| Suite | Pre-Phase-5 | Post-Phase-5 | Δ |
+|---|---|---|---|
+| Baseline (`test/unit/ test/widget/ test/service_integration/`) | 308 ✅ | **308 ✅** | 0 (doc-only) |
+| `test/legacy_quarantine/` (drift baseline) | 44 ❌ | **44 ❌** | unchanged ✅ no silent reactivations |
+
+Cumulative milestone close: **273 → 308 (+35)** across Phases 0-4; Phase 5 added zero tests by design (per §6 — Phase 5 is doc + verify only).
+
+### Key Decisions / Insights
+
+- **Bundling both HUMAN gates into a single runbook section**: per user direction 2026-05-07. Without bundling, Phase 3's badge contrast review would have needed its own laptop+emulator session, and Phase 5's TTS persona check would have needed another. The vp1-vp7 batch is structured so a single device handoff covers both — visual checks first (vp1-vp5) since they're the cheap "open the app and look" pass, audible last (vp6-vp7) since they require firing scenarios via `fire-tts-scenarios.py`. Sign-off is one block at the end.
+- **Persona timbre cheat sheet inline**: Pass 1 finding F5 required recording "perceived voice character." Without the cheat sheet, the user would have to remember which voice goes with which persona OR look it up server-side mid-test. The 6-voice table inline turns vp6 into a comparison task ("does what I hear match Adam's row?") rather than a recall task. The Sam fallback row at the bottom makes the negative case explicit too.
+- **No code changes in Phase 5**: this is the only phase where that holds. The §6 spec was always "docs + verify," which let the milestone close cleanly as a paperwork batch — no risk of regression sneaking in at the close.
+- **HUMAN gate as the only open item, not as a TODO inflation**: per F4 ("do NOT do a wider TODO sweep"), the TODO update touches only the voice-persona items. Other open buckets (hygiene follow-ups from `edaec79`, on-device sanity pass items from session `0d54c763`, FCM deferral) are untouched.
+
+### Out of Scope (HUMAN gate retained)
+
+- **HUMAN runbook execution**: single laptop+emulator session running runbook §"Voice-persona milestone gate" vp1-vp7 + sign-off block. Gated on `feedback_dev_server_laptop_split` memory rule — dev server has no Android SDK; build/deploy on laptop. When that lands, the milestone closes fully.
+
+---
+
 ## 2026.05.07 (checkpoint, post-Phase-3) | Session `c25dbc3e` — Voice-persona Phase 4 TTS routing (CHECKPOINT)
 
 #### Checkpoint | 2026.05.07 | Voice-persona Phase 4 LANDED — collapsed verify+comment per REUSE pre-pass; orchestrator now pipes `notification.voicePersona?.voiceId` through to `StreamingTtsPlayer.speak()`; 302 → 308 baseline tests green
