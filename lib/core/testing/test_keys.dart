@@ -98,6 +98,12 @@ class TestKeys {
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';
 
+  // Voice persona badge (Phase 3 — voice-persona milestone)
+  // Used at every wiring site (inbox tile, conversation header, by-date item).
+  // Suffix with senderId at use-site, e.g. '${personaBadgePrefix}s-1'.
+  static const personaBadgePrefix       = 'persona.badge.';        // + senderId
+  static const personaBadgeDashedPrefix = 'persona.badge.dashed.'; // + senderId (borrowed variant)
+
   // Audio artifact player (Phase 4a — in-app playback for pg-* / rp- jobs)
   static const audioPlayerDownloadButton = 'audio.download';
   static const audioPlayerPlayButton     = 'audio.play';

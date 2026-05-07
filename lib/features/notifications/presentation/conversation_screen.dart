@@ -7,6 +7,7 @@ import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'interactive_prompt_sheet.dart';
+import 'persona_badge.dart';
 import 'sender_dates_screen.dart';
 
 class ConversationScreen extends StatefulWidget {
@@ -37,10 +38,30 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Widget build( BuildContext context ) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.senderId,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: BlocSelector<NotificationBloc, NotificationState, VoicePersona?>(
+          selector: ( state ) => state is PersonaSnapshotMixin
+              ? ( state as PersonaSnapshotMixin ).personaFor( widget.senderId )
+              : null,
+          builder: ( context, persona ) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children    : [
+              if ( persona != null ) ...[
+                PersonaBadge(
+                  persona  : persona,
+                  senderId : widget.senderId,
+                  diameter : 28,
+                ),
+                const SizedBox( width: 8 ),
+              ],
+              Flexible(
+                child: Text(
+                  widget.senderId,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           IconButton(

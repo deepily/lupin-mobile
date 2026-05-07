@@ -7,6 +7,7 @@ import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'conversation_screen.dart';
+import 'persona_badge.dart';
 
 class InboxScreen extends StatefulWidget {
   final String userEmail;
@@ -72,6 +73,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 itemBuilder: ( _, i ) => _SenderTile(
                   sender    : state.senders[ i ],
                   userEmail : widget.userEmail,
+                  persona   : state.personaFor( state.senders[ i ].senderId ),
                 ),
               ),
             );
@@ -111,10 +113,15 @@ class _InboxScreenState extends State<InboxScreen> {
 }
 
 class _SenderTile extends StatelessWidget {
-  final SenderSummary sender;
-  final String        userEmail;
+  final SenderSummary  sender;
+  final String         userEmail;
+  final VoicePersona?  persona;
 
-  const _SenderTile( { required this.sender, required this.userEmail } );
+  const _SenderTile( {
+    required this.sender,
+    required this.userEmail,
+    this.persona,
+  } );
 
   @override
   Widget build( BuildContext context ) {
@@ -138,9 +145,14 @@ class _SenderTile extends StatelessWidget {
         );
       },
       child: ListTile(
-        leading: CircleAvatar(
-          child: Text( sender.senderId.isNotEmpty ? sender.senderId[ 0 ].toUpperCase() : "?" ),
-        ),
+        leading: persona != null
+            ? PersonaBadge(
+                persona  : persona,
+                senderId : sender.senderId,
+              )
+            : CircleAvatar(
+                child: Text( sender.senderId.isNotEmpty ? sender.senderId[ 0 ].toUpperCase() : "?" ),
+              ),
         title: Text(
           sender.senderId,
           maxLines: 1,

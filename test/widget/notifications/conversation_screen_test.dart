@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
+import 'package:lupin_mobile/features/notifications/data/voice_persona.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
@@ -198,6 +199,60 @@ void main() {
 
       expect( find.byType( SenderDatesScreen ), findsOneWidget );
     });
+
+    testWidgets( "3.5 — AppBar header reads bloc-cached persona keyed on senderId", ( tester ) async {
+      const adam = VoicePersona(
+        name        : "Adam",
+        voiceId     : "pNInz6obpgDQGcFmaJgB",
+        icon        : "🌑",
+        color       : "#212121",
+        borrowed    : false,
+        displayName : "Adam (deep)",
+      );
+
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId         : "s-1",
+            userEmail        : "u@x.y",
+            messages         : [ yesNoMsg( "c-1" ) ],
+            personasBySender : const { "s-1": adam },
+          ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      expect(
+        find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-1" ) ),
+        findsOneWidget,
+      );
+    } );
+
+    testWidgets( "AppBar header omits persona badge when personasBySender is empty", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId  : "s-1",
+            userEmail : "u@x.y",
+            messages  : [ yesNoMsg( "c-1" ) ],
+          ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      expect(
+        find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-1" ) ),
+        findsNothing,
+      );
+    } );
 
     testWidgets( "NotificationsGistReady state shows the gist bottom sheet", ( tester ) async {
       whenListen(

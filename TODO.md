@@ -1,12 +1,12 @@
 # TODO
 
-Last updated: 2026-05-06 (Session `a756441c` continuation: Phases 0 + 1 + 2 LANDED — 294 baseline tests green; +21 across all three phases; voice-persona Phase 3 (UI badge) is next)
+Last updated: 2026-05-07 (new session: Phase 3 UI badge LANDED — 302 baseline tests green; +8 over Phase 2 close; voice-persona Phase 4 (TTS routing — collapsed verify+comment) is next)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: voice-persona Phase 3 (UI badge widget)
+## ⭐ NEXT SESSION — START HERE: voice-persona Phase 4 (TTS routing — collapsed verify+comment)
 
-**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phase 0 dispatch audit is also CLOSED** (landed 2026-05-06 same session). Voice-persona Phases 1.1-5 are now actually unblocked.
+**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phase 0 dispatch audit is also CLOSED** (landed 2026-05-06). **Phase 3 UI badge is also CLOSED** (landed 2026-05-07; HUMAN final acceptance review for badge contrast still open, gated on laptop+emulator deployment). Voice-persona Phases 4-5 are now unblocked.
 
 ### Order of operations
 
@@ -32,9 +32,25 @@ Last updated: 2026-05-06 (Session `a756441c` continuation: Phases 0 + 1 + 2 LAND
    - 4 new blocTests (Pass-1-F3 assertion shapes): assigned, released, borrowed-survives, release-unknown idempotent
    - Test impact: 290 → 294 baseline; 44 quarantined unchanged
 
-4. **Voice-persona Phases 3 → 5** (~3 days, 6 tasks remaining) — START HERE NEXT SESSION
+4. **Voice-persona Phase 3 — UI badge** ✅ DONE 2026-05-07 (this session)
+   - New `lib/shared/painters/dashed_border_painter.dart` (60-line `CustomPainter` per Q9)
+   - New `lib/features/notifications/presentation/persona_badge.dart` (StatelessWidget wrapping `CircleAvatar`, hex-color parser with theme-primary fallback, F9 failure-mode contract — color always renders even when emoji glyph fails, 28px header / 24px in-card sizing)
+   - Extended `test_keys.dart` with `personaBadgePrefix` + `personaBadgeDashedPrefix`
+   - Wired into 3 surfaces:
+     - `_SenderTile` (inbox) — parent passes `state.personaFor(senderId)` to tile; PersonaBadge in `leading:` slot when persona present, falls back to existing CircleAvatar
+     - `ConversationScreen` AppBar — `BlocSelector<NotificationBloc, NotificationState, VoicePersona?>` reading `state.personaFor(widget.senderId)` (state guarded by `is PersonaSnapshotMixin`); 28px badge + senderId text via Row
+     - `_NotificationItemCard` (conversation_by_date) — reads `item.voicePersona` directly per Q1; 24px badge inline next to priority chip
+   - 8 new widget tests: 6 in new `persona_badge_test.dart` (3.1 present+colored / 3.2 absent / 3.3 borrowed dashed / 3.4a light+dark / 3.4b broken-emoji codepoint resilience / malformed-color defensive); +2 in `conversation_screen_test.dart` (3.5 header reads bloc-cached / header omits when empty)
+   - Test impact: 294 → 302 baseline; 44 quarantined unchanged
+   - **Pending HUMAN final acceptance**: badge color/contrast review in light + dark mode (gated on laptop+emulator per `feedback_dev_server_laptop_split` — bucket with TTS on-device verification at Phase 5 close)
+
+5. **Voice-persona Phase 4 — TTS routing (collapsed verify+comment)** — START HERE NEXT SESSION
    - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
-   - **Next: Phase 3** in `01-implementation.md §4` — UI badge: new `PersonaBadge` widget + `DashedBorderPainter` (Q9 genuinely-new) + 3 wiring sites (`_NotificationItemCard`, `ConversationScreen` header, inbox sender tile) + 5 widget tests + final acceptance review (EXECUTOR: HUMAN — subjective UX)
+   - Phase 4 was collapsed at REUSE pre-pass — `voiceId` parameter is already shipping at `lib/services/tts/streaming_tts_player.dart:130`. Per Q3 + REUSE finding, this phase is now: (a) verify the existing wiring is correct, (b) add a comment pinning the per-session voice contract, (c) ensure the `TtsOrchestrator` reads `notification.voicePersona.voiceId` and pipes it through. 5 unit tests planned (4.1-4.5) — see `04-testing-validation.md`.
+
+6. **Voice-persona Phase 5 — Docs + verify** — gated on Phase 4 close
+   - Update `TODO.md` / `history.md` / `00-index.md` for milestone completion
+   - Bucket on-device TTS verification with the existing runbook (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`) — confirms scenarios 5/6/7 speak with the assigned per-session voice rather than Sam (Q6)
 
 ### Earlier next-session task — still pending, now bucketed
 

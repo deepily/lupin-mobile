@@ -7,6 +7,7 @@ import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'interactive_prompt_sheet.dart';
+import 'persona_badge.dart';
 
 /// Date-grouped view of a sender's conversation.
 ///
@@ -165,14 +166,26 @@ class _NotificationItemCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Chip(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: color.withOpacity( 0.15 ),
-                  side: BorderSide( color: color ),
-                  label: Text(
-                    item.priority,
-                    style: TextStyle( color: color, fontSize: 11 ),
-                  ),
+                Row(
+                  children: [
+                    Chip(
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: color.withOpacity( 0.15 ),
+                      side: BorderSide( color: color ),
+                      label: Text(
+                        item.priority,
+                        style: TextStyle( color: color, fontSize: 11 ),
+                      ),
+                    ),
+                    if ( item.voicePersona != null ) ...[
+                      const SizedBox( width: 8 ),
+                      PersonaBadge(
+                        persona  : item.voicePersona,
+                        senderId : item.senderId,
+                        diameter : 24,
+                      ),
+                    ],
+                  ],
                 ),
                 Row(
                   children: [

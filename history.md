@@ -1,5 +1,75 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.05.07 (checkpoint) | Session `c25dbc3e` — Voice-persona Phase 3 UI badge (CHECKPOINT)
+
+#### Checkpoint | 2026.05.07 | Voice-persona Phase 3 LANDED — `PersonaBadge` widget + `DashedBorderPainter` + 3 wiring sites + 8 widget tests; 294 → 302 baseline tests green
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/` (unchanged from prior session-end `39e3525`)
+**Implementation doc**: `voice-persona/01-implementation.md` (§4 Phase 3 task checkboxes all `[x]` except HUMAN final acceptance gate; §9 Execution Log Phase 3 row populated)
+**Continues from**: commit `39e3525` (prior session-end `a756441c` — Phase 2 close)
+
+### Accomplishments
+
+1. **Voice-persona Phase 3 — UI badge** (`voice-persona/01-implementation.md §4`)
+   - **`DashedBorderPainter`** in `lib/shared/painters/dashed_border_painter.dart` — 60-line `CustomPainter` per Q9 (FROZEN at REUSE pre-pass; confirmed genuinely-new, no existing `CustomPainter` subclass and no dashed-border package). Uses `Canvas.drawArc` in a stepped loop; configurable `strokeWidth`/`dashLength`/`gapLength`; `shouldRepaint` checks all four params.
+   - **`PersonaBadge`** in `lib/features/notifications/presentation/persona_badge.dart` — `StatelessWidget` wrapping `CircleAvatar` per REUSE `extend-existing` finding. Hex-color parser (accepts `#RRGGBB` and `#AARRGGBB`) with theme-primary fallback for malformed input. Foreground color (emoji + dashed border) chosen by `Color.computeLuminance() > 0.5` so contrast holds across dark + light persona backgrounds. **F9 failure-mode contract** enforced: badge always renders with persona color background regardless of emoji glyph success — color is the primary disambiguator, no letter substitution. `Tooltip(triggerMode: longPress)` shows `displayName`. Borrowed variant overlays a `CustomPaint` with `DashedBorderPainter` inside an `IgnorePointer` so taps still hit the avatar. Two diameters in use: 28px (header) and 24px (in-card).
+   - **`TestKeys`** extended with `personaBadgePrefix` + `personaBadgeDashedPrefix` (suffixed with `senderId` at use-site).
+   - **3 wiring sites** (per Q5 — badge only, no inbox/bubble color sweep):
+     - `_SenderTile` in `inbox_screen.dart`: parent `InboxScreen.itemBuilder` passes `persona: state.personaFor(sender.senderId)` to tile; `_SenderTile` renders `PersonaBadge` in `leading:` slot when persona is non-null, falls back to existing `CircleAvatar(senderId[0])` otherwise.
+     - `ConversationScreen` AppBar in `conversation_screen.dart`: title wrapped in `BlocSelector<NotificationBloc, NotificationState, VoicePersona?>` reading `state.personaFor(widget.senderId)` (state guarded by `is PersonaSnapshotMixin`); 28px badge + senderId text composed via Row with `MainAxisSize.min` + `Flexible` + ellipsis. Badge omits cleanly when `personasBySender` is empty.
+     - `_NotificationItemCard` in `conversation_by_date_screen.dart`: reads `item.voicePersona` directly per Q1 (server-stamped on every notification envelope); 24px badge inline next to the priority chip.
+   - **8 new widget tests** — `persona_badge_test.dart` (6: 3.1 present+colored / 3.2 absent / 3.3 borrowed-dashed / 3.4a light+dark / 3.4b broken-emoji codepoint resilience `\u{1FAFF}` / malformed-color defensive); `conversation_screen_test.dart` (+2: 3.5 header reads bloc-cached persona / header omits when `personasBySender` empty).
+   - Phase 3 §4 task checkboxes all marked `[x]` except the HUMAN final acceptance review (gated on laptop+emulator deployment per `feedback_dev_server_laptop_split` memory rule). §9 Execution Log Phase 3 row populated with test deltas and uncommitted-status placeholder.
+
+2. **Tracking document updates** (this checkpoint)
+   - `voice-persona/01-implementation.md` — §4 task checkboxes `[x]` with executed-evidence; §9 Execution Log Phase 3 row populated
+   - `voice-persona/00-index.md` — Current Status (4/6 phases complete; 302 tests); Phase Summary table marked ✅; Recent Updates Phase 3 entry
+   - `TODO.md` — Phase 3 marked done; Phase 4 (collapsed verify+comment) promoted to NEXT SESSION header; HUMAN final acceptance review explicitly bucketed with the on-device runbook at Phase 5 close per user direction
+   - `.claude-session.md` — new session section for `c25dbc3e` (this session)
+   - `history.md` — this entry
+
+### Files Created (3)
+
+- `lib/shared/painters/dashed_border_painter.dart` — `DashedBorderPainter` (60 lines)
+- `lib/features/notifications/presentation/persona_badge.dart` — `PersonaBadge` widget
+- `test/widget/notifications/persona_badge_test.dart` — 6 widget tests (3.1-3.4 + 2 defensive cases)
+
+### Files Modified (7)
+
+- `lib/core/testing/test_keys.dart` — `personaBadgePrefix` + `personaBadgeDashedPrefix` constants
+- `lib/features/notifications/presentation/inbox_screen.dart` — `_SenderTile.persona` param + `leading:` slot wiring
+- `lib/features/notifications/presentation/conversation_screen.dart` — AppBar `BlocSelector` + 28px badge composition
+- `lib/features/notifications/presentation/conversation_by_date_screen.dart` — `_NotificationItemCard` 24px badge inline next to priority chip
+- `test/widget/notifications/conversation_screen_test.dart` — +2 tests (3.5 header reads cached / header omits when empty)
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md` — §4 + §9 updates
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-index.md` — Current Status, Phase Summary, Recent Updates
+- `TODO.md` — Phase 3 done; Phase 4 next-up; HUMAN review bucketed at Phase 5
+
+### Test Results
+
+| Suite | Pre-Phase-3 | Post-Phase-3 | Δ |
+|---|---|---|---|
+| Baseline (`test/unit/ test/widget/ test/service_integration/`) | 294 ✅ | **302 ✅** | +8 |
+| `test/legacy_quarantine/` (drift baseline) | 44 ❌ | 44 ❌ | unchanged |
+
+Plan estimated +5 widget tests; +3 extras are defensive coverage (3.4 split into light+dark cell vs broken-emoji cell, plus malformed-color and empty-personasBySender edges).
+
+### Key Decisions / Insights
+
+- **Failure-mode contract over letter substitution**: when emoji rendering fails (broken codepoint, OEM skin missing the glyph), the badge stays color-only rather than falling back to `persona.name[0]`. Color IS the primary disambiguator; adding a letter introduces visual noise on top of color and breaks the "one badge appearance per voice" mental model. Test 3.4b verifies no crash on `\u{1FAFF}`; the avatar still renders with `#FFD600` background.
+- **`BlocSelector` over `BlocBuilder` for the AppBar title**: the conversation screen body already uses `BlocConsumer` with `buildWhen` filters; wrapping the AppBar in another `BlocBuilder` would rebuild the whole title on every state change. `BlocSelector` narrows to just the persona for `widget.senderId`, so the title only repaints when that specific persona arrives or changes.
+- **Inbox `_SenderTile.persona` passed from parent, not looked up by tile**: keeps `_SenderTile` testable in isolation (no bloc dependency); follows the existing pattern where the tile takes its data via constructor params. Parent `itemBuilder` does the `state.personaFor(senderId)` lookup once per tile.
+- **`IgnorePointer` around the dashed-border `CustomPaint`**: without it, the overlay would intercept long-press events and the `Tooltip` (showing `displayName`) wouldn't fire on borrowed personas. Tooltip needs to receive the gesture from the avatar layer underneath.
+
+### Out of Scope (deferred)
+
+- **Phase 3 HUMAN final acceptance review** — visual review of badge color/contrast in light + dark mode on a real Android device. Bucketed with the on-device TTS runbook at Phase 5 close per user direction (2026-05-07). Single laptop+emulator session covers both Phase 3 visual QA and Phase 5 TTS runbook.
+- **Phase 4 — TTS routing (collapsed verify+comment)** — next: `voiceId` parameter is already shipping at `streaming_tts_player.dart:130` per REUSE pre-pass; this phase becomes (a) verify wiring, (b) add comment, (c) ensure orchestrator pipes `notification.voicePersona.voiceId` through. 5 unit tests (4.1-4.5).
+- **Phase 5 — Docs + on-device verify** — gated on Phase 4. Bundles HUMAN final acceptance for both Phase 3 (badge) + TTS runbook (Phase 5).
+
+---
+
 ## 2026.05.06 (session-end batch) | Session `a756441c` — Voice-persona Phase 2 WS event dispatch (SESSION-END)
 
 #### Session-End | 2026.05.06 | Voice-persona Phase 2 LANDED — bloc state now carries `personasBySender` snapshot across all 4 loaded states; 290 → 294 baseline tests green; +4 Pass-1-F3 blocTests
