@@ -1,12 +1,12 @@
 # TODO
 
-Last updated: 2026-05-07 (new session: Phase 3 UI badge LANDED — 302 baseline tests green; +8 over Phase 2 close; voice-persona Phase 4 (TTS routing — collapsed verify+comment) is next)
+Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 BOTH LANDED — 308 baseline tests green; +14 over Phase 2 close; voice-persona Phase 5 (Docs + on-device verify) is next; both HUMAN acceptance gates bucketed into a single laptop+emulator session at Phase 5 close)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: voice-persona Phase 4 (TTS routing — collapsed verify+comment)
+## ⭐ NEXT SESSION — START HERE: voice-persona Phase 5 (Docs + on-device verify, bundled HUMAN gates)
 
-**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phase 0 dispatch audit is also CLOSED** (landed 2026-05-06). **Phase 3 UI badge is also CLOSED** (landed 2026-05-07; HUMAN final acceptance review for badge contrast still open, gated on laptop+emulator deployment). Voice-persona Phases 4-5 are now unblocked.
+**Plan-review for voice-persona milestone is FULLY CLOSED** (REUSE → Pass 1 Fitness → Pass 2 Adversarial all converged 2026-05-06). **Phases 0, 1, 2, 3, 4 are all CLOSED**. Voice-persona Phase 5 is the final phase — covers (a) milestone-close doc updates, (b) extension of the existing on-device TTS runbook to bundle BOTH outstanding HUMAN gates (Phase 3 visual badge contrast + Phase 4 persona-voice TTS verification) into a single laptop+emulator session per user direction 2026-05-07.
 
 ### Order of operations
 
@@ -44,13 +44,21 @@ Last updated: 2026-05-07 (new session: Phase 3 UI badge LANDED — 302 baseline 
    - Test impact: 294 → 302 baseline; 44 quarantined unchanged
    - **Pending HUMAN final acceptance**: badge color/contrast review in light + dark mode (gated on laptop+emulator per `feedback_dev_server_laptop_split` — bucket with TTS on-device verification at Phase 5 close)
 
-5. **Voice-persona Phase 4 — TTS routing (collapsed verify+comment)** — START HERE NEXT SESSION
-   - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
-   - Phase 4 was collapsed at REUSE pre-pass — `voiceId` parameter is already shipping at `lib/services/tts/streaming_tts_player.dart:130`. Per Q3 + REUSE finding, this phase is now: (a) verify the existing wiring is correct, (b) add a comment pinning the per-session voice contract, (c) ensure the `TtsOrchestrator` reads `notification.voicePersona.voiceId` and pipes it through. 5 unit tests planned (4.1-4.5) — see `04-testing-validation.md`.
+5. **Voice-persona Phase 4 — TTS routing (collapsed verify+comment)** ✅ DONE 2026-05-07 (this session)
+   - 13-line dartdoc on `streaming_tts_player.dart:speak()` flagging `voiceId` as persona pipe-through (Q3); absent-→-Sam server contract documented
+   - 11-line "intentional omit" comment block inside `tts_orchestrator.dart:_speakViaFallback` (Q4 — different voice space)
+   - Wired `enqueueIfSpeakable.voiceId` → `_Utterance.voiceId` → `_player.speak(voiceId:)`
+   - `NotificationBloc._onExternalUpdate` passes `voiceId: n.voicePersona?.voiceId` at the `enqueueIfSpeakable` call site
+   - 6 new tests: 3 in `streaming_tts_player_test.dart` (4.1 voiceId in body / 4.2 omitted when null / 4.3 borrowed body shape unchanged); 3 in `tts_orchestrator_test.dart` (4.4 persona piped from notification / 4.4b null voiceId defensive / 4.5 quota fallback omits voiceId per Q4+F11)
+   - Test impact: 302 → 308 baseline (+6; plan estimated +5, the +1 is 4.4b defensive); 44 quarantined unchanged
 
-6. **Voice-persona Phase 5 — Docs + verify** — gated on Phase 4 close
-   - Update `TODO.md` / `history.md` / `00-index.md` for milestone completion
-   - Bucket on-device TTS verification with the existing runbook (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`) — confirms scenarios 5/6/7 speak with the assigned per-session voice rather than Sam (Q6)
+6. **Voice-persona Phase 5 — Docs + on-device verify** — START HERE NEXT SESSION
+   - Plan doc-set: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/`
+   - Update `00-index.md` Current Status to "milestone complete"; populate `01-implementation.md` §9 Phase 5 row; close `TODO.md` voice-persona entries; brief `history.md` accomplishment line
+   - Extend the existing on-device TTS runbook (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`) with a **persona-section** that consolidates BOTH outstanding HUMAN gates per user direction 2026-05-07:
+     - **Phase 3 visual acceptance**: badge color/contrast review in light + dark mode on real device (Phases 3.6 in `04-testing-validation.md`)
+     - **Phase 4 TTS persona verification**: confirm scenarios 5/6/7 speak with the assigned per-session voice rather than Sam (Q6 — bucketed with existing runbook)
+   - Single laptop+emulator session covers both gates
 
 ### Earlier next-session task — still pending, now bucketed
 

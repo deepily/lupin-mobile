@@ -124,6 +124,16 @@ class StreamingTtsPlayer {
   /// (backend will then start streaming audio chunks on the WS). Throws
   /// [DioException] on HTTP failure — caller (orchestrator) decides
   /// whether to fall back.
+  ///
+  /// **`voiceId` is the persona pipe-through path** (per `Q3` of the
+  /// 2026-04-28 voice-persona milestone — see
+  /// `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/03-decisions.md`).
+  /// When provided, the body's `voice_id` key tells the backend which
+  /// per-session persona voice to render the utterance with. When `null`
+  /// (or omitted), the backend falls back to the default Sam voice — the
+  /// pre-2026-04-28 behavior. The body wiring at the `voice_id` insertion
+  /// site below intentionally OMITS the key when null (rather than sending
+  /// `null`) so the server's "absent → Sam" fallback contract is preserved.
   Future<void> speak( {
     required String text,
     required String sessionId,

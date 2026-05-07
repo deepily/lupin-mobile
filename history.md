@@ -1,5 +1,70 @@
 # LUPIN MOBILE - SESSION HISTORY
 
+## 2026.05.07 (checkpoint, post-Phase-3) | Session `c25dbc3e` — Voice-persona Phase 4 TTS routing (CHECKPOINT)
+
+#### Checkpoint | 2026.05.07 | Voice-persona Phase 4 LANDED — collapsed verify+comment per REUSE pre-pass; orchestrator now pipes `notification.voicePersona?.voiceId` through to `StreamingTtsPlayer.speak()`; 302 → 308 baseline tests green
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/` (unchanged from prior checkpoint `1577e29`)
+**Implementation doc**: `voice-persona/01-implementation.md` (§5 Phase 4 task checkboxes all `[x]`; §9 Execution Log Phase 4 row populated)
+**Continues from**: checkpoint `1577e29` (same session, post-Phase-3 close)
+
+### Accomplishments
+
+1. **Voice-persona Phase 4 — TTS routing (collapsed verify+comment)** (`voice-persona/01-implementation.md §5`)
+   - **`streaming_tts_player.dart` — REUSE-AS-IS verify + dartdoc** (no code change). 13-line dartdoc block above `speak()` documenting `voiceId` as the persona pipe-through path (Q3). Explains the absent-→-Sam server fallback contract; explains why the body-wiring at `:141` deliberately uses `if (voiceId != null)` to OMIT the key (rather than sending `null`) so the server contract is preserved. Cross-referenced to `03-decisions.md` Q3.
+   - **`tts_orchestrator.dart` — wiring + Q4 comment**:
+     - Added `String? voiceId` parameter to `enqueueIfSpeakable()` with dartdoc explaining the per-session pipe-through and the explicit Q4 carve-out (NOT piped to `flutter_tts` fallback).
+     - Added `voiceId` field to private `_Utterance` class.
+     - `_dispatchCurrent` now passes `voiceId: utter.voiceId` to `_player.speak()`.
+     - 11-line "intentional omit" comment block inside `_speakViaFallback` per Q4: ElevenLabs voice IDs vs `flutter_tts` device voices live in different namespaces; warns future maintainer not to "fix" this. The comment forestalls a Pass 2 Adversarial flag for missing test coverage.
+   - **`notification_bloc.dart:191-196`** — `enqueueIfSpeakable` call site now passes `voiceId: n.voicePersona?.voiceId`. The bloc reads persona straight off each notification per Q1; no separate cache.
+   - **6 new unit tests**:
+     - `streaming_tts_player_test.dart` (+3): 4.1 voiceId in POST body / 4.2 voiceId omitted from body when null per Q3 contract / 4.3 borrowed body shape unchanged (server treats borrowed identically — only `voice_id` is on the wire).
+     - `tts_orchestrator_test.dart` (+3): 4.4 persona piped from notification through to `player.speak(voiceId: ...)` / 4.4b null voiceId defensive — orchestrator passes `voiceId: null` cleanly through / 4.5 quota fallback omits voiceId per Q4 + F11 — uses `errorCtrl.add(TtsErrorEvent(errorCode: 'quota_exceeded'))` to enter the 5-min window, then asserts `verify(fallback.flutterTtsSpeak(text))` and `verifyNever(player.speak(voiceId: ...))`.
+   - Phase 4 §5 task checkboxes all marked `[x]` with executed-evidence; §9 Execution Log Phase 4 row populated.
+
+2. **Tracking document updates** (this checkpoint)
+   - `voice-persona/01-implementation.md` — §5 task checkboxes `[x]` with executed-evidence; §9 Phase 4 row populated
+   - `voice-persona/00-index.md` — Current Status (5/6 phases complete; 308 tests; Phase 5 next); Phase Summary table; Recent Updates Phase 4 entry
+   - `TODO.md` — Phase 4 marked done; Phase 5 promoted to NEXT SESSION header; both HUMAN gates explicitly bundled into a single laptop+emulator session at Phase 5 close
+   - `.claude-session.md` — Phase 4 touched-files block added under session `c25dbc3e`
+   - `history.md` — this entry
+
+### Files Modified (8)
+
+- `lib/services/tts/streaming_tts_player.dart` — 13-line dartdoc on `speak()` (Q3 pipe-through documentation; no code change)
+- `lib/services/tts/tts_orchestrator.dart` — `enqueueIfSpeakable` + `_Utterance` extended with `voiceId`; `_dispatchCurrent` pipes through to `_player.speak`; 11-line Q4 comment block in `_speakViaFallback`
+- `lib/features/notifications/domain/notification_bloc.dart` — call site passes `voiceId: n.voicePersona?.voiceId`
+- `test/unit/services/tts/streaming_tts_player_test.dart` — +3 tests (4.1, 4.2, 4.3)
+- `test/unit/services/tts/tts_orchestrator_test.dart` — +3 tests (4.4, 4.4b, 4.5)
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/01-implementation.md` — §5 + §9 updates
+- `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/00-index.md` — Current Status, Phase Summary, Recent Updates
+- `TODO.md` — Phase 4 done; Phase 5 next-up; HUMAN gates bundled
+
+### Test Results
+
+| Suite | Pre-Phase-4 | Post-Phase-4 | Δ |
+|---|---|---|---|
+| `test/unit/services/tts/` (focused) | 21 ✅ | 27 ✅ | +6 |
+| Baseline (`test/unit/ test/widget/ test/service_integration/`) | 302 ✅ | **308 ✅** | +6 |
+| `test/legacy_quarantine/` (drift baseline) | 44 ❌ | 44 ❌ | unchanged |
+
+Plan estimated +5 tests; +1 extra is 4.4b defensive (null voiceId passes through cleanly). All Phase 0/1/2/3 regressions hold.
+
+### Key Decisions / Insights
+
+- **The "verify+comment" interpretation of Phase 4 was load-bearing**: the REUSE pre-pass at 2026-05-06 had already collapsed Phase 4 from "write new" to "verify + comment" because `voiceId` was already shipping. Without the dartdoc block, a future maintainer reading `streaming_tts_player.dart:speak()` would have NO indication that the parameter is the documented persona pipe-through. The 13-line dartdoc is the durable artifact of the REUSE-AS-IS verdict — it's why the line is there *and* why the body wiring is shaped the way it is.
+- **Q4 carve-out comment is preventive, not explanatory**: the `_speakViaFallback` comment doesn't document a feature — it documents a deliberate non-feature. Without it, a future maintainer would see "ElevenLabs gets voiceId, flutter_tts doesn't — must be a bug" and "fix" it. The comment names the namespace mismatch and the missing translation table that would be required to do this correctly.
+- **Test 4.5 uses error-stream injection over time-mocking**: the natural way to test the quota window is to mock `DateTime.now()` and advance it past `_elevenLabsDisabledUntil`. But `dart:core` time isn't easily mockable here. The cleaner path is to push a `TtsErrorEvent(errorCode: 'quota_exceeded')` into the player's error stream — the orchestrator's `_onElevenLabsError` handler then sets `_elevenLabsDisabledUntil` directly, and the next enqueue routes via fallback. Per Pass 1 finding F11.
+- **`_Utterance.voiceId` is nullable + the entire pipe-through honors null**: at every layer (bloc → orchestrator.enqueueIfSpeakable → _Utterance → player.speak → POST body), null means "don't pipe a voice ID; use Sam." Test 4.4b verifies the orchestrator level; test 4.2 verifies the body level. Together they prove the chain doesn't insert a non-null somewhere by mistake.
+
+### Out of Scope (deferred to Phase 5)
+
+- **Phase 5 — Docs + on-device verify** (final phase): updates `00-index.md` Current Status to "milestone complete"; populates `01-implementation.md` §9 Phase 5 row; closes `TODO.md` voice-persona entries; adds a brief `history.md` accomplishment line. Extends the existing on-device TTS runbook with a persona-section that bundles BOTH outstanding HUMAN gates per user direction 2026-05-07: (a) Phase 3 visual badge contrast review in light + dark mode (laptop+emulator) and (b) Phase 4 TTS persona verification (scenarios 5/6/7 speak with assigned per-session voice rather than Sam, Q6). Single laptop+emulator session covers both.
+
+---
+
 ## 2026.05.07 (checkpoint) | Session `c25dbc3e` — Voice-persona Phase 3 UI badge (CHECKPOINT)
 
 #### Checkpoint | 2026.05.07 | Voice-persona Phase 3 LANDED — `PersonaBadge` widget + `DashedBorderPainter` + 3 wiring sites + 8 widget tests; 294 → 302 baseline tests green

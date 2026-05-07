@@ -62,10 +62,18 @@ class TtsOrchestrator {
   ///
   /// [suppressDing] mirrors the web client: it silences the ding only,
   /// NOT the speech (see notifications.js:5408). So we ignore it here.
+  ///
+  /// [voiceId] is the per-session persona voice ID that routes through
+  /// `StreamingTtsPlayer.speak()` to the backend `voice_id` body key (per
+  /// `Q3` of the voice-persona milestone). Bloc passes
+  /// `notification.voicePersona?.voiceId`; null routes to the server's
+  /// default Sam voice. NOT piped through to `flutter_tts` fallback per
+  /// `Q4` (different voice space — see [_speakViaFallback] comment).
   void enqueueIfSpeakable( {
     required String priority,
     required String message,
     String?         title,
+    String?         voiceId,
   } ) {
     if ( _prefs.masterMute ) return;
     if ( !_isSpeakable( priority ) ) return;
@@ -73,6 +81,7 @@ class TtsOrchestrator {
     final utter = _Utterance(
       priority : priority,
       text     : _formatSpeech( title: title, message: message ),
+      voiceId  : voiceId,
     );
 
     if ( priority == 'urgent' ) {
@@ -146,7 +155,11 @@ class TtsOrchestrator {
     }
 
     try {
-      await _player.speak( text: utter.text, sessionId: sessionId );
+      await _player.speak(
+        text      : utter.text,
+        sessionId : sessionId,
+        voiceId   : utter.voiceId,
+      );
       // Audio events (status / chunk / complete / error) arrive via WS
       // and drive `_onUtteranceFinished` or `_onElevenLabsError`.
     } catch ( _ ) {
@@ -158,6 +171,16 @@ class TtsOrchestrator {
   }
 
   Future<void> _speakViaFallback( String text ) async {
+    // INTENTIONAL: `voiceId` is NOT piped through to the `flutter_tts`
+    // fallback per `Q4` (FROZEN 2026-05-06 — see
+    // `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/03-decisions.md`).
+    // ElevenLabs voice IDs (`pNInz6obpgDQGcFmaJgB` etc) live in a different
+    // voice space than the on-device `flutter_tts` engine voices; mapping
+    // would require a translation table that doesn't exist and isn't part
+    // of this milestone. Fallback uses the device default voice — the
+    // narration still happens, just without the per-session persona match.
+    // Future maintainer: if you're tempted to "fix" this by passing
+    // `voiceId` here, please check the milestone docs first.
     await _fallback.flutterTtsSpeak( text );
   }
 
@@ -194,7 +217,12 @@ class TtsOrchestrator {
 }
 
 class _Utterance {
-  final String priority;
-  final String text;
-  const _Utterance( { required this.priority, required this.text } );
+  final String  priority;
+  final String  text;
+  final String? voiceId;
+  const _Utterance( {
+    required this.priority,
+    required this.text,
+    this.voiceId,
+  } );
 }

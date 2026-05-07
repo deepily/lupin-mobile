@@ -303,5 +303,78 @@ void main() {
       expect( done, isEmpty );
       verifyNever( () => audioPlayer.play( any() ) );
     } );
+
+    // Phase 4 (voice-persona milestone) — voiceId pipe-through tests per
+    // 04-testing-validation.md rows 4.1, 4.2, 4.3.
+
+    test( "4.1 — voiceId present in POST body when speak() is called with voiceId", () async {
+      player = StreamingTtsPlayer( dio, player: audioPlayer );
+      await player!.speak(
+        text      : "hello",
+        sessionId : "wise penguin",
+        voiceId   : "pNInz6obpgDQGcFmaJgB",
+      );
+
+      final captured = verify( () => dio.post<Map<String, dynamic>>(
+        any(),
+        data              : captureAny( named: 'data' ),
+        queryParameters   : any( named: 'queryParameters' ),
+        options           : any( named: 'options' ),
+        cancelToken       : any( named: 'cancelToken' ),
+        onSendProgress    : any( named: 'onSendProgress' ),
+        onReceiveProgress : any( named: 'onReceiveProgress' ),
+      ) ).captured;
+      final data = captured.first as Map<String, dynamic>;
+      expect( data[ 'voice_id' ], 'pNInz6obpgDQGcFmaJgB' );
+      expect( data[ 'session_id' ], 'wise penguin' );
+      expect( data[ 'text' ],       'hello' );
+    } );
+
+    test( "4.2 — voiceId omitted from POST body when speak() is called without voiceId", () async {
+      player = StreamingTtsPlayer( dio, player: audioPlayer );
+      await player!.speak( text: "hello", sessionId: "wise penguin" );
+
+      final captured = verify( () => dio.post<Map<String, dynamic>>(
+        any(),
+        data              : captureAny( named: 'data' ),
+        queryParameters   : any( named: 'queryParameters' ),
+        options           : any( named: 'options' ),
+        cancelToken       : any( named: 'cancelToken' ),
+        onSendProgress    : any( named: 'onSendProgress' ),
+        onReceiveProgress : any( named: 'onReceiveProgress' ),
+      ) ).captured;
+      final data = captured.first as Map<String, dynamic>;
+      // Server's "absent → Sam" fallback contract requires the key to be
+      // OMITTED, not sent as null. Per Q3 (FROZEN 2026-05-06).
+      expect( data.containsKey( 'voice_id' ), isFalse );
+    } );
+
+    test( "4.3 — borrowed persona body shape unchanged (server treats borrowed identically)", () async {
+      player = StreamingTtsPlayer( dio, player: audioPlayer );
+      // borrowed=true on the persona is a UI concern (dashed border), not a
+      // server concern. The body that hits the wire is identical to the
+      // borrowed=false case — only `voice_id` matters at the network layer.
+      await player!.speak(
+        text      : "borrowed-narration",
+        sessionId : "wise penguin",
+        voiceId   : "pNInz6obpgDQGcFmaJgB",
+      );
+
+      final captured = verify( () => dio.post<Map<String, dynamic>>(
+        any(),
+        data              : captureAny( named: 'data' ),
+        queryParameters   : any( named: 'queryParameters' ),
+        options           : any( named: 'options' ),
+        cancelToken       : any( named: 'cancelToken' ),
+        onSendProgress    : any( named: 'onSendProgress' ),
+        onReceiveProgress : any( named: 'onReceiveProgress' ),
+      ) ).captured;
+      final data = captured.first as Map<String, dynamic>;
+
+      // Body keys: session_id, text, voice_id. No "borrowed", no persona-name,
+      // no decoration metadata. Only the voice_id is on the wire.
+      expect( data.keys.toSet(), { 'session_id', 'text', 'voice_id' } );
+      expect( data[ 'voice_id' ], 'pNInz6obpgDQGcFmaJgB' );
+    } );
   } );
 }

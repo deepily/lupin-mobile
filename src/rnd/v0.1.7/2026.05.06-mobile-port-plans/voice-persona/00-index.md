@@ -41,9 +41,9 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 
 ## Current Status
 
-**Active Phase**: Phase 4 (TTS routing — collapsed verify+comment) is next — Phases 0, 1, 2, 3 closed (HUMAN acceptance review for Phase 3 badge contrast still open, requires laptop+emulator)
-**Progress**: 4/6 phases complete
-**Test count**: 302 baseline-tracked (was 273; +29 across Phases 0–3)
+**Active Phase**: Phase 5 (Docs + on-device verify) is next — Phases 0, 1, 2, 3, 4 closed. HUMAN gates outstanding: (a) Phase 3 badge contrast review (laptop+emulator), (b) Phase 5 TTS runbook end-to-end. Both bucketed into a single laptop+emulator session at Phase 5 close per user direction 2026-05-07.
+**Progress**: 5/6 phases complete
+**Test count**: 308 baseline-tracked (was 273; +35 across Phases 0–4)
 **Last Updated**: 2026-05-07
 
 ---
@@ -56,13 +56,14 @@ Clean port — no UX redesign. Persona model is well-defined server-side; mobile
 | 1 — Data model | ✅ complete 2026-05-06 | [01-implementation.md §2](01-implementation.md) | `VoicePersona` model + `NotificationItem.voicePersona` field + fixture + 14 new tests. 276 → 290 |
 | 2 — WS dispatch | ✅ complete 2026-05-06 | [01-implementation.md §3](01-implementation.md) | 2 new bloc events + `PersonaSnapshotMixin` on 4 loaded states + bloc-instance persona map + 4 Pass-1-F3 blocTests. 290 → 294 |
 | 3 — UI badge | ✅ complete 2026-05-07 | [01-implementation.md §4](01-implementation.md) | `PersonaBadge` + `DashedBorderPainter` + 3 wiring sites + 8 widget tests. 294 → 302. HUMAN acceptance review pending (laptop+emulator). |
-| 4 — TTS routing | ⏳ pending | [01-implementation.md §5](01-implementation.md) | `voice_id` parameter on `StreamingTtsPlayer.speak()` + orchestrator pipe-through |
+| 4 — TTS routing | ✅ complete 2026-05-07 | [01-implementation.md §5](01-implementation.md) | Verify+comment per REUSE pre-pass. Q3 dartdoc on `speak()`; Q4 intentional-omit comment in `_speakViaFallback`; `enqueueIfSpeakable.voiceId` wired through `_Utterance` to `_player.speak`; bloc passes `n.voicePersona?.voiceId`. 6 new tests. 302 → 308. |
 | 5 — Docs + verify | ⏳ pending | [01-implementation.md §6](01-implementation.md) | `TODO.md` / `history.md` updates + full test run |
 
 ---
 
 ## Recent Updates
 
+- **2026-05-07 (Phase 4 landed)**: TTS routing phase executed (collapsed verify+comment per REUSE pre-pass). 13-line dartdoc block on `streaming_tts_player.dart:speak()` flagging `voiceId` as the persona pipe-through path with the absent-→-Sam server contract documented. 11-line "intentional omit" comment block inside `tts_orchestrator.dart:_speakViaFallback` warning future maintainers not to pipe `voiceId` to `flutter_tts` (different voice space, Q4). Wiring: `String? voiceId` param added to `TtsOrchestrator.enqueueIfSpeakable`; `_Utterance` extended with `voiceId` field; `_dispatchCurrent` passes `voiceId: utter.voiceId` to `_player.speak`. `NotificationBloc._onExternalUpdate` now passes `voiceId: n.voicePersona?.voiceId` at the `enqueueIfSpeakable` call site. 6 new tests: 3 in `streaming_tts_player_test.dart` (4.1 voiceId in body / 4.2 omitted when null per Q3 / 4.3 borrowed body shape unchanged); 3 in `tts_orchestrator_test.dart` (4.4 persona piped from notification / 4.4b null voiceId defensive / 4.5 quota fallback omits voiceId — uses error-stream injection per F11 to enter 5-min window then asserts `fallback.flutterTtsSpeak(text)` is called without voiceId). Baseline 302 → 308 (+6; plan estimated +5, the +1 is the 4.4b defensive case).
 - **2026-05-07 (Phase 3 landed)**: UI badge phase executed. New `PersonaBadge` widget (StatelessWidget wrapping `CircleAvatar`, hex-color parser with theme-primary fallback, F9 failure-mode contract — color always renders even when emoji glyph fails), new `DashedBorderPainter` (60-line `CustomPainter` per Q9), `TestKeys` extended with `personaBadgePrefix`/`personaBadgeDashedPrefix`. Wired into all 3 surfaces: `_SenderTile` (inbox; parent passes `state.personaFor(senderId)` to tile), `ConversationScreen` AppBar (BlocSelector reading from `personasBySender`), `_NotificationItemCard` (reads `item.voicePersona` directly per Q1). 6 tests in new `persona_badge_test.dart` + 2 in `conversation_screen_test.dart`. Baseline 294 → 302 (+8; plan estimated +5, the +3 extras are defensive coverage — 3.4 split into light+dark vs broken-emoji cells, plus malformed-color and empty-personasBySender edge cases). HUMAN acceptance review for badge contrast in light+dark mode pending laptop+emulator deployment.
 - **2026-05-06 (Phase 2 landed)**: Phase 2 WS dispatch executed post-checkpoint `fd8fc18`. New bloc events `NotificationsVoicePersonaAssigned`/`Released`; `PersonaSnapshotMixin` shared by 4 loaded states (`personaFor(senderId)` accessor); bloc-instance `_personasBySender` map + `_personasSnapshot()` defensive-copy helper threaded through 7 emit sites; `_onExternalUpdate` switch extended with explicit voice-persona cases (default-branch logger preserved for genuinely unknown types). 4 new blocTests in `notification_bloc_persona_test.dart` (2.4.1 assigned, 2.4.2 released, 2.4.3 borrowed-survives, 2.4.4 release-unknown idempotent). Baseline 290 → 294.
 - **2026-05-06 (Phase 1 landed)**: Phase 1 data model executed in same session continuation. New `voice_persona.dart` (liberal `fromJson` per Q7, null-defense per F1, equality keyed on `voiceId` per task 1.2). `NotificationItem` extended with `voicePersona` field. Fixture at `test/fixtures/notifications/notification-with-persona.json` (note: actual path is `test/fixtures/`, not `test/_fixtures/` — plan's path was a typo). 14 new tests across 3 files. Baseline 276 → 290.

@@ -282,5 +282,107 @@ void main() {
 
       verify( () => fallback.flutterTtsSpeak( "will fail" ) ).called( 1 );
     } );
+
+    // Phase 4 (voice-persona milestone) — orchestrator pipe-through tests
+    // per 04-testing-validation.md rows 4.4 and 4.5.
+
+    test( "4.4 — persona piped from notification: orchestrator passes voiceId through to player.speak", () async {
+      await setUpMocks();
+      await prefs.setSpeakOnHigh( true );
+      final o = newOrch();
+
+      o.enqueueIfSpeakable(
+        priority : "high",
+        message  : "hello from Adam",
+        title    : null,
+        voiceId  : "pNInz6obpgDQGcFmaJgB",
+      );
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+      verify( () => player.speak(
+        text      : "hello from Adam",
+        sessionId : "wise penguin",
+        voiceId   : "pNInz6obpgDQGcFmaJgB",
+      ) ).called( 1 );
+      verifyNever( () => fallback.flutterTtsSpeak( any() ) );
+    } );
+
+    test( "4.4b — null voiceId omitted: enqueueIfSpeakable without voiceId calls player.speak with voiceId=null", () async {
+      await setUpMocks();
+      await prefs.setSpeakOnHigh( true );
+      final o = newOrch();
+
+      o.enqueueIfSpeakable( priority: "high", message: "no persona", title: null );
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+      // Server falls back to Sam when voice_id key is absent (Q3 contract).
+      // The orchestrator passes null through; StreamingTtsPlayer's body
+      // wiring at :141 omits the key entirely (covered by test 4.2 above).
+      verify( () => player.speak(
+        text      : "no persona",
+        sessionId : "wise penguin",
+        voiceId   : null,
+      ) ).called( 1 );
+    } );
+
+    test( "4.5 — quota fallback omits voiceId: flutter_tts speak is called WITHOUT voiceId per Q4", () async {
+      // Per Pass 1 finding F11: instantiate the orchestrator with a quota
+      // window already active (simulated via the existing
+      // "quota_exceeded → 5min fallback window" path), then enqueue a high
+      // utterance with a voiceId. Assert that ElevenLabs `player.speak` is
+      // NOT called (window-gated fallback) and `fallback.flutterTtsSpeak`
+      // IS called with the bare text — no voiceId reaches the fallback.
+      await setUpMocks();
+      await prefs.setSpeakOnHigh( true );
+      final o = newOrch();
+
+      // Trigger the quota window: emit a quota_exceeded error event on the
+      // player's error stream while no utterance is in flight. The
+      // orchestrator's _onElevenLabsError handler sets
+      // _elevenLabsDisabledUntil and the next enqueue routes via fallback.
+      // We do this by faking a "current" utterance: enqueue one, then
+      // simulate the error event arriving.
+      o.enqueueIfSpeakable(
+        priority : "high",
+        message  : "first",
+        title    : null,
+        voiceId  : "vx-first",
+      );
+      await Future<void>.delayed( Duration.zero );
+
+      // Now the orchestrator has an in-flight utterance. Push a
+      // quota_exceeded error → enters the 5-min fallback window.
+      errorCtrl.add( const TtsErrorEvent(
+        errorCode : 'quota_exceeded',
+        message   : 'first',
+      ) );
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+      // Fallback should have re-spoken "first" without voiceId.
+      verify( () => fallback.flutterTtsSpeak( "first" ) ).called( 1 );
+
+      // Now the next utterance during the window goes straight to fallback.
+      o.enqueueIfSpeakable(
+        priority : "high",
+        message  : "second",
+        title    : null,
+        voiceId  : "vx-second",
+      );
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+      // Per Q4: flutter_tts is called with bare text only. No voiceId,
+      // no overload that takes voiceId. The fallback voice space is
+      // intentionally separate from ElevenLabs.
+      verify( () => fallback.flutterTtsSpeak( "second" ) ).called( 1 );
+
+      // ElevenLabs `player.speak` was NOT called for the second utterance
+      // (window is active). It WAS called once for "first" before the
+      // error fired; that's the expected baseline.
+      verifyNever( () => player.speak(
+        text      : "second",
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId" ),
+      ) );
+    } );
   } );
 }

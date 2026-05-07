@@ -192,6 +192,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             priority : n.priority,
             message  : n.message,
             title    : n.title,
+            voiceId  : n.voicePersona?.voiceId,
           );
           break;
         case "voice_persona_assigned":
