@@ -11,6 +11,11 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Required by `flutter_local_notifications` ^17.2.3 (resolves 17.2.4) —
+        // its WorkManager + Android-X scheduling APIs use Java 8+ stdlib classes
+        // (java.time.*) that need desugaring on minSdk 24. See:
+        // https://developer.android.com/studio/write/java8-support
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -39,4 +44,11 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Companion to `isCoreLibraryDesugaringEnabled = true` above. 2.1.4 is the
+    // current stable as of 2026 and is compatible with both flutter_local_notifications
+    // 17.x and 18.x. Bump only if a future plugin requires it.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

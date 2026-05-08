@@ -1,12 +1,53 @@
 # TODO
 
-Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 + Phase 5 ALL LANDED — voice-persona milestone is CODE-COMPLETE; 308 baseline tests green; +35 across Phases 0-4; HUMAN gate (laptop+emulator runbook vp1-vp7) is the only outstanding step)
+Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 + Phase 5 ALL LANDED — voice-persona milestone is CODE-COMPLETE; 308 baseline tests green; +35 across Phases 0-4; HUMAN gate (laptop+emulator runbook vp1-vp7) is the only outstanding step. **NEW R&D dropped 2026-05-07** proposing Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually.)
+
+---
+
+## 🍞 BREADCRUMB — read this first on resume (2026-05-07)
+
+**Before starting the vp1-vp7 runbook, revisit it in light of**:
+
+- **R&D doc**: `src/rnd/v0.1.7/2026.05.07-automating-rendering-and-behaviors-on-android-emulator.md` (1079 lines, dropped 2026-05-07)
+  - Title: "Lupin Voice-Persona Validation Runbook — Three-Domain Split"
+  - Premise: Flutter rasterises into a single `SurfaceView`/`FlutterView` canvas, so vanilla `uiautomator`/Espresso can't see the widget tree. **Patrol** bridges this — Dart-side test driver via `integration_test` + `PatrolJUnitRunner` instrumentation — exposing Flutter's element tree to native test process while still allowing native affordances (system dialogs, dark-mode toggle) via `$.native`.
+  - Three deliverables proposed:
+    1. **Splitter prompt** — Claude Code prompt (`prompts/split_runbook.md`) that splits the existing `2026.04.24-on-device-tts-verify-runbook.md` §vp1-vp7 into three domain files: `automated_patrol.md` / `human_perception.md` / `metadata_signoff.md`.
+    2. **Patrol bootstrap + automated tests** — full pubspec/Gradle/instrumentation-runner config + `integration_test/` files for **vp1-vp4 + vp6-infra + vp7-infra**.
+    3. **Single-file Python CLI** (`tools/qa/human_signoff.py`) for the residual human-perception gates: **vp5, vp6-timbre, vp7-audible**.
+
+**What this changes about the runbook plan**:
+
+| Gate | Currently HUMAN | Per R&D | Net effect |
+|---|---|---|---|
+| vp1 inbox badge | manual visual | Patrol widget identity | automatable |
+| vp2 conversation header | manual visual | Patrol widget size + colour eq | automatable |
+| vp3 by-date item | manual visual | Patrol widget size + sibling layout | automatable |
+| vp4 borrowed dashed | manual visual | Patrol conditional overlay | automatable |
+| vp5 light/dark contrast | manual visual | **stays HUMAN** | residual |
+| vp6 voice_id present | manual audible | Patrol logcat WS-envelope `voice_id` ∈ persona table; not Sam | automatable (infra) |
+| vp6 timbre match | manual audible | **stays HUMAN** (perceptual) | residual |
+| vp7 fallback engine | manual audible | Patrol logcat `flutter_tts` engine path + 5-min window | automatable (infra) |
+| vp7 robotic cadence | manual audible | **stays HUMAN** (perceptual) | residual |
+
+So instead of 7 manual gates, the runbook could collapse to ~3 HUMAN gates (vp5, vp6-timbre, vp7-audible) + an automated Patrol suite covering everything else.
+
+**Decision points to consider on resume**:
+
+1. **Adopt the R&D plan or run the runbook manually as-currently-written?** Tradeoff: Patrol bootstrap is non-trivial (pubspec deps, AndroidX instrumentation, JUnitRunner config) but durable — every future on-device milestone benefits. Manual run is one-time cost but recurs each milestone.
+2. **If adopting**: which deliverable order? D1 (splitter prompt) is cheap and just rearranges docs; D2 (Patrol bootstrap) is the heavy lift; D3 (Python CLI) is single-file. Probably D1 → D3 → D2.
+3. **If adopting**: file the manual `vp1-vp7` runbook section I added 2026-05-07 as the "fallback runbook" — the Patrol suite + Python CLI become the primary path, and the manual section stays as backup for environments where Patrol can't run.
+4. **If skipping for now**: file an explicit defer item with revisit-trigger (e.g., "revisit when a 2nd milestone needs on-device verification"). Don't lose the R&D — it's a substantial design proposal.
+
+**Why this matters**: per the auto-memory `feedback_automate_over_manual_tests` rule, I should default to automating. The R&D presents a credible path to do that for ~⅔ of the gates I just told you to run by hand. Worth at least a 30-minute design conversation before committing to the manual run.
 
 ---
 
 ## ⭐ NEXT SESSION — START HERE: voice-persona milestone HUMAN gate (laptop+emulator runbook execution)
 
 **Voice-persona milestone is CODE-COMPLETE** as of 2026-05-07. All 6 phases AI-executable work has landed. The only remaining step is the HUMAN runbook execution on a real device — single laptop+emulator session running `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` §"Voice-persona milestone gate" steps vp1-vp7 (5 visual + 2 audible). Sign-off in the runbook closes the milestone.
+
+**⚠️ But see the breadcrumb above** — review the new R&D doc on automating most of these gates before committing to the manual run.
 
 ### Order of operations
 
