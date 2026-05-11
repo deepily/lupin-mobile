@@ -12,6 +12,43 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.05.11 (later same day) | Session `fe7679c9` — TODO triage micro-session: yes/no/neither for `ask_yes_no` flagged as next-session priority 1
+
+#### Session-End | 2026.05.11 | Single TODO.md edit recording the user directive that next-session priority-1 is tri-state yes/no/**neither** for the `ask_yes_no` flow; no code edits, no tests touched; baseline unchanged at 298 ✅ from session `c594308e`
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Continues from**: same-day session `c594308e` (CC dispatch retirement sync, commit `ee6f081`)
+
+### Accomplishments
+
+1. **Session-start recap delivered** — accomplishments-and-pending summary across the prior two sessions (voice-persona milestone CODE-COMPLETE at `c25dbc3e` + CC dispatch sync at `c594308e`) plus the four open work buckets (HUMAN gate, forward-compat triggers, hygiene follow-ups, on-device sanity sweep). Delivered as terminal markdown + cosa-voice notification with rich abstract.
+
+2. **Priority-1 next-session item recorded** — user flagged tri-state response (yes / no / **neither**) for the `ask_yes_no` notification flow as first-and-foremost next-session work. New `## 🎯 NEXT SESSION — PRIORITY 1` section in `TODO.md` above the existing CC-sync forward-compat block; header `Last updated:` line reframed to surface the directive on resume. Surfaces likely affected captured in the TODO body (`InteractivePromptSheet` + `NotificationBloc` response event + `NotificationRepository` POST body + fixture-backed tests); backend-contract scope deferred to resume.
+
+3. **Session-end ritual executed** per `/plan-session-end` canonical workflow: history health check 10k/HEALTHY, bug-fix-mode skip (owned by session `1fb8dc65`, not this one), manifest section added for `fe7679c9` via §3.5, selective-staging (TODO.md + history.md auto-includes only), commit approval via cosa-voice multi-choice gate (no push, no backup per user direction).
+
+### Files Modified (2)
+
+- `TODO.md` — new PRIORITY 1 section for yes/no/neither at top + header note in Last-Updated line
+- `history.md` — this entry
+
+### Test Results
+
+n/a — no code changes; no tests touched. Baseline remains **298 ✅** from session `c594308e`. `44 ❌` quarantine drift unchanged.
+
+### Key Decisions / Insights
+
+- **Capture-then-restart pattern**: user explicitly asked to record the directive before closing the session to restart MCP servers. Lightweight planning-only sessions are a valid use of the slash-command ritual — not every session needs to land code.
+- **TODO header reframing**: the new priority-1 item is recorded BOTH as a top section AND in the `Last updated:` line so it can't be skimmed past on resume.
+
+### Out of Scope (deferred)
+
+- **yes/no/neither implementation itself** — captured as TODO Priority 1; resume in a fresh session after MCP restart.
+- **Voice-persona HUMAN gate + CC sync UI smoke** — single bundled device handoff; unchanged from prior session.
+
+---
+
+
 ## 2026.05.11 | Session `c594308e` — Claude Code dispatch retirement sync (mobile cutover to canonical `/api/claude-code/submit`)
 
 #### Implementation | 2026.05.11 | Mobile migrated to canonical Claude Code submit endpoint; 5 retired methods + 4 retired model classes + 6 retired BLoC events deleted; INTERACTIVE UI surfaces preserved as banner-only screens per "obviously disable, don't silently mask" strategy; PIP plan-review GATE cleared (REUSE + Pass 1 Fitness + Pass 2 Adversarial all converged); baseline 308 → 298 (-10 from test pruning); 8/8 focused claude_code tests green

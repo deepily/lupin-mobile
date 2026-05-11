@@ -1,6 +1,12 @@
 # TODO
 
-Last updated: 2026-05-11 (Session `c594308e` — Claude Code dispatch retirement sync to canonical `/api/claude-code/submit` LANDED; 298 baseline tests green; voice-persona milestone CODE-COMPLETE still has its HUMAN gate outstanding, now joined by this session's UI smoke (BOUNDED dispatch sheet on device). Bundle into a single device handoff. **NEW R&D dropped 2026-05-07** proposing Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually.)
+Last updated: 2026-05-11 (Session `c594308e` — Claude Code dispatch retirement sync to canonical `/api/claude-code/submit` LANDED; 298 baseline tests green; voice-persona milestone CODE-COMPLETE still has its HUMAN gate outstanding, now joined by this session's UI smoke (BOUNDED dispatch sheet on device). Bundle into a single device handoff. **NEW R&D dropped 2026-05-07** proposing Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually. **2026-05-11 user directive (next session priority-1)**: yes/no/**neither** for `ask_yes_no` — see top of pending block.)
+
+---
+
+## 🎯 NEXT SESSION — PRIORITY 1 (user-flagged 2026-05-11): yes/no/neither for `ask_yes_no`
+
+- [ ] [LUPIN-MOBILE] Implement **yes / no / neither** for the `ask_yes_no` question — extend the current binary response to a tri-state response (third path: *neither* / decline-to-answer). User flagged this 2026-05-11 as **first-and-foremost** item for next session. Scope to confirm on resume: mobile UI surface (`InteractivePromptSheet` + `NotificationBloc` response event + `NotificationRepository` response endpoint), and whether the parent-Lupin backend contract needs a matching third-state response field or whether "neither" maps to an existing decline path. Surfaces likely affected: prompt sheet button row, bloc response event payload, repo POST body, fixture-backed tests.
 
 ---
 
@@ -13,6 +19,8 @@ Last updated: 2026-05-11 (Session `c594308e` — Claude Code dispatch retirement
 2. **INTERACTIVE controls restoration (chat_screen + session_list_screen)** — forward-compat. Triggers when parent restores `inject` / `interrupt` / `end_session` methods on `ClaudeCodeJob` (Q1 of the Bounded redesign reserves stubs for these; future plan). Current state: `chat_screen.dart` + `session_list_screen.dart` are preserved as banner-only screens; route entries still wired. When the parent ships restoration, rebuild these screens from the pre-2026-05-11 git history (commit chain available via `git log --oneline`) + repoint to the new parent endpoints. Plan: file a new session and reverse-port from voice-persona-style Pattern A doc-set.
 
 3. **Canonical URL propagation verification** — when next session opens, re-run pre-Phase-1 gates G1 / G2 from `src/rnd/v0.1.7/2026.05.09-cc-dispatch-retirement-sync/01-plan.md` against `:7999`. If G1 returns HTTP 401 (instead of 404 as of 2026-05-11), parent's rename has propagated to dev server. Update execution log; ready to ship real submissions.
+
+4. **[LUPIN-CC-SUBMIT-RENAME] Update Claude Code submit endpoint from /api/claude-code/queue/submit to /api/claude-code/submit. Alias active for one release cycle from `<commit-date pending parent commit authorization>`. See parent Lupin `src/rnd/v0.1.7/2026.05.09-cc-card-normalization/02-handoff-summary.md` for full context. [Q8 verdict: PRIMARY]** — Parent's CC card normalization (2026-05-11, session 658ea35d, Mr. Radio) renamed the canonical submit URL. The old URL works as a `deprecated=True` alias for one release cycle (through next stable release tag, e.g. v0.1.8). Q8 verdict resolved as PRIMARY — FastAPI 0.115.12 accepts stacked decorators; both routes register. Mobile has the full migration window. Migrate `claude_code_repository.dart` and update BLoC + repository tests. Coordinates with item #2 above (INTERACTIVE controls forward-compat) — same migration epic.
 
 ---
 
