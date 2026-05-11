@@ -1,6 +1,20 @@
 # TODO
 
-Last updated: 2026-05-07 (this session continued: Phase 3 + Phase 4 + Phase 5 ALL LANDED — voice-persona milestone is CODE-COMPLETE; 308 baseline tests green; +35 across Phases 0-4; HUMAN gate (laptop+emulator runbook vp1-vp7) is the only outstanding step. **NEW R&D dropped 2026-05-07** proposing Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually.)
+Last updated: 2026-05-11 (Session `c594308e` — Claude Code dispatch retirement sync to canonical `/api/claude-code/submit` LANDED; 298 baseline tests green; voice-persona milestone CODE-COMPLETE still has its HUMAN gate outstanding, now joined by this session's UI smoke (BOUNDED dispatch sheet on device). Bundle into a single device handoff. **NEW R&D dropped 2026-05-07** proposing Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually.)
+
+---
+
+## ⭐ NEXT SESSION — START HERE: forward-compat items from 2026-05-11 CC sync
+
+**Triggers waiting on parent-Lupin work**:
+
+1. **`artifacts.transcript_path` link in QueueDashboardScreen job detail (cc-* job type)** — forward-compat. Triggers when parent ships ClaudeCodeJob redesign Phase 4 (currently blocked on parent-side PIP plan-review at 4/11 findings; see `<lupin>/src/rnd/v0.1.7/2026.05.07-claude-code-bounded-redesign/`). When the field appears on completed-job records, expose it as a downloadable transcript link in `QueueDashboardScreen` job detail. Out of scope for this session per documentation-first principle — field doesn't exist server-side yet.
+
+2. **INTERACTIVE controls restoration (chat_screen + session_list_screen)** — forward-compat. Triggers when parent restores `inject` / `interrupt` / `end_session` methods on `ClaudeCodeJob` (Q1 of the Bounded redesign reserves stubs for these; future plan). Current state: `chat_screen.dart` + `session_list_screen.dart` are preserved as banner-only screens; route entries still wired. When the parent ships restoration, rebuild these screens from the pre-2026-05-11 git history (commit chain available via `git log --oneline`) + repoint to the new parent endpoints. Plan: file a new session and reverse-port from voice-persona-style Pattern A doc-set.
+
+3. **Canonical URL propagation verification** — when next session opens, re-run pre-Phase-1 gates G1 / G2 from `src/rnd/v0.1.7/2026.05.09-cc-dispatch-retirement-sync/01-plan.md` against `:7999`. If G1 returns HTTP 401 (instead of 404 as of 2026-05-11), parent's rename has propagated to dev server. Update execution log; ready to ship real submissions.
+
+---
 
 ---
 

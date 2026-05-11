@@ -11,35 +11,13 @@ class ClaudeCodeInitial extends ClaudeCodeState {
   const ClaudeCodeInitial();
 }
 
-class ClaudeCodeDispatching extends ClaudeCodeState {
-  const ClaudeCodeDispatching();
+class ClaudeCodeSubmitting extends ClaudeCodeState {
+  const ClaudeCodeSubmitting();
 }
 
-/// Session is running and accepting status polls / WS events.
-class ClaudeCodeActive extends ClaudeCodeState {
-  final ClaudeCodeSession session;
-  const ClaudeCodeActive( this.session );
-  @override List<Object?> get props => [ session.taskId, session.status ];
-}
-
-/// Session is paused, awaiting user input inject.
-class ClaudeCodeAwaitingInput extends ClaudeCodeState {
-  final ClaudeCodeSession session;
-  const ClaudeCodeAwaitingInput( this.session );
-  @override List<Object?> get props => [ session.taskId ];
-}
-
-/// Session completed (success or interrupted).
-class ClaudeCodeDone extends ClaudeCodeState {
-  final ClaudeCodeSession session;
-  const ClaudeCodeDone( this.session );
-  @override List<Object?> get props => [ session.taskId, session.costUsd ];
-}
-
-/// BOUNDED job was queued via CJ Flow.
-class ClaudeCodeQueued extends ClaudeCodeState {
-  final ClaudeCodeQueueResponse response;
-  const ClaudeCodeQueued( this.response );
+class ClaudeCodeSubmitted extends ClaudeCodeState {
+  final ClaudeCodeSubmitResponse response;
+  const ClaudeCodeSubmitted( this.response );
   @override List<Object?> get props => [ response.jobId ];
 }
 

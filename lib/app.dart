@@ -67,15 +67,6 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
       case AppConstants.eventQueueDeadUpdate:
         ServiceLocator.get<QueueBloc>().add( const QueueExternalUpdate( 'dead' ) );
         break;
-      case AppConstants.eventClaudeCodeMessage:
-      case AppConstants.eventClaudeCodeStateChange:
-        final taskId = data['task_id'] as String?;
-        if ( taskId != null ) {
-          ServiceLocator.get<ClaudeCodeBloc>().add(
-            ClaudeCodeExternalMessage( taskId: taskId, payload: data ),
-          );
-        }
-        break;
       case AppConstants.eventNotificationQueueUpdate:
         // Backend emits `{"type": "notification_queue_update", "notification": {...}}`
         // (see src/cosa/rest/websocket_manager.py `async_emit` / `emit_to_user`).

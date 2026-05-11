@@ -3,10 +3,92 @@
 ## 📚 Archived Sessions
 
 Older session entries have been archived for token-limit hygiene. See:
+- **[2026-04-17-to-24-history.md](history/2026-04-17-to-24-history.md)** — WS hookup → TTS overlap fix (5 sessions, Apr 17-24, 2026; archived 2026-05-11)
 - **[2026-04-15-to-16-history.md](history/2026-04-15-to-16-history.md)** — Tier 1-4 buildout (5 sessions, Apr 15-16, 2026)
 - **[2025-07-06-to-08-17-history.md](history/2025-07-06-to-08-17-history.md)** — Initial era (7 sessions, Jul 2025 – Aug 2025; project then dormant for 8 months)
 
-Most recent ~3 weeks (2026-04-17 onward) are retained below.
+Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch retirement sync) are retained below.
+
+---
+
+
+## 2026.05.11 | Session `c594308e` — Claude Code dispatch retirement sync (mobile cutover to canonical `/api/claude-code/submit`)
+
+#### Implementation | 2026.05.11 | Mobile migrated to canonical Claude Code submit endpoint; 5 retired methods + 4 retired model classes + 6 retired BLoC events deleted; INTERACTIVE UI surfaces preserved as banner-only screens per "obviously disable, don't silently mask" strategy; PIP plan-review GATE cleared (REUSE + Pass 1 Fitness + Pass 2 Adversarial all converged); baseline 308 → 298 (-10 from test pruning); 8/8 focused claude_code tests green
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan slate**: `src/rnd/v0.1.7/2026.05.09-cc-dispatch-retirement-sync/` (01-plan + 90-execution-log)
+**Continues from**: voice-persona milestone CODE-COMPLETE (session-end `c25dbc3e` 2026-05-07; voice-persona HUMAN gate still outstanding, now joined by this CC sync work also requiring eventual on-device smoke)
+
+### Accomplishments
+
+1. **Parent-Lupin audit complete**: identified the 2026-05-05 retirement of `/api/claude-code/dispatch` cluster (6 endpoints, commit `73bee1b`) + the in-flight Bounded ClaudeCodeJob redesign (commit `c1cec74` 2026-05-07; internal architecture, wire-stable). Two mobile rnd docs (`2026.04.15-tier-3-queue-and-claude-code-plan.md` + `2026.04.15-resync-mobile-with-lupin-api-v0.1.6.md`) flipped from open retirement-notice to ✅ DONE migration banners.
+
+2. **Canonical URL change captured**: user direction 2026-05-10 confirmed parent's parallel re-implementation of submission endpoint as `POST /api/claude-code/submit` (shorter form; supersedes original `/api/claude-code/queue/submit`). Mobile cut over to canonical URL today; gets 404 against pre-rename Lupin servers (G1 returned 404 against local `:7999` at session time — rename in flight, not propagated; G3 confirmed legacy `/queue/submit` still wired). Per user direction via cosa-voice gate: chose Option C (cutover now, accept 404) matching parent's "obviously disable" strategy.
+
+3. **PIP plan-review GATE executed end-to-end** (per `$PLANNING_IS_PROMPTING_ROOT/workflow/plan-review.md`):
+   - REUSE pre-pass: 10 items reviewed; 6 reuse-as-is + 1 extend-existing + 2 genuinely-new (minimal) + 1 default-set preservation. "Prior art referenced" section appended to plan doc.
+   - Pass 1 Fitness: 8 findings (F1-F8) — user approved ALL via cosa-voice multi-select; applied verbatim. Convergence loop closed (no new TBDs).
+   - Pass 2 Adversarial: 3 findings (A1-A3) — user approved A1 (EXECUTOR tags across all verification surfaces); A2 + A3 skipped per user. Convergence loop closed.
+   - Idempotency marker `last-reviewed-at: 2026-05-11` recorded.
+
+4. **Code migration (Phases 1-5)**:
+   - **data layer**: `claude_code_repository.dart` shrunk to single `submit()` method targeting `/api/claude-code/submit`; `claude_code_models.dart` shrunk to `ClaudeCodeSubmitRequest`/`Response` (8 + 4 wire fields preserved verbatim) + `ClaudeCodeApiException`. Literal 3-line retirement footnote added to both file dartdocs.
+   - **domain layer**: `claude_code_event.dart` shrunk to single `ClaudeCodeSubmit` event; `claude_code_state.dart` to `Initial → Submitting → (Submitted | Error)`; BLoC handler family shrunk to `_onSubmit` only.
+   - **presentation layer**: `dispatch_sheet.dart` rewritten as BOUNDED-only with yellow-bg retirement banner (`Color(0xFFFFF3CD)` matching parent web's `.cc-retired-banner` rule verbatim); `chat_screen.dart` + `session_list_screen.dart` preserved as banner-only screens; CTA on session list pushes to `QueueDashboardScreen` (Tier 3 surface where `cc-*` jobs land).
+   - **WS bridge**: `lib/app.dart` `claude_code_message` / `claude_code_state_change` handler block deleted; 2 retired event-name constants removed from `lib/core/constants/app_constants.dart`.
+
+5. **Tests rewritten** (`test/unit/claude_code/`): 8 tests across 3 files (4 model + 2 repo + 2 bloc). All 8 green. Old test count was ~13 (3 dispatch + 1 inject + 1 interrupt + 1 queueSubmit repo + 6 bloc dispatch/inject/end/queue + 4 model). New count is 8. Pruning achieved planned scope.
+
+### Files Modified (13)
+
+**Code**:
+- `lib/features/claude_code/data/claude_code_repository.dart` — 107 → 35 lines; 5 retired methods deleted; `queueSubmit` → `submit`; URL `/api/claude-code/queue/submit` → `/api/claude-code/submit`; literal 3-line footnote
+- `lib/features/claude_code/data/claude_code_models.dart` — 169 → 67 lines; 4 retired classes + 1 enum deleted; `ClaudeCodeQueueRequest`/`Response` → `ClaudeCodeSubmitRequest`/`Response`; literal 3-line footnote
+- `lib/features/claude_code/domain/claude_code_event.dart` — 54 → 12 lines; 6 retired events deleted; `ClaudeCodeQueueSubmit` → `ClaudeCodeSubmit`
+- `lib/features/claude_code/domain/claude_code_state.dart` — 51 → 25 lines; 3 retired states deleted; `Dispatching` → `Submitting`; `Queued` → `Submitted`; field type `ClaudeCodeQueueResponse` → `ClaudeCodeSubmitResponse`
+- `lib/features/claude_code/domain/claude_code_bloc.dart` — 141 → 30 lines; shrunk to single `_onSubmit` handler; 6 retired event registrations + `_stateFromSession` helper deleted
+- `lib/features/claude_code/presentation/dispatch_sheet.dart` — rewritten: BOUNDED-only; `SegmentedButton<ClaudeCodeTaskType>` removed; retirement banner at top; `_dispatch()` → `_submit()` builds `ClaudeCodeSubmitRequest`
+- `lib/features/claude_code/presentation/chat_screen.dart` — 202 → 48 lines; INTERACTIVE chat body replaced with banner; AppBar title preserved (`Claude Code Chat (retired)`), actions dropped
+- `lib/features/claude_code/presentation/session_list_screen.dart` — 98 → 87 lines; state-driven session list body replaced with banner + `FilledButton.tonal` CTA pushing to `QueueDashboardScreen`; FAB preserved for new BOUNDED submissions
+- `lib/app.dart` — WS handler block for `claude_code_message`/`claude_code_state_change` events removed (10 lines)
+- `lib/core/constants/app_constants.dart` — 2 retired event-name constants removed (`eventClaudeCodeMessage`, `eventClaudeCodeStateChange`)
+
+**Tests**:
+- `test/unit/claude_code/claude_code_models_test.dart` — rewritten: 4 tests covering `ClaudeCodeSubmitRequest.toJson` (defaults + optionals) + `ClaudeCodeSubmitResponse.fromJson` (parse + defaults)
+- `test/unit/claude_code/claude_code_repository_test.dart` — rewritten: 2 tests covering `submit()` happy path against canonical URL + error path (HTTP 500 → `ClaudeCodeApiException`)
+- `test/unit/claude_code/claude_code_bloc_test.dart` — rewritten: 2 blocTests covering `Initial → Submitting → Submitted` and `Initial → Submitting → Error`
+
+**Docs / planning**:
+- `src/rnd/v0.1.7/2026.05.09-cc-dispatch-retirement-sync/01-plan.md` — NEW (serialised from `~/.claude/plans/piped-tumbling-quiche.md`; F1-F8 + A1 fixes applied via PIP plan-review)
+- `src/rnd/v0.1.7/2026.05.09-cc-dispatch-retirement-sync/90-execution-log.md` — NEW (phase-status + REUSE/Fitness/Adversarial close-out evidence + gate G1/G2/G3 results + warning baseline + pre-delete grep verdicts)
+- `src/rnd/v0.1.6-migration/2026.04.15-tier-3-queue-and-claude-code-plan.md` — RETIREMENT NOTICE → ✅ RETIREMENT MIGRATION COMPLETE
+- `src/rnd/v0.1.6-migration/2026.04.15-resync-mobile-with-lupin-api-v0.1.6.md` — same flip
+- `TODO.md` — voice-persona milestone HUMAN gate joined by this session's forward-compat items (parent transcript_path artifact + INTERACTIVE controls restoration triggers)
+
+### Test Results
+
+| Suite | Pre-session | Post-session | Δ |
+|---|---|---|---|
+| Focused `test/unit/claude_code/` | ~13 ✅ (mixed dispatch/queue) | **8 ✅** (canonical submit only) | -5 by design (pruning) |
+| Baseline `test/unit/ test/widget/ test/service_integration/` | 308 ✅ | **298 ✅** | -10 (matches plan's ~300 estimate) |
+| Retired endpoint 404 sanity | n/a | HTTP 404 for `/api/claude-code/dispatch` ✅ | — |
+| Gate G1 (canonical URL live) | n/a | HTTP 404 (rename in flight on parent) | informational HALT → user chose cutover |
+| Gate G3 (legacy disposition) | n/a | HTTP 401 (legacy still wired) | informational |
+
+### Key Decisions / Insights
+
+- **PIP plan-review gate saved a real bug**: F5 fix (schema-parity probe in G2) + F6 fix (gates lifted above verification table) were exactly the structure that surfaced G1's 404. Without them, mobile would have committed to a URL and discovered the rename gap only at runtime. The gate did its job.
+- **Wire-stable internal redesign means mobile is decoupled from parent's in-flight Bounded ClaudeCodeJob redesign** (`<lupin>/src/rnd/v0.1.7/2026.05.07-claude-code-bounded-redesign/`). Parent can land that redesign without mobile rework — only the new `artifacts.transcript_path` field is future-relevant, and that surfaces on completed-job records (queue feature surface), not on the submit response.
+- **Color literal matching parent web verbatim** (`Color(0xFFFFF3CD)` from F2 fix): single source of truth across web and mobile retirement banners. Same yellow + orange accent the user sees on the parent's notifications page.
+- **User-stated contract overrode local probe state**: G1 returned 404 against local `:7999` but user-stated canonical is `/api/claude-code/submit`. Mobile committed to user-stated value per `feedback_user_stated_contract_is_authoritative` (auto-memory saved 2026-05-10).
+
+### Out of Scope (deferred / forward-compat)
+
+- **Voice-persona HUMAN gate** (laptop+emulator runbook vp1-vp7) — still outstanding from voice-persona milestone close 2026-05-07; now joined by this session's UI smoke (dispatch sheet BOUNDED-only verification on device). Bundle into a single device handoff.
+- **`artifacts.transcript_path` consumption** in `QueueDashboardScreen` job detail (cc-* job type) — forward-compat TODO. Triggers when parent ships ClaudeCodeJob redesign Phase 4 (currently blocked on parent-side plan-review at 4/11 findings).
+- **INTERACTIVE controls restoration** (`inject` / `interrupt` / `end_session`) — banner-preserved chat_screen + session_list_screen ready for restoration; triggers when parent's `ClaudeCodeJob` gains bidirectional control.
+- **Commit cadence** — per `feedback_no_auto_checkpoint`: user drives commits. Files modified above are uncommitted as of session-time.
 
 ---
 
@@ -499,351 +581,4 @@ No code changes this session; all work was planning + plan-review. Test count un
 - WS reconnect circuit-breaker handling (Tier-1 Mobile-Resync silent-regression item)
 - `/api/claude-code/dispatch` fossil cleanup
 - Doc-viewer scope=docs deep-link handling
-
----
-
-## 2026.04.24 | Session `0d54c763` — TTS overlap bug fix + on-device verify prep
-
-#### Session-End | 2026.04.24 | 273/273 non-legacy tests green (was 263 at session start; +10)
-
-**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
-**Runbook**: `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`
-
-### Accomplishments
-
-1. **TTS overlap bug audit + fix** (`lib/services/tts/streaming_tts_player.dart`)
-   - Root cause: `handleWsEvent` for `audio_streaming_complete` fired `_completeCtrl` immediately, but `_playPcmBuffer()` was not awaited. Orchestrator advanced its FIFO while audio was still playing → scenario #7 (two rapid highs) would interrupt the first utterance.
-   - Fix: extracted `StreamingTtsAudioPlayer` test seam (mirrors `AudioPlaybackController` pattern from `AudioArtifactPlayer`), gated `TtsCompleteEvent` emission on `onPlayerComplete` via a completer + identity guard so `stop()` (urgent preempt) doesn't emit a stray complete.
-
-2. **Quota-simulation dart-define hook** (same file)
-   - `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define, `kDebugMode`-gated, optional-constructor-override for tests. When true, `speak()` adds `debug_simulate_error: true` to the POST body. Backend `/api/get-speech-elevenlabs` already supports this flag (`speech.py:508,891`) and emits a `tts_error` WS event with `error_code=quota_exceeded`. Enables on-device scenario #8 without needing an exhausted ElevenLabs account.
-
-3. **Regression + flag-coverage test suite** (`test/unit/services/tts/streaming_tts_player_test.dart`)
-   - 10 new tests covering: complete-NOT-fired-before-onComplete, complete-IS-fired-after-onComplete, empty-buffer defensive, stop()-during-playback, preempt→next-utterance, isPlaying lifecycle, stray-event filter, tts_error mid-stream, simulateTtsError=true POST-body-inclusion, simulateTtsError=false POST-body-omission. Unit count: 177 → 187.
-
-4. **Scenario-firing script** (`src/scripts/fire-tts-scenarios.py`)
-   - 12-scenario Python script that POSTs each TODO.md scenario (lines 54-71) to `/api/notify`. Supports `--scenario all`, single-scenario, `--dry-run`, auto-fires s5b after s5 with 500ms rapid-fire gap. Uses `requests` (per CLAUDE.md no-curl rule). Loads API key from `$LUPIN_ROOT/src/conf/keys/notification-api-claude-code-dev`.
-
-5. **On-device verify runbook** (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`)
-   - Copy-paste-ready runbook for the laptop leg of the next session. Covers rsync → pub get → build → install → per-scenario checklist with expected behavior, adb logcat filters, stub-injection for s8, channel-sound gotcha, PCM→WAV verification.
-
-### Files Modified (2)
-
-- `lib/services/tts/streaming_tts_player.dart` — overlap fix + test seam + dart-define hook
-- `TODO.md` — will be updated at session-end to reflect next steps
-
-### Files Created (3)
-
-- `test/unit/services/tts/streaming_tts_player_test.dart`
-- `src/scripts/fire-tts-scenarios.py`
-- `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`
-
-### Test Results
-
-| Suite | Start | End |
-|-------|-------|-----|
-| Unit | 177 | 187 |
-| Widget + service_integration | 86 | 86 |
-| **Total** | **263** | **273** |
-
-Pre-existing 44 `legacy_quarantine/` failures unchanged (per memory rule, drift-broken quarantined tests, not regressions).
-
-### Key Decisions / Insights
-
-- **Mock/real contract divergence**: The 11 existing `TtsOrchestrator` tests mocked `StreamingTtsPlayer` entirely and emitted `completeCtrl` at the intended contract time. The real player violated the contract (fired complete on WS stream, not on playback end). Tests passed against the mock, but scenario #7 would have failed on-device. The new regression suite closes this gap by exercising the real player with a mocked `StreamingTtsAudioPlayer`.
-- **`_activePlaybackCompleter` identity guard**: chose field + capture-local + `identical()` check over a generation counter. Reason: completer + identity is idiomatic Dart for "supersede this async operation" and plays well with `stop()`'s need to wake hung awaits without emitting spurious complete events.
-- **Dev-flag over backend stub**: `debug_simulate_error` was already baked into the backend but the mobile client didn't expose it. Adding a `kDebugMode`-gated dart-define + optional constructor override is cleaner than a backend debug endpoint, confined to the mobile app, and automated via unit tests (per memory: "Automate smokes before recommending on-device manual testing").
-- **Script over curl**: `fire-tts-scenarios.py` uses `requests` per project CLAUDE.md's `NEVER use curl for API testing` rule. Dry-run mode validated the POST payload shape without mutating backend state.
-- **No commits**: uncommitted through this session per memory rule "user drives commit cadence". Session-end ritual handles the commit prompt with explicit user approval.
-
-### Out of Scope (deferred to next session)
-
-- On-device execution of the 10 TTS scenarios (laptop + emulator, user-driven)
-- Phase 4b (podcast `audio_path` field rename) — still blocked on parent-Lupin cross-repo fix
-- Hygiene follow-ups from commit `edaec79` (flutter pub get sanity, history.md one-liner decision, etc.) — not picked up this session
-
----
-
-## 2026.04.22 | Session `40aa03d3` — Tier 2 + Tier 4 polish slate (4 phases)
-
-#### Session-End | 2026.04.22 | 263/263 non-legacy tests green (was 237 at session start; +26 across the slate)
-
-**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
-**Plan**: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md` (serialized from approved plan-mode output; 4 phases + 2 doc cleanups, scoped excluding TimeSavedDashboard per user)
-
-### Accomplishments
-
-1. **Phase 0 — Doc cleanup + cross-repo bug filing**
-   - `_emit_queue_update` parent-Lupin bug moved from Cross-Repo → Completed in `bug-fix-queue.md` (user confirmed fix landed in parent)
-   - **NEW** Cross-Repo entry filed: parent Lupin `routers/queues.py:456,523` queue-metadata mapping omits `artifacts['audio_path']` for `pg-*`/`rp-*` jobs (confirmed by direct read; podcast `job.py:281,398` writes the field, queue router never reads it). Blocks Phase 4b.
-   - `TODO.md` curated: `TimeSavedDashboard + StatsRepository + StatsBloc + fl_chart` removed and replaced with `[scope decision 2026-04-22]` line per user
-   - Plan serialized to `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`
-
-2. **Phase 1 — TrustStateScreen drilldown** (5 widget tests, 237→242)
-   - New `lib/features/decision_proxy/presentation/trust_state_screen.dart` — per-domain grouped trust-state list with circuit-breaker badge
-   - Reused already-shipped `DecisionProxyLoadTrust` event/state/handler (no new bloc plumbing)
-   - "View trust details" AppBar action wired on `TrustDashboardScreen` (re-loads dashboard on pop-back to handle `DecisionProxyTrustLoaded` → `DecisionProxyDashboardLoaded` state transition)
-
-3. **Phase 2+3 — SenderDates + ConversationByDate** (12 widget + 2 bloc tests, 242→256)
-   - 2 new bloc events (`NotificationsLoadSenderDates`, `NotificationsLoadConversationByDate`), 2 new states, 2 new handlers, +1 `_refreshCurrent()` branch for the by-date case
-   - `sender_dates_screen.dart` — date tile list with `newCount` badge
-   - `conversation_by_date_screen.dart` + `_NotificationItemCard` (Option A renderer per architectural decision — purpose-built for `NotificationItem`'s 44-field shape; rejects unifying with `ConversationMessage` to avoid cross-repo work)
-   - Calendar AppBar action on `ConversationScreen` → push `SenderDatesScreen`; date tile tap → push `ConversationByDateScreen` anchored to date
-
-4. **Phase 4a — AudioArtifactPlayer in-app playback** (7 widget tests, 256→263)
-   - Full rewrite of `lib/features/artifacts/audio_artifact_player.dart` around `audioplayers` + `DeviceFileSource`
-   - Extracted `AudioPlaybackController` interface so widget tests can mock it (audioplayers requires platform channels)
-   - State machine: idle → loading → ready → playing/paused → idle (+ error)
-   - Calls `TtsOrchestrator.stopAll()` before play to coordinate single audio stream
-   - Preserves `IoFileService.shareToExternalApp` as Share overflow action
-
-### Files Created (8)
-
-- `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md` (serialized plan)
-- `lib/features/decision_proxy/presentation/trust_state_screen.dart`
-- `test/widget/decision_proxy/trust_state_screen_test.dart`
-- `lib/features/notifications/presentation/sender_dates_screen.dart`
-- `test/widget/notifications/sender_dates_screen_test.dart`
-- `lib/features/notifications/presentation/conversation_by_date_screen.dart`
-- `test/widget/notifications/conversation_by_date_screen_test.dart`
-- `test/widget/artifacts/audio_artifact_player_test.dart`
-
-### Files Modified (10)
-
-- `bug-fix-queue.md`, `TODO.md`
-- `lib/core/testing/test_keys.dart` (+12 constants across phases)
-- `test/_harness/test_app.dart` (+3 mocktail fallbacks)
-- `lib/features/notifications/domain/notification_event.dart` (+2 events)
-- `lib/features/notifications/domain/notification_state.dart` (+2 states)
-- `lib/features/notifications/domain/notification_bloc.dart` (+2 handlers, +1 `_refreshCurrent` branch)
-- `lib/features/notifications/presentation/conversation_screen.dart` (calendar IconButton)
-- `lib/features/decision_proxy/presentation/trust_dashboard_screen.dart` (View trust details action)
-- `lib/features/artifacts/audio_artifact_player.dart` (full rewrite around `audioplayers`)
-- `test/widget/notifications/conversation_screen_test.dart` (+1 calendar-nav test)
-- `test/unit/notifications/notification_bloc_test.dart` (+2 blocTests)
-
-### Test Results
-
-| Suite | Start | End |
-|-------|-------|-----|
-| Unit + Widget + ServiceIntegration | 237 | 263 |
-
-Pre-existing 44 `legacy_quarantine/` failures unchanged (drift-broken tests; per memory rule, not regressions).
-
-### Key Decisions / Insights
-
-- **Option A for date-grouped renderer**: Purpose-built `_NotificationItemCard` instead of unifying `NotificationItem` (44 fields, no delivery state) and `ConversationMessage` (20 fields incl. `state`/`deliveredAt`/`respondedAt`/`responseValue`). Trade: by-date view shows priority/played/responseRequested but NOT a "responded at X with Y" badge. Avoids cross-repo work and zero risk to existing `_MessageCard` tests.
-- **`AudioPlaybackController` extraction**: Wrapping `audioplayers.AudioPlayer` behind a constructor-injected interface enables widget tests; otherwise platform channels block them. Real impl uses `DeviceFileSource(file.path)` (NOT `BytesSource`) since podcast MP3s can be multi-MB.
-- **Audio focus**: `AudioArtifactPlayer.play()` calls `TtsOrchestrator.stopAll()` first. Inverse direction (urgent TTS preempts playback) already covered by `_preemptForUrgent`. No orchestrator changes required.
-- **Phase 4a/4b split**: 4a builds the player UI now; 4b (field rename to `audioPath` in `JobSummary`) is gated on parent-Lupin merging the cross-repo `audio_path` mapping fix. Empty path = graceful no-op for now (filed as cross-repo bug).
-- **Pop-back state recovery (Phase 1)**: `TrustDashboardScreen`'s `BlocBuilder` falls through to `SizedBox.shrink()` when state is `DecisionProxyTrustLoaded`. Solution: `await Navigator.push()` then re-fire `DecisionProxyLoadDashboard` if mounted. Same pattern applied to `ConversationScreen` calendar nav.
-
-### Out of Scope (per user direction)
-
-- `TimeSavedDashboard / StatsRepository / StatsBloc / fl_chart` — explicitly deferred indefinitely
-- Phase 4b mobile field rename — gated on parent-Lupin backend fix
-- Cross-repo authoring of parent-Lupin `audio_path` fix (filed as cross-repo bug only)
-
----
-
-## 2026.04.21 | Session `214c47b6` — Stage 4 agentic + generate-gist UI + notification audio + FCM defer + agent-narration TTS
-
-#### Session-End | 2026.04.21 22:10 | 237/237 tests green (was 178 at session start; +59 over the day)
-
-**Day scope** (four logical deliverables across the 10-hour session):
-1. **Auto-pilot phase (morning→lunch)**: Stage 4 agentic widget-test coverage + generate-gist UI — ~8 hr — see Checkpoint 1 below.
-2. **Foreground notification audio**: `NotificationAudioService` + channels + settings + flutter_tts — ~2 hr — Checkpoint 2 below.
-3. **FCM defer + R&D doc**: pulled cross-repo bug-queue item after investigation; preserved reasoning in `src/rnd/v0.1.7/2026.04.21-fcm-apns-push-considerations.md` — ~30 min — Checkpoint 3 below.
-4. **Agent-narration TTS (ElevenLabs primary + flutter_tts fallback)**: slim `StreamingTtsPlayer` + `TtsOrchestrator` (FIFO + urgent preempt + quota-fallback); `NotificationAudioService` refactored for split responsibilities; 14 new tests — ~3 hr — Checkpoint 4 below (this session-end commit).
-
-**Final test count**: 178 → 237 green (+59 total). No regressions.
-**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`.
-**Next session first-priority**: on-device verification of items #2 + #4 — see the "⭐ NEXT SESSION" banner at the top of TODO.md.
-
----
-
-#### Checkpoint 4 | 2026.04.21 22:10 | Agent-narration TTS pipeline (ElevenLabs + flutter_tts fallback)
-
-**Files**: `lib/services/tts/streaming_tts_player.dart` (new, ~230 lines), `lib/services/tts/tts_orchestrator.dart` (new), `lib/services/notification_audio/notification_audio_service.dart` (refactored — removed auto-priority speech branch, exposed `flutterTtsSpeak()` + `stopFallbackSpeech()`), `lib/features/notifications/domain/notification_bloc.dart` (injected orchestrator), `lib/app.dart` (routes `audio_streaming_*` + `tts_error` to player), `lib/core/di/service_locator.dart` (registered new services), `lib/services/websocket/websocket_service.dart` (renamed binary wrapper to `audio_streaming_chunk`), `test/unit/services/tts/tts_orchestrator_test.dart` (new, 11 cases), `test/unit/notifications/notification_bloc_test.dart` (extended), `test/unit/services/notification_audio/notification_audio_service_test.dart` (rewrote for split responsibilities), `src/rnd/v0.1.7/2026.04.21-agent-narration-tts-plan.md` (new plan doc), TODO.md (+1 manifest). Test count 225 → 237 green.
-**Architecture note**: Abandoned the `EnhancedTTSService` revival approach after audit revealed 2,707-line dep chain (EnhancedWebSocketService + AdaptiveConnectionManager + AppLifecycleService) for marginal benefit. Legacy stack stays tree-shaken.
-**Commit**: [pending — this session-end commit]
-
-#### Checkpoint 3 | 2026.04.21 17:55 | FCM/APNs defer + R&D doc
-
-**Decision**: After filing a cross-repo bug-queue item requesting backend FCM/APNs support, user asked whether push can be self-hosted. Walk-through of landscape (FCM/APNs are OS-gatekeepers; realistic alternatives are silent-push relay, Android foreground service with persistent notification, or UnifiedPush/ntfy) converged on "too early in the project to commit to any of this." **Pulled the parent-Lupin bug-queue item**; captured investigation + 2026-04-21 defer decision + trigger conditions to revisit in `src/rnd/v0.1.7/2026.04.21-fcm-apns-push-considerations.md` (322 lines). Updated mobile `TODO.md` Phase 5 entries; updated `2026.04.21-notification-audio-on-receipt-plan.md` Phase 5 + Cross-Repo Dependency sections to point at the R&D doc.
-**Commit**: [pending — this session-end commit]
-**Cross-repo side-effect**: `/mnt/DATA01/include/www.deepily.ai/projects/lupin/bug-fix-queue.md` was edited (FCM entry removed); left uncommitted in parent repo per cross-repo git rules.
-
-#### Checkpoint | 2026.04.21 14:50 | Stage 4 agentic widget-test coverage + generate-gist UI
-
-**Files**: test_keys.dart, 8 agentic forms, 8 agentic widget test files, notification event/state/bloc, conversation_screen + test, test_app harness, TODO.md, plan doc (+1 manifest)
-**Commit**: 92852b6
-
-#### Checkpoint | 2026.04.21 17:15 | Notification audio-on-receipt (dings + on-device TTS for medium/high/urgent)
-
-**Files**: pubspec.yaml (+ `flutter_local_notifications` + `flutter_tts`), AndroidManifest.xml (`POST_NOTIFICATIONS`), 3 MP3 assets copied from Lupin web client into `android/app/src/main/res/raw/lupin_{medium,high,urgent}.mp3`, new `NotificationAudioService` + `NotificationPreferences`, new `NotificationAudioSettingsScreen` + gear-icon entry on home AppBar, extended `NotificationsExternalUpdate` event with `NotificationItem`, `app.dart` parses WS payload, `NotificationBloc._onExternalUpdate` triggers audio, DI wiring in `service_locator.dart`, +17 new tests (prefs + service + bloc + settings widget), plan doc `src/rnd/v0.1.7/2026.04.21-notification-audio-on-receipt-plan.md`, TODO.md (+1 manifest). Test count 206 → 223 green.
-**Commit**: 94f0d77
-
-### Session Summary
-- **Objective**: Auto-pilot session while user was at lunch — close out Testing Playbook Stage 4 (TestKeys + widget tests for the 8 agentic forms that didn't yet have them) and deliver at least one Tier 2 polish feature. Skip anything requiring laptop / adb / on-device / manual testing.
-- **Outcome**: ✅ **206/206 unit + widget tests green** (was 178 at session start; **+28 new tests**). 38 new `TestKeys` constants, 8 new widget test files, full `generate-gist` UI pipeline end-to-end.
-- **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
-
-### Accomplishments
-1. **Plan serialized** — `src/rnd/v0.1.7/2026.04.21-stage-4-agentic-coverage-and-tier-2-polish.md` documents the re-ordered hands-free execution sequence, cost/value analysis for skipped fixture-capture phases, and the two TODO.md corrections discovered during exploration.
-2. **Stale TODO corrections**:
-   - `getIt` in `home_screen.dart` — confirmed already removed (grep-verified, only DI-canonical files reference `getIt`); marked done.
-   - `lib/shared/models/notification_item.dart` — turned out NOT to be orphan. Re-exported via `shared/models/models.dart` and imported by 20+ production files (voice bloc, audio cache, repositories). Two `NotificationItem` classes now coexist (old in `shared/models/`, new in `features/notifications/data/notification_models.dart`) for different layers. Reclassified TODO as "leave in place; revisit with voice/audio refactor".
-3. **TestKeys expansion** — 38 new constants added to `lib/core/testing/test_keys.dart` covering all 8 agentic forms (pg/px/sw/bfe/tfe/ts/rp/rx).
-4. **TestKeys wired into 8 agentic forms** — podcast, presentation, SWE team, Bug Fix Expediter, Test Fix Expediter, Test Suite (including prefix-suffixed checkbox keys for all 4 test types), Research→Podcast, Research→Presentation.
-5. **8 new widget test files** (`test/widget/agentic/`) — render + form-reset + required-field validation + valid-submit dispatch paths for all 8 forms. BFE test additionally verifies `deadJobId` constructor pre-fill. TSF test additionally verifies the "unchecking all types makes submit a no-op" path. 26 new test cases total.
-6. **`generate-gist` UI** — new `NotificationsGenerateGistRequested` event + `NotificationsGistLoading`/`NotificationsGistReady` states + bloc handler that pulls currently-loaded messages and posts to `POST /api/notifications/generate-gist`. `ConversationScreen` AppBar gets a **Summarize** icon button; `NotificationsGistReady` triggers a bottom-sheet rendering of the LLM summary (keyed `TestKeys.convGistSheet`). After the sheet closes, the bloc re-emits the prior `NotificationsConversationLoaded` so the message list stays intact.
-7. **3 new ConversationScreen widget tests** — Summarize button renders; tap dispatches the new event; `NotificationsGistReady` state materializes the gist bottom sheet.
-8. **Test harness updated** — `registerHarnessFallbacks()` now registers a fallback for `NotificationsGenerateGistRequested` so mocktail `any()` works against the new event type.
-9. **Auto-pilot hands-free pattern saved to memory** — when user signals away-status, re-order the queue to filter out any item needing their keyboard/laptop/device involvement.
-
-### Files Added (9 new)
-- `src/rnd/v0.1.7/2026.04.21-stage-4-agentic-coverage-and-tier-2-polish.md`
-- `test/widget/agentic/podcast_generator_form_test.dart`
-- `test/widget/agentic/presentation_generator_form_test.dart`
-- `test/widget/agentic/swe_team_form_test.dart`
-- `test/widget/agentic/bug_fix_expediter_form_test.dart`
-- `test/widget/agentic/test_fix_expediter_form_test.dart`
-- `test/widget/agentic/test_suite_form_test.dart`
-- `test/widget/agentic/research_to_podcast_form_test.dart`
-- `test/widget/agentic/research_to_presentation_form_test.dart`
-
-### Files Modified (12)
-- `lib/core/testing/test_keys.dart` — 38 new constants
-- `lib/features/agentic/presentation/{podcast_generator,presentation_generator,swe_team,bug_fix_expediter,test_fix_expediter,test_suite,research_to_podcast,research_to_presentation}_form.dart` — TestKeys wired to primary inputs + switches + submit buttons
-- `lib/features/notifications/domain/{notification_event,notification_state,notification_bloc}.dart` — gist event + states + handler
-- `lib/features/notifications/presentation/conversation_screen.dart` — Summarize AppBar action + `_showGistSheet` bottom-sheet rendering
-- `test/_harness/test_app.dart` — gist fallback registered
-- `test/widget/notifications/conversation_screen_test.dart` — 3 new tests for gist flow
-- `TODO.md` — stale entries corrected; new completions recorded
-
-### Test Results
-| Suite | At session start | At session end |
-|-------|------------------|----------------|
-| Unit   | 150 | 150 |
-| Widget | 28  | 56  |
-| **Total** | **178** | **206** |
-
-### Key Decisions / Insights
-- **Fixture-capture deferred with justification**: Unlike notifications/decision-proxy where real-backend fixtures caught the login envelope bug, agentic submit responses share ONE `AgenticSubmitResponse` envelope across all 10 endpoints. Capturing live fixtures would burn real LLM $$ (DR/podcast/presentation spawn real work) for marginal drift-detection value. Hand-stubbed envelopes in `agentic_repository_test.dart` are documented against the OpenAPI spec and left as-is.
-- **Gist flow kept one-shot state**: The bloc emits `NotificationsGistReady` transiently, then re-emits the prior `NotificationsConversationLoaded` so the underlying list view doesn't collapse. UI uses a `BlocConsumer` listener (not builder) for the bottom sheet so the conversation stays rendered under the modal.
-- **Double-emit pattern**: same pattern used for gist error handling — emit `NotificationsError(msg)` then re-emit prior state. No persistent "error banner" state; consistent with existing `_onRespond` flow.
-- **`NotificationItem` vs `ConversationMessage`**: the former is the canonical shape from the REST list endpoint; the latter is a flattened conversation-specific shape with delivery/state fields. They diverge enough that switching ConversationScreen to `conversation-by-date` requires unified rendering — deferred, logged in TODO.md with blocker note.
-- **TrustStateScreen drilldown** (from the original plan): deferred. More invasive (new screen, per-domain data shape) and of less immediate value than the gist delivery. Queued for user's return.
-
-### Out of Scope (not touched this session)
-- Device/emulator sanity pass (5 items in TODO.md) — laptop domain per memory
-- Cross-repo parent-Lupin `_emit_queue_update` fix — different repo
-- Stats dashboard / `fl_chart` integration
-- In-app audio playback wiring in `AudioArtifactPlayer`
-- Date-grouped ConversationScreen — blocked by model type divergence
-- TrustStateScreen drilldown — deferred for user review
-
----
-
-## 2026.04.19 – 2026.04.20 | Session `1fb8dc65` — URL-encoding, WS lifecycle wiring, HTTP-interceptor idempotency, bug-fix-queue split
-
-### Session Summary
-- **Objective**: Close out the 2026-04-17 hot-bug list (URL-encoding + post-login investigation), then act on whatever the investigation surfaced.
-- **Outcome**: ✅ 4 bugs fixed, 1 cross-repo bug surfaced for parent Lupin. WS lifecycle wiring validated end-to-end on emulator (test `notify()` arrived in inbox in real time without pull-to-refresh). Bug tracker split from TODO.md per new convention. **178/178 unit + widget tests green** (was 169 at session start; +9 new).
-- **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
-
-### Accomplishments
-1. **`NotificationRepository` URL-encoding** — top-level `_enc()` helper (`Uri.encodeComponent`) applied to all 11 path-interpolation sites (senderId / userEmail / userId / project / dateString). Regression test covers slash-bearing sender IDs + `@` in email. Updated 7 pre-existing handler keys in repo + bloc tests. Shipped as commit `ab2a56c`.
-2. **Post-login investigation** — code-read audit surfaced that `WebSocketService.connect()` was never invoked post-login; the `_dispatchWsEvent` router in `app.dart` was dead code at runtime. Findings serialized to `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`.
-3. **WS lifecycle wiring** — new `WsLifecycleListener` widget (`BlocListener<AuthBloc>` with `listenWhen` on `runtimeType` change) drives `ws.connect(userId:)` on `AuthAuthenticated` and `ws.disconnect()` on `AuthUnauthenticated`/`AuthError`. 5 widget-test cases covering the full transition matrix. Plan doc at `src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md`. Validated end-to-end on emulator.
-4. **`DecisionProxyRepository` URL-encoding parity** — same `_enc()` pattern applied to 3 sites (`pending`, `trust`, `decisions/$domain/$category`). +1 regression test.
-5. **Duplicate HTTP log output** — diagnosed as double `_configureDio()` on shared Dio: `CachedHttpService extends HttpService` + both get the same DI singleton, each adding `LogInterceptor`+`InterceptorsWrapper`. Fixed with `options.extra['_lupin_http_configured']` idempotency marker. +2 unit tests.
-6. **Bug tracker / TODO split** — new `bug-fix-queue.md` (v2.0 format, mirrors parent Lupin's convention); `TODO.md` scoped to build-out work only with a header documenting the split.
-
-### Files Added (7 new)
-- `lib/features/auth/presentation/ws_lifecycle_listener.dart`
-- `test/widget/auth/ws_lifecycle_listener_test.dart`
-- `test/unit/services/network/http_service_test.dart`
-- `src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md`
-- `src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md`
-- `bug-fix-queue.md`
-- *(the URL-encoding regression test additions are inline in existing files)*
-
-### Files Modified
-- `lib/app.dart` — wrapped `MaterialApp` with `WsLifecycleListener`
-- `lib/features/notifications/data/notification_repository.dart` — `_enc()` helper + 11 sites *(already shipped in `ab2a56c`)*
-- `lib/features/decision_proxy/data/decision_proxy_repository.dart` — `_enc()` helper + 3 sites
-- `lib/services/network/http_service.dart` — `_configureDio()` idempotency guard
-- `test/unit/notifications/notification_{repository,bloc}_test.dart` — 7 handler keys + regression test *(committed)*
-- `test/unit/decision_proxy/decision_proxy_{repository,bloc}_test.dart` — 3 handler keys + regression test
-- `TODO.md` — scoped to build-out; bug entries migrated to `bug-fix-queue.md`
-
-### Test Results
-| Suite | At session start | At session end |
-|-------|------------------|----------------|
-| Unit   | 141 | 150 |
-| Widget | 28  | 28  |
-| **Total** | **169** | **178** |
-
-### Key Decisions / Insights
-- **Logging ≠ dispatching**: the apparent "duplicate dispatch" in emulator logcat was duplicate *logging* caused by `CachedHttpService` extending `HttpService` on a shared Dio. Using `options.extra` as the idempotency sentinel keeps the guard on the Dio itself, not on the service class, so any future service re-configuring the same Dio is also safe.
-- **Bug-tracker convention**: split `bug-fix-queue.md` from `TODO.md` mirrors parent Lupin's format. TODO = *build*; bug-fix-queue = *fix*. Header on `TODO.md` documents the split so future sessions don't mistakenly file bugs there again.
-- **WS token rotation** left as follow-up: `WebSocketService._authenticate()` reads the token once at connect time; token refresh inside a held WS is NOT handled. Filed as cross-cutting follow-up in the plan doc.
-
-### Cross-Repo Surfaced
-- **Lupin backend `NotificationFifoQueue._emit_queue_update` AttributeError** — `POST /api/notifications/{id}/played` returns 500 in parent Lupin. Tracked in `bug-fix-queue.md` under "Cross-Repo" so lupin-mobile contributors see it, but the actual fix belongs in the parent repo (`src/cosa/rest/`).
-
----
-
-## 2026.04.17 - WS hookup + auth envelope fix + fixture-backed tests + broader widget coverage
-
-### Session Summary
-- **Objective**: Complete the on-device verification loop for the v0.1.6 resync work, then close the loop on test infrastructure (playbook Stage 1 → Stage 3 fixtures).
-- **Status**: ✅ 169/169 unit + widget tests green. Login verified on-device. All server-side work uncommitted per user's explicit commit discipline.
-- **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
-
-### Accomplishments
-1. **WebSocket hookup (Track C)** — wired `NotificationsExternalUpdate` dispatch in `app.dart` so `notification_queue_update` WS events now refresh the inbox without manual pull. +1 blocTest covering the refresh path.
-2. **Testing playbook Stage 1** — added `mocktail` + `network_image_mock`, `TestKeys` class, shared `testApp` harness, `integration_test/` scaffold, first widget test (login). Renamed stale `test/integration/` → `test/service_integration/`.
-3. **Widget coverage for three smoke scenarios** — `inbox_screen` (4 cases), `conversation_screen` (3 cases incl. yes_no response flow), `trust_dashboard_screen` (3 cases + 2 approve/reject), `deep_research_form` (3 cases incl. dry-run submit). On-device smokes downgraded from "primary verification" to "sanity pass".
-4. **Dev-only credential pre-fill** — `LUPIN_DEV_EMAIL` + `LUPIN_DEV_PASSWORD` via `--dart-define`, gated by `kDebugMode`, wired in `auth_gate.dart` + `login_screen.dart` + `build-and-deploy-lupin-mobile.sh`.
-5. **Auth login envelope fix** — `AuthRepository.login/refresh` were parsing flat tokens; real backend returns `LoginResponse`/`RefreshResponse` envelopes with `tokens` nested. Extracted `_parseTokensEnvelope` helper that throws `AuthException` on bad shape (no more raw `TypeError` swallowed by generic catch). Added `AuthGate` widget test suite covering the navigation contract.
-6. **Stage 2 fixture-backed tests (auth)** — captured real `/auth/*` responses via Python script, redacted JWTs + PII, wrote JSON fixtures. Drift detection verified by deliberate fixture mutation.
-7. **Stage 3 fixture expansion + broader TestKeys** — shared `_fixture_lib.py`, new capture scripts for notifications + decision-proxy, 8 new fixtures, 6 repository tests converted, keys applied to `InteractivePromptSheet` yes/no buttons + `_DecisionCard` approve/reject, new widget test for prompt sheet, approve/reject tests added to dashboard.
-
-### Files Added (24 new)
-- `src/scripts/_fixture_lib.py`, `capture-auth-fixtures.py`, `capture-notifications-fixtures.py`, `capture-decision-proxy-fixtures.py`
-- `test/fixtures/README.md`, `test/fixtures/auth/*.json` (4), `test/fixtures/notifications/*.json` (4), `test/fixtures/decision_proxy/*.json` (4)
-- `test/_helpers/fixture_loader.dart`, `test/_harness/test_app.dart`
-- `test/widget/auth/{login_screen,auth_gate}_test.dart`
-- `test/widget/notifications/{inbox_screen,conversation_screen,interactive_prompt_sheet}_test.dart`
-- `test/widget/decision_proxy/trust_dashboard_screen_test.dart`
-- `test/widget/agentic/deep_research_form_test.dart`
-- `integration_test/smoke_hello_test.dart`
-- `lib/core/testing/test_keys.dart`
-- `src/rnd/v0.1.7/2026.04.17-{tracks-c-b-a-implementation-plan,auth-login-envelope-parse-fix,stage-3-fixture-expansion-and-testkeys}.md`
-
-### Files Modified
-- `lib/app.dart`, `lib/features/auth/presentation/{login_screen,auth_gate}.dart`, `lib/services/auth/auth_repository.dart`, `lib/features/notifications/presentation/{inbox_screen,interactive_prompt_sheet}.dart`, `lib/features/decision_proxy/presentation/trust_dashboard_screen.dart`, `lib/features/agentic/presentation/deep_research_form.dart`
-- `pubspec.yaml` (mocktail + network_image_mock), `src/scripts/build-and-deploy-lupin-mobile.sh` (dart-define flags)
-- `test/unit/notifications/notification_{repository,bloc}_test.dart`, `test/unit/decision_proxy/decision_proxy_repository_test.dart`, `test/unit/auth/{auth_repository,auth_interceptor}_test.dart`
-- `TODO.md`
-
-### Files Renamed
-- `test/integration/` → `test/service_integration/` (2 files, non-canonical service-level notes, not the Flutter `integration_test/` at project root)
-
-### Test Results
-| Suite | Count |
-|-------|-------|
-| Unit   | 141 |
-| Widget | 28  |
-| **Total** | **169** |
-
-### Key Decisions / Insights
-- **Fixture-backed tests close the stub-drift gap** — the login envelope bug passed all unit tests because stubs matched the buggy parser, not the real backend. Captured fixtures + redaction script prevent that class of bug going forward.
-- **Flagged latent URL-encoding bug** in `NotificationRepository.conversation()`: interpolates `$senderId` without encoding, breaks on sender IDs containing `/` (e.g. `peer-queue-watch/<uuid>`). Fixture capture works around it by filtering slash-free senders. Separate fix needed; tracked in TODO.md.
-- **Commit discipline** — user explicitly pushed back on autonomous commits mid-session. Memory-persisted rule: only commit when user asks, regardless of plan content.
-
----
 

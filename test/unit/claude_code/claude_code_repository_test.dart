@@ -14,52 +14,34 @@ void main() {
       repo    = ClaudeCodeRepository( makeDio( adapter ) );
     } );
 
-    test( 'dispatch POSTs and returns session', () async {
-      adapter.handlers[ 'POST /api/claude-code/dispatch' ] = ( opts ) {
+    test( 'submit POSTs to canonical URL and returns parsed response', () async {
+      adapter.handlers[ 'POST /api/claude-code/submit' ] = ( opts ) {
         final body = opts.data as Map<String, dynamic>;
-        expect( body[ 'task_type' ], 'INTERACTIVE' );
-        return jsonBody( { 'task_id': 't-1', 'status': 'running' } );
+        expect( body[ 'prompt'    ], 'run something' );
+        expect( body[ 'task_type' ], 'BOUNDED' );
+        return jsonBody( {
+          'status'        : 'queued',
+          'job_id'        : 'cc-1',
+          'queue_position': 1,
+          'message'       : 'ok',
+        } );
       };
-      final session = await repo.dispatch(
-        ClaudeCodeDispatchRequest( prompt: 'run', taskType: ClaudeCodeTaskType.interactive ),
+      final r = await repo.submit(
+        ClaudeCodeSubmitRequest( prompt: 'run something' ),
       );
-      expect( session.taskId, 't-1' );
-      expect( session.status, 'running' );
+      expect( r.jobId,  'cc-1' );
+      expect( r.status, 'queued' );
     } );
 
-    test( 'getStatus returns parsed session', () async {
-      adapter.handlers[ 'GET /api/claude-code/t-2/status' ] = ( _ ) =>
-          jsonBody( { 'task_id': 't-2', 'status': 'awaiting_input' } );
-      final session = await repo.getStatus( 't-2' );
-      expect( session.status, 'awaiting_input' );
-    } );
-
-    test( 'inject POSTs message to correct endpoint', () async {
-      adapter.handlers[ 'POST /api/claude-code/t-3/inject' ] = ( opts ) {
-        final body = opts.data as Map<String, dynamic>;
-        expect( body[ 'message' ], 'yes' );
-        return jsonBody( { 'status': 'ok', 'task_id': 't-3' } );
-      };
-      await expectLater( repo.inject( 't-3', 'yes' ), completes );
-    } );
-
-    test( 'interrupt POSTs to correct endpoint', () async {
-      adapter.handlers[ 'POST /api/claude-code/t-4/interrupt' ] = ( _ ) =>
-          jsonBody( { 'status': 'interrupted' } );
-      await expectLater( repo.interrupt( 't-4' ), completes );
-    } );
-
-    test( 'queueSubmit returns queue response', () async {
-      adapter.handlers[ 'POST /api/claude-code/queue/submit' ] = ( _ ) => jsonBody( {
-        'status'        : 'queued',
-        'job_id'        : 'cj-5',
-        'queue_position': 1,
-        'message'       : 'ok',
-      } );
-      final r = await repo.queueSubmit(
-        ClaudeCodeQueueRequest( prompt: 'bounded task' ),
+    test( 'submit throws ClaudeCodeApiException on HTTP 500', () async {
+      adapter.handlers[ 'POST /api/claude-code/submit' ] = ( _ ) =>
+          jsonBody( { 'detail': 'server crashed' }, status: 500 );
+      await expectLater(
+        repo.submit( ClaudeCodeSubmitRequest( prompt: 'x' ) ),
+        throwsA( isA<ClaudeCodeApiException>()
+            .having( ( e ) => e.message,    'message',    'server crashed' )
+            .having( ( e ) => e.statusCode, 'statusCode', 500 ) ),
       );
-      expect( r.jobId, 'cj-5' );
     } );
   } );
 }
