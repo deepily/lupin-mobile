@@ -1,12 +1,6 @@
 # TODO
 
-Last updated: 2026-05-11 (Session `c594308e` — Claude Code dispatch retirement sync to canonical `/api/claude-code/submit` LANDED; 298 baseline tests green; voice-persona milestone CODE-COMPLETE still has its HUMAN gate outstanding, now joined by this session's UI smoke (BOUNDED dispatch sheet on device). Bundle into a single device handoff. **NEW R&D dropped 2026-05-07** proposing Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually. **2026-05-11 user directive (next session priority-1)**: yes/no/**neither** for `ask_yes_no` — see top of pending block.)
-
----
-
-## 🎯 NEXT SESSION — PRIORITY 1 (user-flagged 2026-05-11): yes/no/neither for `ask_yes_no`
-
-- [ ] [LUPIN-MOBILE] Implement **yes / no / neither** for the `ask_yes_no` question — extend the current binary response to a tri-state response (third path: *neither* / decline-to-answer). User flagged this 2026-05-11 as **first-and-foremost** item for next session. Scope to confirm on resume: mobile UI surface (`InteractivePromptSheet` + `NotificationBloc` response event + `NotificationRepository` response endpoint), and whether the parent-Lupin backend contract needs a matching third-state response field or whether "neither" maps to an existing decline path. Surfaces likely affected: prompt sheet button row, bloc response event payload, repo POST body, fixture-backed tests.
+Last updated: 2026-05-11 (Session `51ee0afa` — Yes/No/**Neither** tri-state for `ask_yes_no` LANDED; 298 → **301 ✅** baseline; backend already permissive so no cross-repo work; legacy-quarantine triage TODO filed under Testing Playbook. Voice-persona milestone HUMAN gate + CC-sync UI smoke + yes/no/neither rendering smoke all bundle into a single device handoff. **NEW R&D from 2026-05-07** still proposes Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually.)
 
 ---
 
@@ -272,6 +266,7 @@ tests, re-verify on device.
 - [ ] [LUPIN-MOBILE] **Phase 4b (deferred, blocked on cross-repo)**: switch `JobDetailScreen` for `pg-*`/`rp-*` jobs to use real `audioPath` field — blocked on parent Lupin exposing `artifacts['audio_path']` in queue metadata. See `bug-fix-queue.md` Cross-Repo entry.
 
 ### Testing Playbook — Stage 4+ (deferred with revisit triggers)
+- [ ] [LUPIN-MOBILE] **Legacy quarantine triage pass** (`test/legacy_quarantine/`, 22 files / 44 ❌, baseline since 2026-04-16) — produce a per-file mapping `quarantined-test → covered-by-new-test` (or "still meaningful → fix and re-admit"). Three buckets to resolve: (1) API drift / compile errors from Tier 1-4 migration (~16 files: `cacheAudioForText`, `PerformanceMonitorConfig`, `AppError`, `audio.jobId`, stale mocks); (2) live-WS-server dependencies (4 files: `connection_recovery`, `websocket_integration`, `event_system_integration`, `websocket_performance` — replace with BLoC-seam mocks or delete if redundant with current WS smoke suite); (3) test-infra rot (1 file: `user_repository_test.dart` missing `TestWidgetsFlutterBinding` init). Outcome: prune covered files to delete (drop `.mocks.dart` alongside), re-admit any still-meaningful files after fixing. Closes the standing 44 ❌ drift baseline. **Revisit trigger**: when the drift number changes (up or down) OR when the next major data-layer change lands. Reference: `test/legacy_quarantine/README.md` + `src/rnd/v0.1.6-migration/2026.04.16-legacy-test-triage.log`.
 - [ ] [LUPIN-MOBILE] Alchemist visual-regression goldens — revisit when inbox tile / DR form / trust chip sees ≥2 regressions in a month
 - [ ] [LUPIN-MOBILE] Patrol 4.x native-dialog support — revisit when app requests runtime permissions (mic, notifications) and smokes can't pass them via taps
 - [ ] [LUPIN-MOBILE] Maestro MCP flows — revisit after `integration_test/` has ≥5 flows and CI parallelization matters
@@ -284,6 +279,7 @@ tests, re-verify on device.
 - [x] [LUPIN-MOBILE] `getIt` import in `home_screen.dart` — verified **already removed** as of 2026-04-21 (confirmed by grep; only DI canonical files `service_locator.dart` + `use_case_registry.dart` reference `getIt`). — 2026-04-21
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] **Yes/No/Neither tri-state for `ask_yes_no`** (session `51ee0afa`): added `promptNeitherButton` TestKey; replaced `_YesNoBody` 2-button Row with 3-button Row (OutlinedButton-No | Tooltip-wrapped-TextButton-⊘-Neither | FilledButton-Yes; 12→8px gaps; label + tooltip verbatim parity with web UI); +2 widget tests + 1 conversation integration test; backend confirmed already permissive (no cross-repo work). 298 → **301 ✅** baseline; 44 ❌ quarantine unchanged. Plan: `src/rnd/2026.05.11-yes-no-neither-mobile-implementation.md`. — 2026-05-11
 - [x] [LUPIN-MOBILE] TTS overlap bug fix + on-device verify prep (session `0d54c763`): `StreamingTtsAudioPlayer` test seam + playback-gated `TtsCompleteEvent` + `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define + 10 new regression/flag tests + `fire-tts-scenarios.py` script + runbook. 263→273 green. Runbook: `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`. — 2026-04-24
 - [x] [LUPIN-MOBILE] Tier 2 + Tier 4 polish slate (session `40aa03d3`): TrustStateScreen drilldown + SenderDatesScreen + ConversationByDateScreen + AudioArtifactPlayer in-app playback rebuild. 4 phases, 22 widget tests + 2 bloc tests, 237→263 green. Plan: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`. — 2026-04-22
 - [x] [LUPIN-MOBILE] Cross-repo bug filed: parent Lupin `routers/queues.py:456,523` omits `artifacts['audio_path']` mapping for `pg-*`/`rp-*` jobs. Blocks Phase 4b. — 2026-04-22

@@ -7,7 +7,77 @@ Older session entries have been archived for token-limit hygiene. See:
 - **[2026-04-15-to-16-history.md](history/2026-04-15-to-16-history.md)** — Tier 1-4 buildout (5 sessions, Apr 15-16, 2026)
 - **[2025-07-06-to-08-17-history.md](history/2025-07-06-to-08-17-history.md)** — Initial era (7 sessions, Jul 2025 – Aug 2025; project then dormant for 8 months)
 
-Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch retirement sync) are retained below.
+Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch retirement sync + yes/no/neither tri-state) are retained below.
+
+---
+
+
+## 2026.05.11 (third session same day) | Session `51ee0afa` — Yes/No/**Neither** tri-state for `ask_yes_no` shipped; mobile now at parity with cosa-voice MCP v0.3.0 + parent-Lupin web UI
+
+#### Implementation | 2026.05.11 | Priority-1 next-session item (from `fe7679c9`) executed end-to-end: verification → plan via `/p-is-p-01-planning` → code → tests → 301 ✅ baseline; backend already permissive so no cross-repo work; on-device verification bundled into existing milestone HUMAN gate; one new test-hygiene TODO filed (legacy quarantine triage)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Continues from**: same-day session `fe7679c9` (TODO triage, commit `29e8d6d`)
+**Plan slate**: `src/rnd/2026.05.11-yes-no-neither-mobile-implementation.md` (Phase 0 doc-first artifact; serialized from approved `~/.claude/plans/humming-munching-globe.md`)
+
+### Accomplishments
+
+1. **Verification verdict delivered** — confirmed mobile gap via direct file probe (`_YesNoBody` at `interactive_prompt_sheet.dart:103-156` had only 2 buttons; `TestKeys` had no neither key; `grep -rn "neither" lib/ test/ integration_test/` → zero hits). Verdict doc serialized to `src/rnd/2026.05.11-yes-no-neither-mobile-verification.md`; delivered to user via cosa-voice viewer-link notification.
+
+2. **Two Explore agents launched in parallel** to scope the work pre-plan: (a) full mobile context (NotificationRepository POST shape, BLoC handler, existing test patterns, all call sites) confirmed data layer is permissive (`dynamic responseValue`) end-to-end; (b) parent-Lupin backend probe confirmed `/api/notify/response` accepts `Dict[str, Any]` with no enum constraint, prediction engine normalizes generically, and **web UI already renders `⊘ Neither` button** at `notifications.js:13792-13794`. Verdict: mobile is the only surface lagging the contract; no cross-repo coordination needed.
+
+3. **`/p-is-p-01-planning` plan-mode workflow executed**: Pattern 3 (Feature Development) selected via smart defaults; plan written to `~/.claude/plans/humming-munching-globe.md`, approved via `ExitPlanMode`, serialized to `src/rnd/2026.05.11-yes-no-neither-mobile-implementation.md` (Phase 0 doc-first artifact per CLAUDE.md Documentation-First mandate).
+
+4. **Code implementation** (Phases 1-4 of plan): added `promptNeitherButton = 'prompt.neither'` to `TestKeys`; replaced `_YesNoBody` 2-button Row (12px gap) with 3-button Row (8px gaps): `OutlinedButton "No"` | `Tooltip("Neither — the question itself needs re-framing")` wrapping `TextButton "⊘ Neither"` | `FilledButton "Yes"`. Visual hierarchy honors cosa-voice contract's "never a default" rule (TextButton is most de-emphasized Material 3 tier); glyph + label + tooltip text are verbatim parity with parent-Lupin web UI.
+
+5. **Tests landed** (Phase 5 verification all green):
+   - `interactive_prompt_sheet_test.dart` — 4 existing tests, updated 1 render assertion to include Neither, added 2 new: tap Neither → `"neither"` emit; tap Neither with comment → `"neither [comment: ambiguous which backups]"` emit. **6/6 green**.
+   - `conversation_screen_test.dart` — 9 existing tests, added 1 new integration case: open prompt sheet → tap Neither (via `promptNeitherButton` TestKey) → assert event has `responseValue == "neither"`. **10/10 green**.
+   - Full suite `test/unit/ test/widget/ test/service_integration/`: **301 ✅ / 0 ❌** (298 baseline + 3 net new — render-update + 2 new in prompt-sheet + 1 new in conversation-screen).
+   - Quarantine `test/legacy_quarantine/`: 44 ❌ unchanged (drift baseline preserved).
+   - `flutter analyze` on modified files: clean (only pre-existing `_multi` info lint on unrelated `_MultipleChoiceBody`).
+
+6. **Test-hygiene TODO filed** — user asked for an explanation of the 44 ❌ quarantine; responded with the 3-bucket breakdown (API drift / live-WS dependency / test-infra rot) from `test/legacy_quarantine/README.md` + Apr 16 triage log. User requested follow-up TODO: added new entry under "Testing Playbook — Stage 4+ (deferred with revisit triggers)" — produce per-file mapping `quarantined-test → covered-by-new-test` (or "still meaningful → fix and re-admit"); revisit-trigger is any change to the 44 drift number or next major data-layer change.
+
+### Files Modified (8)
+
+**Code (2)**:
+- `lib/core/testing/test_keys.dart` — added `promptNeitherButton = 'prompt.neither'` constant
+- `lib/features/notifications/presentation/interactive_prompt_sheet.dart` — `_YesNoBody` Row extended to 3 buttons (Outlined-No | Tooltip-wrapped-TextButton-⊘-Neither | Filled-Yes); 12→8px gaps
+
+**Tests (2)**:
+- `test/widget/notifications/interactive_prompt_sheet_test.dart` — render assertion extended to include `promptNeitherButton`; +2 new Neither cases (with + without comment)
+- `test/widget/notifications/conversation_screen_test.dart` — +1 new integration case for Neither via prompt sheet
+
+**Docs / planning (2 new)**:
+- `src/rnd/2026.05.11-yes-no-neither-mobile-verification.md` — verdict doc delivered to user via cosa-voice viewer-link notification
+- `src/rnd/2026.05.11-yes-no-neither-mobile-implementation.md` — Phase 0 doc-first artifact; serialized from approved plan
+
+**Tracking docs (2)**:
+- `TODO.md` — added legacy-quarantine-triage entry under Testing Playbook (revisit-triggered); priority-1 yes/no/neither block removed in session-end (this commit)
+- `history.md` — this entry
+
+### Test Results (mandatory tabular form per CLAUDE.md)
+
+| Tier | Command | Result |
+|---|---|---|
+| `flutter analyze` (modified files) | `./flutter.sh analyze lib/core/testing/test_keys.dart lib/features/notifications/presentation/interactive_prompt_sheet.dart` | ✓ clean |
+| Focused widget — prompt sheet | `./flutter.sh test test/widget/notifications/interactive_prompt_sheet_test.dart` | **6/6 ✅** |
+| Focused integration — conversation screen | `./flutter.sh test test/widget/notifications/conversation_screen_test.dart` | **10/10 ✅** |
+| Full suite | `./flutter.sh test test/unit/ test/widget/ test/service_integration/` | **301 ✅ / 0 ❌** (298 → 301; +3 net new) |
+| Quarantine drift | `./flutter.sh test test/legacy_quarantine/` | 44 ❌ unchanged |
+
+### Key Decisions / Insights
+
+- **Skipped Plan-agent for the design phase** — Explore-agent findings converged so cleanly (backend already permissive; web UI already at parity; mobile surface is one widget) that the design was deterministic. Direct write to `humming-munching-globe.md` rather than a third agent round.
+- **No on-device runbook step added** for tri-state — the existing prompt-sheet open/respond flow is unchanged structurally (still a `showModalBottomSheet` over `InteractivePromptSheet`); the widget tests fully cover the BLoC emit path; rendering smoke can be done opportunistically during the next voice-persona + CC-sync milestone HUMAN gate device session.
+- **Visual hierarchy decision** (`TextButton` for Neither, not `OutlinedButton`) traces to the cosa-voice contract's explicit "Neither is never a default" rule. Material 3's text-button is the most de-emphasized peer-button tier; OutlinedButton would have signaled too much equivalence with No.
+
+### Out of Scope (deferred)
+
+- **Legacy quarantine triage pass** — new TODO under Testing Playbook; revisit-triggered by drift-number change OR next major data-layer migration.
+- **Voice-persona HUMAN gate + CC sync UI smoke + yes/no/neither rendering smoke** — single bundled device handoff; unchanged from prior session (no new HUMAN gate added by this session).
+- **Forward-compat triggers from session `c594308e`** — unchanged (4 items: transcript-path link, INTERACTIVE controls restoration, canonical URL propagation verification, LUPIN-CC-SUBMIT-RENAME alias migration).
 
 ---
 

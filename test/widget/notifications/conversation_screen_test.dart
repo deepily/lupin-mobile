@@ -116,6 +116,38 @@ void main() {
       expect( event.responseValue,  "yes" );
     });
 
+    testWidgets( "tapping Respond → Neither dispatches NotificationsRespond with 'neither'", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsConversationLoaded(
+            senderId  : "s-1",
+            userEmail : "u@x.y",
+            messages  : [ yesNoMsg( "c-1" ) ],
+          ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      // Open the InteractivePromptSheet.
+      await tester.tap( find.text( "Respond" ) );
+      await tester.pumpAndSettle();
+
+      await tester.tap( find.byKey( const Key( TestKeys.promptNeitherButton ) ) );
+      await tester.pumpAndSettle();
+
+      final captured = verify( () => bloc.add( captureAny(
+        that: isA<NotificationsRespond>(),
+      ) ) ).captured;
+      expect( captured.length, 1 );
+      final event = captured.first as NotificationsRespond;
+      expect( event.notificationId, "c-1" );
+      expect( event.responseValue,  "neither" );
+    });
+
     testWidgets( "renders empty state when no messages", ( tester ) async {
       whenListen(
         bloc,

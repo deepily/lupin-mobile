@@ -22,6 +22,7 @@ class TestKeys {
   static const convGistSheet           = 'conv.gistSheet';
   static const promptYesButton         = 'prompt.yes';
   static const promptNoButton          = 'prompt.no';
+  static const promptNeitherButton     = 'prompt.neither';
   static const promptCommentField      = 'prompt.comment';
 
   // Sender-dates drilldown

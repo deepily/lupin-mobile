@@ -140,7 +140,18 @@ class _YesNoBodyState extends State<_YesNoBody> {
                 child: const Text( "No" ),
               ),
             ),
-            const SizedBox( width: 12 ),
+            const SizedBox( width: 8 ),
+            Expanded(
+              child: Tooltip(
+                message: "Neither — the question itself needs re-framing",
+                child: TextButton(
+                  key: const Key( TestKeys.promptNeitherButton ),
+                  onPressed: () => widget.onSubmit( _withComment( "neither" ) ),
+                  child: const Text( "⊘ Neither" ),
+                ),
+              ),
+            ),
+            const SizedBox( width: 8 ),
             Expanded(
               child: FilledButton(
                 key: const Key( TestKeys.promptYesButton ),

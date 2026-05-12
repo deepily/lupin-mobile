@@ -38,11 +38,12 @@ void main() {
       );
     }
 
-    testWidgets( "renders yes + no + comment field by TestKeys", ( tester ) async {
+    testWidgets( "renders yes + no + neither + comment field by TestKeys", ( tester ) async {
       await tester.pumpWidget( underTest() );
-      expect( find.byKey( const Key( TestKeys.promptYesButton    ) ), findsOneWidget );
-      expect( find.byKey( const Key( TestKeys.promptNoButton     ) ), findsOneWidget );
-      expect( find.byKey( const Key( TestKeys.promptCommentField ) ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.promptYesButton     ) ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.promptNoButton      ) ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.promptNeitherButton ) ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.promptCommentField  ) ), findsOneWidget );
     });
 
     testWidgets( "tapping Yes dispatches NotificationsRespond with 'yes'", ( tester ) async {
@@ -86,6 +87,36 @@ void main() {
       ) ) ).captured;
       final event = captured.first as NotificationsRespond;
       expect( event.responseValue, "yes [comment: only the March ones]" );
+    });
+
+    testWidgets( "tapping Neither dispatches NotificationsRespond with 'neither'", ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await tester.tap( find.byKey( const Key( TestKeys.promptNeitherButton ) ) );
+      await tester.pump();
+
+      final captured = verify( () => bloc.add( captureAny(
+        that: isA<NotificationsRespond>(),
+      ) ) ).captured;
+      expect( captured.length, 1 );
+      final event = captured.first as NotificationsRespond;
+      expect( event.notificationId, "msg-1" );
+      expect( event.responseValue,  "neither" );
+    });
+
+    testWidgets( "tapping Neither with comment appends '[comment: ...]'", ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await tester.enterText(
+        find.byKey( const Key( TestKeys.promptCommentField ) ),
+        "ambiguous which backups",
+      );
+      await tester.tap( find.byKey( const Key( TestKeys.promptNeitherButton ) ) );
+      await tester.pump();
+
+      final captured = verify( () => bloc.add( captureAny(
+        that: isA<NotificationsRespond>(),
+      ) ) ).captured;
+      final event = captured.first as NotificationsRespond;
+      expect( event.responseValue, "neither [comment: ambiguous which backups]" );
     });
   });
 }
