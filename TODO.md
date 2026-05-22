@@ -1,6 +1,28 @@
 # TODO
 
-Last updated: 2026-05-11 (Session `51ee0afa` — Yes/No/**Neither** tri-state for `ask_yes_no` LANDED; 298 → **301 ✅** baseline; backend already permissive so no cross-repo work; legacy-quarantine triage TODO filed under Testing Playbook. Voice-persona milestone HUMAN gate + CC-sync UI smoke + yes/no/neither rendering smoke all bundle into a single device handoff. **NEW R&D from 2026-05-07** still proposes Patrol-based automation of most of vp1-vp7 — see breadcrumb below before running the runbook manually.)
+Last updated: 2026-05-21 (Session `1b3f8c46` — Tiffany 💍 — Notification-client change audit + mobile sync plan-of-record authored + reshaped for `/plan-review-cascaded`. Q1-Q4 walk-through resolved. Plan queued behind another plan in the cascade pipeline. No code this session — planning + coordination only.)
+
+---
+
+## ⭐ NEXT SESSION — START HERE: Notification-client sync plan awaiting `/plan-review-cascaded` (2026-05-21)
+
+**Status**: Plan-of-record `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` is **cascade-review-ready** — §0 conformance block in place (4-section decomposition + dependency map + Recon checklist + 6-criterion self-assessment), Q1-Q4 resolved (§8.0). Queued behind another plan in the `/plan-review-cascaded` pipeline. Rick launches the cascade; mobile implementation begins ONLY after the cascade closes and Rick greenlights the ratified revision package.
+
+**The 4 sections that go through the cascade**: A (WS handler stubs for 3 new event types) · B (`speakerphone_changed` adoption) · C (`PersonaBadge` overflow variant) · D (`assigned_at` propagation E2E).
+
+**Cross-cutting coordination**: Section D couples with Mr. Radio 🦉's parent-Lupin Part B `assigned_at` plumbing-check. Courtesy DM at Section D start; he patches backend only if a gap surfaces.
+
+### Parked deferred items (Q3 walk-through resolution 2026-05-21 — all 6 parked, none dropped)
+
+Conditional "if-then" entries — revisit only if the trigger lands:
+- [ ] [LUPIN-MOBILE] **Commons DM panel** — revisit IF mobile becomes a CC peer (user voice-asks; other sessions DM a reply). Wire: `commons_question_received` WS event.
+- [ ] [LUPIN-MOBILE] **Recent Activity stream surface** — revisit IF mobile grows a peer-traffic surface. Wire: `commons_activity` WS stream.
+- [ ] [LUPIN-MOBILE] **TTS preview-and-pause config consumption** — revisit IF preview-and-pause UX is wanted on mobile. Wire: `tts_preview_*` fields on `/api/config/client`.
+
+Greenfield-feature entries — revisit only on a dedicated feature request (NOT parity-sync work):
+- [ ] [LUPIN-MOBILE] **Recent-Activity filter strip UI** — web-only UX (Mr. Radio's Part A); mobile has no Recent Activity panel.
+- [ ] [LUPIN-MOBILE] **Focus-bar chronological lock UI** — web-only UX (Mr. Radio's Part B); mobile has no focus-bar / strip-of-icons surface.
+- [ ] [LUPIN-MOBILE] **Doc-viewer link emission** — mobile renders zero `/app/docs` links today; doc-link rendering would be a new feature.
 
 ---
 
@@ -279,6 +301,7 @@ tests, re-verify on device.
 - [x] [LUPIN-MOBILE] `getIt` import in `home_screen.dart` — verified **already removed** as of 2026-04-21 (confirmed by grep; only DI canonical files `service_locator.dart` + `use_case_registry.dart` reference `getIt`). — 2026-04-21
 
 ## Completed (Recent)
+- [x] [LUPIN-MOBILE] **Notification-client change audit + mobile sync plan-of-record + cascade-review reshaping** (session `1b3f8c46`, Tiffany 💍): audited May 6 → May 21 parent-Lupin notification-client deltas (~30 `notifications.js` commits, 23 multiplexer TS files, 13 CoSA commits); DM-coordinated two reply cycles with Mr. Radio 🦉; authored `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` (6-phase plan); walked Rick through Q1-Q4 via `ask_multiple_choice`; reshaped plan into `/plan-review-cascaded` input shape (§0 conformance block). No code — planning + coordination only. Commits `1a71ab1` + `5cc11c9`. — 2026-05-21
 - [x] [LUPIN-MOBILE] **Yes/No/Neither tri-state for `ask_yes_no`** (session `51ee0afa`): added `promptNeitherButton` TestKey; replaced `_YesNoBody` 2-button Row with 3-button Row (OutlinedButton-No | Tooltip-wrapped-TextButton-⊘-Neither | FilledButton-Yes; 12→8px gaps; label + tooltip verbatim parity with web UI); +2 widget tests + 1 conversation integration test; backend confirmed already permissive (no cross-repo work). 298 → **301 ✅** baseline; 44 ❌ quarantine unchanged. Plan: `src/rnd/2026.05.11-yes-no-neither-mobile-implementation.md`. — 2026-05-11
 - [x] [LUPIN-MOBILE] TTS overlap bug fix + on-device verify prep (session `0d54c763`): `StreamingTtsAudioPlayer` test seam + playback-gated `TtsCompleteEvent` + `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define + 10 new regression/flag tests + `fire-tts-scenarios.py` script + runbook. 263→273 green. Runbook: `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`. — 2026-04-24
 - [x] [LUPIN-MOBILE] Tier 2 + Tier 4 polish slate (session `40aa03d3`): TrustStateScreen drilldown + SenderDatesScreen + ConversationByDateScreen + AudioArtifactPlayer in-app playback rebuild. 4 phases, 22 widget tests + 2 bloc tests, 237→263 green. Plan: `src/rnd/v0.1.7/2026.04.22-tier-2-and-4-polish-plan.md`. — 2026-04-22

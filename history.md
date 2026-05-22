@@ -12,6 +12,29 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.05.21 | Session `1b3f8c46` (Tiffany 💍) — Notification-client change audit + mobile sync plan-of-record + cascade-review reshaping
+
+#### Planning + coordination session | 2026.05.21 | Audited May 6 → May 21 parent-Lupin notification-client deltas; authored mobile sync plan; walked Rick through 4 design questions; reshaped plan for `/plan-review-cascaded` submission. No code changes — planning + coordination only.
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan-of-record**: `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` (NEW)
+**Commits**: `1a71ab1` (audit + plan-of-record), `5cc11c9` (walk-through resolutions + cascade reshape), + session-end commit
+
+### Accomplishments
+
+1. **Notification-UI change audit** — swept parent-Lupin `history.md` + git log (parent + CoSA submodule) for every notification-client delta since the mobile's 2026-05-06 Phase 0 dispatch audit (anchor `fd8fc18`). Inventory: ~30 commits on legacy `notifications.js` (+1,255 LOC), 23 new multiplexer TS files (+5,558 LOC), 13 CoSA-side commits. Delivered to Rick as a locked inventory grouped by surface — legacy JS / multiplexer TS / server-side / WS event-surface deltas / cross-cutting doctrine.
+
+2. **Cross-session coordination with Mr. Radio 🦉** (parent-Lupin session `679e8f04`) — two DM reply cycles. Pulled his in-flight Recent-Activity filter strip + focus-bar chronological-lock design; folded his walkthrough-locked delta (Kind axis 2→4 options; no new wire-contract impact). Identified `voice_persona.assigned_at` plumbing as the only cross-cutting Lupin↔mobile contract item.
+
+3. **Mobile sync plan-of-record authored** — `2026.05.21-notif-client-sync-may-06-deltas.md`: 6 phases + pre-flight. Phase 1 WS handler stubs for 3 new event types; Phase 2 `speakerphone_changed` adoption; Phase 3 `PersonaBadge` overflow variant; Phase 4 `assigned_at` E2E; Phase 5 on-device VP. Confirmed the mobile data layer already carries `overflow` / `assignedAt` / `displayName`.
+
+4. **Q1-Q4 walk-through with Rick** — 4 design questions resolved via cosa-voice `ask_multiple_choice`: speakerphone record-only (no UI); new-event-name-only + smoke-test guard; park all 6 deferred items in TODO.md; `assigned_at` E2E runs parallel to Mr. Radio's Part B (tests-as-spec).
+
+5. **Plan reshaped for `/plan-review-cascaded`** — added §0 cascade-readiness block: 4-section decomposition (A WS stubs / B speakerphone / C overflow badge / D `assigned_at` E2E), cross-section dependency map, pre-cascade Recon checklist, 6-criterion light-review self-assessment (all PASS), requirement provenance table. Plan is cascade-review-ready, queued behind another plan.
+
+**Files**: `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` (NEW, ~470 LOC) + `history.md` + `TODO.md` (this session-end).
+
+
 ## 2026.05.11 (third session same day) | Session `51ee0afa` — Yes/No/**Neither** tri-state for `ask_yes_no` shipped; mobile now at parity with cosa-voice MCP v0.3.0 + parent-Lupin web UI
 
 #### Implementation | 2026.05.11 | Priority-1 next-session item (from `fe7679c9`) executed end-to-end: verification → plan via `/p-is-p-01-planning` → code → tests → 301 ✅ baseline; backend already permissive so no cross-repo work; on-device verification bundled into existing milestone HUMAN gate; one new test-hygiene TODO filed (legacy quarantine triage)
