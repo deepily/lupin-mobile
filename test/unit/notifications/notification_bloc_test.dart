@@ -314,5 +314,98 @@ void main() {
 
       await bloc.close();
     } );
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Section D (Phase 4, 2026-05-23 notif-client-sync) — `assigned_at`
+    // propagation E2E along the WS event path. AC-D5 asserts that a
+    // `voice_persona_assigned` external-update with `assigned_at` in its
+    // payload yields a `personasBySender` map whose `VoicePersona.assignedAt`
+    // is the parsed DateTime. Companion: AC-D1/D2/D3 in `voice_persona_test.dart`
+    // cover the parse-level contract; AC-D4 in `notification_repository_test.dart`
+    // covers the REST-path fixture grounding; AC-D6 covers the live WS probe.
+    // ─────────────────────────────────────────────────────────────────────
+
+    test(
+      "AC-D5 — voice_persona_assigned WS-path with assigned_at populated "
+      "yields personasBySender entry with parsed DateTime",
+      () async {
+        // Seed an InboxLoaded state so `_refreshCurrent` (called at the end of
+        // `_onExternalUpdate`) has a context to re-emit into.
+        adapter.handlers["GET /api/notifications/senders-visible/u%40x.y"] = (_) =>
+          jsonBody( const [] );
+
+        final bloc = NotificationBloc( repo );
+
+        bloc.add( const NotificationsLoadInbox( userEmail: "u@x.y" ) );
+        await Future.delayed( const Duration( milliseconds: 50 ) );
+
+        // Inject the WS event with assigned_at populated. The bloc routes
+        // type=="voice_persona_assigned" into the `_onExternalUpdate` case
+        // that mutates `_personasBySender[sid] = persona;` then calls
+        // `_refreshCurrent(emit)`, which re-emits InboxLoaded with the
+        // snapshot.
+        final assignedUtc = DateTime.utc( 2026, 5, 22, 12, 0, 0 );
+        bloc.add( NotificationsExternalUpdate(
+          notification: NotificationItem(
+            id                     : "n-vpa-d5",
+            message                : "",
+            type                   : "voice_persona_assigned",
+            priority               : "low",
+            timestamp              : DateTime( 2026, 5, 22 ),
+            played                 : false,
+            playCount              : 0,
+            responseRequested      : false,
+            suppressDing           : false,
+            displayQualifierWidget : false,
+            senderId               : "s-vpa-d5",
+            voicePersona           : VoicePersona(
+              name        : "Adam",
+              voiceId     : "v-d5",
+              icon        : "🌑",
+              color       : "#3F51B5",
+              borrowed    : false,
+              assignedAt  : assignedUtc,
+              displayName : "Adam",
+            ),
+          ),
+        ) );
+        await Future.delayed( const Duration( milliseconds: 100 ) );
+
+        final state = bloc.state;
+        expect(
+          state,
+          isA<NotificationsInboxLoaded>(),
+          reason:
+              "AC-D5 — after persona assignment + _refreshCurrent, bloc must "
+              "re-emit InboxLoaded carrying the persona snapshot.",
+        );
+        final loaded  = state as NotificationsInboxLoaded;
+        final persona = loaded.personasBySender[ "s-vpa-d5" ];
+        expect(
+          persona,
+          isNotNull,
+          reason:
+              "AC-D5 — personasBySender must carry an entry at the new "
+              "senderId after assignment.",
+        );
+        expect(
+          persona!.assignedAt,
+          isNotNull,
+          reason:
+              "AC-D5 — VoicePersona.assignedAt must be non-null after "
+              "WS-path injection (the carrier round-tripped through state).",
+        );
+        expect(
+          persona.assignedAt!.toUtc(),
+          assignedUtc,
+          reason:
+              "AC-D5 — parsed assignedAt must equal the injected UTC DateTime.",
+        );
+        expect( persona.assignedAt!.isUtc, isTrue,
+          reason: "AC-D5 — assignedAt must preserve UTC offset." );
+
+        await bloc.close();
+      },
+    );
   });
 }

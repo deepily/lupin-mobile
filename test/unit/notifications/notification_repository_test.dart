@@ -198,5 +198,145 @@ void main() {
         expect(r.notifications.length, 0);
       },
     );
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Section D (Phase 4, 2026-05-23 notif-client-sync) — `assigned_at`
+    // wire-contract grounding on the voice-persona pool REST path (AC-D4)
+    // and the live WS probe (AC-D6). Per cascade Stage-2 consolidated
+    // wire-grounding doctrine: the AC-D4 fixture is a MANDATED live `:7999`
+    // capture, never hand-authored. The AC-D6 probe is non-optional but
+    // requires a running :7999 + authenticated HTTP client + WebSocket
+    // client setup — the dev-server slice of this test verifies the
+    // contract shape via the captured fixture (AC-D4); the laptop slice
+    // runs the live probe (AC-D6) under the existing Flutter test pipeline.
+    // ─────────────────────────────────────────────────────────────────────
+
+    test(
+      "AC-D4 — voice-persona pool fixture: every active_sessions entry "
+      "carries a non-null assigned_at (wire-contract grounding)",
+      () {
+        // Source-of-truth fixture: `test/fixtures/notifications/voice_persona_pool.json`.
+        //
+        // Capture procedure (MANDATED — never hand-author per consolidated
+        // wire-grounding doctrine, cascade Stage-2 F-Krishna-D1):
+        //
+        //   1. Start the lupin FastAPI server on :7999 with a logged-in
+        //      test user (LUPIN_TEST_INTERACTIVE_MOCK_JOBS_EMAIL/PASSWORD
+        //      per CLAUDE.md TEST CREDENTIALS).
+        //   2. Obtain a Bearer token by logging in via /api/auth/login,
+        //      OR use an X-API-Key the server accepts.
+        //   3. curl -H "Authorization: Bearer <jwt>" \
+        //        http://localhost:7999/api/cosa-voice/voice-persona/pool \
+        //        > test/fixtures/notifications/voice_persona_pool.json
+        //   4. Add a provenance header (capture UTC timestamp, endpoint path,
+        //      server build hash) — either as JSON metadata fields on the
+        //      response root or as a sibling .provenance file. Recommended
+        //      shape: { "_capture": { "ts": "<ISO-8601>", "endpoint": "...",
+        //      "server_build": "..." }, "active_sessions": [...] }.
+        //   5. Commit the fixture.
+        //
+        // Capture is DEFERRED to the laptop pipeline because the dev-server
+        // session lacks the authenticated HTTP context needed (probe in this
+        // session returned 401: "Missing auth. Provide X-API-Key or
+        // Authorization: Bearer <jwt>"). When the fixture lands, this test
+        // becomes a regression that pins the wire contract every test run.
+        //
+        // If the live capture lacks assigned_at on any entry, the test
+        // fails as designed — that failure is the OSQ-D-1 tests-as-spec
+        // signal for the parent-side patch (cascade-handoff §Section D
+        // residuals RA-D1: courtesy DM to Mr. Radio at Section D impl
+        // start surfaces any contract amendment).
+
+        final fixture = loadFixture( "notifications/voice_persona_pool.json" );
+
+        // Per the consolidated wire-grounding doctrine + Section D Goal,
+        // the response carries an `active_sessions` list (the data layer
+        // that has per-session assigned_at — distinct from the senders
+        // summary list at `/api/notifications/senders-visible/...`).
+        expect(
+          fixture[ "active_sessions" ],
+          isA<List>(),
+          reason:
+              "AC-D4 — voice_persona_pool fixture must have an "
+              "active_sessions list field. If absent, the cosa server's "
+              "/api/cosa-voice/voice-persona/pool shape has changed; "
+              "re-capture and update the wire-contract spec.",
+        );
+
+        final sessions = fixture[ "active_sessions" ] as List;
+        expect(
+          sessions,
+          isNotEmpty,
+          reason:
+              "AC-D4 — fixture should have at least one active_session entry "
+              "to meaningfully test the assigned_at contract. Capture against "
+              "a server with at least one allocated persona.",
+        );
+
+        for ( final s in sessions ) {
+          expect( s, isA<Map>(),
+            reason: "AC-D4 — each active_sessions entry must be an object." );
+          final m = s as Map;
+          expect(
+            m.containsKey( "assigned_at" ),
+            isTrue,
+            reason:
+                "AC-D4 — every active_sessions entry must carry an "
+                "`assigned_at` field. Missing means the wire contract has "
+                "drifted: either the cosa server-side hasn't been patched "
+                "to stamp it, or the fixture is stale. Per Q4 tests-as-spec, "
+                "this failure IS the empirical spec for any parent-Lupin "
+                "Part-B patch.",
+          );
+          expect(
+            m[ "assigned_at" ],
+            isNotNull,
+            reason:
+                "AC-D4 — assigned_at must be non-null on every active_sessions "
+                "entry (per assumption 2 of the Section D spec).",
+          );
+        }
+      },
+    );
+
+    test(
+      "AC-D6 — WS-path live :7999 probe (allocate → observe WS event → "
+      "release; net-zero persistent-state mutation)",
+      () async {
+        // Live :7999 probe per cascade Stage-2 F-Krishna-D2 (non-optional)
+        // + F-Krishna-D3 (paired allocate/release for net-zero mutation).
+        //
+        // Test shape (to flesh out when run laptop-side):
+        //   1. Authenticate an HTTP client to :7999 (Bearer token via
+        //      /api/auth/login using LUPIN_TEST_INTERACTIVE_MOCK_JOBS_*).
+        //   2. Open a WebSocket connection to :7999/ws and subscribe to
+        //      persona-assignment events for a fresh sender id.
+        //   3. POST /api/cosa-voice/voice-persona/{sid}/allocate (mutates
+        //      persona-pool state — allocates a fresh persona; this is the
+        //      half of the pair that requires cleanup below).
+        //   4. Await the WS event; assert assigned_at is present and
+        //      parseable via DateTime.tryParse.
+        //   5. POST /api/cosa-voice/voice-persona/{sid}/release to clean up
+        //      (the paired release — together with the allocate, nets zero
+        //      persistent-state mutation, keeping the probe `:7999`-eligible
+        //      per CLAUDE.md TESTING VENUES).
+        //
+        // Skipped here because the test requires:
+        //   - A running :7999 server (the laptop pipeline provides this).
+        //   - Authenticated HTTP client setup (see test creds in CLAUDE.md).
+        //   - A test-side WebSocket client (the mobile's `websocket_service.dart`
+        //     can be reused or a thin test-only ws client written).
+        //
+        // The probe shape above is the cascade-ratified spec verbatim. Un-skip
+        // by removing the `skip:` argument once the laptop pipeline plumbs
+        // the auth + WS prerequisites. The `:7999` venue assignment stands —
+        // the paired allocate/release keeps the run AI-discretionary.
+      },
+      skip:
+          "AC-D6 requires running :7999 + authenticated HTTP client + "
+          "WebSocket test client; un-skip in the laptop test pipeline once "
+          "auth + WS prerequisites are wired in (see in-test docstring for "
+          "the full probe shape).",
+    );
   });
 }

@@ -172,3 +172,14 @@ Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow 
 
 **Session Start**: Use `/plan-session-start` or see planning-is-prompting → workflow/session-start.md
 **Session End**: Use `/plan-session-end` or see planning-is-prompting → workflow/session-end.md
+
+## Doc Viewer Scope
+
+When sending document viewer links from this repo, use:
+
+- **Scope name**: `lupin-mobile`
+- **Allowed prefixes** (per Lupin INI): wildcard (any path under repo root)
+- **Source of truth**: Lupin's `lupin-app.ini` § `external repos`
+- **Runtime discovery**: inspect the `doc_scope` field returned by `mcp__cosa-voice__get_session_info()`
+
+Example: `/app/docs?path=README.md&scope=lupin-mobile`

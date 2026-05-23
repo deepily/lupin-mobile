@@ -190,3 +190,26 @@ class NotificationsVoicePersonaReleased extends NotificationEvent {
   @override
   List<Object?> get props => [ senderId, personaName ];
 }
+
+/// Per-session speakerphone state changed for [senderId]. Used for test
+/// injection of the `on`-state ACs (AC-B2/B3/B4) — mirrors
+/// `NotificationsVoicePersonaAssigned`.
+///
+/// Kept 2-field (senderId, on) per Section B / F-Krishna-B1 resolution:
+/// the `displaced`/`displaced_by` raw-payload diagnostic fields are tested
+/// via raw `_onExternalUpdate` injection (AC-B6), NOT via this typed event.
+/// The bloc's typed-event handler builds a `SpeakerphoneRecord(on: event.on)`
+/// with null displaced fields; the WS-path case in `_onExternalUpdate`
+/// extracts the full payload via `n.raw[...]`.
+class NotificationsSpeakerphoneChanged extends NotificationEvent {
+  final String senderId;
+  final bool   on;
+
+  const NotificationsSpeakerphoneChanged( {
+    required this.senderId,
+    required this.on,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, on ];
+}

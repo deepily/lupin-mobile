@@ -5,6 +5,8 @@
 /// `cosa/rest/notification_fifo_queue.NotificationItem.to_dict()`.
 library;
 
+import 'package:equatable/equatable.dart';
+
 import 'voice_persona.dart';
 
 export 'voice_persona.dart' show VoicePersona;
@@ -13,6 +15,35 @@ DateTime? _parseDt( dynamic v ) =>
     v == null ? null : DateTime.tryParse( v.toString() );
 
 T? _as<T>( dynamic v ) => v is T ? v : null;
+
+/// Per-session speakerphone state record (Section B / Phase 2, 2026-05-23
+/// notif-client-sync). Stored in `NotificationBloc._speakerphoneBySession`
+/// keyed by `n.senderId`, mutated by the `speakerphone_changed` case in
+/// `_onExternalUpdate`. Diagnostic only — no UI surface (Q1 record-only
+/// resolution, plan §8.0).
+///
+/// `displaced` / `displacedBy` are stored verbatim from the wire payload
+/// (extracted via `n.raw["displaced"]` / `n.raw["displaced_by"]` per the
+/// OSQ B-1 resolution — `NotificationItem` has no typed accessor for these
+/// payload fields). They are NOT acted on by the bloc.
+///
+/// Extends `Equatable` so `Map<String, SpeakerphoneRecord>`-equality
+/// assertions in dispatch tests (AC-B3 idempotency: same payload injected
+/// twice → record equal) work via value-equality rather than identity.
+class SpeakerphoneRecord extends Equatable {
+  final bool    on;
+  final String? displaced;
+  final String? displacedBy;
+
+  const SpeakerphoneRecord( {
+    required this.on,
+    this.displaced,
+    this.displacedBy,
+  } );
+
+  @override
+  List<Object?> get props => [ on, displaced, displacedBy ];
+}
 
 /// A single notification item — matches `NotificationItem.to_dict()`.
 /// Returned by `GET /api/notifications/{user_id}` and `/next`, and by

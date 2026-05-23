@@ -104,6 +104,7 @@ class TestKeys {
   // Suffix with senderId at use-site, e.g. '${personaBadgePrefix}s-1'.
   static const personaBadgePrefix       = 'persona.badge.';        // + senderId
   static const personaBadgeDashedPrefix = 'persona.badge.dashed.'; // + senderId (borrowed variant)
+  static const personaBadgeDottedPrefix = 'persona.badge.dotted.'; // + senderId (overflow variant — Section C / Phase 3)
 
   // Audio artifact player (Phase 4a — in-app playback for pg-* / rp- jobs)
   static const audioPlayerDownloadButton = 'audio.download';

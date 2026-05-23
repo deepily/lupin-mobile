@@ -8,16 +8,22 @@ import 'package:flutter/material.dart';
 /// no existing `CustomPainter` subclass in the mobile tree and no
 /// dashed-border package in `pubspec.yaml`.
 class DashedBorderPainter extends CustomPainter {
-  final Color  color;
-  final double strokeWidth;
-  final double dashLength;
-  final double gapLength;
+  final Color     color;
+  final double    strokeWidth;
+  final double    dashLength;
+  final double    gapLength;
+  /// New in Section C (Phase 3, 2026-05-23 notif-client-sync). Default
+  /// `StrokeCap.butt` preserves the existing dashed-border behavior. The
+  /// overflow variant of `PersonaBadge` passes `StrokeCap.round` together
+  /// with a short `dashLength` (≈ `strokeWidth`) to render true round dots.
+  final StrokeCap cap;
 
   const DashedBorderPainter( {
     required this.color,
     this.strokeWidth = 1.5,
     this.dashLength  = 4.0,
     this.gapLength   = 3.0,
+    this.cap         = StrokeCap.butt,
   } );
 
   @override
@@ -25,7 +31,8 @@ class DashedBorderPainter extends CustomPainter {
     final paint = Paint()
       ..color       = color
       ..strokeWidth = strokeWidth
-      ..style       = PaintingStyle.stroke;
+      ..style       = PaintingStyle.stroke
+      ..strokeCap   = cap;
 
     final radius     = ( size.shortestSide / 2 ) - ( strokeWidth / 2 );
     final center     = Offset( size.width / 2, size.height / 2 );
@@ -52,5 +59,6 @@ class DashedBorderPainter extends CustomPainter {
       old.color       != color
       || old.strokeWidth != strokeWidth
       || old.dashLength  != dashLength
-      || old.gapLength   != gapLength;
+      || old.gapLength   != gapLength
+      || old.cap         != cap;
 }

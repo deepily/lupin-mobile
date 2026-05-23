@@ -8,8 +8,17 @@ import '../data/voice_persona.dart';
 /// a colored circular background. Wraps `CircleAvatar` per the REUSE pre-pass
 /// `extend-existing` finding (sibling pattern at `inbox_screen.dart:141`).
 ///
-/// Borrowed-persona variant (`borrowed=true`) overlays a dashed border via
-/// the new `DashedBorderPainter` per `Q2` (FROZEN 2026-05-06).
+/// **Three render variants** (based on `VoicePersona` flags):
+/// - `overflow=true` (any `borrowed`): **dotted** border + `✱` glyph overlay
+///   (Section C / Phase 3, 2026-05-23 notif-client-sync). Overflow takes
+///   precedence over borrowed per the web composition rule (mirrors
+///   `.persona-badge.overflow` precedence in `notifications.js`). The ✱ glyph
+///   (AC-C2) is the load-bearing disambiguator; the perceptual dotted-vs-dashed
+///   distinctness at small diameters is AC-C5 (on-device VP, deferred to the
+///   laptop pipeline per `feedback_dev_server_laptop_split`).
+/// - `borrowed=true, overflow=false`: **dashed** border via `DashedBorderPainter`
+///   per `Q2` (FROZEN 2026-05-06).
+/// - both false: plain badge.
 ///
 /// **Failure-mode contract** (per Pass 1 finding F9, applied 2026-05-06):
 /// the badge ALWAYS renders with the persona color background regardless of
@@ -65,9 +74,11 @@ class PersonaBadge extends StatelessWidget {
 
     final radius = diameter / 2;
     final keyId  = senderId ?? p.voiceId ?? p.name ?? "anon";
-    final keyStr = p.borrowed
-        ? "${TestKeys.personaBadgeDashedPrefix}$keyId"
-        : "${TestKeys.personaBadgePrefix}$keyId";
+    final keyStr = p.overflow
+        ? "${TestKeys.personaBadgeDottedPrefix}$keyId"
+        : p.borrowed
+            ? "${TestKeys.personaBadgeDashedPrefix}$keyId"
+            : "${TestKeys.personaBadgePrefix}$keyId";
 
     final avatar = CircleAvatar(
       key             : Key( keyStr ),
@@ -85,7 +96,51 @@ class PersonaBadge extends StatelessWidget {
     final tooltipMessage = p.displayName ?? p.name ?? "";
 
     Widget content = avatar;
-    if ( p.borrowed ) {
+    if ( p.overflow ) {
+      // Section C (Phase 3, 2026-05-23 notif-client-sync) — overflow variant:
+      // dotted border + ✱ glyph overlay. Overflow takes precedence over
+      // borrowed per the web composition rule (mirrors `.persona-badge.overflow`
+      // precedence in `notifications.js`). The ✱ glyph (AC-C2) is the
+      // load-bearing disambiguator — guarantees the variant is identifiable
+      // even if AC-C5's perceptual dotted-vs-dashed distinction fails at
+      // small badge diameters (40px / 24px).
+      content = SizedBox(
+        width  : diameter,
+        height : diameter,
+        child  : Stack(
+          alignment    : Alignment.center,
+          clipBehavior : Clip.none,
+          children     : [
+            avatar,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: DashedBorderPainter(
+                    color      : foregroundColor,
+                    cap        : StrokeCap.round,
+                    dashLength : 1.5,  // ≈ strokeWidth → round-dot appearance
+                  ),
+                ),
+              ),
+            ),
+            // ✱ overflow glyph — top-right of the badge.
+            Positioned(
+              right : -2,
+              top   : -2,
+              child : IgnorePointer(
+                child: Text(
+                  "✱",
+                  style: TextStyle(
+                    fontSize : diameter * 0.35,
+                    color    : foregroundColor,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if ( p.borrowed ) {
       content = SizedBox(
         width  : diameter,
         height : diameter,

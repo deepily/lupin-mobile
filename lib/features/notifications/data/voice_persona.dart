@@ -25,6 +25,7 @@ class VoicePersona {
   final String?   icon;
   final String?   color;
   final bool      borrowed;
+  final bool      overflow;
   final DateTime? assignedAt;
   final String?   displayName;
 
@@ -34,14 +35,21 @@ class VoicePersona {
     this.icon,
     this.color,
     this.borrowed = false,
+    this.overflow = false,
     this.assignedAt,
     this.displayName,
   } );
 
   /// Liberal parser per `Q7` — accepts any string fields; missing fields
-  /// default to null; `borrowed` defaults to false; never throws on shape.
-  /// `assigned_at` is parsed via `DateTime.tryParse` so a malformed timestamp
-  /// becomes null rather than blowing up the envelope.
+  /// default to null; `borrowed` and `overflow` default to false; never
+  /// throws on shape. `assigned_at` is parsed via `DateTime.tryParse` so a
+  /// malformed timestamp becomes null rather than blowing up the envelope.
+  ///
+  /// `overflow=true` indicates the server allocated Sam (system-default
+  /// voice) because the main pool was exhausted at allocate time. Distinct
+  /// from `borrowed=true` (legacy hash-borrow fallback used only when Sam is
+  /// unconfigured). UI renders the two states with different badge styling.
+  /// See: parent-lupin/src/rnd/v0.1.7/2026.05.16-voice-persona-stale-bridge-and-sam-overflow.md
   factory VoicePersona.fromJson( Map<String, dynamic> json ) {
     return VoicePersona(
       name        : _asStr( json["name"] ),
@@ -49,6 +57,7 @@ class VoicePersona {
       icon        : _asStr( json["icon"] ),
       color       : _asStr( json["color"] ),
       borrowed    : json["borrowed"] == true,
+      overflow    : json["overflow"] == true,
       assignedAt  : _parseDt( json["assigned_at"] ),
       displayName : _asStr( json["display_name"] ),
     );
@@ -64,6 +73,7 @@ class VoicePersona {
     "icon"         : icon,
     "color"        : color,
     "borrowed"     : borrowed,
+    "overflow"     : overflow,
     "assigned_at"  : assignedAt?.toIso8601String(),
     "display_name" : displayName,
   };
@@ -83,5 +93,5 @@ class VoicePersona {
 
   @override
   String toString() =>
-      "VoicePersona(name: $name, voiceId: $voiceId, borrowed: $borrowed)";
+      "VoicePersona(name: $name, voiceId: $voiceId, borrowed: $borrowed, overflow: $overflow)";
 }

@@ -149,4 +149,74 @@ void main() {
       expect( round.displayName, src.displayName );
     } );
   } );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section D (Phase 4, 2026-05-23 notif-client-sync) — `assigned_at`
+  // propagation E2E. Pins the wire-contract for `assigned_at` parse behavior
+  // (AC-D1 valid ISO-8601, AC-D2 missing → null, AC-D3 malformed → null).
+  // The fixture-backed senders-pool wire-contract test is AC-D4 (lives in
+  // `notification_repository_test.dart`); the blocTest for the WS-event path
+  // is AC-D5 (lives in `notification_bloc_test.dart`); the live WS probe is
+  // AC-D6. These three tests below assert the parse-level contract that all
+  // four downstream tests rely on.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  group( "Section D — assigned_at parse contract (AC-D1/D2/D3)", () {
+    test(
+      "AC-D1 — VoicePersona.fromJson with valid ISO-8601 assigned_at yields "
+      "non-null DateTime equal to the expected value",
+      () {
+        final p = VoicePersona.fromJson( const {
+          "name"         : "Adam",
+          "voice_id"     : "v-d1",
+          "assigned_at"  : "2026-05-21T15:00:00Z",
+        } );
+
+        expect( p.assignedAt, isNotNull,
+          reason: "AC-D1 — valid ISO-8601 assigned_at must produce a non-null DateTime." );
+        expect( p.assignedAt!.toUtc(), DateTime.utc( 2026, 5, 21, 15, 0, 0 ),
+          reason: "AC-D1 — parsed DateTime must equal the source ISO-8601 in UTC." );
+        expect( p.assignedAt!.isUtc, isTrue,
+          reason: "AC-D1 — Z-suffixed ISO-8601 must parse as UTC." );
+      },
+    );
+
+    test(
+      "AC-D2 — VoicePersona.fromJson with no assigned_at key yields "
+      "assignedAt == null and does not throw",
+      () {
+        // No throw expected — VoicePersona.fromJson is the F1 null-defense
+        // parser; absent fields default to null cleanly.
+        final p = VoicePersona.fromJson( const {
+          "name"     : "Adam",
+          "voice_id" : "v-d2",
+          // assigned_at intentionally absent.
+        } );
+
+        expect( p.assignedAt, isNull,
+          reason: "AC-D2 — missing assigned_at key must yield assignedAt == null." );
+        // Other fields parsed normally — confirms the absence is field-local.
+        expect( p.name,    "Adam" );
+        expect( p.voiceId, "v-d2" );
+      },
+    );
+
+    test(
+      "AC-D3 — VoicePersona.fromJson with malformed assigned_at yields null "
+      "(graceful degradation per the liberal-parser contract; never throws)",
+      () {
+        final p = VoicePersona.fromJson( const {
+          "name"        : "Adam",
+          "voice_id"    : "v-d3",
+          "assigned_at" : "garbage",
+        } );
+
+        expect( p.assignedAt, isNull,
+          reason:
+              "AC-D3 — malformed assigned_at must yield null (DateTime.tryParse "
+              "returned null; F1 null-defense contract requires graceful "
+              "degradation, never an exception)." );
+      },
+    );
+  } );
 }

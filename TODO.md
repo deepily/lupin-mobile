@@ -1,16 +1,35 @@
 # TODO
 
-Last updated: 2026-05-21 (Session `1b3f8c46` — Tiffany 💍 — Notification-client change audit + mobile sync plan-of-record authored + reshaped for `/plan-review-cascaded`. Q1-Q4 walk-through resolved. Plan queued behind another plan in the cascade pipeline. No code this session — planning + coordination only.)
+Last updated: 2026-05-23 (Session `1b3f8c46` — Tiffany 💍 — notif-client-sync cascade CLOSED + Sections B/C/D implemented overnight on a 3-min self-cron; Section A inherited from Rio + hygiene-passed; 2 laptop-side AC-D closures filed below.)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: Notification-client sync plan awaiting `/plan-review-cascaded` (2026-05-21)
+## ✅ COMPLETED 2026-05-23 — Notification-client sync plan IMPLEMENTED (Sections A by Rio; B/C/D by Tiffany)
 
-**Status**: Plan-of-record `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` is **cascade-review-ready** — §0 conformance block in place (4-section decomposition + dependency map + Recon checklist + 6-criterion self-assessment), Q1-Q4 resolved (§8.0). Queued behind another plan in the `/plan-review-cascaded` pipeline. Rick launches the cascade; mobile implementation begins ONLY after the cascade closes and Rick greenlights the ratified revision package.
+**Cascade outcome**: PLAN BLESSED FOR IMPLEMENTATION via `/plan-review-cascaded` (Mr. Radio 🦉 Manager / Sam 🎙️ Stage-3 ZERO findings across all 4 sections); 25 total findings across S1+S2+S3, 0 foundational, 0 user-escalated. Step-9 synthesis at `src/rnd/2026.05.22-notif-client-sync-cascade-handoff.md`.
 
-**The 4 sections that go through the cascade**: A (WS handler stubs for 3 new event types) · B (`speakerphone_changed` adoption) · C (`PersonaBadge` overflow variant) · D (`assigned_at` propagation E2E).
+**Implementation status** (committed via this session-end commit):
+- Section A — Rio's WS handler stubs + AC-A1–A5 tests (hygiene-passed clean by Tiffany)
+- Section B — Tiffany's `speakerphone_changed` adoption + `SpeakerphoneRecord` carrier + 7 AC-B tests
+- Section C — Tiffany's `PersonaBadge` overflow variant (dotted border + ✱ glyph) + `DashedBorderPainter` `StrokeCap cap` param + 7 AC-C widget tests
+- Section D — Tiffany's `assigned_at` propagation E2E tests (test-only): 3 parse-contract + 1 WS blocTest + 1 fixture-load + 1 skipped-with-reason live probe
 
-**Cross-cutting coordination**: Section D couples with Mr. Radio 🦉's parent-Lupin Part B `assigned_at` plumbing-check. Courtesy DM at Section D start; he patches backend only if a gap surfaces.
+**Laptop-side first-run verification gate**: `flutter analyze` clean + `flutter test test/` (per `feedback_dev_server_laptop_split` — dev server lacks Flutter SDK; cannot self-verify here).
+
+---
+
+## ⭐ NEXT SESSION — START HERE: 2 laptop-side closures for notif-client-sync Section D (2026-05-23)
+
+**Triggers**: implementation landed but two AC-D tests need laptop-side validation + plumbing.
+
+1. **[LUPIN-MOBILE] Capture AC-D4 fixture** — `test/fixtures/notifications/voice_persona_pool.json` does NOT exist yet. The dev-server probe returned `401 "Missing auth"` (no Bearer token / X-API-Key available in dev-server session). On laptop:
+   - Authenticate via `LUPIN_TEST_INTERACTIVE_MOCK_JOBS_EMAIL` / `LUPIN_TEST_INTERACTIVE_MOCK_JOBS_PASSWORD` env vars; obtain Bearer token via `/api/auth/login` OR use X-API-Key
+   - `curl -H "Authorization: Bearer <jwt>" http://localhost:7999/api/cosa-voice/voice-persona/pool > test/fixtures/notifications/voice_persona_pool.json`
+   - Add a `_capture` provenance metadata block to the JSON root: capture UTC timestamp + endpoint path + server build hash
+   - Commit the fixture. AC-D4 then passes as a regression that pins the wire contract every test run.
+   - Full capture procedure documented in-line in the AC-D4 test body (`test/unit/notifications/notification_repository_test.dart`).
+
+2. **[LUPIN-MOBILE] Un-skip AC-D6 live probe** — currently `skip:`-documented in `notification_repository_test.dart`. Requires: running `:7999` + authenticated HTTP client + WebSocket test client (reuse `lib/services/websocket/websocket_service.dart` or write a thin test-only ws client). The cascade-ratified probe shape (auth → POST allocate → WS observe `assigned_at` → POST release for net-zero mutation) is documented in-line in the test body. Un-skip by removing the `skip:` argument once laptop plumbing lands.
 
 ### Parked deferred items (Q3 walk-through resolution 2026-05-21 — all 6 parked, none dropped)
 

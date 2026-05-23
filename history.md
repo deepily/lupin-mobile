@@ -12,6 +12,89 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.05.22–23 | Session `1b3f8c46` (Tiffany 💍) — Cascade-review of notif-client-sync plan CLOSED + 4-section IMPLEMENTATION landed
+
+#### Cascade authoring + implementation | 2026.05.22–23 | 4-section plan ran through `/plan-review-cascaded` Stage 0/1/2/3 with Sam Stage-3 zero findings; cascade closed; Rio implemented Section A overnight (~04:02 UTC); Tiffany implemented Sections B/C/D + ran Section A hygiene-pass on a self-driving 3-min cron through ~05:10 UTC. Code uncommitted in tree until this session-end commit.
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan-of-record**: `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` (Stage-1 + Sam-Step-0 edits this session)
+**Cascade synthesis**: `src/rnd/2026.05.22-notif-client-sync-cascade-handoff.md` (NEW — Mr. Radio's Step-9 Manager-authored synthesis doc; PLAN BLESSED FOR IMPLEMENTATION; 25 findings, 0 foundational, 0 user-escalated)
+**Commits**: `75ffa41` (2026-05-21 prior session-end) + this session-end commit
+
+### Part 1 — Cascade authoring (2026-05-22 ~15:00–21:30 UTC)
+
+1. **Readiness loop** — set up a 5-min cron to check Maria 🌸 + Mr. Radio 🦉 readiness for cascade kickoff while Rick was AFK. Both confirmed within ~5 min; loop retuned to quiet-poll; retired on cascade-LIVE event.
+
+2. **Stage 0** — posted 4 section author_drafts (A WS stubs / B speakerphone / C overflow badge / D `assigned_at` E2E). Mr. Radio's premature pipeline-LIVE go crossed in flight with his stand-down correction; all 4 drafts retracted; Rick sent his explicit-go broadcast; Mr. Radio confirmed Step-3 closed; all 4 drafts re-affirmed under authorized go. Demonstrated discipline: held for Manager-authorized DM, never acted on broadcast or relay alone.
+
+3. **Sam's Step-0 light-review** — passed all 6 criteria. 3 non-blocking observations applied directly to plan doc (parking-lot count fix, audit-provenance note, c8→flutter-coverage cross-wire fix).
+
+4. **Stage 1 revisions** (Tiberius 🌑 findings, all 4 sections): A — test-file home + comment form + Assumption-2 re-grounding on `websocket_subscription_manager.dart`; B — collapsed emit path to canonical `_emitCurrentSnapshot` + proactive forward-sweep of F-Tib-A1 to B's blocTests; C — OSQ-C-1 resolved (reuse `DashedBorderPainter` + true round dots author call) + named widget-test home; D — corrected `test/features/` → `test/unit/notifications/` paths + named fixture home.
+
+5. **Stage 2 revisions** (Krishna 🦚 findings): added **AC-A5** wire-string grounding; added **`SpeakerphoneRecord`** carrier (F-Krishna-B1); narrowed OSQ B-1 to `n.senderId` authoritative (F-Krishna-B2); added **AC-B7** payload-field-name grounding; AC-B1b doc-comment cleanup; AC-C1 reconciled to 4 tests; AC-C4 mechanism corrected to direct two-render pixel-diff (NOT golden); AC-D4 mandated live `:7999` capture; AC-D6 made non-optional. Plus **consolidated wire-grounding doctrine fold** (`valid_types` whitelist + emit sites; never hand-authored fixture) — superseding-reposts on A + B.
+
+6. **Sam Stage-3 audit**: **ZERO findings across all 4 sections** ("audited and CLEAN"). Cascade CLOSED. Mr. Radio authored the Step-9 cascade-handoff synthesis doc.
+
+### Part 2 — Implementation (2026-05-23 ~04:00–05:10 UTC)
+
+7. **Role reassignment** (Rick's voice DM at ~04:18 UTC): Tiffany = Implementer (was Rio); Mr. Radio = Implementation Manager (was Tiberius). Rio's overnight Section A implementation (~04:02 UTC) inherited and hygiene-passed clean.
+
+8. **Section A** (Rio's implementation, hygiene-pass CLEAN): 3 case-label constants + provenance comment + `@visibleForTesting personasBySenderForTesting` getter + 3 no-op cases with pinned `// no-op stub — <reason>; real behavior parked per Q3 (plan §8.0)` form + AC-A5 cosa-whitelist regex-read against `cosa/rest/routers/notifications.py:359`. Read-only filesystem boundary respected. 6 AC-A1–A5 tests.
+
+9. **Section B — Speakerphone Adoption** (Tiffany implementation + tests):
+   - `SpeakerphoneRecord { on, displaced, displacedBy }` Equatable carrier
+   - `SpeakerphoneSnapshotMixin` + 4 state-class extensions
+   - `NotificationsSpeakerphoneChanged(senderId, on)` typed event
+   - Bloc: new field + helper + `@visibleForTesting` getter + typed-event handler + raw-WS `speakerphone_changed` case using `n.raw[...]` (OSQ B-1 resolution) + AC-B1b doc-comment cleanup + extended `_emitCurrentSnapshot` + 7 emit-site updates across load handlers + `_refreshCurrent`
+   - **7 new tests**: AC-B1 production-source grep, AC-B2/B3/B4 typed-event injection (Equatable idempotency), AC-B5/B6 raw-payload extraction, AC-B7 cosa `e420ec0` wire-grounding scan.
+
+10. **Section C — PersonaBadge Overflow Variant** (Tiffany implementation + tests):
+    - `DashedBorderPainter` extended with `StrokeCap cap = StrokeCap.butt` parameter
+    - `personaBadgeDottedPrefix` test key
+    - `PersonaBadge` 3-way render branch (overflow → dotted + ✱ glyph; borrowed → dashed; plain) with overflow precedence; ✱ glyph as load-bearing disambiguator
+    - **7 new widget tests**: AC-C1 × 4 (overflow, borrowed) combinations + AC-C2 ✱-glyph presence (4 cases) + AC-C3 dotted-prefix discovery + AC-C4 direct two-render pixel-diff via `RenderRepaintBoundary.toImage` (NOT Flutter golden-file).
+
+11. **Section D — `assigned_at` Propagation E2E** (test-only, Tiffany):
+    - 3 explicit AC-tagged tests in `voice_persona_test.dart` (AC-D1/D2/D3 parse contract)
+    - 1 blocTest in `notification_bloc_test.dart` (AC-D5 WS-path `assigned_at` round-trip)
+    - 1 fixture-load test + 1 `skip:`-documented test in `notification_repository_test.dart` (AC-D4 + AC-D6)
+    - **Two laptop-side closures filed in TODO.md**: (a) capture `test/fixtures/notifications/voice_persona_pool.json` (`:7999` probe returned 401 from dev server — auth needed); (b) un-skip AC-D6 once laptop pipeline plumbs auth + WebSocket test client.
+
+12. **Section A hygiene-pass CLEAN**: pinned comment form on all 3 no-op cases ✅; AC-A5 cosa-whitelist read confirmed at `cosa:359` matching Rio's `:359-364` provenance ✅; line numbers shifted from `:245-253` → `:294-301` due to Section B insertions (mechanical, not regression) ✅; read-only filesystem boundary preserved ✅.
+
+13. **Self-driving 3-min cron `7d97461b`** carried implementation overnight while Rick slept. Mr. Radio polled on heartbeat ticks. Cron self-deleted at `IMPLEMENTATION COMPLETE` (~05:10 UTC).
+
+14. **Turn-boundary insight surfaced + logged for post-game**: I'm session-driven (no auto-continue between turns without inbound trigger); Mr. Radio's SITREP-on-stall pattern was the working re-engagement loop until we agreed on the self-cron. Per Mr. Radio: "highest-signal observation tonight — it'll reshape how Manager-Implementer relationships are wired in future cascades."
+
+### Files modified (15) + new (1)
+
+**Production code (8)**:
+- `lib/features/notifications/domain/notification_bloc.dart` (Section A by Rio + Section B by Tiffany)
+- `lib/features/notifications/domain/notification_event.dart` (Section B)
+- `lib/features/notifications/domain/notification_state.dart` (Section B)
+- `lib/features/notifications/data/notification_models.dart` (Section B `SpeakerphoneRecord`)
+- `lib/features/notifications/data/voice_persona.dart` (foundational `overflow` field — pre-existing modification, load-bearing for Section C compile)
+- `lib/features/notifications/presentation/persona_badge.dart` (Section C overflow branch)
+- `lib/shared/painters/dashed_border_painter.dart` (Section C `StrokeCap cap` param)
+- `lib/core/testing/test_keys.dart` (Section C `personaBadgeDottedPrefix`)
+
+**Test code (5)**:
+- `test/unit/notifications/notification_bloc_dispatch_test.dart` (Section A by Rio + Section B by Tiffany — 7 new tests)
+- `test/unit/notifications/notification_bloc_test.dart` (Section D AC-D5)
+- `test/unit/notifications/notification_repository_test.dart` (Section D AC-D4 + AC-D6)
+- `test/unit/notifications/voice_persona_test.dart` (Section D AC-D1/D2/D3)
+- `test/widget/notifications/persona_badge_test.dart` (Section C — 7 new widget tests)
+
+**Docs / tracking (3)**:
+- `src/rnd/2026.05.21-notif-client-sync-may-06-deltas.md` (Sam's Step-0 observations applied)
+- `src/rnd/2026.05.22-notif-client-sync-cascade-handoff.md` (NEW — Mr. Radio's Step-9 Manager-authored synthesis)
+- `CLAUDE.md` (Doc Viewer Scope section — pre-existing pending modification)
+
+**Test count delta**: +19 cascade-spec-traceable tests (B: 7; C: 7; D: 5) added by Tiffany; +6 by Rio (Section A) = **25 cascade tests in tree, all `EXECUTOR: AI`** except AC-C5 (`EXECUTOR: HUMAN` on-device VP, deferred to laptop pipeline).
+
+**Verification gate**: laptop-side `flutter analyze` clean + `flutter test test/` (dev server lacks Flutter SDK per `feedback_dev_server_laptop_split`).
+
+
 ## 2026.05.21 | Session `1b3f8c46` (Tiffany 💍) — Notification-client change audit + mobile sync plan-of-record + cascade-review reshaping
 
 #### Planning + coordination session | 2026.05.21 | Audited May 6 → May 21 parent-Lupin notification-client deltas; authored mobile sync plan; walked Rick through 4 design questions; reshaped plan for `/plan-review-cascaded` submission. No code changes — planning + coordination only.
