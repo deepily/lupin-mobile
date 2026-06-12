@@ -105,6 +105,9 @@ src/lupin-mobile/
 ### Project Planning
 - **[Project Initialization Plan](src/rnd/2025.07.06-project-initialization-plan.md)** - Initial project setup and milestone planning
 
+### Focus-Mode Voice Chat + FCM Wake-Up (2026-06)
+- **[Focus-Mode Voice Chat doc-set](src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md)** - Multi-stage plan-of-record: focus-mode default surface (badge rail + serial TTS with pause/resume + Whisper-ASR voice replies) and the FCM silent-relay wake-up; cascade-shaped sections S1-S6, awaiting `/plan-review-cascaded`
+
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring (2026-04)
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings
 - **[WS Lifecycle Auth Wiring Plan](src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md)** - Design for driving `WebSocketService.connect/disconnect` from `AuthBloc` state transitions via a `WsLifecycleListener` widget

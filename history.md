@@ -12,6 +12,24 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.06.11–12 | Session `dabf7fbb` (Mr. Radio 🦉, Manager) — Focus-mode voice-chat doc-set authored + cascade-focus-mode CLOSED 6/6
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+**Plan-of-record**: `src/rnd/2026.06.11-focus-mode-voice-chat/` (12-doc set, ██ CASCADE CLOSED 2026-06-12T03:09Z ██)
+
+**Accomplishments**:
+- Authored the full focus-mode voice-chat + FCM wake-up doc-set (index, working contract, architecture, Q1–Q11 frozen decisions, testing strategy, six cascade sections S1–S6) and ran it through the complete 3-stage `/plan-review-cascaded` pipeline as Manager (cast: Tiffany 💍 author, Sam 🎙️ Stage-1, Arnold 🪨 Stage-2, Cheech 🌿 Stage-3, María 🌸 steward)
+- ~43 findings processed (Stage-1: 17 · Stage-2: 13+1 · Stage-3: 12); every re-litigation round closed in ONE pass, zero votes; 0 foundational findings survived
+- 2 user rulings: F-S1-1 (`enqueueAlways` ungated path + FocusChatBloc sole dispatcher via DI-seam withdrawal) and F-S5-S2-1 (FCM background handler-does-the-work per the 2026.04.21 A′ chain, Phase-0 on-device probe gated) — the latter backed by a web-sourced research synthesis (`20-fcm-background-isolate-explainer.md`, 14 primary sources)
+- ALL 7 OSQs cascade-ratified into `02-decisions.md` (OSQ-2/3/6 as-amended)
+- Cross-repo contract integrity: AC-S6.5 element-wise comparison caught 4/6 restatement drift at cascade close; fixed mechanically and re-verified to PASS 6/6
+- Known v1 behavior on the record: paused focus session does NOT gate FCM background speech (prefs are the only background gate)
+- Cast operations: Sam reaped EOL (253k tokens, post-completion, user-authorized); Tiffany rotated at >50% context via memento → fresh seat (user-ordered); survived a manager /clear + memento rehydration, a ~35-min platform tool outage, one worker seat-freeze, and two false-positive fleet-stall alarms
+
+**Files**: 12 new docs in `src/rnd/2026.06.11-focus-mode-voice-chat/` + README/TODO/history updates. Implementation NOT started (Step 9 handoff doc + Stage-1 next — see TODO.md).
+
+---
+
 ## 2026.05.22–23 | Session `1b3f8c46` (Tiffany 💍) — Cascade-review of notif-client-sync plan CLOSED + 4-section IMPLEMENTATION landed
 
 #### Cascade authoring + implementation | 2026.05.22–23 | 4-section plan ran through `/plan-review-cascaded` Stage 0/1/2/3 with Sam Stage-3 zero findings; cascade closed; Rio implemented Section A overnight (~04:02 UTC); Tiffany implemented Sections B/C/D + ran Section A hygiene-pass on a self-driving 3-min cron through ~05:10 UTC. Code uncommitted in tree until this session-end commit.

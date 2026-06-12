@@ -1,6 +1,29 @@
 # TODO
 
-Last updated: 2026-05-23 (Session `1b3f8c46` — Tiffany 💍 — notif-client-sync cascade CLOSED + Sections B/C/D implemented overnight on a 3-min self-cron; Section A inherited from Rio + hygiene-passed; 2 laptop-side AC-D closures filed below.)
+Last updated: 2026-06-12 (Session `dabf7fbb` — Mr. Radio 🦉 — cascade-focus-mode CLOSED 6/6 sections; doc-set is PLAN-OF-RECORD; next step is Step-9 handoff doc + Stage-1 implementation.)
+
+---
+
+## ⭐ NEXT SESSION — START HERE: focus-mode implementation (post-cascade, 2026-06-12)
+
+**Plan-of-record**: `src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md` — ██ CASCADE CLOSED
+2026-06-12T03:09Z ██ (all 6 sections × 3 stages; ~43 findings; 2 user rulings; 7/7 OSQs ratified).
+
+1. [ ] [LUPIN-MOBILE] **Step 9: author the cascade-revision handoff doc**
+   (`src/rnd/2026.06.11-focus-mode-voice-chat/90-cascade-revision-handoff.md`, 7-section spec incl.
+   §6 workflow-guidance candidates) + cold-context self-test + light review (Arnold 🪨 accepted the
+   duty; Sam reaped EOL). Then post `implementation_handoff_ready`.
+2. [ ] [LUPIN-MOBILE] **Stage-1 implementation** under Mr. Radio's management (implementer-workers
+   model, Rick-ratified): order S1→S2→S4→S3 per index DAG; record green baseline suite count in each
+   section's Execution Log BEFORE first edit; `./flutter.sh analyze` + `test` green per section;
+   working contract governs. Phase-0 items first: ASR probes (OSQ-1/OSQ-2), `msg.raw` fixture check,
+   hours-param probe, synthesized canned-WAV fixture creation.
+3. [ ] [LUPIN-MOBILE] **Stage-2 implementation**: S5 mobile (ENABLE_FCM default-OFF; handler-does-
+   the-work per Rick's F-S5-S2-1 ruling; Phase-0 on-device probe gates the chain — incl.
+   refresh→access exchange path + TTS-survives-handler-completion) + S6 parent work order via DM to
+   Tiberius 👑 (cite section file §4; NO cross-repo spawn). OSQ-7 Firebase console = EXECUTOR:
+   HUMAN (Rick). On-device runbook "Focus-mode milestone gate" session = EXECUTOR: HUMAN (bundled,
+   scripted by the AI-authored runbook task).
 
 ---
 
