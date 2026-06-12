@@ -32,6 +32,25 @@
    section rather than spawning a parallel runbook; Stage 2 adds a doze/wake gate.
 6. **"Manual" semantics**: per Convention 5, "Manual E2E" in any section means NOT-YET-AUTOMATED,
    never "the user does it". Steps the AI genuinely cannot run carry `EXECUTOR: HUMAN <reason>`.
+7. **Await-window state-clobber guard** (folded 2026-06-12 from ledger addendum #11): in any
+   bloc/async handler, NEVER `emit` (or merge into) state captured BEFORE an `await` — every
+   suspension point is a window in which another event may have advanced the state, and emitting
+   the stale capture clobbers it. Re-read `state` and merge SYNCHRONOUSLY after all awaits
+   complete. Review checklist item for every new async handler; regression recipe when a
+   violation is found: Completer-held async stubs + mid-flight event injection + a survival
+   assertion on the racing field. (Confirmed twice in one night: F-S1-IMPL-1
+   `_preemptNonDestructive`; F-S2-IMPL-1 `_reconnectRefresh` + `_coldStartBuild` — both caught
+   by implementation light review, both regression-pinned, 2026-06-12.)
+8. **`tester.runAsync` for real-event-loop futures** (folded 2026-06-12 from ledger addendum
+   #12, twice-bitten): any future inside `testWidgets` that completes on the REAL event loop —
+   engine image capture (`toImage` / `toByteData`), bloc-seeding waits, bare `Future.delayed` —
+   MUST be wrapped in `tester.runAsync(...)`. Under the default fake-async zone these futures
+   never complete; the failure presents as an opaque 10-minute timeout with no useful stack
+   (`_RawReceivePort._handleMessage` only), in full-suite AND solo runs. Diagnostic cue: a
+   widget test that times out rather than fails is a fake-async hang until proven otherwise.
+   After seeding via runAsync, hard-gate with an `expect` on the seeded state before pumping.
+   (Anchors: AC-C4 pixel-diff hang + `focus_assembly_test.dart` seeding hang, S3 close; full
+   recipe in `12-section-s3-focus-ui.md` §8.)
 
 ## Cross-Section Integration Checkpoints
 

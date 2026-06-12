@@ -12,6 +12,25 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.06.12 | Session `dabf7fbb` (Mr. Radio 🦉) — Commit + Postgame + AFK-window wrap (post-/clear continuation)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+**Accomplishments** (post-ritual continuation, ~15:45–22:00 UTC):
+- **Implementation batch committed** `b34fa01` (55 files, +7,046/−441) on Rick's authorization — selective staging from manifest sections dabf7fbb + 472b7468 (Tiffany) + ad7692cc (Rio); `io/` scratch excluded.
+- **Postgame walkthrough COMPLETE** — Rick ran all 7 §POSTGAME items live via blocking asks, decided 6 (P5 two-file-contract parked pending explainer read). Decisions ledger in `TODO.md §POSTGAME DECISIONS`. Joint doc folded by María + my fresh-eyes PASS (v1.1): `src/rnd/2026.06.12-joint-postgame-focus-mode-build.md`.
+- **6 R&D docs authored** (pointers): PIP redline draft (`2026.06.12-pip-redline-draft-workflow-guidance-ledger.md`), retirement scoping (`…-legacy-voice-stack-retirement-scoping.md`, GO posture), two-file-contract explainer (`…-two-file-contract-pattern-explainer.md`), resume-seat ticket draft (`…-cosa-voice-resume-seat-primitive-ticket-draft.md`), **PoC laptop-build runbook** (`…-poc-laptop-build-runbook.md` — real-device LAN-IP repoint finding), quarantine triage (`…-legacy-quarantine-triage.md` — 25 files dispositioned, `PerformanceMonitor` the one lost-coverage flag).
+- **Ledger folds**: #11/#12 landed LOCALLY into `03-testing-strategy.md` Standing Rules 7+8; #14 relayed to Tiberius; manager-autonomy v1.1 §7–§8 acked.
+- **Tiberius FCM/GCP coordination** (now back-burnered): S6 endpoints + `fcm_tokens` persistence IN-SERVICE on the test VM via the mount model; wake-SENDS still need image rebuild w/ firebase-admin + the OSQ-7 key (batch with runbook 91).
+- **Weekly quota freeze survived**: limit hit ~19:26Z (resets Jun 15 11am EDT) — froze main loop + killed 2 helper subagents (zero output); recovered on model swap; both deliverables re-authored INLINE. Confirmed ledger-#14 class (a) — quota freeze indistinguishable from stall (this time it WAS one).
+
+**Remaining (all Rick-gated or coordination)** — see `TODO.md`:
+- Device pipeline: OSQ-7 console (runbook 91) → laptop build + probe p1–p11 (runbook 92) → doze gate + fm1–fm6. **PoC path needs NONE of it** — `2026.06.12-poc-laptop-build-runbook.md` gives a Stage-1 build with FCM OFF.
+- Push this batch (Rick's word); ledger review-then-fold; full Tier A+B legacy-voice retirement (post-PoC; flutter_sound rides it).
+- **Next cleared sessions** (Rick's priorities to Monday): (1) **task list** functionality, (2) **cosa-voice token efficiency** (~75% of budget). GCP migration BACK-BURNERED.
+
+---
+
 ## 2026.06.12 | Session `dabf7fbb` continued (Mr. Radio 🦉, Implementation Manager) — Focus-mode milestone AI-IMPLEMENTATION + REVIEW COMPLETE
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` (uncommitted — Rick drives commits)

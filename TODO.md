@@ -1,8 +1,18 @@
 # TODO
 
-Last updated: 2026-06-12 (Session `dabf7fbb` — Mr. Radio 🦉 — focus-mode milestone
-**AI-IMPLEMENTATION + REVIEW COMPLETE**: all 6 sections built/tested/reviewed; mobile suite
-406 ✅ / 1 by-design skip / 0 ❌; parent S6 merged. Remaining = HUMAN-only device items.)
+Last updated: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉). Focus-mode milestone
+AI-IMPLEMENTATION + REVIEW COMPLETE (406 ✅ / 1 skip / 0 ❌); implementation batch committed
+`b34fa01`; postgame walkthrough done (6/7 decided, §POSTGAME DECISIONS); 6 new R&D docs authored
+(see §NEXT-SESSION pointers). Survived a weekly-quota freeze (resets Jun 15 11am EDT).
+
+> **▶ CLEARED-SESSION PRIORITIES (Rick, 2026-06-12 → Monday)**: GCP migration BACK-BURNERED.
+> Two priorities for fresh sessions: **(1) the task-list functionality**, **(2) cosa-voice token
+> efficiency** (~75% of inference budget — the dominant spend). Budget is meager (Rick bought
+> extra credits, dialed all sessions to Opus 4.8). Lead with token-frugal work.
+>
+> **▶ WORKING-PoC FAST PATH** (needs NO Firebase): `src/rnd/2026.06.12-poc-laptop-build-runbook.md`
+> — rsync→build→adb install; real-device gotcha = repoint `assets/config/server-contexts.json`
+> off `10.0.2.2` (emulator-only) to the dev-server LAN IP; ends at fm1–fm6 acceptance.
 
 ---
 
@@ -21,23 +31,70 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 3. [ ] [LUPIN-MOBILE] **On-device gates**: S5 HUMAN doze gate + Stage-1 "Focus-mode milestone
    gate" fm1–fm6 (runbook section authored; riders: S1 TTS-pacing, S4 ≤2-word transcript bar,
    OSQ-3 boot-order note).
+3a. [ ] [LUPIN-MOBILE] **(BACK-BURNERED 2026-06-12 per Rick — GCP migration paused until
+   further notice)** Coordinate w/ Tiberius: Firebase Cloud Messaging (FCM) wake-up service
+   INTO SERVICE on the test VM (originally Rick's order ~17:15Z). S6 code is merged
+   (`83990552`) + locally verified only; get it deployed/configured/live on the test VM.
+   Opening DM on `dm-tiberius` 16:58Z (GCP-bundling status + deployed-parent needs beyond the
+   OSQ-7 key). Dependency: runbook-91 console pass provisions the service-account key — no
+   push emission without it. Done = endpoints + sender verified live on the test VM, receipt
+   in section docs §8.
+   *Tiberius's answer 17:06Z + Krishna's verdict 17:08Z (CLAUSE CLOSED)*: endpoints +
+   `fcm_tokens` persistence are IN-SERVICE at bring-up — compose pulls the pre-S6
+   `lupin:1.1.0` image BUT the Decision-3 mount model bind-mounts the on-VM checkout
+   `37e5c695` (⊇ S6 merge) over it. Remaining for wake-SENDS: (a) image rebuild with
+   `firebase-admin>=6.5` (not in 1.1.0; lazy import → FcmWakeService runs DISABLED, no boot
+   risk) + (b) the OSQ-7 service-account key — both batch naturally with Rick's runbook-91
+   console pass. In-service verification rides the Phase G probe.
 4. [x] [LUPIN-MOBILE] **Fleet wrap** — DONE 2026-06-12 ~12:40Z on Rick's ritual broadcast
    d86c7faf: all 4 seats dismissed with mementos (Arnold badge-Sam, Cheech, Rio; Tiffany's
    parked seat killed — memento impossible at the rate-limit dialog, continuity preserved via
    manifest + section files + her 0259Z memento).
-5. [ ] [LUPIN-MOBILE] **flutter_sound REMOVAL-CANDIDATE debt** (OSQ-2 amendment, handoff §5
-   item 1, filed at close-out as mandated): two recording engines now in the dependency tree
-   (`record` ^5.x active for S4; `flutter_sound` ^9.2.13 = DI-disabled legacy voice stack).
-   Remove flutter_sound WITH the legacy-voice-stack retirement — not before (legacy wrapper
-   `VoiceInputOutputService` still references it).
-6. [ ] [LUPIN-MOBILE] **Commit the implementation batch** (EXECUTOR: Rick) — everything since
-   `c3847bd` is uncommitted by standing rule: 5 sections of production+test code, 3 handoff/
-   runbook docs, 5 fixtures, doc-set §8 evidence, TODO/history/index. Manifest sections
-   dabf7fbb + 472b7468 + ad7692cc enumerate every file for selective staging.
+5. [ ] [LUPIN-MOBILE] **FULL legacy-voice-stack retirement incl. flutter_sound** (OSQ-2
+   amendment debt, expanded 2026-06-12): scoped GO by read-only audit —
+   `src/rnd/2026.06.12-legacy-voice-stack-retirement-scoping.md` (Tier A 3 files ~2,179 LoC +
+   Tier B 16 files ~4,931 LoC, all zero-active-importers; zero functionality blockers; 7
+   quarantined test files drop per convention; pubspec/flutter_sound removal LAST).
+   **Rick's disposition (postgame, ~17:05Z): WAIT — return to this AFTER we have a working
+   PoC together.** Full Tier A+B shape when it runs; P5 pub-get/registrant tail on laptop.
+6. [x] [LUPIN-MOBILE] **Commit the implementation batch** — DONE 2026-06-12 `b34fa01`
+   (Rick authorized via ask_yes_no; Mr. Radio staged selectively from manifest sections
+   dabf7fbb + 472b7468 + ad7692cc: 55 files +7,046/−441; `io/` session scratch excluded;
+   NOT pushed — push remains Rick-gated).
 
 ---
 
 ## 🎙️ POSTGAME AGENDA (Rick's ritual broadcast d86c7faf — issues to go over, all sessions)
+
+### ✅ POSTGAME DECISIONS (walkthrough 2026-06-12 ~16:20–16:50Z, Rick live via ask_* tools)
+
+1. **Un-park path**: listener-level resume-seat primitive in cosa-voice (narrow, audited,
+   human-word-gated) + `!`-prefix interim protocol (manager diagnoses + hands Rick the exact
+   command; he fires it himself). Follow-up: file the cosa-voice feature ticket (parent-side).
+2. **Takeover pattern**: codify, QUALIFIED — **memento-first precedence**: mementos always
+   take priority; archaeology-first rehydration applies ONLY when no memento exists.
+3. **Ledger disposition**: REVIEW-THEN-FOLD — Rick reads
+   `src/rnd/2026.06.12-pip-redline-draft-workflow-guidance-ledger.md` (worker-drafted, 13
+   redlines + checklist; 4 fold targets remapped — they don't exist in PIP by ledger names);
+   PIP application only in a later Rick-authorized session.
+4. **Light review**: standardize, QUALIFIED — default-on but NON-DOGMATIC; manager staffs and
+   runs autonomously; **the human is never a gate**. Activates #11's conditional PIP fold.
+5. **Two-file contract**: PARKED pending Rick's read of
+   `src/rnd/2026.06.12-two-file-contract-pattern-explainer.md` (written at his neither-comment);
+   walkthrough returns to this question after.
+6. **Persona lifecycle**: adopt BOTH #13 mitigations (allocation-time dm-topic check +
+   reap-time closing marker); rides the review-then-fold gate. Claim-race allocator fix stays
+   an open parent-side question.
+7. **Done-but-unverified posture**: RATIFIED — code-complete ≠ delivered until the on-device
+   receipt lands; only hardware-unreachable verification (FCM/doze/mic/ear) is human-gated,
+   everything programmatically testable must be tested programmatically.
+   *Addendum (Rick, 2026-06-12 ~17:00Z)*: **PROVISIONAL-CONTINUE authorized** — build work may
+   proceed ASSUMING the Firebase Cloud Messaging (FCM) probe will pass, since the device
+   install will be a while. The §3.2.4 milestone itself stays UNDECLARED; anything stacking on
+   FCM stays behind the kEnableFcm flag boundary; the eventual receipt either confirms or
+   triggers runbook 92's shape-3 fallback (provisional-plus-delta disposition, ledger #8
+   pattern). Also: short-term verbal convention — say "Firebase Cloud Messaging (FCM)" in
+   full so Rick internalizes the term.
 
 1. **Quota-freeze episode** (~01:10–03:45 EDT): froze both fleets mid-implementation; arbiter
    fired 8+ false alarms + 2 Rick escalations; Tiffany's seat parked at the rate-limit dialog

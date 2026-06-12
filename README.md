@@ -107,6 +107,13 @@ src/lupin-mobile/
 
 ### Focus-Mode Voice Chat + FCM Wake-Up (2026-06)
 - **[Focus-Mode Voice Chat doc-set](src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md)** - Multi-stage plan-of-record: focus-mode default surface (badge rail + serial TTS with pause/resume + Whisper-ASR voice replies) and the FCM silent-relay wake-up; cascade-shaped sections S1-S6, awaiting `/plan-review-cascaded`
+- **[PIP Redline Draft: Workflow-Guidance Ledger](src/rnd/2026.06.12-pip-redline-draft-workflow-guidance-ledger.md)** - Draft (NOT landed) redlines folding the 14-entry cascade-focus-mode ledger into planning-is-prompting canonical docs; postgame ratification checklist
+- **[Legacy Voice Stack Retirement Scoping](src/rnd/2026.06.12-legacy-voice-stack-retirement-scoping.md)** - Read-only audit of the flutter_sound/VoiceInputOutputService legacy stack: inventory, gap analysis, phased retirement plan (GO posture, unscheduled)
+- **[Two-File Contract Pattern Explainer](src/rnd/2026.06.12-two-file-contract-pattern-explainer.md)** - How the S5/S6 cross-repo interface spec lives verbatim in both repos with same-round amendment propagation + element-wise comparison AC; written for postgame item 5
+- **[cosa-voice Resume-Seat Primitive Ticket Draft](src/rnd/2026.06.12-cosa-voice-resume-seat-primitive-ticket-draft.md)** - Parent-side feature ticket per postgame decision 1: listener-level un-park of rate-limit-parked worker seats (detection, human-word-gated action, audit) + the !-prefix interim protocol
+- **[Joint Post-Game: Focus-Mode Build Night](src/rnd/2026.06.12-joint-postgame-focus-mode-build.md)** - Manager 🦉 + Observer 🌸 joint record with Rick's live rulings per item (6 decided / 1 parked), the bilateral comms-meta lesson + 3 convention pins, and the 8-action consolidated ledger
+- **[PoC Laptop-Build Runbook](src/rnd/2026.06.12-poc-laptop-build-runbook.md)** - Zero → focus-mode PoC on a real device: wraps the existing rsync/build-and-deploy scripts, FCM-OFF guidance, and the critical real-device LAN-IP repoint (bundled dev URL `10.0.2.2` is emulator-only); ends at the fm1–fm6 acceptance gate
+- **[Legacy Quarantine Triage](src/rnd/2026.06.12-legacy-quarantine-triage.md)** - Per-file disposition of all 25 quarantined test files (rides-retirement / rides-follow-on / resurrect-candidate); the one real lost-coverage flag is `PerformanceMonitor`; closes the 2026-05-11 quarantine-triage TODO debt
 
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring (2026-04)
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings
