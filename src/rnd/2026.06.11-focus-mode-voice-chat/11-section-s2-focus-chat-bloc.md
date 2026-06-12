@@ -116,51 +116,55 @@ their full visual function (Q1) — only speech ownership moves.
 
 ## 4. Tasks
 
-- [ ] Models/state/events per §3 incl. `FocusRespondRequested` + typed `FocusPromptContext` +
+- [x] Models/state/events per §3 incl. `FocusRespondRequested` + typed `FocusPromptContext` +
       `pendingPromptFor` selector (reuse `NotificationItem`, `VoicePersona`; no new data models
       EXCEPT the typed prompt-context and — only if the Phase-0 raw-passthrough check fails — the
       thin backfill adapter per §3.1, F-S2-S2-2)
-- [ ] Bloc handlers: inbound, select, cold-start/reconnect-refresh (mode-dependent merge,
+- [x] Bloc handlers: inbound, select, cold-start/reconnect-refresh (mode-dependent merge,
       F-S2-S3-1), persona-update, respond
-- [ ] Phase 0 (EXECUTOR: AI; F-S2-S3-3): (a) fixture-check that `msg.raw` carries
+- [x] Phase 0 (EXECUTOR: AI; F-S2-S3-3): (a) fixture-check that `msg.raw` carries
       `response_options` + response-state fields → DECIDES the §3.1 mapping branch
       (raw-passthrough vs thin adapter); (b) live-probe `senders()`/`conversation()` hours-param
       semantics (null = full history?) → pin as fixture (affects cold-start completeness +
       backfill depth)
-- [ ] 7-item window eviction + insertion-ordered registry
-- [ ] `app.dart` parallel dispatch + WS-reconnect re-hydration dispatch + DI registration +
+- [x] 7-item window eviction + insertion-ordered registry
+- [x] `app.dart` parallel dispatch + WS-reconnect re-hydration dispatch + DI registration +
       withdraw legacy `tts` injection (F-S2-1)
-- [ ] TTS enqueue call-out via `enqueueAlways` with voiceId pipe-through
-- [ ] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
+- [x] TTS enqueue call-out via `enqueueAlways` with voiceId pipe-through
+- [x] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
       rule 1; F-S1-S3-2 family)
-- [ ] Bloc tests (§5) + full-suite regression
+- [x] Bloc tests (§5) + full-suite regression
 
 ## 5. Acceptance Criteria
 
-- [ ] EXECUTOR: AI — AC-S2.1 blocTest: inbound from new sender appends to `senderOrder` END
+- [x] EXECUTOR: AI — AC-S2.1 blocTest: inbound from new sender appends to `senderOrder` END
       (establishment order preserved across 3 senders arriving B, A, C → order B, A, C).
-- [ ] EXECUTOR: AI — AC-S2.2 blocTest: 8th message for a sender evicts the oldest; window length
+- [x] EXECUTOR: AI — AC-S2.2 blocTest: 8th message for a sender evicts the oldest; window length
       stays 7, newest-last.
-- [ ] EXECUTOR: AI — AC-S2.3 blocTest: inbound for NON-focused sender increments its unread;
+- [x] EXECUTOR: AI — AC-S2.3 blocTest: inbound for NON-focused sender increments its unread;
       focused sender's stays 0; viewport pointer (`focusedSender`) unchanged (Q4 invariant).
-- [ ] EXECUTOR: AI — AC-S2.4 blocTest: `FocusSenderSelected` zeroes unread + sets focus + emits
-      hydration=loading→ready when backfill fires (mock repository). Extended (F-S2-S2-2):
-      backfilled-structured-ask fixture — an unanswered ask coming through the §3.1 mapping
-      retains its `responseOptions` (chips renderable) and its answered/unanswered discriminator.
-- [ ] EXECUTOR: AI — AC-S2.5 blocTest: EVERY inbound (low AND urgent) produces exactly one
+- [x] EXECUTOR: AI — AC-S2.4 blocTest: `FocusSenderSelected` zeroes unread + sets focus + emits
+      hydration=loading→ready when backfill fires (mock repository). Extended (F-S2-S2-2; clause
+      AMENDED to wire truth 2026-06-12 per F-S2-IMPL-2 — Phase-0 ruled the conversation wire
+      carries NO `response_options`, `notifications.py:1940-1962` + the
+      `conversation_wire_sample.json` capture): a backfilled-structured-ask fixture retains its
+      answered/unanswered DISCRIMINATOR through the §3.1 mapping; `responseOptions` is NULL on
+      backfill (chips render only from live WS payloads — S3's fallback affordance covers
+      backfilled choice asks).
+- [x] EXECUTOR: AI — AC-S2.5 blocTest: EVERY inbound (low AND urgent) produces exactly one
       `enqueueAlways` call with the sender's voiceId (mock orchestrator; Q6 — re-targeted at the
       ungated surface per F-S2-2).
-- [ ] EXECUTOR: AI — AC-S2.6 unit: cold-start ordering — `SenderSummary` fixture with interleaved
+- [x] EXECUTOR: AI — AC-S2.6 unit: cold-start ordering — `SenderSummary` fixture with interleaved
       `lastActivity` values rebuilds the registry `lastActivity` DESC (OSQ-3 as amended,
       F-S2-S2-1); a subsequent live arrival from a NEW sender APPENDS (snapshot never re-sorts).
-- [ ] EXECUTOR: AI — AC-S2.7 regression: legacy NotificationBloc suite stays green — the bloc
+- [x] EXECUTOR: AI — AC-S2.7 regression: legacy NotificationBloc suite stays green — the bloc
       FILE is untouched (Q2); only `service_locator` withdraws its `tts` injection, and legacy
       unit tests construct the bloc with their own mocks, unaffected by DI registration.
-- [ ] EXECUTOR: AI — AC-S2.8 service-integration (F-S2-1): one `notification_queue_update` frame
+- [x] EXECUTOR: AI — AC-S2.8 service-integration (F-S2-1): one `notification_queue_update` frame
       through the real `app.dart` wiring → EXACTLY ONE orchestrator enqueue across BOTH blocs
       (FocusChatBloc's `enqueueAlways`; legacy path silent because `tts` is not injected) —
       single-dispatch pin.
-- [ ] EXECUTOR: AI — AC-S2.9 blocTest (F-S3-2, extended F-S2-S2-3 — three cases): (i) explicit
+- [x] EXECUTOR: AI — AC-S2.9 blocTest (F-S3-2, extended F-S2-S2-3 — three cases): (i) explicit
       id: event with typed `promptContext` → `respond()` called with THAT `notificationId`;
       (ii) resolved id: event without context, focused sender has ≥2 UNANSWERED asks in the
       fixture → `respond()` called with the NEWEST one's id (F-S2-S3-2 — discriminates the
@@ -168,7 +172,7 @@ their full visual function (Q1) — only speech ownership moves.
       context, NO pending ask → NO `respond()` call, no crash, state unchanged. All cases: a
       successful respond appends a `type: user_initiated_message` reply to the window;
       repository failure sets `hydration = error` (mock repository).
-- [ ] EXECUTOR: AI — AC-S2.10 (F-S5-1c seam; extended F-S2-S3-1): WS reconnect triggers a
+- [x] EXECUTOR: AI — AC-S2.10 (F-S5-1c seam; extended F-S2-S3-1): WS reconnect triggers a
       `FocusColdStartRequested` re-dispatch (mock WS service through the app-level wiring).
       Reconnect-refresh fixture asserts the FULL merge contract: existing sender order preserved
       (no re-sort), new sender APPENDED, windows merge-deduped by notification id (no duplicates;
@@ -221,6 +225,62 @@ proposed answers; cascade to ratify.
 *(Placeholder per working-contract §Phase-Complete Definition + testing-strategy rule 1 —
 populated at implementation time, NOT during the cascade.)*
 
-- [ ] Green baseline suite count recorded BEFORE first edit: `____` (date/time, command, count)
-- Per-AC evidence entries land here as each §5 checkbox flips to `[x]` (test output, probe
-  response, or named HUMAN sign-off).
+- [x] Baseline suite count recorded BEFORE first edit (2026-06-12T04:17Z, carried forward from
+  the S1-close run per Manager authorization — zero edits between): `./flutter.sh test
+  test/unit/ test/widget/ test/service_integration/` → **334 ✅ / 1 skip / 2 ❌** (both failures
+  pre-existing Manager-owned: AC-D4 parent-side `assigned_at` gap, AC-C4 under triage — neither
+  an S2 surface). Operative bar: 334 never decreases + legacy NotificationBloc suite green
+  (AC-S2.7) + quarantine untouched.
+- **Implementer depth choice (hours asymmetry, per Phase-0)**: backfill calls
+  `conversation( ..., hours: 24 * 7 )` — `FocusChatBloc.backfillHours = 168`, explicit because
+  the server defaults to a 24-HOUR window when omitted (`notifications.py:1854`). One week
+  balances window-fill completeness for recently active senders against unbounded payloads from
+  chatty senders; the 7-item cap is the real limiter. Named constant for easy tuning.
+- [x] **Implementation landed 2026-06-12T04:30Z (session `472b7468`, Tiffany 💍)**:
+  `lib/features/focus_mode/domain/` — `focus_chat_state.dart` (FocusHydration, `FocusMessage`
+  thin adapter per the OPERATIVE Phase-0 branch, FocusChatState + `pendingPromptFor`),
+  `focus_chat_event.dart` (5 events + typed `FocusPromptContext`), `focus_chat_bloc.dart`
+  (all 5 handlers; `backfillHours = 168` explicit). `service_locator.dart` — F-S2-1 DI
+  withdrawal (legacy `tts:` no longer injected, rationale comment in place) + FocusChatBloc
+  registration. `app.dart` — `WsBlocDispatcher` extracted from the private State (so AC-S2.8/
+  S2.10 test the REAL wiring); parallel focus dispatch with the valid_types whitelist + persona
+  routing; `auth_success` → `FocusColdStartRequested` (initial connect AND reconnect — the
+  F-S5-1c seam); authenticated email captured from `WsLifecycleListener.onAuthenticated`.
+- [x] **AC evidence (2026-06-12T04:42Z)** — `test/unit/focus_mode/focus_chat_bloc_test.dart`
+  (12 tests) + `test/service_integration/focus_app_wiring_test.dart` (4 tests): **16/16 ✅**.
+  Mapping: AC-S2.1, S2.2, S2.3, S2.4 (loading→ready + discriminator retained; **Phase-0
+  amendment applied to the extended clause**: the 19-field wire carries NO `response_options`,
+  so the test asserts the discriminator + options-null as the documented wire truth — live WS
+  asks are unaffected, S3 fallback affordance covers backfilled chips, per the Phase-0 entry
+  above), S2.5 (low AND urgent → exactly one `enqueueAlways` each, voiceId piped,
+  `enqueueIfSpeakable` never), S2.6 (DESC snapshot + append-no-re-sort, null-activity-last),
+  S2.9 i/ii/iii + failure-path, S2.10 bloc-half (FULL merge contract: order kept, C appended,
+  dedupe-by-id, unread preserved+incremented, focus unchanged) + app-half (auth_success →
+  `senders()` with the authenticated email; defensive no-auth case), persona assigned/released.
+  **Implementer call on the record (refresh unread)**: "preserved" = never zeroed; newly merged
+  missed messages INCREMENT unread for non-focused senders — the badge signal S5's
+  no-auto-re-speak pickup behavior relies on.
+- [x] AC-S2.7 + AC-S2.6/full regression (2026-06-12T04:45Z): legacy NotificationBloc suite green
+  (file untouched; its tests construct the bloc with own mocks); full suite
+  `./flutter.sh test test/unit/ test/widget/ test/service_integration/` →
+  **350 ✅ / 1 skip / 1 ❌** vs the 334-baseline — passing INCREASED (+16 S2 tests; AC-B7 and
+  AC-C4 returned to green via the Manager's parallel triage fixes); the single remaining failure
+  is pre-existing AC-D4 (parent-side `assigned_at` gap, owned by parent work order — not an S2
+  surface). Analyze clean on all changed files; 44-test quarantine untouched.
+
+**SECTION S2 IMPLEMENTATION COMPLETE (AI tiers) — 2026-06-12.**
+
+- **2026-06-12T04:07Z — Phase-0 CLOSED (EXECUTOR: AI, Mr. Radio 🦉)**: (a) `msg.raw`
+  fixture-check: **raw-passthrough FAILS → THIN ADAPTER branch decided** — the conversation
+  serializer is a fixed 19-field dict with NO `response_options` and NO `voice_persona`
+  (source-grounded `notifications.py:1940-1962` + live capture). Answered/unanswered
+  discriminator fields ARE wire-present (`state`/`response_requested`/`response_type`/
+  `response_value`/`responded_at`) — `pendingPromptFor` inputs covered; backfilled
+  multiple_choice asks carry no options (live WS arrivals unaffected; S3 fallback affordance
+  covers); persona badges for backfilled bubbles must merge from S2's registry, not the wire.
+  Task-1 amendment per §3.1 contingency is now OPERATIVE. (b) hours-param probe: **asymmetric
+  semantics** — `senders()` omitted = FULL history (`Optional[int]` default None,
+  `notifications.py:1773-1775`; probe 102 vs 1 senders); `conversation()` omitted = **24-hour
+  window server default** (`int = Query(24)`, `notifications.py:1854`), NOT full history —
+  backfill depth must pass `hours` explicitly beyond 24h; `anchor` available. Fixture:
+  `test/fixtures/notifications/conversation_wire_sample.json` (with `_capture` provenance).

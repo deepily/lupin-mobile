@@ -12,6 +12,26 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.06.12 | Session `dabf7fbb` continued (Mr. Radio 🦉, Implementation Manager) — Focus-mode milestone AI-IMPLEMENTATION + REVIEW COMPLETE
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` (uncommitted — Rick drives commits)
+**Plan-of-record**: `src/rnd/2026.06.11-focus-mode-voice-chat/` (status banner + per-section table = as-built record)
+
+**Accomplishments** (post-cascade implementation phase, ~04:00–09:18 UTC):
+- Step 9 closed: `90-cascade-revision-handoff.md` authored (7-section spec), cold-context self-test 6/6, Arnold light review 6/6 → `implementation_handoff_ready` 04:03Z; `manager_self_audit_sweep` posted (10 candidates → TODO.md, later +3 implementation-phase addenda)
+- Phase-0 wire-grounding executed: OSQ-1 (transcribe endpoint UNAUTHENTICATED), OSQ-2 (PCM16 mono 44.1k), S2 raw-passthrough FAILS → thin-adapter branch decided (serializer source-grounded), hours-param asymmetry pinned, canned-WAV fixture created + live round-trip exact (4 fixtures committed with provenance)
+- Stage-1 implemented S1→S2→S4→S3 (Tiffany 💍; Rio ⚡ took over S3 after the fleet-wide Max-plan quota freeze parked her seat — archaeology-first takeover, attribution preserved) — suite 321✅/3❌ start → 384✅/0❌ at Stage-1 close
+- Stage-2: S5 FCM mobile AI tiers (Rio — locator-free FcmWakeChain, ENABLE_FCM default-OFF, builds green without google-services.json, probe runbook 92 authored) + S6 parent-side complete in parallel (Clayton/Tiberius Lane-3: merged `83990552`, AC-S6.5 impl-start 6/6, AC-S6.1 rehydration 6/6 on :8000) — **final suite 406 ✅ / 1 by-design skip / 0 ❌**
+- Review pipeline (Arnold 🪨, 5 reviews): 4 real findings — F-S1-IMPL-1 + F-S2-IMPL-1 await-window races (both fixed + Completer-pinned), F-S2-IMPL-2 doc-drift (heads-up beat S3 calcification), F-S4-IMPL-1 typed-contract gap — all fixed mid-stream; S3 + S5 final reviews clean at ZERO findings
+- Baseline triage 3/3: AC-B7 emit-shape test fix; AC-C4 keyed-boundary + runAsync; AC-D4 fixture captured (login = `/auth/login`, stale laptop-only assumption retired) → parent `assigned_at` gap fixed by Clayton → re-captured GREEN
+- OSQ-6 second amendment Manager-concurred (POST `/api/fcm/unregister-token`), propagated S5§3.1+S6§3.1 same-round pre-implementation; reason-semantics + dual-socket marker quirks recorded as contract-environment notes
+- Incidents survived: fleet-wide quota freeze (~01:10–03:45 EDT) with arbiter false-alarm stand-downs, classifier-blocked keystroke un-park (escalated to Rick; standing-grant takeover spawn instead), recycled-persona DM contamination flagged (ledger #13)
+- HUMAN remainder queued in TODO.md: Firebase console (runbook 91) → probe p1–p11 (runbook 92) → doze + fm1–fm6 gates; worker dismissals await Rick's word
+
+**Files**: 5 mobile sections of production+test code (Tiffany/Rio per manifest), 2 new runbook docs (91, 92), handoff doc 90, 5 fixtures, doc-set §8 evidence throughout, TODO/index/manifest current.
+
+---
+
 ## 2026.06.11–12 | Session `dabf7fbb` (Mr. Radio 🦉, Manager) — Focus-mode voice-chat doc-set authored + cascade-focus-mode CLOSED 6/6
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`

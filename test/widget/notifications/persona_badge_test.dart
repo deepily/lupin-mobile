@@ -340,35 +340,44 @@ void main() {
           // assertion that proves the two configurations differ structurally
           // at pixel level.
 
+          // The boundary is KEYED because the host scaffolding (MaterialApp /
+          // navigator) contributes its own RepaintBoundary widgets — a bare
+          // find.byType( RepaintBoundary ) over-matches ("Too many elements",
+          // baseline-triage fix 2026-06-12).
+          const boundaryKey = Key( "ac-c4-pixel-boundary" );
+
           await tester.pumpWidget( host(
-            const RepaintBoundary( child: PersonaBadge(
+            const RepaintBoundary( key: boundaryKey, child: PersonaBadge(
               persona  : adamOverflow,
               senderId : "s-of",
             ) ),
           ) );
           await tester.pumpAndSettle();
           final overflowBoundary = tester.renderObject<RenderRepaintBoundary>(
-            find.byType( RepaintBoundary ),
+            find.byKey( boundaryKey ),
           );
-          final overflowImg   = await overflowBoundary.toImage( pixelRatio: 1.0 );
-          final overflowBytes = await overflowImg.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          // runAsync: toImage/toByteData complete on the REAL event loop —
+          // awaited bare under the test binding's fake async they can hang
+          // to the 10-minute timeout (full-suite repro 2026-06-12).
+          final overflowBytes = await tester.runAsync( () async {
+            final img = await overflowBoundary.toImage( pixelRatio: 1.0 );
+            return img.toByteData( format: ui.ImageByteFormat.png );
+          } );
 
           await tester.pumpWidget( host(
-            const RepaintBoundary( child: PersonaBadge(
+            const RepaintBoundary( key: boundaryKey, child: PersonaBadge(
               persona  : adamBorrowed,
               senderId : "s-bor",
             ) ),
           ) );
           await tester.pumpAndSettle();
           final borrowedBoundary = tester.renderObject<RenderRepaintBoundary>(
-            find.byType( RepaintBoundary ),
+            find.byKey( boundaryKey ),
           );
-          final borrowedImg   = await borrowedBoundary.toImage( pixelRatio: 1.0 );
-          final borrowedBytes = await borrowedImg.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final borrowedBytes = await tester.runAsync( () async {
+            final img = await borrowedBoundary.toImage( pixelRatio: 1.0 );
+            return img.toByteData( format: ui.ImageByteFormat.png );
+          } );
 
           expect( overflowBytes, isNotNull );
           expect( borrowedBytes, isNotNull );

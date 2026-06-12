@@ -1,0 +1,22 @@
+{
+  "fixture"             : "canned-focus-mode-test.wav",
+  "expected_transcript" : "Focus mode voice chat test one two three.",
+  "spoken_text"         : "Focus mode voice chat test one two three",
+  "format"              : {
+    "codec"       : "pcm_s16le",
+    "sample_rate" : 44100,
+    "channels"    : 1,
+    "osq2_source" : "lupin_client.py:79-81 (paInt16 / CHANNELS=1 / RATE=44100) — OSQ-2 RATIFIED-AS-AMENDED params"
+  },
+  "synthesis"           : {
+    "engine"     : "gTTS (Google Translate TTS)",
+    "conversion" : "ffmpeg -ar 44100 -ac 1 -sample_fmt s16 (mp3 -> wav)"
+  },
+  "_capture"            : {
+    "utc"              : "2026-06-12T04:07:00Z",
+    "endpoint"         : "POST http://localhost:7999/api/upload-and-transcribe-wav",
+    "round_trip"       : "200, transcript exactly matches expected_transcript (0 word errors)",
+    "captured_by"      : "Mr. Radio (session dabf7fbb), Phase-0 cascade-focus-mode",
+    "section_evidence" : "src/rnd/2026.06.11-focus-mode-voice-chat/13-section-s4-voice-input-asr.md section 9 Execution Log"
+  }
+}

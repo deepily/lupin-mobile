@@ -4,7 +4,13 @@
 **Created**: 2026.06.11
 **Pattern**: Pattern A (Multi-Phase Implementation), cascade-shaped
 **Review gate**: `/plan-review-cascaded` — MANDATORY before any implementation code (user directive 2026-06-11)
-**Status**: 📝 DOC-SET AUTHORED — awaiting cascaded review kickoff
+**Status**: 🚀 AI-IMPLEMENTATION COMPLETE 2026-06-12T09:14Z — all 6 sections built + tested
+(mobile suite **406 ✅ / 1 by-design skip / 0 ❌**; parent S6 merged `83990552`, AC-S6.1 6/6 on
+:8000). Lifecycle: cascade closed 03:09Z → `implementation_handoff_ready` 04:03Z → Stage-1
+AI-complete + review-complete 09:00Z → S5 AI-complete 09:14Z. **Remaining = HUMAN-only**:
+OSQ-7 Firebase console ([91-runbook](91-osq7-firebase-console-runbook.md)) → gradle+json wiring →
+S5 Phase-0 on-device probe ([92-runbook](92-s5-phase0-fcm-probe-runbook.md), gates §3.2.4
+milestone) → doze gate → Stage-1 "Focus-mode milestone gate" fm1–fm6 device session.
 
 ## Project Overview
 
@@ -35,6 +41,9 @@ Supersedes the May skeleton `../v0.1.7/2026.05.06-mobile-port-plans/03-session-s
 | [14-section-s5-fcm-silent-relay-mobile.md](14-section-s5-fcm-silent-relay-mobile.md) | Cascade section S5 |
 | [15-section-s6-fcm-backend-interface.md](15-section-s6-fcm-backend-interface.md) | Cascade section S6 |
 | [20-fcm-background-isolate-explainer.md](20-fcm-background-isolate-explainer.md) | F-S5-S2-1 escalation companion — background-isolate blocker, web-sourced, 3 shapes compared |
+| [90-cascade-revision-handoff.md](90-cascade-revision-handoff.md) | Step-9 revision-handoff doc — implementer brief; light-review PASSED 6/6; `implementation_handoff_ready` 2026-06-12T04:03Z |
+| [91-osq7-firebase-console-runbook.md](91-osq7-firebase-console-runbook.md) | OSQ-7 click-path runbook (EXECUTOR: HUMAN) + AI validation checklist — Firebase project/app/key provisioning |
+| [92-s5-phase0-fcm-probe-runbook.md](92-s5-phase0-fcm-probe-runbook.md) | S5 Phase-0 on-device probe (AI-authored / HUMAN-executed) — exchange-in-fresh-isolate + TTS-survives-handler-completion; gates §3.2.4; shape-3 fallback procedure |
 
 ## Stage & Section Summary
 
@@ -47,12 +56,12 @@ Supersedes the May skeleton `../v0.1.7/2026.05.06-mobile-port-plans/03-session-s
 
 | Stage | Section | Title | Status | Review |
 |---|---|---|---|---|
-| 1 | S1 | TTS pause/resume (TtsOrchestrator extension) | PLAN-OF-RECORD | ✅ 3-stage cascade closed |
-| 1 | S2 | FocusChatBloc (state + session registry) | PLAN-OF-RECORD | ✅ 3-stage cascade closed |
-| 1 | S3 | Focus UI surface (badge rail + chat pane + route swap) | PLAN-OF-RECORD | ✅ 3-stage cascade closed (+delta re-verify) |
-| 1 | S4 | Voice input → Whisper ASR → reply | PLAN-OF-RECORD | ✅ 3-stage cascade closed |
-| 2 | S5 | FCM silent-relay handler (mobile) | PLAN-OF-RECORD | ✅ 3-stage cascade closed (user-ruled reshape + 6/6 contract re-verify) |
-| 2 | S6 | FCM backend interface (cross-repo, parent Lupin) | PLAN-OF-RECORD | ✅ 3-stage cascade closed (AC-S6.5 comparison PASS 6/6) |
+| 1 | S1 | TTS pause/resume (TtsOrchestrator extension) | ✅ IMPLEMENTED (Tiffany, 04:17Z) | cascade 3-stage ✅ + impl light review ✅ (1 finding fixed+pinned) |
+| 1 | S2 | FocusChatBloc (state + session registry) | ✅ IMPLEMENTED (Tiffany, 04:38Z) | cascade 3-stage ✅ + impl light review ✅ (2 findings fixed+pinned) |
+| 1 | S3 | Focus UI surface (badge rail + chat pane + route swap) | ✅ IMPLEMENTED (Tiffany pre-freeze + Rio takeover, 08:55Z) | cascade 3-stage ✅ + impl light review ✅ (zero findings) |
+| 1 | S4 | Voice input → Whisper ASR → reply | ✅ IMPLEMENTED (Tiffany, 04:50Z) | cascade 3-stage ✅ + impl light review ✅ (1 cosmetic fixed) |
+| 2 | S5 | FCM silent-relay handler (mobile) | ✅ AI-IMPLEMENTED (Rio, 09:14Z) — §3.2.4 milestone awaits on-device probe receipt | cascade 3-stage ✅ + impl light review in flight |
+| 2 | S6 | FCM backend interface (cross-repo, parent Lupin) | ✅ IMPLEMENTED parent-side (Clayton/Tiberius Lane-3, merged 83990552) — OSQ-7 console = HUMAN remainder | cascade 3-stage ✅ + parent review (Rachel) ✅ |
 
 ## Cross-Section Dependency Map (DAG)
 

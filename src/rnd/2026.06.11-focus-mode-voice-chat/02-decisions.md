@@ -180,7 +180,11 @@ fires on "no live MOBILE WS" (a desktop browser session must NOT suppress the ph
 Restated in BOTH S5 §3.1 and S6 §3; AC-S6.5's element-wise sync check verifies the marker appears
 in both files. ***RATIFIED-AS-AMENDED 2026-06-12*** — endpoint shape + client-type marker +
 durability requirement + executable propagation rule (S6 Stage-3 ownership-lens verdict +
-Manager concurrence; ledger stamp 02:44Z).
+Manager concurrence; ledger stamp 02:44Z). *Second amendment 2026-06-12 (implementation phase,
+under the same rights)*: unregister endpoint switched `DELETE /api/fcm/register-token` (body) →
+`POST /api/fcm/unregister-token` — parent design-gate recommendation, Manager-concurred,
+proxy-fragility residual discharged; S5 §3.1 + S6 §3.1 edited same-round BEFORE either side
+implemented (propagation rule exercised and held).
 
 **Open sub-question 7**: Firebase project provisioning ownership. *Proposed resolution*:
 EXECUTOR: HUMAN (GCP/Firebase console access + `google-services.json` placement on the laptop);

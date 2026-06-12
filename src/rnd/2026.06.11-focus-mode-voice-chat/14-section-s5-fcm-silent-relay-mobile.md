@@ -48,11 +48,12 @@ see §3.2.4 bootstrap).
   section files if it changes; explicit cross-section dependency, see 00-index.md DAG):
   - `POST /api/fcm/register-token` (JWT) — body `{ "token": str, "platform": "android",
     "user_email": str }` → 200 `{ "status": "ok" }`. Upsert keyed on token.
-  - `DELETE /api/fcm/register-token` (JWT) — body `{ "token": str }` → 200. Best-effort logout
-    path (consumed by §3.2.2; AC-S5.2 tests it). *Parent-design flag (S6 Stage-1 residual)*:
-    DELETE-with-JSON-body is proxy-fragile — parent design confirms or switches to
-    `POST /api/fcm/unregister-token` under the OSQ-6 amendment rights; any switch propagates to
-    this restatement before either side implements.
+  - `POST /api/fcm/unregister-token` (JWT) — body `{ "token": str }` → 200 `{ "status": "ok" }`.
+    Best-effort logout path (consumed by §3.2.2; AC-S5.2 tests it). *Amended 2026-06-12 under
+    OSQ-6 amendment rights (parent design-gate recommendation, Manager-concurred; propagated
+    same-round from S6 §3.1)*: was `DELETE /api/fcm/register-token` with JSON body — the
+    proxy-fragility flag is DISCHARGED by the POST shape; neither side had implemented at
+    amendment time (the propagation rule held).
 - **WS client-type marker (F-S6-1, S5-side OBLIGATION)**: the mobile app includes
   `"client_type": "mobile"` in its WS `auth_request` payload so the parent can distinguish the
   mobile WS from web sessions; absent marker ⇒ treated as web (backward-compatible — existing
@@ -61,6 +62,15 @@ see §3.2.4 bootstrap).
   covers both files. Implementation note: this lands in the WS auth payload assembly
   (`WebSocketService` connect/auth path) — a one-field addition, active in Stage 1 builds too
   (harmless: parent treats absent-or-present uniformly until S6 lands).
+  *Contract-environment note (2026-06-12, parent S6-review relay — informational, not a
+  comparison element)*: in the parent's dual-socket topology, a shared-sid AUDIO-socket close
+  pops ALL session maps including this marker (pre-existing quirk) — so a wake push may arrive
+  while the queue WS is STILL LIVE. The S5 handler design already tolerates this (each wake =
+  idempotent best-effort fetch→speak; durable store dedupes; a wake is a summons, never proof
+  of disconnection) — implementer: do NOT treat an arriving wake as evidence the queue WS
+  dropped, and prefer keeping both sockets up together where the mobile app uses the audio
+  socket. (The sibling HIGH find — audio-CONNECT clobbering the marker — is fixed parent-side
+  pre-merge; the suppression arm holds in steady state.)
 
 ### 3.2 FcmWakeupService
 
@@ -124,10 +134,10 @@ see §3.2.4 bootstrap).
 
 ## 4. Tasks
 
-- [ ] Firebase deps + `ENABLE_FCM` dart-define-gated bootstrap (default OFF; no hard dependency
+- [x] Firebase deps + `ENABLE_FCM` dart-define-gated bootstrap (default OFF; no hard dependency
       for Stage-1 builds)
-- [ ] FcmWakeupService: token lifecycle vs S6 endpoint
-- [ ] `client_type: "mobile"` field in the WS auth payload (F-S6-1 obligation; §3.1)
+- [x] FcmWakeupService: token lifecycle vs S6 endpoint
+- [x] `client_type: "mobile"` field in the WS auth payload (F-S6-1 obligation; §3.1)
 - [ ] Phase-0 PROBE (gates all §3.2.4 implementation tasks; F-S5-S2-1 ruling condition):
       EXECUTOR: AI authors the probe — throwaway `@pragma('vm:entry-point')` handler +
       synthesized wake payload + step-by-step device runbook; EXECUTOR: HUMAN executes on the
@@ -137,35 +147,35 @@ see §3.2.4 bootstrap).
       fresh-login access token would mask it — the memory-only token never exists in the
       isolate). Probe failure ⇒ documented fall-back to catch-up-on-pickup (shape 3) with
       evidence, per the ruling.
-- [ ] Background handler per §3.2.4: self-contained bootstrap (Dio + secure-storage auth +
+- [x] Background handler per §3.2.4: self-contained bootstrap (Dio + secure-storage auth +
       local-storage prefs) → fetch → local notification → single utterance. Foreground catch-up
       stays the Stage-1 wiring (WS reconnect → S2 §3.3 re-hydration, F-S5-1c — no new pull code;
       handler never touches the WS, Rick directive 1)
-- [ ] Debug hook: log every wake with reason + chain outcome (fetched n / shown /
+- [x] Debug hook: log every wake with reason + chain outcome (fetched n / shown /
       spoke|muted|truncated — field-debuggable from `adb logcat`)
-- [ ] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
+- [x] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
       rule 1; F-S1-S3-2 family)
-- [ ] Tests (§5) + full-suite regression
+- [x] Tests (§5) + full-suite regression
 
 ## 5. Acceptance Criteria
 
-- [ ] EXECUTOR: AI (executability conditional on OSQ-6 resolution — the registration payload
+- [x] EXECUTOR: AI (executability conditional on OSQ-6 resolution — the registration payload
       shape is S6-owned; until OSQ-6 closes, this AC carries this same-line dependence note) —
       AC-S5.1 unit: token obtained → registration POST fired with the §3.1-declared payload
       (mock Dio + mock messaging).
-- [ ] EXECUTOR: AI — AC-S5.2 unit: `onTokenRefresh` re-registers; logout unregisters. Extended
+- [x] EXECUTOR: AI — AC-S5.2 unit: `onTokenRefresh` re-registers; logout unregisters. Extended
       (F-S6-S2-1(b)): WS reconnect triggers a re-registration POST (idempotent upsert — mock Dio
       asserts the repeat call).
-- [ ] EXECUTOR: AI — AC-S5.3 unit (re-targeted per the F-S5-S2-1 reshape): `ws_wake` data
+- [x] EXECUTOR: AI — AC-S5.3 unit (re-targeted per the F-S5-S2-1 reshape): `ws_wake` data
       message → the handler performs token-exchange → fetch → show → ONE speak, in order, using
       ONLY its constructor-injected/bootstrapped seams (mock secure-storage/refresh-exchange
       seam + mock Dio + mock notifications plugin + mock TTS;
       ZERO service-locator access — assert the locator is never queried); speak-toggle prefs OFF
       ⇒ fetch + show fire, speak does NOT; the spoken text is the `message` field only; unknown
       types logged and ignored (defensive).
-- [ ] EXECUTOR: AI — AC-S5.4 widget/unit: app builds and runs with `ENABLE_FCM` OFF (the
+- [x] EXECUTOR: AI — AC-S5.4 widget/unit: app builds and runs with `ENABLE_FCM` OFF (the
       default) — Stage-1 regression safety; flag grep-able as `--dart-define=ENABLE_FCM`.
-- [ ] EXECUTOR: AI — AC-S5.5 unit (F-S6-1): WS auth payload includes `client_type: "mobile"`
+- [x] EXECUTOR: AI — AC-S5.5 unit (F-S6-1): WS auth payload includes `client_type: "mobile"`
       (fixture-pinned against the §3.1 contract).
 - [ ] EXECUTOR: HUMAN (hardware: real doze + Play-services FCM delivery cannot be emulated
       faithfully in unit tests) — on-device gate: background the app (screen off, doze),
@@ -235,12 +245,95 @@ OSQ-6 (endpoint shape — owned by S6; amended 2026-06-12 with the client-type m
   the canonical key name, pointing back at §3.1). No S6-side edit; the implementation-start
   AC-S6.5 re-run (parent session) re-verifies. S5 closes all three stages with this revision —
   cascade's last open finding.
+- **2026-06-12 (post-cascade OSQ-6 amendment — unregister endpoint POST switch)**: §3.1
+  unregister element amended `DELETE /api/fcm/register-token` (body) → `POST
+  /api/fcm/unregister-token` `{token}` → 200 `{"status":"ok"}` per the parent design-gate
+  recommendation (Clayton/Tiberius Lane-3) + Manager concurrence; the Stage-1 proxy-fragility
+  residual is DISCHARGED. Propagation rule honored: S6 §3.1 edited in the same round, BEFORE
+  either side implemented the endpoint (parent sequenced unregister last; mobile S5 not yet
+  started). §3.2.2 logout + AC-S5.2 consume the new shape unchanged in spirit (same body, same
+  response).
 
 ## 8. Execution Log
 
 *(Placeholder per working-contract §Phase-Complete Definition + testing-strategy rule 1 —
 populated at implementation time, NOT during the cascade.)*
 
-- [ ] Green baseline suite count recorded BEFORE first edit: `____` (date/time, command, count)
+- [x] Green baseline suite count recorded BEFORE first edit (2026-06-12T09:40Z, carried forward
+  from the S3-close run per Manager dispatch — zero code edits between, doc/manifest edits only):
+  `./flutter.sh test test/unit/ test/widget/ test/service_integration/` →
+  **384 ✅ / 1 skip / 0 ❌** (skip = by-design AC-D6; ZERO known failures — AC-D4 went green via
+  parent merge 83990552 + Manager's 08:28Z fixture re-capture). Operative bar: 384 never
+  decreases + quarantine untouched + ALL-GREEN maintained.
+- **Phase-0 wire-grounding (2026-06-12T09:40Z, Rio ⚡)** — the §3.2.4 fetch endpoint pinned:
+  `GET /api/notifications/{user_id}/next` — "Fetch the next unplayed notification for a user
+  without modifying its played state" (parent `notifications.py:1628-1637`); already consumed by
+  the mobile client as `NotificationRepository.next()`
+  (`notification_repository.dart:79-88`). Dedupe mechanism = the existing
+  `POST /api/notifications/{notification_id}/played` (`markPlayed`, `:96`) fired best-effort
+  AFTER the speak — a repeat wake then fetches nothing ("durable store dedupes", §3.1
+  environment note); marking played does NOT hide the item from focus re-hydration
+  (`conversation()` filters only `is_hidden`) so the badge signal survives. Refresh→access
+  exchange path = existing `POST /auth/refresh` `{refresh_token}` (`auth_repository.dart:67-79`);
+  refresh token + last email live in `SecureCredentialStore` (per-context keys,
+  `secure_credential_store.dart:26-41`).
 - Per-AC evidence entries land here as each §5 checkbox flips to `[x]` (test output, probe
   response, or named HUMAN sign-off).
+- [x] **Implementation landed 2026-06-12T10:06Z (session `ad7692cc`, Rio ⚡)**:
+  `firebase_core 3.15.2` + `firebase_messaging 15.2.10` (pubspec comment documents the gate +
+  the OSQ-7 gradle-wiring deferral); `lib/services/push/fcm_wake_chain.dart` (the §3.2.4 chain
+  as a LOCATOR-FREE class — every dependency a constructor seam; exchange→fetch→show→ONE
+  speak→mark-played; never-throws budget posture; `FcmWakeOutcome` + per-step `[FcmWake]` log
+  lines = the §4 debug hook); `fcm_wakeup_service.dart` (token lifecycle vs the §3.1 POST
+  contract; THREE idempotent-upsert writers: auth-state AUTHENTICATED hook, `onTokenRefresh`,
+  WS-reconnect; best-effort POST unregister on logout); `fcm_bootstrap.dart` (`kEnableFcm` =
+  `const bool.fromEnvironment('ENABLE_FCM')` default OFF — grep-able `--dart-define=ENABLE_FCM`;
+  `@pragma('vm:entry-point')` handler → `buildBackgroundWakeChain()` real seams: fresh Dio on
+  `ServerContextService.load`, `SecureCredentialStore` refresh+email →
+  `POST /auth/refresh` exchange, `GET /api/notifications/{user}/next` fetch,
+  re-initialized `flutter_local_notifications`, fresh `flutter_tts` with
+  `awaitSpeakCompletion(true)`, `NotificationPreferences` speak gate mirroring the legacy
+  priority policy; foreground data message = debug-log no-op; `auth_success`-frame listener =
+  the WS-reconnect re-register writer); `websocket_service.dart` (`client_type: "mobile"` —
+  payload assembly extracted to static `buildAuthRequestMessage` so AC-S5.5 fixture-pins it;
+  active in Stage-1 builds, harmless per §3.1); `main.dart` (`initFcmIfEnabled()`) + `app.dart`
+  (`fcmOnAuthenticated`/`fcmOnLoggedOut` on the `WsLifecycleListener` transitions — the named
+  Arnold-residual-#1 seam). **GRADLE WIRING INTENTIONALLY OPEN**: `google-services.json` +
+  the google-services plugin ride the OSQ-7 laptop pass (applying the plugin without the json
+  breaks every build) — steps documented in the probe runbook; flag-OFF default keeps every
+  dev-server build/test green without them (AC-S5.4's exact design intent).
+- [x] **AC evidence (2026-06-12T10:25Z)** — `test/unit/services/push/` (20) +
+  `test/unit/services/websocket/ws_auth_payload_test.dart` (2): **22/22 ✅**. Mapping:
+  AC-S5.1 (register POST `/api/fcm/register-token`, FIELD-EXACT body
+  `{token, platform: "android", user_email}`; null-token skip); AC-S5.2 (rotate → re-register
+  with the rotated token; logout → `POST /api/fcm/unregister-token {token}`; F-S6-S2-1(b)
+  extension: 2 reconnects → 3 identical upsert POSTs; pre-login reconnect no-op; register
+  failure non-fatal+logged); AC-S5.3 (chain order asserted as an ordered seam-call journal
+  AGAINST AN EMPTY GetIt — `GetIt.instance.reset()` precedes the run, so ANY locator touch
+  would throw; prefs-OFF ⇒ fetch+show fire, speak does NOT; spoken text = `message` field only,
+  never abstract; unknown type logged+ignored with zero seam calls; both `reason` enum values;
+  no-creds + fetch-null + never-throws + mark-played-best-effort supplements; §4 debug-hook
+  lines asserted incl. the `exchange ok` line the probe keys on); AC-S5.4 (`kEnableFcm`
+  defaults FALSE; `initFcmIfEnabled()` returns null without touching Firebase — the test run
+  itself compiles `fcm_bootstrap.dart` with NO google-services.json present; auth hooks safe
+  no-ops; flag grep-able); AC-S5.5 (EXACT `auth_request` fixture: type/token/session_id/
+  subscribed_events/`client_type: "mobile"`; null-session variant).
+- [x] Full-suite regression (2026-06-12T10:25Z): `./flutter.sh test test/unit/ test/widget/
+  test/service_integration/` → **406 ✅ / 1 skip / 0 ❌** vs baseline 384 — ALL-GREEN held
+  (+22 S5 tests; skip = by-design AC-D6); analyze on every changed surface: 0 errors /
+  0 NEW warnings (all hits pre-existing in untouched legacy files); 44-test quarantine
+  untouched.
+- [x] **Phase-0 PROBE — AI half AUTHORED (2026-06-12T10:20Z)**:
+  [92-s5-phase0-fcm-probe-runbook.md](92-s5-phase0-fcm-probe-runbook.md) — reuses the
+  PRODUCTION chain verbatim (no throwaway handler to drift); OSQ-7-dependent gradle wiring
+  steps; FCM v1 synthesized-wake script (data-only, `android.priority: HIGH`, §3.1-exact
+  payload); p1–p11 step table covering BOTH ruling conditions (p4 exchange-in-fresh-isolate,
+  p7 TTS-vs-handler-completion) plus dedupe/prefs-gate/deep-doze/pickup-no-re-speak; receipt
+  template with the shape-3 fallback procedure. **HUMAN execution OPEN — §3.2.4's milestone is
+  NOT declared delivered until the probe receipt lands here** (the §4 probe checkbox stays
+  open for that reason; the handler CODE is complete and unit-proven above).
+- HUMAN doze gate (§5 last checkbox): open by design — runs AFTER the probe, bundled into the
+  Stage-2 runbook session.
+
+**SECTION S5 IMPLEMENTATION COMPLETE (AI tiers; §3.2.4 milestone pending the Phase-0 probe
+receipt) — 2026-06-12. Full suite 406 ✅ / 1 skip / 0 ❌.**

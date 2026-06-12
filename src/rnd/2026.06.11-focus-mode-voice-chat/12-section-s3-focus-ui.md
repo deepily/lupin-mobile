@@ -106,22 +106,22 @@ prompt-key constants).
 
 ## 4. Tasks
 
-- [ ] SessionRail + unread overlays + selection ring
-- [ ] FocusChatPane + bubbles + header (live held-count banner via S1 `queueDepthStream`)
-- [ ] Pause/resume toggle bound to S1 streams
-- [ ] Extract the THREE single-String prompt bodies to `lib/shared/widgets/prompt_bodies.dart`
+- [x] SessionRail + unread overlays + selection ring
+- [x] FocusChatPane + bubbles + header (live held-count banner via S1 `queueDepthStream`)
+- [x] Pause/resume toggle bound to S1 streams
+- [x] Extract the THREE single-String prompt bodies to `lib/shared/widgets/prompt_bodies.dart`
       (injected `onRespond`); batch body stays in the legacy sheet (F-S3-S2-2(d)); refactor
       legacy sheet to compose the extracted three; legacy sheet tests stay green (F-S3-1)
-- [ ] Inline prompt bubbles composing the extracted bodies, attached via `pendingPromptFor`
+- [x] Inline prompt bubbles composing the extracted bodies, attached via `pendingPromptFor`
       (buried-ask rule, F-S3-S2-1); `onRespond` → `FocusRespondRequested` (F-S3-2); batch-ask
       fallback affordance → legacy sheet
-- [ ] Cold-start empty-state hint + hydration loading spinner + error retry banner (F-S3-S2-3)
-- [ ] Embed S4 `VoiceReplyField` in composer slot; wire `onSubmit` → `FocusRespondRequested`;
+- [x] Cold-start empty-state hint + hydration loading spinner + error retry banner (F-S3-S2-3)
+- [x] Embed S4 `VoiceReplyField` in composer slot; wire `onSubmit` → `FocusRespondRequested`;
       gate composer availability on `pendingPromptFor(focusedSender)` (disabled + hint when null
       — presentation choice per F-S2-S2-3; the signal is S2's contract)
-- [ ] Default-route swap at the `AuthGate.authenticatedChild` seam (`app.dart:139-141`) + legacy
+- [x] Default-route swap at the `AuthGate.authenticatedChild` seam (`app.dart:139-141`) + legacy
       drawer
-- [ ] EXECUTOR: AI (F-S3-S3-1) — author the "Focus-mode milestone gate" section in
+- [x] EXECUTOR: AI (F-S3-S3-1) — author the "Focus-mode milestone gate" section in
       `../v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` enumerating ALL Stage-1
       perceptual + hardware gates (testing-strategy rule 5). THREE RIDERS, one artifact:
       (i) S1's TTS-pacing-under-pause/resume item (F-S1-S3-3 consuming side);
@@ -130,40 +130,40 @@ prompt-key constants).
       a broken pipeline);
       (iii) the OSQ-3 boot-order note (Maria tops the rail only if most-recently-active at the
       cold-start snapshot) so the first device session isn't surprised.
-- [ ] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
+- [x] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
       rule 1; F-S1-S3-2 family)
-- [ ] TestKeys + widget tests (§5) + full-suite regression
+- [x] TestKeys + widget tests (§5) + full-suite regression
 
 ## 5. Acceptance Criteria
 
-- [ ] EXECUTOR: AI — AC-S3.1 widget: rail renders badges in `senderOrder` (MockBloc state with 3
+- [x] EXECUTOR: AI — AC-S3.1 widget: rail renders badges in `senderOrder` (MockBloc state with 3
       senders) — top-to-bottom order asserted, not just presence.
-- [ ] EXECUTOR: AI — AC-S3.2 widget: unread count renders on non-focused badge; absent on focused.
-- [ ] EXECUTOR: AI — AC-S3.3 widget: rail tap dispatches `FocusSenderSelected(senderId)` exactly
+- [x] EXECUTOR: AI — AC-S3.2 widget: unread count renders on non-focused badge; absent on focused.
+- [x] EXECUTOR: AI — AC-S3.3 widget: rail tap dispatches `FocusSenderSelected(senderId)` exactly
       once; no TTS calls from the tap path (Q4/manual-focus, mock orchestrator).
-- [ ] EXECUTOR: AI — AC-S3.4 widget: pane shows exactly the focused sender's window (7 bubbles max).
-- [ ] EXECUTOR: AI — AC-S3.5 widget: pause toggle calls `pause()`; paused visual state renders
+- [x] EXECUTOR: AI — AC-S3.4 widget: pane shows exactly the focused sender's window (7 bubbles max).
+- [x] EXECUTOR: AI — AC-S3.5 widget: pause toggle calls `pause()`; paused visual state renders
       with held count, and the count updates when `queueDepthStream` emits (mock orchestrator
       seam with a controllable stream); resume calls `resume()`.
-- [ ] EXECUTOR: AI — AC-S3.6 widget: unanswered yes_no ask renders the extracted tri-state body;
+- [x] EXECUTOR: AI — AC-S3.6 widget: unanswered yes_no ask renders the extracted tri-state body;
       tap Yes dispatches `FocusRespondRequested` with "yes" (MockBloc verify); answered prompt
       collapses to result chip. Sub-case (F-S3-S2-1, buried ask): an unanswered ask followed by
       2 newer progress messages STILL renders its buttons and dispatches on tap. Sub-case
       (F-S3-S2-2(d)): a batch open-ended ask renders the fallback affordance (NO inline chips);
       tapping it opens the legacy sheet.
-- [ ] EXECUTOR: AI — AC-S3.7 widget: post-auth route lands on FocusModeScreen; drawer opens and
+- [x] EXECUTOR: AI — AC-S3.7 widget: post-auth route lands on FocusModeScreen; drawer opens and
       navigates to a legacy screen (smoke).
-- [ ] EXECUTOR: AI — AC-S3.8 integration (F-S3-S3-2 binding): execute testing-strategy
+- [x] EXECUTOR: AI — AC-S3.8 integration (F-S3-S3-2 binding): execute testing-strategy
       §Cross-Section Integration Checkpoints items 1–3 — (1) full-suite run reported
       count-vs-baseline in tabular form; (2) S2+S1 wiring blocTest (paused inbound accumulates
       TTS queue + increments unread; resume drains in order); (3) S3 rail-tap assembly widget
       test (pane switches without TTS state changes) — ALL THREE green. (Item 4, the HUMAN
       device gate, is the separate checkbox below.)
-- [ ] EXECUTOR: AI — AC-S3.9 regression (F-S3-1): legacy `interactive_prompt_sheet` widget suite
+- [x] EXECUTOR: AI — AC-S3.9 regression (F-S3-1): legacy `interactive_prompt_sheet` widget suite
       stays green after the sheet is refactored to compose the extracted bodies (incl. the
       Yes/No/Neither tri-state tests and the UNEXTRACTED batch body) — extraction must be
       behavior-neutral for the legacy surface.
-- [ ] EXECUTOR: AI — AC-S3.10 widget (F-S3-S2-3): null-focus cold start renders the empty-state
+- [x] EXECUTOR: AI — AC-S3.10 widget (F-S3-S2-3): null-focus cold start renders the empty-state
       hint (no crash, no auto-focus — `FocusSenderSelected` never dispatched without a tap);
       `hydration = loading` renders the pane spinner; `hydration = error` renders the retry
       banner and its tap re-dispatches `FocusColdStartRequested` (MockBloc verify).
@@ -224,6 +224,111 @@ None new — consumes OSQ resolutions owned by S1/S2/S4.
 *(Placeholder per working-contract §Phase-Complete Definition + testing-strategy rule 1 —
 populated at implementation time, NOT during the cascade.)*
 
-- [ ] Green baseline suite count recorded BEFORE first edit: `____` (date/time, command, count)
+- [x] Baseline suite count recorded BEFORE first edit (2026-06-12T05:05Z, carried forward from
+  the S4-close run per Manager dispatch — zero edits between): `./flutter.sh test test/unit/
+  test/widget/ test/service_integration/` → **365 ✅ / 1 skip / 1 ❌** (failure = pre-existing
+  AC-D4 parent-side; skip = pre-existing AC-D6). Operative bar: 365 never decreases +
+  legacy `interactive_prompt_sheet` suite green post-extraction (AC-S3.9) + quarantine untouched.
 - Per-AC evidence entries land here as each §5 checkbox flips to `[x]` (test output, probe
   response, or named HUMAN sign-off).
+- [x] **PARTIAL-WORK INVENTORY (2026-06-12T08:20Z, takeover implementer Rio ⚡, session
+  `ad7692cc`)** — archaeology of Tiffany 💍's parked disk edits (session `472b7468` froze mid-S3
+  in the fleet quota freeze AFTER her 05:04 manifest entry; everything below is unlogged in her
+  manifest section but present + consistent on disk):
+  - **LANDED (production surface — complete)**: `lib/features/focus_mode/presentation/`
+    `session_rail.dart` (rail + unread overlays + selection ring + initial-fallback badge),
+    `focus_chat_pane.dart` (header, 7-window bubbles, buried-ask via `pendingPromptFor`,
+    answered chip, batch/multi-select/null-options fallback affordance → legacy sheet,
+    cold-start hint + spinner + retry banner), `focus_mode_screen.dart` (assembly, pause toggle,
+    paused banner on `queueDepthStream`, composer gating off `pendingPromptFor`, legacy drawer);
+    `lib/shared/widgets/prompt_bodies.dart` (F-S3-1 three-body extraction, implementer call
+    documented: multi-select multiple_choice routes to the fallback affordance with batch);
+    `interactive_prompt_sheet.dart` refactored to COMPOSE the extracted bodies (batch body
+    retained private); 8 S3 TestKeys; `app.dart` route swap landed at the AuthGate seam
+    (`authenticatedChild: const FocusModeScreen()`, now `app.dart:205-210` post-WsBlocDispatcher
+    extraction — seam name governed, cite drift confirmed harmless).
+  - **LANDED (the queued 3-finding bundle — ALL THREE already applied)**: F-S2-IMPL-1 phased
+    `_coldStartBuild` + `_reconnectRefresh` in `focus_chat_bloc.dart` (awaits→locals, one
+    synchronous re-read→merge→emit; cold-start unions fetched order with `state.senderOrder`)
+    PLUS both Completer-gated mid-flight regression tests — verified passing 15/15 in
+    `test/unit/focus_mode/`; F-S2-IMPL-2 AC-S2.4 wire-truth amendment present in 11-section-s2
+    §5 with provenance (`notifications.py:1940-1962` + `conversation_wire_sample.json`);
+    F-S4-IMPL-1 `_recorder.stop()` try→typed-AsrException in `asr_service.dart` (+ the optional
+    `start()` orphan-cleanup half).
+  - **HALF-DONE (tests authored, NOT green)**: as-found full suite
+    `./flutter.sh test test/unit/ test/widget/ test/service_integration/` →
+    **377 ✅ / 1 skip / 7 ❌** (wall 10:25 incl. two 10-min hangs). Attribution:
+    (1–2) `focus_mode_screen_test` AC-S3.2 + AC-S3.4 fail on a REAL production bug — the
+    composer-hint Row (`focus_mode_screen.dart:111`) overflows 132px (unwrapped long hint Text);
+    (3) AC-S3.10 sub-cases (b)/(c) re-seed the SAME MockBloc — element reuse keeps BlocBuilder
+    subscribed to the old stub, spinner never renders; (4) AC-S3.7 drawer smoke —
+    `pumpAndSettle` after navigating to InboxScreen never settles (infinite spinner animation);
+    (5) `focus_assembly_test` — `await Future.delayed` inside `testWidgets` fake-async hangs →
+    10-min timeout; (6) `persona_badge_test` AC-C4 (Manager triage surface, was green at S4
+    close) now reproducibly HANGS — `toImage`/`toByteData` real futures without
+    `tester.runAsync`; (7) pre-existing AC-D4 (parent-owned `assigned_at` gap — not an S3
+    surface). Items 1–6 are fix-forward work this session; item 7 stays.
+  - **UNTOUCHED**: the EXECUTOR: AI runbook task ("Focus-mode milestone gate" section with the
+    three riders — absent from `../v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`); §4 task
+    flips; §5 AC flips; per-AC evidence below; AC-S3.8 item-1 tabular report; AC-S3.9
+    legacy-suite verification statement.
+  - Analyze (lib/ + test/, project scope): S3 surfaces clean; sole changed-file warning
+    (`app.dart` unused `claude_code_event.dart` import) is PRE-EXISTING at HEAD:15.
+- [x] **Fix-forward pass (2026-06-12T09:20Z, Rio ⚡ — Manager-concurred plan, DM 08:36Z)**:
+  (1) PRODUCTION FIX — composer-hint Text wrapped in `Flexible` (`focus_mode_screen.dart`; the
+  Row overflowed 132px — a real device-visible bug, caught by Tiffany's own AC-S3.2/S3.4 tests);
+  (2) `focus_mode_screen_test.dart` — `seed()` now creates a FRESH MockBloc per call (element
+  reuse kept BlocBuilder subscribed to the prior stub; AC-S3.10 (b)/(c) now exercise real
+  re-subscription) + AC-S3.7 drawer smoke post-nav `pumpAndSettle` → bounded pumps (InboxScreen's
+  mock-initial spinner never settles); (3) `focus_assembly_test.dart` — bloc seeding + teardown
+  closes moved onto the REAL event loop via `tester.runAsync` with a hard-gate `expect` on
+  `senderOrder` post-seed + defensive repo stubs (bare `Future.delayed` — and even a fake-clock
+  `pump(20ms)` — hung under testWidgets fake async to the 10-min timeout; runAsync is the
+  recipe); (4) `persona_badge_test.dart` AC-C4 (Manager's surface, Manager-concurred) — both
+  `toImage`/`toByteData` captures wrapped in `tester.runAsync` (real-event-loop futures; hung
+  reproducibly in full-suite AND solo runs). **Test-recipe lesson for the ledger (twice-bitten
+  tonight): any real-event-loop future awaited inside `testWidgets` — engine image capture,
+  bloc-seeding waits, `Future.delayed` — must ride `tester.runAsync`; fake-async hangs present as
+  opaque 10-minute timeouts with no useful stack.**
+- [x] **AC evidence (2026-06-12T09:25Z)** — `focus_mode_screen_test.dart` (12) +
+  `focus_assembly_test.dart` (1) + `focus_s1_s2_wiring_test.dart` (1): **14/14 ✅**. Mapping:
+  AC-S3.1 (top-to-bottom y-coordinate order asserted, B<A<C); AC-S3.2 (unread '3' on non-focused,
+  none on focused); AC-S3.3 (exactly-once `FocusSenderSelected`, zero TTS calls verified);
+  AC-S3.4 (focused sender's 7 bubbles only + disabled-composer hint); AC-S3.5 (pause() verified,
+  banner + LIVE depth tick 2→5 via controllable `queueDepthStream`, resume() verified); AC-S3.6
+  (tri-state body renders, Yes → `FocusRespondRequested` w/ explicit typed context, answered →
+  chip; buried-ask sub-case: ask + 2 newer progress messages still renders buttons + dispatches;
+  batch sub-case: fallback affordance, NO inline chips, tap opens legacy sheet w/ "Submit all");
+  AC-S3.7 (real AuthGate seam shape lands on the focus rail; drawer → Inbox navigates away);
+  AC-S3.10 (cold-start hint + `FocusSenderSelected` never dispatched; loading spinner; error
+  retry banner re-dispatches `FocusColdStartRequested` w/ authed email). AC-S3.9: legacy
+  `interactive_prompt_sheet_test.dart` + `conversation_screen_test.dart` → **16/16 ✅**
+  (extraction behavior-neutral incl. tri-state Yes/No/Neither + UNEXTRACTED batch body).
+- [x] **AC-S3.8 — Cross-Section Integration Checkpoints items 1–3 (2026-06-12T09:30Z)**:
+  item 2 = `focus_s1_s2_wiring_test.dart` ✅ (REAL FocusChatBloc + REAL TtsOrchestrator: paused
+  inbound accumulates depth 2 + unread increments; resume drains `['msg-1','msg-2']` in arrival
+  order); item 3 = `focus_assembly_test.dart` ✅ (REAL bloc behind the real screen: rail tap
+  switches pane, `focusedSender`='B', ZERO TTS state mutations — Q4); item 1 = full-suite
+  count-vs-baseline, tabular:
+
+  | Run | ✅ | skip | ❌ | Note |
+  |---|---|---|---|---|
+  | S3 pre-edit baseline (S4-close carry-forward) | 365 | 1 | 1 | ❌ = AC-D4 (parent-owned, then) |
+  | As-found at takeover (Tiffany's parked edits) | 377 | 1 | 7 | 6 fix-forward + AC-D4 |
+  | **S3 close** | **384** | **1** | **0** | **ALL GREEN; skip = by-design AC-D6** |
+
+  365-baseline never decreased (+19 net new passing); AC-D4 returned green via the parent-side
+  merge + Manager's 08:28Z fixture re-capture; 44-test quarantine untouched; analyze clean on
+  every changed surface (0 errors/warnings; only style infos). (Item 4 = the HUMAN device gate,
+  scripted by the runbook section below — open by design.)
+- [x] **Runbook task (F-S3-S3-1) — AUTHORED (2026-06-12T08:50Z)**: NEW section "Focus-mode
+  milestone gate (added 2026-06-12)" in `../v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` —
+  fm1 rail ergonomics/legibility light+dark, fm2 OSQ-3 boot-order note (rider iii), fm3
+  paused-visibility at arm's length, fm4 S1 TTS-pacing under pause/resume (rider i), fm5 S4
+  transcript gate ≤2 word errors vs "Focus mode voice chat test one two three." (rider ii), fm6
+  prompt-interplay spot check + sign-off table mapping each gate to its section AC.
+- HUMAN gate (§5 last checkbox): remains open by design — executes on the laptop via the
+  runbook's fm1–fm6, bundled Stage-1 session.
+
+**SECTION S3 IMPLEMENTATION COMPLETE (AI tiers) — 2026-06-12. STAGE 1 (S1+S2+S4+S3) AI-COMPLETE;
+full suite 384 ✅ / 1 skip / 0 ❌.**

@@ -1,0 +1,85 @@
+import 'package:equatable/equatable.dart';
+
+import '../../notifications/data/notification_models.dart';
+
+/// Typed prompt-context for [FocusRespondRequested] (F-S2-S2-3): inline
+/// prompts pass the target notification id explicitly; voice replies omit
+/// it and the bloc falls back to `pendingPromptFor( senderId )`.
+class FocusPromptContext extends Equatable {
+  final String  notificationId;
+  final String? promptType;     // yes_no | open_ended | multiple_choice
+
+  const FocusPromptContext( {
+    required this.notificationId,
+    this.promptType,
+  } );
+
+  @override
+  List<Object?> get props => [ notificationId, promptType ];
+}
+
+abstract class FocusChatEvent extends Equatable {
+  const FocusChatEvent();
+  @override
+  List<Object?> get props => [];
+}
+
+/// WS bridge dispatch (`app.dart`) for every user-facing inner type on
+/// `notification_queue_update`. Effect: upsert sender (append if new) →
+/// append to window (evict >7) → unread++ if not focused → emit; then
+/// `TtsOrchestrator.enqueueAlways(...)` — EVERY item, EVERY priority (Q6).
+class FocusInboundNotification extends FocusChatEvent {
+  final NotificationItem item;
+  const FocusInboundNotification( this.item );
+  @override
+  List<Object?> get props => [ item.id ];
+}
+
+/// S3 rail tap: set focused, zero its unread, trigger backfill if the
+/// window is not yet hydrated (OSQ-4).
+class FocusSenderSelected extends FocusChatEvent {
+  final String senderId;
+  const FocusSenderSelected( this.senderId );
+  @override
+  List<Object?> get props => [ senderId ];
+}
+
+/// Screen init AND WS reconnect (S2 §3.3). MODE-DEPENDENT (F-S2-S3-1):
+/// cold start (`senderOrder` empty) builds the one-time `lastActivity`
+/// DESC snapshot; reconnect-refresh MERGES per the §3.1 contract.
+class FocusColdStartRequested extends FocusChatEvent {
+  final String userEmail;
+  const FocusColdStartRequested( { required this.userEmail } );
+  @override
+  List<Object?> get props => [ userEmail ];
+}
+
+/// WS `voice_persona_assigned` / `voice_persona_released` bridge.
+/// `persona == null` ⇒ released.
+class FocusPersonaUpdated extends FocusChatEvent {
+  final String        senderId;
+  final VoicePersona? persona;
+  const FocusPersonaUpdated( { required this.senderId, this.persona } );
+  @override
+  List<Object?> get props => [ senderId, persona ];
+}
+
+/// The ONE response-dispatch shape (F-S3-2): S3 inline-prompt taps pass a
+/// typed [FocusPromptContext]; S4's `VoiceReplyField` (via S3-wired
+/// `onSubmit`) omits it. `text` is a SINGLE String end-to-end — batch
+/// open-ended asks are scoped OUT of the focus inline path in v1 and route
+/// to the legacy sheet (F-S3-S2-2(d)); this event never carries a Map.
+class FocusRespondRequested extends FocusChatEvent {
+  final String              senderId;
+  final String              text;
+  final FocusPromptContext? promptContext;
+
+  const FocusRespondRequested( {
+    required this.senderId,
+    required this.text,
+    this.promptContext,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, text, promptContext ];
+}

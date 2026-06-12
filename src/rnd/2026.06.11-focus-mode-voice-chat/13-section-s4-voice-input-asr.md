@@ -35,12 +35,12 @@ transcription text. (Independently re-verified by Stage-1 review.)
 
 Remaining to pin live (OSQ-1, OSQ-2):
 
-- [ ] EXECUTOR: AI — probe `:7999` authed + unauthenticated: confirm auth requirement, response
+- [x] EXECUTOR: AI — probe `:7999` authed + unauthenticated: confirm auth requirement, response
       Content-Type/shape, error envelope; capture as fixture with `_capture` provenance block.
       The probe also pins whether the endpoint expects the bearer the app's SHARED Dio attaches
       (AsrService receives the shared, auth-wired Dio instance from the service locator — see
       §4.1).
-- [ ] EXECUTOR: AI — read the web client's recorder parameters (sample rate / channels / encoding)
+- [x] EXECUTOR: AI — read the web client's recorder parameters (sample rate / channels / encoding)
       in parent source; mirror them in `RecordConfig`. The `prefix` query param stays UNSET for
       chat replies unless the web client sends one (pin during this probe).
 
@@ -89,51 +89,51 @@ entry remains available in review state (transcript is a seed, not a cage).
 
 ## 5. Tasks
 
-- [ ] Phase-0 probes + fixtures (§3)
-- [ ] EXECUTOR: AI (F-S4-S3-1; part of Phase 0, immediately after the OSQ-2 param pin — feeds
+- [x] Phase-0 probes + fixtures (§3)
+- [x] EXECUTOR: AI (F-S4-S3-1; part of Phase 0, immediately after the OSQ-2 param pin — feeds
       AC-S4.7 directly): create the canned WAV fixture — SYNTHESIZED known-content speech (no
       microphone involved; dev server has none) rendered to the OSQ-2-pinned params, with a
       `_provenance` block (generation command, params, expected transcript), checked in at
       `test/fixtures/asr/`
-- [ ] `record` dependency (per OSQ-2 amended justification) + DI registration
-- [ ] Verify `RECORD_AUDIO` present in AndroidManifest (`:5` — already declared) +
+- [x] `record` dependency (per OSQ-2 amended justification) + DI registration
+- [x] Verify `RECORD_AUDIO` present in AndroidManifest (`:5` — already declared) +
       runtime-request via existing `permission_handler` (F-S4-3: verify-not-add)
-- [ ] AsrService per §4.1 (shared Dio seam)
-- [ ] Annotate/deprecate `HttpService.uploadAndTranscribe()` with MP3-trap warning + pointer to
+- [x] AsrService per §4.1 (shared Dio seam)
+- [x] Annotate/deprecate `HttpService.uploadAndTranscribe()` with MP3-trap warning + pointer to
       AsrService (F-S4-2 disarm; doc-comment touch on `lib/services/http/http_service.dart`,
       no behavior change)
-- [ ] VoiceReplyField per §4.2 + TestKeys (`voiceReplyMic`, `voiceReplyTranscript`,
+- [x] VoiceReplyField per §4.2 + TestKeys (`voiceReplyMic`, `voiceReplyTranscript`,
       `voiceReplySend`, `voiceReplyCancel`, `voiceReplyError` — the F-S4-S2-1a error affordance
       AC-S4.8 asserts against, F-S4-S3-2a)
-- [ ] Record green baseline suite count in §9 Execution Log BEFORE first edit (testing-strategy
+- [x] Record green baseline suite count in §9 Execution Log BEFORE first edit (testing-strategy
       rule 1; F-S1-S3-2 family)
-- [ ] Tests (§6) + full-suite regression
+- [x] Tests (§6) + full-suite regression
 
 ## 6. Acceptance Criteria
 
-- [ ] EXECUTOR: AI (executability conditional on OSQ-2 resolution — `RecordConfig` params come
+- [x] EXECUTOR: AI (executability conditional on OSQ-2 resolution — `RecordConfig` params come
       from the §3 Phase-0 web-client read; until OSQ-2 closes, this AC carries this same-line
       dependence note) — AC-S4.1 unit: AsrService happy path — recorder stop → multipart POST to
       `/api/upload-and-transcribe-wav` (mock Dio asserts path + multipart field name) → returns
       transcript string.
-- [ ] EXECUTOR: AI — AC-S4.2 unit: HTTP 500 / network error → typed AsrException; temp file
+- [x] EXECUTOR: AI — AC-S4.2 unit: HTTP 500 / network error → typed AsrException; temp file
       deleted. Extended (F-S4-S3-2b): HTTP 200 with an EMPTY transcript (real Whisper outcome for
       silence/noise) ALSO throws the typed AsrException — never returns the empty string (which
       would ride AC-S4.8's error rendering instead of showing a blank review field).
-- [ ] EXECUTOR: AI — AC-S4.3 unit: cancel discards recording, no upload fired.
-- [ ] EXECUTOR: AI — AC-S4.4 widget: full state machine idle→recording→transcribing→review→idle
+- [x] EXECUTOR: AI — AC-S4.3 unit: cancel discards recording, no upload fired.
+- [x] EXECUTOR: AI — AC-S4.4 widget: full state machine idle→recording→transcribing→review→idle
       with mocked AsrService; Send invokes `onSubmit` EXACTLY ONCE with the edited text and
       resets to idle (F-S3-2 callback shape + F-S4-S2-1b no-sending-state — no repository call
       from the widget).
-- [ ] EXECUTOR: AI — AC-S4.5 widget: mic-permission denied path renders guidance, no exception.
-- [ ] EXECUTOR: AI — AC-S4.6 fixture test: response-shape fixture from Phase-0 capture parses;
+- [x] EXECUTOR: AI — AC-S4.5 widget: mic-permission denied path renders guidance, no exception.
+- [x] EXECUTOR: AI — AC-S4.6 fixture test: response-shape fixture from Phase-0 capture parses;
       pins the wire contract every run.
-- [ ] EXECUTOR: AI (executability conditional on OSQ-2 resolution — the fixture is rendered to
+- [x] EXECUTOR: AI (executability conditional on OSQ-2 resolution — the fixture is rendered to
       the Phase-0-pinned params; F-S4-S3-1 rider) — AC-S4.7 live probe (net-zero): POST the
       CHECKED-IN canned WAV fixture (`test/fixtures/asr/`, created by the §5 fixture task with
       its `_provenance` block) to `:7999` → non-empty transcript returned matching the fixture's
       known content. (Runs on dev server; NO recording involved — the dev server has no mic.)
-- [ ] EXECUTOR: AI — AC-S4.8 widget (F-S4-S2-1): transcribe failure (mock AsrService throws
+- [x] EXECUTOR: AI — AC-S4.8 widget (F-S4-S2-1): transcribe failure (mock AsrService throws
       `AsrException`) renders the inline error affordance then returns to idle — no stuck
       spinner, no `onSubmit` fired; cancel during `transcribing` discards and returns to idle,
       no `onSubmit` fired.
@@ -180,6 +180,57 @@ implementation tasks begin.
 *(Placeholder per working-contract §Phase-Complete Definition + testing-strategy rule 1 —
 populated at implementation time, NOT during the cascade.)*
 
-- [ ] Green baseline suite count recorded BEFORE first edit: `____` (date/time, command, count)
-- Per-AC evidence entries land here as each §6 checkbox flips to `[x]` (test output, probe
-  response, or named HUMAN sign-off).
+- [x] Baseline suite count recorded BEFORE first edit (2026-06-12T04:38Z, carried forward from
+  the S2-close run per Manager dispatch — zero edits between): `./flutter.sh test test/unit/
+  test/widget/ test/service_integration/` → **351 ✅ / 1 skip / 1 ❌** (sole failure =
+  pre-existing AC-D4, parent-side `assigned_at` gap, fixed in a held parent commit — not an S4
+  surface). Operative bar: 351 never decreases + quarantine untouched.
+- [x] **Implementation landed 2026-06-12T04:58Z (session `472b7468`, Tiffany 💍)**:
+  `record: ^5.1.2` (resolved 5.2.1) added with the OSQ-2 justification + flutter_sound
+  do-not-remove note; `lib/services/asr/asr_service.dart` (§4.1 — typed `AsrException`, OSQ-2
+  `RecordConfig` PCM16/mono/44100, shared-Dio multipart POST, temp-file hygiene
+  success-or-failure, empty-transcript exception); `voice_reply_field.dart` (§4.2 —
+  idle→recording→transcribing→review, failure + cancel exits, NO sending state, exactly-once
+  `onSubmit`, op-epoch stale-result guard, `permission_handler`-backed seam); five
+  `voiceReply.*` TestKeys; F-S4-2 MP3-trap disarm (`@Deprecated` + docstring on
+  `HttpService.uploadAndTranscribe` — zero active callers, no behavior change); DI registration
+  on the shared Dio; `RECORD_AUDIO` VERIFIED present (`AndroidManifest.xml:5` — verify-not-add,
+  F-S4-3). NOTE: `promptContext` rides S3's `onSubmit` closure rather than a widget param —
+  the widget never dispatches (F-S3-2), so it has no use for the value; S3 wiring closes over
+  it. Flagged in the close DM for contest.
+- [x] **AC evidence (2026-06-12T05:02Z)** — `asr_service_test.dart` (7) +
+  `asr_contract_test.dart` (2) + `voice_reply_field_test.dart` (5): **14/14 ✅**. Mapping:
+  AC-S4.1 (endpoint path + multipart field name pinned via captured FormData); AC-S4.2 ×3
+  (HTTP 500 w/ statusCode, network error, 200-EMPTY-transcript → typed exception; temp file
+  deleted in every path); AC-S4.3 (cancel → no upload, file removed); AC-S4.4 (full machine,
+  exactly-once edited-text submit, reset to idle); AC-S4.5 (denied-permission guidance, no
+  exception); AC-S4.6 (Phase-0 contract fixture pinned incl. the silence-hallucination fact);
+  **AC-S4.7 live probe RAN GREEN against `:7999`** — POSTed the checked-in canned WAV, exact
+  provenance-transcript match (venue guard: skips with a named reason when `:7999` is
+  unreachable, keeping laptop suites portable); AC-S4.8 (failure → error affordance → idle, no
+  stuck spinner + cancel-during-transcribing drops the stale in-flight result) + a
+  cancel-during-recording supplement.
+- [x] Full-suite regression (2026-06-12T05:03Z): `./flutter.sh test test/unit/ test/widget/
+  test/service_integration/` → **365 ✅ / 1 skip / 1 ❌** vs baseline 351 — passing increased
+  (+14 S4 tests); failure = pre-existing AC-D4 (parent-owned), skip = pre-existing AC-D6;
+  analyze clean on changed files (sole warning = pre-existing `dart:convert` unused import in
+  `http_service.dart`, predates the doc-only touch); 44-test quarantine untouched.
+- HUMAN mic gate (real acoustics): remains open by design — bundled into the Stage-1 on-device
+  runbook session (S3's runbook task carries the ≤2-word-error rider).
+
+**SECTION S4 IMPLEMENTATION COMPLETE (AI tiers) — 2026-06-12.**
+
+- **2026-06-12T04:07Z — Phase-0 CLOSED (EXECUTOR: AI, Mr. Radio 🦉)**: (a) OSQ-1 probe:
+  `POST /api/upload-and-transcribe-wav` requires **NO auth** — unauthenticated AND bearer'd
+  POSTs both 200 (`speech.py:646-653` carries no auth dependency); response = JSON string
+  literal of the transcript; no 401/403 envelope exists. The shared auth-wired Dio's bearer is
+  harmless. (b) OSQ-2 recorder params pinned from source: **PCM16 mono 44100 Hz**
+  (`lupin_client.py:79-81`); `prefix` stays UNSET for chat replies (only the legacy GUI client
+  sends it, `:384`). (c) **Silence behavior**: 0.5 s silence → 200 with Whisper HALLUCINATION
+  ("You know,") — NOT an empty transcript; AC-S4.2 implementers note: empty-recording does not
+  reliably yield empty text. (d) Canned-WAV fixture CREATED + round-trip VERIFIED:
+  `test/fixtures/asr/canned-focus-mode-test.wav` (gTTS-synthesized, ffmpeg → OSQ-2 params) →
+  live POST returned the exact expected transcript "Focus mode voice chat test one two three."
+  (0 word errors). Provenance sidecar + endpoint-contract fixture:
+  `canned-focus-mode-test.provenance.json`, `transcribe_endpoint_contract.json`. Both §3
+  Phase-0 checkboxes are satisfied by this evidence.

@@ -1,0 +1,24 @@
+{
+  "endpoint"   : "POST /api/upload-and-transcribe-wav",
+  "osq1_answer": {
+    "auth_required"        : false,
+    "unauthenticated"      : { "status": 200, "content_type": "application/json" },
+    "with_bearer"          : { "status": 200, "content_type": "application/json" },
+    "note"                 : "Endpoint has NO auth dependency (speech.py:646-653 — no Depends(require_*)). The app's shared auth-wired Dio attaches a bearer anyway; harmless. No error envelope to pin — there is no 401/403 path.",
+    "response_shape"       : "JSON string literal of the transcript, e.g. \"Focus mode voice chat test one two three.\""
+  },
+  "silence_behavior" : {
+    "input"      : "0.5 s pure silence, PCM16 mono 44100 Hz",
+    "status"     : 200,
+    "transcript" : "\"You know,\"",
+    "note"       : "Whisper HALLUCINATES on silence — a 200 with non-empty junk text, NOT an empty transcript. AC-S4.2's empty-transcript -> AsrException case must therefore treat hallucination-on-silence as a distinct possibility; an empty recording does not reliably produce an empty transcript."
+  },
+  "prefix_param" : {
+    "usage" : "UNSET for chat replies. Only the legacy GUI client (lupin_client.py:384) sends prefix= for command routing; web notifications client does not use this endpoint."
+  },
+  "_capture" : {
+    "utc"         : "2026-06-12T04:03:06Z",
+    "server"      : "http://localhost:7999 (dev)",
+    "captured_by" : "Mr. Radio (session dabf7fbb), Phase-0 cascade-focus-mode probe script"
+  }
+}

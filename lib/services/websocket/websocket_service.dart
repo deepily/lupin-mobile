@@ -144,18 +144,40 @@ class WebSocketService {
     }
   }
 
+  /// Builds the `auth_request` payload (extracted so AC-S5.5 can
+  /// fixture-pin the shape without a live socket).
+  ///
+  /// `client_type: "mobile"` is the F-S6-1 S5-side OBLIGATION: it lets the
+  /// parent distinguish this mobile WS from web sessions — the FCM wake
+  /// trigger fires on "no live MOBILE WS", so a desktop browser must not
+  /// suppress the phone's wake. Absent marker ⇒ parent treats the client
+  /// as web (backward-compatible); harmless in Stage-1 builds.
+  static Map<String, dynamic> buildAuthRequestMessage({
+    required String bearerToken,
+    required String? sessionId,
+  }) {
+    return {
+      'type': 'auth_request',
+      'token': bearerToken,
+      'session_id': sessionId,
+      'subscribed_events': [], // Empty array = receive all events
+      'client_type': 'mobile', // F-S6-1 marker (S6 §3.0 / S5 §3.1)
+    };
+  }
+
   /// Authenticates the WebSocket connection.
-  /// 
+  ///
   /// Requires:
   ///   - userId must be non-empty string
   ///   - WebSocket connection must be established
   ///   - sessionId must be available
-  /// 
+  ///
   /// Ensures:
   ///   - Authentication message is sent to backend
   ///   - Bearer token is generated for the user
   ///   - Session ID is included in auth message
   ///   - Subscribed events array is included (empty = receive all events)
+  ///   - client_type "mobile" marker is included (F-S6-1, S5 §3.1)
   Future<void> _authenticate(String userId) async {
     try {
       // Bearer auth token sourced from AuthBloc (set on login / refresh).
@@ -165,14 +187,12 @@ class WebSocketService {
         return;
       }
       final authToken = 'Bearer $accessToken';
-      
-      final authMessage = {
-        'type': 'auth_request',
-        'token': authToken,
-        'session_id': _sessionId,
-        'subscribed_events': [], // Empty array = receive all events
-      };
-      
+
+      final authMessage = buildAuthRequestMessage(
+        bearerToken: authToken,
+        sessionId: _sessionId,
+      );
+
       await sendMessage(authMessage);
       print('[WebSocket] Authentication sent for user: $userId with session: $_sessionId');
     } catch (e) {

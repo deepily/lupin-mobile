@@ -1,29 +1,126 @@
 # TODO
 
-Last updated: 2026-06-12 (Session `dabf7fbb` — Mr. Radio 🦉 — cascade-focus-mode CLOSED 6/6 sections; doc-set is PLAN-OF-RECORD; next step is Step-9 handoff doc + Stage-1 implementation.)
+Last updated: 2026-06-12 (Session `dabf7fbb` — Mr. Radio 🦉 — focus-mode milestone
+**AI-IMPLEMENTATION + REVIEW COMPLETE**: all 6 sections built/tested/reviewed; mobile suite
+406 ✅ / 1 by-design skip / 0 ❌; parent S6 merged. Remaining = HUMAN-only device items.)
 
 ---
 
-## ⭐ NEXT SESSION — START HERE: focus-mode implementation (post-cascade, 2026-06-12)
+## ⭐ NEXT SESSION — START HERE: focus-mode HUMAN device items (laptop, 2026-06-12)
 
-**Plan-of-record**: `src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md` — ██ CASCADE CLOSED
-2026-06-12T03:09Z ██ (all 6 sections × 3 stages; ~43 findings; 2 user rulings; 7/7 OSQs ratified).
+**Plan-of-record**: `src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md` — 🚀 AI-IMPLEMENTATION
+COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/table).
 
-1. [ ] [LUPIN-MOBILE] **Step 9: author the cascade-revision handoff doc**
-   (`src/rnd/2026.06.11-focus-mode-voice-chat/90-cascade-revision-handoff.md`, 7-section spec incl.
-   §6 workflow-guidance candidates) + cold-context self-test + light review (Arnold 🪨 accepted the
-   duty; Sam reaped EOL). Then post `implementation_handoff_ready`.
-2. [ ] [LUPIN-MOBILE] **Stage-1 implementation** under Mr. Radio's management (implementer-workers
-   model, Rick-ratified): order S1→S2→S4→S3 per index DAG; record green baseline suite count in each
-   section's Execution Log BEFORE first edit; `./flutter.sh analyze` + `test` green per section;
-   working contract governs. Phase-0 items first: ASR probes (OSQ-1/OSQ-2), `msg.raw` fixture check,
-   hours-param probe, synthesized canned-WAV fixture creation.
-3. [ ] [LUPIN-MOBILE] **Stage-2 implementation**: S5 mobile (ENABLE_FCM default-OFF; handler-does-
-   the-work per Rick's F-S5-S2-1 ruling; Phase-0 on-device probe gates the chain — incl.
-   refresh→access exchange path + TTS-survives-handler-completion) + S6 parent work order via DM to
-   Tiberius 👑 (cite section file §4; NO cross-repo spawn). OSQ-7 Firebase console = EXECUTOR:
-   HUMAN (Rick). On-device runbook "Focus-mode milestone gate" session = EXECUTOR: HUMAN (bundled,
-   scripted by the AI-authored runbook task).
+1. [ ] [LUPIN-MOBILE] **OSQ-7 Firebase console pass** (EXECUTOR: HUMAN, ~10 min) — follow
+   `src/rnd/2026.06.11-focus-mode-voice-chat/91-osq7-firebase-console-runbook.md` Parts A–D;
+   then say "Firebase done" and the AI runs the validation checklist.
+2. [ ] [LUPIN-MOBILE] **Laptop build wiring + S5 Phase-0 on-device probe** (EXECUTOR: HUMAN,
+   AI-scripted) — gradle plugin + `google-services.json` per runbook 92 prelude, then probe
+   p1–p11 (`92-s5-phase0-fcm-probe-runbook.md`); receipt lands in 14-section-s5 §8 and DECLARES
+   (or shape-3-falls-back) the §3.2.4 milestone.
+3. [ ] [LUPIN-MOBILE] **On-device gates**: S5 HUMAN doze gate + Stage-1 "Focus-mode milestone
+   gate" fm1–fm6 (runbook section authored; riders: S1 TTS-pacing, S4 ≤2-word transcript bar,
+   OSQ-3 boot-order note).
+4. [x] [LUPIN-MOBILE] **Fleet wrap** — DONE 2026-06-12 ~12:40Z on Rick's ritual broadcast
+   d86c7faf: all 4 seats dismissed with mementos (Arnold badge-Sam, Cheech, Rio; Tiffany's
+   parked seat killed — memento impossible at the rate-limit dialog, continuity preserved via
+   manifest + section files + her 0259Z memento).
+5. [ ] [LUPIN-MOBILE] **flutter_sound REMOVAL-CANDIDATE debt** (OSQ-2 amendment, handoff §5
+   item 1, filed at close-out as mandated): two recording engines now in the dependency tree
+   (`record` ^5.x active for S4; `flutter_sound` ^9.2.13 = DI-disabled legacy voice stack).
+   Remove flutter_sound WITH the legacy-voice-stack retirement — not before (legacy wrapper
+   `VoiceInputOutputService` still references it).
+6. [ ] [LUPIN-MOBILE] **Commit the implementation batch** (EXECUTOR: Rick) — everything since
+   `c3847bd` is uncommitted by standing rule: 5 sections of production+test code, 3 handoff/
+   runbook docs, 5 fixtures, doc-set §8 evidence, TODO/history/index. Manifest sections
+   dabf7fbb + 472b7468 + ad7692cc enumerate every file for selective staging.
+
+---
+
+## 🎙️ POSTGAME AGENDA (Rick's ritual broadcast d86c7faf — issues to go over, all sessions)
+
+1. **Quota-freeze episode** (~01:10–03:45 EDT): froze both fleets mid-implementation; arbiter
+   fired 8+ false alarms + 2 Rick escalations; Tiffany's seat parked at the rate-limit dialog
+   and the classifier twice DENIED the manager keystroke to un-park (second denial: couldn't
+   verify ask_yes_no "yes" wasn't a timeout default — it was). Discussion: un-park
+   authorization path (Bash permission rule? `!`-prefix protocol? listener-level handling?).
+2. **Takeover-spawn pattern WORKED** (Rio replacing parked Tiffany): archaeology-first brief →
+   partial-work inventory before any edit → attribution preserved → zero re-work. Candidate
+   for manager-autonomy.md codification alongside the rotation pattern.
+3. **The 14-entry workflow-guidance ledger** (10 cascade candidates + #11 await-window emit
+   discipline + #12 runAsync recipe + #13 recycled-persona DM contamination + #14 arbiter
+   stall-heuristic false-positive classes incl. covers-not-parsed retries). PIP-side deep
+   redline + parent-side arbiter fold both pending.
+4. **Implementation light-review ROI**: 5 reviews → 4 real findings (2 await-window races, 1
+   live-work-steering doc-drift, 1 typed-contract gap), all fixed+pinned mid-stream; final 2
+   reviews clean at zero — the findings demonstrably taught later implementations. Discussion:
+   make per-section implementation light-review a standard pipeline stage?
+5. **Two-file contract discipline validated twice** (AC-S6.5 caught 4/6 drift at cascade close;
+   OSQ-6 POST amendment propagated cleanly pre-implementation). Keep as the cross-repo pattern.
+6. **Persona lifecycle wrinkles**: overflow voice slot died with Arnold's old seat (re-voiced
+   as Sam under Rick's delegation); Clayton-claim race with Tiberius's fleet; recycled-Rio DM
+   contamination. Allocation/reap hygiene proposals in ledger #13.
+7. **Done-but-unverified-on-device**: §3.2.4 FCM milestone is code-complete + desk-reviewed but
+   NOT declared until probe p1–p11 receipt; S5 doze gate + Stage-1 fm1–fm6 pending Rick's
+   device session. AC-D6 un-skip still rides the laptop pipeline (pre-existing item).
+
+### ✅ COMPLETED 2026-06-12 (this session-line) — focus-mode implementation
+- [x] Step 9 handoff doc + cold-context 6/6 + Arnold light review 6/6 → `implementation_handoff_ready` 04:03Z
+- [x] Phase-0 probes/fixtures (OSQ-1 no-auth; OSQ-2 PCM16/44.1k; thin-adapter branch; hours asymmetry; canned WAV round-trip 0 errors)
+- [x] Stage-1 S1→S2→S4→S3 (Tiffany 💍 + Rio ⚡ takeover post-quota-freeze) — all ACs evidence-logged
+- [x] Stage-2: S5 AI tiers (Rio) + S6 parent-side (Clayton/Tiberius Lane-3, merged 83990552, AC-S6.1 6/6 on :8000)
+- [x] 5 implementation light reviews (Arnold 🪨): 4 real findings, 4 fixed + regression-pinned mid-stream; S3 + S5 clean at zero
+- [x] Baseline triage 3/3 (AC-B7 emit-shape fix; AC-C4 keyed-boundary + runAsync; AC-D4 capture + parent assigned_at fix + re-capture)
+- [x] OSQ-6 second amendment (POST unregister) propagated both files pre-implementation
+
+4. [ ] [LUPIN-MOBILE] **v1.N candidates: cascade-focus-mode workflow-guidance gaps (×10)**
+   (cascade cascade-focus-mode, Manager Mr. Radio 🦉, filed 2026-06-12). Ten Manager-improvisation
+   candidates from the Step-9 close-out self-audit sweep — lossy topic-post dispatch, batched
+   per-section classification, 600s ask cap, stream-error re-send, verbatim-ruling relay,
+   classifier-blocked reaps, outage survival discipline, provisional-plus-delta disposition,
+   contract-AC owner/instant tagging, memento-seeded worker rotation. Full list with empirical
+   anchors + proposed fold targets: `src/rnd/2026.06.11-focus-mode-voice-chat/90-cascade-revision-handoff.md`
+   §6. Deep redline = PIP-side work (fold targets in plan-review-cascaded common/defaults/personas
+   + manager-autonomy.md). Source: `kind: manager_self_audit_sweep` post on
+   cascade-focus-mode-input-plan at 2026-06-12T03:57:34Z.
+   *Implementation-phase addendum (#11, filed 2026-06-12 04:57Z)*: **await-window state-clobber
+   pattern in bloc async handlers** — never emit state captured before an `await`; re-read +
+   merge synchronously after all awaits complete. CONFIRMED twice in one night by implementation
+   light review (F-S1-IMPL-1 `_preemptNonDestructive`; F-S2-IMPL-1 `_reconnectRefresh` +
+   `_coldStartBuild`); regression recipe = Completer-held async stubs + mid-flight injection +
+   survival assertion. Fold targets: lupin-mobile working-contract/testing-strategy review
+   checklist + PIP implementation-review persona rubric (if reviews get codified).
+   *Addendum #12 (filed 2026-06-12 08:56Z, twice-bitten)*: **real-event-loop futures inside
+   `testWidgets` MUST ride `tester.runAsync`** — engine image capture (`toImage`/`toByteData`),
+   bloc-seeding waits, `Future.delayed` all hang under fake-async, presenting as opaque 10-min
+   timeouts with no useful stack (`_RawReceivePort._handleMessage` only). Anchors: AC-C4
+   pixel-diff hang (hung solo, not ordering) + focus_assembly seeding hang, both S3 close
+   2026-06-12. Recipe recorded in 12-section-s3 §8. Fold target: 03-testing-strategy.md test
+   recipes + working-contract test conventions.
+   *Addendum #13 (filed 2026-06-12 09:18Z, Rio's hygiene flag)*: **recycled-persona DM-topic
+   contamination** — voice personas recycle across fleets within minutes, but `dm-<persona>`
+   topics persist; a new holder inherits another session's thread history and a stale-addressed
+   DM reads like a live dispatch (anchor: dm-rio carried 5 Tiberius DMs for a prior Rio reaped
+   2 min before re-allocation). Mitigations: on allocation, check `dm-<persona>` for another
+   session's unfinished thread (disambiguate by sender_session_id/allocation timestamp); on
+   reap, the manager posts a closing marker to the persona's dm topic. Fold targets:
+   cross-session-communication.md §DM mechanics + manager-autonomy.md §reap hygiene.
+   *Addendum #14 (filed 2026-06-12 09:42Z)*: **arbiter stall-heuristic false-positive classes**
+   — two confirmed in one night: (a) a fleet-wide quota/rate-limit freeze is indistinguishable
+   from a dual-manager stall (anchors: 01:10–03:45 EDT episode, 8+ pings, 2 Rick escalations);
+   (b) a HUMAN-GATED WAIT STATE (all machine-executable work complete, fleet parked for the
+   user) is indistinguishable from a stall under "no progress + work owed" (anchor: 09:26/09:41Z
+   pings AFTER milestone completion). Proposed carve-outs: correlate with rate-limit dialog
+   states pre-escalation; recognize a manager-declared human-gated terminal posture (e.g. a
+   `fleet_state: human_gated` post the arbiter reads). Fold target: parent arbiter heuristics
+   (lupin `io/arbiter` config) — PARENT-side work, relay to Tiberius's lane when it reopens.
+
+5. [ ] [LUPIN-MOBILE] **Parked v1.1 candidate: MultipleChoicePromptBody empty-string submit**
+   (Arnold's S3-close micro-nit (a), 2026-06-12). Single-select with nothing selected can submit
+   `""` — legacy behavior extracted verbatim into `prompt_bodies.dart`; AC-S3.9
+   behavior-neutrality governed leaving it. If a behavior round ever opens: disable Submit until
+   a selection exists (touches BOTH legacy sheet + focus bubbles via the shared body — one fix,
+   two surfaces).
 
 ---
 

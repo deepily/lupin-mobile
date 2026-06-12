@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
 import 'core/error_handling/error_handler.dart';
+import 'services/push/fcm_bootstrap.dart';
 import 'app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     // Initialize core systems (logging, error handling, storage, DI)
     await AppInitialization.initialize(
@@ -14,9 +15,14 @@ void main() async {
       enableFileLogging: true,
       enableRemoteLogging: false,
     );
-    
+
     Logger.info('Lupin Mobile app starting...');
-    
+
+    // S5 FCM silent-relay wake-up. No-op unless built with
+    // --dart-define=ENABLE_FCM=true (default OFF — Stage-1 builds carry
+    // no google-services.json dependency, AC-S5.4).
+    await initFcmIfEnabled();
+
     // Run the app
     runApp(const LupinMobileApp());
     

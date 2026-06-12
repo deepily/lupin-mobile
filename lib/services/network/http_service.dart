@@ -189,6 +189,18 @@ class HttpService {
   ///   - DioException if upload or transcription fails
   ///   - FileSystemException if file cannot be read
   ///   - ArgumentError if file format is unsupported
+  ///
+  /// ⚠️ MP3-ENDPOINT TRAP (F-S4-2, focus-mode-voice-chat 2026-06-12): this
+  /// method POSTs to `/api/upload-and-transcribe-mp3`, which QUEUES A
+  /// MULTIMODAL JOB on the parent — it does NOT return a chat-reply
+  /// transcript, despite the WAV mention in the docstring above. For
+  /// voice-reply transcription use `AsrService`
+  /// (`lib/services/asr/asr_service.dart`), which POSTs to the synchronous
+  /// `/api/upload-and-transcribe-wav` endpoint. Deprecated for new callers;
+  /// kept for the legacy voice stack (zero active callers at annotation
+  /// time).
+  @Deprecated( 'Wrong tool for chat replies — queues a multimodal job. '
+      'Use AsrService (/api/upload-and-transcribe-wav) instead. F-S4-2.' )
   Future<Map<String, dynamic>> uploadAndTranscribe({
     required String filePath,
     required String sessionId,

@@ -673,8 +673,20 @@ void main() {
           );
 
           // Collect Python files whose contents contain the literal
-          // "speakerphone_changed" string (any single/double quote style).
-          final emitFiles = <File>[];
+          // "speakerphone_changed" string — EMIT-SHAPED occurrences only.
+          // Drift fix 2026-06-12 (Phase-0 baseline triage): the original
+          // any-mention file heuristic over-matched non-emit references
+          // added after capture (a schema comment in
+          // notification_fifo_queue.py:105 and the valid-types whitelist
+          // entry in routers/notifications.py:428), failing the field
+          // assertions on windows that never carried a payload. An
+          // occurrence is emit-shaped iff it is a
+          // `type = "speakerphone_changed"` / `"type": "speakerphone_changed"`
+          // assignment — comments and list-entry mentions do not match.
+          final emitShaped = RegExp(
+            r'''type\s*[=:]\s*["']speakerphone_changed["']''',
+          );
+          final windows = <String, List<String>>{};
           await for ( final entity in dir.list(
             recursive    : true,
             followLinks  : false,
@@ -682,9 +694,11 @@ void main() {
             if ( entity is! File || !entity.path.endsWith( ".py" ) ) continue;
             try {
               final content = await entity.readAsString();
-              if ( content.contains( '"speakerphone_changed"' ) ||
-                   content.contains( "'speakerphone_changed'" ) ) {
-                emitFiles.add( entity );
+              for ( final m in emitShaped.allMatches( content ) ) {
+                final start = ( m.start - 1000 ).clamp( 0, content.length );
+                final end   = ( m.end + 1000 ).clamp( 0, content.length );
+                windows.putIfAbsent( entity.path, () => <String>[] )
+                       .add( content.substring( start, end ) );
               }
             } catch ( _ ) {
               // Skip files we cannot read (encoding, permissions). The
@@ -693,43 +707,50 @@ void main() {
           }
 
           expect(
-            emitFiles,
+            windows,
             isNotEmpty,
             reason:
-                "AC-B7 — no cosa Python file contains the literal "
-                "'speakerphone_changed' string. The emit site may have moved "
-                "or been renamed; the provenance comment in "
+                "AC-B7 — no cosa Python file contains an emit-shaped "
+                "`type = \"speakerphone_changed\"` assignment. The emit site "
+                "may have moved or been renamed; the provenance comment in "
                 "notification_bloc.dart's speakerphone_changed case needs "
                 "updating (was commit e420ec0).",
           );
 
-          // For each emit-site file, the mobile-extracted payload field
-          // names must appear in a ~1000-char window around the
-          // speakerphone_changed string (Python dict-literal scope).
-          // Window-scoping reduces false positives from short field names
-          // like "on" appearing elsewhere in the same Python file.
-          for ( final file in emitFiles ) {
-            final content = await file.readAsString();
-            var idx = content.indexOf( '"speakerphone_changed"' );
-            if ( idx < 0 ) idx = content.indexOf( "'speakerphone_changed'" );
-            expect( idx >= 0, isTrue );
-
-            final start  = ( idx - 1000 ).clamp( 0, content.length );
-            final end    = ( idx + 1000 ).clamp( 0, content.length );
-            final window = content.substring( start, end );
-
-            for ( final name in <String>[ "on", "displaced", "displaced_by" ] ) {
+          // Field semantics (wire-grounded speakerphone.py:208 + :274):
+          // `on` rides EVERY speakerphone_changed payload; `displaced` /
+          // `displaced_by` ride only the displace shape (the self-change
+          // emit carries {session_id, on} only) — so `on` is asserted per
+          // emit window, the displace fields on the UNION of windows.
+          for ( final entry in windows.entries ) {
+            for ( final window in entry.value ) {
               expect(
-                window.contains( '"$name"' ) || window.contains( "'$name'" ),
+                window.contains( '"on"' ) || window.contains( "'on'" ),
                 isTrue,
                 reason:
-                    "AC-B7 — payload field name '$name' missing from cosa "
-                    "emit-site window in ${file.path}. The wire contract "
+                    "AC-B7 — payload field name 'on' missing from cosa "
+                    "emit-site window in ${entry.key}. The wire contract "
                     "has drifted; either the cosa emit was edited or the "
                     "mobile extraction was hand-edited out of sync with "
                     "the server contract.",
               );
             }
+          }
+          final allWindows = windows.values
+              .expand( ( w ) => w )
+              .toList();
+          for ( final name in <String>[ "displaced", "displaced_by" ] ) {
+            expect(
+              allWindows.any(
+                ( w ) => w.contains( '"$name"' ) || w.contains( "'$name'" ),
+              ),
+              isTrue,
+              reason:
+                  "AC-B7 — payload field name '$name' missing from EVERY "
+                  "cosa emit-site window. The displace-shape emit "
+                  "(speakerphone.py) has drifted out of sync with the "
+                  "mobile extraction.",
+            );
           }
         },
       );

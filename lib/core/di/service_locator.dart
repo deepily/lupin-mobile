@@ -29,6 +29,9 @@ import '../../features/decision_proxy/data/decision_proxy_repository.dart';
 import '../../features/notifications/domain/notification_bloc.dart';
 import '../../features/decision_proxy/domain/decision_proxy_bloc.dart';
 
+// Focus-mode surface (focus-mode-voice-chat milestone, S2)
+import '../../features/focus_mode/domain/focus_chat_bloc.dart';
+
 // Tier 3 data layer
 import '../../features/queue/data/queue_repository.dart';
 import '../../features/claude_code/data/claude_code_repository.dart';
@@ -51,6 +54,10 @@ import '../../services/notification_audio/notification_preferences.dart';
 // Agent-narration TTS (ElevenLabs primary, flutter_tts fallback)
 import '../../services/tts/streaming_tts_player.dart';
 import '../../services/tts/tts_orchestrator.dart';
+
+// Voice-reply ASR (S4 — record pkg push-to-talk → parent Whisper endpoint)
+import 'package:record/record.dart';
+import '../../services/asr/asr_service.dart';
 
 // Legacy voice/audio/TTS/use-case-registry stack is disabled — the code in
 // lib/core/repositories/impl/{voice,audio}_repository_impl.dart and
@@ -281,11 +288,35 @@ class ServiceLocator {
     );
 
     // Tier 2 BLoCs — lazy singletons so state survives navigation.
+    //
+    // F-S1-1 USER RULING (mechanism F-S2-1, 2026-06-12): the legacy bloc's
+    // Optional `tts` dependency is NO LONGER injected — its TTS dispatch
+    // goes dead and FocusChatBloc (below) becomes the SOLE TTS dispatcher
+    // via TtsOrchestrator.enqueueAlways(). The bloc FILE is untouched
+    // (Q2 literal); ding/audio routing stays with the legacy bloc.
+    // Re-injecting `tts:` here would double-speak every high/urgent frame.
     _getIt.registerLazySingleton<NotificationBloc>(
       () => NotificationBloc(
         _getIt<NotificationRepository>(),
         audio : _getIt<NotificationAudioService>(),
-        tts   : _getIt<TtsOrchestrator>(),
+      ),
+    );
+
+    // Focus-mode state engine (S2) — the sole TTS dispatcher per above.
+    _getIt.registerLazySingleton<FocusChatBloc>(
+      () => FocusChatBloc(
+        _getIt<NotificationRepository>(),
+        tts: _getIt<TtsOrchestrator>(),
+      ),
+    );
+
+    // Voice-reply ASR (S4): record-pkg push-to-talk → parent Whisper WAV
+    // endpoint. Rides the SHARED auth-wired Dio (endpoint needs no auth per
+    // OSQ-1; the bearer is harmless).
+    _getIt.registerLazySingleton<AsrService>(
+      () => AsrService(
+        dio      : _getIt<Dio>(),
+        recorder : AudioRecorder(),
       ),
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(

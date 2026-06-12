@@ -385,4 +385,364 @@ void main() {
       ) );
     } );
   } );
+
+  // S1 — TTS pause/resume + enqueueAlways (focus-mode-voice-chat milestone,
+  // 10-section-s1-tts-pause-resume.md §5, AC-S1.1–S1.11). The mock player
+  // mirrors the wire-grounded semantics (testing-strategy rule 4 /
+  // F-S1-S3-1): `stop()` emits NOTHING on `completeStream`
+  // (streaming_tts_player.dart:162-176, :242-249).
+  group( "TtsOrchestrator S1 — pause/resume + enqueueAlways", () {
+    late _MockPlayer   player;
+    late _MockFallback fallback;
+    late _MockWs       ws;
+    late NotificationPreferences prefs;
+    late StreamController<TtsCompleteEvent> completeCtrl;
+    late StreamController<TtsErrorEvent>    errorCtrl;
+    late List<String> spoken;          // player.speak texts, in call order
+    late List<String> fallbackSpoken;  // flutterTtsSpeak texts, in call order
+    TtsOrchestrator? orch;
+
+    Future<void> setUpMocks( {
+      String? sessionId = "wise penguin",
+    } ) async {
+      SharedPreferences.setMockInitialValues( {} );
+      final sp = await SharedPreferences.getInstance();
+      prefs = NotificationPreferences( sp );
+
+      player         = _MockPlayer();
+      fallback       = _MockFallback();
+      ws             = _MockWs();
+      completeCtrl   = StreamController<TtsCompleteEvent>.broadcast();
+      errorCtrl      = StreamController<TtsErrorEvent>   .broadcast();
+      spoken         = [];
+      fallbackSpoken = [];
+
+      when( () => player.completeStream ).thenAnswer( ( _ ) => completeCtrl.stream );
+      when( () => player.errorStream    ).thenAnswer( ( _ ) => errorCtrl   .stream );
+      when( () => player.isPlaying      ).thenReturn( false );
+      when( () => player.speak(
+        text      : any( named: "text"      ),
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId"   ),
+      ) ).thenAnswer( ( inv ) async {
+        spoken.add( inv.namedArguments[ #text ] as String );
+      } );
+      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
+
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        fallbackSpoken.add( inv.positionalArguments.first as String );
+      } );
+      when( () => fallback.stopFallbackSpeech() ).thenAnswer( ( _ ) async {} );
+
+      when( () => ws.sessionId ).thenReturn( sessionId );
+    }
+
+    TtsOrchestrator newOrch() {
+      orch = TtsOrchestrator(
+        player   : player,
+        fallback : fallback,
+        prefs    : prefs,
+        ws       : ws,
+      );
+      return orch!;
+    }
+
+    Future<void> pump() => Future<void>.delayed( Duration.zero );
+
+    Future<void> completeUtterance() async {
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+    }
+
+    tearDown( () async {
+      await orch?.dispose();
+      await completeCtrl.close();
+      await errorCtrl   .close();
+    } );
+
+    test( "AC-S1.1 — pause() then 3 enqueueAlways (incl. low): nothing speaks, queue holds 3", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.pause();
+      o.enqueueAlways( priority: "low",    message: "one"   );
+      o.enqueueAlways( priority: "medium", message: "two"   );
+      o.enqueueAlways( priority: "high",   message: "three" );
+      await pump();
+
+      verifyNever( () => player.speak(
+        text      : any( named: "text" ),
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId" ),
+      ) );
+      verifyNever( () => fallback.flutterTtsSpeak( any() ) );
+      expect( o.queueDepth, 3 );
+    } );
+
+    test( "AC-S1.2 — resume() drains accumulated utterances in arrival order", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.pause();
+      o.enqueueAlways( priority: "low",    message: "one"   );
+      o.enqueueAlways( priority: "medium", message: "two"   );
+      o.enqueueAlways( priority: "high",   message: "three" );
+      await pump();
+
+      o.resume();
+      await pump();
+      await completeUtterance();
+      await completeUtterance();
+      await completeUtterance();
+
+      expect( spoken, [ "one", "two", "three" ] );
+      expect( o.queueDepth, 0 );
+    } );
+
+    test( "AC-S1.3 — pause during in-flight: current completes via the completion seam, next does NOT start", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "high", message: "in-flight" );
+      await pump();
+      expect( spoken, [ "in-flight" ] );
+
+      o.pause();
+      o.enqueueAlways( priority: "high", message: "held" );
+      await pump();
+
+      await completeUtterance();   // _player.completeStream → _onUtteranceFinished honored
+
+      expect( spoken, [ "in-flight" ], reason: "held utterance must not start under pause" );
+      expect( o.queueDepth, 1 );
+      expect( o.isPlaying, isFalse, reason: "completion cleared the current slot" );
+    } );
+
+    test( "AC-S1.4 — urgent while paused: no preempt; two urgents drain arrival-ordered ahead of non-urgents", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.pause();
+      o.enqueueAlways( priority: "medium", message: "N1" );
+      o.enqueueAlways( priority: "urgent", message: "U1" );
+      o.enqueueAlways( priority: "urgent", message: "U2" );
+      await pump();
+
+      verifyNever( () => player.stop() );
+      expect( spoken, isEmpty );
+      expect( o.queueDepth, 3 );
+
+      o.resume();
+      await pump();
+      expect( spoken, [ "U1" ], reason: "urgent plays FIRST on resume" );
+      await completeUtterance();
+      expect( spoken, [ "U1", "U2" ], reason: "no LIFO inversion — urgent block arrival-ordered" );
+      await completeUtterance();
+      expect( spoken, [ "U1", "U2", "N1" ] );
+      await completeUtterance();
+      expect( o.queueDepth, 0 );
+    } );
+
+    test( "AC-S1.5 — quota window opened pre-pause: resumed utterances route via flutter_tts fallback", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "high", message: "first" );
+      await pump();
+      errorCtrl.add( const TtsErrorEvent( errorCode: "quota_exceeded" ) );
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      expect( fallbackSpoken, [ "first" ], reason: "quota error re-speaks current via fallback" );
+
+      o.pause();
+      o.enqueueAlways( priority: "medium", message: "held one" );
+      o.enqueueAlways( priority: "low",    message: "held two" );
+      await pump();
+      expect( fallbackSpoken, [ "first" ] );
+
+      o.resume();
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+      expect( fallbackSpoken, [ "first", "held one", "held two" ] );
+      expect( spoken, [ "first" ], reason: "ElevenLabs got only the pre-window dispatch" );
+    } );
+
+    test( "AC-S1.7 — urgent while UNPAUSED: non-destructive preempt, replay-from-start, nothing dropped, exactly one post-preempt dispatch", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "medium", message: "current" );
+      await pump();
+      expect( spoken, [ "current" ] );
+
+      o.enqueueAlways( priority: "low",    message: "q1" );
+      o.enqueueAlways( priority: "medium", message: "q2" );
+      o.enqueueAlways( priority: "high",   message: "q3" );
+      await pump();
+      expect( o.queueDepth, 3 );
+
+      o.enqueueAlways( priority: "urgent", message: "URGENT" );
+      await pump();
+
+      verify( () => player.stop() ).called( 1 );
+      // F-S1-S3-1: exactly ONE dispatch follows the preempt, asserted via
+      // TOTAL speak-call count — the mock's stop() emitted nothing on
+      // completeStream, so no completion-driven double-advance can hide here.
+      expect( spoken, [ "current", "URGENT" ] );
+      expect( o.queueDepth, 4, reason: "interrupted utterance re-queued at the front — nothing dropped" );
+
+      await completeUtterance();   // URGENT finishes
+      expect( spoken, [ "current", "URGENT", "current" ],
+        reason: "interrupted utterance replays from the start" );
+      await completeUtterance();
+      await completeUtterance();
+      await completeUtterance();
+      await completeUtterance();
+      expect( spoken, [ "current", "URGENT", "current", "q1", "q2", "q3" ] );
+      expect( o.queueDepth, 0 );
+    } );
+
+    test( "AC-S1.7 ext (F-S1-S2-1b) — urgent does NOT preempt an in-flight urgent", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "urgent", message: "U1" );
+      await pump();
+      expect( spoken, [ "U1" ] );
+
+      o.enqueueAlways( priority: "urgent", message: "U2" );
+      await pump();
+
+      verifyNever( () => player.stop() );
+      expect( spoken, [ "U1" ], reason: "U2 waits — replay churn avoided under urgent bursts" );
+
+      await completeUtterance();
+      expect( spoken, [ "U1", "U2" ] );
+    } );
+
+    test( "AC-S1.8 — enqueueAlways bypasses masterMute AND priority gates: low speaks while everything is muted", () async {
+      await setUpMocks();
+      await prefs.setMasterMute( true );
+      await prefs.setSpeakOnHigh( false );
+      await prefs.setSpeakOnUrgent( false );
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "low", message: "ungated low" );
+      await pump();
+
+      expect( spoken, [ "ungated low" ] );
+    } );
+
+    test( "AC-S1.9 sub-case (F-S1-S2-2) — legacy urgent while paused PREEMPTS: pause-exempt by design", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.pause();
+      o.enqueueAlways( priority: "medium", message: "held focus item" );
+      await pump();
+      expect( o.queueDepth, 1 );
+
+      o.enqueueIfSpeakable( priority: "urgent", message: "LEGACY URGENT" );
+      await pump();
+
+      verify( () => player.stop() ).called( 1 );
+      expect( spoken, [ "LEGACY URGENT" ], reason: "legacy urgent dispatches directly despite pause" );
+      expect( o.queueDepth, 0, reason: "legacy flush behavior verbatim — pending cleared" );
+    } );
+
+    test( "AC-S1.10 — ElevenLabs error while paused: queue does not advance; resume drains normally", () async {
+      await setUpMocks();
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "high", message: "erroring" );
+      await pump();
+      o.enqueueAlways( priority: "medium", message: "next up" );
+      await pump();
+      expect( spoken, [ "erroring" ] );
+
+      o.pause();
+      errorCtrl.add( const TtsErrorEvent( errorCode: "server_error" ) );
+      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+      expect( spoken, [ "erroring" ], reason: "error continuation parks at the _tryStartNext gate" );
+      expect( o.queueDepth, 1 );
+
+      o.resume();
+      await pump();
+      expect( spoken, [ "erroring", "next up" ] );
+    } );
+
+    test( "AC-S1.11 — queueDepthStream emits 1,2,3 under hold and decrements to 0 on resume drain", () async {
+      await setUpMocks();
+      final o = newOrch();
+      final depths = <int>[];
+      final sub    = o.queueDepthStream.listen( depths.add );
+
+      o.pause();
+      o.enqueueAlways( priority: "low",    message: "a" );
+      o.enqueueAlways( priority: "medium", message: "b" );
+      o.enqueueAlways( priority: "high",   message: "c" );
+      await pump();
+      expect( depths, [ 1, 2, 3 ] );
+
+      o.resume();
+      await pump();
+      await completeUtterance();
+      await completeUtterance();
+      await completeUtterance();
+
+      expect( depths, [ 1, 2, 3, 2, 1, 0 ] );
+      await sub.cancel();
+    } );
+
+    test( "F-S1-IMPL-1 — arrival during the preempt-stop await window does NOT double-dispatch", () async {
+      await setUpMocks();
+      // Hold the preempt open: stop() parks on a test-controlled Completer
+      // (the real stop() awaits network/audio teardown — the mock's default
+      // microtask completion never exposes the window).
+      final stopGate = Completer<void>();
+      when( () => player.stop() ).thenAnswer( ( _ ) => stopGate.future );
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "medium", message: "current" );
+      await pump();
+      expect( spoken, [ "current" ] );
+
+      o.enqueueAlways( priority: "urgent", message: "URGENT" );   // enters preempt, parks on stop()
+      await pump();
+      o.enqueueAlways( priority: "low", message: "arrival" );     // arrives INSIDE the window
+      await pump();
+
+      expect( spoken, [ "current" ],
+        reason: "preempt owns the slot — the arrival must not idle-dispatch" );
+
+      stopGate.complete();
+      await pump();
+
+      expect( spoken, [ "current", "URGENT" ],
+        reason: "exactly ONE dispatch follows the preempt (total speak-call count)" );
+
+      await completeUtterance();   // URGENT finishes → interrupted replays
+      expect( spoken, [ "current", "URGENT", "current" ] );
+      await completeUtterance();   // replay finishes → the window arrival drains
+      expect( spoken, [ "current", "URGENT", "current", "arrival" ] );
+      expect( o.queueDepth, 0, reason: "nothing dropped" );
+    } );
+
+    test( "pausedStream — emits transitions only; idempotent pause()/resume() do not re-emit", () async {
+      await setUpMocks();
+      final o      = newOrch();
+      final states = <bool>[];
+      final sub    = o.pausedStream.listen( states.add );
+
+      o.pause();
+      o.pause();    // idempotent — no second emission
+      o.resume();
+      o.resume();   // idempotent — no second emission
+      await pump();
+
+      expect( states, [ true, false ] );
+      expect( o.isPaused, isFalse );
+      await sub.cancel();
+    } );
+  } );
 }

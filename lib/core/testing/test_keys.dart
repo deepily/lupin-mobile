@@ -106,6 +106,23 @@ class TestKeys {
   static const personaBadgeDashedPrefix = 'persona.badge.dashed.'; // + senderId (borrowed variant)
   static const personaBadgeDottedPrefix = 'persona.badge.dotted.'; // + senderId (overflow variant — Section C / Phase 3)
 
+  // Focus-mode surface (S3 — focus-mode-voice-chat milestone)
+  static const focusRail            = 'focus.rail';
+  static const focusRailBadgePrefix = 'focus.rail.badge.';   // + senderId
+  static const focusPauseToggle     = 'focus.pauseToggle';
+  static const focusChatPane        = 'focus.chatPane';
+  static const focusDrawerButton    = 'focus.drawerButton';
+  static const focusPausedBanner    = 'focus.pausedBanner';
+  static const focusRetryBanner     = 'focus.retryBanner';
+  static const focusBatchFallbackPrefix = 'focus.batchFallback.';  // + notificationId
+
+  // Focus-mode voice reply composer (S4 — focus-mode-voice-chat milestone)
+  static const voiceReplyMic        = 'voiceReply.mic';
+  static const voiceReplyTranscript = 'voiceReply.transcript';
+  static const voiceReplySend       = 'voiceReply.send';
+  static const voiceReplyCancel     = 'voiceReply.cancel';
+  static const voiceReplyError      = 'voiceReply.error';   // F-S4-S2-1a affordance (AC-S4.8)
+
   // Audio artifact player (Phase 4a — in-app playback for pg-* / rp- jobs)
   static const audioPlayerDownloadButton = 'audio.download';
   static const audioPlayerPlayButton     = 'audio.play';

@@ -1,0 +1,166 @@
+{
+  "pool": [
+    {
+      "name": "maria",
+      "display_name": "Mar\u00eda",
+      "voice_id": "kcQkGnn0HAT2JRDQ4Ljp",
+      "icon": "\ud83c\udf38",
+      "color": "#F06292",
+      "profile": "Warm, inquisitive female"
+    },
+    {
+      "name": "mr radio",
+      "display_name": "Mr. Radio",
+      "voice_id": "Aa6nEBJJMKJwJkCx8VU2",
+      "icon": "\ud83e\udd89",
+      "color": "#FFA000",
+      "profile": "Authoritative warm male"
+    },
+    {
+      "name": "Rachel",
+      "display_name": "Rachel",
+      "voice_id": "21m00Tcm4TlvDq8ikWAM",
+      "icon": "\ud83d\udd4a\ufe0f",
+      "color": "#CE93D8",
+      "profile": "Calm & clear female"
+    },
+    {
+      "name": "Tiberius",
+      "display_name": "Tiberius",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "icon": "\ud83d\udc51",
+      "color": "#3F51B5",
+      "profile": "Deep male"
+    },
+    {
+      "name": "Rio",
+      "display_name": "Rio",
+      "voice_id": "AZnzlk1XvdvUeBnXmlld",
+      "icon": "\u26a1",
+      "color": "#880E4F",
+      "profile": "Young & energetic female"
+    },
+    {
+      "name": "Tiffany",
+      "display_name": "Tiffany",
+      "voice_id": "6aDn1KB0hjpdcocrUkmq",
+      "icon": "\ud83d\udc8d",
+      "color": "#FFD600",
+      "profile": "Natural and low key female"
+    },
+    {
+      "name": "Krishna",
+      "display_name": "Krishna",
+      "voice_id": "ogSj7jM4rppgY9TgZMqW",
+      "icon": "\ud83e\udd9a",
+      "color": "#1DE9B6",
+      "profile": "Reassuring warm male"
+    },
+    {
+      "name": "sam",
+      "display_name": "Sam",
+      "voice_id": "G7ILShrCNLfmS0A37SXS",
+      "icon": "\ud83c\udf99\ufe0f",
+      "color": "#5E35B1",
+      "profile": "British male"
+    },
+    {
+      "name": "Clayton",
+      "display_name": "Clayton",
+      "voice_id": "fQ9aRKjmL75dgjNakj2u",
+      "icon": "\ud83d\ude0e",
+      "color": "#81D4FA",
+      "profile": "Laid back male"
+    },
+    {
+      "name": "Cheech",
+      "display_name": "Cheech",
+      "voice_id": "OhisAd2u8Q6qSA4xXAAT",
+      "icon": "\ud83c\udf3f",
+      "color": "#FFCC80",
+      "profile": "Stoner cartoon friend"
+    }
+  ],
+  "occupied_names": [
+    "Cheech",
+    "Clayton",
+    "Krishna",
+    "Rachel",
+    "Rio",
+    "Tiberius",
+    "Tiffany",
+    "maria",
+    "mr radio",
+    "sam"
+  ],
+  "free_names": [],
+  "active_sessions": [
+    {
+      "session_id": "d0e37f17-0140-40ad-8e05-a3acdcc7e157",
+      "persona_name": "Cheech",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T03:36:20+00:00"
+    },
+    {
+      "session_id": "60b1c0d7-787a-478a-86b4-14261a924742",
+      "persona_name": "Rachel",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T04:39:06+00:00"
+    },
+    {
+      "session_id": "80648935-d982-41bd-af92-75e2be86a240",
+      "persona_name": "Clayton",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T04:23:23+00:00"
+    },
+    {
+      "session_id": "34d34d06-227c-48cc-ad2a-eb525161349d",
+      "persona_name": "sam",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T03:41:04+00:00"
+    },
+    {
+      "session_id": "ad7692cc-7b26-43ca-9317-8b9a35a85152",
+      "persona_name": "Rio",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T07:54:23+00:00"
+    },
+    {
+      "session_id": "dabf7fbb-f4e5-4318-861c-059d51b45991",
+      "persona_name": "mr radio",
+      "borrowed": false,
+      "assigned_at": "2026-06-11T23:07:40+00:00"
+    },
+    {
+      "session_id": "472b7468-f0b0-48e1-a404-c1d0396098c9",
+      "persona_name": "Tiffany",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T03:01:22+00:00"
+    },
+    {
+      "session_id": "dbe21f66-7401-4903-a1f9-9345f5f08fea",
+      "persona_name": "maria",
+      "borrowed": false,
+      "assigned_at": "2026-06-11T22:06:09+00:00"
+    },
+    {
+      "session_id": "f557aab9-0732-431e-81d9-42b1402bc367",
+      "persona_name": "Tiberius",
+      "borrowed": false,
+      "assigned_at": "2026-06-11T13:18:08+00:00"
+    },
+    {
+      "session_id": "8573bf8f-fc58-4093-95d2-2f142384ae73",
+      "persona_name": "Krishna",
+      "borrowed": false,
+      "assigned_at": "2026-06-12T08:27:12+00:00"
+    }
+  ],
+  "_capture": {
+    "utc": "2026-06-12T08:27:42Z",
+    "endpoint": "/api/cosa-voice/voice-persona/pool",
+    "server": "http://localhost:7999 (dev, --reload serving merge 83990552)",
+    "server_build": "wip-v0.1.8 merge 83990552 (Clayton Lane-3 assigned_at serialization fix, commit 4ccbfe90)",
+    "captured_by": "Mr. Radio (session dabf7fbb) \u2014 AC-D4 re-capture at Clayton's landing trigger 08:27Z"
+  }
+}

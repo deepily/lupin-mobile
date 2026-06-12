@@ -103,39 +103,39 @@ Changes:
 
 ## 4. Tasks
 
-- [ ] Add paused flag, `pause()`, `resume()`, `isPaused`, `pausedStream`, `queueDepthStream`
+- [x] Add paused flag, `pause()`, `resume()`, `isPaused`, `pausedStream`, `queueDepthStream`
       (emits on every enqueue/dequeue)
-- [ ] Gate `_tryStartNext()` on `_paused` (single choke point — completion, error continuation,
+- [x] Gate `_tryStartNext()` on `_paused` (single choke point — completion, error continuation,
       dispatch-if-idle all covered) + skip dispatch-if-idle in both enqueue entry points
-- [ ] NEW `enqueueAlways()` ungated entry point (F-S1-1)
-- [ ] Urgent-while-paused: insert behind leading urgents (urgent block arrival-ordered), no
+- [x] NEW `enqueueAlways()` ungated entry point (F-S1-1)
+- [x] Urgent-while-paused: insert behind leading urgents (urgent block arrival-ordered), no
       audio preempt (F-S1-S2-1a)
-- [ ] Urgent-while-unpaused via `enqueueAlways`: non-destructive preempt + re-queue interrupted
+- [x] Urgent-while-unpaused via `enqueueAlways`: non-destructive preempt + re-queue interrupted
       utterance, replay-from-start (F-S1-2); no urgent-preempts-urgent (F-S1-S2-1b)
-- [ ] Document legacy pause-exemption in dartdoc (F-S1-S2-2)
-- [ ] Dartdoc on all public members stating Q6/OSQ-5/F-S1-1 semantics
-- [ ] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
+- [x] Document legacy pause-exemption in dartdoc (F-S1-S2-2)
+- [x] Dartdoc on all public members stating Q6/OSQ-5/F-S1-1 semantics
+- [x] Record green baseline suite count in §8 Execution Log BEFORE first edit (testing-strategy
       rule 1; F-S1-S3-2)
-- [ ] Tests (§5) + full-suite regression run
+- [x] Tests (§5) + full-suite regression run
 
 ## 5. Acceptance Criteria
 
-- [ ] EXECUTOR: AI — AC-S1.1 unit: `pause()` then 3 × `enqueueAlways` (one of them priority
+- [x] EXECUTOR: AI — AC-S1.1 unit: `pause()` then 3 × `enqueueAlways` (one of them priority
       `low`) → player.speak NOT called; queue length 3.
-- [ ] EXECUTOR: AI — AC-S1.2 unit: `resume()` after AC-S1.1 → utterances dispatched in arrival
+- [x] EXECUTOR: AI — AC-S1.2 unit: `resume()` after AC-S1.1 → utterances dispatched in arrival
       order (capture order via mock player).
-- [ ] EXECUTOR: AI — AC-S1.3 unit: pause during in-flight utterance → current completes
+- [x] EXECUTOR: AI — AC-S1.3 unit: pause during in-flight utterance → current completes
       (completion event on `_player.completeStream` → `_onUtteranceFinished` honored), next does
       NOT start.
-- [ ] EXECUTOR: AI — AC-S1.4 unit: urgent via `enqueueAlways` while paused → no preempt call; on
+- [x] EXECUTOR: AI — AC-S1.4 unit: urgent via `enqueueAlways` while paused → no preempt call; on
       resume it plays FIRST. Extended (F-S1-S2-1a): TWO urgents arriving while paused (U1 then
       U2, with non-urgents already queued) drain U1 → U2 → non-urgents in arrival order — no
       LIFO inversion.
-- [ ] EXECUTOR: AI — AC-S1.5 unit: quota-fallback window opened pre-pause routes resumed
+- [x] EXECUTOR: AI — AC-S1.5 unit: quota-fallback window opened pre-pause routes resumed
       utterances through `flutterTtsSpeak` while window active (`enqueueAlways` path).
-- [ ] EXECUTOR: AI — AC-S1.6 regression: existing orchestrator suite (incl. 2026-04-24 overlap
+- [x] EXECUTOR: AI — AC-S1.6 regression: existing orchestrator suite (incl. 2026-04-24 overlap
       fix tests) stays green; report counts.
-- [ ] EXECUTOR: AI — AC-S1.7 unit (F-S1-2): urgent via `enqueueAlways` while UNPAUSED with 3
+- [x] EXECUTOR: AI — AC-S1.7 unit (F-S1-2): urgent via `enqueueAlways` while UNPAUSED with 3
       queued → current playback stops, urgent plays immediately, then the interrupted utterance
       replays from the start, then the 3 queued in arrival order; nothing dropped (capture via
       mock player). Extended (F-S1-S2-1b): if the in-flight utterance is itself URGENT, a second
@@ -144,18 +144,18 @@ Changes:
       (`streaming_tts_player.dart:162-176`, `:242-249`) — and the test asserts exactly ONE
       dispatch follows the preempt via TOTAL speak-call COUNT (not sequence order alone): no
       completion-driven double-advance.
-- [ ] EXECUTOR: AI — AC-S1.8 unit (F-S1-1): `low`-priority via `enqueueAlways` with
+- [x] EXECUTOR: AI — AC-S1.8 unit (F-S1-1): `low`-priority via `enqueueAlways` with
       `masterMute=true` and `speakOnHigh`/`speakOnUrgent` false IS enqueued and spoken — gates
       bypassed.
-- [ ] EXECUTOR: AI — AC-S1.9 unit (F-S1-1): legacy gated path unchanged — low/medium via
+- [x] EXECUTOR: AI — AC-S1.9 unit (F-S1-1): legacy gated path unchanged — low/medium via
       `enqueueIfSpeakable` still never speak; `masterMute` still suppresses; legacy urgent still
       flush-preempts via `_preemptForUrgent()` (parity pins). Sub-case (F-S1-S2-2):
       legacy-urgent-while-paused PREEMPTS (flush + speak) — the legacy path is pause-exempt by
       design.
-- [ ] EXECUTOR: AI — AC-S1.10 unit (F-S1-4): ElevenLabs error on the in-flight utterance while
+- [x] EXECUTOR: AI — AC-S1.10 unit (F-S1-4): ElevenLabs error on the in-flight utterance while
       paused → queue does NOT advance (error continuation `:205`/`:210` parks at the
       `_tryStartNext()` gate); on resume, the queue drains normally.
-- [ ] EXECUTOR: AI — AC-S1.11 unit (F-S1-S2-3): 3 × `enqueueAlways` while paused →
+- [x] EXECUTOR: AI — AC-S1.11 unit (F-S1-S2-3): 3 × `enqueueAlways` while paused →
       `queueDepthStream` emits 1, 2, 3; on resume-drain it emits decrements back to 0.
 
 ## 6. Open Items
@@ -204,6 +204,53 @@ enumerate pause/resume pacing — consuming-side check on record for S3 Stage 3.
 *(Placeholder per working-contract §Phase-Complete Definition + testing-strategy rule 1 —
 populated at implementation time, NOT during the cascade.)*
 
-- [ ] Green baseline suite count recorded BEFORE first edit: `____` (date/time, command, count)
-- Per-AC evidence entries land here as each §5 checkbox flips to `[x]` (test output, probe
-  response, or named HUMAN sign-off).
+- [x] Baseline suite count recorded BEFORE first edit: 2026-06-12T04:07Z,
+  `./flutter.sh test test/unit/ test/widget/ test/service_integration/` →
+  **321 ✅ / 1 skipped / 3 ❌** — NOT fully green; all 3 failures PRE-EXISTING and OUTSIDE S1
+  surfaces (prior notif-client-sync milestone artifacts): (1) AC-D4
+  `notification_repository_test.dart` — missing fixture
+  `test/fixtures/notifications/voice_persona_pool.json` (PathNotFoundException); (2) AC-B7
+  `notification_bloc_dispatch_test.dart` — cosa wire-contract grep drift (`on` field absent from
+  `../cosa/rest/notification_fifo_queue.py` emit-site window — parent-side); (3) AC-C4
+  `persona_badge_test.dart` — dotted-vs-dashed paint-path pixel diff. The TtsOrchestrator suite
+  is GREEN at baseline. Flagged to Manager (dm 04:07Z). **Operative bar for S1: 321 passing
+  never decreases + orchestrator suite green + 44-test quarantine untouched.**
+- [x] Implementation landed 2026-06-12T04:10Z (session `472b7468`, Tiffany 💍):
+  `lib/services/tts/tts_orchestrator.dart` — §3 changes 1–8 (paused flag + `pause()`/`resume()`/
+  `isPaused`/`pausedStream`/`queueDepthStream`; `_tryStartNext()` pause gate; `enqueueAlways()`;
+  insert-behind-leading-urgents; non-destructive preempt + replay-from-start;
+  no-urgent-preempts-urgent; utterance-epoch guard; quota-window orthogonality untouched; legacy
+  paths verbatim + dartdoc'd pause-exemption). Tests:
+  `test/unit/services/tts/tts_orchestrator_test.dart` — NEW group "TtsOrchestrator S1", 12 tests.
+- [x] AC evidence (ALL §5 ACs are EXECUTOR: AI; flipped 2026-06-12T04:18Z): targeted run
+  `./flutter.sh test test/unit/services/tts/tts_orchestrator_test.dart` → **26/26 ✅**
+  (14 legacy parity tests unchanged-and-green = AC-S1.9 main parity pins; 12 S1 tests). Per-AC
+  test mapping: AC-S1.1, S1.2, S1.3, S1.4 (incl. F-S1-S2-1a two-urgent extension), S1.5,
+  S1.7 (incl. F-S1-S2-1b no-urgent-preempts-urgent ext + F-S1-S3-1 total-speak-count assertion
+  with the wire-grounded stop()-emits-nothing mock), S1.8, S1.9 sub-case
+  (legacy-urgent-while-paused preempts), S1.10, S1.11 — each a named test; plus a pausedStream
+  transition test (supplementary, not AC-bound).
+- [x] AC-S1.6 regression + full-suite (2026-06-12T04:17Z): `./flutter.sh analyze` — changed
+  files: No issues (repo-wide info-lint count 9778 = pre-existing baseline noise);
+  `./flutter.sh test test/unit/ test/widget/ test/service_integration/` →
+  **334 ✅ / 1 skip / 2 ❌** vs baseline 321 ✅ / 1 skip / 3 ❌ — passing count INCREASED
+  (+12 S1 tests; pre-existing AC-B7 also returned to green during the evening), both remaining
+  failures are the pre-existing Manager-owned items (AC-D4 fixture, AC-C4 paint diff — neither
+  an S1 surface); 44-test legacy quarantine untouched (zero edits under
+  `test/legacy_quarantine/`). 2026-04-24 overlap-fix tests included in the green 26.
+- HUMAN perceptual gate (TTS pacing under pause/resume): rides S3's on-device runbook milestone
+  gate per §6 pointer — S1 closes on AI tiers only, as designed.
+
+**SECTION S1 IMPLEMENTATION COMPLETE (AI tiers) — 2026-06-12.**
+
+- [x] **Post-close amendment (F-S1-IMPL-1, Arnold's implementation light review — inconsistency,
+  Manager-concurred, 2026-06-12T04:40Z)**: arrival-during-preempt race fixed —
+  `_preemptNonDestructive` previously NULLED `_current` before the `await _player.stop()` /
+  `stopFallbackSpeech()` window; an enqueue arriving inside that window saw an idle orchestrator
+  and idle-dispatched the queue head, yielding two concurrent speak calls (the epoch guard
+  cannot cover it — both dispatches arm fresh epochs). Fix per Arnold shape (a): `_current =
+  urgent` is set BEFORE the awaits (slot claimed; zero new state); legacy `_preemptForUrgent`
+  was already immune (never nulls pre-await). Required test rider added: "F-S1-IMPL-1 — arrival
+  during the preempt-stop await window does NOT double-dispatch" (mock `stop()` gated on a
+  test-controlled Completer to hold the window open; TOTAL speak-call-count assertion).
+  Targeted suite post-fix: **27/27 ✅**.
