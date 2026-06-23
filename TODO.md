@@ -21,6 +21,33 @@ AI-IMPLEMENTATION + REVIEW COMPLETE (406 ✅ / 1 skip / 0 ❌); implementation b
 **Plan-of-record**: `src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md` — 🚀 AI-IMPLEMENTATION
 COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/table).
 
+> **🔥 FCM LIVE-SERVICE TRACK REACTIVATED 2026-06-23** (Rick directive — un-back-burnered).
+> Coordinated with Tiberius 👑 (session 3d7c4c2e, thread f27e53be); division of labor LOCKED:
+> **Tiffany = CLIENT** (gradle plugin + google-services.json + runbook-92 on-device probe),
+> **Tiberius = SERVER** (firebase-admin>=6.5 image rebuild + key at `FCM_SERVICE_ACCOUNT_JSON`
+> PATH + restart `lupin-rest-cloud-test`). **NEW Firebase project `lupin-mobile`** (Rick
+> confirmed); **authoritative console-pass spec** is now
+> `src/rnd/2026.06.23-firebase-android-provisioning-for-live-fcm.md` (supersedes the runbook-91
+> pointer below). Grounded: `applicationId`/`namespace` = `ai.deepily.lupin_mobile` matches the
+> registration. Client work is HELD until Tiberius's **live-service-up ping**; gradle plugin +
+> JSON ride ONE bundled laptop pass per runbook 92 step 2 (do NOT pre-wire — apply without the
+> JSON breaks every build). Store task: `63790ce3`. Rick's move: the 5 console clicks per the
+> spec doc. ETA pending Tiberius's rebuild-runbook worker report.
+>
+> **UPDATE 2026-06-23 ~15:55Z**: Standup AUTHORIZED + IN PROGRESS (Rick gave full go, then
+> stepped into a ~1hr meeting; Tiberius executing autonomously, now re-spinning via memento per
+> Rick's "prepare for re-spin" broadcast — state preserved). Auth model = **keyless ADC**
+> (`fcm wake auth mode=adc`; VM SA grant roles/firebasecloudmessaging.admin) — **no
+> service-account JSON key needed** after all. CLIENT SIDE READY: `android/app/google-services.json`
+> present + **gradle plugin pre-wired** (settings.gradle.kts 4.4.2 + app/build.gradle.kts) →
+> runbook-92 laptop pass now collapses to **on-device probe only** (needs laptop build-verify).
+> Project-alignment VERIFIED no-403 (device-reg project == server-send project, both
+> `hello-world-foo-423219`). **NON-BLOCKING DECISION FOR RICK (later):** the Android app
+> registered under the existing `hello-world-foo-423219` project (where VM/SQL/AR live) rather
+> than a fresh dedicated `lupin-mobile` Firebase project — works + aligned now, but clean
+> separation may be preferred long-term. Tiberius is also raising this with Rick. Only remaining
+> wait = Tiberius's **live-service-up ping** → then run the on-device probe.
+
 1. [ ] [LUPIN-MOBILE] **OSQ-7 Firebase console pass** (EXECUTOR: HUMAN, ~10 min) — follow
    `src/rnd/2026.06.11-focus-mode-voice-chat/91-osq7-firebase-console-runbook.md` Parts A–D;
    then say "Firebase done" and the AI runs the validation checklist.

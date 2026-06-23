@@ -114,6 +114,7 @@ src/lupin-mobile/
 - **[Joint Post-Game: Focus-Mode Build Night](src/rnd/2026.06.12-joint-postgame-focus-mode-build.md)** - Manager 🦉 + Observer 🌸 joint record with Rick's live rulings per item (6 decided / 1 parked), the bilateral comms-meta lesson + 3 convention pins, and the 8-action consolidated ledger
 - **[PoC Laptop-Build Runbook](src/rnd/2026.06.12-poc-laptop-build-runbook.md)** - Zero → focus-mode PoC on a real device: wraps the existing rsync/build-and-deploy scripts, FCM-OFF guidance, and the critical real-device LAN-IP repoint (bundled dev URL `10.0.2.2` is emulator-only); ends at the fm1–fm6 acceptance gate
 - **[Legacy Quarantine Triage](src/rnd/2026.06.12-legacy-quarantine-triage.md)** - Per-file disposition of all 25 quarantined test files (rides-retirement / rides-follow-on / resurrect-candidate); the one real lost-coverage flag is `PerformanceMonitor`; closes the 2026-05-11 quarantine-triage TODO debt
+- **[Focus-Mode Status Summary](src/rnd/2026.06.23-focus-mode-status-summary.md)** - One-page readable answer to "where are we on the focus UI?": all 6 sections AI-complete + committed (b34fa01, not pushed), suite 406✅; remaining work is all HUMAN/on-device (Firebase console, S5 Phase-0 probe, device gates); the no-Firebase PoC fast path
 
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring (2026-04)
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings

@@ -3,6 +3,10 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase Cloud Messaging (FCM) — processes android/app/google-services.json.
+    // Safe to apply only because google-services.json is present (applying it without
+    // the JSON breaks every build; see runbook 92 step 2).
+    id("com.google.gms.google-services")
 }
 
 android {

@@ -32,7 +32,19 @@ dependencies:
   # (F-S4-1): flutter_sound is DI-dead legacy + streaming-oriented.
   # flutter_sound itself is REMOVAL-CANDIDATE debt riding the legacy-stack
   # retirement — do not remove it as part of S4.
-  record: ^5.1.2
+  # ^6.0.0 (2026-06-23): the 5.x federated set skewed. record_platform_interface
+  # 1.6.0 carries the hasPermission(request:) / startStream contract (interface
+  # 1.5.0+) that stale record_linux 0.7.2 never implemented. record_linux is a
+  # DART-only plugin (dartPluginClass), so Flutter's plugin registrant compiles it
+  # into the Android kernel even though this app targets only android/ios/web —
+  # hence the build's record_linux compile failure. record 6.2.1 bumps record_linux
+  # → 1.3.1 (implements interface 1.6.0), fixing it. record_windows 1.0.7 stays
+  # stale but is a NATIVE plugin (no dartPluginClass) never Dart-compiled, and we
+  # build no Windows target — so it's a non-issue. record 7.x would be cleaner but
+  # needs Dart >=3.12 (toolchain is 3.9). Our usage
+  # (AudioRecorder/RecordConfig{encoder,sampleRate,numChannels}/hasPermission/start)
+  # is unchanged across the major.
+  record: ^6.0.0
 
   # Notification audio (foreground ding + on-device TTS for priority-driven alerts)
   flutter_local_notifications: ^17.2.3
