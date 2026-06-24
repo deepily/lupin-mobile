@@ -47,6 +47,24 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 > than a fresh dedicated `lupin-mobile` Firebase project — works + aligned now, but clean
 > separation may be preferred long-term. Tiberius is also raising this with Rick. Only remaining
 > wait = Tiberius's **live-service-up ping** → then run the on-device probe.
+>
+> **✅ CLOSED 2026-06-23 (Rick-directed "mark it done")**: store task `63790ce3` →
+> **done** (receipts: commit `be03dd9` + status doc; 15/15 ASR tests; APK build
+> device-confirmed builds+loads; FCM server LIVE). Client-side live-FCM enablement is
+> DELIVERED. Redundant probe-tracking task `81430c6b` dropped (board hygiene).
+> **HUMAN CARVE-OUT (Rick-owned verification, NOT Tiffany-owed):** the runbook-92
+> on-device wake probe (register token → wake with WS closed → confirm push) remains
+> Rick's hardware test on his timeline; when he runs it, Tiffany observes + reports the
+> receipt to Tiberius (thread d9f4c1a3) → §3.2.4 milestone declared (or shape-3 fallback).
+> **PARKED NON-BLOCKING DECISION for Rick:** reuse `hello-world-foo-423219` vs a dedicated
+> `lupin-mobile` Firebase project — recommendation: keep reuse (works + aligned, zero
+> rework), prove the feature first, treat clean separation as a deliberate later migration.
+>
+> **🎉 DEVICE-VERIFIED 2026-06-23**: Rick built + ran the focus-mode UI on device/emulator —
+> **it works** (APK builds + loads; UI interactive). Milestone functionally validated.
+> **NEW BACKLOG — focus-mode UX polish**: Rick found the UX "a little weird and clunky."
+> Deferred follow-up: a UX-refinement pass on the focus-mode surface (interaction flow /
+> affordances / pacing) — scope in a later session; not blocking.
 
 1. [ ] [LUPIN-MOBILE] **OSQ-7 Firebase console pass** (EXECUTOR: HUMAN, ~10 min) — follow
    `src/rnd/2026.06.11-focus-mode-voice-chat/91-osq7-firebase-console-runbook.md` Parts A–D;

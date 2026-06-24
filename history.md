@@ -12,6 +12,23 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.06.23 | Session `e02f3101` (Tiffany 💍) — FCM live-service enablement + APK build fix; focus-mode UI device-verified working
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+**Accomplishments**:
+- **APK build fixed** — Rick's `flutter build apk` failed compiling Dart-only `record_linux 0.7.2` (didn't implement `record_platform_interface` 1.6.0's `hasPermission(request:)`/`startStream`; Flutter's plugin registrant pulls the Dart plugin into the Android kernel even on an android/ios/web-only app). Fix: `record ^5.1.2 → ^6.0.0` (resolves 6.2.1 → `record_linux 1.3.1`). Verified on dev server: pub get clean, `flutter analyze` no-issues, 15/15 ASR + voice-reply tests green (incl. live `:7999` WAV→transcript). **Rick device-confirmed: APK builds + loads + focus-mode UI works** (UX noted clunky but functional).
+- **FCM live-service track reactivated + delivered** — coordinated end-to-end with Tiberius 👑 (client/server division of labor). Client: `google-services.json` in place + Google Services Gradle plugin wired. Server: Tiberius stood up FcmWakeService on the test VM (image `lupin:1.2.0`, keyless ADC, send-auth proven, project aligned all `hello-world-foo-423219`). Caught + cleared a project-alignment risk (google-services `project_id`) before it became a silent 403.
+- **Docs**: new `src/rnd/2026.06.23-focus-mode-status-summary.md` (focus-mode status + session-progress addendum); TODO.md FCM reactivation/closure notes; README index link.
+- **Board hygiene** (Rick-directed): store task `63790ce3` → done (receipts: commit `be03dd9` + status doc); redundant probe-tracker `81430c6b` dropped.
+
+**Files Modified**: commit `be03dd9` (6 files: pubspec.yaml, android/{settings,app/build}.gradle.kts, TODO.md, README.md, status doc) + this session-end commit (history.md, TODO.md).
+
+**Open (not Tiffany-owed)**: on-device FCM wake probe (runbook 92) is Rick's hardware verification; parked non-blocking decision — reuse `hello-world-foo-423219` vs dedicated `lupin-mobile` Firebase project (rec: keep reuse).
+
+---
+
+
 ## 2026.06.12 | Session `dabf7fbb` (Mr. Radio 🦉) — Commit + Postgame + AFK-window wrap (post-/clear continuation)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
