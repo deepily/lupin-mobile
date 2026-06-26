@@ -1,6 +1,8 @@
 # TODO
 
-Last updated: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉). Focus-mode milestone
+Last updated: 2026-06-25 (Session `f53bc7b3` — Tiffany 💍): Focus UI active/history filter PLAN
+landed + review-ready (see 🆕 NEW BACKLOG below; doc `src/rnd/2026.06.25-focus-ui-active-history-filter.md`).
+Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉). Focus-mode milestone
 AI-IMPLEMENTATION + REVIEW COMPLETE (406 ✅ / 1 skip / 0 ❌); implementation batch committed
 `b34fa01`; postgame walkthrough done (6/7 decided, §POSTGAME DECISIONS); 6 new R&D docs authored
 (see §NEXT-SESSION pointers). Survived a weekly-quota freeze (resets Jun 15 11am EDT).
@@ -65,6 +67,36 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 > **NEW BACKLOG — focus-mode UX polish**: Rick found the UX "a little weird and clunky."
 > Deferred follow-up: a UX-refinement pass on the focus-mode surface (interaction flow /
 > affordances / pacing) — scope in a later session; not blocking.
+
+> **🆕 NEW BACKLOG — Focus UI active/history filter + exit-visibility (Tiffany 💍, 2026-06-25)**
+> — PLAN COMPLETE + REVIEW-READY, no code written yet:
+> `src/rnd/2026.06.25-focus-ui-active-history-filter.md` (linked in README index). Part of the
+> focus-mode UX refinement above.
+> - **What**: make the Focus rail default to currently-LIVE sessions, with a Material-3
+>   `SegmentedButton` toggle to a rolling 24h history (live counts + 🟢/🟡 status dots + empty
+>   state). Rail is 56px so the control sits in a slim toolbar above the rail+pane.
+> - **Core contract (Rick ruling)**: filter = **VISIBILITY, not deletion** — keep ALL cards in
+>   state, toggle a derived `visible` flag. Live mode hides exited + aged cards (icon AND card);
+>   History re-reveals them within the window. Nothing is destroyed.
+> - **Recency math** mirrors the web notifications + multiplexer clients VERBATIM (Mr Radio-verified,
+>   DM thread 77099736): 🟢 `<1h` = Live, 🟡 `<24h` = History, ⚪ `≥24h`/null = dropped. Pure
+>   client-side; NO server liveness/presence signal exists.
+> - **Implementation**: add `lastActivityBySender` to `FocusChatState` (the bloc currently sorts
+>   by `lastActivity` then DISCARDS the timestamps) + a 30s aging `Timer.tick` + recompute-on-resume
+>   (web dodges the timer via WS re-render; mobile can't for the 1h boundary) + switch cold-start
+>   from `senders()` → `sendersVisible(hours:24)` for web parity (already exists in repo).
+> - **Exit handling (§4.8)**: on `voice_persona_released`, mark-exited + hide in Live; guard with a
+>   3–5s **debounce** (cancel if a same-session `voice_persona_assigned` lands — benign seat-handback
+>   vs true exit are wire-identical; payload has no `reason`). Honor `session_reaped` as an immediate
+>   worker-exit. Switch off today's grey-to-initial fallback (it diverges from web, which REMOVES the
+>   glyph).
+> - **⬆ UPSTREAM DEPENDENCY**: parent-repo task **`69edd619`** (Mr Radio-owned, P2 queued) adds
+>   `reason={exit|reassigned|borrowed_return|clear}` to the release payload at `voice_persona.py:570`
+>   + `notifications.py:609` catalog; **mobile swaps off the debounce when it lands**.
+> - **Phasing** (doc §6): P1 state+bloc+predicate+repo-switch; P2 widget; P3 tests (100% L/B/F) +
+>   optional filter persistence.
+> - **OPEN non-blocking (#8)**: History as single-24h view vs a 1h/24h sub-selector — Rick to
+>   confirm; speced as single-24h for now.
 
 1. [ ] [LUPIN-MOBILE] **OSQ-7 Firebase console pass** (EXECUTOR: HUMAN, ~10 min) — follow
    `src/rnd/2026.06.11-focus-mode-voice-chat/91-osq7-firebase-console-runbook.md` Parts A–D;

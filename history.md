@@ -12,6 +12,24 @@ Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.06.25 | Session `f53bc7b3` (Tiffany 💍) — Focus UI active/history filter: planning doc
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+**Accomplishments** (planning-only session — no app code touched):
+- **Planning doc authored**: `src/rnd/2026.06.25-focus-ui-active-history-filter.md` — make the Focus rail default to currently-LIVE sessions with a Material-3 `SegmentedButton` toggle to a rolling 24h history. Mapped the existing `focus_mode/` feature (rail, `FocusChatBloc`/`State`, `SenderSummary`, repository) before designing.
+- **Cross-client alignment via Mr Radio 🦉** (DM thread 77099736): confirmed both web clients (notifications.js + multiplexer) use IDENTICAL pure-client recency math — 🟢 `<1h` Live / 🟡 `<24h` History / ⚪ dropped; NO server liveness/presence signal. Plan mirrors the constants verbatim with source-citation comments. Caught the key trap: the bloc sorts by `lastActivity` then discards timestamps → plan adds `lastActivityBySender` + 30s aging tick + `senders-visible` switch.
+- **Rick's visibility-model ruling** (the governing contract, §4.0): filter = VISIBILITY, not deletion — keep all cards, toggle `visible`; Live hides exited + aged, History re-reveals.
+- **Exit handling (§4.8)** designed: `voice_persona_released` → mark-exited + hide in Live, guarded by a 3–5s debounce (benign seat-handback vs true exit are wire-identical — no `reason` field today); `session_reaped` = immediate worker-exit.
+- **Upstream dependency minted**: Mr Radio filed parent-repo task `69edd619` (P2) adding `reason={exit|reassigned|borrowed_return|clear}` to the release payload (Rick-approved); mobile swaps off the debounce when it lands.
+
+**Files Modified**: this session-end commit only — new `src/rnd/2026.06.25-focus-ui-active-history-filter.md`, README.md (index link), TODO.md (🆕 NEW BACKLOG entry), history.md. **No app/lib/ code changed.**
+
+**Status**: plan review-ready; implementation NOT started (phasing in doc §6). One non-blocking open item (#8): History single-24h vs a 1h/24h sub-selector — Rick to confirm.
+
+---
+
+
 ## 2026.06.23 | Session `e02f3101` (Tiffany 💍) — FCM live-service enablement + APK build fix; focus-mode UI device-verified working
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
