@@ -133,6 +133,12 @@ class TestKeys {
   static const settingsStopListReset         = 'settings.stopList.reset';
   static const settingsStopListRowPrefix     = 'settings.stopList.row.';      // + pattern
   static const settingsStopListTogglePrefix  = 'settings.stopList.toggle.';   // + pattern
+  // TTS preview-fraction slider pinned at the top of the focus pane (Rick 2026-08-21)
+  static const focusTtsFractionBar             = 'focus.ttsFraction.bar';
+  static const focusTtsFractionSlider          = 'focus.ttsFraction.slider';
+  static const focusTtsFractionValue           = 'focus.ttsFraction.value';
+  // Lower-left timestamp on every notification bubble/card (Rick 2026-08-21)
+  static const messageStampPrefix              = 'message.stamp.';             // + notification id
   // Progress-group collapse (plan 2026.08.21 §4)
   static const settingsCollapseGroups          = 'settings.collapseGroups';
   static const focusGroupPrefix                = 'focus.group.';               // + groupKey-latestId

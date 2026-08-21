@@ -10,6 +10,7 @@ import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'interactive_prompt_sheet.dart';
+import 'message_stamp.dart';
 import 'persona_badge.dart';
 import 'sender_dates_screen.dart';
 
@@ -69,6 +70,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final sl = _stopList;
     if ( sl == null || _showHidden ) return all;
     return all.where( ( m ) => !sl.matches( m.message ) ).toList();
+  }
+
+  /// Chronological (oldest→newest), STABLE on equal timestamps — the shape
+  /// the group collapse wants; the render then flips it so the NEWEST is at
+  /// the top (Rick 2026-08-21). Sorting ASC directly (not DESC-then-reverse)
+  /// keeps tied messages in wire order instead of flipping them.
+  static List<ConversationMessage> _oldestFirst( List<ConversationMessage> ms ) {
+    final indexed = ms.asMap().entries.toList()
+      ..sort( ( a, b ) {
+        final c = a.value.timestamp.compareTo( b.value.timestamp );
+        return c != 0 ? c : a.key.compareTo( b.key );   // stable on ties
+      } );
+    return indexed.map( ( e ) => e.value ).toList( growable: false );
   }
 
   @override
@@ -182,8 +196,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   child: visible.isEmpty
                       ? const Center( child: Text( "All messages here are hidden by your stop-list" ) )
                       : Builder( builder: ( context ) {
+                          // Group on the chronological list (runs are contiguous
+                          // in time), then flip so the newest burst is on top and
+                          // each group's latest message is its summary.
                           final groups = collapseByProgressGroup<ConversationMessage>(
-                            visible, _groupKey, enabled: _stopList?.collapseGroups ?? true );
+                            _oldestFirst( visible ), _groupKey,
+                            enabled: _stopList?.collapseGroups ?? true ).reversed.toList();
                           return ListView.separated(
                             padding: const EdgeInsets.all( 12 ),
                             itemCount: groups.length,
@@ -195,7 +213,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                                 key   : Key( '${TestKeys.conversationGroupPrefix}${g.key}-${g.latest.id}' ),
                                 count : g.count,
                                 summary : _MessageCard( message: g.latest ),
-                                children: [ for ( final m in g.items ) _MessageCard( message: m ) ],
+                                children: [ for ( final m in g.items.reversed ) _MessageCard( message: m ) ],
                               );
                             },
                           );
@@ -274,11 +292,6 @@ class _MessageCard extends StatelessWidget {
                     style: TextStyle( color: _stateColor( context ), fontSize: 11 ),
                   ),
                 ),
-                if ( message.timeDisplay != null )
-                  Text(
-                    message.timeDisplay!,
-                    style: theme.textTheme.bodySmall,
-                  ),
               ],
             ),
             const SizedBox( height: 8 ),
@@ -326,6 +339,8 @@ class _MessageCard extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox( height: 6 ),
+            MessageStamp( timestamp: message.timestamp, id: message.id ),   // lower-left
           ],
         ),
       ),

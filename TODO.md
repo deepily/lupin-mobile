@@ -69,7 +69,7 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 > Deferred follow-up: a UX-refinement pass on the focus-mode surface (interaction flow /
 > affordances / pacing) — scope in a later session; not blocking.
 
-> **🆕 2026-08-21 — Focus rail Live/24h + persona icons (A ✅ + B ✅ + C ✅ ALL IMPLEMENTED, uncommitted — awaiting Rick's commit word + device check)**
+> **🆕 2026-08-21 — Focus rail Live/24h + persona icons (A ✅ + B ✅ + C ✅ committed `557e037`; device-feedback round — stop-list render lens, lower-left timestamps, newest-first, TTS-fraction slider (web parity, default 20%) — implemented, uncommitted)**
 > (Tiffany 💍). Rick's rulings by voice: Live(<1h) default + 24h history toggle; persona icon w/ NAME-initial fallback
 > (never repo id); one checkbox = hide + mute; order A→B→C. Measured: cold start fetches ALL senders (146 vs 6 in 24h);
 > personas seeded only by live events; `/senders-visible` carries `voice_persona`. Plan:

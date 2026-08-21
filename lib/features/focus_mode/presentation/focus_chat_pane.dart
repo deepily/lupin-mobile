@@ -3,14 +3,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_filter/progress_group_collapse.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
+import '../../notifications/presentation/message_stamp.dart';
 import '../../notifications/presentation/persona_badge.dart';
 import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
+import 'tts_fraction_bar.dart';
 
 /// The chat pane half of the focus surface (S3 §3.1): header (badge +
 /// sender name), the focused sender's last-7 window newest-at-bottom,
@@ -30,20 +33,28 @@ class FocusChatPane extends StatefulWidget {
   /// Filter prefs (collapse toggle). Tests inject; production resolves from
   /// the locator when registered; null ⇒ collapse ON (browser parity).
   final NotificationStopList? stopList;
+  /// Audio prefs for the pinned TTS-fraction slider. Tests inject; production
+  /// resolves from the locator; null => no slider rendered.
+  final NotificationPreferences? prefs;
 
-  const FocusChatPane( { super.key, this.userEmail, this.stopList } );
+  const FocusChatPane( { super.key, this.userEmail, this.stopList, this.prefs } );
 
   @override
   State<FocusChatPane> createState() => _FocusChatPaneState();
 }
 
 class _FocusChatPaneState extends State<FocusChatPane> {
-  NotificationStopList? _stopList;
+  NotificationStopList?    _stopList;
+  NotificationPreferences? _prefs;
   String? get userEmail => widget.userEmail;
 
   @override
   void initState() {
     super.initState();
+    _prefs = widget.prefs ??
+        ( ServiceLocator.isRegistered<NotificationPreferences>()
+            ? ServiceLocator.get<NotificationPreferences>()
+            : null );
     _stopList = widget.stopList ??
         ( ServiceLocator.isRegistered<NotificationStopList>()
             ? ServiceLocator.get<NotificationStopList>()
@@ -73,6 +84,9 @@ class _FocusChatPaneState extends State<FocusChatPane> {
           key: const Key( TestKeys.focusChatPane ),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Pinned ABOVE everything else in the pane -- survives sender
+            // switches, loading and error states (Rick 2026-08-21).
+            if ( _prefs != null ) TtsFractionBar( prefs: _prefs! ),
             if ( state.hydration == FocusHydration.error )
               _RetryBanner( userEmail: userEmail ),
             Expanded( child: _body( context, state ) ),
@@ -100,10 +114,22 @@ class _FocusChatPaneState extends State<FocusChatPane> {
       );
     }
 
-    final window  = state.windows[ focused ] ?? const <FocusMessage>[];
+    final stored  = state.windows[ focused ] ?? const <FocusMessage>[];
     final pending = state.pendingPromptFor( focused );
     final persona = state.personasBySender[ focused ];
-    final hidden  = state.hiddenCountBySender[ focused ] ?? 0;
+
+    // Stop-list RENDER lens (2026-08-21, Rick: "Done: Bash is checked yet
+    // still shows"): ingest suppression only catches NEW arrivals, so a
+    // pattern checked after a bubble landed left it on screen. Apply the
+    // same predicate here too — the window is retained (hide-not-delete),
+    // so unchecking reveals again instantly; the pane already re-renders on
+    // any stop-list change via [_onPrefsChanged]. User replies never hide.
+    final sl      = _stopList;
+    final window  = sl == null
+        ? stored
+        : stored.where( ( m ) =>
+            m.item.type == 'user_initiated_message' || !sl.matches( m.item.message ) ).toList();
+    final hidden  = ( state.hiddenCountBySender[ focused ] ?? 0 ) + ( stored.length - window.length );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,10 +165,17 @@ class _FocusChatPaneState extends State<FocusChatPane> {
           ),
         Expanded(
           child: window.isEmpty
-              ? const Center( child: Text( 'No messages yet in this window.' ) )
+              ? Center( child: Text( stored.isEmpty
+                  ? 'No messages yet in this window.'
+                  : 'Everything here is hidden by your stop-list.' ) )
               : Builder( builder: ( context ) {
+                  // NEWEST AT THE TOP (Rick 2026-08-21): the window is stored
+                  // oldest→newest; group first (runs are contiguous either
+                  // way), then render the groups reversed. Inside an expanded
+                  // group the children are newest-first too.
                   final groups = collapseByProgressGroup<FocusMessage>(
-                    window, _groupKey, enabled: _stopList?.collapseGroups ?? true );
+                    window, _groupKey, enabled: _stopList?.collapseGroups ?? true )
+                    .reversed.toList( growable: false );
                   return ListView.builder(
                     padding     : const EdgeInsets.all( 8 ),
                     itemCount   : groups.length,
@@ -160,7 +193,7 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                         key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
                         count    : g.count,
                         summary  : _MessageBubble( msg: g.latest, senderId: focused, isPendingPrompt: false ),
-                        children : [ for ( final m in g.items )
+                        children : [ for ( final m in g.items.reversed )
                           _MessageBubble( msg: m, senderId: focused, isPendingPrompt: false ) ],
                       );
                     },
@@ -238,6 +271,8 @@ class _MessageBubble extends StatelessWidget {
           Text( msg.item.title!, style: theme.textTheme.labelLarge ),
         Text( msg.item.message ),
         if ( msg.item.responseRequested ) _promptZone( context ),
+        const SizedBox( height: 2 ),
+        MessageStamp( timestamp: msg.item.timestamp, id: msg.item.id ),   // lower-left
       ],
     );
 

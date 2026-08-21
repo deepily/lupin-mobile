@@ -385,5 +385,33 @@ void main() {
       await tester.pump();
       expect( find.text( "Done: Read x" ), findsOneWidget );
     });
+
+    testWidgets( "NEWEST AT THE TOP: cards sort by timestamp desc regardless of wire order; each card has a lower-left stamp", ( tester ) async {
+      SharedPreferences.setMockInitialValues( {} );
+      final sl = NotificationStopList( await SharedPreferences.getInstance() );
+      for ( var i = sl.patterns.length - 1; i >= 0; i-- ) { await sl.removeAt( i ); }
+      ConversationMessage m( String id, String text, int minute ) => ConversationMessage(
+        id: id, message: text, type: "progress", priority: "low", state: "delivered", isHidden: false,
+        responseRequested: false, timestamp: DateTime( 2026, 8, 21, 10, minute, 0 ),
+      );
+      whenListen( bloc, Stream<NotificationState>.fromIterable( [
+        NotificationsConversationLoaded( senderId: "s-1", userEmail: "u@x.y", messages: [
+          m( "a", "middle", 2 ), m( "b", "oldest", 1 ), m( "c", "newest", 3 ),
+        ] ),
+      ] ), initialState: const NotificationsInitial() );
+      await tester.pumpWidget( testApp(
+        authBloc: MockAuthBloc(),
+        extraProviders: [ BlocProvider<NotificationBloc>.value( value: bloc ) ],
+        child: ConversationScreen( senderId: "s-1", userEmail: "u@x.y", stopList: sl ),
+      ) );
+      await tester.pump();
+      final dyNew = tester.getTopLeft( find.text( "newest" ) ).dy;
+      final dyMid = tester.getTopLeft( find.text( "middle" ) ).dy;
+      final dyOld = tester.getTopLeft( find.text( "oldest" ) ).dy;
+      expect( dyNew < dyMid && dyMid < dyOld, isTrue );
+      for ( final id in [ "a", "b", "c" ] ) {
+        expect( find.byKey( Key( "${TestKeys.messageStampPrefix}$id" ) ), findsOneWidget );
+      }
+    });
   });
 }

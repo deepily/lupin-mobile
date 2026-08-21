@@ -4,6 +4,7 @@ import 'dart:collection';
 import '../notification_audio/notification_audio_service.dart';
 import '../notification_audio/notification_preferences.dart';
 import '../notification_filter/notification_stop_list.dart';
+import 'tts_preview_truncator.dart';
 import '../websocket/websocket_service.dart';
 import 'streaming_tts_player.dart';
 
@@ -254,9 +255,16 @@ class TtsOrchestrator {
     }
   }
 
+  /// Title is spoken whole (it is short); the MESSAGE is cut to the user's
+  /// TTS preview fraction (`prefs.ttsFraction`, slider at the top of the
+  /// focus pane -- web `#cc-tts-fraction-slider` parity, Rick 2026-08-21).
+  /// Applied HERE, at enqueue time: the queue holds text, not audio, and the
+  /// player synthesizes one utterance at a time when it reaches the head --
+  /// so the cut is upstream of any TTS spend.
   String _formatSpeech( { required String message, String? title } ) {
-    if ( title != null && title.isNotEmpty ) return '$title. $message';
-    return message;
+    final spoken = TtsPreviewTruncator.previewFor( message, _prefs.ttsFraction );
+    if ( title != null && title.isNotEmpty ) return '$title. $spoken';
+    return spoken;
   }
 
   void _emitQueueDepth() {

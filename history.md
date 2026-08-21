@@ -12,6 +12,23 @@ Most recent entries (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — Device-feedback round: stop-list render lens · lower-left timestamps + newest-first · TTS preview-fraction slider
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Plan**: `src/rnd/2026.08.21-focus-rail-liveness-icons-and-notification-stop-list.md` (§5b amendment, §5d, §5e) · store rows `bae1ecd4` / `f1bdd6e8` / `89e8e2a1`
+
+**Accomplishments** (third commit of the session, after `98a3a40` + `557e037`; self re-spin at 21:05Z mid-round — memento `io/mementos/tiffany-2026-08-21T2105Z.md`):
+- **Stop-list RENDER lens** (device finding: "Done: Bash" still showed in the focus pane) — `FocusChatPane` now applies the same `NotificationStopList` predicate at render, with a hidden-count line instead of "no messages yet"; the collapse fixtures were de-stop-listed so they still exercise collapse.
+- **`MessageStamp`** (NEW, lower-left `HH:mm` on every bubble/card) + **newest-first ordering** in both the focus pane and `ConversationScreen` (stable chronological sort, then reversed); `messageStampPrefix` test key.
+- **TTS preview-fraction slider** (web `#cc-tts-fraction-slider` parity): `TtsFractionBar` (NEW, pinned top of pane, 10% steps, **default 20%** — Rick changed it from 30% at checkpoint), `TtsPreviewTruncator` (NEW, port of web `_truncateAtBoundary`), `NotificationPreferences.ttsFraction`/`setTtsFraction`/`snapTtsFraction`, applied in `TtsOrchestrator._formatSpeech` at enqueue (queue holds text; audio plays one at a time).
+- **Tests**: +19 (message_stamp ×2, preview_truncator ×11, orchestrator +2, preferences +1, pane widget +4, conversation +1). **Full suite 559 ✅ / 0 ❌ outside `legacy_quarantine/`**; targeted re-run after the 20% change 65/65 ✅; analyze clean.
+
+**Files Modified**: 18 — lib: `focus_chat_pane.dart`, `conversation_screen.dart`, `message_stamp.dart` (NEW), `tts_fraction_bar.dart` (NEW), `tts_preview_truncator.dart` (NEW), `tts_orchestrator.dart`, `notification_preferences.dart`, `test_keys.dart`; tests as above; plan doc, TODO.md, history.md.
+
+**Open (Rick, device)**: APK rebuild + check of the whole round (`src/rnd/2026.06.12-poc-laptop-build-runbook.md`). Wave 2 of the v2 cutover still waits on `/api/v2/submit`.
+
+---
+
+
 ## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — Focus rail Live/24h + persona icons · notification stop-list · progress-group collapse (A+B+C)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Plan**: `src/rnd/2026.08.21-focus-rail-liveness-icons-and-notification-stop-list.md` (Rick's voice rulings folded in; §5a/5b/5c implementation records) · store rows `341b1c9f` / `0193089c` / `530849ba`

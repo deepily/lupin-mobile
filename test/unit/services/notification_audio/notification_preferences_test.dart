@@ -47,5 +47,18 @@ void main() {
       await p.setDingOnUrgent( true );
       expect( p.dingOnUrgent, true );
     } );
+
+    test( 'ttsFraction defaults to 0.2, snaps to 10% steps, clamps, and persists', () async {
+      SharedPreferences.setMockInitialValues( {} );
+      final p = NotificationPreferences( await SharedPreferences.getInstance() );
+      expect( p.ttsFraction, NotificationPreferences.defaultTtsFraction );
+      await p.setTtsFraction( 0.57 );
+      expect( p.ttsFraction, 0.6 );
+      await p.setTtsFraction( 1.7 );
+      expect( p.ttsFraction, 1.0 );
+      await p.setTtsFraction( -3 );
+      expect( p.ttsFraction, 0.0 );
+      expect( NotificationPreferences.snapTtsFraction( 0.25 ), 0.3 );
+    } );
   } );
 }

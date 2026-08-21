@@ -776,5 +776,40 @@ void main() {
       await Future<void>.delayed( Duration.zero );
       verify( () => player.speak( text: "Done: mcp__cosa-voice__notify", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
     } );
-} );
+
+    // TTS preview fraction (Rick 2026-08-21, web #cc-tts-fraction-slider parity)
+    test( "fraction: a long message is cut to the first sentence(s) at 30%; title spoken whole", () async {
+      await setUpMocks();
+      await prefs.setTtsFraction( 0.3 );
+      final o = newOrch();
+      final long = List.generate( 6, ( i ) => "Sentence number ${i + 1} is here and long enough." ).join( " " );
+      o.enqueueAlways( priority: "low", message: long, title: "Tiffany" );
+      await Future<void>.delayed( Duration.zero );
+      final captured = verify( () => player.speak( text: captureAny( named: "text" ), sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).captured;
+      final spoken = captured.single as String;
+      expect( spoken, startsWith( "Tiffany. Sentence number 1" ) );
+      expect( spoken.length, lessThan( long.length ) );
+      expect( spoken, endsWith( "." ) );
+    } );
+
+    test( "fraction: 100% speaks the whole message; short messages are never cut", () async {
+      await setUpMocks();
+      await prefs.setTtsFraction( 1.0 );
+      final o = newOrch();
+      final long = List.generate( 6, ( i ) => "Sentence number ${i + 1} is here and long enough." ).join( " " );
+      o.enqueueAlways( priority: "low", message: long, title: null );
+      await Future<void>.delayed( Duration.zero );
+      verify( () => player.speak( text: long, sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
+
+      // Fresh orchestrator: the first utterance is still "current" (one at a
+      // time), so a second enqueue on `o` would queue, not speak.
+      await o.dispose();
+      await setUpMocks();
+      await prefs.setTtsFraction( 0.0 );
+      final o2 = newOrch();
+      o2.enqueueAlways( priority: "low", message: "Build finished", title: null );
+      await Future<void>.delayed( Duration.zero );
+      verify( () => player.speak( text: "Build finished", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
+    } );
+  } );
 }

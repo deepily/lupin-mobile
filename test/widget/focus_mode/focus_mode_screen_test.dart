@@ -220,6 +220,13 @@ void main() {
           'Y': [ FocusMessage( item: _item( 'y1', 'Y' ) ) ],
         },
       ) );
+      // Bubbles carry a lower-left timestamp since 2026-08-21, so seven of
+      // them no longer fit the default 800×600 test surface and ListView.builder
+      // would not build the bottom one — use a phone-tall viewport.
+      tester.view.physicalSize     = const Size( 1080, 2400 );
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown( tester.view.resetPhysicalSize );
+      addTearDown( tester.view.resetDevicePixelRatio );
       await tester.pumpWidget( host() );
       await tester.pump();
 
