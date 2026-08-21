@@ -123,6 +123,12 @@ class WsBlocDispatcher {
         final sid = notif.senderId;
         if ( sid != null ) focus.add( FocusPersonaUpdated( senderId: sid ) );
         break;
+      case 'session_reaped':
+        // Unambiguous worker exit (dismiss_sessions) — no debounce needed;
+        // the rail hides it in Live, History still shows it (plan §4.8 #5).
+        final sid = notif.senderId;
+        if ( sid != null ) focus.add( FocusSenderExited( sid ) );
+        break;
     }
   }
 }

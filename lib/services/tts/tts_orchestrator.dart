@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import '../notification_audio/notification_audio_service.dart';
 import '../notification_audio/notification_preferences.dart';
+import '../notification_filter/notification_stop_list.dart';
 import '../websocket/websocket_service.dart';
 import 'streaming_tts_player.dart';
 
@@ -47,6 +48,10 @@ class TtsOrchestrator {
   final NotificationAudioService  _fallback;
   final NotificationPreferences   _prefs;
   final WebSocketService          _ws;
+  /// User stop-list (plan 2026.08.21 §3): a matched message is MUTED on
+  /// BOTH entry points — including the ungated focus path — because a
+  /// checked pattern means "hide AND mute". Null ⇒ no filtering.
+  final NotificationStopList?     _stopList;
 
   final Queue<_Utterance> _fifo    = Queue();
   _Utterance?             _current;
@@ -78,10 +83,12 @@ class TtsOrchestrator {
     required NotificationAudioService fallback,
     required NotificationPreferences  prefs,
     required WebSocketService         ws,
+    NotificationStopList?             stopList,
   } ) : _player   = player,
        _fallback  = fallback,
        _prefs     = prefs,
-       _ws        = ws {
+       _ws        = ws,
+       _stopList  = stopList {
     _completeSub = _player.completeStream.listen( ( _ )  => _onUtteranceFinished() );
     _errorSub    = _player.errorStream   .listen( _onElevenLabsError );
   }
@@ -152,6 +159,7 @@ class TtsOrchestrator {
     String?         voiceId,
   } ) {
     if ( _prefs.masterMute ) return;
+    if ( _stopList?.matches( message ) ?? false ) return;   // stop-list: muted
     if ( !_isSpeakable( priority ) ) return;
 
     final utter = _Utterance(
@@ -192,6 +200,9 @@ class TtsOrchestrator {
     String?         title,
     String?         voiceId,
   } ) {
+    // The ONLY gate on this path (F-S1-1 keeps it ungated by priority and
+    // master-mute): a user-checked stop-list pattern = "never speak this".
+    if ( _stopList?.matches( message ) ?? false ) return;
     final utter = _Utterance(
       priority : priority,
       text     : _formatSpeech( title: title, message: message ),

@@ -50,6 +50,7 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 // Notification audio (ding + TTS on high/urgent)
 import '../../services/notification_audio/notification_audio_service.dart';
 import '../../services/notification_audio/notification_preferences.dart';
+import '../../services/notification_filter/notification_stop_list.dart';
 
 // Agent-narration TTS (ElevenLabs primary, flutter_tts fallback)
 import '../../services/tts/streaming_tts_player.dart';
@@ -232,6 +233,11 @@ class ServiceLocator {
     // wraps flutter_local_notifications + flutter_tts. Channels register
     // lazily on first handleIncoming() via initialize(); app startup also
     // pre-warms the service (see main.dart).
+    // Notification stop-list (plan 2026.08.21 §3) — ONE predicate shared
+    // by the TTS gate, the focus bloc and the conversation list.
+    _getIt.registerSingleton<NotificationStopList>(
+      NotificationStopList( _getIt<SharedPreferences>() ),
+    );
     _getIt.registerSingleton<NotificationPreferences>(
       NotificationPreferences(_getIt<SharedPreferences>()),
     );
@@ -258,6 +264,7 @@ class ServiceLocator {
         fallback : _getIt<NotificationAudioService>(),
         prefs    : _getIt<NotificationPreferences>(),
         ws       : _getIt<WebSocketService>(),
+        stopList : _getIt<NotificationStopList>(),
       ),
     );
   }
@@ -306,7 +313,11 @@ class ServiceLocator {
     _getIt.registerLazySingleton<FocusChatBloc>(
       () => FocusChatBloc(
         _getIt<NotificationRepository>(),
-        tts: _getIt<TtsOrchestrator>(),
+        tts          : _getIt<TtsOrchestrator>(),
+        // Recency-band aging tick (plan 2026.06.25 §4.4) — production only;
+        // tests construct the bloc without one so pumpAndSettle can settle.
+        tickInterval : const Duration( seconds: 30 ),
+        stopList     : _getIt<NotificationStopList>(),
       ),
     );
 

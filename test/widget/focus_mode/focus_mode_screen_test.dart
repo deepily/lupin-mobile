@@ -15,6 +15,7 @@ import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_bloc.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/focus_mode/presentation/focus_mode_screen.dart';
+import 'package:lupin_mobile/features/focus_mode/presentation/session_rail.dart';
 import 'package:lupin_mobile/features/focus_mode/presentation/voice_reply_field.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
@@ -68,14 +69,24 @@ FocusChatState _st( {
   String?                         focused,
   FocusHydration                  hydration = FocusHydration.ready,
   Map<String, VoicePersona?>      personas = const {},
+  Map<String, DateTime>           activity = const {},
+  Set<String>                     exited   = const {},
+  FocusFilter                     filter   = FocusFilter.live,
+  DateTime?                       asOf,
+  Map<String, int>                hidden   = const {},
 } ) {
   return FocusChatState(
-    senderOrder      : order,
-    personasBySender : personas,
-    windows          : windows,
-    unreadBySender   : unread,
-    focusedSender    : focused,
-    hydration        : hydration,
+    senderOrder          : order,
+    personasBySender     : personas,
+    windows              : windows,
+    unreadBySender       : unread,
+    focusedSender        : focused,
+    hydration            : hydration,
+    lastActivityBySender : activity,
+    exitedSenders        : exited,
+    filter               : filter,
+    asOf                 : asOf,
+    hiddenCountBySender  : hidden,
   );
 }
 
@@ -411,5 +422,121 @@ void main() {
 
       expect( find.byType( VoiceReplyField ), findsOneWidget );
     } );
+  } );
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Visibility lens — 2026.06.25 plan §4.1/§4.5 (Live/24h toggle, status
+  // dots, empty state) + Rick 2026-08-21 (persona-NAME initial fallback).
+  // ───────────────────────────────────────────────────────────────────────
+  group( 'FocusModeScreen — rail visibility lens + icons', () {
+    final at = DateTime( 2026, 8, 21, 12 );
+
+    Finder dot( String sid )     => find.byKey( Key( '${TestKeys.focusRailStatusDotPrefix}$sid' ) );
+    Finder initial( String sid ) => find.byKey( Key( '${TestKeys.focusRailInitialPrefix}$sid' ) );
+
+    testWidgets( 'filter bar shows Live/24h counts; tapping 24h dispatches FocusFilterChanged(history)', ( tester ) async {
+      seed( _st(
+        order    : const [ 'L', 'H' ],
+        activity : { 'L': at.subtract( const Duration( minutes: 2 ) ), 'H': at.subtract( const Duration( hours: 3 ) ) },
+        asOf     : at,
+      ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.focusFilterBar ) ), findsOneWidget );
+      expect( find.text( 'Live (1)' ), findsOneWidget );
+      expect( find.text( '24h (2)' ),  findsOneWidget );
+      // Live lens: only L is on the rail
+      expect( railBadge( 'L' ), findsOneWidget );
+      expect( railBadge( 'H' ), findsNothing );
+
+      await tester.tap( find.byKey( const Key( TestKeys.focusFilterHistory ) ) );
+      await tester.pump();
+      verify( () => focusBloc.add( const FocusFilterChanged( FocusFilter.history ) ) ).called( 1 );
+    } );
+
+    testWidgets( 'History lens renders both bands with 🟢/🟡 status dots; exited sender shows amber', ( tester ) async {
+      seed( _st(
+        order    : const [ 'L', 'H', 'X' ],
+        activity : {
+          'L': at.subtract( const Duration( minutes: 2 ) ),
+          'H': at.subtract( const Duration( hours: 3 ) ),
+          'X': at,
+        },
+        exited   : const { 'X' },
+        filter   : FocusFilter.history,
+        asOf     : at,
+      ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      for ( final sid in [ 'L', 'H', 'X' ] ) {
+        expect( railBadge( sid ), findsOneWidget );
+        expect( dot( sid ), findsOneWidget );
+      }
+      Color colorOf( String sid ) =>
+          ( ( tester.widget<Container>( dot( sid ) ).decoration ) as BoxDecoration ).color!;
+      expect( colorOf( 'L' ), const Color( 0xFF2E7D32 ) );
+      expect( colorOf( 'H' ), const Color( 0xFFF9A825 ) );
+      expect( colorOf( 'X' ), const Color( 0xFFF9A825 ), reason: 'exited renders as history even if recent' );
+    } );
+
+    testWidgets( 'fallback avatar uses the persona NAME initial, else the sender local part — never the repo id', ( tester ) async {
+      final noIcon = VoicePersona.fromJson( { 'name': 'Tiffany' } );   // no icon ⇒ initial path
+      seed( _st(
+        order    : const [ 'lupin.tiffany@lupin.deepily.ai#e082', 'deep.research@lupin.deepily.ai#dr-1', '' ],
+        personas : { 'lupin.tiffany@lupin.deepily.ai#e082': noIcon },
+        asOf     : at,
+      ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( tester.widget<Text>( initial( 'lupin.tiffany@lupin.deepily.ai#e082' ) ).data, 'T' );
+      expect( tester.widget<Text>( initial( 'deep.research@lupin.deepily.ai#dr-1' ) ).data, 'D' );
+      expect( tester.widget<Text>( initial( '' ) ).data, '?' );
+      expect( SessionRail.railInitial( 'x@y', VoicePersona.fromJson( { 'name': 'Rio', 'display_name': 'María' } ) ), 'M' );
+      expect( SessionRail.railInitial( '#only-suffix', null ), '?' );
+    } );
+
+    testWidgets( 'Live lens with nothing live but history present → empty hint; its button dispatches FocusFilterChanged(history)', ( tester ) async {
+      seed( _st(
+        order    : const [ 'H' ],
+        activity : { 'H': at.subtract( const Duration( hours: 5 ) ) },
+        asOf     : at,
+      ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.focusRailEmptyHint ) ), findsOneWidget );
+      expect( railBadge( 'H' ), findsNothing );
+      await tester.tap( find.byKey( const Key( TestKeys.focusRailEmptyHintButton ) ) );
+      await tester.pump();
+      verify( () => focusBloc.add( const FocusFilterChanged( FocusFilter.history ) ) ).called( 1 );
+    } );
+
+    testWidgets( 'no senders at all → no empty hint (cold rail stays blank, no misleading "no live sessions")', ( tester ) async {
+      seed( _st( asOf: at ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.focusRailEmptyHint ) ), findsNothing );
+    } );
+
+  group( 'FocusModeScreen — stop-list caption', () {
+    testWidgets( 'focused sender with hidden messages shows "N hidden by your stop-list"; none ⇒ no caption', ( tester ) async {
+      seed( _st( order: const [ 'S' ], focused: 'S',
+                 windows: { 'S': [ FocusMessage( item: _item( '1', 'S' ) ) ] },
+                 hidden: const { 'S': 3 } ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.focusHiddenCaption ) ), findsOneWidget );
+      expect( find.text( '3 hidden by your stop-list' ), findsOneWidget );
+
+      seed( _st( order: const [ 'S' ], focused: 'S',
+                 windows: { 'S': [ FocusMessage( item: _item( '1', 'S' ) ) ] } ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.focusHiddenCaption ) ), findsNothing );
+    } );
+  } );
   } );
 }

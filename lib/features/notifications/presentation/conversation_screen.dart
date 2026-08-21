@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../services/notification_filter/notification_stop_list.dart';
+import '../../../services/notification_filter/progress_group_collapse.dart';
 import '../data/notification_models.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
@@ -13,11 +16,15 @@ import 'sender_dates_screen.dart';
 class ConversationScreen extends StatefulWidget {
   final String senderId;
   final String userEmail;
+  /// Stop-list seam (plan 2026.08.21 §3). Tests inject; production resolves
+  /// from the locator when registered; null ⇒ no filtering.
+  final NotificationStopList? stopList;
 
   const ConversationScreen( {
     super.key,
     required this.senderId,
     required this.userEmail,
+    this.stopList,
   } );
 
   @override
@@ -25,13 +32,43 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen> {
+  NotificationStopList? _stopList;
+  bool _showHidden = false;
+
   @override
   void initState() {
     super.initState();
+    _stopList = widget.stopList ??
+        ( ServiceLocator.isRegistered<NotificationStopList>()
+            ? ServiceLocator.get<NotificationStopList>()
+            : null );
+    _stopList?.addListener( _onStopListChanged );
     context.read<NotificationBloc>().add( NotificationsLoadConversation(
       senderId  : widget.senderId,
       userEmail : widget.userEmail,
     ) );
+  }
+
+  @override
+  void dispose() {
+    _stopList?.removeListener( _onStopListChanged );
+    super.dispose();
+  }
+
+  void _onStopListChanged() {
+    if ( mounted ) setState( () {} );
+  }
+
+  /// Plan §4 — a pending ask is never buried in a collapsed group.
+  static String? _groupKey( ConversationMessage m ) =>
+      m.responseRequested ? null : m.progressGroupId;
+
+  /// Hide-not-delete: the bloc state keeps every message; this lens drops
+  /// stop-listed ones unless the user taps the "N hidden" chip.
+  List<ConversationMessage> _visible( List<ConversationMessage> all ) {
+    final sl = _stopList;
+    if ( sl == null || _showHidden ) return all;
+    return all.where( ( m ) => !sl.matches( m.message ) ).toList();
   }
 
   @override
@@ -122,11 +159,49 @@ class _ConversationScreenState extends State<ConversationScreen> {
             if ( state.messages.isEmpty ) {
               return const Center( child: Text( "No messages" ) );
             }
-            return ListView.separated(
-              padding: const EdgeInsets.all( 12 ),
-              itemCount: state.messages.length,
-              separatorBuilder: ( _, __ ) => const SizedBox( height: 8 ),
-              itemBuilder: ( _, i ) => _MessageCard( message: state.messages[ i ] ),
+            final visible = _visible( state.messages );
+            final hidden  = state.messages.length - visible.length;
+            return Column(
+              children: [
+                if ( hidden > 0 || _showHidden )
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB( 12, 8, 12, 0 ),
+                      child: ActionChip(
+                        key     : const Key( TestKeys.conversationHiddenChip ),
+                        avatar  : Icon( _showHidden ? Icons.visibility_off : Icons.visibility, size: 16 ),
+                        label   : Text( _showHidden
+                            ? 'Hide stop-listed again'
+                            : '$hidden hidden by your stop-list' ),
+                        onPressed: () => setState( () => _showHidden = !_showHidden ),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: visible.isEmpty
+                      ? const Center( child: Text( "All messages here are hidden by your stop-list" ) )
+                      : Builder( builder: ( context ) {
+                          final groups = collapseByProgressGroup<ConversationMessage>(
+                            visible, _groupKey, enabled: _stopList?.collapseGroups ?? true );
+                          return ListView.separated(
+                            padding: const EdgeInsets.all( 12 ),
+                            itemCount: groups.length,
+                            separatorBuilder: ( _, __ ) => const SizedBox( height: 8 ),
+                            itemBuilder: ( _, i ) {
+                              final g = groups[ i ];
+                              if ( !g.isCollapsed ) return _MessageCard( message: g.items.single );
+                              return _CollapsedCards(
+                                key   : Key( '${TestKeys.conversationGroupPrefix}${g.key}-${g.latest.id}' ),
+                                count : g.count,
+                                summary : _MessageCard( message: g.latest ),
+                                children: [ for ( final m in g.items ) _MessageCard( message: m ) ],
+                              );
+                            },
+                          );
+                        } ),
+                ),
+              ],
             );
           }
           return const SizedBox.shrink();
@@ -254,6 +329,50 @@ class _MessageCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Collapsed burst of same-progress-group cards (plan 2026.08.21 §4):
+/// latest card + ×N chip; tap to expand in place.
+class _CollapsedCards extends StatefulWidget {
+  final int          count;
+  final Widget       summary;
+  final List<Widget> children;
+  const _CollapsedCards( { super.key, required this.count, required this.summary, required this.children } );
+
+  @override
+  State<_CollapsedCards> createState() => _CollapsedCardsState();
+}
+
+class _CollapsedCardsState extends State<_CollapsedCards> {
+  bool _expanded = false;
+
+  @override
+  Widget build( BuildContext context ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          key   : Key( '${TestKeys.conversationGroupTogglePrefix}${widget.key.toString()}' ),
+          onTap : () => setState( () => _expanded = !_expanded ),
+          child : Row(
+            children: [
+              Expanded( child: _expanded ? const SizedBox.shrink() : widget.summary ),
+              Padding(
+                padding: const EdgeInsets.symmetric( horizontal: 8 ),
+                child: Chip(
+                  visualDensity : VisualDensity.compact,
+                  avatar        : Icon( _expanded ? Icons.unfold_less : Icons.unfold_more, size: 14 ),
+                  label         : Text( '×${widget.count}' ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if ( _expanded )
+          for ( final c in widget.children ) Padding( padding: const EdgeInsets.only( top: 8 ), child: c ),
+      ],
     );
   }
 }

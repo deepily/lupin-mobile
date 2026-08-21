@@ -115,6 +115,30 @@ class TestKeys {
   static const focusPausedBanner    = 'focus.pausedBanner';
   static const focusRetryBanner     = 'focus.retryBanner';
   static const focusBatchFallbackPrefix = 'focus.batchFallback.';  // + notificationId
+  // Focus rail visibility lens (2026.06.25 plan, built 2026-08-21)
+  static const focusFilterBar            = 'focus.filterBar';
+  static const focusFilterLive           = 'focus.filter.live';
+  static const focusFilterHistory        = 'focus.filter.history';
+  static const focusRailStatusDotPrefix  = 'focus.rail.dot.';      // + senderId
+  static const focusRailInitialPrefix    = 'focus.rail.initial.';  // + senderId (fallback avatar)
+  static const focusRailEmptyHint        = 'focus.rail.emptyHint';
+  static const focusRailEmptyHintButton  = 'focus.rail.emptyHint.button';
+  // Notification stop-list (plan 2026.08.21 §3)
+  static const focusHiddenCaption            = 'focus.hiddenCaption';
+  static const conversationHiddenChip        = 'conversation.hiddenChip';
+  static const settingsOpenStopList          = 'settings.audio.openStopList';
+  static const settingsStopListAddField      = 'settings.stopList.addField';
+  static const settingsStopListAddButton     = 'settings.stopList.addButton';
+  static const settingsStopListMenu          = 'settings.stopList.menu';
+  static const settingsStopListReset         = 'settings.stopList.reset';
+  static const settingsStopListRowPrefix     = 'settings.stopList.row.';      // + pattern
+  static const settingsStopListTogglePrefix  = 'settings.stopList.toggle.';   // + pattern
+  // Progress-group collapse (plan 2026.08.21 §4)
+  static const settingsCollapseGroups          = 'settings.collapseGroups';
+  static const focusGroupPrefix                = 'focus.group.';               // + groupKey-latestId
+  static const focusGroupTogglePrefix          = 'focus.group.toggle.';        // + Key(...).toString()
+  static const conversationGroupPrefix         = 'conversation.group.';        // + groupKey-latestId
+  static const conversationGroupTogglePrefix   = 'conversation.group.toggle.'; // + Key(...).toString()
 
   // Focus-mode voice reply composer (S4 — focus-mode-voice-chat milestone)
   static const voiceReplyMic        = 'voiceReply.mic';

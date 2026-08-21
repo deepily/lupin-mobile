@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../notifications/data/notification_models.dart';
 import '../../notifications/data/notification_repository.dart';
@@ -32,6 +35,16 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   /// ones; the window cap is the real limiter.
   static const int backfillHours = 24 * 7;
 
+  /// Server-side history bound for the senders fetch (plan 2026.06.25 §4.4
+  /// G4): stale (⚪ >24h) senders never arrive; the 1h Live band is the
+  /// client predicate on top ([FocusChatState.isVisible]).
+  static const int sendersHours = 24;
+
+  /// `voice_persona_released` carries no `reason` (parent task 69edd619 adds
+  /// one); a benign seat hand-back and a true exit are wire-identical, so
+  /// the release arms this debounce and a re-`assigned` cancels it.
+  static const Duration defaultExitDebounce = Duration( seconds: 4 );
+
   /// Cached from the last [FocusColdStartRequested] — backfill on
   /// [FocusSenderSelected] needs it (the event carries only the senderId).
   String? _userEmail;
@@ -41,14 +54,55 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   /// selection still backfills and merges (OSQ-4).
   final Set<String> _backfilled = {};
 
-  FocusChatBloc( this._repo, { required TtsOrchestrator tts } )
-      : _tts = tts,
-        super( const FocusChatState.initial() ) {
+  /// Injectable clock (deterministic band tests) + timers.
+  final DateTime Function() _now;
+  final Duration?           _tickInterval;   // null ⇒ no periodic tick (tests / DI decides)
+  final Duration            _exitDebounce;
+  Timer?                    _activityTimer;
+  final Map<String, Timer>  _exitTimers = {};
+
+  /// User stop-list (plan 2026.08.21 §3). A matched inbound message still
+  /// ESTABLISHES / bumps its sender (it is activity) but is not stored,
+  /// not counted unread and not spoken; backfill/refresh fetches are
+  /// filtered by the same predicate. Null ⇒ no filtering.
+  final NotificationStopList? _stopList;
+
+  FocusChatBloc(
+    this._repo, {
+    required TtsOrchestrator tts,
+    DateTime Function()? now,
+    Duration?            tickInterval,
+    Duration             exitDebounce = defaultExitDebounce,
+    NotificationStopList? stopList,
+  } )  : _tts          = tts,
+         _now          = now ?? DateTime.now,
+         _tickInterval = tickInterval,
+         _exitDebounce = exitDebounce,
+         _stopList     = stopList,
+         super( const FocusChatState.initial() ) {
     on<FocusInboundNotification>( _onInbound );
     on<FocusSenderSelected>( _onSenderSelected );
     on<FocusColdStartRequested>( _onColdStart );
     on<FocusPersonaUpdated>( _onPersonaUpdated );
     on<FocusRespondRequested>( _onRespondRequested );
+    on<FocusFilterChanged>( _onFilterChanged );
+    on<FocusActivityTick>( _onActivityTick );
+    on<FocusSenderExited>( _onSenderExited );
+
+    final interval = _tickInterval;
+    if ( interval != null ) {
+      _activityTimer = Timer.periodic( interval, ( _ ) => add( const FocusActivityTick() ) );
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _activityTimer?.cancel();
+    for ( final t in _exitTimers.values ) {
+      t.cancel();
+    }
+    _exitTimers.clear();
+    return super.close();
   }
 
   // ---------- handlers ----------
@@ -67,6 +121,30 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final order = List<String>.from( state.senderOrder );
     if ( !order.contains( sid ) ) order.add( sid );   // establishment order (Q7)
 
+    // A speaking sender is alive: bump its activity, re-enter Live, drop any
+    // pending exit — and refresh the clock so the band re-derives now.
+    final now      = _now();
+    final activity = Map<String, DateTime>.from( state.lastActivityBySender )
+      ..[ sid ] = now;
+    final exited   = Set<String>.from( state.exitedSenders )..remove( sid );
+    _exitTimers.remove( sid )?.cancel();
+
+    // Stop-list (plan 2026.08.21 §3): suppressed = not stored, not unread,
+    // not spoken — counted so the pane can say "N hidden". Sender still
+    // establishes/bumps above (the chatter proves the session is alive).
+    if ( _suppressed( item ) ) {
+      final hidden = Map<String, int>.from( state.hiddenCountBySender )
+        ..[ sid ] = ( state.hiddenCountBySender[ sid ] ?? 0 ) + 1;
+      emit( state.copyWith(
+        senderOrder          : order,
+        lastActivityBySender : activity,
+        exitedSenders        : exited,
+        asOf                 : now,
+        hiddenCountBySender  : hidden,
+      ) );
+      return;
+    }
+
     final windows = _copyWindows();
     final window  = List<FocusMessage>.from( windows[ sid ] ?? const [] )
       ..add( FocusMessage( item: item ) );
@@ -83,9 +161,12 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
 
     emit( state.copyWith(
-      senderOrder    : order,
-      windows        : windows,
-      unreadBySender : unread,
+      senderOrder          : order,
+      windows              : windows,
+      unreadBySender       : unread,
+      lastActivityBySender : activity,
+      exitedSenders        : exited,
+      asOf                 : now,
     ) );
 
     // EVERY item, EVERY priority (Q6) — the ungated S1 path (F-S1-1).
@@ -118,7 +199,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     try {
       final msgs = await _repo.conversation( sid, email, hours: backfillHours );
       final fetched = msgs
-          .where( ( m ) => !m.isHidden )
+          .where( ( m ) => !m.isHidden && !( _stopList?.matches( m.message ) ?? false ) )
           .map( FocusMessage.fromConversation )
           .toList();
 
@@ -150,17 +231,21 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
   }
 
-  /// COLD START (OSQ-3 as amended, F-S2-S2-1): ONE `senders()` fetch
-  /// (omitted hours = FULL history), registry ordered `lastActivity` DESC —
-  /// a one-time recency snapshot. Establishment order governs every live
-  /// arrival thereafter; the rail never re-sorts.
+  /// COLD START (OSQ-3 as amended, F-S2-S2-1): ONE `sendersVisible()` fetch
+  /// bounded to [sendersHours] (2026-08-21: `senders()` with hours omitted
+  /// returned the FULL history — 146 senders on the dev box vs 6 in 24h —
+  /// and carries no persona; `senders-visible` stamps `voice_persona` from
+  /// the session bridge), registry ordered `lastActivity` DESC — a one-time
+  /// recency snapshot. Establishment order governs every live arrival
+  /// thereafter; the rail never re-sorts. Seeds `lastActivityBySender` and
+  /// `personasBySender` (live `FocusPersonaUpdated` still overrides).
   Future<void> _coldStartBuild( Emitter<FocusChatState> emit ) async {
     emit( state.copyWith( hydration: FocusHydration.loading ) );
     try {
       // Phase 1 — the await, into a local (F-S2-IMPL-1: never emit a copy
       // captured before an await; a live arrival during the fetch would be
       // clobbered out of the registry, orphaning its window).
-      final senders = await _repo.senders( _userEmail! );
+      final senders = await _repo.sendersVisible( _userEmail!, hours: sendersHours );
 
       // Phase 2 — synchronous re-read → merge → emit, no await between.
       final ordered = List<SenderSummary>.from( senders )
@@ -181,8 +266,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       }
 
       emit( state.copyWith(
-        senderOrder : order,
-        hydration   : FocusHydration.ready,
+        senderOrder          : order,
+        lastActivityBySender : _seedActivity( senders ),
+        personasBySender     : _seedPersonas( senders ),
+        asOf                 : _now(),
+        hydration            : FocusHydration.ready,
       ) );
     } on NotificationApiException catch ( e ) {
       print( '[FocusChat] cold start failed: $e' );
@@ -205,12 +293,12 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       // state; copies captured before the awaits would clobber its
       // append/unread/rail entry on emit (audio spoke it, UI lost it —
       // and the lost badge is the signal S5's pickup relies on).
-      final senders = await _repo.senders( _userEmail! );
+      final senders = await _repo.sendersVisible( _userEmail!, hours: sendersHours );
       final fetchedBySender = <String, List<FocusMessage>>{};
       for ( final sid in _backfilled.toList() ) {
         final msgs = await _repo.conversation( sid, _userEmail!, hours: backfillHours );
         fetchedBySender[ sid ] = msgs
-            .where( ( m ) => !m.isHidden )
+            .where( ( m ) => !m.isHidden && !( _stopList?.matches( m.message ) ?? false ) )
             .map( FocusMessage.fromConversation )
             .toList();
       }
@@ -240,10 +328,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       } );
 
       emit( state.copyWith(
-        senderOrder    : order,
-        windows        : windows,
-        unreadBySender : unread,
-        hydration      : FocusHydration.ready,
+        senderOrder          : order,
+        windows              : windows,
+        unreadBySender       : unread,
+        lastActivityBySender : _seedActivity( senders ),
+        personasBySender     : _seedPersonas( senders ),
+        asOf                 : _now(),
+        hydration            : FocusHydration.ready,
       ) );
     } on NotificationApiException catch ( e ) {
       print( '[FocusChat] reconnect refresh failed: $e' );
@@ -255,9 +346,50 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     FocusPersonaUpdated event,
     Emitter<FocusChatState> emit,
   ) {
+    final sid      = event.senderId;
     final personas = Map<String, VoicePersona?>.from( state.personasBySender );
-    personas[ event.senderId ] = event.persona;   // null ⇒ released (no badge)
-    emit( state.copyWith( personasBySender: personas ) );
+    personas[ sid ] = event.persona;   // null ⇒ released (no badge)
+
+    if ( event.persona == null ) {
+      // Released: arm the exit debounce (plan §4.8 item 4). A re-assign for
+      // the same sender before it fires means the seat was merely handed
+      // back (reassignment / `/clear` / borrowed-return) — not an exit.
+      _exitTimers.remove( sid )?.cancel();
+      _exitTimers[ sid ] = Timer( _exitDebounce, () {
+        _exitTimers.remove( sid );
+        if ( !isClosed ) add( FocusSenderExited( sid ) );
+      } );
+      emit( state.copyWith( personasBySender: personas ) );
+    } else {
+      _exitTimers.remove( sid )?.cancel();
+      final exited = Set<String>.from( state.exitedSenders )..remove( sid );
+      emit( state.copyWith( personasBySender: personas, exitedSenders: exited ) );
+    }
+  }
+
+  void _onFilterChanged(
+    FocusFilterChanged event,
+    Emitter<FocusChatState> emit,
+  ) {
+    emit( state.copyWith( filter: event.filter, asOf: _now() ) );
+  }
+
+  void _onActivityTick(
+    FocusActivityTick event,
+    Emitter<FocusChatState> emit,
+  ) {
+    // `asOf` is in props ⇒ Equatable fires a rebuild and `visibleOrder`
+    // re-derives; aged-out senders drop with no refetch.
+    emit( state.copyWith( asOf: _now() ) );
+  }
+
+  void _onSenderExited(
+    FocusSenderExited event,
+    Emitter<FocusChatState> emit,
+  ) {
+    _exitTimers.remove( event.senderId )?.cancel();
+    final exited = Set<String>.from( state.exitedSenders )..add( event.senderId );
+    emit( state.copyWith( exitedSenders: exited, asOf: _now() ) );
   }
 
   Future<void> _onRespondRequested(
@@ -328,6 +460,35 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
   Map<String, List<FocusMessage>> _copyWindows() =>
       Map<String, List<FocusMessage>>.from( state.windows );
+
+  /// Stop-list predicate for live items. The user's own replies are never
+  /// suppressed (they are not notifications).
+  bool _suppressed( NotificationItem item ) =>
+      item.type != 'user_initiated_message' && ( _stopList?.matches( item.message ) ?? false );
+
+  /// Merge fetched `lastActivity` into the registry (fetched wins — it is
+  /// the server's view; a live arrival after this emit bumps it again).
+  Map<String, DateTime> _seedActivity( List<SenderSummary> senders ) {
+    final activity = Map<String, DateTime>.from( state.lastActivityBySender );
+    for ( final s in senders ) {
+      final la = s.lastActivity;
+      if ( la != null ) activity[ s.senderId ] = la;
+    }
+    return activity;
+  }
+
+  /// Seed persona badges from `senders-visible` for senders the live
+  /// `FocusPersonaUpdated` stream has not (yet) told us about. A live
+  /// assignment/release already recorded wins — the bridge stamp is the
+  /// cold-start fallback, not an override.
+  Map<String, VoicePersona?> _seedPersonas( List<SenderSummary> senders ) {
+    final personas = Map<String, VoicePersona?>.from( state.personasBySender );
+    for ( final s in senders ) {
+      final p = s.voicePersona;
+      if ( p != null && !personas.containsKey( s.senderId ) ) personas[ s.senderId ] = p;
+    }
+    return personas;
+  }
 
   /// First-hydration merge (OSQ-4 backfill meeting a live-built window):
   /// union dedupe by id PREFERRING the existing entry (live items carry

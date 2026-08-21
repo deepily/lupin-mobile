@@ -350,21 +350,31 @@ class SenderSummary {
   final String   senderId;
   final DateTime? lastActivity;
   final int      count;
-  final int?     newCount;       // only present in senders-visible
+  final int?     newCount;        // only present in senders-visible
+  final VoicePersona? voicePersona;    // senders-visible only: stamped from the
+                                       // session bridge for LIVE CC sessions
+  final VoicePersona? managerPersona;  // senders-visible only: spawning manager
 
   const SenderSummary( {
     required this.senderId,
     this.lastActivity,
     required this.count,
     this.newCount,
+    this.voicePersona,
+    this.managerPersona,
   } );
+
+  static VoicePersona? _persona( dynamic v ) =>
+      v is Map ? VoicePersona.fromJson( Map<String, dynamic>.from( v ) ) : null;
 
   factory SenderSummary.fromJson( Map<String, dynamic> json ) {
     return SenderSummary(
-      senderId     : ( json["sender_id"] ?? "" ).toString(),
-      lastActivity : _parseDt( json["last_activity"] ),
-      count        : ( json["count"] as num? )?.toInt() ?? 0,
-      newCount     : ( json["new_count"] as num? )?.toInt(),
+      senderId       : ( json["sender_id"] ?? "" ).toString(),
+      lastActivity   : _parseDt( json["last_activity"] ),
+      count          : ( json["count"] as num? )?.toInt() ?? 0,
+      newCount       : ( json["new_count"] as num? )?.toInt(),
+      voicePersona   : _persona( json["voice_persona"] ),
+      managerPersona : _persona( json["manager_persona"] ),
     );
   }
 }

@@ -105,21 +105,21 @@ void main() {
     } );
 
     test( 'AC-S2.10 (app half) — auth_success frame re-dispatches FocusColdStartRequested with the authenticated email', () async {
-      when( () => repo.senders( any(), hours: any( named: 'hours' ) ) )
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )
           .thenAnswer( ( _ ) async => [] );
 
       dispatcher.lastAuthenticatedUserId = 'rick@test.com';
       dispatcher.dispatch( 'auth_success', { 'type': 'auth_success' } );
       await pump();
 
-      verify( () => repo.senders( 'rick@test.com', hours: any( named: 'hours' ) ) ).called( 1 );
+      verify( () => repo.sendersVisible( 'rick@test.com', hours: any( named: 'hours' ) ) ).called( 1 );
     } );
 
     test( 'auth_success before any authentication → no cold-start dispatch (defensive)', () async {
       dispatcher.dispatch( 'auth_success', { 'type': 'auth_success' } );
       await pump();
 
-      verifyNever( () => repo.senders( any(), hours: any( named: 'hours' ) ) );
+      verifyNever( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) );
     } );
 
     test( 'persona frames route to FocusPersonaUpdated, not the inbound path (no TTS enqueue)', () async {
@@ -146,6 +146,29 @@ void main() {
       expect( focusBloc.state.personasBySender[ 'sender-1' ], isNotNull );
       expect( focusBloc.state.senderOrder, isEmpty,
           reason: 'admin frames never create rail entries' );
+    } );
+      test( 'session_reaped frame → FocusSenderExited (immediate hide in Live; no TTS, no rail entry)', () async {
+      // establish the sender first so the exit has something to hide
+      dispatcher.dispatch( 'notification_queue_update', _queueUpdateFrame() );
+      await pump();
+      expect( focusBloc.state.visibleOrder, [ 'sender-1' ] );
+
+      dispatcher.dispatch( 'notification_queue_update', {
+        'type'         : 'notification_queue_update',
+        'notification' : {
+          'id'        : 'r-1',
+          'message'   : 'worker reaped',
+          'type'      : 'session_reaped',
+          'priority'  : 'low',
+          'sender_id' : 'sender-1',
+          'timestamp' : '2026-06-12T01:00:00',
+        },
+      } );
+      await pump();
+
+      expect( focusBloc.state.exitedSenders, { 'sender-1' } );
+      expect( focusBloc.state.visibleOrder, isEmpty );
+      expect( focusBloc.state.senderOrder, [ 'sender-1' ], reason: 'retained — visibility only' );
     } );
   } );
 }

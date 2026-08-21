@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../services/notification_filter/notification_stop_list.dart';
+import '../../../services/notification_filter/progress_group_collapse.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
 import '../../notifications/presentation/persona_badge.dart';
@@ -20,12 +23,47 @@ import '../domain/focus_chat_state.dart';
 /// and multi-select multiple-choice (same Map/List reasoning, implementer
 /// call S3 §8) — render a fallback affordance that opens the legacy
 /// `InteractivePromptSheet` (F-S3-S2-2(d)).
-class FocusChatPane extends StatelessWidget {
+class FocusChatPane extends StatefulWidget {
   /// Retry seam: the error banner re-dispatches `FocusColdStartRequested`,
   /// which needs the authenticated email (provided by the screen).
   final String? userEmail;
+  /// Filter prefs (collapse toggle). Tests inject; production resolves from
+  /// the locator when registered; null ⇒ collapse ON (browser parity).
+  final NotificationStopList? stopList;
 
-  const FocusChatPane( { super.key, this.userEmail } );
+  const FocusChatPane( { super.key, this.userEmail, this.stopList } );
+
+  @override
+  State<FocusChatPane> createState() => _FocusChatPaneState();
+}
+
+class _FocusChatPaneState extends State<FocusChatPane> {
+  NotificationStopList? _stopList;
+  String? get userEmail => widget.userEmail;
+
+  @override
+  void initState() {
+    super.initState();
+    _stopList = widget.stopList ??
+        ( ServiceLocator.isRegistered<NotificationStopList>()
+            ? ServiceLocator.get<NotificationStopList>()
+            : null );
+    _stopList?.addListener( _onPrefsChanged );
+  }
+
+  @override
+  void dispose() {
+    _stopList?.removeListener( _onPrefsChanged );
+    super.dispose();
+  }
+
+  void _onPrefsChanged() {
+    if ( mounted ) setState( () {} );
+  }
+
+  /// A pending ask is never buried inside a collapsed group.
+  static String? _groupKey( FocusMessage m ) =>
+      m.item.responseRequested ? null : m.item.progressGroupId;
 
   @override
   Widget build( BuildContext context ) {
@@ -65,6 +103,7 @@ class FocusChatPane extends StatelessWidget {
     final window  = state.windows[ focused ] ?? const <FocusMessage>[];
     final pending = state.pendingPromptFor( focused );
     final persona = state.personasBySender[ focused ];
+    final hidden  = state.hiddenCountBySender[ focused ] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -88,18 +127,45 @@ class FocusChatPane extends StatelessWidget {
           ),
         ),
         const Divider( height: 1 ),
+        if ( hidden > 0 )
+          Padding(
+            key     : const Key( TestKeys.focusHiddenCaption ),
+            padding : const EdgeInsets.fromLTRB( 12, 4, 12, 0 ),
+            child   : Text(
+              '$hidden hidden by your stop-list',
+              style: Theme.of( context ).textTheme.labelSmall?.copyWith(
+                color: Theme.of( context ).colorScheme.outline ),
+            ),
+          ),
         Expanded(
           child: window.isEmpty
               ? const Center( child: Text( 'No messages yet in this window.' ) )
-              : ListView.builder(
-                  padding     : const EdgeInsets.all( 8 ),
-                  itemCount   : window.length,
-                  itemBuilder : ( context, i ) => _MessageBubble(
-                    msg            : window[ i ],
-                    senderId       : focused,
-                    isPendingPrompt: pending?.item.id == window[ i ].item.id,
-                  ),
-                ),
+              : Builder( builder: ( context ) {
+                  final groups = collapseByProgressGroup<FocusMessage>(
+                    window, _groupKey, enabled: _stopList?.collapseGroups ?? true );
+                  return ListView.builder(
+                    padding     : const EdgeInsets.all( 8 ),
+                    itemCount   : groups.length,
+                    itemBuilder : ( context, i ) {
+                      final g = groups[ i ];
+                      if ( !g.isCollapsed ) {
+                        final m = g.items.single;
+                        return _MessageBubble(
+                          msg            : m,
+                          senderId       : focused,
+                          isPendingPrompt: pending?.item.id == m.item.id,
+                        );
+                      }
+                      return _CollapsedGroup(
+                        key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
+                        count    : g.count,
+                        summary  : _MessageBubble( msg: g.latest, senderId: focused, isPendingPrompt: false ),
+                        children : [ for ( final m in g.items )
+                          _MessageBubble( msg: m, senderId: focused, isPendingPrompt: false ) ],
+                      );
+                    },
+                  );
+                } ),
         ),
       ],
     );
@@ -289,6 +355,51 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding : const EdgeInsets.only( top: 8 ),
       child   : body,
+    );
+  }
+}
+
+/// One expandable row standing in for a burst of same-progress-group
+/// messages (plan 2026.08.21 §4): the LATEST message as the summary, a
+/// ×N badge, tap to expand/collapse in place. Render-only state.
+class _CollapsedGroup extends StatefulWidget {
+  final int          count;
+  final Widget       summary;
+  final List<Widget> children;
+  const _CollapsedGroup( { super.key, required this.count, required this.summary, required this.children } );
+
+  @override
+  State<_CollapsedGroup> createState() => _CollapsedGroupState();
+}
+
+class _CollapsedGroupState extends State<_CollapsedGroup> {
+  bool _expanded = false;
+
+  @override
+  Widget build( BuildContext context ) {
+    final theme = Theme.of( context );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          key   : Key( '${TestKeys.focusGroupTogglePrefix}${widget.key.toString()}' ),
+          onTap : () => setState( () => _expanded = !_expanded ),
+          child : Row(
+            children: [
+              Expanded( child: _expanded ? const SizedBox.shrink() : widget.summary ),
+              Padding(
+                padding: const EdgeInsets.symmetric( horizontal: 8 ),
+                child: Chip(
+                  visualDensity : VisualDensity.compact,
+                  avatar        : Icon( _expanded ? Icons.unfold_less : Icons.unfold_more, size: 14 ),
+                  label         : Text( '×${widget.count}', style: theme.textTheme.labelSmall ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if ( _expanded ) ...widget.children,
+      ],
     );
   }
 }

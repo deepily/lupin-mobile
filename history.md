@@ -12,6 +12,23 @@ Most recent entries (2026-05-06 onward — voice-persona milestone + CC dispatch
 ---
 
 
+## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — Focus rail Live/24h + persona icons · notification stop-list · progress-group collapse (A+B+C)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Plan**: `src/rnd/2026.08.21-focus-rail-liveness-icons-and-notification-stop-list.md` (Rick's voice rulings folded in; §5a/5b/5c implementation records) · store rows `341b1c9f` / `0193089c` / `530849ba`
+
+**Accomplishments** (second commit of the session, after wave-1 `98a3a40`):
+- **A — rail**: Live(<1h)/24h `SegmentedButton` with counts (`focus_filter_bar.dart`); cold start + reconnect → `senders-visible?hours=24` (146 → 6 senders on the dev box) seeding `lastActivityBySender` + persona badges; `visibleOrder` lens (filter = visibility, never deletion; focused sender pinned); 🟢/🟡 status dots; name-initial fallback (never the repo id); `voice_persona_released` → 4s exit debounce, `session_reaped` → immediate; 30s aging tick (DI only).
+- **B — stop-list**: `NotificationStopList` (JSON in SharedPreferences, seeds `Done: mcp/Bash/ToolSearch/Read/Edit/Write/Grep/Glob`, case-insensitive prefix); ONE predicate at three seams — `TtsOrchestrator` (both enqueue paths), `FocusChatBloc` ingest + backfill (`hiddenCountBySender`, never the user's own replies), `ConversationScreen` lens with "N hidden" reveal chip; `NotificationFilterSettingsScreen` (checklist / add / swipe-delete / reset) linked from audio settings + focus drawer.
+- **C — collapse**: pure `collapseByProgressGroup()`; consecutive same-`progress_group_id` messages → one expandable row (`×N`, latest text) in the focus pane + conversation list; pending asks never buried; `collapseGroups` pref default ON with a settings switch.
+- **Tests**: +~45 across unit/bloc/widget/wiring (new files: stop-list unit, grouping unit, filter-settings widget, pane-collapse widget). **Full suite 538 ✅ / 1 skip / 44 ❌ all `legacy_quarantine/`, 0 outside** (baseline 488); analyze clean on every touched file. One self-inflicted test hang (helper recursing into itself) caught via the analyzer's unused-symbol warning.
+
+**Files Modified**: ~40 (lib: focus_mode domain/presentation, notifications data/presentation, settings, services/notification_filter NEW, tts_orchestrator, DI, test_keys, app.dart; tests as above; plan doc, TODO.md, history.md).
+
+**Open (Rick, device)**: toggle feel, 28px icon legibility, 30s aging, `×N` chip tap target.
+
+---
+
+
 ## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — v2 cutover WAVE 1: `/api/push` + retry → `/api/v2/ask`
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`

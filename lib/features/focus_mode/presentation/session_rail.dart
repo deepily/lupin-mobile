@@ -2,20 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../notifications/data/voice_persona.dart';
 import '../../notifications/presentation/persona_badge.dart';
 import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
 
 /// Always-visible vertical badge rail (Q11 Pattern A): PersonaBadges in
-/// `senderOrder` (establishment order, Q7 — never re-sorts), unread
-/// dot/count overlays on non-focused senders, selection highlight ring.
-/// Tap → `FocusSenderSelected` — the ONLY thing in the surface that moves
+/// `visibleOrder` (establishment order, Q7 — never re-sorts; filtered by
+/// the Live/History lens, plan 2026.06.25 §4.5), unread dot/count overlays
+/// on non-focused senders, selection highlight ring, recency status dot
+/// (🟢 live / 🟡 history — mirrors the web glyphs). Tap →
+/// `FocusSenderSelected` — the ONLY thing in the surface that moves
 /// `focusedSender` (Q4 manual-focus invariant).
 class SessionRail extends StatelessWidget {
   static const double width = 56;
 
   const SessionRail( { super.key } );
+
+  /// Avatar initial when no persona glyph is available (Rick 2026-08-21:
+  /// the persona NAME, never the repo id — the old `sid[0]` fallback
+  /// produced a rail of identical letters). Order: persona display name →
+  /// persona name → the sender-id local part before `@` / `#`
+  /// (`deep.research@lupin…` → "D").
+  static String railInitial( String sid, VoicePersona? persona ) {
+    final name = persona?.displayName ?? persona?.name;
+    if ( name != null && name.trim().isNotEmpty ) return name.trim().substring( 0, 1 ).toUpperCase();
+    final local = sid.split( RegExp( r'[@#]' ) ).first.trim();
+    if ( local.isEmpty ) return '?';
+    return local.substring( 0, 1 ).toUpperCase();
+  }
 
   @override
   Widget build( BuildContext context ) {
@@ -24,18 +40,24 @@ class SessionRail extends StatelessWidget {
       width : width,
       child : BlocBuilder<FocusChatBloc, FocusChatState>(
         builder: ( context, state ) {
+          final visible = state.visibleOrder;
+          if ( visible.isEmpty && state.filter == FocusFilter.live && state.senderOrder.isNotEmpty ) {
+            return _EmptyLiveHint( historyCount: state.historyCount );
+          }
           return ListView.builder(
             padding     : const EdgeInsets.symmetric( vertical: 8 ),
-            itemCount   : state.senderOrder.length,
+            itemCount   : visible.length,
             itemBuilder : ( context, i ) {
-              final sid     = state.senderOrder[ i ];
+              final sid     = visible[ i ];
               final persona = state.personasBySender[ sid ];
               final unread  = state.unreadBySender[ sid ] ?? 0;
               final focused = state.focusedSender == sid;
+              final exited  = state.exitedSenders.contains( sid );
               return _RailEntry(
                 senderId : sid,
                 unread   : focused ? 0 : unread,
                 focused  : focused,
+                band     : exited ? FocusBand.history : state.bandFor( sid ),
                 child    : _badgeFor( context, sid, persona ),
               );
             },
@@ -45,34 +67,73 @@ class SessionRail extends StatelessWidget {
     );
   }
 
-  /// PersonaBadge when the registry has one; sender-initial fallback
+  /// PersonaBadge when the registry has one; name-initial fallback
   /// otherwise (PersonaBadge renders nothing for a null persona, but the
   /// rail must always show a tappable entry per sender).
-  Widget _badgeFor( BuildContext context, String sid, dynamic persona ) {
-    if ( persona != null ) {
+  Widget _badgeFor( BuildContext context, String sid, VoicePersona? persona ) {
+    if ( persona != null && ( persona.icon ?? '' ).isNotEmpty ) {
       return PersonaBadge( persona: persona, senderId: sid, diameter: 28 );
     }
-    final initial = sid.isEmpty ? '?' : sid.substring( 0, 1 ).toUpperCase();
     return CircleAvatar(
       radius          : 14,
       backgroundColor : Theme.of( context ).colorScheme.surfaceContainerHighest,
-      child           : Text( initial, style: const TextStyle( fontSize: 12 ) ),
+      child           : Text(
+        railInitial( sid, persona ),
+        key   : Key( '${TestKeys.focusRailInitialPrefix}$sid' ),
+        style : const TextStyle( fontSize: 12 ),
+      ),
+    );
+  }
+}
+
+/// Live filter, nothing live, but senders exist in History — say so
+/// instead of rendering a blank rail (plan §4.1 "empty state").
+class _EmptyLiveHint extends StatelessWidget {
+  final int historyCount;
+  const _EmptyLiveHint( { required this.historyCount } );
+
+  @override
+  Widget build( BuildContext context ) {
+    return Padding(
+      key     : const Key( TestKeys.focusRailEmptyHint ),
+      padding : const EdgeInsets.all( 4 ),
+      child   : Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon( Icons.nightlight_round, size: 18, color: Theme.of( context ).colorScheme.outline ),
+          const SizedBox( height: 4 ),
+          Text( 'No live\nsessions', textAlign: TextAlign.center,
+                style: Theme.of( context ).textTheme.labelSmall ),
+          if ( historyCount > 0 )
+            TextButton(
+              key       : const Key( TestKeys.focusRailEmptyHintButton ),
+              style     : TextButton.styleFrom( padding: EdgeInsets.zero, minimumSize: const Size( 48, 28 ) ),
+              onPressed : () => context.read<FocusChatBloc>().add( const FocusFilterChanged( FocusFilter.history ) ),
+              child     : Text( '24h ($historyCount)', style: const TextStyle( fontSize: 10 ) ),
+            ),
+        ],
+      ),
     );
   }
 }
 
 class _RailEntry extends StatelessWidget {
-  final String senderId;
-  final Widget child;
-  final int    unread;
-  final bool   focused;
+  final String    senderId;
+  final Widget    child;
+  final int       unread;
+  final bool      focused;
+  final FocusBand band;
 
   const _RailEntry( {
     required this.senderId,
     required this.child,
     required this.unread,
     required this.focused,
+    required this.band,
   } );
+
+  static const Color liveDot    = Color( 0xFF2E7D32 );   // 🟢 web parity
+  static const Color historyDot = Color( 0xFFF9A825 );   // 🟡
 
   @override
   Widget build( BuildContext context ) {
@@ -98,6 +159,21 @@ class _RailEntry extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 child,
+                if ( band != FocusBand.stale )
+                  Positioned(
+                    right  : -2,
+                    bottom : -2,
+                    child  : Container(
+                      key        : Key( '${TestKeys.focusRailStatusDotPrefix}$senderId' ),
+                      width      : 9,
+                      height     : 9,
+                      decoration : BoxDecoration(
+                        color  : band == FocusBand.live ? liveDot : historyDot,
+                        shape  : BoxShape.circle,
+                        border : Border.all( color: Theme.of( context ).colorScheme.surface, width: 1.5 ),
+                      ),
+                    ),
+                  ),
                 if ( unread > 0 )
                   Positioned(
                     right : -4,

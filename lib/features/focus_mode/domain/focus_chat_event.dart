@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../notifications/data/notification_models.dart';
+import 'focus_chat_state.dart' show FocusFilter;
 
 /// Typed prompt-context for [FocusRespondRequested] (F-S2-S2-3): inline
 /// prompts pass the target notification id explicitly; voice replies omit
@@ -62,6 +63,30 @@ class FocusPersonaUpdated extends FocusChatEvent {
   const FocusPersonaUpdated( { required this.senderId, this.persona } );
   @override
   List<Object?> get props => [ senderId, persona ];
+}
+
+/// Toolbar `SegmentedButton` tap — switch the rail's visibility lens.
+class FocusFilterChanged extends FocusChatEvent {
+  final FocusFilter filter;
+  const FocusFilterChanged( this.filter );
+  @override
+  List<Object?> get props => [ filter ];
+}
+
+/// Periodic / on-resume re-evaluation of the recency bands (`asOf = now`).
+/// No refetch — aged-out senders simply leave `visibleOrder`.
+class FocusActivityTick extends FocusChatEvent {
+  const FocusActivityTick();
+}
+
+/// Confirmed session exit: `session_reaped` (unambiguous, workers) or the
+/// `voice_persona_released` debounce elapsing with no re-assign. In Live
+/// the sender's icon + card go invisible; History still shows them.
+class FocusSenderExited extends FocusChatEvent {
+  final String senderId;
+  const FocusSenderExited( this.senderId );
+  @override
+  List<Object?> get props => [ senderId ];
 }
 
 /// The ONE response-dispatch shape (F-S3-2): S3 inline-prompt taps pass a

@@ -69,6 +69,12 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 > Deferred follow-up: a UX-refinement pass on the focus-mode surface (interaction flow /
 > affordances / pacing) — scope in a later session; not blocking.
 
+> **🆕 2026-08-21 — Focus rail Live/24h + persona icons (A ✅ + B ✅ + C ✅ ALL IMPLEMENTED, uncommitted — awaiting Rick's commit word + device check)**
+> (Tiffany 💍). Rick's rulings by voice: Live(<1h) default + 24h history toggle; persona icon w/ NAME-initial fallback
+> (never repo id); one checkbox = hide + mute; order A→B→C. Measured: cold start fetches ALL senders (146 vs 6 in 24h);
+> personas seeded only by live events; `/senders-visible` carries `voice_persona`. Plan:
+> `src/rnd/2026.08.21-focus-rail-liveness-icons-and-notification-stop-list.md` (extends the 06-25 rail plan below).
+
 > **🆕 2026-08-21 — v2 cutover WAVE 1 DONE (Tiffany 💍, store `94ae726e`)**: `/api/push` + `/api/job-history/{id}/retry`
 > → `/api/v2/ask` with the synchronous-response shape carried through repo/BLoC/UI; 30/30 queue tests, 0 failures
 > outside `legacy_quarantine/`, live `:7999` probe key-identical. Record: `src/rnd/2026.08.21-v2-cutover-wave1-ask.md`.

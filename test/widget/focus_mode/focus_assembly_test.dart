@@ -62,7 +62,7 @@ void main() {
     // Defensive: should the screen's init-guard ever dispatch a cold start,
     // an UN-stubbed mock would throw MissingStubError inside the bloc's
     // event zone (poisoning the test opaquely) — stub to benign empties.
-    when( () => repo.senders( any() ) ).thenAnswer( ( _ ) async => const [] );
+    when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => const [] );
     when( () => repo.conversation( any(), any(), hours: any( named: 'hours' ) ) )
         .thenAnswer( ( _ ) async => const [] );
 

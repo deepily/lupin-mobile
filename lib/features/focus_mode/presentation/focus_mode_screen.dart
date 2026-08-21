@@ -12,11 +12,14 @@ import '../../home/home_screen.dart';
 import '../../notifications/presentation/inbox_screen.dart';
 import '../../queue/presentation/queue_dashboard_screen.dart';
 import '../../settings/presentation/notification_audio_settings_screen.dart';
+import '../../settings/presentation/notification_filter_settings_screen.dart';
+import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
 import 'focus_chat_pane.dart';
+import 'focus_filter_bar.dart';
 import 'session_rail.dart';
 import 'voice_reply_field.dart';
 
@@ -80,6 +83,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       body: Column(
         children: [
           _PausedBanner( tts: _tts ),
+          const FocusFilterBar(),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -181,6 +185,14 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             title   : const Text( 'Settings' ),
             onTap   : () => push( NotificationAudioSettingsScreen(
               prefs: ServiceLocator.get<NotificationPreferences>(),
+            ) ),
+          ),
+          ListTile(
+            leading : const Icon( Icons.filter_alt_outlined ),
+            title   : const Text( 'Notification stop-list' ),
+            enabled : ServiceLocator.isRegistered<NotificationStopList>(),
+            onTap   : () => push( NotificationFilterSettingsScreen(
+              stopList: ServiceLocator.get<NotificationStopList>(),
             ) ),
           ),
         ],

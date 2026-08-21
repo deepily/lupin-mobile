@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
+import 'package:lupin_mobile/services/notification_filter/notification_stop_list.dart';
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
@@ -744,5 +745,36 @@ void main() {
       expect( o.isPaused, isFalse );
       await sub.cancel();
     } );
-  } );
+  
+    // ── stop-list gate (plan 2026.08.21 §3: checked = hide + MUTE) ──────
+    test( "stop-list: a matched message is muted on enqueueIfSpeakable even at high priority", () async {
+      await setUpMocks();
+      final sp = await SharedPreferences.getInstance();
+      final sl = NotificationStopList( sp );
+      orch = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws, stopList: sl );
+      orch!.enqueueIfSpeakable( priority: "high", message: "Done: Bash ls", title: "Tiffany" );
+      await Future<void>.delayed( Duration.zero );
+      verifyNever( () => player.speak( text: any( named: "text" ), sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) );
+      expect( orch!.queueDepth, 0 );
+
+      orch!.enqueueIfSpeakable( priority: "high", message: "Build finished", title: "Tiffany" );
+      await Future<void>.delayed( Duration.zero );
+      verify( () => player.speak( text: "Tiffany. Build finished", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
+    } );
+
+    test( "stop-list: the UNGATED focus path (enqueueAlways) is still muted by a checked pattern — and unmuted when unchecked", () async {
+      await setUpMocks();
+      final sp = await SharedPreferences.getInstance();
+      final sl = NotificationStopList( sp );
+      orch = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws, stopList: sl );
+      orch!.enqueueAlways( priority: "low", message: "Done: mcp__cosa-voice__notify", title: null );
+      await Future<void>.delayed( Duration.zero );
+      verifyNever( () => player.speak( text: any( named: "text" ), sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) );
+
+      await sl.setEnabled( 0, false );   // Done: mcp off
+      orch!.enqueueAlways( priority: "low", message: "Done: mcp__cosa-voice__notify", title: null );
+      await Future<void>.delayed( Duration.zero );
+      verify( () => player.speak( text: "Done: mcp__cosa-voice__notify", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
+    } );
+} );
 }

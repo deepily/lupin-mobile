@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../../core/di/service_locator.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
+import '../../../services/notification_filter/notification_stop_list.dart';
+import 'notification_filter_settings_screen.dart';
 
 /// User-facing toggles for notification ding + TTS speech behavior. Mirrors
 /// the Lupin web client's priority tiers: medium = ding only, high = ding +
@@ -102,6 +105,21 @@ class _NotificationAudioSettingsScreenState
             onChanged  : _toggleSpeakUrgent,
           ),
           const SizedBox( height: 24 ),
+          const Divider(),
+          const _SectionHeader( 'Filtering' ),
+          ListTile(
+            key      : const Key( TestKeys.settingsOpenStopList ),
+            leading  : const Icon( Icons.filter_alt_outlined ),
+            title    : const Text( 'Notification stop-list' ),
+            subtitle : const Text( 'Hide + mute messages by prefix (e.g. tool-call chatter).' ),
+            trailing : const Icon( Icons.chevron_right ),
+            enabled  : ServiceLocator.isRegistered<NotificationStopList>(),
+            onTap    : () => Navigator.of( context ).push( MaterialPageRoute(
+              builder: ( _ ) => NotificationFilterSettingsScreen(
+                stopList: ServiceLocator.get<NotificationStopList>(),
+              ),
+            ) ),
+          ),
         ],
       ),
     );
