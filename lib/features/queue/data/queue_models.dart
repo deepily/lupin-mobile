@@ -13,16 +13,28 @@ T? _as<T>( dynamic v ) => v is T ? v : null;
 // Submission requests
 // ─────────────────────────────────────────────
 
-/// Request body for POST /api/push (standard job via runtime-arg expediter).
-class PushJobRequest {
+/// Request body for POST /api/v2/ask — the CJ Flow v2 question door.
+///
+/// Replaces POST /api/push (410 tombstone since 2026-08-21; REMOVE BY 2026-12-31).
+/// Field names match `cosa/rest/routers/v2_ask.py::AskRequest`.
+class AskRequest {
   final String  question;
-  final String  websocketId;
+  final String? websocketId;
+  final bool    speak;        // dispatch the answer as a TTS notification
+  final bool    interactive;  // park + resume on a missing argument (else needs_input)
 
-  const PushJobRequest( { required this.question, required this.websocketId } );
+  const AskRequest( {
+    required this.question,
+    this.websocketId,
+    this.speak       = true,
+    this.interactive = true,
+  } );
 
   Map<String, dynamic> toJson() => {
     'question'     : question,
-    'websocket_id' : websocketId,
+    if ( websocketId != null ) 'websocket_id' : websocketId,
+    'speak'        : speak,
+    'interactive'  : interactive,
   };
 }
 
@@ -58,7 +70,8 @@ class PushAgenticRequest {
 // Submission response
 // ─────────────────────────────────────────────
 
-/// Response from POST /api/push and POST /api/push-agentic.
+/// Response from POST /api/push-agentic (queue-and-poll).
+/// (POST /api/push is gone — see [AskResponse] for the synchronous v2 reply.)
 class PushJobResponse {
   final String  status;
   final String  websocketId;
@@ -83,6 +96,90 @@ class PushJobResponse {
     jobId          : _as<String>( j[ 'job_id' ] ),
     result         : _as<String>( j[ 'result' ] ),
     routingCommand : _as<String>( j[ 'routing_command' ] ),
+  );
+}
+
+// ─────────────────────────────────────────────
+// v2 ask response (§8 result dict)
+// ─────────────────────────────────────────────
+
+/// Response from POST /api/v2/ask — SYNCHRONOUS: the answer (or the first
+/// clarifying question) comes back in the body; nothing is queued for polling.
+/// Field names match `cosa/rest/routers/v2_ask.py::AskResponse`.
+class AskResponse {
+  final String        path;          // replay | agent | needs_input | receptionist
+  final String        status;        // done | parked | needs_input | failed
+  final String        routeReason;
+  final String?       answer;
+  final String?       answerRaw;
+  final String?       command;
+  final List<String>  argsKnown;
+  final List<String>  argsMissing;
+  final String?       pendingId;     // set when interactive + needs_input (resume with /api/v2/resume)
+  final String?       jobId;
+  final String?       snapshotId;
+  final double?       similarity;
+  final bool          wroteSnapshot;
+  final bool          cacheHit;
+  final bool          spoke;
+  final Map<String, dynamic> timingsMs;
+  final String        traceId;
+  final String?       error;
+
+  const AskResponse( {
+    required this.path,
+    required this.status,
+    required this.routeReason,
+    required this.traceId,
+    this.answer,
+    this.answerRaw,
+    this.command,
+    this.argsKnown     = const [],
+    this.argsMissing   = const [],
+    this.pendingId,
+    this.jobId,
+    this.snapshotId,
+    this.similarity,
+    this.wroteSnapshot = false,
+    this.cacheHit      = false,
+    this.spoke         = false,
+    this.timingsMs     = const {},
+    this.error,
+  } );
+
+  bool get isDone     => status == 'done';
+  bool get needsInput => status == 'needs_input' || status == 'parked';
+  bool get isFailed   => status == 'failed';
+
+  /// One-line summary for snackbars / toasts.
+  String get summary {
+    if ( needsInput ) return answer ?? 'Needs input: ${argsMissing.join( ", " )}';
+    if ( isFailed )   return error ?? 'Request failed';
+    return answer ?? 'Done ($path)';
+  }
+
+  static List<String> _strList( dynamic v ) =>
+      v is List ? v.map( ( e ) => e.toString() ).toList() : const [];
+
+  factory AskResponse.fromJson( Map<String, dynamic> j ) => AskResponse(
+    path          : j[ 'path' ]         as String,
+    status        : j[ 'status' ]       as String,
+    routeReason   : _as<String>( j[ 'route_reason' ] ) ?? '',
+    traceId       : _as<String>( j[ 'trace_id' ] ) ?? '',
+    answer        : _as<String>( j[ 'answer' ] ),
+    answerRaw     : _as<String>( j[ 'answer_raw' ] ),
+    command       : _as<String>( j[ 'command' ] ),
+    argsKnown     : _strList( j[ 'args_known' ] ),
+    argsMissing   : _strList( j[ 'args_missing' ] ),
+    pendingId     : _as<String>( j[ 'pending_id' ] ),
+    jobId         : _as<String>( j[ 'job_id' ] ),
+    snapshotId    : _as<String>( j[ 'snapshot_id' ] ),
+    similarity    : ( j[ 'similarity' ] as num? )?.toDouble(),
+    wroteSnapshot : _as<bool>( j[ 'wrote_snapshot' ] ) ?? false,
+    cacheHit      : _as<bool>( j[ 'cache_hit' ] ) ?? false,
+    spoke         : _as<bool>( j[ 'spoke' ] ) ?? false,
+    timingsMs     : _as<Map<String, dynamic>>( j[ 'timings_ms' ] ) ?? const {},
+    error         : _as<String>( j[ 'error' ] ),
   );
 }
 
@@ -386,19 +483,6 @@ class MessageDeliveredResponse {
         notificationId : j[ 'notification_id' ] as String,
         jobId          : j[ 'job_id' ]          as String,
       );
-}
-
-/// Response from POST /api/job-history/{job_id}/retry.
-class RetryJobResponse {
-  final String status;
-  final String originalJobId;
-
-  const RetryJobResponse( { required this.status, required this.originalJobId } );
-
-  factory RetryJobResponse.fromJson( Map<String, dynamic> j ) => RetryJobResponse(
-    status        : j[ 'status' ]           as String,
-    originalJobId : j[ 'original_job_id' ]  as String,
-  );
 }
 
 /// Response from POST /api/jobs/{id_hash}/resume-from-checkpoint.

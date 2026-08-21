@@ -116,6 +116,7 @@ src/lupin-mobile/
 - **[Legacy Quarantine Triage](src/rnd/2026.06.12-legacy-quarantine-triage.md)** - Per-file disposition of all 25 quarantined test files (rides-retirement / rides-follow-on / resurrect-candidate); the one real lost-coverage flag is `PerformanceMonitor`; closes the 2026-05-11 quarantine-triage TODO debt
 - **[Focus-Mode Status Summary](src/rnd/2026.06.23-focus-mode-status-summary.md)** - One-page readable answer to "where are we on the focus UI?": all 6 sections AI-complete + committed (b34fa01, not pushed), suite 406✅; remaining work is all HUMAN/on-device (Firebase console, S5 Phase-0 probe, device gates); the no-Firebase PoC fast path
 - **[Focus UI: Active / Recent-24h Session Filter](src/rnd/2026.06.25-focus-ui-active-history-filter.md)** - PLANNING doc for making the Focus rail default to currently-active sessions with a toggle to a rolling 24h history; mirrors the web notifications/multiplexer recency math (🟢 <1h / 🟡 <24h, Mr Radio-verified), adds `lastActivityBySender` + `FocusFilter` state + a 30s aging tick; M3 `SegmentedButton` toolbar; pure client-side, no backend work
+- [2026.08.21 — v2 cutover wave 1: /api/push + retry → /api/v2/ask](src/rnd/2026.08.21-v2-cutover-wave1-ask.md)
 
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring (2026-04)
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings

@@ -40,8 +40,9 @@ class QueueExternalUpdate extends QueueEvent {
 
 // ─── Job submission ───────────────────────────────────────────────────────────
 
+/// Ask a question through /api/v2/ask (synchronous — see [QueueAnswered]).
 class QueueSubmitJob extends QueueEvent {
-  final PushJobRequest request;
+  final AskRequest request;
   const QueueSubmitJob( this.request );
   @override List<Object?> get props => [ request ];
 }
@@ -79,11 +80,14 @@ class QueueDeleteJob extends QueueEvent {
   @override List<Object?> get props => [ queueName, jobId ];
 }
 
+/// Re-ask a prior job's question through /api/v2/ask. The client supplies the
+/// question text (from the job row) — the old server-side retry door is gone.
 class QueueRetryJob extends QueueEvent {
-  final String jobId;
-  final String websocketId;
-  const QueueRetryJob( { required this.jobId, required this.websocketId } );
-  @override List<Object?> get props => [ jobId, websocketId ];
+  final String  jobId;
+  final String  questionText;
+  final String? websocketId;
+  const QueueRetryJob( { required this.jobId, required this.questionText, this.websocketId } );
+  @override List<Object?> get props => [ jobId, questionText, websocketId ];
 }
 
 class QueueResumeFromCheckpoint extends QueueEvent {

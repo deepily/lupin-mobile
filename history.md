@@ -7,7 +7,23 @@ Older session entries have been archived for token-limit hygiene. See:
 - **[2026-04-15-to-16-history.md](history/2026-04-15-to-16-history.md)** — Tier 1-4 buildout (5 sessions, Apr 15-16, 2026)
 - **[2025-07-06-to-08-17-history.md](history/2025-07-06-to-08-17-history.md)** — Initial era (7 sessions, Jul 2025 – Aug 2025; project then dormant for 8 months)
 
-Most recent ~6 days (2026-05-06 onward — voice-persona milestone + CC dispatch retirement sync + yes/no/neither tri-state) are retained below.
+Most recent entries (2026-05-06 onward — voice-persona milestone + CC dispatch retirement sync + yes/no/neither tri-state) are retained below.
+
+---
+
+
+## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — v2 cutover WAVE 1: `/api/push` + retry → `/api/v2/ask`
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work`
+
+**Accomplishments** (per María 🌸's plan, lupin `src/rnd/v0.2.0/2026.08.21-lupin-mobile-v2-cutover-plan.md`; store row `1265204e` → review):
+- **Both retired doors re-pointed to `/api/v2/ask`** — and the **synchronous-response shape change carried through**, not just the URL: `PushJobRequest` → `AskRequest`, NEW `AskResponse` (§8 result dict + `isDone`/`needsInput`/`isFailed`/`summary`), `QueueRepository.ask()`, `retryJob()` re-asks with client-supplied `questionText` (the server-side retry door pulled it off the row; it is gone), NEW `QueueAnswered` bloc state, submit sheet + dashboard snackbar show the answer / clarifying question. `RetryJobResponse` deleted.
+- **Tests moved with the wave, fixtures carry the NEW body**: queue unit 19 → **30/30 ✅**; full `flutter test test/` **488 ✅ / 1 skip / 44 ❌ all in `legacy_quarantine/`** (0 outside); `flutter analyze` 0 new issues.
+- **Live `:7999` probe**: `/auth/login` → `POST /api/v2/ask` → 200, answer "4", **key set identical to the Dart model** (0 missing / 0 extra). `/api/push` still 200 pre-bounce.
+- **Untouched by design**: wave 2's eleven submit-shaped doors (wait for `/api/v2/submit`) and `/api/deep-research/report` (a read).
+- **Record**: `src/rnd/2026.08.21-v2-cutover-wave1-ask.md` (+ README link, TODO.md wave-2 backlog). Receipt DM'd to María.
+
+**Files Modified**: 9 lib/test files (`queue_models/repository/event/state/bloc`, `submit_job_sheet`, `queue_dashboard_screen`, 3 queue tests) + new R&D doc, README.md, TODO.md, history.md.
 
 ---
 

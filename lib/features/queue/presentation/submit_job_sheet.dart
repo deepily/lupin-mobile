@@ -37,7 +37,7 @@ class _SubmitJobSheetState extends State<SubmitJobSheet> {
     } else {
       context.read<QueueBloc>().add(
         QueueSubmitJob(
-          PushJobRequest( question: question, websocketId: 'mobile' ),
+          AskRequest( question: question, websocketId: 'mobile' ),
         ),
       );
     }
@@ -48,7 +48,7 @@ class _SubmitJobSheetState extends State<SubmitJobSheet> {
     final bottom = MediaQuery.of( context ).viewInsets.bottom;
     return BlocListener<QueueBloc, QueueState>(
       listener: ( context, state ) {
-        if ( state is QueueSubmitted ) {
+        if ( state is QueueSubmitted || state is QueueAnswered ) {
           Navigator.of( context ).pop();
         }
         if ( state is QueueSubmitting ) {

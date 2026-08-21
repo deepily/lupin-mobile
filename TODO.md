@@ -1,6 +1,7 @@
 # TODO
 
-Last updated: 2026-06-25 (Session `f53bc7b3` — Tiffany 💍): Focus UI active/history filter PLAN
+Last updated: 2026-08-21 (Session `e082edd7` — Tiffany 💍): v2 cutover wave 1 DONE; wave 2 backlog below.
+Prior: 2026-06-25 (Session `f53bc7b3` — Tiffany 💍): Focus UI active/history filter PLAN
 landed + review-ready (see 🆕 NEW BACKLOG below; doc `src/rnd/2026.06.25-focus-ui-active-history-filter.md`).
 Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉). Focus-mode milestone
 AI-IMPLEMENTATION + REVIEW COMPLETE (406 ✅ / 1 skip / 0 ❌); implementation batch committed
@@ -67,6 +68,14 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 > **NEW BACKLOG — focus-mode UX polish**: Rick found the UX "a little weird and clunky."
 > Deferred follow-up: a UX-refinement pass on the focus-mode surface (interaction flow /
 > affordances / pacing) — scope in a later session; not blocking.
+
+> **🆕 2026-08-21 — v2 cutover WAVE 1 DONE (Tiffany 💍, store `94ae726e`)**: `/api/push` + `/api/job-history/{id}/retry`
+> → `/api/v2/ask` with the synchronous-response shape carried through repo/BLoC/UI; 30/30 queue tests, 0 failures
+> outside `legacy_quarantine/`, live `:7999` probe key-identical. Record: `src/rnd/2026.08.21-v2-cutover-wave1-ask.md`.
+> **WAVE 2 BACKLOG (blocked on parent `/api/v2/submit`)**: the eleven submit-shaped doors (9× `agentic_repository.dart`,
+> `/api/push-agentic`, `/api/jobs/{id}/resume-from-checkpoint`) → one `/api/v2/submit` call each; do NOT touch
+> `/api/deep-research/report` (a read). Follow-ups: wire a retry UI passing `job.questionText`; in-app `/api/v2/resume`
+> for `pendingId`. Plan: lupin `src/rnd/v0.2.0/2026.08.21-lupin-mobile-v2-cutover-plan.md`.
 
 > **🆕 NEW BACKLOG — Focus UI active/history filter + exit-visibility (Tiffany 💍, 2026-06-25)**
 > — PLAN COMPLETE + REVIEW-READY, no code written yet:

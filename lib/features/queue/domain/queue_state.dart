@@ -37,10 +37,19 @@ class QueueSubmitting extends QueueState {
   const QueueSubmitting();
 }
 
+/// An agentic job was accepted onto the queue (POST /api/push-agentic).
 class QueueSubmitted extends QueueState {
   final PushJobResponse response;
   const QueueSubmitted( this.response );
   @override List<Object?> get props => [ response.jobId ];
+}
+
+/// A v2 ask completed synchronously (POST /api/v2/ask) — the answer, or the
+/// first clarifying question, is already in [response]. Nothing to poll.
+class QueueAnswered extends QueueState {
+  final AskResponse response;
+  const QueueAnswered( this.response );
+  @override List<Object?> get props => [ response.traceId, response.status ];
 }
 
 class QueueActionComplete extends QueueState {

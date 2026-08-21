@@ -9,15 +9,19 @@ class QueueRepository {
   const QueueRepository( this._dio );
 
   // ─────────────────────────────────────────────
-  // POST /api/push
+  // POST /api/v2/ask  (was POST /api/push — 410 tombstone, REMOVE BY 2026-12-31)
   // ─────────────────────────────────────────────
 
-  Future<PushJobResponse> push( PushJobRequest req ) async {
+  /// Ask one question through CJ Flow v2. SYNCHRONOUS: the answer (or the
+  /// first clarifying question) is in the returned [AskResponse]; nothing is
+  /// queued for polling. Never 500s for an agent failure — the server degrades
+  /// to the receptionist and reports it in `status`/`error`.
+  Future<AskResponse> ask( AskRequest req ) async {
     try {
-      final res = await _dio.post<Map<String, dynamic>>( '/api/push', data: req.toJson() );
-      return PushJobResponse.fromJson( res.data! );
+      final res = await _dio.post<Map<String, dynamic>>( '/api/v2/ask', data: req.toJson() );
+      return AskResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
-      throw _err( e, 'push failed' );
+      throw _err( e, 'ask failed' );
     }
   }
 
@@ -80,16 +84,21 @@ class QueueRepository {
   }
 
   // ─────────────────────────────────────────────
-  // POST /api/job-history/{job_id}/retry
+  // Retry = re-ask via POST /api/v2/ask
+  // (was POST /api/job-history/{job_id}/retry — 410 tombstone, REMOVE BY 2026-12-31.
+  //  The old handler pulled question_text off the stored row server-side; the
+  //  client now supplies it, so a retry is just the same question asked again.)
   // ─────────────────────────────────────────────
 
-  Future<RetryJobResponse> retryJob( String jobId, String websocketId ) async {
+  Future<AskResponse> retryJob( {
+    required String  jobId,
+    required String  questionText,
+    String?          websocketId,
+  } ) async {
     try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/job-history/$jobId/retry',
-        data: { 'websocket_id': websocketId },
-      );
-      return RetryJobResponse.fromJson( res.data! );
+      final req = AskRequest( question: questionText, websocketId: websocketId );
+      final res = await _dio.post<Map<String, dynamic>>( '/api/v2/ask', data: req.toJson() );
+      return AskResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
       throw _err( e, 'retryJob($jobId) failed' );
     }

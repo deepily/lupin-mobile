@@ -82,6 +82,17 @@ class _QueueDashboardScreenState extends State<QueueDashboardScreen>
             );
             _refresh();
           }
+          if ( state is QueueAnswered ) {
+            // v2 ask is synchronous — the answer (or first question) is already here.
+            ScaffoldMessenger.of( context ).showSnackBar(
+              SnackBar(
+                content         : Text( state.response.summary ),
+                backgroundColor : state.response.isFailed ? Colors.red : null,
+                duration        : const Duration( seconds: 6 ),
+              ),
+            );
+            _refresh();
+          }
           if ( state is QueueActionComplete ) {
             ScaffoldMessenger.of( context ).showSnackBar(
               SnackBar( content: Text( state.message ) ),

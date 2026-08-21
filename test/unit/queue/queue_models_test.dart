@@ -2,12 +2,69 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/queue/data/queue_models.dart';
 
 void main() {
-  group( 'PushJobRequest.toJson', () {
-    test( 'maps fields to snake_case', () {
-      final r = PushJobRequest( question: 'q1', websocketId: 'ws-1' );
+  group( 'AskRequest.toJson', () {
+    test( 'maps fields to snake_case with speak/interactive defaults true', () {
+      const r = AskRequest( question: 'q1', websocketId: 'ws-1' );
       final j = r.toJson();
       expect( j[ 'question'     ], 'q1' );
       expect( j[ 'websocket_id' ], 'ws-1' );
+      expect( j[ 'speak'        ], isTrue );
+      expect( j[ 'interactive'  ], isTrue );
+    } );
+
+    test( 'omits websocket_id when null and honours speak/interactive overrides', () {
+      final j = const AskRequest( question: 'q', speak: false, interactive: false ).toJson();
+      expect( j.containsKey( 'websocket_id' ), isFalse );
+      expect( j[ 'speak'       ], isFalse );
+      expect( j[ 'interactive' ], isFalse );
+    } );
+  } );
+
+  group( 'AskResponse.fromJson', () {
+    test( 'parses the full §8 result dict', () {
+      final r = AskResponse.fromJson( {
+        'path'          : 'replay',
+        'status'        : 'done',
+        'route_reason'  : 'cache:exact',
+        'answer'        : 'It is 3pm.',
+        'answer_raw'    : '15:00',
+        'command'       : 'agent router go to date and time',
+        'args_known'    : [ 'tz' ],
+        'args_missing'  : [],
+        'pending_id'    : null,
+        'job_id'        : 'h-1',
+        'snapshot_id'   : 'snap-1',
+        'similarity'    : 100,
+        'wrote_snapshot': false,
+        'cache_hit'     : true,
+        'spoke'         : true,
+        'timings_ms'    : { 'total': 42 },
+        'trace_id'      : 'tr-9',
+        'error'         : null,
+      } );
+      expect( r.path,          'replay' );
+      expect( r.isDone,        isTrue );
+      expect( r.cacheHit,      isTrue );
+      expect( r.similarity,    100.0 );
+      expect( r.argsKnown,     [ 'tz' ] );
+      expect( r.timingsMs[ 'total' ], 42 );
+      expect( r.summary,       'It is 3pm.' );
+    } );
+
+    test( 'tolerates a minimal body and derives needsInput / isFailed / summary', () {
+      final parked = AskResponse.fromJson( {
+        'path': 'needs_input', 'status': 'needs_input', 'trace_id': 't',
+        'args_missing': [ 'city', 'date' ],
+      } );
+      expect( parked.needsInput, isTrue );
+      expect( parked.answer,     isNull );
+      expect( parked.summary,    'Needs input: city, date' );
+
+      final failed = AskResponse.fromJson( {
+        'path': 'receptionist', 'status': 'failed', 'trace_id': 't', 'error': 'router down',
+      } );
+      expect( failed.isFailed, isTrue );
+      expect( failed.summary,  'router down' );
     } );
   } );
 
