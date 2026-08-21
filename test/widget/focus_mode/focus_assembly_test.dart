@@ -18,6 +18,7 @@ import 'package:lupin_mobile/features/auth/domain/auth_event.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_state.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_bloc.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
+import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/focus_mode/presentation/focus_mode_screen.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
@@ -79,6 +80,7 @@ void main() {
     // async never completes (hangs to the 10-min timeout).
     final bloc = FocusChatBloc( repo, tts: tts );
     await tester.runAsync( () async {
+      bloc.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );   // persona-less fixtures (§5f)
       bloc.add( FocusInboundNotification( _item( 'a1', 'A' ) ) );
       bloc.add( FocusInboundNotification( _item( 'b1', 'B' ) ) );
       await Future<void>.delayed( const Duration( milliseconds: 50 ) );
@@ -116,6 +118,7 @@ void main() {
       message  : any( named: 'message' ),
       title    : any( named: 'title' ),
       voiceId  : any( named: 'voiceId' ),
+      sender   : any( named: 'sender' ),
     ) );
 
     // Real-event-loop teardown for the same fake-async reason as seeding.

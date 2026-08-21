@@ -52,6 +52,21 @@ class NotificationRepository {
   }
 
   // ---------------------------------------------------------------------
+  // POST /api/dm/send  (user → one CC session; Rick 2026-08-21)
+  // ---------------------------------------------------------------------
+  Future<DmSendAck> sendDm( DmSendRequest req ) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        "/api/dm/send",
+        data: req.toJson(),
+      );
+      return DmSendAck.fromJson( res.data ?? const {} );
+    } on DioException catch ( e ) {
+      throw _err( e, "Direct message failed" );
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // GET /api/notifications/{user_id}
   // ---------------------------------------------------------------------
   Future<NotificationListResponse> list(

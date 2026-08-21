@@ -285,6 +285,7 @@ void main() {
         priority : any( named: "priority" ),
         message  : any( named: "message" ),
         title    : any( named: "title" ),
+        sender   : any( named: 'sender' ),
       ) ).thenReturn( null );
 
       final bloc = NotificationBloc( repo, audio: audio, tts: tts );
@@ -310,6 +311,7 @@ void main() {
         priority : "urgent",
         message  : "Prod is down.",
         title    : "CRIT",
+        sender   : any( named: 'sender' ),
       ) ).called( 1 );
 
       await bloc.close();

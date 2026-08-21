@@ -48,6 +48,16 @@ void main() {
       expect( p.dingOnUrgent, true );
     } );
 
+    test( 'speakSystemSenders defaults to true and persists', () async {
+      SharedPreferences.setMockInitialValues( {} );
+      final p = NotificationPreferences( await SharedPreferences.getInstance() );
+      expect( p.speakSystemSenders, isTrue );
+      await p.setSpeakSystemSenders( false );
+      expect( p.speakSystemSenders, isFalse );
+      final again = NotificationPreferences( await SharedPreferences.getInstance() );
+      expect( again.speakSystemSenders, isFalse );
+    } );
+
     test( 'ttsFraction defaults to 0.2, snaps to 10% steps, clamps, and persists', () async {
       SharedPreferences.setMockInitialValues( {} );
       final p = NotificationPreferences( await SharedPreferences.getInstance() );

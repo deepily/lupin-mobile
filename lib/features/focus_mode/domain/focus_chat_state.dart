@@ -11,6 +11,13 @@ enum FocusHydration { idle, loading, ready, error }
 /// `history` = everything active in the last 24h (exited included).
 enum FocusFilter { live, history }
 
+/// Rail SENDER SCOPE (Rick 2026-08-21, voice): `personas` = only senders
+/// carrying a voice-persona glyph; `all` = personas + system senders.
+/// Default `personas`, resets each launch. RAIL ONLY — the focused
+/// sender is always visible, and TTS/pane are untouched (the stop-list
+/// governs what is spoken).
+enum FocusSenderScope { personas, all }
+
 /// Recency band of a sender at `asOf` — mirrors the web clients' pure
 /// client-side math (🟢 <1h, 🟡 <24h, ⚪ dropped).
 enum FocusBand { live, history, stale }
@@ -75,6 +82,7 @@ class FocusChatState extends Equatable {
   final Map<String, DateTime>            lastActivityBySender;
   final Set<String>                      exitedSenders;    // persona released + debounce elapsed, or reaped
   final FocusFilter                      filter;
+  final FocusSenderScope                 senderScope;
   final DateTime?                        asOf;             // evaluation clock; null ⇒ not yet evaluated
   /// Messages the user's stop-list suppressed at ingest, per sender
   /// (plan 2026.08.21 §3) — never stored in the window, never spoken,
@@ -91,6 +99,7 @@ class FocusChatState extends Equatable {
     this.lastActivityBySender = const {},
     this.exitedSenders        = const {},
     this.filter               = FocusFilter.live,
+    this.senderScope          = FocusSenderScope.personas,
     this.asOf,
     this.hiddenCountBySender  = const {},
   } );
@@ -105,6 +114,7 @@ class FocusChatState extends Equatable {
         lastActivityBySender = const {},
         exitedSenders        = const {},
         filter               = FocusFilter.live,
+        senderScope          = FocusSenderScope.personas,
         asOf                 = null,
         hiddenCountBySender  = const {};
 
@@ -120,10 +130,16 @@ class FocusChatState extends Equatable {
     return FocusBand.stale;
   }
 
-  /// Is [senderId] rendered under the current [filter]? The focused sender
-  /// is ALWAYS visible (never blank the pane mid-read — plan §4.6).
-  bool isVisible( String senderId ) {
-    if ( senderId == focusedSender ) return true;
+  /// Does [senderId] carry a persona GLYPH (the rail's persona group)?
+  /// Same test `SessionRail._badgeFor` uses to pick PersonaBadge over the
+  /// initial fallback — a persona without an icon renders as system.
+  bool isPersona( String senderId ) {
+    final p = personasBySender[ senderId ];
+    return p != null && ( p.icon ?? '' ).isNotEmpty;
+  }
+
+  /// Recency/exit lens only (Live/24h) — independent of [senderScope].
+  bool _passesBand( String senderId ) {
     final band = bandFor( senderId );
     switch ( filter ) {
       case FocusFilter.live:
@@ -133,10 +149,56 @@ class FocusChatState extends Equatable {
     }
   }
 
-  /// Derived, pure: the senders the rail shows, in establishment order.
-  /// `senderOrder` / `windows` are never pruned — this is a render lens.
+  /// Is [senderId] rendered under the current [filter] + [senderScope]?
+  /// The focused sender is ALWAYS visible (never blank the pane mid-read —
+  /// plan §4.6; Rick 2026-08-21: also through a Personas-only scope).
+  bool isVisible( String senderId ) {
+    if ( senderId == focusedSender ) return true;
+    if ( !_passesBand( senderId ) ) return false;
+    switch ( senderScope ) {
+      case FocusSenderScope.personas:
+        return isPersona( senderId );
+      case FocusSenderScope.all:
+        return true;
+    }
+  }
+
+  /// Persona group, OLDEST SESSION FIRST (Rick 2026-08-21): sorted by
+  /// `voice_persona.assigned_at` ascending; senders with no timestamp
+  /// follow in establishment order; ties keep establishment order (stable).
+  List<String> get visiblePersonas {
+    final indexed = <MapEntry<int, String>>[];
+    for ( var i = 0; i < senderOrder.length; i++ ) {
+      final sid = senderOrder[ i ];
+      if ( isPersona( sid ) && isVisible( sid ) ) indexed.add( MapEntry( i, sid ) );
+    }
+    indexed.sort( ( a, b ) {
+      final ta = personasBySender[ a.value ]?.assignedAt;
+      final tb = personasBySender[ b.value ]?.assignedAt;
+      if ( ta == null && tb == null ) return a.key.compareTo( b.key );
+      if ( ta == null ) return 1;
+      if ( tb == null ) return -1;
+      final c = ta.compareTo( tb );
+      return c != 0 ? c : a.key.compareTo( b.key );
+    } );
+    return indexed.map( ( e ) => e.value ).toList( growable: false );
+  }
+
+  /// System group (no persona glyph), establishment order — Rick ruled
+  /// 2026-08-21: arrival order, never re-sorted.
+  List<String> get visibleSystem =>
+      senderOrder.where( ( s ) => !isPersona( s ) && isVisible( s ) ).toList( growable: false );
+
+  /// Derived, pure: the senders the rail shows — persona group (oldest
+  /// session first) then system group (establishment order). `senderOrder`
+  /// / `windows` are never pruned — this is a render lens.
   List<String> get visibleOrder =>
-      senderOrder.where( isVisible ).toList( growable: false );
+      [ ...visiblePersonas, ...visibleSystem ];
+
+  /// Toolbar counts for the Personas / All segments — under the current
+  /// Live/24h lens, independent of [senderScope].
+  int get personaCount => senderOrder.where( ( s ) => isPersona( s ) && _passesBand( s ) ).length;
+  int get allCount     => senderOrder.where( _passesBand ).length;
 
   /// Count the toolbar shows for each segment (independent of [filter]).
   int get liveCount => senderOrder
@@ -173,6 +235,7 @@ class FocusChatState extends Equatable {
     Map<String, DateTime>?           lastActivityBySender,
     Set<String>?                     exitedSenders,
     FocusFilter?                     filter,
+    FocusSenderScope?                senderScope,
     DateTime?                        asOf,
     Map<String, int>?                hiddenCountBySender,
   } ) {
@@ -186,6 +249,7 @@ class FocusChatState extends Equatable {
       lastActivityBySender : lastActivityBySender ?? this.lastActivityBySender,
       exitedSenders        : exitedSenders        ?? this.exitedSenders,
       filter               : filter               ?? this.filter,
+      senderScope          : senderScope          ?? this.senderScope,
       asOf                 : asOf                 ?? this.asOf,
       hiddenCountBySender  : hiddenCountBySender  ?? this.hiddenCountBySender,
     );
@@ -202,6 +266,7 @@ class FocusChatState extends Equatable {
     lastActivityBySender,
     exitedSenders,
     filter,
+    senderScope,
     asOf,
     hiddenCountBySender,
   ];

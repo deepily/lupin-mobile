@@ -86,6 +86,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     on<FocusPersonaUpdated>( _onPersonaUpdated );
     on<FocusRespondRequested>( _onRespondRequested );
     on<FocusFilterChanged>( _onFilterChanged );
+    on<FocusSenderScopeChanged>( _onSenderScopeChanged );
     on<FocusActivityTick>( _onActivityTick );
     on<FocusSenderExited>( _onSenderExited );
 
@@ -170,11 +171,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     ) );
 
     // EVERY item, EVERY priority (Q6) — the ungated S1 path (F-S1-1).
+    final persona = item.voicePersona ?? state.personasBySender[ sid ];
     _tts.enqueueAlways(
       priority : item.priority,
       message  : item.message,
       title    : item.title,
       voiceId  : item.voicePersona?.voiceId,
+      sender   : TtsSender( senderId: sid, name: persona?.displayName ?? persona?.name, icon: persona?.icon ),
     );
   }
 
@@ -374,6 +377,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     emit( state.copyWith( filter: event.filter, asOf: _now() ) );
   }
 
+  void _onSenderScopeChanged(
+    FocusSenderScopeChanged event,
+    Emitter<FocusChatState> emit,
+  ) {
+    emit( state.copyWith( senderScope: event.scope, asOf: _now() ) );
+  }
+
   void _onActivityTick(
     FocusActivityTick event,
     Emitter<FocusChatState> emit,
@@ -402,9 +412,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         ?? state.pendingPromptFor( event.senderId )?.item.id;
 
     if ( targetId == null ) {
-      // Defined non-crash outcome: S3 disables the composer off the same
-      // selector, so this path is defensive.
-      print( '[FocusChat] respond for ${event.senderId} with no pending prompt — dropped' );
+      // No unanswered ask ⇒ this is a DIRECT MESSAGE to the session (Rick
+      // 2026-08-21: the composer is ungated; a reply with nothing to reply
+      // to is a DM). Same event, same bubble — a different door.
+      await _sendDirectMessage( event.senderId, event.text, emit );
       return;
     }
 
@@ -452,6 +463,78 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       emit( state.copyWith( windows: windows ) );
     } on NotificationApiException catch ( e ) {
       print( '[FocusChat] respond failed for $targetId: $e' );
+      emit( state.copyWith( hydration: FocusHydration.error ) );
+    }
+  }
+
+  /// Sender identity stamped on outbound DMs (Rick 2026-08-21). The app
+  /// has no display name — derive a readable one from the e-mail local
+  /// part ("ricardo.felipe.ruiz@…" → "Ricardo"); icon marks the phone.
+  static const String dmSenderIcon    = '📱';
+  static const String dmSenderProject = 'lupin-mobile';
+
+  static String dmSenderPersona( String? email ) {
+    final local = ( email ?? '' ).split( '@' ).first.trim();
+    if ( local.isEmpty ) return 'Mobile user';
+    final first = local.split( RegExp( r'[._\-]' ) ).first;
+    if ( first.isEmpty ) return 'Mobile user';
+    return first[ 0 ].toUpperCase() + first.substring( 1 );
+  }
+
+  /// Address a chip: persona NAME when the registry has one (the server's
+  /// preferred resolver), else the `#hash8` session suffix of the sender id
+  /// (prefix-tolerant on the server), else the raw sender id.
+  DmSendRequest dmRequestFor( String senderId, String text ) {
+    final persona = state.personasBySender[ senderId ];
+    final name    = ( persona?.name ?? '' ).trim();
+    final hashIdx = senderId.lastIndexOf( '#' );
+    final sessionSuffix = hashIdx >= 0 && hashIdx < senderId.length - 1
+        ? senderId.substring( hashIdx + 1 )
+        : null;
+    return DmSendRequest(
+      senderSessionId    : 'lupin-mobile:${_userEmail ?? 'anonymous'}',
+      body               : text,
+      recipientPersona   : name.isNotEmpty ? name : null,
+      recipientSessionId : name.isNotEmpty ? null : ( sessionSuffix ?? senderId ),
+      senderPersona      : dmSenderPersona( _userEmail ),
+      senderIcon         : dmSenderIcon,
+      senderProject      : dmSenderProject,
+    );
+  }
+
+  Future<void> _sendDirectMessage(
+    String senderId,
+    String text,
+    Emitter<FocusChatState> emit,
+  ) async {
+    try {
+      await _repo.sendDm( dmRequestFor( senderId, text ) );
+      final windows = _copyWindows();
+      final window  = List<FocusMessage>.from( windows[ senderId ] ?? const [] );
+      final now     = DateTime.now();
+      window.add( FocusMessage(
+        item: NotificationItem(
+          id                     : 'local-dm-${now.microsecondsSinceEpoch}',
+          message                : text,
+          type                   : 'user_initiated_message',
+          priority               : 'low',
+          senderId               : senderId,
+          timestamp              : now,
+          played                 : true,
+          playCount              : 0,
+          responseRequested      : false,
+          suppressDing           : true,
+          displayQualifierWidget : false,
+        ),
+        answered: true,
+      ) );
+      while ( window.length > windowCap ) {
+        window.removeAt( 0 );
+      }
+      windows[ senderId ] = window;
+      emit( state.copyWith( windows: windows ) );
+    } on NotificationApiException catch ( e ) {
+      print( '[FocusChat] direct message to $senderId failed: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }

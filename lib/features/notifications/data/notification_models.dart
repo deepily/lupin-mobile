@@ -522,6 +522,57 @@ class NotificationResponsePayload {
 }
 
 /// `POST /api/notify/response` response.
+/// POST /api/dm/send request — a USER-originated direct message to one CC
+/// session (Rick 2026-08-21: "send a voice-to-text message to a persona
+/// chip"). Mirrors the server's `DmSendRequest` (parent `routers/dm.py`):
+/// recipient by persona name (preferred) or session id (prefix-tolerant —
+/// the `#hash8` suffix of a sender id is accepted); sender identity rides
+/// `sender_persona` / `sender_icon` so the recipient frames it as
+/// "[DM from <persona> <icon>]"; `sender_project` is the caller's project.
+class DmSendRequest {
+  final String  senderSessionId;
+  final String  body;
+  final String? recipientSessionId;
+  final String? recipientPersona;
+  final String? senderPersona;
+  final String? senderIcon;
+  final String? senderProject;
+
+  const DmSendRequest( {
+    required this.senderSessionId,
+    required this.body,
+    this.recipientSessionId,
+    this.recipientPersona,
+    this.senderPersona,
+    this.senderIcon,
+    this.senderProject,
+  } );
+
+  Map<String, dynamic> toJson() => {
+    "sender_session_id" : senderSessionId,
+    "body"              : body,
+    if ( recipientSessionId != null ) "recipient_session_id" : recipientSessionId,
+    if ( recipientPersona   != null ) "recipient_persona"    : recipientPersona,
+    if ( senderPersona      != null ) "sender_persona"       : senderPersona,
+    if ( senderIcon         != null ) "sender_icon"          : senderIcon,
+    if ( senderProject      != null ) "sender_project"       : senderProject,
+  };
+}
+
+/// 201 body of POST /api/dm/send — `{message_id, thread_id}` (+ extras we
+/// ignore). Liberal parse: either id may be absent on an older server.
+class DmSendAck {
+  final String? messageId;
+  final String? threadId;
+
+  const DmSendAck( { this.messageId, this.threadId } );
+
+  factory DmSendAck.fromJson( Map<String, dynamic> json ) => DmSendAck(
+    messageId : json["message_id"]?.toString(),
+    threadId  : json["thread_id"]?.toString(),
+  );
+}
+
 class NotificationResponseAck {
   final String   status;
   final String?  message;

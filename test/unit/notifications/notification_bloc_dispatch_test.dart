@@ -91,6 +91,7 @@ void main() {
         priority : any( named: "priority" ),
         message  : any( named: "message" ),
         title    : any( named: "title" ),
+        sender   : any( named: 'sender' ),
       ) ).thenReturn( null );
     } );
 
@@ -115,6 +116,7 @@ void main() {
           priority : any( named: "priority" ),
           message  : any( named: "message" ),
           title    : any( named: "title" ),
+          sender   : any( named: 'sender' ),
         ) );
 
         await bloc.close();
@@ -142,6 +144,7 @@ void main() {
           priority : any( named: "priority" ),
           message  : any( named: "message" ),
           title    : any( named: "title" ),
+          sender   : any( named: 'sender' ),
         ) );
 
         await bloc.close();
@@ -174,6 +177,7 @@ void main() {
           priority : "urgent",
           message  : "Prod is down.",
           title    : "CRIT",
+          sender   : any( named: 'sender' ),
         ) ).called( 1 );
 
         await bloc.close();
@@ -211,6 +215,7 @@ void main() {
         priority : any( named: "priority" ),
         message  : any( named: "message" ),
         title    : any( named: "title" ),
+        sender   : any( named: 'sender' ),
       ) ).thenReturn( null );
     } );
 
@@ -258,6 +263,7 @@ void main() {
         priority : any( named: "priority" ),
         message  : any( named: "message" ),
         title    : any( named: "title" ),
+        sender   : any( named: 'sender' ),
       ) );
 
       // AC-A4 — no "Unknown notification.type" log emitted (the new cases
@@ -446,6 +452,7 @@ void main() {
           priority : any( named: "priority" ),
           message  : any( named: "message" ),
           title    : any( named: "title" ),
+          sender   : any( named: 'sender' ),
         ) ).thenReturn( null );
       } );
 
@@ -561,6 +568,7 @@ void main() {
           priority : any( named: "priority" ),
           message  : any( named: "message" ),
           title    : any( named: "title" ),
+          sender   : any( named: 'sender' ),
         ) ).thenReturn( null );
       } );
 

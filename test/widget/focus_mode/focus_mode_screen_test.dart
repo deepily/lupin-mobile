@@ -72,6 +72,7 @@ FocusChatState _st( {
   Map<String, DateTime>           activity = const {},
   Set<String>                     exited   = const {},
   FocusFilter                     filter   = FocusFilter.live,
+  FocusSenderScope                scope    = FocusSenderScope.all,   // band fixtures are persona-less (§5f)
   DateTime?                       asOf,
   Map<String, int>                hidden   = const {},
 } ) {
@@ -85,6 +86,7 @@ FocusChatState _st( {
     lastActivityBySender : activity,
     exitedSenders        : exited,
     filter               : filter,
+    senderScope          : scope,
     asOf                 : asOf,
     hiddenCountBySender  : hidden,
   );
@@ -208,6 +210,7 @@ void main() {
         message  : any( named: 'message' ),
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
       ) );
     } );
 
@@ -235,9 +238,44 @@ void main() {
       }
       expect( find.text( 'msg-y1' ), findsNothing,
           reason: 'only the FOCUSED sender\'s window renders' );
+      // 2026-08-21: the composer is UNGATED — no pending ask ⇒ it is a
+      // direct message to the focused session, and the caption says so.
+      expect( find.byType( VoiceReplyField ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.focusComposerCaption ) ), findsOneWidget );
+      expect( find.textContaining( 'Direct message to' ), findsOneWidget );
+    } );
+
+    testWidgets( 'composer with NO focused sender shows the focus hint, no VoiceReplyField', ( tester ) async {
+      seed( _st( order: [ 'X' ] ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
       expect( find.byType( VoiceReplyField ), findsNothing );
-      expect( find.textContaining( 'No unanswered ask' ), findsOneWidget,
-          reason: 'composer disabled + hint when pendingPromptFor is null' );
+      expect( find.textContaining( 'Focus a session' ), findsOneWidget );
+    } );
+
+    testWidgets( 'speech-queue button: badge shows depth off queueDepthStream; tap opens the TtsQueueSheet (Rick 2026-08-21)', ( tester ) async {
+      final queueCtrl = StreamController<List<TtsQueueItem>>.broadcast();
+      addTearDown( queueCtrl.close );
+      when( () => tts.queueStream   ).thenAnswer( ( _ ) => queueCtrl.stream );
+      when( () => tts.queueSnapshot ).thenReturn( const [
+        TtsQueueItem( id: 1, priority: 'high', text: 'playing now', sender: TtsSender( name: 'Tiffany', icon: '💍' ), isCurrent: true ),
+        TtsQueueItem( id: 2, priority: 'low',  text: 'pytest chatter', sender: TtsSender( senderId: 'pytest@lupin#1' ), isCurrent: false ),
+      ] );
+      when( () => tts.queueDepth ).thenReturn( 1 );
+      seed( _st( order: [ 'A' ] ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.focusQueueButton ) ), findsOneWidget );
+      final badge = tester.widget<Badge>( find.byKey( const Key( TestKeys.focusQueueBadge ) ) );
+      expect( badge.isLabelVisible, isTrue );
+      expect( ( badge.label as Text ).data, '1' );
+
+      await tester.tap( find.byKey( const Key( TestKeys.focusQueueButton ) ) );
+      await tester.pumpAndSettle();
+      expect( find.byKey( const Key( TestKeys.ttsQueueSheet ) ), findsOneWidget );
+      expect( find.text( 'playing now' ),    findsOneWidget );
+      expect( find.text( 'pytest chatter' ), findsOneWidget );
     } );
 
     testWidgets( 'AC-S3.5 — pause toggle calls pause(); paused banner shows LIVE held count off queueDepthStream; resume calls resume()', ( tester ) async {
@@ -428,6 +466,22 @@ void main() {
       await tester.pump();
 
       expect( find.byType( VoiceReplyField ), findsOneWidget );
+      expect( find.textContaining( 'Replying to' ), findsOneWidget, reason: 'pending ask ⇒ reply caption' );
+    } );
+
+    testWidgets( 'DM caption names the focused persona; onSubmit dispatches FocusRespondRequested without context (bloc picks reply vs DM)', ( tester ) async {
+      when( () => asr.startRecording()  ).thenAnswer( ( _ ) async {} );
+      when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
+      final tiff = VoicePersona.fromJson( { 'name': 'Tiffany', 'icon': '💍' } );
+      seed( _st( order: [ 'S' ], focused: 'S', personas: { 'S': tiff },
+                 windows: { 'S': [ FocusMessage( item: _item( 'n1', 'S' ) ) ] } ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( find.text( 'Direct message to Tiffany' ), findsOneWidget );
+      final field = tester.widget<VoiceReplyField>( find.byType( VoiceReplyField ) );
+      field.onSubmit( 'status please' );
+      verify( () => focusBloc.add( const FocusRespondRequested( senderId: 'S', text: 'status please' ) ) ).called( 1 );
     } );
   } );
 
@@ -460,6 +514,54 @@ void main() {
       await tester.tap( find.byKey( const Key( TestKeys.focusFilterHistory ) ) );
       await tester.pump();
       verify( () => focusBloc.add( const FocusFilterChanged( FocusFilter.history ) ) ).called( 1 );
+    } );
+
+    testWidgets( '§5f Personas/All control: default Personas hides system chips, shows counts; tapping All dispatches FocusSenderScopeChanged(all)', ( tester ) async {
+      final tiff = VoicePersona.fromJson( { 'name': 'Tiffany', 'icon': '💍', 'assigned_at': at.subtract( const Duration( hours: 2 ) ).toIso8601String() } );
+      final sam  = VoicePersona.fromJson( { 'name': 'Sam',     'icon': '🎷', 'assigned_at': at.subtract( const Duration( hours: 5 ) ).toIso8601String() } );
+      seed( _st(
+        order    : const [ 'sys1', 'tiff', 'sam' ],
+        personas : { 'tiff': tiff, 'sam': sam },
+        activity : { 'sys1': at, 'tiff': at, 'sam': at },
+        scope    : FocusSenderScope.personas,
+        asOf     : at,
+      ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( find.text( 'Personas (2)' ), findsOneWidget );
+      expect( find.text( 'All (3)' ),      findsOneWidget );
+      expect( railBadge( 'sam' ),  findsOneWidget );
+      expect( railBadge( 'tiff' ), findsOneWidget );
+      expect( railBadge( 'sys1' ), findsNothing, reason: 'system chip hidden under Personas' );
+      expect( find.byKey( const Key( TestKeys.focusRailGroupDivider ) ), findsNothing, reason: 'no orphan divider' );
+      // oldest session on top: Sam (5h) above Tiffany (2h)
+      expect( tester.getTopLeft( railBadge( 'sam' ) ).dy < tester.getTopLeft( railBadge( 'tiff' ) ).dy, isTrue );
+
+      await tester.tap( find.byKey( const Key( TestKeys.focusScopeAll ) ) );
+      await tester.pump();
+      verify( () => focusBloc.add( const FocusSenderScopeChanged( FocusSenderScope.all ) ) ).called( 1 );
+    } );
+
+    testWidgets( '§5f All scope: persona group, divider, then system group in arrival order', ( tester ) async {
+      final tiff = VoicePersona.fromJson( { 'name': 'Tiffany', 'icon': '💍', 'assigned_at': at.toIso8601String() } );
+      seed( _st(
+        order    : const [ 'sysB', 'tiff', 'sysA' ],
+        personas : { 'tiff': tiff },
+        activity : { 'sysB': at, 'tiff': at, 'sysA': at },
+        scope    : FocusSenderScope.all,
+        asOf     : at,
+      ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      final divider = find.byKey( const Key( TestKeys.focusRailGroupDivider ) );
+      expect( divider, findsOneWidget );
+      final yT = tester.getTopLeft( railBadge( 'tiff' ) ).dy;
+      final yD = tester.getTopLeft( divider ).dy;
+      final yB = tester.getTopLeft( railBadge( 'sysB' ) ).dy;
+      final yA = tester.getTopLeft( railBadge( 'sysA' ) ).dy;
+      expect( yT < yD && yD < yB && yB < yA, isTrue, reason: 'persona · divider · sysB · sysA (arrival order)' );
     } );
 
     testWidgets( 'History lens renders both bands with 🟢/🟡 status dots; exited sender shows amber', ( tester ) async {

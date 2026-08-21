@@ -73,6 +73,7 @@ class TtsOrchestrator {
 
   final StreamController<bool> _pausedCtrl = StreamController<bool>.broadcast();
   final StreamController<int>  _depthCtrl  = StreamController<int>.broadcast();
+  final StreamController<List<TtsQueueItem>> _queueCtrl = StreamController<List<TtsQueueItem>>.broadcast();
 
   static const _quotaFallbackWindow = Duration( minutes: 5 );
 
@@ -114,6 +115,48 @@ class TtsOrchestrator {
   /// held-count signal for S3's paused banner (F-S1-S2-3). The
   /// synchronous [queueDepth] getter stays for one-shot reads.
   Stream<int> get queueDepthStream => _depthCtrl.stream;
+
+  /// Queue viewer feed (Rick 2026-08-21, web `#tts-queue-section` parity):
+  /// the in-flight utterance first (flagged), then pending in play order.
+  /// Emits on every change (enqueue, dequeue, clear, skip, current change).
+  Stream<List<TtsQueueItem>> get queueStream => _queueCtrl.stream;
+
+  /// One-shot read of what [queueStream] would emit now.
+  List<TtsQueueItem> get queueSnapshot => [
+    if ( _current != null ) _current!.toItem( isCurrent: true ),
+    ..._fifo.map( ( u ) => u.toItem( isCurrent: false ) ),
+  ];
+
+  /// Viewer "skip": stop the in-flight utterance and advance (parks at the
+  /// pause gate when held). No-op when nothing is playing. Destructive for
+  /// THAT utterance only — the queue is untouched.
+  Future<void> skipCurrent() async {
+    if ( _current == null ) return;
+    ++_epoch;   // stale-guard the stopped utterance's completion/error events
+    _current = null;
+    await _player.stop();
+    await _fallback.stopFallbackSpeech();
+    _emitQueue();
+    await _tryStartNext();
+  }
+
+  /// Viewer "delete": drop one PENDING utterance by id. The in-flight one
+  /// is not removable here — use [skipCurrent]. Returns whether it existed.
+  bool removeQueued( int id ) {
+    final before = _fifo.length;
+    _fifo.removeWhere( ( u ) => u.id == id );
+    final removed = _fifo.length != before;
+    if ( removed ) _emitQueueDepth();
+    return removed;
+  }
+
+  /// Viewer "clear queue": drop every PENDING utterance; the in-flight one
+  /// finishes (use [stopAll] to cut it too).
+  void clearQueued() {
+    if ( _fifo.isEmpty ) return;
+    _fifo.clear();
+    _emitQueueDepth();
+  }
 
   /// HOLD the queue (Q6; OSQ-5 utterance-boundary semantics): the
   /// in-flight utterance finishes naturally — never cut mid-sentence —
@@ -158,15 +201,18 @@ class TtsOrchestrator {
     required String message,
     String?         title,
     String?         voiceId,
+    TtsSender?      sender,
   } ) {
     if ( _prefs.masterMute ) return;
     if ( _stopList?.matches( message ) ?? false ) return;   // stop-list: muted
+    if ( _systemSenderMuted( sender ) ) return;             // Rick 2026-08-21
     if ( !_isSpeakable( priority ) ) return;
 
     final utter = _Utterance(
       priority : priority,
       text     : _formatSpeech( title: title, message: message ),
       voiceId  : voiceId,
+      sender   : sender ?? const TtsSender(),
     );
 
     if ( priority == 'urgent' ) {
@@ -200,14 +246,19 @@ class TtsOrchestrator {
     required String message,
     String?         title,
     String?         voiceId,
+    TtsSender?      sender,
   } ) {
-    // The ONLY gate on this path (F-S1-1 keeps it ungated by priority and
-    // master-mute): a user-checked stop-list pattern = "never speak this".
+    // The ONLY gates on this path (F-S1-1 keeps it ungated by priority and
+    // master-mute) are the user's explicit "never speak this" rulings: a
+    // checked stop-list pattern, and — since 2026-08-21 — the
+    // speak-system-senders switch (persona-less senders muted as a class).
     if ( _stopList?.matches( message ) ?? false ) return;
+    if ( _systemSenderMuted( sender ) ) return;
     final utter = _Utterance(
       priority : priority,
       text     : _formatSpeech( title: title, message: message ),
       voiceId  : voiceId,
+      sender   : sender ?? const TtsSender(),
     );
 
     if ( priority == 'urgent' ) {
@@ -234,6 +285,7 @@ class TtsOrchestrator {
     _fifo.clear();
     _emitQueueDepth();
     _current = null;
+    _emitQueue();
     await _player.stop();
     await _fallback.stopFallbackSpeech();
   }
@@ -243,9 +295,16 @@ class TtsOrchestrator {
     await _errorSub?.cancel();
     await _pausedCtrl.close();
     await _depthCtrl.close();
+    await _queueCtrl.close();
   }
 
   // ---------- private ----------
+
+  /// System-sender gate: a sender with NO persona is muted when the
+  /// `speakSystemSenders` pref is off. Unknown sender (null) counts as
+  /// system — the legacy path that passes nothing gets the same ruling.
+  bool _systemSenderMuted( TtsSender? sender ) =>
+      !_prefs.speakSystemSenders && !( sender?.isPersona ?? false );
 
   bool _isSpeakable( String priority ) {
     switch ( priority ) {
@@ -269,6 +328,11 @@ class TtsOrchestrator {
 
   void _emitQueueDepth() {
     if ( !_depthCtrl.isClosed ) _depthCtrl.add( _fifo.length );
+    _emitQueue();
+  }
+
+  void _emitQueue() {
+    if ( !_queueCtrl.isClosed ) _queueCtrl.add( queueSnapshot );
   }
 
   /// Insert [utter] behind the contiguous block of urgents at the queue
@@ -298,6 +362,7 @@ class TtsOrchestrator {
     await _player.stop();
     await _fallback.stopFallbackSpeech();
     _current = urgent;
+    _emitQueue();
     await _dispatchCurrent();
   }
 
@@ -315,6 +380,7 @@ class TtsOrchestrator {
     // `_current` here would let it idle-dispatch the queue head and break
     // one-voice-at-a-time with a second concurrent speak.
     _current = urgent;
+    _emitQueue();
     await _player.stop();
     await _fallback.stopFallbackSpeech();
     if ( interrupted != null ) {
@@ -402,6 +468,7 @@ class TtsOrchestrator {
 
     final wasCurrent = _current;
     _current = null;
+    _emitQueue();
 
     if ( event.errorCode == 'quota_exceeded' ) {
       _elevenLabsDisabledUntil = DateTime.now().add( _quotaFallbackWindow );
@@ -422,17 +489,64 @@ class TtsOrchestrator {
   void _onUtteranceFinished() {
     if ( _inFlightEpoch != _epoch ) return;   // stale event (F-S1-S3-1)
     _current = null;
+    _emitQueue();
     _tryStartNext();
   }
 }
 
+/// Who a queued utterance comes from — for the queue viewer and the
+/// system-sender gate (Rick 2026-08-21). `name`/`icon` come from the
+/// voice persona; both null ⇒ a SYSTEM sender (no persona).
+class TtsSender {
+  final String? senderId;
+  final String? name;
+  final String? icon;
+  const TtsSender( { this.senderId, this.name, this.icon } );
+
+  bool get isPersona => ( name ?? '' ).isNotEmpty || ( icon ?? '' ).isNotEmpty;
+
+  /// Short label for the viewer: persona name, else the sender-id local
+  /// part before `@`/`#`, else "system".
+  String get label {
+    final n = ( name ?? '' ).trim();
+    if ( n.isNotEmpty ) return n;
+    final local = ( senderId ?? '' ).split( RegExp( r'[@#]' ) ).first.trim();
+    return local.isEmpty ? 'system' : local;
+  }
+}
+
+/// One row of the TTS queue viewer (web `#tts-queue-section` parity):
+/// the in-flight utterance first (`isCurrent`), then the pending ones in
+/// play order. `id` is the handle for [TtsOrchestrator.removeQueued].
+class TtsQueueItem {
+  final int       id;
+  final String    priority;
+  final String    text;
+  final TtsSender sender;
+  final bool      isCurrent;
+  const TtsQueueItem( {
+    required this.id,
+    required this.priority,
+    required this.text,
+    required this.sender,
+    required this.isCurrent,
+  } );
+}
+
 class _Utterance {
-  final String  priority;
-  final String  text;
-  final String? voiceId;
-  const _Utterance( {
+  static int _nextId = 0;
+  final int       id;
+  final String    priority;
+  final String    text;
+  final String?   voiceId;
+  final TtsSender sender;
+  _Utterance( {
     required this.priority,
     required this.text,
     this.voiceId,
-  } );
+    this.sender = const TtsSender(),
+  } ) : id = ++_nextId;
+
+  TtsQueueItem toItem( { required bool isCurrent } ) => TtsQueueItem(
+    id: id, priority: priority, text: text, sender: sender, isCurrent: isCurrent );
 }

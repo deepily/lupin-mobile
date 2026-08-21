@@ -1,6 +1,6 @@
 # TODO
 
-Last updated: 2026-08-21 (Session `e082edd7` — Tiffany 💍): v2 cutover wave 1 DONE; wave 2 backlog below.
+Last updated: 2026-08-21 (Session `e082edd7` — Tiffany 💍): v2 cutover wave 1 DONE; wave 2 backlog below. Session-end 2026-08-21: TODO.md is past the ~200-line horizon — archive pass owed (`/plan-todo archive`), deferred because Rick was AFK at session-end.
 Prior: 2026-06-25 (Session `f53bc7b3` — Tiffany 💍): Focus UI active/history filter PLAN
 landed + review-ready (see 🆕 NEW BACKLOG below; doc `src/rnd/2026.06.25-focus-ui-active-history-filter.md`).
 Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉). Focus-mode milestone
@@ -69,7 +69,7 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 > Deferred follow-up: a UX-refinement pass on the focus-mode surface (interaction flow /
 > affordances / pacing) — scope in a later session; not blocking.
 
-> **🆕 2026-08-21 — Focus rail Live/24h + persona icons (A ✅ + B ✅ + C ✅ committed `557e037`; device-feedback round — stop-list render lens, lower-left timestamps, newest-first, TTS-fraction slider (web parity, default 20%) — implemented, uncommitted)**
+> **🆕 2026-08-21 — Focus rail Live/24h + persona icons (A ✅ + B ✅ + C ✅ committed `557e037`; device-feedback round — stop-list render lens, lower-left timestamps, newest-first, TTS-fraction slider (web parity, default 20%) — committed `b9fa06b`; round 2: rail Personas/All scope + persona/system grouping + oldest-session-first (§5f) implemented, uncommitted; voice-DM-to-chip built (§5g); TTS queue viewer + speak-system-senders switch (§5h); login enter-to-submit — all uncommitted)**
 > (Tiffany 💍). Rick's rulings by voice: Live(<1h) default + 24h history toggle; persona icon w/ NAME-initial fallback
 > (never repo id); one checkbox = hide + mute; order A→B→C. Measured: cold start fetches ALL senders (146 vs 6 in 24h);
 > personas seeded only by live events; `/senders-visible` carries `voice_persona`. Plan:
@@ -523,9 +523,10 @@ tests, re-verify on device.
 > deferred improvements. Known defects (things to *fix*) live in `bug-fix-queue.md`.
 
 ## Pending
+- [ ] [LUPIN-MOBILE] Archive TODO.md horizon — `/plan-todo archive` (dry-run → confirm → write); file is ~570 lines, past the current+2 horizon (flagged at session-end 2026-08-21, Rick AFK).
 
 ### ⚡ First thing next session — hygiene-commit follow-ups (from 2026-04-23 gitignore cleanup, commit `edaec79`)
-- [ ] [LUPIN-MOBILE] Run `flutter pub get` sanity check — confirm the newly-untracked `.dart_tool/` regenerates cleanly on next build; catches any surprise from the un-track. Low risk since disk copies are intact, but worth a deliberate verification pass.
+- [x] [LUPIN-MOBILE] Run `flutter pub get` sanity check — **done 2026-08-21 (Tiffany): `pub get` clean, `.dart_tool/` regenerates; full suite 582 ✅ on the regenerated tree.**
 - [ ] [LUPIN-MOBILE] Decide whether to add a `history.md` one-liner for commit `edaec79` — the chore is fully documented in the commit message itself; decision is: keep history.md for feature/bug work only, or backfill a one-liner for this cleanup.
 - [ ] [LUPIN-MOBILE] Decide whether to purge `build_runner.dart-3.8.0.snapshot` (~26MB binary) from git history — requires `git filter-repo` + force-push; permanently reduces clone size but rewrites history. Only worth it if the repo is mirrored/cloned frequently.
 - [ ] [LUPIN-MOBILE] Audit parent Lupin + other sub-repos (cosa, lupin-plugin-firefox) for the same gitignore gaps — consistency pass; may not apply since those aren't Flutter projects, but .claude-session.md / __pycache__ gaps might recur elsewhere. (Out of scope for lupin-mobile repo; would need to be done in each repo's own context.)
@@ -557,7 +558,7 @@ tests, re-verify on device.
 - [x] [LUPIN-MOBILE] On-device verify runbook — `src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md` (copy-paste-ready for laptop). — 2026-04-24 session `0d54c763`
 - [ ] [LUPIN-MOBILE] On-device verify TTS: live ElevenLabs audio plays in the emulator (user's laptop); injected `quota_exceeded` falls back to `flutter_tts` cleanly. **Scenario #7 is the regression test for the 2026-04-24 overlap fix.**
 - [ ] [LUPIN-MOBILE] Future: ElevenLabs voice/config customization per agent/context (currently uses backend defaults only)
-- [ ] [LUPIN-MOBILE] Future: Cancel/replay UI for in-flight narration
+- [x] [LUPIN-MOBILE] Future: Cancel/replay UI for in-flight narration — **cancel side done 2026-08-21 (§5h TTS queue viewer: Skip / Delete / Clear queue / Stop all); replay still open.**
 
 ### Notification audio-on-receipt (new 2026-04-21)
 - [x] [LUPIN-MOBILE] Phase 0 — Web client cross-check (low/medium/high/urgent policy aligned) + 3 MP3 assets copied from `src/fastapi_app/static/audio/` into `android/app/src/main/res/raw/lupin_{medium,high,urgent}.mp3`. Plan: `src/rnd/v0.1.7/2026.04.21-notification-audio-on-receipt-plan.md` — 2026-04-21

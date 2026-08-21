@@ -95,6 +95,7 @@ class TestKeys {
   static const settingsSpeakHigh    = 'settings.audio.speakHigh';
   static const settingsSpeakUrgent  = 'settings.audio.speakUrgent';
   static const settingsMasterMute   = 'settings.audio.masterMute';
+  static const settingsSpeakSystem  = 'settings.audio.speakSystemSenders';
 
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';
@@ -119,6 +120,19 @@ class TestKeys {
   static const focusFilterBar            = 'focus.filterBar';
   static const focusFilterLive           = 'focus.filter.live';
   static const focusFilterHistory        = 'focus.filter.history';
+  static const focusScopePersonas        = 'focus.scope.personas';
+  static const focusScopeAll             = 'focus.scope.all';
+  static const focusRailGroupDivider     = 'focus.rail.groupDivider';
+  static const focusComposerCaption      = 'focus.composer.caption';
+  static const focusQueueButton          = 'focus.queueButton';
+  static const focusQueueBadge           = 'focus.queueButton.badge';
+  static const ttsQueueSheet             = 'ttsQueue.sheet';
+  static const ttsQueueEmpty             = 'ttsQueue.empty';
+  static const ttsQueueSkip              = 'ttsQueue.skip';
+  static const ttsQueueClear             = 'ttsQueue.clear';
+  static const ttsQueueStopAll           = 'ttsQueue.stopAll';
+  static const ttsQueueRowPrefix         = 'ttsQueue.row.';      // + item id
+  static const ttsQueueDeletePrefix      = 'ttsQueue.delete.';   // + item id
   static const focusRailStatusDotPrefix  = 'focus.rail.dot.';      // + senderId
   static const focusRailInitialPrefix    = 'focus.rail.initial.';  // + senderId (fallback avatar)
   static const focusRailEmptyHint        = 'focus.rail.emptyHint';

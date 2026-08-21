@@ -55,6 +55,29 @@ void main() {
       ) ).called( 1 );
     });
 
+    testWidgets( "keyboard enter/done in the password field submits (no Sign-in tap needed)", ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await tester.enterText( find.byKey( const Key( TestKeys.loginEmailField    ) ), "u@x.y" );
+      await tester.enterText( find.byKey( const Key( TestKeys.loginPasswordField ) ), "hunter2" );
+      await tester.testTextInput.receiveAction( TextInputAction.done );
+      await tester.pump();
+      verify( () => auth.add(
+        const AuthLoginRequested( email: "u@x.y", password: "hunter2" ),
+      ) ).called( 1 );
+      final pw = tester.widget<EditableText>( find.descendant(
+          of: find.byKey( const Key( TestKeys.loginPasswordField ) ), matching: find.byType( EditableText ) ) );
+      expect( pw.textInputAction, TextInputAction.done );   // the key reads "done", not "return"
+    } );
+
+    testWidgets( "enter in the password field with an invalid email does NOT dispatch (validator still gates)", ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await tester.enterText( find.byKey( const Key( TestKeys.loginPasswordField ) ), "hunter2" );
+      await tester.testTextInput.receiveAction( TextInputAction.done );
+      await tester.pump();
+      verifyNever( () => auth.add( any() ) );
+      expect( find.text( "Enter a valid email" ), findsOneWidget );
+    } );
+
     testWidgets( "initialEmail + initialPassword pre-fill fields and submit sends them", ( tester ) async {
       await tester.pumpWidget( testApp(
         authBloc: auth,

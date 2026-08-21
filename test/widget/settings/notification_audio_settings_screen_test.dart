@@ -49,6 +49,19 @@ void main() {
       expect( tile( TestKeys.settingsSpeakUrgent ).value, true  );
     } );
 
+    testWidgets( "speak-system-senders switch: default ON; toggling persists OFF (Rick 2026-08-21)", ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+      final key = find.byKey( const Key( TestKeys.settingsSpeakSystem ) );
+      await tester.dragUntilVisible( key, find.byType( ListView ), const Offset( 0, -200 ) );
+      await tester.pump();
+      expect( tester.widget<SwitchListTile>( key ).value, isTrue );
+      await tester.tap( key );
+      await tester.pump();
+      expect( tester.widget<SwitchListTile>( key ).value, isFalse );
+      expect( prefs.speakSystemSenders, isFalse );
+    } );
+
     testWidgets( "toggling master mute flips the switch immediately", ( tester ) async {
       await tester.pumpWidget( underTest() );
       await tester.pump();

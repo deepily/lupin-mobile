@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../notifications/data/notification_models.dart';
-import 'focus_chat_state.dart' show FocusFilter;
+import 'focus_chat_state.dart' show FocusFilter, FocusSenderScope;
 
 /// Typed prompt-context for [FocusRespondRequested] (F-S2-S2-3): inline
 /// prompts pass the target notification id explicitly; voice replies omit
@@ -71,6 +71,15 @@ class FocusFilterChanged extends FocusChatEvent {
   const FocusFilterChanged( this.filter );
   @override
   List<Object?> get props => [ filter ];
+}
+
+/// Toolbar Personas / All tap — switch the rail's sender-scope lens
+/// (rail only; Rick 2026-08-21).
+class FocusSenderScopeChanged extends FocusChatEvent {
+  final FocusSenderScope scope;
+  const FocusSenderScopeChanged( this.scope );
+  @override
+  List<Object?> get props => [ scope ];
 }
 
 /// Periodic / on-resume re-evaluation of the recency bands (`asOf = now`).

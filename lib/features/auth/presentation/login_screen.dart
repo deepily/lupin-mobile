@@ -87,6 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _email,
                     decoration: const InputDecoration( labelText: "Email" ),
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,   // soft-keyboard "next" → password
                     autofillHints: const [ AutofillHints.email ],
                     validator: ( v ) =>
                       ( v == null || !v.contains( "@" ) ) ? "Enter a valid email" : null,
@@ -97,6 +98,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _password,
                     decoration: const InputDecoration( labelText: "Password" ),
                     obscureText: true,
+                    // Rick 2026-08-21: the keyboard's enter/done key submits —
+                    // no reaching up to tap "Sign in" after typing the password.
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: ( _ ) { if ( !busy ) _submit(); },
                     autofillHints: const [ AutofillHints.password ],
                     validator: ( v ) =>
                       ( v == null || v.isEmpty ) ? "Password required" : null,

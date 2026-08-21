@@ -21,6 +21,7 @@ import '../domain/focus_chat_state.dart';
 import 'focus_chat_pane.dart';
 import 'focus_filter_bar.dart';
 import 'session_rail.dart';
+import 'tts_queue_sheet.dart';
 import 'voice_reply_field.dart';
 
 /// The app's DEFAULT post-auth surface (Q1): vertical badge rail + chat
@@ -77,7 +78,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           ),
         ),
         title   : const Text( 'Lupin Focus' ),
-        actions : [ _PauseToggle( tts: _tts ) ],
+        actions : [ _QueueButton( tts: _tts ), _PauseToggle( tts: _tts ) ],
       ),
       drawer: _legacyDrawer( context ),
       body: Column(
@@ -100,16 +101,17 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     );
   }
 
-  /// S4 composer slot, gated on S2's `pendingPromptFor` contract-signal
-  /// (F-S2-S2-3 — presentation choice owned here): active only when the
-  /// focused sender has an unanswered ask; disabled + hint otherwise.
+  /// S4 composer slot — UNGATED since 2026-08-21 (Rick: "send a voice
+  /// message to a persona chip"): any focused session takes a voice/text
+  /// message. With an unanswered ask it is a REPLY (the bloc's
+  /// `pendingPromptFor` fallback resolves the target, F-S2-S2-3); without
+  /// one it is a DIRECT MESSAGE through `/api/dm/send`. The caption says
+  /// which, so the user knows what Send will do.
   Widget _composer( BuildContext context ) {
     return BlocBuilder<FocusChatBloc, FocusChatState>(
       builder: ( context, state ) {
         final focused = state.focusedSender;
-        final pending =
-            focused == null ? null : state.pendingPromptFor( focused );
-        if ( focused == null || pending == null ) {
+        if ( focused == null ) {
           return Container(
             padding : const EdgeInsets.all( 12 ),
             child   : Row(
@@ -121,9 +123,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
                 const SizedBox( width: 8 ),
                 Flexible(
                   child: Text(
-                    focused == null
-                        ? 'Focus a session to reply'
-                        : 'No unanswered ask — voice reply unlocks when this session asks',
+                    'Focus a session to reply or message it',
                     style: TextStyle( color: Theme.of( context ).disabledColor ),
                   ),
                 ),
@@ -131,16 +131,44 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             ),
           );
         }
+        final pending = state.pendingPromptFor( focused );
+        final persona = state.personasBySender[ focused ];
+        final who     = ( persona?.displayName ?? persona?.name ?? '' ).trim();
+        final caption = pending != null
+            ? 'Replying to ${who.isEmpty ? 'this session' : who}\'s question'
+            : 'Direct message to ${who.isEmpty ? 'this session' : who}';
         final bloc = context.read<FocusChatBloc>();
         return Padding(
           padding: const EdgeInsets.symmetric( horizontal: 8 ),
-          child: VoiceReplyField(
-            asr      : _asr,
-            // Voice replies intentionally omit promptContext — the bloc's
-            // pendingPromptFor fallback resolves the target (F-S2-S2-3).
-            onSubmit : ( text ) => bloc.add(
-              FocusRespondRequested( senderId: focused, text: text ),
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize      : MainAxisSize.min,
+            children: [
+              Padding(
+                padding : const EdgeInsets.only( left: 4, top: 4 ),
+                child   : Row(
+                  children: [
+                    Icon( pending != null ? Icons.reply : Icons.send,
+                        size  : 12,
+                        color : Theme.of( context ).colorScheme.outline ),
+                    const SizedBox( width: 4 ),
+                    Text(
+                      caption,
+                      key   : const Key( TestKeys.focusComposerCaption ),
+                      style : Theme.of( context ).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+              VoiceReplyField(
+                asr      : _asr,
+                // promptContext intentionally omitted — the bloc resolves
+                // the pending ask (reply) or falls through to a DM.
+                onSubmit : ( text ) => bloc.add(
+                  FocusRespondRequested( senderId: focused, text: text ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -203,6 +231,35 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
 
 /// Pause/resume hold toggle bound to S1's `pausedStream` (Q6: a pause,
 /// not a mute — see [_PausedBanner] for the held-count visibility).
+/// App-bar speech-queue button (Rick 2026-08-21): live count badge off
+/// [TtsOrchestrator.queueDepthStream]; tap opens [TtsQueueSheet].
+class _QueueButton extends StatelessWidget {
+  final TtsOrchestrator tts;
+  const _QueueButton( { required this.tts } );
+
+  @override
+  Widget build( BuildContext context ) {
+    return StreamBuilder<int>(
+      stream      : tts.queueDepthStream,
+      initialData : tts.queueDepth,
+      builder: ( context, snap ) {
+        final depth = snap.data ?? 0;
+        return IconButton(
+          key       : const Key( TestKeys.focusQueueButton ),
+          tooltip   : 'Speech queue',
+          onPressed : () => TtsQueueSheet.show( context, tts ),
+          icon      : Badge(
+            key       : const Key( TestKeys.focusQueueBadge ),
+            isLabelVisible : depth > 0,
+            label     : Text( '$depth' ),
+            child     : const Icon( Icons.queue_music ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _PauseToggle extends StatelessWidget {
   final TtsOrchestrator tts;
   const _PauseToggle( { required this.tts } );

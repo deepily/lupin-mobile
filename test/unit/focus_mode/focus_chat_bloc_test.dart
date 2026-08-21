@@ -106,6 +106,7 @@ void main() {
         notificationId : 'fallback',
         responseValue  : 'fallback',
       ) );
+      registerFallbackValue( const DmSendRequest( senderSessionId: 'fallback', body: 'fallback' ) );
     } );
 
     setUp( () {
@@ -229,18 +230,21 @@ void main() {
         message  : 'msg-1',
         title    : any( named: 'title' ),
         voiceId  : 'vx-1',
+        sender   : any( named: 'sender' ),
       ) ).called( 1 );
       verify( () => tts.enqueueAlways(
         priority : 'urgent',
         message  : 'msg-2',
         title    : any( named: 'title' ),
         voiceId  : 'vx-1',
+        sender   : any( named: 'sender' ),
       ) ).called( 1 );
       verifyNever( () => tts.enqueueIfSpeakable(
         priority : any( named: 'priority' ),
         message  : any( named: 'message' ),
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
       ) );
     } );
 
@@ -262,6 +266,87 @@ void main() {
       await pump();
       expect( bloc!.state.senderOrder, [ 'B', 'C', 'A', 'Z', 'NEW' ],
           reason: 'establishment order governs live arrivals — no re-sort' );
+    } );
+
+    test( 'TTS sender meta: enqueueAlways carries the persona (from the item, else the registry) — persona-less ⇒ system sender', () async {
+      bloc!.add( FocusPersonaUpdated( senderId: 'reg', persona: VoicePersona.fromJson( { 'name': 'Sam', 'icon': '🎷' } ) ) );
+      await pump();
+      bloc!.add( FocusInboundNotification( _item( 'p1', 'pers', voiceId: 'v-t' ) ) );   // persona on the item (name 'P-v-t')
+      bloc!.add( FocusInboundNotification( _item( 'r1', 'reg' ) ) ); // persona only in the registry
+      bloc!.add( FocusInboundNotification( _item( 's1', 'sys@lupin#1' ) ) );
+      await pump();
+      final senders = verify( () => tts.enqueueAlways(
+        priority: any( named: 'priority' ), message: any( named: 'message' ),
+        title: any( named: 'title' ), voiceId: any( named: 'voiceId' ),
+        sender: captureAny( named: 'sender' ),
+      ) ).captured.cast<TtsSender>();
+      expect( senders.map( ( x ) => x.label ).toList(), [ 'P-v-t', 'Sam', 'sys' ] );
+      expect( senders.map( ( x ) => x.isPersona ).toList(), [ true, true, false ] );
+      expect( senders[ 1 ].icon, '🎷', reason: 'registry persona used when the item carries none' );
+      expect( senders[ 2 ].senderId, 'sys@lupin#1' );
+    } );
+
+    // ── Direct message door (Rick 2026-08-21: ungated composer → /api/dm/send) ──
+    test( 'DM: respond with NO pending ask → sendDm() addressed by persona NAME, sender stamped, bubble appended; respond() never called', () async {
+      when( () => repo.sendDm( any() ) ).thenAnswer( ( _ ) async =>
+          DmSendAck.fromJson( { 'message_id': 'm-1', 'thread_id': 't-1' } ) );
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => const [] );
+      // cold start only to record the user e-mail the sender stamp derives from
+      bloc!.add( const FocusColdStartRequested( userEmail: 'ricardo.felipe.ruiz@gmail.com' ) );
+      await pump();
+      bloc!.add( FocusPersonaUpdated( senderId: 'claude.code@lupin.deepily.ai#abc12345',
+          persona: VoicePersona.fromJson( { 'name': 'Tiffany', 'icon': '💍' } ) ) );
+      bloc!.add( FocusInboundNotification( _item( 'n1', 'claude.code@lupin.deepily.ai#abc12345' ) ) );   // plain message, no ask
+      await pump();
+
+      bloc!.add( const FocusRespondRequested( senderId: 'claude.code@lupin.deepily.ai#abc12345', text: 'please re-run the suite' ) );
+      await pump();
+
+      verifyNever( () => repo.respond( any() ) );
+      final req = verify( () => repo.sendDm( captureAny() ) ).captured.single as DmSendRequest;
+      expect( req.recipientPersona,   'Tiffany' );
+      expect( req.recipientSessionId, isNull );
+      expect( req.body,               'please re-run the suite' );
+      expect( req.senderPersona,      'Ricardo' );
+      expect( req.senderIcon,         FocusChatBloc.dmSenderIcon );
+      expect( req.senderProject,      'lupin-mobile' );
+      expect( req.senderSessionId,    'lupin-mobile:ricardo.felipe.ruiz@gmail.com' );
+      expect( req.toJson().containsKey( 'recipient_session_id' ), isFalse, reason: 'nulls are omitted on the wire' );
+
+      final window = bloc!.state.windows[ 'claude.code@lupin.deepily.ai#abc12345' ]!;
+      expect( window.last.item.type,    'user_initiated_message' );
+      expect( window.last.item.message, 'please re-run the suite' );
+      expect( window.last.item.id,      startsWith( 'local-dm-' ) );
+      expect( bloc!.state.hydration, isNot( FocusHydration.error ) );
+    } );
+
+    test( 'DM: persona-less sender → addressed by the #hash8 session suffix; no # → raw sender id', () async {
+      when( () => repo.sendDm( any() ) ).thenAnswer( ( _ ) async => const DmSendAck() );
+      bloc!.add( FocusInboundNotification( _item( 'n1', 'sys@lupin#deadbeef' ) ) );
+      bloc!.add( FocusInboundNotification( _item( 'n2', 'plain-sender' ) ) );
+      await pump();
+
+      bloc!.add( const FocusRespondRequested( senderId: 'sys@lupin#deadbeef', text: 'hi' ) );
+      bloc!.add( const FocusRespondRequested( senderId: 'plain-sender', text: 'yo' ) );
+      await pump();
+
+      final reqs = verify( () => repo.sendDm( captureAny() ) ).captured.cast<DmSendRequest>();
+      expect( reqs[ 0 ].recipientSessionId, 'deadbeef' );
+      expect( reqs[ 0 ].recipientPersona,   isNull );
+      expect( reqs[ 1 ].recipientSessionId, 'plain-sender' );
+      expect( FocusChatBloc.dmSenderPersona( null ), 'Mobile user' );
+      expect( FocusChatBloc.dmSenderPersona( 'rick@x.com' ), 'Rick' );
+    } );
+
+    test( 'DM: transport failure → hydration error, NO local bubble (nothing pretends to be sent)', () async {
+      when( () => repo.sendDm( any() ) ).thenThrow(
+          const NotificationApiException( 'Direct message failed', statusCode: 422 ) );
+      bloc!.add( FocusInboundNotification( _item( 'n1', 'S' ) ) );
+      await pump();
+      bloc!.add( const FocusRespondRequested( senderId: 'S', text: 'hello?' ) );
+      await pump();
+      expect( bloc!.state.hydration, FocusHydration.error );
+      expect( bloc!.state.windows[ 'S' ]!.where( ( m ) => m.item.type == 'user_initiated_message' ), isEmpty );
     } );
 
     test( 'AC-S2.9(i) — explicit typed promptContext → respond() with THAT notificationId + user reply appended', () async {
@@ -308,16 +393,17 @@ void main() {
           reason: 'newest-selection rule, not any-pending' );
     } );
 
-    test( 'AC-S2.9(iii) — no context, no pending ask → NO respond() call, no crash, state unchanged', () async {
+    test( 'AC-S2.9(iii) — no context, no pending ask → NO respond() call; since 2026-08-21 the text goes out as a DIRECT MESSAGE instead', () async {
+      when( () => repo.sendDm( any() ) ).thenAnswer( ( _ ) async => const DmSendAck() );
       bloc!.add( FocusInboundNotification( _item( 'plain', 'S' ) ) );
       await pump();
-      final before = bloc!.state;
 
       bloc!.add( const FocusRespondRequested( senderId: 'S', text: 'orphan reply' ) );
       await pump();
 
       verifyNever( () => repo.respond( any() ) );
-      expect( bloc!.state, before );
+      verify( () => repo.sendDm( any() ) ).called( 1 );
+      expect( bloc!.state.windows[ 'S' ]!.last.item.message, 'orphan reply' );
     } );
 
     test( 'AC-S2.9(failure) — repository failure sets hydration = error', () async {
@@ -498,11 +584,16 @@ void main() {
         now          : () => clock,
         exitDebounce : const Duration( milliseconds: 30 ),
       );
+      // These tests exercise the Live/24h band lens with persona-less
+      // senders; widen the sender scope so the default Personas-only rail
+      // (2026-08-21 §5f) does not hide them.
+      bloc!.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
       when( () => tts.enqueueAlways(
         priority : any( named: 'priority' ),
         message  : any( named: 'message'  ),
         title    : any( named: 'title'    ),
         voiceId  : any( named: 'voiceId'  ),
+        sender   : any( named: 'sender' ),
       ) ).thenReturn( null );
     } );
 
@@ -725,6 +816,27 @@ void main() {
       await pump( 60 );
       bloc = null;   // tearDown guard
     } );
+
+    test( 'FocusSenderScopeChanged flips the lens live (nothing deleted) and refreshes asOf', () async {
+      stubVisible( [
+        sv( 'p@x#1', clock, persona: { 'name': 'Tiffany', 'icon': '💍', 'assigned_at': clock.subtract( const Duration( hours: 1 ) ).toIso8601String() } ),
+        sv( 'sys@x', clock ),
+      ] );
+      bloc!.add( const FocusSenderScopeChanged( FocusSenderScope.personas ) );   // undo the setUp widening
+      bloc!.add( const FocusColdStartRequested( userEmail: 'rick@test.com' ) );
+      await pump();
+      expect( bloc!.state.visibleOrder, [ 'p@x#1' ] );
+      clock = clock.add( const Duration( seconds: 5 ) );
+      bloc!.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
+      await pump();
+      expect( bloc!.state.senderScope, FocusSenderScope.all );
+      expect( bloc!.state.visibleOrder, [ 'p@x#1', 'sys@x' ] );
+      expect( bloc!.state.asOf, clock );
+      bloc!.add( const FocusSenderScopeChanged( FocusSenderScope.personas ) );
+      await pump();
+      expect( bloc!.state.visibleOrder, [ 'p@x#1' ] );
+      expect( bloc!.state.senderOrder, [ 'p@x#1', 'sys@x' ], reason: 'lens, not deletion' );
+    } );
   } );
 
   group( 'FocusChatState — pure selectors', () {
@@ -756,6 +868,7 @@ void main() {
         },
         exitedSenders : const { 'exited' },
         focusedSender : 'pinned',
+        senderScope   : FocusSenderScope.all,   // persona-less fixtures
         asOf          : at,
       );
       expect( st.visibleOrder, [ 'live', 'pinned' ] );
@@ -767,6 +880,68 @@ void main() {
       expect( st == st.copyWith( asOf: at.add( const Duration( seconds: 1 ) ) ), isFalse,
           reason: 'asOf is in props so a tick triggers a rebuild' );
     } );
+
+    // ── §5f sender scope + grouping + oldest-session-first (Rick 2026-08-21) ──
+    VoicePersona vp( String name, String icon, DateTime? assigned ) => VoicePersona.fromJson( {
+      'name'        : name,
+      'icon'        : icon,
+      'assigned_at' : assigned?.toIso8601String(),
+    } );
+
+    test( 'visibleOrder = personas (assigned_at ASC, nulls after in arrival order) then system (arrival order); scope defaults to personas', () {
+      final at = DateTime( 2026, 8, 21, 12 );
+      final st = const FocusChatState.initial().copyWith(
+        // arrival order deliberately scrambles start times
+        senderOrder      : const [ 'sysA', 'newest', 'sysB', 'oldest', 'noTs', 'middle', 'noIcon' ],
+        personasBySender : {
+          'newest' : vp( 'Sam',     '🎷', at.subtract( const Duration( minutes: 5 ) ) ),
+          'oldest' : vp( 'Cheech',  '🌿', at.subtract( const Duration( hours: 9 ) ) ),
+          'noTs'   : vp( 'Tiffany', '💍', null ),
+          'middle' : vp( 'María',   '🌸', at.subtract( const Duration( hours: 2 ) ) ),
+          'noIcon' : vp( 'Ghost',   '',   at.subtract( const Duration( hours: 20 ) ) ),   // no glyph ⇒ system
+        },
+        asOf : at,
+      );
+      expect( st.senderScope, FocusSenderScope.personas, reason: 'default scope — resets each launch' );
+      expect( st.isPersona( 'noIcon' ), isFalse );
+      expect( st.visiblePersonas, [ 'oldest', 'middle', 'newest', 'noTs' ] );
+      expect( st.visibleSystem,   isEmpty, reason: 'Personas scope hides the system group' );
+      expect( st.visibleOrder,    [ 'oldest', 'middle', 'newest', 'noTs' ] );
+      expect( st.personaCount, 4 );
+      expect( st.allCount,     7 );
+
+      final all = st.copyWith( senderScope: FocusSenderScope.all );
+      expect( all.visibleSystem, [ 'sysA', 'sysB', 'noIcon' ], reason: 'system group keeps arrival order' );
+      expect( all.visibleOrder,  [ 'oldest', 'middle', 'newest', 'noTs', 'sysA', 'sysB', 'noIcon' ] );
+      expect( st.props, contains( FocusSenderScope.personas ) );
+      expect( st == all, isFalse, reason: 'scope is in props' );
+    } );
+
+    test( 'a focused SYSTEM sender stays visible under the Personas scope (pin invariant); scope composes with the Live/24h band lens', () {
+      final at = DateTime( 2026, 8, 21, 12 );
+      final st = const FocusChatState.initial().copyWith(
+        senderOrder          : const [ 'p', 'sysFocused', 'sysOld', 'pOld' ],
+        personasBySender     : {
+          'p'    : vp( 'Sam',    '🎷', at.subtract( const Duration( hours: 1 ) ) ),
+          'pOld' : vp( 'Cheech', '🌿', at.subtract( const Duration( hours: 30 ) ) ),
+        },
+        lastActivityBySender : {
+          'p'          : at,
+          'sysFocused' : at,
+          'sysOld'     : at,
+          'pOld'       : at.subtract( const Duration( hours: 3 ) ),   // history band
+        },
+        focusedSender : 'sysFocused',
+        asOf          : at,
+      );
+      expect( st.visibleOrder, [ 'p', 'sysFocused' ], reason: 'focused system sender pinned after the persona group' );
+      expect( st.personaCount, 1, reason: 'pOld is in the history band under Live' );
+      expect( st.allCount,     3 );
+      final hist = st.copyWith( filter: FocusFilter.history );
+      expect( hist.visibleOrder, [ 'pOld', 'p', 'sysFocused' ], reason: 'oldest session first once 24h reveals it' );
+      expect( hist.personaCount, 2 );
+    } );
+
   
   group( 'FocusChatBloc — stop-list seam (plan 2026.08.21 §3: hide + mute at ingest and backfill)', () {
     late _MockRepo repo;
@@ -783,6 +958,7 @@ void main() {
       when( () => tts.enqueueAlways(
         priority : any( named: 'priority' ), message: any( named: 'message' ),
         title    : any( named: 'title' ),    voiceId: any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
       ) ).thenReturn( null );
       registerFallbackValue( const NotificationResponsePayload( notificationId: 'f', responseValue: 'f' ) );
     } );
@@ -808,9 +984,11 @@ void main() {
       expect( st.hiddenCountBySender[ 'S' ], 2 );
       verify( () => tts.enqueueAlways(
         priority: any( named: 'priority' ), message: 'Suite green 30/30',
+        sender   : any( named: 'sender' ),
         title: any( named: 'title' ), voiceId: any( named: 'voiceId' ) ) ).called( 1 );
       verifyNever( () => tts.enqueueAlways(
         priority: any( named: 'priority' ), message: any( named: 'message', that: startsWith( 'Done:' ) ),
+        sender   : any( named: 'sender' ),
         title: any( named: 'title' ), voiceId: any( named: 'voiceId' ) ) );
     } );
 

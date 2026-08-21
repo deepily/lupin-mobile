@@ -246,6 +246,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             message  : n.message,
             title    : n.title,
             voiceId  : n.voicePersona?.voiceId,
+            sender   : TtsSender( senderId: n.senderId, name: n.voicePersona?.displayName ?? n.voicePersona?.name, icon: n.voicePersona?.icon ),
           );
           break;
         case "voice_persona_assigned":

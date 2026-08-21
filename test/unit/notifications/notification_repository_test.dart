@@ -110,6 +110,38 @@ void main() {
       expect(ack.responseValue, "yes");
     });
 
+    test("sendDm posts the DM body to /api/dm/send (nulls omitted) and parses {message_id, thread_id}", () async {
+      adapter.handlers["POST /api/dm/send"] = (opts) {
+        final d = opts.data as Map;
+        expect(d["sender_session_id"], "lupin-mobile:rick@x");
+        expect(d["body"],              "re-run the suite");
+        expect(d["recipient_persona"], "Tiffany");
+        expect(d["sender_persona"],    "Rick");
+        expect(d["sender_icon"],       "📱");
+        expect(d["sender_project"],    "lupin-mobile");
+        expect(d.containsKey("recipient_session_id"), isFalse);
+        return jsonBody({"message_id": "m-9", "thread_id": "t-9", "recipient_persona": "Tiffany"});
+      };
+      final ack = await repo.sendDm(const DmSendRequest(
+        senderSessionId  : "lupin-mobile:rick@x",
+        body             : "re-run the suite",
+        recipientPersona : "Tiffany",
+        senderPersona    : "Rick",
+        senderIcon       : "📱",
+        senderProject    : "lupin-mobile",
+      ));
+      expect(ack.messageId, "m-9");
+      expect(ack.threadId,  "t-9");
+    });
+
+    test("sendDm maps a 422 (recipient unresolved) to NotificationApiException", () async {
+      adapter.handlers["POST /api/dm/send"] = (opts) => jsonBody({"detail": "no such persona"}, status: 422);
+      expect(
+        () => repo.sendDm(const DmSendRequest(senderSessionId: "s", body: "b", recipientPersona: "Nobody")),
+        throwsA(isA<NotificationApiException>()),
+      );
+    });
+
     test("conversation URL-encodes senderId with `/` and userEmail with `@`", () async {
       // Regression for the pre-fix bug where raw path interpolation caused
       // FastAPI to split `peer-queue-watch/abc-def` into two segments.

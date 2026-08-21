@@ -11,6 +11,8 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/app.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_bloc.dart';
+import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
+import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
@@ -64,6 +66,8 @@ void main() {
       // gets audio but NO tts (F-S2-1 withdrawal); focus bloc owns speech.
       legacyBloc = NotificationBloc( repo, audio: audio );
       focusBloc  = FocusChatBloc( repo, tts: tts );
+      // Persona-less fixtures: widen the rail scope (default Personas-only, §5f).
+      focusBloc.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
 
       GetIt.instance.registerSingleton<NotificationBloc>( legacyBloc );
       GetIt.instance.registerSingleton<FocusChatBloc>( focusBloc );
@@ -87,6 +91,7 @@ void main() {
         message  : 'frame message',
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
       ) ).called( 1 );
       // ...and the legacy gated path stayed SILENT (tts not injected).
       verifyNever( () => tts.enqueueIfSpeakable(
@@ -94,6 +99,7 @@ void main() {
         message  : any( named: 'message' ),
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
       ) );
       // Legacy bloc still processed the frame (audio/ding ownership stays).
       verify( () => audio.handleIncoming(
@@ -142,6 +148,7 @@ void main() {
         message  : any( named: 'message' ),
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
       ) );
       expect( focusBloc.state.personasBySender[ 'sender-1' ], isNotNull );
       expect( focusBloc.state.senderOrder, isEmpty,

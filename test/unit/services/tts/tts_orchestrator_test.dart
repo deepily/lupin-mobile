@@ -159,6 +159,100 @@ void main() {
       ) ).called( 1 );
     } );
 
+    // ── Queue viewer + system-sender gate (Rick 2026-08-21) ──
+    test( "queue viewer: queueSnapshot/queueStream = current (flagged) then pending in play order, with sender meta", () async {
+      await setUpMocks();
+      final o = newOrch();
+      final emitted = <List<TtsQueueItem>>[];
+      final sub = o.queueStream.listen( emitted.add );
+      const tiff = TtsSender( senderId: "cc@lupin#e082", name: "Tiffany", icon: "💍" );
+      const sys  = TtsSender( senderId: "pytest.runner@lupin#1" );
+
+      o.enqueueAlways( priority: "high", message: "first",  sender: tiff );
+      await Future<void>.delayed( Duration.zero );
+      o.enqueueAlways( priority: "low",  message: "second", sender: sys );
+      o.enqueueAlways( priority: "low",  message: "third" );
+      await Future<void>.delayed( Duration.zero );
+
+      final snap = o.queueSnapshot;
+      expect( snap.map( ( i ) => i.text ).toList(), [ "first", "second", "third" ] );
+      expect( snap[ 0 ].isCurrent, isTrue );
+      expect( snap[ 1 ].isCurrent, isFalse );
+      expect( snap[ 0 ].sender.label, "Tiffany" );
+      expect( snap[ 0 ].sender.isPersona, isTrue );
+      expect( snap[ 1 ].sender.label, "pytest.runner", reason: "no persona ⇒ sender-id local part" );
+      expect( snap[ 1 ].sender.isPersona, isFalse );
+      expect( snap[ 2 ].sender.label, "system", reason: "no sender at all" );
+      expect( snap.map( ( i ) => i.id ).toSet().length, 3, reason: "ids unique" );
+      expect( emitted.last.map( ( i ) => i.text ).toList(), [ "first", "second", "third" ] );
+
+      // current completes ⇒ 'second' becomes current
+      completeCtrl.add( const TtsCompleteEvent() );
+      await Future<void>.delayed( Duration.zero );
+      expect( o.queueSnapshot.first.text, "second" );
+      expect( o.queueSnapshot.first.isCurrent, isTrue );
+      await sub.cancel();
+    } );
+
+    test( "queue viewer: skipCurrent stops the player and advances; removeQueued drops ONE pending by id; clearQueued keeps the current one", () async {
+      await setUpMocks();
+      final o = newOrch();
+      o.enqueueAlways( priority: "low", message: "a" );
+      await Future<void>.delayed( Duration.zero );
+      o.enqueueAlways( priority: "low", message: "b" );
+      o.enqueueAlways( priority: "low", message: "c" );
+      o.enqueueAlways( priority: "low", message: "d" );
+      await Future<void>.delayed( Duration.zero );
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "a", "b", "c", "d" ] );
+
+      final cId = o.queueSnapshot.firstWhere( ( i ) => i.text == "c" ).id;
+      expect( o.removeQueued( cId ), isTrue );
+      expect( o.removeQueued( cId ), isFalse, reason: "already gone" );
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "a", "b", "d" ] );
+      expect( o.removeQueued( o.queueSnapshot.first.id ), isFalse, reason: "the in-flight one is not removable here" );
+
+      await o.skipCurrent();
+      await Future<void>.delayed( Duration.zero );
+      verify( () => player.stop() ).called( 1 );
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "b", "d" ] );
+      expect( o.queueSnapshot.first.isCurrent, isTrue, reason: "b dispatched after the skip" );
+      verify( () => player.speak( text: "b", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
+
+      // a stale completion for the skipped utterance must NOT double-advance
+      completeCtrl.add( const TtsCompleteEvent() );
+      await Future<void>.delayed( Duration.zero );
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "d" ], reason: "completion belongs to b (current epoch) ⇒ advance once" );
+
+      o.enqueueAlways( priority: "low", message: "e" );
+      o.clearQueued();
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "d" ], reason: "clearQueued drops pending only" );
+      expect( o.queueDepth, 0 );
+      await o.skipCurrent();
+      expect( o.queueSnapshot, isEmpty );
+      await o.skipCurrent();   // idle: no-op, no throw
+    } );
+
+    test( "system-sender gate: speakSystemSenders=false mutes persona-less senders on BOTH entry points; personas still speak; default is ON", () async {
+      await setUpMocks();
+      expect( prefs.speakSystemSenders, isTrue );
+      await prefs.setSpeakSystemSenders( false );
+      final o = newOrch();
+      const tiff = TtsSender( senderId: "cc#1", name: "Tiffany", icon: "💍" );
+      const sys  = TtsSender( senderId: "hooks@lupin#9" );
+
+      o.enqueueAlways( priority: "high", message: "sys-always",  sender: sys );
+      o.enqueueAlways( priority: "high", message: "none-always" );              // unknown sender ⇒ system
+      o.enqueueIfSpeakable( priority: "high", message: "sys-speakable", sender: sys );
+      o.enqueueAlways( priority: "high", message: "tiff-always", sender: tiff );
+      o.enqueueIfSpeakable( priority: "high", message: "tiff-speakable", sender: tiff );
+      await Future<void>.delayed( Duration.zero );
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "tiff-always", "tiff-speakable" ] );
+
+      await prefs.setSpeakSystemSenders( true );
+      o.enqueueAlways( priority: "high", message: "sys-now-ok", sender: sys );
+      expect( o.queueSnapshot.map( ( i ) => i.text ).toList(), [ "tiff-always", "tiff-speakable", "sys-now-ok" ] );
+    } );
+
     test( "FIFO — second high waits for first's complete event before dispatching", () async {
       await setUpMocks();
       final o = newOrch();

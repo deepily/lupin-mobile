@@ -9,8 +9,10 @@ import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
 
 /// Always-visible vertical badge rail (Q11 Pattern A): PersonaBadges in
-/// `visibleOrder` (establishment order, Q7 — never re-sorts; filtered by
-/// the Live/History lens, plan 2026.06.25 §4.5), unread dot/count overlays
+/// `visibleOrder` — persona group (oldest session first) above a thin
+/// divider, system group (establishment order, Q7) below; filtered by the
+/// Live/History lens + the Personas/All scope (plan 2026.06.25 §4.5 +
+/// 2026.08.21 §5f) — unread dot/count overlays
 /// on non-focused senders, selection highlight ring, recency status dot
 /// (🟢 live / 🟡 history — mirrors the web glyphs). Tap →
 /// `FocusSenderSelected` — the ONLY thing in the surface that moves
@@ -40,15 +42,28 @@ class SessionRail extends StatelessWidget {
       width : width,
       child : BlocBuilder<FocusChatBloc, FocusChatState>(
         builder: ( context, state ) {
-          final visible = state.visibleOrder;
+          final personas = state.visiblePersonas;
+          final system   = state.visibleSystem;
+          final visible  = [ ...personas, ...system ];
           if ( visible.isEmpty && state.filter == FocusFilter.live && state.senderOrder.isNotEmpty ) {
             return _EmptyLiveHint( historyCount: state.historyCount );
           }
+          // A divider row sits between the two groups only when BOTH have
+          // members (no orphan line under a personas-only rail).
+          final hasDivider = personas.isNotEmpty && system.isNotEmpty;
+          final rows       = visible.length + ( hasDivider ? 1 : 0 );
           return ListView.builder(
             padding     : const EdgeInsets.symmetric( vertical: 8 ),
-            itemCount   : visible.length,
+            itemCount   : rows,
             itemBuilder : ( context, i ) {
-              final sid     = visible[ i ];
+              if ( hasDivider && i == personas.length ) {
+                return Padding(
+                  key     : const Key( TestKeys.focusRailGroupDivider ),
+                  padding : const EdgeInsets.symmetric( horizontal: 12, vertical: 6 ),
+                  child   : Divider( height: 1, thickness: 1, color: Theme.of( context ).colorScheme.outlineVariant ),
+                );
+              }
+              final sid     = visible[ hasDivider && i > personas.length ? i - 1 : i ];
               final persona = state.personasBySender[ sid ];
               final unread  = state.unreadBySender[ sid ] ?? 0;
               final focused = state.focusedSender == sid;

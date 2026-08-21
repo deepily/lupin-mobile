@@ -26,6 +26,7 @@ class _NotificationAudioSettingsScreenState
   late bool _dingOnHigh;
   late bool _dingOnUrgent;
   late bool _speakOnHigh;
+  late bool _speakSystem;
   late bool _speakOnUrgent;
 
   @override
@@ -37,6 +38,7 @@ class _NotificationAudioSettingsScreenState
     _dingOnHigh    = p.dingOnHigh;
     _dingOnUrgent  = p.dingOnUrgent;
     _speakOnHigh   = p.speakOnHigh;
+    _speakSystem   = p.speakSystemSenders;
     _speakOnUrgent = p.speakOnUrgent;
   }
 
@@ -50,6 +52,7 @@ class _NotificationAudioSettingsScreenState
   void _toggleDingUrgent(    bool v ) { setState( () => _dingOnUrgent  = v ); widget.prefs.setDingOnUrgent(  v ); }
   void _toggleSpeakHigh(     bool v ) { setState( () => _speakOnHigh   = v ); widget.prefs.setSpeakOnHigh(   v ); }
   void _toggleSpeakUrgent(   bool v ) { setState( () => _speakOnUrgent = v ); widget.prefs.setSpeakOnUrgent( v ); }
+  void _toggleSpeakSystem(   bool v ) { setState( () => _speakSystem   = v ); widget.prefs.setSpeakSystemSenders( v ); }
 
   @override
   Widget build( BuildContext context ) {
@@ -103,6 +106,13 @@ class _NotificationAudioSettingsScreenState
             subtitle   : const Text( 'Read out the title and message after the ding.' ),
             value      : _speakOnUrgent,
             onChanged  : _toggleSpeakUrgent,
+          ),
+          SwitchListTile(
+            key        : const Key( TestKeys.settingsSpeakSystem ),
+            title      : const Text( 'Speak system senders' ),
+            subtitle   : const Text( 'Off = only sessions with a voice persona are spoken; test runners, hooks and scripts stay visible but silent.' ),
+            value      : _speakSystem,
+            onChanged  : _toggleSpeakSystem,
           ),
           const SizedBox( height: 24 ),
           const Divider(),

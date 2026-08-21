@@ -23,6 +23,11 @@ class NotificationPreferences {
   /// automatically, in 10% steps. 1.0 = whole message.
   static const keyTtsFraction   = 'notif_audio.tts_fraction';
   static const double defaultTtsFraction = 0.2;
+  /// Speak SYSTEM senders (no voice persona: test runners, hooks, scripts)?
+  /// Rick 2026-08-21: "how do I silence the system messages?" — OFF mutes
+  /// every persona-less sender in one switch; personas keep speaking.
+  /// Default ON (today's behaviour).
+  static const keySpeakSystemSenders = 'notif_audio.speak_system_senders';
 
   final SharedPreferences _prefs;
   const NotificationPreferences( this._prefs );
@@ -33,6 +38,7 @@ class NotificationPreferences {
   bool get speakOnHigh   => _prefs.getBool( _keySpeakOnHigh   ) ?? true;
   bool get speakOnUrgent => _prefs.getBool( _keySpeakOnUrgent ) ?? true;
   bool get masterMute    => _prefs.getBool( _keyMasterMute    ) ?? false;
+  bool get speakSystemSenders => _prefs.getBool( keySpeakSystemSenders ) ?? true;
 
   /// Spoken fraction of each message, snapped to 10% steps in [0.0, 1.0].
   double get ttsFraction {
@@ -49,5 +55,6 @@ class NotificationPreferences {
   Future<void> setSpeakOnHigh(   bool v ) => _prefs.setBool( _keySpeakOnHigh,   v );
   Future<void> setSpeakOnUrgent( bool v ) => _prefs.setBool( _keySpeakOnUrgent, v );
   Future<void> setMasterMute(    bool v ) => _prefs.setBool( _keyMasterMute,    v );
+  Future<void> setSpeakSystemSenders( bool v ) => _prefs.setBool( keySpeakSystemSenders, v );
   Future<void> setTtsFraction( double v ) => _prefs.setDouble( keyTtsFraction, snapTtsFraction( v ) );
 }
