@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../queue/data/queue_models.dart';
 import 'agentic_common_models.dart';
 import 'bug_fix_expediter_models.dart';
 import 'chained_models.dart';
@@ -10,27 +11,33 @@ import 'swe_team_models.dart';
 import 'test_fix_expediter_models.dart';
 import 'test_suite_models.dart';
 
-/// Typed wrapper over all 10 agentic job endpoints.
+/// Typed wrapper over the agentic job doors.
 /// Uses the shared Dio (auth interceptor injects Bearer automatically).
+///
+/// v2 cutover wave 2 (2026-08-21, server sha 799e43d0): the eight submit-shaped
+/// doors POST `/api/v2/submit` — `{command, args, question?, websocket_id?,
+/// scheduled_at?, monopolize?}` — and read the synchronous `AskResponse`
+/// (`status == 'waiting'` + `job_id` is the success). The per-door request
+/// models stay the UI's input; `toSubmitArgs()` produces the contract keys.
+/// `/api/test-fix-expediter/resume-from` stays v1 (a checkpoint-built job the
+/// submit body cannot express) and `/api/deep-research/report` is a READ.
 class AgenticRepository {
   final Dio _dio;
   const AgenticRepository( this._dio );
 
   // ─────────────────────────────────────────────
-  // POST /api/deep-research/submit
+  // DeepResearchRequest → POST /api/v2/submit   (was /api/deep-research/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitDeepResearch( DeepResearchRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/deep-research/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitDeepResearch failed' );
-    }
-  }
+  Future<AgenticSubmitResponse> submitDeepResearch( DeepResearchRequest req ) =>
+      _submit( 'submitDeepResearch', SubmitRequest(
+        command     : DeepResearchRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : req.query,
+        websocketId : req.websocketId,
+        scheduledAt : req.scheduledAt,
+        monopolize  : req.monopolize ? true : null,
+      ) );
 
   // ─────────────────────────────────────────────
   // GET /api/deep-research/report?job_id=...
@@ -49,84 +56,74 @@ class AgenticRepository {
   }
 
   // ─────────────────────────────────────────────
-  // POST /api/podcast-generator/submit
+  // PodcastGeneratorRequest → POST /api/v2/submit   (was /api/podcast-generator/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitPodcast( PodcastGeneratorRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/podcast-generator/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitPodcast failed' );
-    }
-  }
+  Future<AgenticSubmitResponse> submitPodcast( PodcastGeneratorRequest req ) =>
+      _submit( 'submitPodcast', SubmitRequest(
+        command     : PodcastGeneratorRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : 'podcast from ${req.researchSource}',
+        websocketId : null,
+        scheduledAt : req.scheduledAt,
+        monopolize  : req.monopolize ? true : null,
+      ) );
 
   // ─────────────────────────────────────────────
-  // POST /api/presentation-generator/submit
+  // PresentationGeneratorRequest → POST /api/v2/submit   (was /api/presentation-generator/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitPresentation( PresentationGeneratorRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/presentation-generator/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitPresentation failed' );
-    }
-  }
+  Future<AgenticSubmitResponse> submitPresentation( PresentationGeneratorRequest req ) =>
+      _submit( 'submitPresentation', SubmitRequest(
+        command     : PresentationGeneratorRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : 'presentation from ${req.sourcePath}',
+        websocketId : null,
+        scheduledAt : req.scheduledAt,
+        monopolize  : req.monopolize ? true : null,
+      ) );
 
   // ─────────────────────────────────────────────
-  // POST /api/swe-team/submit
+  // SweTeamRequest → POST /api/v2/submit   (was /api/swe-team/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitSweTeam( SweTeamRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/swe-team/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitSweTeam failed' );
-    }
-  }
+  Future<AgenticSubmitResponse> submitSweTeam( SweTeamRequest req ) =>
+      _submit( 'submitSweTeam', SubmitRequest(
+        command     : SweTeamRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : req.task,
+        websocketId : req.websocketId,
+        scheduledAt : req.scheduledAt,
+        monopolize  : req.monopolize ? true : null,
+      ) );
 
   // ─────────────────────────────────────────────
-  // POST /api/bug-fix-expediter/submit
+  // BugFixExpediterRequest → POST /api/v2/submit   (was /api/bug-fix-expediter/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitBugFixExpediter( BugFixExpediterRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/bug-fix-expediter/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitBugFixExpediter failed' );
-    }
-  }
+  Future<AgenticSubmitResponse> submitBugFixExpediter( BugFixExpediterRequest req ) =>
+      _submit( 'submitBugFixExpediter', SubmitRequest(
+        command     : BugFixExpediterRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : 'fix dead job ${req.deadJobId}',
+        websocketId : req.websocketId,
+        scheduledAt : req.scheduledAt,
+        monopolize  : req.monopolize ? true : null,
+      ) );
 
   // ─────────────────────────────────────────────
-  // POST /api/test-suite/submit
+  // TestSuiteRequest → POST /api/v2/submit   (was /api/test-suite/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitTestSuite( TestSuiteRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/test-suite/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitTestSuite failed' );
-    }
-  }
+  Future<AgenticSubmitResponse> submitTestSuite( TestSuiteRequest req ) =>
+      _submit( 'submitTestSuite', SubmitRequest(
+        command     : TestSuiteRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : 'run ${req.testTypes} tests',
+        websocketId : req.websocketId,
+        scheduledAt : req.scheduledAt,
+        monopolize  : null,
+      ) );
 
   // ─────────────────────────────────────────────
   // POST /api/test-fix-expediter/resume-from
@@ -145,35 +142,43 @@ class AgenticRepository {
   }
 
   // ─────────────────────────────────────────────
-  // POST /api/deep-research-to-podcast/submit
+  // ResearchToPodcastRequest → POST /api/v2/submit   (was /api/deep-research-to-podcast/submit)
   // ─────────────────────────────────────────────
 
-  Future<AgenticSubmitResponse> submitResearchToPodcast( ResearchToPodcastRequest req ) async {
+  Future<AgenticSubmitResponse> submitResearchToPodcast( ResearchToPodcastRequest req ) =>
+      _submit( 'submitResearchToPodcast', SubmitRequest(
+        command     : ResearchToPodcastRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : req.query,
+        websocketId : null,
+        scheduledAt : null,
+        monopolize  : null,
+      ) );
+
+  // ─────────────────────────────────────────────
+  // ResearchToPresentationRequest → POST /api/v2/submit   (was /api/deep-research-to-presentation/submit)
+  // ─────────────────────────────────────────────
+
+  Future<AgenticSubmitResponse> submitResearchToPresentation( ResearchToPresentationRequest req ) =>
+      _submit( 'submitResearchToPresentation', SubmitRequest(
+        command     : ResearchToPresentationRequest.submitCommand,
+        args        : req.toSubmitArgs(),
+        question    : req.query,
+        websocketId : null,
+        scheduledAt : null,
+        monopolize  : null,
+      ) );
+
+  // ─────────────────────────────────────────────
+  // The one v2 door the eight submits share
+  // ─────────────────────────────────────────────
+
+  Future<AgenticSubmitResponse> _submit( String label, SubmitRequest sr ) async {
     try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/deep-research-to-podcast/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
+      final res = await _dio.post<Map<String, dynamic>>( '/api/v2/submit', data: sr.toJson() );
+      return AgenticSubmitResponse.fromAsk( AskResponse.fromJson( res.data! ) );
     } on DioException catch ( e ) {
-      throw _err( e, 'submitResearchToPodcast failed' );
-    }
-  }
-
-  // ─────────────────────────────────────────────
-  // POST /api/deep-research-to-presentation/submit
-  // ─────────────────────────────────────────────
-
-  Future<AgenticSubmitResponse> submitResearchToPresentation(
-      ResearchToPresentationRequest req ) async {
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-        '/api/deep-research-to-presentation/submit',
-        data: req.toJson(),
-      );
-      return AgenticSubmitResponse.fromJson( res.data! );
-    } on DioException catch ( e ) {
-      throw _err( e, 'submitResearchToPresentation failed' );
+      throw _err( e, '$label failed' );
     }
   }
 

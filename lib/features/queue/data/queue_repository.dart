@@ -26,13 +26,42 @@ class QueueRepository {
   }
 
   // ─────────────────────────────────────────────
-  // POST /api/push-agentic
+  // POST /api/v2/submit  (wave 2 of the v2 cutover — the eleven submit-shaped
+  // doors route through this one body once the server's agentic-job path lands)
   // ─────────────────────────────────────────────
 
+  /// Submit work whose command is already decided. Same synchronous
+  /// [AskResponse] as [ask]; a command missing arguments comes back
+  /// `needs_input` + `argsMissing` and is never parked.
+  Future<AskResponse> submit( SubmitRequest req ) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>( '/api/v2/submit', data: req.toJson() );
+      return AskResponse.fromJson( res.data! );
+    } on DioException catch ( e ) {
+      throw _err( e, 'submit failed' );
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // PushAgenticRequest → POST /api/v2/submit   (was /api/push-agentic — wave 2)
+  // ─────────────────────────────────────────────
+
+  /// Door 10 is 1:1 with `submit`: `routing_command` → `command`, `args` /
+  /// `question` verbatim, queue directives top-level. A v2 body that did not
+  /// create a job (needs_input / receptionist / failed) is a [QueueApiException],
+  /// never a "Job queued" with no id.
   Future<PushJobResponse> pushAgentic( PushAgenticRequest req ) async {
     try {
-      final res = await _dio.post<Map<String, dynamic>>( '/api/push-agentic', data: req.toJson() );
-      return PushJobResponse.fromJson( res.data! );
+      final res = await _dio.post<Map<String, dynamic>>( '/api/v2/submit', data: req.toSubmitRequest().toJson() );
+      final ask = AskResponse.fromJson( res.data! );
+      if ( ask.jobId == null || ask.jobId!.isEmpty || !( ask.status == 'waiting' || ask.status == 'done' ) ) {
+        throw QueueApiException(
+          ask.status == 'needs_input'
+              ? 'Missing: ${ask.argsMissing.join( ", " )}'
+              : ( ask.error ?? ask.answer ?? 'No job was created (${ask.path}/${ask.status}: ${ask.routeReason})' ),
+        );
+      }
+      return PushJobResponse.fromAsk( ask, websocketId: req.websocketId );
     } on DioException catch ( e ) {
       throw _err( e, 'push-agentic failed' );
     }

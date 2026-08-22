@@ -14,10 +14,13 @@ import 'package:lupin_mobile/features/agentic/domain/agentic_submission_state.da
 
 import '../_helpers/stub_dio.dart';
 
+// The synchronous /api/v2/submit body for an accepted long job (wave 2).
 Map<String, dynamic> _submitResp( String jobId ) => {
-  'status'        : 'queued',
-  'job_id'        : jobId,
-  'queue_position': 1,
+  'path'         : 'agent',
+  'status'       : 'waiting',
+  'route_reason' : 'submitted',
+  'job_id'       : jobId,
+  'trace_id'     : 'tr-$jobId',
 };
 
 void main() {
@@ -42,7 +45,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'deepResearch submit emits InProgress → Success',
       setUp: () {
-        adapter.handlers[ 'POST /api/deep-research/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( _submitResp( 'dr-aaa' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
@@ -63,7 +66,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'podcast submit emits InProgress → Success',
       setUp: () {
-        adapter.handlers[ 'POST /api/podcast-generator/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( _submitResp( 'pg-bbb' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
@@ -110,7 +113,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'testSuite submit emits InProgress → Success',
       setUp: () {
-        adapter.handlers[ 'POST /api/test-suite/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( _submitResp( 'ts-ccc' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
@@ -129,7 +132,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'bugFixExpediter submit emits InProgress → Success',
       setUp: () {
-        adapter.handlers[ 'POST /api/bug-fix-expediter/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( _submitResp( 'bfe-ddd' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
@@ -148,7 +151,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'researchToPodcast submit emits InProgress → Success',
       setUp: () {
-        adapter.handlers[ 'POST /api/deep-research-to-podcast/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( _submitResp( 'rp-eee' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
@@ -167,7 +170,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'researchToPresentation submit emits InProgress → Success',
       setUp: () {
-        adapter.handlers[ 'POST /api/deep-research-to-presentation/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( _submitResp( 'rx-fff' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
@@ -186,7 +189,7 @@ void main() {
     blocTest<AgenticSubmissionBloc, AgenticSubmissionState>(
       'submit emits InProgress → Failure on 500',
       setUp: () {
-        adapter.handlers[ 'POST /api/deep-research/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( { 'detail': 'server error' }, status: 500 );
       },
       build : () => AgenticSubmissionBloc( repo ),

@@ -13,6 +13,22 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 ---
 
 
+## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — v2 cutover wave 2: nine submit doors → `/api/v2/submit` · lane-2 harness door fix (SESSION-END)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Doc**: `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md` · store rows `a938907a` (wave 2) / `c84e9313` (lane-2, closed)
+
+**Accomplishments** (fifth commit of the session; Rick AFK 22:00–23:55Z; self re-spin #2 at 22:35Z, clean wake):
+- **Wave 2 flipped** against integration `799e43d0` (Cheech's word 23:16Z): `SubmitRequest` + top-level `scheduledAt` / `monopolize` / `parentIdHash` (Cheech's ruling, serialized only when set); eight `AgenticRepository.submitX()` through one `_submit()` + `QueueRepository.pushAgentic()` → `POST /api/v2/submit`; per-door `submitCommand` + `toSubmitArgs()` (renames `research_source→research`, `target_languages→languages`, `source_path→source`); bloc/UI contracts kept via `AgenticSubmitResponse.fromAsk` / `PushJobResponse.fromAsk` — `waiting`+`job_id` = success, `needs_input`/receptionist/`failed` → Failure with the server's words. Doors 7 (TFE resume) and 11 stay v1 (checkpoint-built jobs); ask-side agentic dispatch is bug `b7fe8941` (Rachel).
+- **Lane-2 gate failure (María's row)** — instrument: harness POSTed retired `/api/push` (410) then waited 1200s. Fixed in lupin worktree: `--door auto|v1|v2`, v2 ask→resume auto-answer, fail-fast, parked-after-budget terminal; two other stale src/rnd push sites stop on 410; +6 unit tests (20/20). Merged to integration `3c3f1f5e`.
+- **Tests**: +11 mobile (repo semantics ×3, pushAgentic ×2, mappers ×6), mocks moved to v2 bodies. **Full suite 597 ✅ / 0 outside `legacy_quarantine/`** (was 585); analyze clean on touched features.
+
+**Files Modified**: 15 (agentic data ×9 incl. repository + common models; queue models + repository; tests ×4 incl. `submit_mappers_test.dart` NEW; readiness doc NEW + README link).
+
+**Open**: live check of the nine doors against `:7999` once `799e43d0` reaches wip + bounce; Rick's device check of the day; prune merged worktrees `lupin-wt-tiffany-{salutations,v2eval,lane2-door}`.
+
+---
+
+
 ## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — Rail grouping (Personas/All) · voice DM to a chip · login enter-to-submit · TTS queue viewer + speak-system-senders switch (SESSION-END)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Plan**: `src/rnd/2026.08.21-focus-rail-liveness-icons-and-notification-stop-list.md` §5f–§5h · store rows `d0c9d8f4` / `2d1727d6` / `9a66e530` / `2e997558` / `b1480d02`

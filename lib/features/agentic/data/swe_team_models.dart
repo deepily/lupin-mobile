@@ -30,6 +30,18 @@ class SweTeamRequest {
     this.monopolize  = false,
   } );
 
+  /// v2 wave 2 — `/api/v2/submit` args (keys are 1:1 with the factory).
+  static const submitCommand = 'agent router go to swe team';
+  Map<String, dynamic> toSubmitArgs() => {
+    'task'                                 : task,
+    if ( budget != null       ) 'budget'        : budget,
+    if ( timeout != null      ) 'timeout'       : timeout,
+    if ( trustMode != null    ) 'trust_mode'    : trustMode,
+    if ( leadModel != null    ) 'lead_model'    : leadModel,
+    if ( workerModel != null  ) 'worker_model'  : workerModel,
+    if ( dryRun               ) 'dry_run'       : dryRun,
+  };
+
   Map<String, dynamic> toJson() => {
     'task'                                 : task,
     if ( budget != null       ) 'budget'        : budget,

@@ -59,6 +59,122 @@ void main() {
       expect( adapter.captured.single.path, '/api/v2/ask' );
     } );
 
+    // ── /api/v2/submit (wave 2 — the door beside ask) ──────────────────────
+    test( 'submit POSTs /api/v2/submit with {command, args, question?, websocket_id?, speak} and parses AskResponse', () async {
+      adapter.handlers[ 'POST /api/v2/submit' ] = ( opts ) {
+        final body = opts.data as Map<String, dynamic>;
+        expect( body[ 'command'      ], 'agent router go to weather' );
+        expect( body[ 'args'         ], { 'location': 'Washington DC' } );
+        expect( body[ 'question'     ], 'weather in DC' );
+        expect( body[ 'websocket_id' ], 'mobile' );
+        expect( body[ 'speak'        ], isFalse );
+        expect( body.containsKey( 'interactive' ), isFalse, reason: 'submit has no interactive flag — it never parks' );
+        return jsonBody( {
+          'path'         : 'agent',
+          'status'       : 'done',
+          'route_reason' : 'submitted',
+          'answer'       : 'Sunny.',
+          'answer_raw'   : 'sunny',
+          'command'      : 'agent router go to weather',
+          'args_known'   : [ 'location' ],
+          'args_missing' : [],
+          'trace_id'     : 'tr-s1',
+        } );
+      };
+      final r = await repo.submit( const SubmitRequest(
+        command     : 'agent router go to weather',
+        args        : { 'location': 'Washington DC' },
+        question    : 'weather in DC',
+        websocketId : 'mobile',
+        speak       : false,
+      ) );
+      expect( r.status,   'done' );
+      expect( r.isDone,   isTrue );
+      expect( r.answer,   'Sunny.' );
+      expect( r.command,  'agent router go to weather' );
+      expect( adapter.captured.single.path, '/api/v2/submit' );
+    } );
+
+    test( 'submit omits question/websocket_id when null and surfaces needs_input WITHOUT a pending_id (never parked)', () async {
+      adapter.handlers[ 'POST /api/v2/submit' ] = ( opts ) {
+        final body = opts.data as Map<String, dynamic>;
+        expect( body.containsKey( 'question' ),     isFalse );
+        expect( body.containsKey( 'websocket_id' ), isFalse );
+        expect( body[ 'args' ], isEmpty );
+        expect( body[ 'speak' ], isTrue );
+        return jsonBody( {
+          'path'         : 'needs_input',
+          'status'       : 'needs_input',
+          'route_reason' : 'args_incomplete',
+          'answer'       : 'location is required',
+          'command'      : 'agent router go to weather',
+          'args_known'   : [],
+          'args_missing' : [ 'location' ],
+          'pending_id'   : null,
+          'trace_id'     : 'tr-s2',
+        } );
+      };
+      final r = await repo.submit( const SubmitRequest( command: 'agent router go to weather' ) );
+      expect( r.needsInput,  isTrue );
+      expect( r.argsMissing, [ 'location' ] );
+      expect( r.pendingId,   isNull );
+    } );
+
+    test( 'submit carries scheduled_at / monopolize TOP-LEVEL (never inside args) and only when set', () async {
+      late Map<String, dynamic> body;
+      adapter.handlers[ 'POST /api/v2/submit' ] = ( opts ) {
+        body = opts.data as Map<String, dynamic>;
+        return jsonBody( { 'path': 'agent', 'status': 'waiting', 'route_reason': 'submitted', 'job_id': 'dr-1', 'trace_id': 'tr-s4' } );
+      };
+      await repo.submit( const SubmitRequest(
+        command     : 'agent router go to deep research',
+        args        : { 'query': 'q' },
+        scheduledAt : '2026-08-22T10:00:00-04:00',
+        monopolize  : true,
+      ) );
+      expect( body[ 'scheduled_at' ], '2026-08-22T10:00:00-04:00' );
+      expect( body[ 'monopolize' ], isTrue );
+      expect( ( body[ 'args' ] as Map ).containsKey( 'scheduled_at' ), isFalse, reason: 'queue directives are not agent args' );
+      expect( ( body[ 'args' ] as Map ).containsKey( 'monopolize' ),   isFalse );
+
+      await repo.submit( const SubmitRequest( command: 'agent router go to weather' ) );
+      expect( body.containsKey( 'scheduled_at' ), isFalse, reason: 'unset → omitted, body unchanged for the server' );
+      expect( body.containsKey( 'monopolize' ),   isFalse );
+    } );
+
+    // ── door 10: /api/push-agentic → /api/v2/submit (wave 2) ───────────────
+    test( 'pushAgentic rides /api/v2/submit 1:1 (routing_command → command) and adapts waiting+job_id to PushJobResponse', () async {
+      late Map<String, dynamic> body;
+      adapter.handlers[ 'POST /api/v2/submit' ] = ( opts ) {
+        body = opts.data as Map<String, dynamic>;
+        return jsonBody( { 'path': 'agent', 'status': 'waiting', 'route_reason': 'submitted', 'command': 'agent router go to deep research', 'job_id': 'dr-77', 'trace_id': 'tr-pa' } );
+      };
+      final r = await repo.pushAgentic( const PushAgenticRequest( routingCommand: 'agent router go to deep research', websocketId: 'mobile', args: { 'query': 'q' }, question: 'research q', scheduledAt: '2026-08-22T10:00:00-04:00' ) );
+      expect( body[ 'command' ], 'agent router go to deep research' );
+      expect( body[ 'args' ], { 'query': 'q' } );
+      expect( body[ 'question' ], 'research q' );
+      expect( body[ 'websocket_id' ], 'mobile' );
+      expect( body[ 'scheduled_at' ], '2026-08-22T10:00:00-04:00' );
+      expect( body.containsKey( 'routing_command' ), isFalse );
+      expect( r.jobId, 'dr-77' );
+      expect( r.status, 'waiting' );
+      expect( r.routingCommand, 'agent router go to deep research' );
+      expect( adapter.captured.single.path, '/api/v2/submit' );
+    } );
+
+    test( 'pushAgentic: a v2 body without a job is a QueueApiException, never "Job queued" with no id', () async {
+      adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) => jsonBody( { 'path': 'receptionist', 'status': 'done', 'route_reason': 'unknown_command', 'answer': 'not a command I know', 'trace_id': 'tr-rc' } );
+      await expectLater(
+        repo.pushAgentic( const PushAgenticRequest( routingCommand: 'nonsense', websocketId: 'mobile' ) ),
+        throwsA( isA<QueueApiException>().having( ( e ) => e.message, 'message', contains( 'not a command' ) ) ),
+      );
+    } );
+
+    test( 'submit maps a transport failure to QueueApiException', () async {
+      adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) => jsonBody( { 'detail': 'nope' }, status: 500 );
+      expect( () => repo.submit( const SubmitRequest( command: 'x' ) ), throwsA( isA<QueueApiException>() ) );
+    } );
+
     test( 'ask surfaces needs_input with pending_id (interactive park)', () async {
       adapter.handlers[ 'POST /api/v2/ask' ] = ( _ ) => jsonBody( {
         'path'         : 'needs_input',

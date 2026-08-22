@@ -30,6 +30,21 @@ class DeepResearchRequest {
     this.monopolize   = false,
   } );
 
+  /// v2 wave 2 — the `/api/v2/submit` spelling of this door (held until the
+  /// server side merges; see src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md).
+  /// `scheduledAt` / `monopolize` are QUEUE DIRECTIVES and ride top-level on
+  /// `SubmitRequest`, never inside `args`. `lead_model` is carried but the
+  /// factory on b12174fc does not read it for deep research.
+  static const submitCommand = 'agent router go to deep research';
+  Map<String, dynamic> toSubmitArgs() => {
+    'query'                            : query,
+    if ( budget != null          ) 'budget'           : budget,
+    if ( leadModel != null       ) 'lead_model'       : leadModel,
+    if ( dryRun                  ) 'dry_run'          : dryRun,
+    if ( audience != null        ) 'audience'         : audience,
+    if ( audienceContext != null ) 'audience_context' : audienceContext,
+  };
+
   Map<String, dynamic> toJson() => {
     'query'                            : query,
     if ( budget != null          ) 'budget'           : budget,

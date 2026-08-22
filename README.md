@@ -122,6 +122,7 @@ src/lupin-mobile/
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring (2026-04)
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings
 - **[WS Lifecycle Auth Wiring Plan](src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md)** - Design for driving `WebSocketService.connect/disconnect` from `AuthBloc` state transitions via a `WsLifecycleListener` widget
+- [2026.08.21 — v2 cutover wave 2 readiness](src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md) — eleven submit doors vs `/api/v2/submit` contract: what maps, what does not, and what the mobile repo landed now
 
 ## Project Documentation
 

@@ -38,6 +38,50 @@ class AskRequest {
   };
 }
 
+/// Request body for POST /api/v2/submit — work whose COMMAND is already
+/// decided (the door beside `ask`; Rick's two-door ruling, 2026-08-21). The
+/// caller names the routing command and hands over every argument it needs;
+/// the server skips routing + extraction. `question` is optional and only
+/// carried for the record; a submit NEVER parks — missing args come back as
+/// `status == 'needs_input'` with `argsMissing` filled in. Wave 2 of the
+/// v2 cutover routes the eleven submit-shaped doors through this one body.
+/// `scheduledAt` / `monopolize` ride TOP-LEVEL, not inside `args`: `args` is
+/// contract-validated against `JOB_ARG_CONTRACTS` and these two are queue
+/// directives, not agent arguments (Rachel's recommendation 2026-08-21; the
+/// server-side ruling is pending — see
+/// `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md` § Rachel's answers).
+/// They are serialized ONLY when set, so bodies stay byte-identical until the
+/// server accepts them.
+class SubmitRequest {
+  final String               command;
+  final Map<String, dynamic> args;
+  final String?              question;
+  final String?              websocketId;
+  final bool                 speak;
+  final String?              scheduledAt;
+  final bool?                monopolize;
+
+  const SubmitRequest( {
+    required this.command,
+    this.args        = const {},
+    this.question,
+    this.websocketId,
+    this.speak       = true,
+    this.scheduledAt,
+    this.monopolize,
+  } );
+
+  Map<String, dynamic> toJson() => {
+    'command'      : command,
+    'args'         : args,
+    if ( question    != null ) 'question'     : question,
+    if ( websocketId != null ) 'websocket_id' : websocketId,
+    'speak'        : speak,
+    if ( scheduledAt != null ) 'scheduled_at' : scheduledAt,
+    if ( monopolize  != null ) 'monopolize'   : monopolize,
+  };
+}
+
 /// Request body for POST /api/push-agentic (agentic job, bypasses expediter).
 class PushAgenticRequest {
   final String               routingCommand;
@@ -55,6 +99,19 @@ class PushAgenticRequest {
     this.scheduledAt,
     this.monopolize = false,
   } );
+
+  /// v2 wave 2 — the same submission as a `SubmitRequest` (door 10 is 1:1:
+  /// `routing_command` → `command`; `args`/`question` carry over verbatim; the
+  /// queue directives stay top-level).
+  SubmitRequest toSubmitRequest( { bool speak = true } ) => SubmitRequest(
+    command     : routingCommand,
+    args        : args,
+    question    : question,
+    websocketId : websocketId,
+    speak       : speak,
+    scheduledAt : scheduledAt,
+    monopolize  : monopolize ? true : null,
+  );
 
   Map<String, dynamic> toJson() => {
     'routing_command' : routingCommand,
@@ -88,6 +145,18 @@ class PushJobResponse {
     this.result,
     this.routingCommand,
   } );
+
+  /// v2 wave 2: door 10 (`/api/push-agentic`) now rides `/api/v2/submit`; the
+  /// synchronous body is adapted back to the queue-and-poll shape the dashboard
+  /// already renders ("Job queued: <id>"). `user_id` is not in the v2 body.
+  factory PushJobResponse.fromAsk( AskResponse ask, { required String websocketId } ) => PushJobResponse(
+    status         : ask.status,
+    websocketId    : websocketId,
+    userId         : '',
+    jobId          : ask.jobId,
+    result         : ask.answer,
+    routingCommand : ask.command,
+  );
 
   factory PushJobResponse.fromJson( Map<String, dynamic> j ) => PushJobResponse(
     status         : j[ 'status' ]       as String,
