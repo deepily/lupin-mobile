@@ -118,6 +118,7 @@ src/lupin-mobile/
 - **[Focus UI: Active / Recent-24h Session Filter](src/rnd/2026.06.25-focus-ui-active-history-filter.md)** - PLANNING doc for making the Focus rail default to currently-active sessions with a toggle to a rolling 24h history; mirrors the web notifications/multiplexer recency math (🟢 <1h / 🟡 <24h, Mr Radio-verified), adds `lastActivityBySender` + `FocusFilter` state + a 30s aging tick; M3 `SegmentedButton` toolbar; pure client-side, no backend work
 - [2026.08.21 — v2 cutover wave 1: /api/push + retry → /api/v2/ask](src/rnd/2026.08.21-v2-cutover-wave1-ask.md)
 - [2026.08.21 — Focus rail liveness + persona icons, notification stop-list, progress-group collapse (plan)](src/rnd/2026.08.21-focus-rail-liveness-icons-and-notification-stop-list.md)
+- [2026.08.29 — Quick Ask: push-to-talk Q&A screen (plan)](src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md) — hold-to-record → `/api/v2/ask` → todo/running/done via the `job_state_transition` frames mobile currently drops, plus the first cut of the generic "server asks the phone a question" surface (four doors, status-first branching). **PLANNING ONLY — awaiting `/plan-review-cascaded` with María as workflow steward; no implementation without Rick's go-ahead**
 
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring (2026-04)
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings
