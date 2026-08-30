@@ -11,12 +11,13 @@ import '../domain/notification_event.dart';
 ///   - open_ended        → multiline TextField
 ///   - open_ended_batch  → list of TextFields (one per question)
 ///
-/// The three single-String bodies (yes/no, multiple-choice, open-ended)
-/// were EXTRACTED to `lib/shared/widgets/prompt_bodies.dart` (F-S3-1,
-/// 2026-06-12) and are COMPOSED here, wiring `onRespond` to the existing
-/// `NotificationsRespond` dispatch — behavior-neutral for this surface
-/// (AC-S3.9). The batch body stays private here (F-S3-S2-2(d): it submits
-/// a Map; focus-mode bubbles route batch asks to this sheet instead).
+/// EVERY body now lives in `lib/shared/widgets/prompt_bodies.dart` and is
+/// COMPOSED here, wiring `onRespond` to the existing `NotificationsRespond`
+/// dispatch. The three single-String bodies moved in F-S3-1 (2026-06-12);
+/// the batch body followed in AC-S4.16 (2026-08-29) as
+/// [MultiQuestionPromptBody] — it was the only widget in the tree that read
+/// the canonical nested `questions[]` shape, and being private is what kept
+/// anyone from reusing it.
 class InteractivePromptSheet extends StatelessWidget {
   final String                notificationId;
   final String                responseType;
@@ -55,6 +56,12 @@ class InteractivePromptSheet extends StatelessWidget {
     );
   }
 
+  /// The canonical nested question list, or empty when the payload does
+  /// not carry one. ONE reader, so the two doors cannot disagree about
+  /// where questions live.
+  static List<dynamic> _nestedQuestions( Map<String, dynamic>? options ) =>
+      ( options?[ "questions" ] as List? )?.cast<dynamic>() ?? const [];
+
   void _submit( BuildContext context, dynamic value ) {
     context.read<NotificationBloc>().add( NotificationsRespond(
       notificationId : notificationId,
@@ -71,16 +78,38 @@ class InteractivePromptSheet extends StatelessWidget {
         body = YesNoPromptBody( onRespond: ( v ) => _submit( context, v ) );
         break;
       case "multiple_choice":
-        body = MultipleChoicePromptBody(
-          options   : ( options?[ "options" ] as List? )?.cast<dynamic>() ?? const [],
-          multi     : options?[ "multi_select" ] == true,
-          onRespond : ( v ) => _submit( context, v ),
-        );
+        // 🔴 AC-S4.10b delta 3 / AC-S4.5. This read `options?["options"]`
+        // and `options?["multi_select"]` at the TOP level, but a canonical
+        // `ask_multiple_choice` payload nests its questions under
+        // `response_options.questions[]` — so the sheet rendered an EMPTY
+        // option list and submitted a bare label. It is the same defect the
+        // focus pane carries one layer up, and this sheet is where the
+        // pane's "Answer in full view…" fallback lands, so a canonical
+        // payload used to hit the wall twice.
+        final nested = _nestedQuestions( options );
+        if ( nested.isNotEmpty ) {
+          body = MultiQuestionPromptBody(
+            questions : nested,
+            // The server parser wants {"answers": {header: value}}; the
+            // body stays door-agnostic and the HOST wraps (AC-S4.11).
+            onRespond : ( v ) => _submit( context, { "answers": v } ),
+          );
+        } else {
+          body = MultipleChoicePromptBody(
+            options   : ( options?[ "options" ] as List? )?.cast<dynamic>() ?? const [],
+            multi     : options?[ "multi_select" ] == true,
+            onRespond : ( v ) => _submit( context, v ),
+          );
+        }
         break;
       case "open_ended_batch":
-        body = _OpenEndedBatchBody(
-          questions: ( options?[ "questions" ] as List? )?.cast<dynamic>() ?? const [],
-          onSubmit : ( v ) => _submit( context, v ),
+        // Unchanged shape: a batch question carries no `options`, so the
+        // promoted body renders the same text fields and submits the same
+        // {header: value} map it always did — unwrapped, as this door has
+        // always expected.
+        body = MultiQuestionPromptBody(
+          questions : _nestedQuestions( options ),
+          onRespond : ( v ) => _submit( context, v ),
         );
         break;
       case "open_ended":
@@ -101,76 +130,6 @@ class InteractivePromptSheet extends StatelessWidget {
           body,
         ],
       ),
-    );
-  }
-}
-
-// --- open-ended batch (UNEXTRACTED — Map-valued, F-S3-S2-2(d)) ---------------
-
-class _OpenEndedBatchBody extends StatefulWidget {
-  final List<dynamic>                  questions;
-  final void Function( Map<String, String> ) onSubmit;
-
-  const _OpenEndedBatchBody( {
-    required this.questions,
-    required this.onSubmit,
-  } );
-
-  @override
-  State<_OpenEndedBatchBody> createState() => _OpenEndedBatchBodyState();
-}
-
-class _OpenEndedBatchBodyState extends State<_OpenEndedBatchBody> {
-  late final List<TextEditingController> _controllers;
-
-  @override
-  void initState() {
-    super.initState();
-    _controllers = List.generate(
-      widget.questions.length,
-      ( _ ) => TextEditingController(),
-    );
-  }
-
-  String _question( dynamic q ) {
-    if ( q is Map ) return ( q[ "question" ] ?? "" ).toString();
-    return q.toString();
-  }
-
-  String _key( dynamic q, int i ) {
-    if ( q is Map && q[ "header" ] != null ) return q[ "header" ].toString();
-    return "q_$i";
-  }
-
-  @override
-  Widget build( BuildContext context ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ...List.generate( widget.questions.length, ( i ) {
-          return Padding(
-            padding: const EdgeInsets.only( bottom: 12 ),
-            child: TextField(
-              controller: _controllers[ i ],
-              decoration: InputDecoration(
-                labelText: _question( widget.questions[ i ] ),
-                border   : const OutlineInputBorder(),
-              ),
-              maxLines: 2,
-            ),
-          );
-        } ),
-        FilledButton(
-          onPressed: () {
-            final map = <String, String>{};
-            for ( var i = 0; i < widget.questions.length; i++ ) {
-              map[ _key( widget.questions[ i ], i ) ] = _controllers[ i ].text;
-            }
-            widget.onSubmit( map );
-          },
-          child: const Text( "Submit all" ),
-        ),
-      ],
     );
   }
 }

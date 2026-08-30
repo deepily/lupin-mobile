@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -344,9 +346,23 @@ class _MessageBubble extends StatelessWidget {
     // conversation wire never emits response_options (Phase-0 capture;
     // F-S2-IMPL-2 heads-up). Chips can only render from a live payload.
     final optionsRenderable = opts?[ 'options' ] is List;
+    // 🔴 AC-S4.10b delta 1 / AC-S4.5: a CANONICAL `ask_multiple_choice`
+    // payload nests its questions under `response_options.questions[]`, so
+    // `optionsRenderable` was false for it and every canonical ask fell
+    // through to the "Answer in full view…" fallback below. It renders
+    // inline now, through the same promoted body the sheet uses.
+    final nestedAll = ( opts?[ 'questions' ] as List? )?.cast<dynamic>() ?? const [];
+    // SCOPED TO multiple_choice ON PURPOSE. Delta 1 is about the canonical
+    // `ask_multiple_choice` payload; `open_ended_batch` keeps its existing
+    // route to the legacy sheet. Letting the inline path swallow batch asks
+    // too would be a FOURTH behavior change on this surface — a scope
+    // escape under AC-S4.10b, and the existing batch-fallback test in
+    // focus_mode_screen_test.dart catches it, which is what it is for.
+    final nested = type == 'multiple_choice' ? nestedAll : const [];
 
-    if ( type == 'open_ended_batch' ||
-        ( type == 'multiple_choice' && ( multi || !optionsRenderable ) ) ) {
+    if ( nested.isEmpty &&
+        ( type == 'open_ended_batch' ||
+        ( type == 'multiple_choice' && ( multi || !optionsRenderable ) ) ) ) {
       // Map/List-valued asks stay String-free on the focus path, and
       // option-less (backfilled) choice asks have nothing to chip: fallback
       // affordance → legacy sheet (F-S3-S2-2(d); multi-select + null-options
@@ -368,6 +384,17 @@ class _MessageBubble extends StatelessWidget {
     }
 
     Widget body;
+    if ( nested.isNotEmpty ) {
+      // The server parser wants {"answers": {header: value}}; the body
+      // stays door-agnostic and this host wraps (AC-S4.11).
+      return Padding(
+        padding : const EdgeInsets.only( top: 8 ),
+        child   : MultiQuestionPromptBody(
+          questions : nested,
+          onRespond : ( v ) => respond( jsonEncode( { 'answers': v } ) ),
+        ),
+      );
+    }
     switch ( type ) {
       case 'yes_no':
         body = YesNoPromptBody( onRespond: respond );

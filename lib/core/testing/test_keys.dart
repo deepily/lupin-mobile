@@ -24,6 +24,8 @@ class TestKeys {
   static const promptNoButton          = 'prompt.no';
   static const promptNeitherButton     = 'prompt.neither';
   static const promptCommentField      = 'prompt.comment';
+  /// Submit button of the promoted multi-question body (AC-S4.16).
+  static const promptMultiQuestionSubmit = 'prompt.multiQuestion.submit';
 
   // Sender-dates drilldown
   static const senderDatesTilePrefix          = 'senderDates.tile.';        // + date
@@ -174,4 +176,16 @@ class TestKeys {
   static const audioPlayerStopButton     = 'audio.stop';
   static const audioPlayerShareButton    = 'audio.share';
   static const audioPlayerSlider         = 'audio.slider';
+
+  // ── Quick Ask (S2) ──────────────────────────────────────────────────────
+  static const quickAskRecordButton   = 'quickAsk.record';
+  static const quickAskBlockedReason  = 'quickAsk.blockedReason';
+  static const quickAskError          = 'quickAsk.error';
+  static const quickAskList           = 'quickAsk.list';
+  static const quickAskEmpty          = 'quickAsk.empty';
+  static const quickAskLostBanner     = 'quickAsk.lost';
+  static const quickAskCardPrefix     = 'quickAsk.card.';      // + jobId
+  static const quickAskChipPrefix     = 'quickAsk.chip.';      // + lane name
+  static const quickAskAnswerPrefix   = 'quickAsk.answer.';    // + jobId
+  static const quickAskErrorCardPrefix = 'quickAsk.errorCard.';// + jobId
 }
