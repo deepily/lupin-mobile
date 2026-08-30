@@ -75,9 +75,13 @@ void main() {
       arrange( startPaused: true );
       await tester.pumpWidget( host( TtsPauseToggle( tts: tts, toggleKey: toggleKey ) ) );
 
-      // No stream emission at all — pausedStream has no replay-on-subscribe
-      // (store row a3fdb6ad), so seeding from the getter is the only thing
-      // standing between this and a control that reads wrong indefinitely.
+      // No stream emission at all. `pausedStream` DOES replay on subscribe
+      // now (row a3fdb6ad, landed) — but the replay arrives a microtask late,
+      // and this mock emits nothing whatsoever. So `initialData` is still what
+      // paints the first frame, and still what this asserts. Two belts, and
+      // dropping either one is a visible regression: without the seed a
+      // one-frame flash, without the replay a control that reads wrong until
+      // someone toggles.
       expect( iconOf( tester ), Icons.play_circle );
     } );
 

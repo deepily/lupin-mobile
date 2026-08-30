@@ -109,8 +109,46 @@ class TtsOrchestrator {
   bool get isPaused => _paused;
 
   /// Emits on every pause-state TRANSITION (idempotent [pause]/[resume]
-  /// calls do not re-emit). S3's hold toggle renders reactively off this.
-  Stream<bool> get pausedStream => _pausedCtrl.stream;
+  /// calls do not re-emit), and REPLAYS THE CURRENT VALUE ON SUBSCRIBE.
+  ///
+  /// 🔴 The replay is the fix for store row `a3fdb6ad`. A plain broadcast
+  /// controller tells a new listener nothing until the next transition, so a
+  /// control mounted while speech is ALREADY held renders "not paused" over a
+  /// queue that really is held — and stays wrong until somebody toggles. The
+  /// hold is global and Quick Ask mounts its own controls, so arriving at a
+  /// screen mid-hold is the ordinary case, not an edge one.
+  ///
+  /// Every consumer seeds from the synchronous [isPaused] getter via
+  /// `initialData` today, which is why nothing is visibly broken. That is a
+  /// convention each new consumer has to know; this puts it in the stream's
+  /// own contract, where forgetting is not possible.
+  ///
+  /// ⚠️ KEEP the `initialData` seeding anyway. `initialData` paints the FIRST
+  /// frame; the replay lands one microtask later. Dropping it trades a silent
+  /// wrong state for a one-frame flash — smaller, still wrong.
+  ///
+  /// Mirrors `websocket_service.dart` `connectionStream`, which documents the
+  /// same three properties and calls out `pausedStream` by name for lacking
+  /// this one. The two are now the same shape and are worth extracting into
+  /// one helper by whoever next owns both files — not as a drive-by on a file
+  /// another seat may be holding.
+  Stream<bool> get pausedStream {
+    late StreamController<bool> out;
+    StreamSubscription<bool>?   sub;
+    out = StreamController<bool>(
+      onListen: () {
+        // Replay, then follow, in ONE synchronous block — no transition can
+        // slip between the two and be missed.
+        out.add( _paused );
+        sub = _pausedCtrl.stream.listen( out.add, onError: out.addError );
+      },
+      onCancel: () async {
+        await sub?.cancel();
+        sub = null;
+      },
+    );
+    return out.stream;
+  }
 
   /// Emits whenever the stop-list (gate 1) suppresses an item on the
   /// [enqueueAlways] path — AC-S3.7. **The point is that suppression is

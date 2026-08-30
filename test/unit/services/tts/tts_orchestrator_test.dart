@@ -836,7 +836,11 @@ void main() {
       o.resume();   // idempotent — no second emission
       await pump();
 
-      expect( states, [ true, false ] );
+      // The leading `false` is the REPLAY (row a3fdb6ad), not a transition —
+      // a listener is told the current value on subscribe and this one
+      // subscribed while unpaused. The property under test is unchanged: two
+      // pauses and two resumes produce ONE emission each, not two.
+      expect( states, [ false, true, false ] );
       expect( o.isPaused, isFalse );
       await sub.cancel();
     } );
@@ -1143,6 +1147,105 @@ void main() {
       expect( spoken, [ "Build finished" ] );
       expect( seen, isEmpty, reason: "no rule matched ⇒ nothing to report" );
       await sub.cancel();
+    } );
+    // ── row a3fdb6ad — pausedStream replays the current value on subscribe ──
+    //
+    // 🔴 The property, stated as the failure it prevents: a control mounted
+    // while speech is ALREADY held must learn that immediately, not at the
+    // next transition. Without the replay it renders "not paused" over a queue
+    // that really is held, and stays wrong until somebody toggles. The hold is
+    // GLOBAL and Quick Ask mounts its own controls, so arriving at a screen
+    // mid-hold is the ordinary case.
+    //
+    // Nothing was visibly broken because every consumer seeds from the
+    // synchronous `isPaused` getter via `initialData` — a convention each new
+    // consumer had to know. This puts it in the stream's own contract.
+
+    test( "row a3fdb6ad: a listener attached while ALREADY paused is told so, with no transition", () async {
+      await setUpMocks();
+      final o = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws );
+      o.pause();
+      expect( o.isPaused, isTrue );
+
+      // Subscribe AFTER the pause. A plain broadcast controller emits nothing
+      // here — that is the whole defect.
+      final seen = <bool>[];
+      final sub  = o.pausedStream.listen( seen.add );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( seen, [ true ], reason: "no replay ⇒ a mid-hold listener renders unpaused" );
+      await sub.cancel();
+    } );
+
+    test( "row a3fdb6ad: an UNPAUSED subscriber is told false, not left empty", () async {
+      await setUpMocks();
+      final o = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws );
+      final seen = <bool>[];
+      final sub  = o.pausedStream.listen( seen.add );
+      await Future<void>.delayed( Duration.zero );
+      expect( seen, [ false ] );
+      await sub.cancel();
+    } );
+
+    test( "row a3fdb6ad: the replay does not REPLACE the transitions — it precedes them", () async {
+      // A replay implemented as "emit current and stop following" would pass
+      // the first test and silently break every live toggle.
+      await setUpMocks();
+      final o = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws );
+      final seen = <bool>[];
+      final sub  = o.pausedStream.listen( seen.add );
+      await Future<void>.delayed( Duration.zero );
+
+      o.pause();
+      o.resume();
+      o.pause();
+      await Future<void>.delayed( Duration.zero );
+
+      expect( seen, [ false, true, false, true ] );
+      await sub.cancel();
+    } );
+
+    test( "row a3fdb6ad: distinct-until-changed still holds — an idempotent pause does not re-emit", () async {
+      await setUpMocks();
+      final o = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws );
+      final seen = <bool>[];
+      final sub  = o.pausedStream.listen( seen.add );
+      await Future<void>.delayed( Duration.zero );
+
+      o.pause();
+      o.pause();
+      o.pause();
+      await Future<void>.delayed( Duration.zero );
+
+      expect( seen, [ false, true ], reason: "the replay must not cost the existing suppression" );
+      await sub.cancel();
+    } );
+
+    test( "row a3fdb6ad: TWO listeners each get their own replay", () async {
+      // Broadcast semantics are the reason `pausedStream` is a getter that
+      // builds a fresh controller per subscription; a single shared one would
+      // hand the second listener nothing.
+      await setUpMocks();
+      final o = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws );
+      o.pause();
+
+      final a = <bool>[];
+      final b = <bool>[];
+      final subA = o.pausedStream.listen( a.add );
+      await Future<void>.delayed( Duration.zero );
+      final subB = o.pausedStream.listen( b.add );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( a, [ true ] );
+      expect( b, [ true ], reason: "the toggle and the banner subscribe separately" );
+
+      o.resume();
+      await Future<void>.delayed( Duration.zero );
+      expect( a, [ true, false ] );
+      expect( b, [ true, false ] );
+
+      await subA.cancel();
+      await subB.cancel();
     } );
   } );
 

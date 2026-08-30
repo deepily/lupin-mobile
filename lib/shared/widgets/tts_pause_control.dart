@@ -12,13 +12,19 @@
 /// not re-test them.
 ///
 /// 🔴 **Both widgets seed from the synchronous [TtsOrchestrator.isPaused]
-/// getter via `initialData`, and that is load-bearing** (AC-S3.5b).
-/// `pausedStream` is a plain broadcast controller with no current-value
-/// replay, so a control mounted while speech is ALREADY held would
-/// otherwise receive nothing until the next transition and render "not
-/// paused" indefinitely — over a queue that really is held. Store row
-/// `a3fdb6ad` tracks fixing that in the stream's own contract; until it
-/// lands, seeding here is what keeps every consumer honest.
+/// getter via `initialData`, and that is STILL load-bearing** (AC-S3.5b).
+///
+/// `pausedStream` used to be a plain broadcast controller with no
+/// current-value replay, so a control mounted while speech was ALREADY held
+/// received nothing until the next transition and rendered "not paused"
+/// indefinitely — over a queue that really was held. Store row `a3fdb6ad`
+/// fixed that in the stream's own contract, so a consumer that forgets to
+/// seed is no longer silently wrong.
+///
+/// ⚠️ Seeding stays anyway, and this is not belt-and-braces for its own sake:
+/// `initialData` paints the FIRST frame, and the replay lands one microtask
+/// later. Remove it and the wrong state shrinks from indefinite to one frame —
+/// smaller, still wrong.
 library;
 
 import 'package:flutter/material.dart';
