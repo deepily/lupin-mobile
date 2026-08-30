@@ -188,4 +188,7 @@ class TestKeys {
   static const quickAskChipPrefix     = 'quickAsk.chip.';      // + lane name
   static const quickAskAnswerPrefix   = 'quickAsk.answer.';    // + jobId
   static const quickAskErrorCardPrefix = 'quickAsk.errorCard.';// + jobId
+  static const quickAskPauseToggle    = 'quickAsk.pauseToggle';
+  static const quickAskPausedBanner   = 'quickAsk.pausedBanner';
+  static const quickAskReplayPrefix   = 'quickAsk.replay.';      // + jobId
 }

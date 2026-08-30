@@ -8,13 +8,19 @@
 /// because the old combined AC could not discriminate by construction.
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:get_it/get_it.dart';
+
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import 'package:lupin_mobile/shared/widgets/tts_pause_control.dart';
 import 'package:lupin_mobile/features/queue/data/queue_models.dart';
 import 'package:lupin_mobile/features/queue/domain/job_lifecycle.dart';
 import 'package:lupin_mobile/features/quick_ask/data/quick_ask_models.dart';
@@ -25,6 +31,8 @@ import 'package:lupin_mobile/features/quick_ask/presentation/quick_ask_screen.da
 
 class MockQuickAskBloc extends MockBloc<QuickAskEvent, QuickAskState>
     implements QuickAskBloc {}
+
+class MockTtsOrchestrator extends Mock implements TtsOrchestrator {}
 
 QuickAskEntry entry( {
   String jobId = 'j-1',
@@ -49,9 +57,24 @@ QuickAskEntry entry( {
 void main() {
   late MockQuickAskBloc bloc;
 
-  setUpAll( () { registerFallbackValue( const QuickAskRecordPressed() ); } );
+  setUpAll( () {
+    registerFallbackValue( const QuickAskRecordPressed() );
+    registerFallbackValue( const TtsSender() );
+  } );
 
-  setUp( () { bloc = MockQuickAskBloc(); } );
+  late MockTtsOrchestrator tts;
+
+  setUp( () {
+    bloc = MockQuickAskBloc();
+    tts  = MockTtsOrchestrator();
+    when( () => tts.isPaused ).thenReturn( false );
+    when( () => tts.pausedStream ).thenAnswer( ( _ ) => const Stream<bool>.empty() );
+    when( () => tts.queueDepth ).thenReturn( 0 );
+    when( () => tts.queueDepthStream ).thenAnswer( ( _ ) => const Stream<int>.empty() );
+    GetIt.instance.registerSingleton<TtsOrchestrator>( tts );
+  } );
+
+  tearDown( () async { await GetIt.instance.reset(); } );
 
   Widget host( QuickAskState state, { MockQuickAskBloc? using } ) {
     final b = using ?? bloc;
@@ -271,6 +294,125 @@ void main() {
       await tester.pumpWidget( host( const QuickAskState( connected: true ) ) );
       await tester.pump();
       expect( find.byKey( const Key( TestKeys.quickAskLostBanner ) ), findsNothing );
+    } );
+  } );
+
+  group( 'AC-S3.5c — the SHARED pause/replay control is MOUNTED, not reimplemented', () {
+
+    testWidgets( 'the pause toggle on screen is seat B\'s shared widget', ( tester ) async {
+      await tester.pumpWidget( host( const QuickAskState( connected: true ) ) );
+      await tester.pump();
+
+      expect( find.byType( TtsPauseToggle ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.quickAskPauseToggle ) ), findsOneWidget );
+    } );
+
+    testWidgets( '🔴 this screen holds NO StreamBuilder of its own over pausedStream', ( tester ) async {
+      // The falsifier AC-S3.5c names: a screen that renders its own inline
+      // StreamBuilder passes every behavioural assertion while leaving a THIRD
+      // copy in the tree, which IS the defect. Asserted on the source, because
+      // a widget test cannot tell whose StreamBuilder it is looking at.
+      // COMMENTS STRIPPED FIRST. The naive version of this check matched the
+      // comment that explains why the screen does not do this — a source scan
+      // that reads prose as code is a scan that fails on its own explanation.
+      final raw  = File( 'lib/features/quick_ask/presentation/quick_ask_screen.dart' ).readAsStringSync();
+      final code = raw.split( '\n' )
+          .where( ( l ) => !l.trimLeft().startsWith( '//' ) )
+          .join( '\n' );
+
+      expect( code.contains( 'pausedStream' ), isFalse,
+          reason: 'Quick Ask must MOUNT the shared control, never re-derive paused state' );
+      expect( code.contains( 'StreamBuilder' ), isFalse,
+          reason: 'a third StreamBuilder over the same stream IS the defect AC-S3.5c prevents' );
+      // Positive half — the check must not pass merely because the file is empty.
+      expect( code, contains( 'TtsPauseToggle' ) );
+      expect( code, contains( 'TtsPausedBanner' ) );
+    } );
+
+    testWidgets( 'a paused orchestrator renders the shared banner WITH a stated reason', ( tester ) async {
+      // The user-visible half: someone who paused in focus mode arrives here
+      // to an explanation, not a bare icon.
+      when( () => tts.isPaused ).thenReturn( true );
+      when( () => tts.queueDepth ).thenReturn( 2 );
+      await tester.pumpWidget( host( const QuickAskState( connected: true ) ) );
+      await tester.pump();
+
+      expect( find.byType( TtsPausedBanner ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.quickAskPausedBanner ) ), findsOneWidget );
+      expect( find.textContaining( 'Tap replay' ), findsOneWidget );
+    } );
+
+    testWidgets( 'an UNPAUSED orchestrator renders no banner', ( tester ) async {
+      await tester.pumpWidget( host( const QuickAskState( connected: true ) ) );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.quickAskPausedBanner ) ), findsNothing );
+    } );
+  } );
+
+  group( 'the replay button — mounted by S2, behaviour owned by S3', () {
+
+    testWidgets( 'a done card with a non-empty answer offers Replay', ( tester ) async {
+      await tester.pumpWidget( host( QuickAskState(
+        connected : true,
+        entries   : [ entry( state: JobLifecycleState.completed, answer: 'It is sunny.' ) ],
+      ) ) );
+      await tester.pump();
+      expect( find.byKey( const Key( '${TestKeys.quickAskReplayPrefix}j-1' ) ), findsOneWidget );
+    } );
+
+    testWidgets( 'a card with NO answer offers no Replay', ( tester ) async {
+      await tester.pumpWidget( host( QuickAskState(
+        connected : true,
+        entries   : [ entry( state: JobLifecycleState.running ) ],
+      ) ) );
+      await tester.pump();
+      expect( find.byKey( const Key( '${TestKeys.quickAskReplayPrefix}j-1' ) ), findsNothing );
+    } );
+
+    testWidgets( 'a FAILED card offers no Replay — there is nothing to replay', ( tester ) async {
+      await tester.pumpWidget( host( QuickAskState(
+        connected : true,
+        entries   : [ entry( state: JobLifecycleState.failed, error: 'boom' ) ],
+      ) ) );
+      await tester.pump();
+      expect( find.byKey( const Key( '${TestKeys.quickAskReplayPrefix}j-1' ) ), findsNothing );
+    } );
+
+    testWidgets( '🔴 tapping Replay calls replay(), NOT a bare enqueueAlways', ( tester ) async {
+      // AC-S3.4b: an urgent enqueue preempts only when NOT paused, so a bare
+      // `enqueueAlways(priority:"urgent")` here would enqueue and play nothing
+      // while held — and pause-then-rewind is the natural gesture. Routing
+      // through `replay()` is what calls `resume()` first.
+      when( () => tts.replay(
+        message : any( named: 'message' ),
+        title   : any( named: 'title' ),
+        voiceId : any( named: 'voiceId' ),
+        sender  : any( named: 'sender' ),
+      ) ).thenReturn( null );
+
+      await tester.pumpWidget( host( QuickAskState(
+        connected : true,
+        entries   : [ entry( state: JobLifecycleState.completed, answer: 'It is sunny.' ) ],
+      ) ) );
+      await tester.pump();
+
+      await tester.tap( find.byKey( const Key( '${TestKeys.quickAskReplayPrefix}j-1' ) ) );
+      await tester.pump();
+
+      verify( () => tts.replay(
+        message : 'It is sunny.',
+        title   : any( named: 'title' ),
+        voiceId : any( named: 'voiceId' ),
+        sender  : any( named: 'sender' ),
+      ) ).called( 1 );
+      verifyNever( () => tts.enqueueAlways(
+        priority : any( named: 'priority' ),
+        message  : any( named: 'message' ),
+        title    : any( named: 'title' ),
+        voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
+        verbatim : any( named: 'verbatim' ),
+      ) );
     } );
   } );
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../services/tts/tts_orchestrator.dart';
+import '../../../shared/widgets/tts_pause_control.dart';
 import '../../queue/domain/job_lifecycle.dart';
 import '../data/quick_ask_models.dart';
 import '../domain/quick_ask_bloc.dart';
@@ -19,16 +22,35 @@ class QuickAskScreen extends StatelessWidget {
 
   @override
   Widget build( BuildContext context ) {
+    // AC-S3.5c — MOUNT seat B's shared control; do not re-implement it. A
+    // third `StreamBuilder` over `pausedStream` in this file is the defect
+    // that AC exists to prevent, so this screen owns only the mounting.
+    final tts = ServiceLocator.get<TtsOrchestrator>();
+
     return Scaffold(
-      appBar : AppBar( title: const Text( 'Quick Ask' ) ),
+      appBar : AppBar(
+        title   : const Text( 'Quick Ask' ),
+        actions : [ TtsPauseToggle(
+          tts       : tts,
+          toggleKey : const Key( TestKeys.quickAskPauseToggle ),
+        ) ],
+      ),
       body   : BlocBuilder<QuickAskBloc, QuickAskState>(
         builder: ( context, state ) {
           return Column(
             children: [
+              // A user who paused in focus mode arrives here to a STATED
+              // reason rather than a bare icon — the user-visible half of
+              // AC-S3.5c. The banner renders nothing when speech is not held.
+              TtsPausedBanner(
+                tts       : tts,
+                bannerKey : const Key( TestKeys.quickAskPausedBanner ),
+                reason    : 'Tap replay on an answer to resume.',
+              ),
               _RecordHeader( state: state ),
               if ( state.errorMessage != null ) _InlineError( message: state.errorMessage! ),
               if ( state.lost ) const _LostBanner(),
-              Expanded( child: _Scrollback( state: state ) ),
+              Expanded( child: _Scrollback( state: state, tts: tts ) ),
             ],
           );
         },
@@ -188,8 +210,9 @@ class _LostBanner extends StatelessWidget {
 }
 
 class _Scrollback extends StatelessWidget {
-  final QuickAskState state;
-  const _Scrollback( { required this.state } );
+  final QuickAskState   state;
+  final TtsOrchestrator tts;
+  const _Scrollback( { required this.state, required this.tts } );
 
   @override
   Widget build( BuildContext context ) {
@@ -210,14 +233,15 @@ class _Scrollback extends StatelessWidget {
       key         : const Key( TestKeys.quickAskList ),
       padding     : const EdgeInsets.all( 8 ),
       itemCount   : ordered.length,
-      itemBuilder : ( context, i ) => _QuickAskCard( entry: ordered[ i ] ),
+      itemBuilder : ( context, i ) => _QuickAskCard( entry: ordered[ i ], tts: tts ),
     );
   }
 }
 
 class _QuickAskCard extends StatelessWidget {
-  final QuickAskEntry entry;
-  const _QuickAskCard( { required this.entry } );
+  final QuickAskEntry   entry;
+  final TtsOrchestrator tts;
+  const _QuickAskCard( { required this.entry, required this.tts } );
 
   @override
   Widget build( BuildContext context ) {
@@ -250,6 +274,19 @@ class _QuickAskCard extends StatelessWidget {
               Text(
                 key : Key( '${TestKeys.quickAskAnswerPrefix}${entry.jobId ?? "pending"}' ),
                 entry.answer!,
+              ),
+              Align(
+                alignment : Alignment.centerRight,
+                // Replay goes through the orchestrator's own `replay()`, which
+                // calls `resume()` FIRST. An urgent enqueue only preempts when
+                // not paused, so a bare enqueue here would play nothing while
+                // held — and pause-then-rewind is the natural gesture.
+                child     : TextButton.icon(
+                  key       : Key( '${TestKeys.quickAskReplayPrefix}${entry.jobId ?? "pending"}' ),
+                  icon      : const Icon( Icons.replay, size: 18 ),
+                  label     : const Text( 'Replay' ),
+                  onPressed : () => tts.replay( message: entry.answer!, title: 'Quick Ask' ),
+                ),
               ),
             ],
           ],
