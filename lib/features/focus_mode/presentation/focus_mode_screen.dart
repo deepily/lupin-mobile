@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../shared/widgets/tts_pause_control.dart';
 import '../../../services/asr/asr_service.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../auth/domain/auth_bloc.dart';
@@ -78,12 +79,17 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           ),
         ),
         title   : const Text( 'Lupin Focus' ),
-        actions : [ _QueueButton( tts: _tts ), _PauseToggle( tts: _tts ) ],
+        actions : [
+          _QueueButton( tts: _tts ),
+          // AC-S3.5c — the promoted shared control; behavior is asserted in
+          // test/widget/shared/pause_control_test.dart, not here.
+          TtsPauseToggle( tts: _tts, toggleKey: const Key( TestKeys.focusPauseToggle ) ),
+        ],
       ),
       drawer: _legacyDrawer( context ),
       body: Column(
         children: [
-          _PausedBanner( tts: _tts ),
+          TtsPausedBanner( tts: _tts, bannerKey: const Key( TestKeys.focusPausedBanner ) ),
           const FocusFilterBar(),
           Expanded(
             child: Row(
@@ -229,8 +235,6 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   }
 }
 
-/// Pause/resume hold toggle bound to S1's `pausedStream` (Q6: a pause,
-/// not a mute — see [_PausedBanner] for the held-count visibility).
 /// App-bar speech-queue button (Rick 2026-08-21): live count badge off
 /// [TtsOrchestrator.queueDepthStream]; tap opens [TtsQueueSheet].
 class _QueueButton extends StatelessWidget {
@@ -260,63 +264,3 @@ class _QueueButton extends StatelessWidget {
   }
 }
 
-class _PauseToggle extends StatelessWidget {
-  final TtsOrchestrator tts;
-  const _PauseToggle( { required this.tts } );
-
-  @override
-  Widget build( BuildContext context ) {
-    return StreamBuilder<bool>(
-      stream      : tts.pausedStream,
-      initialData : tts.isPaused,
-      builder: ( context, snap ) {
-        final paused = snap.data ?? false;
-        return IconButton(
-          key       : const Key( TestKeys.focusPauseToggle ),
-          tooltip   : paused ? 'Resume speech' : 'Hold speech',
-          icon      : Icon( paused ? Icons.play_circle : Icons.pause_circle ),
-          onPressed : () => paused ? tts.resume() : tts.pause(),
-        );
-      },
-    );
-  }
-}
-
-/// Loudly-visible paused state (Q6 held ≠ silent-forever) with the LIVE
-/// held count off S1's `queueDepthStream` (F-S1-S2-3: ticks up as messages
-/// accumulate under hold — held ≠ lost).
-class _PausedBanner extends StatelessWidget {
-  final TtsOrchestrator tts;
-  const _PausedBanner( { required this.tts } );
-
-  @override
-  Widget build( BuildContext context ) {
-    return StreamBuilder<bool>(
-      stream      : tts.pausedStream,
-      initialData : tts.isPaused,
-      builder: ( context, pausedSnap ) {
-        if ( pausedSnap.data != true ) return const SizedBox.shrink();
-        return Material(
-          key   : const Key( TestKeys.focusPausedBanner ),
-          color : Theme.of( context ).colorScheme.tertiaryContainer,
-          child : Padding(
-            padding: const EdgeInsets.symmetric( horizontal: 12, vertical: 6 ),
-            child: Row(
-              children: [
-                const Icon( Icons.pause, size: 16 ),
-                const SizedBox( width: 8 ),
-                StreamBuilder<int>(
-                  stream      : tts.queueDepthStream,
-                  initialData : tts.queueDepth,
-                  builder: ( context, depthSnap ) => Text(
-                    'Speech held — ${depthSnap.data ?? 0} message(s) queued',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
