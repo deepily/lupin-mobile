@@ -10,6 +10,8 @@
 /// map — the map's own preamble says so.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,12 +21,19 @@ import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 import 'package:lupin_mobile/services/notification_filter/notification_stop_list.dart';
+import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
+import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 import 'package:lupin_mobile/services/tts/speech_intent.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 
 class _MockRepo extends Mock implements NotificationRepository {}
 class _MockTts  extends Mock implements TtsOrchestrator {}
+class _MockPlayer   extends Mock implements StreamingTtsPlayer {}
+class _MockFallback extends Mock implements NotificationAudioService {}
+class _MockWs       extends Mock implements WebSocketService {}
 
 NotificationItem _item( {
   required String id,
@@ -154,21 +163,68 @@ void main() {
       await b.close();
     } );
 
-    test( 'it is NOT spoken — Rick kept the mute half explicitly', () async {
-      final b = build();
+    test( 'it is NOT spoken — and the muting is done by GATE 1, against a '
+          'REAL orchestrator, not by skipping the call', () async {
+      // Asserted against a real TtsOrchestrator sharing the SAME stop list,
+      // because "not spoken" is a claim about the PLAYER, not about whether
+      // a method was invoked. The bloc calls `enqueueAlways` deliberately
+      // (Arnold's finding): an early return muted the item equally well and
+      // meant gate 1 never fired, so no TtsSuppression was ever emitted and
+      // AC-S4.15's seam spanned a wire that did not exist.
+      final player   = _MockPlayer();
+      final fallback = _MockFallback();
+      final ws       = _MockWs();
+      final complete = StreamController<TtsCompleteEvent>.broadcast();
+      final errors   = StreamController<TtsErrorEvent>.broadcast();
+      when( () => player.completeStream ).thenAnswer( ( _ ) => complete.stream );
+      when( () => player.errorStream    ).thenAnswer( ( _ ) => errors.stream );
+      when( () => player.isPlaying      ).thenReturn( false );
+      when( () => player.stop()         ).thenAnswer( ( _ ) async {} );
+      when( () => player.speak(
+        text      : any( named: 'text'      ),
+        sessionId : any( named: 'sessionId' ),
+        voiceId   : any( named: 'voiceId'   ),
+      ) ).thenAnswer( ( _ ) async {} );
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( _ ) async {} );
+      when( () => fallback.stopFallbackSpeech()     ).thenAnswer( ( _ ) async {} );
+      when( () => ws.sessionId ).thenReturn( 'wise penguin' );
+
+      final real = TtsOrchestrator(
+        player   : player,
+        fallback : fallback,
+        prefs    : NotificationPreferences( await SharedPreferences.getInstance() ),
+        ws       : ws,
+        stopList : stopList,          // THE SAME instance the bloc holds
+      );
+      final suppressions = <TtsSuppression>[];
+      final sub = real.suppressedStream.listen( suppressions.add );
+
+      final b = FocusChatBloc( repo, tts: real, stopList: stopList );
+      b.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
       b.add( FocusInboundNotification( _item(
         id: 'n6', sender: askFlowSenderId, message: mutedQuestion, ask: true ) ) );
       await Future<void>.delayed( Duration.zero );
 
-      verifyNever( () => tts.enqueueAlways(
-        priority : any( named: 'priority' ),
-        message  : any( named: 'message'  ),
-        title    : any( named: 'title'    ),
-        voiceId  : any( named: 'voiceId'  ),
-        sender   : any( named: 'sender'   ),
-        verbatim : any( named: 'verbatim' ),
+      // Nothing was SPOKEN — the claim that matters to the user.
+      verifyNever( () => player.speak(
+        text      : any( named: 'text'      ),
+        sessionId : any( named: 'sessionId' ),
+        voiceId   : any( named: 'voiceId'   ),
       ) );
+      verifyNever( () => fallback.flutterTtsSpeak( any() ) );
+      expect( real.queueDepth, 0 );
+
+      // …and the suppression was REPORTED, which is what gives AC-S4.14 a
+      // real object to offer speak-anyway on.
+      expect( suppressions, hasLength( 1 ) );
+      expect( suppressions.single.rule, rule );
+      expect( suppressions.single.message, mutedQuestion );
+
+      await sub.cancel();
       await b.close();
+      await real.dispose();
+      await complete.close();
+      await errors.close();
     } );
 
     test( 'EVERYTHING ELSE the stop-list hides stays hidden, byte for byte: '

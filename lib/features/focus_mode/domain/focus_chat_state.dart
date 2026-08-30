@@ -59,11 +59,18 @@ class FocusMessage extends Equatable {
   /// and the card says which.
   final AskResolution?   resolution;
 
+  /// What the ending CARRIED, when it carried something — the
+  /// `default_used` on an expiry, the `response_value` on someone else's
+  /// answer. "Expired" alone is thin; "expired, default used: no" tells the
+  /// user what the server did on their behalf (AC-S4.3).
+  final String?          resolutionDetail;
+
   const FocusMessage( {
     required this.item,
     this.answered = false,
     this.suppressedRule,
     this.resolution,
+    this.resolutionDetail,
   } );
 
   factory FocusMessage.fromConversation( ConversationMessage msg ) {
@@ -85,15 +92,18 @@ class FocusMessage extends Equatable {
     bool?          answered,
     String?        suppressedRule,
     AskResolution? resolution,
+    String?        resolutionDetail,
   } ) => FocusMessage(
-        item           : item,
-        answered       : answered ?? this.answered,
-        suppressedRule : suppressedRule ?? this.suppressedRule,
-        resolution     : resolution ?? this.resolution,
+        item             : item,
+        answered         : answered ?? this.answered,
+        suppressedRule   : suppressedRule ?? this.suppressedRule,
+        resolution       : resolution ?? this.resolution,
+        resolutionDetail : resolutionDetail ?? this.resolutionDetail,
       );
 
   @override
-  List<Object?> get props => [ item.id, answered, suppressedRule, resolution ];
+  List<Object?> get props =>
+      [ item.id, answered, suppressedRule, resolution, resolutionDetail ];
 }
 
 /// State contract for the focus surface (S2 §3.1; consumed by S3).

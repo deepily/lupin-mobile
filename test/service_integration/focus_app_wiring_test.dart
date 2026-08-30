@@ -6,6 +6,8 @@
 library;
 
 import 'package:bloc_test/bloc_test.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
@@ -14,6 +16,8 @@ import 'package:lupin_mobile/app.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_bloc.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
+import 'package:lupin_mobile/features/notifications/data/ask_resolution.dart';
+import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
@@ -95,6 +99,112 @@ void main() {
 
     tearDown( () async {
       await GetIt.instance.reset();
+    } );
+
+    // ── AC-S4.3 — the ask LIFECYCLE frames, through the REAL dispatcher ──
+    //
+    // Both names appeared ZERO times in `lib/` before this: the frames
+    // arrived and were dropped on the floor. An expired ask therefore
+    // stayed "pending" forever and poisoned `pendingPromptFor`, so the
+    // composer aimed every voice reply at a dead ask and took a 400 the
+    // user never saw.
+    //
+    // Payload keys sit at the TOP level of the frame — verified against the
+    // emit sites, `notifications.py:1442` and `:1636` — NOT nested under
+    // `notification` the way `notification_queue_update` nests them. A case
+    // that reads `data['notification']` here finds nothing and drops the
+    // frame just as silently as having no case at all.
+
+    NotificationItem askItem( String id ) => NotificationItem(
+      id                     : id,
+      message                : 'Proceed?',
+      type                   : 'task',
+      priority               : 'medium',
+      senderId               : 'sender-1',
+      timestamp              : DateTime( 2026, 8, 29, 20 ),
+      played                 : false,
+      playCount              : 0,
+      responseRequested      : true,
+      responseType           : 'yes_no',
+      suppressDing           : false,
+      displayQualifierWidget : false,
+    );
+
+    Future<FocusMessage> deliverThen( Map<String, dynamic> frame ) async {
+      focusBloc.add( FocusInboundNotification( askItem( 'n-live' ) ) );
+      await Future<void>.delayed( Duration.zero );
+      dispatcher.dispatch( frame[ 'type' ] as String, frame );
+      await Future<void>.delayed( Duration.zero );
+      return focusBloc.state.windows[ 'sender-1' ]!
+          .firstWhere( ( m ) => m.item.id == 'n-live' );
+    }
+
+    test( 'AC-S4.3 — notification_expired marks the ask dead and surfaces '
+          'the default the server used', () async {
+      final msg = await deliverThen( {
+        'type'            : 'notification_expired',
+        'notification_id' : 'n-live',
+        'default_used'    : 'no',
+        'timeout'         : true,
+      } );
+
+      expect( msg.answered, isTrue, reason: 'an expired ask is FINISHED' );
+      expect( msg.resolution, AskResolution.expired );
+      expect( msg.resolutionDetail, 'no',
+              reason: '"expired" alone is thin — the user should see what the '
+                      'server answered on their behalf' );
+      expect( focusBloc.state.pendingPromptFor( 'sender-1' ), isNull );
+    } );
+
+    test( 'AC-S4.3 — notification_responded retires the ask as answered '
+          'ELSEWHERE, which is not an error and not our answer', () async {
+      final msg = await deliverThen( {
+        'type'            : 'notification_responded',
+        'notification_id' : 'n-live',
+        'response_value'  : 'yes',
+      } );
+
+      expect( msg.answered, isTrue );
+      expect( msg.resolution, AskResolution.answeredElsewhere );
+      expect( msg.resolutionDetail, 'yes' );
+      expect( focusBloc.state.hydration, isNot( FocusHydration.error ) );
+    } );
+
+    // ── The shared stop-list, pinned so it stays deliberate ─────────────
+    test( 'the orchestrator and FocusChatBloc resolve the SAME '
+          'NotificationStopList instance in production DI', () {
+      // Load-bearing since the suppressed-question path stopped returning
+      // early: the bloc now CALLS `enqueueAlways` and relies on the
+      // orchestrator's gate 1 to mute it. If the two ever hold different
+      // stop lists — or the orchestrator holds none — a question the user
+      // muted starts talking, and every existing test still passes because
+      // each half is individually correct.
+      //
+      // Asserted against the registration source rather than a running
+      // container: both sites must read from the same registered singleton.
+      final di = File( 'lib/core/di/service_locator.dart' ).readAsStringSync();
+      final resolvers = RegExp( r'stopList\s*:\s*_getIt<NotificationStopList>\(\)' )
+          .allMatches( di ).length;
+      expect( resolvers, greaterThanOrEqualTo( 2 ),
+              reason: 'the orchestrator and the focus bloc must BOTH take the '
+                      'registered stop list; a literal or a null at either '
+                      'site un-mutes suppressed questions' );
+      expect( di.contains( 'registerLazySingleton<NotificationStopList>' )
+           || di.contains( 'registerSingleton<NotificationStopList>' ), isTrue,
+              reason: 'one instance, registered once' );
+    } );
+
+    test( 'a lifecycle frame for an UNKNOWN id changes nothing — it does not '
+          'blank the window or throw', () async {
+      final msg = await deliverThen( {
+        'type'            : 'notification_expired',
+        'notification_id' : 'someone-elses-ask',
+        'default_used'    : 'no',
+      } );
+
+      expect( msg.answered, isFalse );
+      expect( msg.resolution, isNull );
+      expect( focusBloc.state.pendingPromptFor( 'sender-1' )?.item.id, 'n-live' );
     } );
 
     Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 20 ) );

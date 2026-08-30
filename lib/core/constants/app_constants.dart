@@ -56,6 +56,19 @@ class AppConstants {
   // Notification Events
   static const String eventNotificationQueueUpdate = 'notification_queue_update';
   static const String eventNotificationPlaySound = 'notification_play_sound';
+  /// Ask LIFECYCLE (AC-S4.3). Both are emitted by
+  /// `rest/routers/notifications.py` — `notification_expired` at :1442 with
+  /// `{notification_id, default_used, timeout, timestamp}`, and
+  /// `notification_responded` at :1636 with
+  /// `{notification_id, response_value, …}`. Payload keys sit at the TOP
+  /// level of the frame, NOT nested under `notification` the way
+  /// `notification_queue_update` nests them.
+  ///
+  /// Both arrived and were DROPPED before this: neither name appeared
+  /// anywhere in `lib/`, so an expired ask stayed "pending" forever and
+  /// poisoned `pendingPromptFor`.
+  static const String eventNotificationExpired   = 'notification_expired';
+  static const String eventNotificationResponded = 'notification_responded';
   
   // System Events
   static const String eventSysTimeUpdate = 'sys_time_update';

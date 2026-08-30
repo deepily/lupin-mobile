@@ -89,6 +89,32 @@ class WsBlocDispatcher {
           ServiceLocator.get<QuickAskBloc>().add( QuickAskNotificationReceived( notif ) );
         }
         break;
+      case AppConstants.eventNotificationExpired:
+        // AC-S4.3 — the ask TIMED OUT. These keys sit at the TOP level of
+        // the frame (`notifications.py:1442`), not nested under
+        // `notification` the way `notification_queue_update` nests them.
+        // Both this case and the one below arrived and were dropped:
+        // neither name appeared anywhere in `lib/`, so an expired ask sat
+        // "pending" forever and poisoned `pendingPromptFor`.
+        final expiredId = data[ 'notification_id' ]?.toString();
+        if ( expiredId != null ) {
+          ServiceLocator.get<FocusChatBloc>().add( FocusAskExpired(
+            notificationId : expiredId,
+            defaultUsed    : data[ 'default_used' ]?.toString(),
+          ) );
+        }
+        break;
+      case AppConstants.eventNotificationResponded:
+        // AC-S4.3 — answered somewhere ELSE (another device, a proxy, the
+        // browser). Retire the card as answered; `notifications.py:1636`.
+        final respondedId = data[ 'notification_id' ]?.toString();
+        if ( respondedId != null ) {
+          ServiceLocator.get<FocusChatBloc>().add( FocusAskResponded(
+            notificationId : respondedId,
+            responseValue  : data[ 'response_value' ]?.toString(),
+          ) );
+        }
+        break;
       case AppConstants.eventAuthSuccess:
         // WS (re)connect re-hydration: cold start on first connect,
         // merge-refresh on reconnect — the bloc is mode-dependent.

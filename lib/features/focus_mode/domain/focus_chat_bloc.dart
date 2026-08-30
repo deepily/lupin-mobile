@@ -96,6 +96,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     on<FocusColdStartRequested>( _onColdStart );
     on<FocusPersonaUpdated>( _onPersonaUpdated );
     on<FocusRespondRequested>( _onRespondRequested );
+    on<FocusAskExpired>( _onAskExpired );
+    on<FocusAskResponded>( _onAskResponded );
     on<FocusFilterChanged>( _onFilterChanged );
     on<FocusSenderScopeChanged>( _onSenderScopeChanged );
     on<FocusActivityTick>( _onActivityTick );
@@ -201,10 +203,27 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     ) );
 
     // 🔴 Shown, marked — and still NOT spoken (AC-S3.8(2)). Rick kept the
-    // mute half of his stop-list ruling explicitly; exempting these items
-    // from speaking as well as from the drop would make them talk, which
-    // is the half he did not give away.
-    if ( rule != null ) return;
+    // mute half of his stop-list ruling explicitly.
+    //
+    // The muting is done BY GATE 1, inside the orchestrator, and this call
+    // is made deliberately rather than skipped (Arnold's finding,
+    // 2026-08-29). An early return here muted the item just as well — and
+    // meant the orchestrator was never invoked, so gate 1 never fired and
+    // NO `TtsSuppression` was ever emitted. That left AC-S4.14's
+    // speak-anyway with no object to act on and AC-S4.15's seam spanning a
+    // wire that did not exist: "orchestrator suppression → prompt-widget
+    // notice" cannot be tested end to end when the first half never
+    // happens.
+    //
+    // Letting the call through changes nothing about what the user hears —
+    // gate 1 fires first, before `verbatim` is ever consulted, and returns
+    // without speaking. It changes only that the suppression is now
+    // REPORTED, which is the whole point of AC-S3.7.
+    //
+    // ⚠️ This relies on the orchestrator and this bloc sharing ONE
+    // `NotificationStopList` — they do (`service_locator.dart:268` and
+    // `:321` both resolve the same registered singleton), and a test pins
+    // that shared instance so it cannot become incidental.
 
     // EVERY item, EVERY priority (Q6) — the ungated S1 path (F-S1-1).
     final persona = item.voicePersona ?? state.personasBySender[ sid ];
@@ -519,6 +538,54 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       print( '[FocusChat] respond failed for $targetId: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
+  }
+
+  /// `notification_expired` — AC-S4.3. The ask timed out and the server
+  /// substituted its `response_default`. Marked finished, carrying WHICH
+  /// default was used, so the card can say what happened on the user's
+  /// behalf rather than going quiet.
+  void _onAskExpired( FocusAskExpired event, Emitter<FocusChatState> emit ) {
+    emit( state.copyWith( windows: _resolveEverywhere(
+      event.notificationId, AskResolution.expired, event.defaultUsed ) ) );
+  }
+
+  /// `notification_responded` — AC-S4.3. Another device, a proxy, or the
+  /// browser answered it. Retire the card: not an error, and not our
+  /// answer.
+  void _onAskResponded( FocusAskResponded event, Emitter<FocusChatState> emit ) {
+    emit( state.copyWith( windows: _resolveEverywhere(
+      event.notificationId, AskResolution.answeredElsewhere, event.responseValue ) ) );
+  }
+
+  /// Resolve a notification id WITHOUT knowing its sender.
+  ///
+  /// The lifecycle frames carry `notification_id` and nothing else
+  /// identifying — no `sender_id` — so the id is looked up across every
+  /// window rather than in one. Scanning all of them is honest about what
+  /// the wire gives us; guessing a sender would be worse.
+  Map<String, List<FocusMessage>> _resolveEverywhere(
+    String        notificationId,
+    AskResolution resolution,
+    String?       detail,
+  ) {
+    final windows = _copyWindows();
+    for ( final entry in windows.entries ) {
+      final window = List<FocusMessage>.from( entry.value );
+      var touched  = false;
+      for ( var i = 0; i < window.length; i++ ) {
+        if ( window[ i ].item.id == notificationId ) {
+          window[ i ] = window[ i ].copyWith(
+            answered         : true,
+            resolution       : resolution,
+            resolutionDetail : detail,
+          );
+          touched = true;
+          break;
+        }
+      }
+      if ( touched ) windows[ entry.key ] = window;
+    }
+    return windows;
   }
 
   /// Mark [targetId] finished with [resolution] — AC-S4.9. The ask stops

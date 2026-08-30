@@ -36,6 +36,28 @@ class FocusInboundNotification extends FocusChatEvent {
   List<Object?> get props => [ item.id ];
 }
 
+/// The ask TIMED OUT — `notification_expired` (AC-S4.3). The server has
+/// already substituted [defaultUsed]; there is nothing left to answer, and
+/// the card says so rather than sitting pending forever.
+class FocusAskExpired extends FocusChatEvent {
+  final String  notificationId;
+  final String? defaultUsed;
+  const FocusAskExpired( { required this.notificationId, this.defaultUsed } );
+  @override
+  List<Object?> get props => [ notificationId, defaultUsed ];
+}
+
+/// Somebody ELSE answered — `notification_responded` (AC-S4.3). Another
+/// device, a proxy, or the browser. Retire the card as answered; it is not
+/// an error and it is not our answer.
+class FocusAskResponded extends FocusChatEvent {
+  final String  notificationId;
+  final String? responseValue;
+  const FocusAskResponded( { required this.notificationId, this.responseValue } );
+  @override
+  List<Object?> get props => [ notificationId, responseValue ];
+}
+
 /// S3 rail tap: set focused, zero its unread, trigger backfill if the
 /// window is not yet hydrated (OSQ-4).
 class FocusSenderSelected extends FocusChatEvent {
