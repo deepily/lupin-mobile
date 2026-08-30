@@ -175,6 +175,36 @@ class PushJobResponse {
 /// Response from POST /api/v2/ask — SYNCHRONOUS: the answer (or the first
 /// clarifying question) comes back in the body; nothing is queued for polling.
 /// Field names match `cosa/rest/routers/v2_ask.py::AskResponse`.
+/// Body of `POST /api/v2/resume` — the Door A answer turn (AC-S4.8).
+///
+/// 🔴 **FOUR fields, and `websocketId` is the one that gets forgotten.**
+/// Verified against `ResumeRequest` in `rest/v2/routers/v2_ask.py`:
+/// `pending_id`, `answer`, `websocket_id`, `speak`. The ask turn sets
+/// `websocket_id` and that is **how the answer's TTS is routed** — a
+/// two-argument `resume( pendingId, answer )` drops it, and the second
+/// turn of one conversation speaks nowhere. The interview is re-entrant
+/// (AC-S4.12), so every turn after the first is this call.
+class ResumeRequest {
+  final String  pendingId;
+  final String  answer;
+  final String? websocketId;
+  final bool    speak;
+
+  const ResumeRequest( {
+    required this.pendingId,
+    required this.answer,
+    this.websocketId,
+    this.speak = true,
+  } );
+
+  Map<String, dynamic> toJson() => {
+    'pending_id'   : pendingId,
+    'answer'       : answer,
+    if ( websocketId != null ) 'websocket_id' : websocketId,
+    'speak'        : speak,
+  };
+}
+
 class AskResponse {
   final String        path;          // replay | agent | needs_input | receptionist
   final String        status;        // done | parked | needs_input | failed
@@ -217,8 +247,27 @@ class AskResponse {
   } );
 
   bool get isDone     => status == 'done';
+  /// Kept as the union both branches used to share — callers that only
+  /// ask "does this want something from the user?" are still right.
   bool get needsInput => status == 'needs_input' || status == 'parked';
+
+  /// 🔴 The two halves of that union are NOT the same thing (AC-S4.1,
+  /// AC-S4.2), and treating them alike is what the id-sniffing design got
+  /// wrong:
+  ///   - `parked` carries a `pending_id` — the server is ASKING, and the
+  ///     answer goes back through `POST /api/v2/resume`.
+  ///   - `needs_input` carries NO id at all — `flow.py:365` hard-codes
+  ///     `interactive=False` on the submit path, so it never parks. The
+  ///     server is TELLING you, not asking. An answer box here has nowhere
+  ///     to send its value.
+  bool get isParked    => status == 'parked';
+  bool get isNeedsInput => status == 'needs_input';
+
   bool get isFailed   => status == 'failed';
+
+  /// The sixth outcome (`v2_ask.py:91`), emitted only by the resume door:
+  /// `pending_expired` / `already_resumed` at `flow.py:698` / `:727`.
+  bool get isExpired  => status == 'expired';
 
   /// AC-S1.5 — the `waiting` branch that was missing.
   ///

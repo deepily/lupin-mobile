@@ -6,6 +6,7 @@ import '../_helpers/stub_dio.dart';
 
 void main() {
   _askTimeout();
+  _resumeDoor();
   group( 'QueueRepository', () {
     late StubAdapter adapter;
     late QueueRepository repo;
@@ -392,6 +393,126 @@ void _askTimeout() {
 
       // Not widened: the request carries no per-request override at all.
       expect( adapter.captured.single.receiveTimeout, isNull );
+    } );
+  } );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AC-S4.8 — the resume door. FOUR fields on the wire, and `websocket_id`
+// asserted in the CAPTURED BODY rather than in the signature: a signature
+// that accepts a parameter and never sends it compiles, type-checks, and
+// silences the answer's TTS on every turn after the first.
+// ─────────────────────────────────────────────────────────────────────────
+
+void _resumeDoor() {
+  group( 'AC-S4.8 — POST /api/v2/resume', () {
+    late StubAdapter adapter;
+    late QueueRepository repo;
+
+    setUp( () {
+      adapter = StubAdapter();
+      repo    = QueueRepository( makeDio( adapter ) );
+    } );
+
+    Map<String, dynamic> parkedBody( { String? pendingId, List<String>? missing } ) => {
+      'path' : 'agent', 'status' : 'parked', 'route_reason' : 'r',
+      'trace_id' : 't', 'answer' : 'Which city?',
+      'pending_id' : pendingId ?? 'pend-1',
+      'args_missing' : missing ?? [ 'city', 'date' ],
+    };
+
+    test( 'posts to /api/v2/resume with ALL FOUR fields — websocket_id is in '
+          'the BODY', () async {
+      adapter.handlers[ 'POST /api/v2/resume' ] = ( _ ) => jsonBody( parkedBody() );
+
+      await repo.resume( const ResumeRequest(
+        pendingId   : 'pend-1',
+        answer      : 'Boston',
+        websocketId : 'wise penguin',
+        speak       : true,
+      ) );
+
+      final req = adapter.captured.single;
+      expect( req.path, '/api/v2/resume' );
+
+      final body = req.data as Map<String, dynamic>;
+      expect( body[ 'pending_id' ],   'pend-1' );
+      expect( body[ 'answer' ],       'Boston' );
+      expect( body[ 'websocket_id' ], 'wise penguin',
+              reason: 'this is how the answer\'s TTS is routed — the ask turn '
+                      'sets it and the resume turn must too, or the second '
+                      'turn of one conversation speaks nowhere' );
+      expect( body[ 'speak' ],        true );
+      expect( body.keys.length, 4 );
+    } );
+
+    test( 'speak: false rides the wire too — it is a value, not an absence',
+          () async {
+      adapter.handlers[ 'POST /api/v2/resume' ] = ( _ ) => jsonBody( parkedBody() );
+      await repo.resume( const ResumeRequest(
+        pendingId: 'p', answer: 'a', websocketId: 'w', speak: false ) );
+
+      expect( ( adapter.captured.single.data as Map )[ 'speak' ], false );
+    } );
+
+    test( 'the resume turn carries the SAME long budget as the ask turn — a '
+          'resume re-enters the same blocking flow', () async {
+      adapter.handlers[ 'POST /api/v2/resume' ] = ( _ ) => jsonBody( parkedBody() );
+      await repo.resume( const ResumeRequest( pendingId: 'p', answer: 'a' ) );
+
+      expect( adapter.captured.single.receiveTimeout,
+              QueueRepository.askReceiveTimeout );
+    } );
+
+    test( 'AC-S4.12 — a second `parked` comes back on the SAME pending_id and '
+          'args_missing has shrunk by one', () async {
+      adapter.handlers[ 'POST /api/v2/resume' ] =
+          ( _ ) => jsonBody( parkedBody( missing: [ 'date' ] ) );
+
+      final next = await repo.resume( const ResumeRequest(
+        pendingId: 'pend-1', answer: 'Boston', websocketId: 'w' ) );
+
+      expect( next.isParked, isTrue,
+              reason: 'the interview CONTINUES; treating turn one as terminal '
+                      'is ruling 5 half-implemented' );
+      expect( next.pendingId, 'pend-1', reason: 'same pending_id, next arg' );
+      expect( next.argsMissing, [ 'date' ] );
+    } );
+
+    test( 'AC-S4.13 — the door\'s two endings arrive as distinct statuses, '
+          'not as one generic failure', () async {
+      for ( final ending in [ 'pending_expired', 'already_resumed' ] ) {
+        adapter = StubAdapter();
+        repo    = QueueRepository( makeDio( adapter ) );
+        adapter.handlers[ 'POST /api/v2/resume' ] = ( _ ) => jsonBody( {
+          'path' : 'agent', 'status' : ending, 'route_reason' : 'r',
+          'trace_id' : 't',
+        } );
+
+        final res = await repo.resume(
+          const ResumeRequest( pendingId: 'p', answer: 'a' ) );
+        expect( res.status, ending,
+                reason: 'the status must survive to the caller — collapsing '
+                        'it here is where the generic error card comes from' );
+      }
+    } );
+
+    test( 'AC-S4.1 / AC-S4.2 — parked and needs_input are DISTINCT: one has '
+          'an id to answer to, the other has none', () {
+      final parked = AskResponse.fromJson( parkedBody() );
+      expect( parked.isParked, isTrue );
+      expect( parked.isNeedsInput, isFalse );
+      expect( parked.pendingId, isNotNull );
+
+      final needsInput = AskResponse.fromJson( {
+        'path' : 'agent', 'status' : 'needs_input', 'route_reason' : 'r',
+        'trace_id' : 't', 'args_missing' : [ 'city' ],
+      } );
+      expect( needsInput.isNeedsInput, isTrue );
+      expect( needsInput.isParked, isFalse );
+      expect( needsInput.pendingId, isNull,
+              reason: 'flow.py hard-codes interactive=False on submit, so it '
+                      'never parks — an answer box here has nowhere to send' );
     } );
   } );
 }

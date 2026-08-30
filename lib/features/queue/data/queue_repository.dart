@@ -156,6 +156,36 @@ class QueueRepository {
   }
 
   // ─────────────────────────────────────────────
+  // POST /api/v2/resume  (Door A — answer a PARKED ask)  AC-S4.8
+  // ─────────────────────────────────────────────
+
+  /// Answer one turn of a parked interview and get the NEXT turn back.
+  ///
+  /// Returns an [AskResponse] because the outcome is the same six-way
+  /// branch as [ask]: another `parked` (the interview continues on the
+  /// SAME `pending_id` — AC-S4.12), a `done` answer, or one of the resume
+  /// door's own two endings, `pending_expired` / `already_resumed`
+  /// (AC-S4.13).
+  ///
+  /// 🔴 All FOUR fields go on the wire — see [ResumeRequest]. Dropping
+  /// `websocket_id` silences the answer's TTS on every turn after the
+  /// first, and nothing reports a fault when it happens.
+  Future<AskResponse> resume( ResumeRequest req ) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v2/resume',
+        data    : req.toJson(),
+        // Same budget as the ask turn: a resume re-enters the same flow and
+        // can hit the same blocking near-match confirm.
+        options : Options( receiveTimeout: askReceiveTimeout ),
+      );
+      return AskResponse.fromJson( res.data! );
+    } on DioException catch ( e ) {
+      throw _err( e, 'resume failed' );
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // POST /api/jobs/{id_hash}/resume-from-checkpoint
   // ─────────────────────────────────────────────
 
