@@ -21,6 +21,8 @@ import 'features/notifications/data/notification_models.dart';
 import 'features/notifications/domain/notification_bloc.dart';
 import 'features/notifications/domain/notification_event.dart';
 import 'features/queue/domain/queue_bloc.dart';
+import 'features/quick_ask/domain/quick_ask_bloc.dart';
+import 'features/quick_ask/domain/quick_ask_event.dart';
 import 'features/queue/domain/queue_event.dart';
 import 'services/auth/server_context_service.dart';
 import 'services/push/fcm_bootstrap.dart';
@@ -54,6 +56,13 @@ class WsBlocDispatcher {
       case AppConstants.eventQueueDeadUpdate:
         ServiceLocator.get<QueueBloc>().add( const QueueExternalUpdate( 'dead' ) );
         break;
+      case AppConstants.eventJobStateTransition:
+        // The LIVE job-status channel. The four `queue_*_update` arms above
+        // have never fired — no emit site exists in the server — so this is
+        // the case that actually carries status, and the completed frame
+        // carries the answer with it (`metadata.response_text`).
+        ServiceLocator.get<QuickAskBloc>().add( QuickAskTransitionReceived( data ) );
+        break;
       case AppConstants.eventNotificationQueueUpdate:
         // Backend emits `{"type": "notification_queue_update", "notification": {...}}`
         // (see src/cosa/rest/websocket_manager.py `async_emit` / `emit_to_user`).
@@ -72,6 +81,13 @@ class WsBlocDispatcher {
         // same frames; speech ownership lives with FocusChatBloc alone (the
         // legacy bloc's `tts` is not injected — F-S2-1 DI withdrawal).
         if ( notif != null ) _dispatchToFocus( notif );
+        // Belt channel (S1 §3): a notification whose `jobId` matches the live
+        // Quick Ask job is independent completion evidence, and a
+        // `response_requested` one is proof of life in the pre-job-id window
+        // where a reconcile has nothing to look up (AC-S1.4b).
+        if ( notif != null ) {
+          ServiceLocator.get<QuickAskBloc>().add( QuickAskNotificationReceived( notif ) );
+        }
         break;
       case AppConstants.eventAuthSuccess:
         // WS (re)connect re-hydration: cold start on first connect,
@@ -193,6 +209,14 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         ),
         BlocProvider<FocusChatBloc>(
           create: ( _ ) => ServiceLocator.get<FocusChatBloc>(),
+        ),
+        // LOAD-BEARING, not boilerplate: this forces construction at app
+        // start, so the pre-attribution buffer and the connection-stream
+        // subscription exist BEFORE the first frame can arrive. The
+        // `pending → queued` frame is emitted synchronously inside the
+        // server's `push()`, before the ask response is even serialized.
+        BlocProvider<QuickAskBloc>(
+          create: ( _ ) => ServiceLocator.get<QuickAskBloc>(),
         ),
       ],
       child: WsLifecycleListener(

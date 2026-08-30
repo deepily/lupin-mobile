@@ -220,10 +220,22 @@ class AskResponse {
   bool get needsInput => status == 'needs_input' || status == 'parked';
   bool get isFailed   => status == 'failed';
 
+  /// AC-S1.5 — the `waiting` branch that was missing.
+  ///
+  /// `pushAgentic()` already knew about `'waiting'`; the knowledge never
+  /// reached this model, so `isDone`/`needsInput`/`isFailed` were ALL false
+  /// for a queued job and `summary` fell through to `'Done ($path)'`.
+  /// `submit_job_sheet.dart` then popped its sheet and reported success for
+  /// work that had not started.
+  bool get isWaiting  => status == 'waiting';
+
   /// One-line summary for snackbars / toasts.
   String get summary {
     if ( needsInput ) return answer ?? 'Needs input: ${argsMissing.join( ", " )}';
     if ( isFailed )   return error ?? 'Request failed';
+    // Before the answer fallback: a queued job has no answer yet, and saying
+    // "Done" about it is the defect this branch exists to remove.
+    if ( isWaiting )  return 'Queued\u2026';
     return answer ?? 'Done ($path)';
   }
 

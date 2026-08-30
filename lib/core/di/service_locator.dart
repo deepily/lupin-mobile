@@ -59,6 +59,7 @@ import '../../services/tts/tts_orchestrator.dart';
 // Voice-reply ASR (S4 — record pkg push-to-talk → parent Whisper endpoint)
 import 'package:record/record.dart';
 import '../../services/asr/asr_service.dart';
+import '../../features/quick_ask/domain/quick_ask_bloc.dart';
 
 // Legacy voice/audio/TTS/use-case-registry stack is disabled — the code in
 // lib/core/repositories/impl/{voice,audio}_repository_impl.dart and
@@ -324,6 +325,17 @@ class ServiceLocator {
     // Voice-reply ASR (S4): record-pkg push-to-talk → parent Whisper WAV
     // endpoint. Rides the SHARED auth-wired Dio (endpoint needs no auth per
     // OSQ-1; the bearer is harmless).
+    // Quick Ask (S1). Eager-ish by way of the MultiBlocProvider in `app.dart`,
+    // which constructs it at app start so the pre-attribution buffer exists
+    // before the first `job_state_transition` frame can arrive.
+    _getIt.registerLazySingleton<QuickAskBloc>(
+      () => QuickAskBloc(
+        _getIt<QueueRepository>(),
+        asr : _getIt<AsrService>(),
+        ws  : _getIt<WebSocketService>(),
+      ),
+    );
+
     _getIt.registerLazySingleton<AsrService>(
       () => AsrService(
         dio      : _getIt<Dio>(),

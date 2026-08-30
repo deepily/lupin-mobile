@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/queue/data/queue_models.dart';
 
 void main() {
+  _acS15();
   group( 'AskRequest.toJson', () {
     test( 'maps fields to snake_case with speak/interactive defaults true', () {
       const r = AskRequest( question: 'q1', websocketId: 'ws-1' );
@@ -183,6 +184,62 @@ void main() {
       expect( e.idHash,    'h-1' );
       expect( e.jobType,   'MathAgent' );
       expect( e.status,    'done' );
+    } );
+  } );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AC-S1.5 — `AskResponse` reports `waiting` distinctly.
+// ─────────────────────────────────────────────────────────────────────────
+
+void _acS15() {
+  group( 'AC-S1.5 — the waiting branch', () {
+    AskResponse waiting() => AskResponse.fromJson( const {
+      'path'         : 'agent',
+      'status'       : 'waiting',
+      'route_reason' : 'router:weather',
+      'answer'       : null,
+      'job_id'       : 'j-1',
+      'trace_id'     : 'tr-1',
+    } );
+
+    test( 'isWaiting is true, and the other three predicates stay false', () {
+      final r = waiting();
+      expect( r.isWaiting,  isTrue );
+      expect( r.isDone,     isFalse );
+      expect( r.needsInput, isFalse );
+      expect( r.isFailed,   isFalse );
+    } );
+
+    test( 'summary does NOT say "Done" for queued work', () {
+      // The live bug: all three predicates were false for `waiting`, so
+      // `summary` fell through to `'Done ($path)'` and `submit_job_sheet.dart`
+      // popped its sheet reporting success for work that had not started.
+      final s = waiting().summary;
+      expect( s, isNot( contains( 'Done' ) ) );
+      expect( s, contains( 'Queued' ) );
+    } );
+
+    test( 'a genuinely done response still summarises as before — no regression', () {
+      final r = AskResponse.fromJson( const {
+        'path'         : 'replay',
+        'status'       : 'done',
+        'route_reason' : 'exact_hit',
+        'answer'       : 'Four.',
+        'trace_id'     : 'tr-2',
+      } );
+      expect( r.isWaiting, isFalse );
+      expect( r.summary,   'Four.' );
+    } );
+
+    test( 'a done response with a null answer keeps the "Done (path)" fallback', () {
+      final r = AskResponse.fromJson( const {
+        'path'         : 'agent',
+        'status'       : 'done',
+        'route_reason' : 'router:x',
+        'trace_id'     : 'tr-3',
+      } );
+      expect( r.summary, 'Done (agent)' );
     } );
   } );
 }

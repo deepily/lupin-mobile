@@ -16,9 +16,31 @@ class QueueRepository {
   /// first clarifying question) is in the returned [AskResponse]; nothing is
   /// queued for polling. Never 500s for an agent failure — the server degrades
   /// to the receptionist and reports it in `status`/`error`.
+  /// Per-request receive budget for the ask call ONLY (AC-S4.7, landed here
+  /// because S1 owns the ask-call edits per the plan's sequencing table).
+  ///
+  /// The shared Dio's global 30s (`http_service.dart:45`) is right for every
+  /// other call and is NOT loosened. It is wrong for exactly this one: the
+  /// near-match confirmation (`rest/v2/flow.py`, `_near_match_replay` /
+  /// `_user_confirms`) BLOCKS the request thread while it asks the user
+  /// "is that the same as …?" — `timeout_seconds = 30`, `retry_on_timeout`,
+  /// `max_attempts = 3`, `backoff_multiplier = 2.0`, so ~210s worst case.
+  /// At the global 30s the phone times out at the instant the FIRST confirm
+  /// attempt expires, the confirm then defaults to "no", and the user never
+  /// sees the question. 240s covers the whole ladder.
+  ///
+  /// 🔴 Live on the dev server: `similarity confirmation enabled = true` sits
+  /// in `[Lupin: Development]` (`lupin-app.ini:497`); it is `false` only under
+  /// `[Lupin: Testing]`.
+  static const Duration askReceiveTimeout = Duration( seconds: 240 );
+
   Future<AskResponse> ask( AskRequest req ) async {
     try {
-      final res = await _dio.post<Map<String, dynamic>>( '/api/v2/ask', data: req.toJson() );
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/v2/ask',
+        data    : req.toJson(),
+        options : Options( receiveTimeout: askReceiveTimeout ),
+      );
       return AskResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
       throw _err( e, 'ask failed' );

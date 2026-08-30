@@ -20,10 +20,32 @@ class AppConstants {
   
   // WebSocket Event Types
   // Queue Events
-  static const String eventQueueTodoUpdate = 'queue_todo_update';
-  static const String eventQueueRunningUpdate = 'queue_running_update';
-  static const String eventQueueDoneUpdate = 'queue_done_update';
-  static const String eventQueueDeadUpdate = 'queue_dead_update';
+  //
+  // 🔴 DISPOSITION (AC-S1.11, 2026-08-29): THESE FOUR ARE NEVER EMITTED BY THE
+  // SERVER. They have zero emit sites in the Lupin backend and do not appear in
+  // the INI's `websocket available events`; the parent repo measured this and
+  // wrote the receipt into `src/tests/lupin_smoke/test_queue_workflow.py:280`.
+  // The live event carrying job status is `eventJobStateTransition` below.
+  //
+  // KEPT rather than deleted, deliberately: they are referenced from four
+  // WebSocket services that no section of the Quick Ask plan owns
+  // (`websocket_message_router.dart`, `websocket_subscription_manager.dart`,
+  // `websocket_dynamic_subscription_controller.dart`) plus several test
+  // helpers. Removing them is a ~40-site edit reaching well outside S1, which
+  // is a bigger change than the tidiness is worth right now. Kept-with-a-reason
+  // is the other disposition AC-S1.11 permits; what it forbids is SILENCE —
+  // adding a fifth name beside four dead ones and leaving a later reader unable
+  // to tell which is real.
+  static const String eventQueueTodoUpdate = 'queue_todo_update';       // DEAD — never emitted
+  static const String eventQueueRunningUpdate = 'queue_running_update'; // DEAD — never emitted
+  static const String eventQueueDoneUpdate = 'queue_done_update';       // DEAD — never emitted
+  static const String eventQueueDeadUpdate = 'queue_dead_update';       // DEAD — never emitted
+
+  /// The LIVE job-status event. Emitted per job by the server at
+  /// `pending→queued` (`todo_fifo_queue.py`), `queued→running`
+  /// (`queue_consumer.py`) and `running→completed` (`running_fifo_queue.py`);
+  /// the completed frame carries the answer in `metadata.response_text`.
+  static const String eventJobStateTransition = 'job_state_transition';
   
   // TTS/Audio Events
   static const String eventTtsJobRequest = 'tts_job_request';

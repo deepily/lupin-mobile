@@ -48,6 +48,16 @@ class AsrService {
 
   String? _activePath;
 
+  /// AC-S2.2c — true iff a capture is in flight on THIS recorder.
+  ///
+  /// The state lives on the service, not on a caller, because the recorder and
+  /// `_activePath` are singleton-scoped (`service_locator.dart:327`) and TWO
+  /// components share the instance: focus mode's `VoiceReplyField` and Quick
+  /// Ask's hold-to-talk button. A guard held by one caller is structurally
+  /// blind to the other — `QuickAskBloc` knowing what IT started says nothing
+  /// about a reply already recording on the same recorder.
+  bool get isCapturing => _activePath != null;
+
   AsrService( {
     required Dio           dio,
     required AudioRecorder recorder,
@@ -61,6 +71,19 @@ class AsrService {
   /// Raises:
   ///   - [AsrException] if mic permission is denied or the recorder fails
   Future<void> startRecording() async {
+    // AC-S2.2c — refuse a SECOND concurrent capture, and say so. Thrown BEFORE
+    // the recorder is touched: `_activePath` is written unconditionally at the
+    // end of this method, so a second start would overwrite the first
+    // capture's path and orphan it, and whichever stop fired first would
+    // consume the other's file. Reachable by ordinary navigation — start a
+    // voice reply in focus mode, open the drawer, hold the Quick Ask button.
+    //
+    // This is a GUARD, not a feature: concurrent capture stays out of scope.
+    // It makes the collision impossible and legible instead of silent and
+    // lossy.
+    if ( isCapturing ) {
+      throw const AsrException( 'A recording is already in progress' );
+    }
     if ( !await _recorder.hasPermission() ) {
       throw const AsrException( 'Microphone permission denied' );
     }

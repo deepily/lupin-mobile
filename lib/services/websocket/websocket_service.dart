@@ -19,6 +19,13 @@ class WebSocketService {
   
   bool _isConnected = false;
   bool _shouldReconnect = true;
+
+  /// AC-S1.8 — the observable behind [connectionStream].
+  ///
+  /// `isConnected` alone is a sync getter over a private bool, so any
+  /// predicate built on it goes STALE SILENTLY: the socket drops, a screen's
+  /// record button stays enabled, and nothing repaints to tell it otherwise.
+  final StreamController<bool> _connectionCtrl = StreamController<bool>.broadcast();
   int _reconnectAttempts = 0;
   static const int maxReconnectAttempts = 5;
   static const Duration reconnectDelay = Duration(seconds: 5);
@@ -29,6 +36,46 @@ class WebSocketService {
 
   // Public getters
   bool get isConnected => _isConnected;
+
+  /// Connection state as a stream, with THREE properties AC-S1.8 requires and
+  /// which `pausedStream` (the nearest in-tree pattern) has only one of:
+  ///
+  ///   1. emits at ALL FIVE sites that mutate `_isConnected` — a stream wired
+  ///      at two of five is worse than no stream, because it LOOKS observable;
+  ///   2. distinct-until-changed, applied at the MUTATION site (the
+  ///      `pausedStream` pattern, `tts_orchestrator.dart:166,174`) — three of
+  ///      the five sites set `false`, so without it one disconnect emits
+  ///      `false` repeatedly;
+  ///   3. replays the CURRENT value on subscribe — a listener attached while
+  ///      already disconnected must learn immediately, not at the next
+  ///      transition. `pausedStream` does NOT do this; mirroring it literally
+  ///      would have shipped the bug this stream exists to remove.
+  Stream<bool> get connectionStream {
+    late StreamController<bool> out;
+    StreamSubscription<bool>?   sub;
+    out = StreamController<bool>(
+      onListen: () {
+        // Replay-on-subscribe, then follow. Both happen in one synchronous
+        // block, so no transition can slip between them.
+        out.add( _isConnected );
+        sub = _connectionCtrl.stream.listen( out.add, onError: out.addError );
+      },
+      onCancel: () async {
+        await sub?.cancel();
+        sub = null;
+      },
+    );
+    return out.stream;
+  }
+
+  /// The ONLY writer of `_isConnected`. Distinct-until-changed lives here, at
+  /// the mutation site, so every one of the five call sites gets it for free
+  /// and a sixth added later cannot forget it.
+  void _setConnected( bool value ) {
+    if ( _isConnected == value ) return;
+    _isConnected = value;
+    if ( !_connectionCtrl.isClosed ) _connectionCtrl.add( value );
+  }
   String? get sessionId => _sessionId;
   Stream<dynamic> get stream => _messageController?.stream ?? const Stream.empty();
 
@@ -117,7 +164,7 @@ class WebSocketService {
       // Wait for connection to be established
       await _channel!.ready;
       
-      _isConnected = true;
+      _setConnected( true );
       _reconnectAttempts = 0;
       
       print('[WebSocket] Connected to ${uri.toString()}');
@@ -139,7 +186,7 @@ class WebSocketService {
       
     } catch (e) {
       print('[WebSocket] Connection failed: $e');
-      _isConnected = false;
+      _setConnected( false );
       _scheduleReconnect();
     }
   }
@@ -276,7 +323,7 @@ class WebSocketService {
   ///   - Error is logged for debugging
   void _handleError(error) {
     print('[WebSocket] Error: $error');
-    _isConnected = false;
+    _setConnected( false );
     _scheduleReconnect();
   }
 
@@ -289,7 +336,7 @@ class WebSocketService {
   ///   - Resources are cleaned up properly
   void _handleDisconnection() {
     print('[WebSocket] Connection closed');
-    _isConnected = false;
+    _setConnected( false );
     _pingTimer?.cancel();
     
     if (_shouldReconnect) {
@@ -362,7 +409,7 @@ class WebSocketService {
       _channel = null;
     }
     
-    _isConnected = false;
+    _setConnected( false );
     _sessionId = null;
     
     print('[WebSocket] Disconnected');
@@ -372,5 +419,6 @@ class WebSocketService {
     disconnect();
     _messageController?.close();
     _messageController = null;
+    _connectionCtrl.close();
   }
 }

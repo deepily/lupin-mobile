@@ -1,0 +1,16 @@
+{
+  "_source": "lupin/src/cosa/rest/job_state.py :: STATE_TO_UI_CONTAINER (verbatim, captured 2026-08-29)",
+  "_note": "AC-S1.1 asserts against this BIDIRECTIONALLY. Nothing pins this fixture against the LIVE server — that is AC-G4, a parent-repo parity test, unowned.",
+  "map": {
+    "pending"     : "todo",
+    "queued"      : "todo",
+    "scheduled"   : "todo",
+    "paused"      : "todo",
+    "running"     : "run",
+    "completed"   : "done",
+    "failed"      : "dead",
+    "cancelled"   : "dead",
+    "interrupted" : "dead",
+    "stalled"     : "todo"
+  }
+}

@@ -12,6 +12,7 @@ import '../../decision_proxy/presentation/trust_dashboard_screen.dart';
 import '../../home/home_screen.dart';
 import '../../notifications/presentation/inbox_screen.dart';
 import '../../queue/presentation/queue_dashboard_screen.dart';
+import '../../quick_ask/presentation/quick_ask_screen.dart';
 import '../../settings/presentation/notification_audio_settings_screen.dart';
 import '../../settings/presentation/notification_filter_settings_screen.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
@@ -194,6 +195,16 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       child: ListView(
         children: [
           const DrawerHeader( child: Text( 'Legacy surfaces' ) ),
+          // Quick Ask sits under the 'Legacy surfaces' header for round 1.
+          // That reads oddly for the round-1 headline feature and is
+          // DELIBERATE: the drawer is the only navigation surface the app has,
+          // and renaming the header or minting a non-legacy entry point is a
+          // navigation change that belongs with round 2's multi-job card view.
+          ListTile(
+            leading : const Icon( Icons.mic ),
+            title   : const Text( 'Quick Ask' ),
+            onTap   : () => push( const QuickAskScreen() ),
+          ),
           ListTile(
             leading : const Icon( Icons.grid_view ),
             title   : const Text( 'Home grid' ),

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import '../../../services/permissions/mic_permission.dart' as mic;
 
 import '../../../core/testing/test_keys.dart';
 import '../../../services/asr/asr_service.dart';
@@ -58,10 +58,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   /// is stale gets dropped instead of resurrecting a cancelled review.
   int _opEpoch = 0;
 
-  Future<bool> _defaultMicPermission() async {
-    final status = await Permission.microphone.request();
-    return status.isGranted;
-  }
+  /// AC-S2.7 — delegates to the ONE shared requester rather than holding a
+  /// private second copy. The widget's `requestMicPermission` test seam is
+  /// unchanged; only the default it falls back to moved.
+  Future<bool> _defaultMicPermission() => mic.requestMicPermission();
 
   Future<void> _onMicPressed() async {
     if ( _phase == _VoiceReplyPhase.idle ) {

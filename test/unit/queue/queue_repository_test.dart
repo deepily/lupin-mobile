@@ -5,6 +5,7 @@ import 'package:lupin_mobile/features/queue/data/queue_repository.dart';
 import '../_helpers/stub_dio.dart';
 
 void main() {
+  _askTimeout();
   group( 'QueueRepository', () {
     late StubAdapter adapter;
     late QueueRepository repo;
@@ -346,6 +347,51 @@ void main() {
       final result = await repo.getJobInteractions( 'j-2' );
       expect( result.interactionCount,              1 );
       expect( result.interactions.first.message, 'Go?' );
+    } );
+  } );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AC-S4.7 (landed in S1 per the plan's sequencing table) — the ask call gets
+// its OWN receive budget; every other call keeps the global 30s.
+// ─────────────────────────────────────────────────────────────────────────
+
+void _askTimeout() {
+  group( 'AC-S4.7 — per-request receiveTimeout on the ask call only', () {
+    late StubAdapter adapter;
+    late QueueRepository repo;
+
+    setUp( () {
+      adapter = StubAdapter();
+      repo    = QueueRepository( makeDio( adapter ) );
+    } );
+
+    Map<String, dynamic> doneBody() => {
+      'path' : 'agent', 'status' : 'done', 'route_reason' : 'r',
+      'trace_id' : 't', 'answer' : 'ok',
+    };
+
+    test( 'ask carries >= 240s, covering the ~210s worst-case confirm ladder', () async {
+      // Door C blocks the request thread while the server asks the user "is
+      // that the same as …?" — 30s timeout, 3 attempts, 2.0 backoff. At the
+      // shared Dio's global 30s the phone gives up at the instant the FIRST
+      // attempt expires, the confirm defaults to "no", and the user never sees
+      // the question.
+      adapter.handlers[ 'POST /api/v2/ask' ] = ( _ ) => jsonBody( doneBody() );
+      await repo.ask( const AskRequest( question: 'q' ) );
+
+      final opts = adapter.captured.single;
+      expect( opts.receiveTimeout, QueueRepository.askReceiveTimeout );
+      expect( opts.receiveTimeout!.inSeconds, greaterThanOrEqualTo( 240 ) );
+    } );
+
+    test( 'every OTHER call is left on the global budget — 30s is right for them', () async {
+      adapter.handlers[ 'GET /api/get-queue/done' ] =
+          ( _ ) => jsonBody( { 'done_jobs_metadata': [] } );
+      await repo.getQueue( 'done' );
+
+      // Not widened: the request carries no per-request override at all.
+      expect( adapter.captured.single.receiveTimeout, isNull );
     } );
   } );
 }
