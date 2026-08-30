@@ -1,6 +1,7 @@
 # TODO
 
-Last updated: 2026-08-21 (Session `e082edd7` — Tiffany 💍): v2 cutover **wave 2 DONE** (nine submit doors → `/api/v2/submit`, against integration 799e43d0; doc `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md`); lane-2 harness door fix merged to integration (3c3f1f5e). **TODO horizon archive pass executed this session** — past content (2026-04-15 → 2026-06-12: postgame decisions, completed blocks, breadcrumb, superseded voice-persona runbook, parked conditionals, all `[x]` items) moved to `todo-archive/2026-04-15-to-06-12-todo.md`.
+Last updated: 2026-08-29 (Session `4000b44a` — Tiffany 💍, MANAGER): **Quick Ask push-to-talk screen implemented end to end** across 62 commits after a cascaded review (doc `src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md`, recon sheet `src/rnd/2026.08.29-cascade-quick-ask-recon-checklist.md`). Suite 710 → **835 passing**; 44 errors all inside `legacy_quarantine/`, zero outside. Crew of four stood down with verified mementos; mementos are now gitignored.
+Prior: 2026-08-21 (Session `e082edd7` — Tiffany 💍): v2 cutover **wave 2 DONE** (nine submit doors → `/api/v2/submit`, against integration 799e43d0; doc `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md`); lane-2 harness door fix merged to integration (3c3f1f5e). **TODO horizon archive pass executed this session** — past content (2026-04-15 → 2026-06-12: postgame decisions, completed blocks, breadcrumb, superseded voice-persona runbook, parked conditionals, all `[x]` items) moved to `todo-archive/2026-04-15-to-06-12-todo.md`.
 Prior: 2026-06-25 (Session `f53bc7b3` — Tiffany 💍): Focus UI active/history filter PLAN landed + review-ready (doc `src/rnd/2026.06.25-focus-ui-active-history-filter.md`).
 Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mode milestone AI-IMPLEMENTATION + REVIEW COMPLETE; postgame decisions → archived (see pointer above).
 
@@ -14,6 +15,18 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
+
+## 🆕 Open from 2026-08-29 (Quick Ask)
+
+> Rick's **new-ticket moratorium** was in force at session end (2026-08-29 22:52 broadcast) — these
+> are carried here as narrative rather than filed as task-store rows. Promote them to rows tomorrow.
+
+- [ ] [LUPIN-MOBILE] **AC-S2.8 is undefined.** The Quick Ask plan cites it **twice** as a live pin it extends and never defines it anywhere; the only tree hits predate the plan. Either define it or retire the two citations.
+- [ ] [LUPIN-MOBILE] **AC-G3 cached-question clause — one scheduled `:8000` probe closes it.** Three reconciled accounts are recorded in the plan doc; the discriminator is to ask something that routes to `CalculatorAgent` (the only class both codeless-replayable and already holding rows). Replays with `exact_hit` while `DateAndTimeAgent` does not ⇒ read-side unservable-row guard confirmed. Both fail ⇒ the guard theory is wrong and the read path needs its own look. Already refuted, do not re-try: *"the v2 read only serves v2-tagged rows"* — `flow_version` is write-side only.
+- [ ] [LUPIN-MOBILE] Store row `54589356` (parent repo) — unconfirmed-answer guard enforced in v2 only. **Blocked on Rick**, chase 2026-08-30 15:00Z.
+- [ ] [LUPIN-MOBILE] Rachel flagged a **render-lens defect** and a **summariser that dropped a test name** as unresolved — read `io/mementos/rachel-a45a8132.md` before picking up her lane.
+- [ ] [LUPIN-MOBILE] `android/app/google-services.json` is untracked and was left uncommitted deliberately (Firebase config, credentials-shaped). Decide: commit, gitignore, or leave.
+- [ ] [LUPIN-MOBILE] Device check of the Quick Ask screen — laptop APK rebuild runbook `src/rnd/2026.06.12-poc-laptop-build-runbook.md`.
 
 ## 🆕 Open from 2026-08-21 (wave 2 / lane 2)
 - [ ] [LUPIN-MOBILE] Live check of the nine `/api/v2/submit` doors against `:7999` once integration `799e43d0` reaches wip + a bounce (mobile tests are mock-backed; one real DR dry-run + one podcast submit through the app).

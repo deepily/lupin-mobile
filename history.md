@@ -13,6 +13,61 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 ---
 
 
+## 2026.08.29 | Session `4000b44a` (Tiffany 💍, MANAGER) — Quick Ask push-to-talk screen: cascaded review → full implementation, 62 commits (SESSION-END)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` (62 ahead of origin at close) · **Doc**: `src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md` + `src/rnd/2026.08.29-cascade-quick-ask-recon-checklist.md`
+
+**Shape of the session**: I authored the plan and managed; I did not build. A crew of four
+(john, Pocholo, Chloé, Rachel — plus Arnold and Clayton earlier) ran the cascaded review and then
+the implementation. All were stood down with verified mementos before session end.
+
+**Accomplishments**:
+- **Quick Ask push-to-talk Q&A screen implemented end to end** — hold-to-record → `/api/v2/ask` →
+  todo/running/done driven by the `job_state_transition` frames mobile had been dropping, plus the
+  first cut of the "server asks the phone a question" surface (four doors, status-first branching).
+- **Plan hardened through cascaded review before any code**: 31 numbered ACs with EXECUTOR tags,
+  a runnable coverage check that *derives* ids rather than trusting a hand list, a shared-state
+  matrix, and six pieces of prior art folded in that collapsed five ACs.
+- **AC-G2 merge gate rewritten twice**: it was passable by *deleting* tests (count-based), so it now
+  compares test-id **sets**; a skipped fixture was reading as a pass, so a SKIP is now loud.
+- **AC-S3.1 was true by accident** — `QuickAskBloc` holds no `TtsOrchestrator`, so the double
+  dispatch it forbids was impossible by construction and no test could fail. Now pinned twice:
+  a structural test that dies if the import appears, and a behavioural one on `app.dart`'s
+  notification arm. New file `test/service_integration/single_dispatcher_test.dart`.
+- **Real defects the new tests found on first run**: a muted question was never shown (AC-S4.15);
+  expired and rejected asks fell through to silence (AC-S4.1); the Door C confirm was unanswerable
+  mid-ask (AC-S4.6); `pausedStream` did not replay its current value on subscribe (row `a3fdb6ad`).
+- **Suite**: 710 → **835 passing**. 44 errors remain, all inside `legacy_quarantine/`, zero outside.
+  ⚠️ `flutter test` still **exits 1** from those 44 — the parsed event stream is the verdict, not the
+  exit code. Runner is `./flutter.sh` (`flutter`/`dart` are not on PATH).
+- **Mementos are now gitignored** (`io/mementos/`, `.claude-memento*.md`): a memento written to be
+  committed is written more carefully, and therefore less honestly.
+
+**The pattern this session kept finding — twelve instances of a check that passes without tracking
+the thing it checks**: a mutant red from the *compiler* (proving only that the mutant cannot exist);
+a `git diff --exit-code` over an **absent** path (vacuous pass); a grep classifier matching file
+loads but not failures; an error message naming a cause it never measured; a mutation runner
+reporting "no named failures" while two failed by name (its regex silently returned an empty list);
+and — three times in one night, by three different people — **documenting a bad path by spelling it,
+which put the bad path back in the document**. ⇒ standing rule: *when documenting a bad string,
+describe it, do not spell it.*
+
+**Verified, do not re-derive**: a cross-check re-cut 7 mutants in another seat's lane — 5 killed,
+both survivors explained. `curl` against `:7999` works (an earlier "blocked" claim was relayed
+unverified and is wrong). The reaper's `prior_holder_present` alarm is a **false** alarm: it reads
+the bare pointer `io/mementos/<persona>.md` while the real record sits at
+`io/mementos/<persona>-<session8>.md`.
+
+**Open at close** (Rick's new-ticket moratorium in force — carried as narrative, no store rows filed):
+AC-S2.8 is cited twice as a live pin the plan extends and is **never defined**; the AC-G3
+cached-question clause is contested across three reconciled accounts and needs one scheduled `:8000`
+probe; store row `54589356` is blocked on Rick with a 2026-08-30 15:00Z chase.
+
+**Files**: `src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md`,
+`src/rnd/2026.08.29-cascade-quick-ask-recon-checklist.md` (new), `.gitignore`, `README.md`,
+`TODO.md`, `history.md` — plus the 62 commits' `lib/` and `test/` changes already landed.
+
+
 ## 2026.08.21 | Session `e082edd7` (Tiffany 💍) — v2 cutover wave 2: nine submit doors → `/api/v2/submit` · lane-2 harness door fix (SESSION-END)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Doc**: `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md` · store rows `a938907a` (wave 2) / `c84e9313` (lane-2, closed)

@@ -79,3 +79,8 @@ __pycache__/
 
 # IDE workspace files
 *.code-workspace
+# Claude mementos (records + pointers) — NEVER commit: a memento that
+# will be committed is written more carefully, and therefore less honestly.
+io/mementos/
+.claude-memento.md
+.claude-memento-*.md
