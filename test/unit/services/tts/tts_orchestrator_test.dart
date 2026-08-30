@@ -8,6 +8,7 @@ import 'package:lupin_mobile/services/notification_audio/notification_audio_serv
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 import 'package:lupin_mobile/services/notification_filter/notification_stop_list.dart';
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
+import 'package:lupin_mobile/services/tts/tts_preview_truncator.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 
@@ -906,4 +907,243 @@ void main() {
       verify( () => player.speak( text: "Build finished", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
     } );
   } );
+
+  // ══════════════════════════════════════════════════════════════════════
+  // S3 — Speech (plan 2026.08.29 §6). The `verbatim` flag (Rick's ruling 4),
+  // visible stop-list suppression (AC-S3.7, OSQ3), and replay-implies-resume
+  // (AC-S3.4b / AC-S3.9).
+  // ══════════════════════════════════════════════════════════════════════
+  group( "TtsOrchestrator S3 — verbatim, suppression, replay", () {
+    late _MockPlayer   player;
+    late _MockFallback fallback;
+    late _MockWs       ws;
+    late NotificationPreferences prefs;
+    late StreamController<TtsCompleteEvent> completeCtrl;
+    late StreamController<TtsErrorEvent>    errorCtrl;
+    late List<String> spoken;
+    TtsOrchestrator? orch;
+
+    /// A message comfortably over `TtsPreviewTruncator.minChars` (80), so
+    /// the fraction cut actually bites and "spoke in full" is a real claim
+    /// rather than an artifact of the short-message exemption.
+    const long = "The build finished on the third attempt. The flake was in the "
+                 "websocket teardown. Nothing else changed in this run at all.";
+
+    /// A persona-less sender — `isPersona` false — i.e. exactly the
+    /// `queue.done@` / `ask.flow@` shape that `_systemSenderMuted` drops.
+    const systemSender = TtsSender( senderId: "queue.done@lupin.deepily.ai" );
+
+    Future<void> setUpMocks() async {
+      SharedPreferences.setMockInitialValues( {} );
+      final sp = await SharedPreferences.getInstance();
+      prefs = NotificationPreferences( sp );
+
+      player       = _MockPlayer();
+      fallback     = _MockFallback();
+      ws           = _MockWs();
+      completeCtrl = StreamController<TtsCompleteEvent>.broadcast();
+      errorCtrl    = StreamController<TtsErrorEvent>   .broadcast();
+      spoken       = [];
+
+      when( () => player.completeStream ).thenAnswer( ( _ ) => completeCtrl.stream );
+      when( () => player.errorStream    ).thenAnswer( ( _ ) => errorCtrl   .stream );
+      when( () => player.isPlaying      ).thenReturn( false );
+      when( () => player.speak(
+        text      : any( named: "text"      ),
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId"   ),
+      ) ).thenAnswer( ( inv ) async {
+        spoken.add( inv.namedArguments[ #text ] as String );
+      } );
+      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( _ ) async {} );
+      when( () => fallback.stopFallbackSpeech()     ).thenAnswer( ( _ ) async {} );
+      when( () => ws.sessionId ).thenReturn( "wise penguin" );
+    }
+
+    TtsOrchestrator newOrch( { NotificationStopList? stopList } ) {
+      orch = TtsOrchestrator(
+        player   : player,
+        fallback : fallback,
+        prefs    : prefs,
+        ws       : ws,
+        stopList : stopList,
+      );
+      return orch!;
+    }
+
+    Future<void> pump() => Future<void>.delayed( Duration.zero );
+
+    Future<void> completeUtterance() async {
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+    }
+
+    tearDown( () async {
+      await orch?.dispose();
+      await completeCtrl.close();
+      await errorCtrl   .close();
+    } );
+
+    test( "AC-S3.2 — verbatim answer speaks IN FULL and is NOT muted "
+          "(both preference gates overridden)", () async {
+      await setUpMocks();
+      // The configuration that silently loses the answer today: system
+      // senders muted, and Rick's 20% preview fraction.
+      await prefs.setSpeakSystemSenders( false );
+      await prefs.setTtsFraction( 0.2 );
+      final o = newOrch();
+
+      o.enqueueAlways(
+        priority : "medium",
+        message  : long,
+        sender   : systemSender,
+        verbatim : true,
+      );
+      await pump();
+
+      expect( spoken, [ long ], reason: "gate 2 (system-sender mute) and gate 3 "
+                                        "(fraction cut) are both overridden" );
+      // The cut would genuinely have bitten — so "in full" is discriminating.
+      expect( TtsPreviewTruncator.previewFor( long, 0.2 ).length,
+              lessThan( long.length ) );
+    } );
+
+    test( "AC-S3.3 — WITHOUT the flag, both gates behave exactly as today", () async {
+      await setUpMocks();
+      await prefs.setSpeakSystemSenders( false );
+      await prefs.setTtsFraction( 0.2 );
+      final o = newOrch();
+
+      // Gate 2 still drops a persona-less sender.
+      o.enqueueAlways( priority: "medium", message: long, sender: systemSender );
+      await pump();
+      expect( spoken, isEmpty, reason: "flag off ⇒ system sender still muted" );
+
+      // Gate 3 still cuts to the preview fraction for a sender that passes.
+      await prefs.setSpeakSystemSenders( true );
+      o.enqueueAlways( priority: "medium", message: long, sender: systemSender );
+      await pump();
+      expect( spoken, [ TtsPreviewTruncator.previewFor( long, 0.2 ) ],
+              reason: "flag off ⇒ the fraction cut still applies, byte for byte" );
+    } );
+
+    test( "AC-S3.4 — replay is urgent, carries a PERSONA sender, and survives "
+          "speakSystemSenders being off", () async {
+      await setUpMocks();
+      await prefs.setSpeakSystemSenders( false );
+      await prefs.setTtsFraction( 0.2 );
+      final o = newOrch();
+
+      o.replay( message: long );
+      await pump();
+
+      expect( spoken, [ long ] );
+      expect( o.queueSnapshot.first.priority, "urgent" );
+      expect( o.queueSnapshot.first.sender.isPersona, isTrue,
+              reason: "a persona-less replay would be dropped by gate 2" );
+    } );
+
+    test( "AC-S3.4b — replay WHILE PAUSED actually plays; it does not "
+          "silently enqueue", () async {
+      await setUpMocks();
+      await prefs.setTtsFraction( 1.0 );
+      final o = newOrch();
+
+      // Something is in flight, then the user pauses: `_current` stays
+      // non-null, which is what makes the naive replay silent.
+      o.enqueueAlways( priority: "medium", message: "first answer" );
+      await pump();
+      expect( spoken, [ "first answer" ] );
+      o.pause();
+
+      o.replay( message: long );
+      await pump();
+
+      expect( spoken, [ "first answer", long ],
+              reason: "replay resumes first, so audio actually starts" );
+      expect( o.isPaused, isFalse );
+    } );
+
+    test( "AC-S3.9 — replay-implies-resume drains the WHOLE held backlog "
+          "(global by design, nothing dropped)", () async {
+      await setUpMocks();
+      await prefs.setTtsFraction( 1.0 );
+      final o = newOrch();
+
+      o.enqueueAlways( priority: "medium", message: "in flight" );
+      await pump();
+      o.pause();
+      o.enqueueAlways( priority: "medium", message: "held one" );
+      o.enqueueAlways( priority: "medium", message: "held two" );
+      await pump();
+      expect( spoken, [ "in flight" ], reason: "held items wait" );
+
+      o.replay( message: "the answer" );
+      await pump();
+      expect( spoken, [ "in flight", "the answer" ] );
+
+      await completeUtterance();   // replay done → the backlog drains
+      await completeUtterance();   // "in flight" replays (non-destructive preempt)
+      await completeUtterance();
+      expect( spoken.contains( "held one" ), isTrue );
+      expect( spoken.contains( "held two" ), isTrue );
+      expect( o.queueDepth, 0, reason: "held ≠ lost — the backlog resumed" );
+    } );
+
+    test( "AC-S3.7 — a stop-list match is SUPPRESSED VISIBLY: reported with "
+          "its rule, and verbatim does NOT bypass it", () async {
+      await setUpMocks();
+      final sp = await SharedPreferences.getInstance();
+      final sl = NotificationStopList( sp );
+      await sl.add( "Never speak this" );
+      final o = newOrch( stopList: sl );
+
+      final seen = <TtsSuppression>[];
+      final sub  = o.suppressedStream.listen( seen.add );
+
+      // verbatim: true — ruling 4's override, which must NOT reach gate 1.
+      o.enqueueAlways(
+        priority : "medium",
+        message  : "Never speak this answer out loud",
+        sender   : systemSender,
+        verbatim : true,
+      );
+      await pump();
+
+      expect( spoken, isEmpty, reason: "the stop-list HOLDS (OSQ3)" );
+      expect( seen, hasLength( 1 ), reason: "suppressed OBSERVABLY, not silently" );
+      expect( seen.single.rule, "Never speak this",
+              reason: "the matching rule is named so the UI can state it" );
+      expect( seen.single.message, "Never speak this answer out loud" );
+      expect( seen.single.verbatim, isTrue );
+
+      // …and one tap speaks it anyway, in full.
+      o.speakAnyway( seen.single );
+      await pump();
+      expect( spoken, [ "Never speak this answer out loud" ] );
+
+      await sub.cancel();
+    } );
+
+    test( "AC-S3.7 — a NON-matching message is untouched and reports nothing", () async {
+      await setUpMocks();
+      await prefs.setTtsFraction( 1.0 );
+      final sp = await SharedPreferences.getInstance();
+      final sl = NotificationStopList( sp );
+      await sl.add( "Never speak this" );
+      final o = newOrch( stopList: sl );
+
+      final seen = <TtsSuppression>[];
+      final sub  = o.suppressedStream.listen( seen.add );
+
+      o.enqueueAlways( priority: "medium", message: "Build finished" );
+      await pump();
+
+      expect( spoken, [ "Build finished" ] );
+      expect( seen, isEmpty, reason: "no rule matched ⇒ nothing to report" );
+      await sub.cancel();
+    } );
+  } );
+
 }

@@ -103,16 +103,26 @@ class NotificationStopList extends ChangeNotifier {
 
   /// THE predicate: true when [message] starts with any enabled pattern,
   /// case-insensitively, after trimming both. Null/blank never matches.
-  bool matches( String? message ) {
-    if ( message == null ) return false;
+  bool matches( String? message ) => matchFor( message ) != null;
+
+  /// WHICH rule matched, not merely THAT one did (AC-S3.7, plan
+  /// 2026.08.29 §6). A suppressed answer or question is rendered with the
+  /// rule named — "not spoken: matches 'Done: Bash'" — so suppression is
+  /// visible rather than indistinguishable from a hang. Returns the FIRST
+  /// enabled pattern [message] starts with, in display order, else null.
+  ///
+  /// [matches] delegates here so the two can never disagree: one scan, one
+  /// answer, and the boolean is a projection of the rule.
+  StopPattern? matchFor( String? message ) {
+    if ( message == null ) return null;
     final m = message.trim().toLowerCase();
-    if ( m.isEmpty ) return false;
+    if ( m.isEmpty ) return null;
     for ( final p in _patterns ) {
       if ( !p.enabled ) continue;
       final needle = p.pattern.trim().toLowerCase();
-      if ( needle.isNotEmpty && m.startsWith( needle ) ) return true;
+      if ( needle.isNotEmpty && m.startsWith( needle ) ) return p;
     }
-    return false;
+    return null;
   }
 
   Future<void> setEnabled( int index, bool enabled ) async {

@@ -72,6 +72,8 @@ class TtsOrchestrator {
   int _inFlightEpoch = 0;
 
   final StreamController<bool> _pausedCtrl = StreamController<bool>.broadcast();
+  final StreamController<TtsSuppression> _suppressedCtrl =
+      StreamController<TtsSuppression>.broadcast();
   final StreamController<int>  _depthCtrl  = StreamController<int>.broadcast();
   final StreamController<List<TtsQueueItem>> _queueCtrl = StreamController<List<TtsQueueItem>>.broadcast();
 
@@ -109,6 +111,23 @@ class TtsOrchestrator {
   /// Emits on every pause-state TRANSITION (idempotent [pause]/[resume]
   /// calls do not re-emit). S3's hold toggle renders reactively off this.
   Stream<bool> get pausedStream => _pausedCtrl.stream;
+
+  /// Emits whenever the stop-list (gate 1) suppresses an item on the
+  /// [enqueueAlways] path — AC-S3.7. **The point is that suppression is
+  /// OBSERVABLE**: an early `return` with no signal is indistinguishable
+  /// from a hang, and for a `response_requested` question the server is
+  /// blocked while the user hears nothing and is shown nothing.
+  ///
+  /// Carries the matched rule so a caller can name it, and enough of the
+  /// original call to re-issue it via [speakAnyway] on one tap. The UI
+  /// claims live where a widget test can see them (AC-S4.14 / AC-S4.15);
+  /// this stream is the seam between the two halves.
+  ///
+  /// NOT emitted on the legacy [enqueueIfSpeakable] path: AC-S3.3 pins
+  /// that path byte-identical, its production dispatch is withdrawn at
+  /// the DI seam, and no answer or question the user must act on arrives
+  /// through it.
+  Stream<TtsSuppression> get suppressedStream => _suppressedCtrl.stream;
 
   /// Emits the new depth on EVERY enqueue and dequeue (and on the
   /// destructive clears: legacy urgent flush, [stopAll]) — the live
@@ -241,22 +260,122 @@ class TtsOrchestrator {
   ///   - urgent while UNPAUSED over an URGENT (F-S1-S2-1b): no preempt —
   ///     the newcomer queues behind earlier urgents and plays when the
   ///     in-flight one finishes.
+  /// [verbatim] (Rick's ruling 4, plan 2026.08.29 §6): the item is one the
+  /// user is EXPECTED TO ACT ON — an answer they deliberately asked for,
+  /// or a question something is blocked waiting on — so the two
+  /// *preference* gates are overridden. It skips gate 2
+  /// ([_systemSenderMuted], a class preference about persona-less chatter)
+  /// and gate 3 ([_formatSpeech]'s fraction cut, a preview preference).
+  ///
+  /// 🔴 **`verbatim` does NOT bypass gate 1, the stop-list** (OSQ3, CLOSED
+  /// by Rick 2026-08-29). Gates 2 and 3 are preferences about chatter the
+  /// user did not ask for; the stop-list is a specific "never speak this"
+  /// the user typed, and silently overriding it would be worse than the
+  /// bug. Suppression is made VISIBLE instead — see [suppressedStream].
   void enqueueAlways( {
     required String priority,
     required String message,
     String?         title,
     String?         voiceId,
     TtsSender?      sender,
+    bool            verbatim = false,
   } ) {
     // The ONLY gates on this path (F-S1-1 keeps it ungated by priority and
     // master-mute) are the user's explicit "never speak this" rulings: a
     // checked stop-list pattern, and — since 2026-08-21 — the
     // speak-system-senders switch (persona-less senders muted as a class).
-    if ( _stopList?.matches( message ) ?? false ) return;
-    if ( _systemSenderMuted( sender ) ) return;
+    //
+    // Gate 1 fires FIRST and is never bypassed; it reports instead of
+    // returning silently (AC-S3.7).
+    final rule = _stopList?.matchFor( message );
+    if ( rule != null ) {
+      _emitSuppression( TtsSuppression(
+        priority : priority,
+        message  : message,
+        title    : title,
+        voiceId  : voiceId,
+        sender   : sender ?? const TtsSender(),
+        rule     : rule.pattern,
+        verbatim : verbatim,
+      ) );
+      return;
+    }
+    // Gate 2 — a preference; `verbatim` overrides it (ruling 4).
+    if ( !verbatim && _systemSenderMuted( sender ) ) return;
+
+    _enqueueUngated(
+      priority : priority,
+      // Gate 3 — the fraction cut; `verbatim` overrides it (ruling 4).
+      text     : _formatSpeech( title: title, message: message, verbatim: verbatim ),
+      voiceId  : voiceId,
+      sender   : sender,
+    );
+  }
+
+  /// The one-tap escape from a stop-list suppression (AC-S3.7 / AC-S4.14):
+  /// speak [s] after all, exactly as it would have been spoken had no rule
+  /// matched.
+  ///
+  /// Bypasses gates 1 AND 2 — this is an explicit user action on an item
+  /// they can see, so re-applying either would drop it a second time with
+  /// no signal, which is the very failure the notice exists to remove.
+  /// Gate 3 is honored per the ORIGINAL call's [TtsSuppression.verbatim],
+  /// so the preview-fraction preference still governs ordinary chatter the
+  /// user chose to unmute.
+  void speakAnyway( TtsSuppression s ) {
+    _enqueueUngated(
+      priority : s.priority,
+      text     : _formatSpeech( title: s.title, message: s.message, verbatim: s.verbatim ),
+      voiceId  : s.voiceId,
+      sender   : s.sender,
+    );
+  }
+
+  /// Replay an already-delivered utterance from the START (Rick's ruling 2;
+  /// AC-S3.4 / AC-S3.4b / AC-S3.9).
+  ///
+  /// 🔴 **Replay implies RESUME, and that is the whole point.** An urgent
+  /// enqueue only preempts when `!_paused` (see [enqueueAlways]); while
+  /// held it falls through to the queue and [_tryStartNext]'s own pause
+  /// gate, so a replay tapped while paused would enqueue and play
+  /// NOTHING. Rick's gesture is *pause, then rewind* — exactly the
+  /// sequence that is silent today — so [resume] is called first.
+  ///
+  /// ⚠️ [resume] is GLOBAL: replaying one answer un-holds everything the
+  /// pause was holding, across every screen (AC-S3.9). Ratified and
+  /// deliberate — one hold, one truth, and nothing was ever dropped, so
+  /// the backlog drains rather than disappears.
+  ///
+  /// [sender] defaults to a NAMED sender so `isPersona` is true and the
+  /// replay survives `speakSystemSenders` being off (AC-S3.4).
+  void replay( {
+    required String message,
+    String?         title,
+    String?         voiceId,
+    TtsSender       sender = const TtsSender( name: 'Replay' ),
+  } ) {
+    resume();
+    enqueueAlways(
+      priority : 'urgent',
+      message  : message,
+      title    : title,
+      voiceId  : voiceId,
+      sender   : sender,
+      verbatim : true,
+    );
+  }
+
+  /// Shared enqueue tail for the ungated path: urgent-preempt semantics,
+  /// else FIFO append, then dispatch if idle. Callers own the gates.
+  void _enqueueUngated( {
+    required String priority,
+    required String text,
+    String?         voiceId,
+    TtsSender?      sender,
+  } ) {
     final utter = _Utterance(
       priority : priority,
-      text     : _formatSpeech( title: title, message: message ),
+      text     : text,
       voiceId  : voiceId,
       sender   : sender ?? const TtsSender(),
     );
@@ -278,6 +397,10 @@ class TtsOrchestrator {
     }
   }
 
+  void _emitSuppression( TtsSuppression s ) {
+    if ( !_suppressedCtrl.isClosed ) _suppressedCtrl.add( s );
+  }
+
   /// User-invoked cancel (e.g. from a future "stop speaking" button).
   /// The only DESTRUCTIVE queue control (Q6: pause never drops).
   Future<void> stopAll() async {
@@ -296,6 +419,7 @@ class TtsOrchestrator {
     await _pausedCtrl.close();
     await _depthCtrl.close();
     await _queueCtrl.close();
+    await _suppressedCtrl.close();
   }
 
   // ---------- private ----------
@@ -320,8 +444,13 @@ class TtsOrchestrator {
   /// Applied HERE, at enqueue time: the queue holds text, not audio, and the
   /// player synthesizes one utterance at a time when it reaches the head --
   /// so the cut is upstream of any TTS spend.
-  String _formatSpeech( { required String message, String? title } ) {
-    final spoken = TtsPreviewTruncator.previewFor( message, _prefs.ttsFraction );
+  ///
+  /// [verbatim] skips the cut ONLY (ruling 4) — the title still leads, as
+  /// it always has, because it was never the truncated part.
+  String _formatSpeech( { required String message, String? title, bool verbatim = false } ) {
+    final spoken = verbatim
+        ? message
+        : TtsPreviewTruncator.previewFor( message, _prefs.ttsFraction );
     if ( title != null && title.isNotEmpty ) return '$title. $spoken';
     return spoken;
   }
@@ -513,6 +642,40 @@ class TtsSender {
     final local = ( senderId ?? '' ).split( RegExp( r'[@#]' ) ).first.trim();
     return local.isEmpty ? 'system' : local;
   }
+}
+
+/// An item the stop-list (gate 1) refused to speak, reported rather than
+/// dropped in silence (AC-S3.7).
+///
+/// Carries [rule] — the pattern that matched, so the UI can name it
+/// ("not spoken — matches 'Done: Bash'") — plus enough of the original
+/// call for [TtsOrchestrator.speakAnyway] to re-issue it verbatim on one
+/// tap. It is a plain value: the orchestrator decides to suppress, the UI
+/// decides how to show it, and neither knows the other's shape.
+class TtsSuppression {
+  final String    priority;
+  final String    message;
+  final String?   title;
+  final String?   voiceId;
+  final TtsSender sender;
+
+  /// The matching stop-list pattern, verbatim as the user typed it.
+  final String    rule;
+
+  /// Whether the suppressed call had asked for [TtsOrchestrator]'s
+  /// `verbatim` treatment — preserved so speak-anyway reproduces the
+  /// original intent rather than guessing.
+  final bool      verbatim;
+
+  const TtsSuppression( {
+    required this.priority,
+    required this.message,
+    required this.rule,
+    this.title,
+    this.voiceId,
+    this.sender   = const TtsSender(),
+    this.verbatim = false,
+  } );
 }
 
 /// One row of the TTS queue viewer (web `#tts-queue-section` parity):
