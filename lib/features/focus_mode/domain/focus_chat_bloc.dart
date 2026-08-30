@@ -98,6 +98,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     on<FocusRespondRequested>( _onRespondRequested );
     on<FocusAskExpired>( _onAskExpired );
     on<FocusAskResponded>( _onAskResponded );
+    on<FocusSpeakAnywayRequested>( _onSpeakAnyway );
     on<FocusFilterChanged>( _onFilterChanged );
     on<FocusSenderScopeChanged>( _onSenderScopeChanged );
     on<FocusActivityTick>( _onActivityTick );
@@ -180,7 +181,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
     final windows = _copyWindows();
     final window  = List<FocusMessage>.from( windows[ sid ] ?? const [] )
-      ..add( FocusMessage( item: item, suppressedRule: rule?.pattern ) );
+      ..add( FocusMessage( item: item ) );
     while ( window.length > windowCap ) {
       window.removeAt( 0 );                            // evict oldest (Q8)
     }
@@ -227,7 +228,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
     // EVERY item, EVERY priority (Q6) — the ungated S1 path (F-S1-1).
     final persona = item.voicePersona ?? state.personasBySender[ sid ];
-    _tts.enqueueAlways(
+    final suppression = _tts.enqueueAlways(
       priority : item.priority,
       message  : item.message,
       title    : item.title,
@@ -242,6 +243,38 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         isLiveAskAnswer   : _isQuickAskJob,
       ),
     );
+
+    // Gate 1 refused it: retain the orchestrator's OWN record against this
+    // message, so speak-anyway later hands back the very object that was
+    // refused rather than a reconstruction of it (AC-S4.14).
+    if ( suppression != null ) {
+      final marked = List<FocusMessage>.from( windows[ sid ]! );
+      for ( var i = marked.length - 1; i >= 0; i-- ) {
+        if ( marked[ i ].item.id == item.id ) {
+          marked[ i ] = marked[ i ].copyWith( suppression: suppression );
+          break;
+        }
+      }
+      final withMark = _copyWindows()..[ sid ] = marked;
+      emit( state.copyWith( windows: withMark ) );
+    }
+  }
+
+  /// The user tapped "speak it anyway" on a muted item — AC-S4.14.
+  ///
+  /// Hands the orchestrator back its OWN suppression object. No
+  /// reconstruction, no second path to the same data: whatever gate 1
+  /// refused is exactly what plays.
+  void _onSpeakAnyway( FocusSpeakAnywayRequested event, Emitter<FocusChatState> emit ) {
+    for ( final window in state.windows.values ) {
+      for ( final m in window ) {
+        if ( m.item.id == event.notificationId ) {
+          final s = m.suppression;
+          if ( s != null ) _tts.speakAnyway( s );
+          return;
+        }
+      }
+    }
   }
 
   Future<void> _onSenderSelected(

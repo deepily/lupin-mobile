@@ -272,7 +272,15 @@ class TtsOrchestrator {
   /// user did not ask for; the stop-list is a specific "never speak this"
   /// the user typed, and silently overriding it would be worse than the
   /// bug. Suppression is made VISIBLE instead — see [suppressedStream].
-  void enqueueAlways( {
+  /// Returns the [TtsSuppression] when gate 1 refused the item, else null.
+  ///
+  /// Same object the stream carries — one source, two deliveries: the
+  /// stream is for OBSERVERS, this return is for the CALLER that caused
+  /// it. A caller needs the object to offer speak-anyway later, and
+  /// correlating a stream event back to the item that produced it means
+  /// guessing on message text. Returning it removes the guess without
+  /// putting state in the orchestrator.
+  TtsSuppression? enqueueAlways( {
     required String priority,
     required String message,
     String?         title,
@@ -289,7 +297,7 @@ class TtsOrchestrator {
     // returning silently (AC-S3.7).
     final rule = _stopList?.matchFor( message );
     if ( rule != null ) {
-      _emitSuppression( TtsSuppression(
+      final suppression = TtsSuppression(
         priority : priority,
         message  : message,
         title    : title,
@@ -297,11 +305,12 @@ class TtsOrchestrator {
         sender   : sender ?? const TtsSender(),
         rule     : rule.pattern,
         verbatim : verbatim,
-      ) );
-      return;
+      );
+      _emitSuppression( suppression );
+      return suppression;
     }
     // Gate 2 — a preference; `verbatim` overrides it (ruling 4).
-    if ( !verbatim && _systemSenderMuted( sender ) ) return;
+    if ( !verbatim && _systemSenderMuted( sender ) ) return null;
 
     _enqueueUngated(
       priority : priority,
@@ -310,6 +319,7 @@ class TtsOrchestrator {
       voiceId  : voiceId,
       sender   : sender,
     );
+    return null;
   }
 
   /// The one-tap escape from a stop-list suppression (AC-S3.7 / AC-S4.14):

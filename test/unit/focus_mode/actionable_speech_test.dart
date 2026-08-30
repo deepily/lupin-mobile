@@ -60,6 +60,8 @@ void main() {
   late _MockRepo repo;
   late _MockTts  tts;
   late NotificationStopList stopList;
+  late _MockPlayer   _lastPlayer;
+  late _MockFallback _lastFallback;
 
   /// The pattern under test, and a message that starts with it.
   const rule           = 'Done: Bash';
@@ -79,6 +81,46 @@ void main() {
       verbatim : any( named: 'verbatim' ),
     ) ).thenReturn( null );
   } );
+
+
+  /// A REAL orchestrator sharing the SAME stop list as the bloc.
+  ///
+  /// Needed because `suppressedRule` is no longer set by the bloc from its
+  /// own match — it is the orchestrator's OWN record, returned by gate 1
+  /// and retained. A mock that returns null would make the field null and
+  /// the assertion vacuous, so the test that checks the rule must drive the
+  /// thing that produces it.
+  Future<TtsOrchestrator> realOrchestrator( List<TtsSuppression> seen ) async {
+    final player   = _MockPlayer();
+    final fallback = _MockFallback();
+    final ws       = _MockWs();
+    final complete = StreamController<TtsCompleteEvent>.broadcast();
+    final errors   = StreamController<TtsErrorEvent>.broadcast();
+    when( () => player.completeStream ).thenAnswer( ( _ ) => complete.stream );
+    when( () => player.errorStream    ).thenAnswer( ( _ ) => errors.stream );
+    when( () => player.isPlaying      ).thenReturn( false );
+    when( () => player.stop()         ).thenAnswer( ( _ ) async {} );
+    when( () => player.speak(
+      text      : any( named: 'text'      ),
+      sessionId : any( named: 'sessionId' ),
+      voiceId   : any( named: 'voiceId'   ),
+    ) ).thenAnswer( ( _ ) async {} );
+    when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( _ ) async {} );
+    when( () => fallback.stopFallbackSpeech()     ).thenAnswer( ( _ ) async {} );
+    when( () => ws.sessionId ).thenReturn( 'wise penguin' );
+
+    _lastPlayer = player;
+    _lastFallback = fallback;
+    final o = TtsOrchestrator(
+      player   : player,
+      fallback : fallback,
+      prefs    : NotificationPreferences( await SharedPreferences.getInstance() ),
+      ws       : ws,
+      stopList : stopList,
+    );
+    o.suppressedStream.listen( seen.add );
+    return o;
+  }
 
   FocusChatBloc build( { bool Function( String )? isQuickAskJob } ) {
     final b = FocusChatBloc( repo, tts: tts,
@@ -148,7 +190,10 @@ void main() {
          'marked, and still not spoken', () {
     test( 'the question is STORED, carries the matched rule, and keeps its '
           'answer affordance', () async {
-      final b = build();
+      final seen = <TtsSuppression>[];
+      final real = await realOrchestrator( seen );
+      final b = FocusChatBloc( repo, tts: real, stopList: stopList );
+      b.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
       b.add( FocusInboundNotification( _item(
         id: 'n5', sender: askFlowSenderId, message: mutedQuestion, ask: true ) ) );
       await Future<void>.delayed( Duration.zero );
@@ -157,10 +202,45 @@ void main() {
       expect( window, hasLength( 1 ), reason: 'not dropped at ingest' );
       expect( window!.single.suppressedRule, rule,
               reason: 'the UI must be able to NAME what muted it' );
+      expect( window.single.suppression, isNotNull,
+              reason: 'the orchestrator\'s OWN record is retained, so '
+                      'speak-anyway replays what was refused' );
       expect( b.state.pendingPromptFor( askFlowSenderId )?.item.id, 'n5',
               reason: 'the answer affordance survives — the server is blocked '
                       'on this reply' );
       await b.close();
+      await real.dispose();
+    } );
+
+    test( 'AC-S4.14 — speak-anyway hands the orchestrator back its OWN '
+          'refused object, and it plays', () async {
+      final seen = <TtsSuppression>[];
+      final real = await realOrchestrator( seen );
+      final b = FocusChatBloc( repo, tts: real, stopList: stopList );
+      b.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
+      b.add( FocusInboundNotification( _item(
+        id: 'n9', sender: askFlowSenderId, message: mutedQuestion, ask: true ) ) );
+      await Future<void>.delayed( Duration.zero );
+
+      verifyNever( () => _lastPlayer.speak(
+        text      : any( named: 'text'      ),
+        sessionId : any( named: 'sessionId' ),
+        voiceId   : any( named: 'voiceId'   ),
+      ) );
+
+      b.add( const FocusSpeakAnywayRequested( 'n9' ) );
+      await Future<void>.delayed( Duration.zero );
+
+      final spoken = verify( () => _lastPlayer.speak(
+        text      : captureAny( named: 'text' ),
+        sessionId : any( named: 'sessionId' ),
+        voiceId   : any( named: 'voiceId'   ),
+      ) ).captured;
+      expect( spoken.single, contains( mutedQuestion ),
+              reason: 'one tap speaks the thing that was refused, in full' );
+
+      await b.close();
+      await real.dispose();
     } );
 
     test( 'it is NOT spoken — and the muting is done by GATE 1, against a '

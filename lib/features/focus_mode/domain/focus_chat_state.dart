@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../services/tts/tts_orchestrator.dart';
 import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/data/notification_models.dart';
 
@@ -42,16 +43,28 @@ class FocusMessage extends Equatable {
   final NotificationItem item;
   final bool             answered;
 
-  /// The stop-list pattern that muted this item, when one did — AC-S3.8(2).
+  /// The orchestrator's own suppression record, retained so the user can
+  /// still choose to hear it — AC-S3.8(2), AC-S4.14.
   ///
   /// A question the user is expected to act on is NOT dropped at ingest the
   /// way ordinary stop-listed chatter is (Rick, 2026-08-29: *"yes of course
   /// you should show the answer. And of course you should mute it and mark
   /// it. That way I can play it if I want."*). It is stored, rendered with
   /// the matched rule NAMED, and left with its answer affordance intact —
-  /// but it is still not spoken. Null for everything else, which is every
-  /// item today.
-  final String?          suppressedRule;
+  /// but it is still not spoken.
+  ///
+  /// 🔴 This is the object gate 1 produced, kept verbatim — NOT a
+  /// reconstruction. Speak-anyway hands it straight back to
+  /// `TtsOrchestrator.speakAnyway()`, so the thing that plays is the thing
+  /// that was refused. Retaining it HERE rather than in the orchestrator
+  /// keeps that stream stateless (Arnold's point) and keys the record by
+  /// the message it belongs to, which is the only correlation that cannot
+  /// go wrong.
+  final TtsSuppression?  suppression;
+
+  /// The matched pattern, for a UI that only needs to NAME the rule.
+  /// A projection, so it can never disagree with [suppression].
+  String? get suppressedRule => suppression?.rule;
 
   /// HOW this ask ended, when it ended without our answer — AC-S4.9 /
   /// AC-S4.13. Null for the ordinary case (unanswered, or answered right
@@ -68,7 +81,7 @@ class FocusMessage extends Equatable {
   const FocusMessage( {
     required this.item,
     this.answered = false,
-    this.suppressedRule,
+    this.suppression,
     this.resolution,
     this.resolutionDetail,
   } );
@@ -89,14 +102,14 @@ class FocusMessage extends Equatable {
   }
 
   FocusMessage copyWith( {
-    bool?          answered,
-    String?        suppressedRule,
-    AskResolution? resolution,
-    String?        resolutionDetail,
+    bool?           answered,
+    TtsSuppression? suppression,
+    AskResolution?  resolution,
+    String?         resolutionDetail,
   } ) => FocusMessage(
         item             : item,
         answered         : answered ?? this.answered,
-        suppressedRule   : suppressedRule ?? this.suppressedRule,
+        suppression      : suppression ?? this.suppression,
         resolution       : resolution ?? this.resolution,
         resolutionDetail : resolutionDetail ?? this.resolutionDetail,
       );

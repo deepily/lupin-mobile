@@ -36,6 +36,16 @@ class FocusInboundNotification extends FocusChatEvent {
   List<Object?> get props => [ item.id ];
 }
 
+/// "Speak it anyway" on a stop-list-muted item — AC-S4.14. Carries only
+/// the notification id; the bloc holds the orchestrator's own suppression
+/// record and hands that back, so the UI never constructs one.
+class FocusSpeakAnywayRequested extends FocusChatEvent {
+  final String notificationId;
+  const FocusSpeakAnywayRequested( this.notificationId );
+  @override
+  List<Object?> get props => [ notificationId ];
+}
+
 /// The ask TIMED OUT — `notification_expired` (AC-S4.3). The server has
 /// already substituted [defaultUsed]; there is nothing left to answer, and
 /// the card says so rather than sitting pending forever.
