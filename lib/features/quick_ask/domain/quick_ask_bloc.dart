@@ -321,8 +321,11 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     }
   }
 
-  /// The `parked` and `needs_input` arms of the six-outcome status table.
-  /// Returns true when it has fully handled the response.
+  /// The arms of the status table that resolve WITHOUT correlation:
+  /// `parked`, `expired`, `rejected`, `needs_input`. Returns true when it has
+  /// fully handled the response; `done`, `failed` and `waiting` are the
+  /// caller's. Branching is on STATUS, never on which id happens to be
+  /// present (AC-S4.1).
   ///
   /// 🔴 `parked` and `needs_input` are NOT the same thing wearing different
   /// ids. `parked` means the server is ASKING and is holding a `pending_id`
@@ -342,6 +345,66 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
           question    : res.answer ?? 'The server needs more information.',
           argsMissing : res.argsMissing,
         ),
+      ) );
+      _cancelWatchdog();
+      return true;
+    }
+
+    // 🔴 AC-S4.13 — the RESUME door's two endings, owned BY NAME. Both arrive
+    // as `status: expired` (verified in the server source, `flow.py:698` and
+    // `:727`, which `_emit` with `status="expired"` either way); the thing that
+    // tells them apart is `route_reason`. They mean DIFFERENT things to the
+    // user — the question timed out and should be asked again, versus you
+    // already answered this turn, possibly on another device — so one shared
+    // "something went wrong" card satisfies "routes correctly" and still tells
+    // the user nothing they can act on.
+    //
+    // Before this arm existed `expired` matched no branch, fell through to the
+    // no-job-id case, and the turn vanished in silence.
+    if ( res.isExpired ) {
+      final resolution = classifyResumeStatus( res.routeReason );
+      emit( state.copyWith(
+        phase   : QuickAskPhase.idle,
+        entries : [ ...state.entries, QuickAskEntry(
+          questionText : transcript,
+          state        : JobLifecycleState.failed,
+          source       : QuickAskSource.askResponse,
+          details      : JobSummary(
+            jobId        : '',
+            questionText : transcript,
+            status       : 'failed',
+            error        : resolution.userMessage,
+          ),
+        ) ],
+        clearLiveQuestion : true,
+        clearInterview    : true,
+      ) );
+      _cancelWatchdog();
+      return true;
+    }
+
+    // `rejected` is the FITNESS GATE, before the cache, the router or the
+    // expeditor sees the question (`flow.py:178`). It is a seventh status the
+    // response model's own docstring does not list, and it carries the refusal
+    // sentence in `answer` — the same sentence the server speaks. Showing a
+    // generic "Request failed" here throws away the one thing that tells the
+    // user why, and makes a refusal indistinguishable from a crash.
+    if ( res.status == 'rejected' ) {
+      emit( state.copyWith(
+        phase   : QuickAskPhase.idle,
+        entries : [ ...state.entries, QuickAskEntry(
+          questionText : transcript,
+          state        : JobLifecycleState.failed,
+          source       : QuickAskSource.askResponse,
+          details      : JobSummary(
+            jobId        : '',
+            questionText : transcript,
+            status       : 'failed',
+            error        : res.answer ?? res.error ?? 'That question was refused.',
+          ),
+        ) ],
+        clearLiveQuestion : true,
+        clearInterview    : true,
       ) );
       _cancelWatchdog();
       return true;
