@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/notification_filter/notification_stop_list.dart';
+import '../../../services/tts/speech_intent.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../notifications/data/notification_models.dart';
 import '../../notifications/data/notification_repository.dart';
@@ -67,6 +68,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   /// filtered by the same predicate. Null ⇒ no filtering.
   final NotificationStopList? _stopList;
 
+  /// Setter 1 of the `verbatim` flag (plan §6): does this `job_id` belong
+  /// to a live Quick Ask question? Injected rather than imported so the
+  /// enqueue stays in ONE place and this bloc does not learn about Quick
+  /// Ask's internals. Null ⇒ no live ask surface (focus mode alone), and
+  /// only the QUESTION arms of [shouldSpeakVerbatim] apply.
+  final bool Function( String jobId )? _isQuickAskJob;
+
   FocusChatBloc(
     this._repo, {
     required TtsOrchestrator tts,
@@ -74,11 +82,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     Duration?            tickInterval,
     Duration             exitDebounce = defaultExitDebounce,
     NotificationStopList? stopList,
-  } )  : _tts          = tts,
-         _now          = now ?? DateTime.now,
-         _tickInterval = tickInterval,
-         _exitDebounce = exitDebounce,
-         _stopList     = stopList,
+    bool Function( String jobId )? isQuickAskJob,
+  } )  : _tts            = tts,
+         _isQuickAskJob  = isQuickAskJob,
+         _now            = now ?? DateTime.now,
+         _tickInterval   = tickInterval,
+         _exitDebounce   = exitDebounce,
+         _stopList       = stopList,
          super( const FocusChatState.initial() ) {
     on<FocusInboundNotification>( _onInbound );
     on<FocusSenderSelected>( _onSenderSelected );
@@ -130,10 +140,29 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final exited   = Set<String>.from( state.exitedSenders )..remove( sid );
     _exitTimers.remove( sid )?.cancel();
 
+    // Is this something the user must ACT ON? One predicate, used twice
+    // below: it decides the stop-list exemption AND whether speech is
+    // verbatim (AC-S3.6 / AC-S3.6b / AC-S3.8).
+    final actionable = isActionableQuestion(
+      responseRequested : item.responseRequested,
+      senderId          : item.senderId,
+      jobId             : item.jobId,
+    );
+    final rule = _suppressionRule( item );
+
     // Stop-list (plan 2026.08.21 §3): suppressed = not stored, not unread,
     // not spoken — counted so the pane can say "N hidden". Sender still
     // establishes/bumps above (the chatter proves the session is alive).
-    if ( _suppressed( item ) ) {
+    //
+    // 🔴 AC-S3.8(2), Rick 2026-08-29 — ONE exemption: an item the user is
+    // expected to act on is NOT dropped here. *"yes of course you should
+    // show the answer. And of course you should mute it and mark it. That
+    // way I can play it if I want."* ⇒ it falls through to be stored and
+    // rendered with the rule NAMED, and the speech call below is skipped.
+    // Without this the item is discarded at ingest, and AC-S4.14 — which
+    // asks the prompt widget to show that question WITH its answer
+    // controls — has no text to render and no card to render it on.
+    if ( rule != null && !actionable ) {
       final hidden = Map<String, int>.from( state.hiddenCountBySender )
         ..[ sid ] = ( state.hiddenCountBySender[ sid ] ?? 0 ) + 1;
       emit( state.copyWith(
@@ -148,7 +177,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
     final windows = _copyWindows();
     final window  = List<FocusMessage>.from( windows[ sid ] ?? const [] )
-      ..add( FocusMessage( item: item ) );
+      ..add( FocusMessage( item: item, suppressedRule: rule?.pattern ) );
     while ( window.length > windowCap ) {
       window.removeAt( 0 );                            // evict oldest (Q8)
     }
@@ -170,6 +199,12 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       asOf                 : now,
     ) );
 
+    // 🔴 Shown, marked — and still NOT spoken (AC-S3.8(2)). Rick kept the
+    // mute half of his stop-list ruling explicitly; exempting these items
+    // from speaking as well as from the drop would make them talk, which
+    // is the half he did not give away.
+    if ( rule != null ) return;
+
     // EVERY item, EVERY priority (Q6) — the ungated S1 path (F-S1-1).
     final persona = item.voicePersona ?? state.personasBySender[ sid ];
     _tts.enqueueAlways(
@@ -178,6 +213,14 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       title    : item.title,
       voiceId  : item.voicePersona?.voiceId,
       sender   : TtsSender( senderId: sid, name: persona?.displayName ?? persona?.name, icon: persona?.icon ),
+      // Ruling 4 + AC-S3.6/S3.6b: an answer the user asked for, or a
+      // question something is blocked on, speaks in full and is not muted.
+      verbatim : shouldSpeakVerbatim(
+        responseRequested : item.responseRequested,
+        senderId          : item.senderId,
+        jobId             : item.jobId,
+        isLiveAskAnswer   : _isQuickAskJob,
+      ),
     );
   }
 
@@ -546,8 +589,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
   /// Stop-list predicate for live items. The user's own replies are never
   /// suppressed (they are not notifications).
-  bool _suppressed( NotificationItem item ) =>
-      item.type != 'user_initiated_message' && ( _stopList?.matches( item.message ) ?? false );
+  /// WHICH stop-list rule mutes [item], or null — AC-S3.8(2). The pattern
+  /// is stored on the message so an exempted question can NAME what muted
+  /// it. Replaces the old boolean `_suppressed`, which had exactly one
+  /// caller: a predicate that could say THAT an item was muted but never
+  /// WHICH rule did it cannot render the notice Rick asked for.
+  StopPattern? _suppressionRule( NotificationItem item ) =>
+      item.type == 'user_initiated_message' ? null : _stopList?.matchFor( item.message );
 
   /// Merge fetched `lastActivity` into the registry (fetched wins — it is
   /// the server's view; a live arrival after this emit bumps it again).

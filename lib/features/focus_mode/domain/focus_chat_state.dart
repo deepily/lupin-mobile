@@ -41,9 +41,21 @@ class FocusMessage extends Equatable {
   final NotificationItem item;
   final bool             answered;
 
+  /// The stop-list pattern that muted this item, when one did — AC-S3.8(2).
+  ///
+  /// A question the user is expected to act on is NOT dropped at ingest the
+  /// way ordinary stop-listed chatter is (Rick, 2026-08-29: *"yes of course
+  /// you should show the answer. And of course you should mute it and mark
+  /// it. That way I can play it if I want."*). It is stored, rendered with
+  /// the matched rule NAMED, and left with its answer affordance intact —
+  /// but it is still not spoken. Null for everything else, which is every
+  /// item today.
+  final String?          suppressedRule;
+
   const FocusMessage( {
     required this.item,
     this.answered = false,
+    this.suppressedRule,
   } );
 
   factory FocusMessage.fromConversation( ConversationMessage msg ) {
@@ -53,11 +65,15 @@ class FocusMessage extends Equatable {
     );
   }
 
-  FocusMessage copyWith( { bool? answered } ) =>
-      FocusMessage( item: item, answered: answered ?? this.answered );
+  FocusMessage copyWith( { bool? answered, String? suppressedRule } ) =>
+      FocusMessage(
+        item           : item,
+        answered       : answered ?? this.answered,
+        suppressedRule : suppressedRule ?? this.suppressedRule,
+      );
 
   @override
-  List<Object?> get props => [ item.id, answered ];
+  List<Object?> get props => [ item.id, answered, suppressedRule ];
 }
 
 /// State contract for the focus surface (S2 §3.1; consumed by S3).

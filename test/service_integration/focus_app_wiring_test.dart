@@ -5,6 +5,7 @@
 /// `service_locator.dart`), FocusChatBloc with the shared mock orchestrator.
 library;
 
+import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
@@ -15,12 +16,25 @@ import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
+import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
+import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_event.dart';
+import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_state.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 
 class _MockRepo  extends Mock implements NotificationRepository {}
 class _MockAudio extends Mock implements NotificationAudioService {}
 class _MockTts   extends Mock implements TtsOrchestrator {}
+
+/// The dispatcher reaches for `QuickAskBloc` on the belt channel (S1 §3).
+/// Registered as a MOCK, deliberately: this file pins the DISPATCH wiring,
+/// not Quick Ask's behavior, and a mock keeps the pin independent of that
+/// bloc's constructor as S1 evolves. The plan's instruction is to register
+/// it in `setUp` rather than guard the production path with `isRegistered`
+/// — a production `if` would make the belt channel silently optional, and
+/// nothing would notice if it were never wired at all.
+class _MockQuickAsk extends MockBloc<QuickAskEvent, QuickAskState>
+    implements QuickAskBloc {}
 
 Map<String, dynamic> _queueUpdateFrame( {
   String priority = 'high',
@@ -48,6 +62,7 @@ void main() {
     late _MockTts   tts;
     late NotificationBloc legacyBloc;
     late FocusChatBloc    focusBloc;
+    late _MockQuickAsk    quickAskBloc;
     late WsBlocDispatcher dispatcher;
 
     setUp( () {
@@ -69,8 +84,11 @@ void main() {
       // Persona-less fixtures: widen the rail scope (default Personas-only, §5f).
       focusBloc.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
 
+      quickAskBloc = _MockQuickAsk();
+
       GetIt.instance.registerSingleton<NotificationBloc>( legacyBloc );
       GetIt.instance.registerSingleton<FocusChatBloc>( focusBloc );
+      GetIt.instance.registerSingleton<QuickAskBloc>( quickAskBloc );
 
       dispatcher = WsBlocDispatcher();
     } );
