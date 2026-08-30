@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/data/notification_models.dart';
 
 /// Hydration phase of the focus surface (single flag — the surface
@@ -52,28 +53,47 @@ class FocusMessage extends Equatable {
   /// item today.
   final String?          suppressedRule;
 
+  /// HOW this ask ended, when it ended without our answer — AC-S4.9 /
+  /// AC-S4.13. Null for the ordinary case (unanswered, or answered right
+  /// here). "Expired" and "already answered elsewhere" are different facts
+  /// and the card says which.
+  final AskResolution?   resolution;
+
   const FocusMessage( {
     required this.item,
     this.answered = false,
     this.suppressedRule,
+    this.resolution,
   } );
 
   factory FocusMessage.fromConversation( ConversationMessage msg ) {
     return FocusMessage(
       item     : NotificationItem.fromJson( msg.raw ),
-      answered : msg.state == 'responded' || msg.responseValue != null,
+      // 🔴 `expired` counts as answered — AC-S4.4. An expired ask is DEAD:
+      // the server already substituted its `response_default`. Counting it
+      // as still-pending left it forever at the head of `pendingPromptFor`,
+      // so the composer aimed every voice reply at a dead ask and took a
+      // 400 the user never saw. Answered here means FINISHED, not
+      // answered-by-us.
+      answered : msg.state == 'responded'
+              || msg.state == 'expired'
+              || msg.responseValue != null,
     );
   }
 
-  FocusMessage copyWith( { bool? answered, String? suppressedRule } ) =>
-      FocusMessage(
+  FocusMessage copyWith( {
+    bool?          answered,
+    String?        suppressedRule,
+    AskResolution? resolution,
+  } ) => FocusMessage(
         item           : item,
         answered       : answered ?? this.answered,
         suppressedRule : suppressedRule ?? this.suppressedRule,
+        resolution     : resolution ?? this.resolution,
       );
 
   @override
-  List<Object?> get props => [ item.id, answered, suppressedRule ];
+  List<Object?> get props => [ item.id, answered, suppressedRule, resolution ];
 }
 
 /// State contract for the focus surface (S2 §3.1; consumed by S3).

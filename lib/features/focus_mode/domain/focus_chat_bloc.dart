@@ -6,6 +6,7 @@ import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/tts/speech_intent.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../notifications/data/notification_models.dart';
+import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/data/notification_repository.dart';
 import 'focus_chat_event.dart';
 import 'focus_chat_state.dart';
@@ -505,9 +506,39 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
       emit( state.copyWith( windows: windows ) );
     } on NotificationApiException catch ( e ) {
+      // AC-S4.9 — two of these 400s are not errors, they are ENDINGS.
+      // "already responded" and "grace period exceeded" both mean the ask
+      // is finished; raising a generic error leaves the card pending
+      // forever and tells the user nothing they can act on.
+      final resolution = classifyRespondFailure( e.message );
+      if ( resolution.isResolved ) {
+        emit( state.copyWith(
+          windows: _windowsWithResolved( event.senderId, targetId, resolution ) ) );
+        return;
+      }
       print( '[FocusChat] respond failed for $targetId: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
+  }
+
+  /// Mark [targetId] finished with [resolution] — AC-S4.9. The ask stops
+  /// being pending (so the composer stops aiming at it) and carries what
+  /// actually happened, which is not the same as "you answered it".
+  Map<String, List<FocusMessage>> _windowsWithResolved(
+    String senderId,
+    String targetId,
+    AskResolution resolution,
+  ) {
+    final windows = _copyWindows();
+    final window  = List<FocusMessage>.from( windows[ senderId ] ?? const [] );
+    for ( var i = 0; i < window.length; i++ ) {
+      if ( window[ i ].item.id == targetId ) {
+        window[ i ] = window[ i ].copyWith( answered: true, resolution: resolution );
+        break;
+      }
+    }
+    windows[ senderId ] = window;
+    return windows;
   }
 
   /// Sender identity stamped on outbound DMs (Rick 2026-08-21). The app
