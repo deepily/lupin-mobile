@@ -27,6 +27,11 @@ for line in open( src ):
         tests[ n["id"] ] = ( n.get( "suiteID" ), n.get( "name" ) )
     elif t == "testDone":
         if e.get( "hidden" ): continue
+        # A SKIPPED test reports result "success" with skipped:true. Counting it
+        # put this fixture ONE ahead of the runner's own summary (753 vs +752,
+        # 2026-08-29) — a baseline whose count disagrees with the runner is the
+        # shape that has bitten this build repeatedly. Skips are not passes.
+        if e.get( "skipped" ): continue
         ( ok if e.get( "result" ) == "success" else failed ).add( e[ "testID" ] )
 
 root = os.path.abspath( "." )
@@ -46,20 +51,36 @@ if paths:
     tracked = set( r.stdout.split() )
     untracked = { p for p in paths if p not in tracked }
 
-sha = subprocess.run( [ "git", "rev-parse", "--short", "HEAD" ],
-                      capture_output=True, text=True ).stdout.strip()
+# The sha is HEAD *at build time*, not necessarily the tree the capture ran on.
+# Measured 2026-08-29: a build minutes after its capture stamped a sha two commits
+# ahead and the fixture then claimed a tree it had never measured. Pass the sha
+# explicitly as argv[3] when capture and build are not back-to-back.
+sha = sys.argv[ 3 ] if len( sys.argv ) > 3 else subprocess.run(
+    [ "git", "rev-parse", "--short", "HEAD" ], capture_output=True, text=True ).stdout.strip()
 
 json.dump( {
     "_ac"        : "AC-G2 — no previously-passing test id may disappear.",
     "_why_a_set" : "A rising COUNT cannot detect a deletion masked by additions; "
                    "the old predicate could be satisfied by deleting the failing tests.",
     "_captured_at_sha" : sha,
+    "_sha_caveat" : (
+        "HEAD at BUILD time unless passed explicitly as argv[3]. Run the capture and "
+        "this builder back-to-back, or pass the sha — a build minutes after its capture "
+        "will stamp a tree it never measured."
+    ),
     "_how_to_refresh"  : "./flutter.sh test --reporter json > /tmp/t.json && "
                          "python3 build_ac_g2_baseline.py /tmp/t.json "
                          "test/fixtures/ac_g2_passing_baseline.json",
     "_untracked_suites_at_capture" : sorted( untracked ),
     "_untracked_warning" : "Ids from these suites are NOT in any commit — another "
                            "checkout cannot reproduce them. Re-capture once they land.",
+    "_count_reconciliation" : (
+        "Matches the runner's own summary line. Three numbers exist for one tree and "
+        "they are NOT interchangeable: ALL testDone successes = 916 (includes 163 "
+        "hidden group/suite-level events); non-hidden = 753; non-hidden AND non-skipped "
+        "= 752, which is what `flutter test` prints and what this fixture stores. "
+        "A skipped test reports result 'success' with skipped:true."
+    ),
     "passing_count" : len( passing ),
     "failing_count" : len( failed ),
     "passing"       : passing,

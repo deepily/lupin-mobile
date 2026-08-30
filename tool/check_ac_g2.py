@@ -6,6 +6,18 @@
 
 Exit 0 = PASS · 1 = REGRESSION · 2 = BASELINE INCOMPLETE.
 
+🔴 DO NOT READ `flutter test`'s OWN EXIT CODE AS THE VERDICT.
+It exits non-zero whenever anything failed, and this repo carries a standing
+~44 failures under `test/legacy_quarantine/`. A reader who takes that process
+exit code as the answer will call a healthy tree red. THIS tool's exit code is
+the verdict; it is computed from the parsed testDone event stream.
+
+Counting, because three different numbers exist for one tree and they are not
+interchangeable (measured 2026-08-29 at 6e170ea): ALL testDone successes = 916,
+of which 163 are hidden group/suite-level events; non-hidden = 753; non-hidden
+AND non-skipped = 752, which is what the runner prints and what we store. A
+SKIPPED test reports result "success" with skipped:true — a skip is not a pass.
+
 🔴 WHY EXIT 2 EXISTS, AND WHY IT IS NOT A WARNING.
 A baseline captured while some suites were untracked pins ids no other checkout
 has: the gate would fail elsewhere on tests that never existed there, or pass
@@ -44,8 +56,9 @@ for line in open( src ):
         n = e[ "test" ]
         if n.get( "name", "" ).startswith( "loading " ): continue
         tests[ n["id"] ] = ( n.get( "suiteID" ), n.get( "name" ) )
-    elif t == "testDone" and not e.get( "hidden" ) and e.get( "result" ) == "success":
-        ok.add( e[ "testID" ] )
+    elif ( t == "testDone" and not e.get( "hidden" ) and not e.get( "skipped" )
+           and e.get( "result" ) == "success" ):
+        ok.add( e[ "testID" ] )   # skipped reports "success" too — a skip is not a pass
 
 root = os.path.abspath( "." )
 now  = { f"{os.path.relpath( suites.get( tests[i][0] ), root )}::{tests[i][1]}"
