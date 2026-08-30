@@ -8,6 +8,7 @@ import '../../../core/testing/test_keys.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_filter/progress_group_collapse.dart';
+import '../../../services/tts/speech_intent.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
 import '../../notifications/presentation/message_stamp.dart';
@@ -126,11 +127,36 @@ class _FocusChatPaneState extends State<FocusChatPane> {
     // same predicate here too — the window is retained (hide-not-delete),
     // so unchecking reveals again instantly; the pane already re-renders on
     // any stop-list change via [_onPrefsChanged]. User replies never hide.
+    //
+    // 🔴 AC-S4.15 — AND NEITHER DOES AN ACTIONABLE QUESTION. The bloc already
+    // exempts one at ingest ([_onInbound]: `rule != null && !actionable`), on
+    // Rick's AC-S3.8(2) ruling that such an item is *shown, muted, marked,
+    // playback available*. This lens is the SECOND enforcement point of that
+    // one rule and it had drifted: it exempted only user replies, so a
+    // question the bloc deliberately kept was filtered straight back out.
+    // The user was then muted AND marked AND NOT SHOWN — the one combination
+    // the ruling forbids, because they are being asked to act on something
+    // they cannot see, while the server blocks on a reply they cannot send.
+    //
+    // Measured by `test/service_integration/suppression_seam_test.dart` on its
+    // first run: gate 1 muted the question, the bloc stored it with its
+    // suppression retained, and the pane rendered neither the notice nor the
+    // answer controls — while AC-S3.7's and AC-S4.14's own tests stayed GREEN.
+    //
+    // [isActionableQuestion] is RE-USED, never re-implemented: one predicate,
+    // two enforcement points. A second copy here is exactly how the first
+    // divergence happened.
     final sl      = _stopList;
     final window  = sl == null
         ? stored
         : stored.where( ( m ) =>
-            m.item.type == 'user_initiated_message' || !sl.matches( m.item.message ) ).toList();
+            m.item.type == 'user_initiated_message' ||
+            !sl.matches( m.item.message ) ||
+            isActionableQuestion(
+              responseRequested : m.item.responseRequested,
+              senderId          : m.item.senderId,
+              jobId             : m.item.jobId,
+            ) ).toList();
     final hidden  = ( state.hiddenCountBySender[ focused ] ?? 0 ) + ( stored.length - window.length );
 
     return Column(
