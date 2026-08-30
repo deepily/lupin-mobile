@@ -191,4 +191,13 @@ class TestKeys {
   static const quickAskPauseToggle    = 'quickAsk.pauseToggle';
   static const quickAskPausedBanner   = 'quickAsk.pausedBanner';
   static const quickAskReplayPrefix   = 'quickAsk.replay.';      // + jobId
+  static const quickAskInterview      = 'quickAsk.interview';
+  static const quickAskInterviewQ     = 'quickAsk.interview.question';
+  static const quickAskInterviewCancel= 'quickAsk.interview.cancel';
+  static const quickAskNeedsInputCard = 'quickAsk.needsInput';
+
+  // ── Suppressed-question notice (S4.14 / S4.15) ──────────────────────────
+  static const promptSuppressedNotice = 'prompt.suppressed.notice';
+  static const promptSuppressedRule   = 'prompt.suppressed.rule';
+  static const promptSpeakAnyway      = 'prompt.suppressed.speakAnyway';
 }

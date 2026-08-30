@@ -245,6 +245,14 @@ class _MessageBubble extends StatelessWidget {
   final String       senderId;
   final bool         isPendingPrompt;
 
+  /// AC-S4.14's speak-anyway hook. Reaching the orchestrator's
+  /// `speakAnyway( TtsSuppression )` needs the ORIGINAL suppression object,
+  /// which is emitted at INGEST — long before this widget mounts — and is not
+  /// retained anywhere today. So the host injects the handler rather than this
+  /// widget reconstructing a `TtsSuppression`, which would guess `verbatim`
+  /// and `sender` and amount to a second source of truth for a stream that
+  /// already owns them.
+
   const _MessageBubble( {
     required this.msg,
     required this.senderId,
@@ -272,6 +280,14 @@ class _MessageBubble extends StatelessWidget {
         if ( msg.item.title != null && msg.item.title!.isNotEmpty )
           Text( msg.item.title!, style: theme.textTheme.labelLarge ),
         Text( msg.item.message ),
+        // AC-S4.14 — a question the stop-list suppressed says so, names the
+        // rule, and offers speak-anyway. It renders HERE, above the prompt
+        // zone, so the normal answer controls below it stay intact: the user
+        // can answer silently, which is the whole point. Putting this notice
+        // in an answer card instead would tell the user something was muted
+        // and give them no way to act on it, while the server stays blocked.
+        if ( msg.suppressedRule != null )
+          _SuppressedNotice( msg: msg ),
         if ( msg.item.responseRequested ) _promptZone( context ),
         const SizedBox( height: 2 ),
         MessageStamp( timestamp: msg.item.timestamp, id: msg.item.id ),   // lower-left
@@ -311,6 +327,7 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _promptZone( BuildContext context ) {
+
     if ( msg.answered ) {
       return const Padding(
         padding : EdgeInsets.only( top: 6 ),
@@ -462,6 +479,82 @@ class _CollapsedGroupState extends State<_CollapsedGroup> {
         ),
         if ( _expanded ) ...widget.children,
       ],
+    );
+  }
+}
+
+/// AC-S4.14 — the suppressed question's notice.
+///
+/// 🔴 Rick's OSQ3 ruling: the stop-list HOLDS. `verbatim` bypasses gates 2 and
+/// 3 only, and a pattern the user typed is not overridden by a flag. But **a
+/// silently dropped question is indistinguishable from a hang** — the user
+/// asked for nothing, hears nothing, and something on the server is blocked
+/// waiting for them. So the suppression is made VISIBLE instead: the text is
+/// always on screen, the matching rule is named, and one tap speaks it anyway.
+///
+/// Rick's own framing lowers the stakes rather than raising them — his
+/// stop-list exists to stop repetitive event chatter rendering in the focus
+/// bar, so an overlap with a deliberately-asked question is *"astronomically
+/// unlikely"*. This is required for correctness and expected to fire
+/// approximately never. Cheap and correct beats thorough here.
+class _SuppressedNotice extends StatelessWidget {
+  final FocusMessage msg;
+
+  /// Supplied by the host. NULL means no handler is wired yet, and the
+  /// speak-anyway affordance is then NOT rendered — a button that does
+  /// nothing is worse than no button, because it tells the user the
+  /// suppression is reversible and then is not.
+
+  const _SuppressedNotice( { required this.msg } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final scheme = Theme.of( context ).colorScheme;
+    final rule   = msg.suppressedRule ?? '';
+
+    return Padding(
+      key     : const Key( TestKeys.promptSuppressedNotice ),
+      padding : const EdgeInsets.only( top: 6 ),
+      child   : Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize      : MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon( Icons.volume_off, size: 14, color: scheme.outline ),
+              const SizedBox( width: 6 ),
+              Flexible(
+                child: Text(
+                  key   : const Key( TestKeys.promptSuppressedRule ),
+                  'Not spoken — matches your stop-list rule "$rule"',
+                  style : TextStyle( fontSize: 11, color: scheme.outline ),
+                ),
+              ),
+            ],
+          ),
+          // Offered only when the ORIGINAL suppression was retained — the
+          // object gate 1 produced, handed straight back, so what plays is
+          // what was refused rather than a reconstruction guessing `verbatim`
+          // and `sender`.
+          if ( msg.suppression != null )
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key       : const Key( TestKeys.promptSpeakAnyway ),
+                icon      : const Icon( Icons.volume_up, size: 16 ),
+                label     : const Text( 'Speak anyway' ),
+                style     : TextButton.styleFrom(
+                  padding       : const EdgeInsets.symmetric( horizontal: 8 ),
+                  visualDensity : VisualDensity.compact,
+                  tapTargetSize : MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed : () => context.read<FocusChatBloc>()
+                    .add( FocusSpeakAnywayRequested( msg.item.id ) ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

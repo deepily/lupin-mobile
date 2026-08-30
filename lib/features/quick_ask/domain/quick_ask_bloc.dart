@@ -105,6 +105,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskTransitionReceived>( _onTransition );
     on<QuickAskNotificationReceived>( _onNotification );
     on<QuickAskConnectionChanged>( _onConnectionChanged );
+    on<QuickAskInterviewAnswered>( _onInterviewAnswered );
+    on<QuickAskInterviewCancelled>( _onInterviewCancelled );
     on<QuickAskErrorDismissed>( _onErrorDismissed );
     on<QuickAskWatchdogFired>( _onWatchdogFired );
 
@@ -228,6 +230,19 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       return;
     }
 
+    await _applyResolvedAsk( res, transcript, emit );
+  }
+
+  /// The six-outcome status table, applied to an ask OR a resume outcome —
+  /// one implementation, so the second turn of an interview cannot drift from
+  /// the first turn of an ask.
+  Future<void> _applyResolvedAsk( AskResponse res, String transcript, Emitter<QuickAskState> emit ) async {
+
+    // ── Branch on STATUS, never on which id happens to be present ────────
+    // (María's ruling). There is a third case with NO id at all, and sniffing
+    // for one would offer an answer box with nowhere to send it.
+    if ( _applyStatusBranch( res, transcript, emit ) ) return;
+
     if ( res.isDone ) {
       // Served from cache or inline — the answer is already here, no
       // correlation needed and no watchdog to arm.
@@ -262,8 +277,6 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
     final jobId = res.jobId;
     if ( jobId == null || jobId.isEmpty ) {
-      // `parked` / `needs_input` — S4's surface. Round 1 leaves the phase idle
-      // rather than pretending a job is in flight.
       emit( state.copyWith( phase: QuickAskPhase.idle, clearLiveQuestion: true ) );
       return;
     }
@@ -294,6 +307,109 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     } else {
       _armWatchdog( reset: true );
     }
+  }
+
+  /// The `parked` and `needs_input` arms of the six-outcome status table.
+  /// Returns true when it has fully handled the response.
+  ///
+  /// 🔴 `parked` and `needs_input` are NOT the same thing wearing different
+  /// ids. `parked` means the server is ASKING and is holding a `pending_id`
+  /// open for the reply. `needs_input` means the server is TELLING: the submit
+  /// path hard-codes `interactive=False` so it never parks, there is no id,
+  /// and nothing exists to answer to (AC-S4.2).
+  bool _applyStatusBranch( AskResponse res, String transcript, Emitter<QuickAskState> emit ) {
+
+    if ( res.status == 'parked' ) {
+      final pendingId = res.pendingId;
+      if ( pendingId == null || pendingId.isEmpty ) return false;   // malformed; fall through
+      emit( state.copyWith(
+        phase        : QuickAskPhase.idle,
+        liveQuestion : transcript,
+        interview    : QuickAskInterview(
+          pendingId   : pendingId,
+          question    : res.answer ?? 'The server needs more information.',
+          argsMissing : res.argsMissing,
+        ),
+      ) );
+      _cancelWatchdog();
+      return true;
+    }
+
+    if ( res.status == 'needs_input' ) {
+      // A TERMINAL card naming what was missing, and NO answer affordance —
+      // there is nothing to answer to. The entry is `failed` so it renders in
+      // the dead lane, which is already the lane with no reply controls.
+      emit( state.copyWith(
+        phase   : QuickAskPhase.idle,
+        entries : [ ...state.entries, QuickAskEntry(
+          questionText : transcript,
+          state        : JobLifecycleState.failed,
+          source       : QuickAskSource.askResponse,
+          details      : JobSummary(
+            jobId        : '',
+            questionText : transcript,
+            status       : 'failed',
+            error        : res.argsMissing.isEmpty
+                ? 'The server needs more information to answer that.'
+                : 'Missing: ${res.argsMissing.join( ", " )}',
+          ),
+        ) ],
+        clearLiveQuestion : true,
+        clearInterview    : true,
+      ) );
+      _cancelWatchdog();
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<void> _onInterviewAnswered( QuickAskInterviewAnswered e, Emitter<QuickAskState> emit ) async {
+    final live = state.interview;
+    if ( live == null ) return;
+
+    emit( state.copyWith( phase: QuickAskPhase.submitting, clearError: true ) );
+
+    AskResponse res;
+    try {
+      res = await _repo.resume( ResumeRequest(
+        // 🔴 The SAME pending_id, every turn. The server holds one id open for
+        // the whole interview and re-asks the next argument on it.
+        pendingId   : live.pendingId,
+        answer      : e.answer,
+        websocketId : _ws.sessionId,
+      ) );
+    } on QueueApiException catch ( ex ) {
+      emit( state.copyWith( phase: QuickAskPhase.idle, errorMessage: ex.message ) );
+      return;
+    }
+
+    // A SECOND `parked` loops BACK to the prompt — it does not terminate.
+    // Treating the first resume as terminal is ruling 5 half-implemented.
+    if ( res.status == 'parked' && ( res.pendingId?.isNotEmpty ?? false ) ) {
+      emit( state.copyWith(
+        phase     : QuickAskPhase.idle,
+        interview : QuickAskInterview(
+          pendingId   : res.pendingId!,
+          question    : res.answer ?? 'One more thing…',
+          argsMissing : res.argsMissing,
+          turn        : live.turn + 1,
+        ),
+      ) );
+      return;
+    }
+
+    // The interview is over — hand the outcome to the ordinary paths.
+    emit( state.copyWith( clearInterview: true ) );
+    await _applyResolvedAsk( res, state.liveQuestion ?? live.question, emit );
+  }
+
+  Future<void> _onInterviewCancelled( QuickAskInterviewCancelled e, Emitter<QuickAskState> emit ) async {
+    emit( state.copyWith(
+      phase             : QuickAskPhase.idle,
+      clearInterview    : true,
+      clearLiveQuestion : true,
+    ) );
   }
 
   // ── Buffer ───────────────────────────────────────────────────────────────

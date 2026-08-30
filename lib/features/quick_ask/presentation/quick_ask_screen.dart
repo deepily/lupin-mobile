@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../services/tts/tts_orchestrator.dart';
+import '../../../shared/widgets/prompt_bodies.dart';
 import '../../../shared/widgets/tts_pause_control.dart';
 import '../../queue/domain/job_lifecycle.dart';
 import '../data/quick_ask_models.dart';
@@ -48,6 +49,7 @@ class QuickAskScreen extends StatelessWidget {
                 reason    : 'Tap replay on an answer to resume.',
               ),
               _RecordHeader( state: state ),
+              if ( state.interview != null ) _InterviewPrompt( interview: state.interview! ),
               if ( state.errorMessage != null ) _InlineError( message: state.errorMessage! ),
               if ( state.lost ) const _LostBanner(),
               Expanded( child: _Scrollback( state: state, tts: tts ) ),
@@ -167,6 +169,60 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
   }
 }
 
+/// The Door-A interview turn — the server is ASKING, and is holding a
+/// `pending_id` open for the reply.
+///
+/// 🔴 The body is the SHARED `OpenEndedPromptBody`, status-blind and
+/// door-agnostic. It takes its own data plus an `onRespond` callback and knows
+/// nothing about endpoints; the HOST decides — after branching on `status` —
+/// whether the value goes to `/api/notify/response`, `/api/v2/resume`, or
+/// nowhere. Passing a `status`, an endpoint, or a door into a body is the
+/// shape fracturing, which is what AC-S4.11 exists to prevent.
+class _InterviewPrompt extends StatelessWidget {
+  final QuickAskInterview interview;
+  const _InterviewPrompt( { required this.interview } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final scheme = Theme.of( context ).colorScheme;
+    return Container(
+      key       : const Key( TestKeys.quickAskInterview ),
+      width     : double.infinity,
+      color     : scheme.secondaryContainer,
+      padding   : const EdgeInsets.all( 12 ),
+      child     : Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon( Icons.help_outline, size: 18 ),
+              const SizedBox( width: 8 ),
+              Expanded(
+                child: Text(
+                  key   : const Key( TestKeys.quickAskInterviewQ ),
+                  interview.question,
+                  style : const TextStyle( fontWeight: FontWeight.w600 ),
+                ),
+              ),
+              IconButton(
+                key       : const Key( TestKeys.quickAskInterviewCancel ),
+                icon      : const Icon( Icons.close ),
+                tooltip   : 'Cancel',
+                onPressed : () => context.read<QuickAskBloc>()
+                    .add( const QuickAskInterviewCancelled() ),
+              ),
+            ],
+          ),
+          OpenEndedPromptBody(
+            onRespond: ( text ) => context.read<QuickAskBloc>()
+                .add( QuickAskInterviewAnswered( text ) ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InlineError extends StatelessWidget {
   final String message;
   const _InlineError( { required this.message } );
@@ -265,7 +321,13 @@ class _QuickAskCard extends StatelessWidget {
             if ( isDead ) ...[
               const SizedBox( height: 8 ),
               Text(
-                key   : Key( '${TestKeys.quickAskErrorCardPrefix}${entry.jobId ?? "pending"}' ),
+                // A `needs_input` outcome is TERMINAL and carries no id: the
+                // server is telling, not asking, so this card names what was
+                // missing and offers NO answer affordance — there is nothing
+                // to answer to (AC-S4.2).
+                key   : Key( ( entry.jobId == null || entry.jobId!.isEmpty )
+                    ? TestKeys.quickAskNeedsInputCard
+                    : '${TestKeys.quickAskErrorCardPrefix}${entry.jobId}' ),
                 entry.error ?? 'That question failed.',
                 style : TextStyle( color: Theme.of( context ).colorScheme.error ),
               ),

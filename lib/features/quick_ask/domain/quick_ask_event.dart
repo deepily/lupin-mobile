@@ -56,6 +56,20 @@ class QuickAskConnectionChanged extends QuickAskEvent {
   List<Object?> get props => [ connected ];
 }
 
+/// The user answered the server's Door-A interview question. The bloc re-posts
+/// the SAME `pending_id` (AC-S4.12) rather than starting a new ask.
+class QuickAskInterviewAnswered extends QuickAskEvent {
+  final String answer;
+  const QuickAskInterviewAnswered( this.answer );
+  @override
+  List<Object?> get props => [ answer ];
+}
+
+/// The user abandoned the interview without answering.
+class QuickAskInterviewCancelled extends QuickAskEvent {
+  const QuickAskInterviewCancelled();
+}
+
 /// The user dismissed the inline error.
 class QuickAskErrorDismissed extends QuickAskEvent {
   const QuickAskErrorDismissed();

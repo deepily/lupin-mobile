@@ -38,6 +38,40 @@ extension QuickAskBlockReasonText on QuickAskBlockReason {
   }
 }
 
+/// A live Door-A interview turn: the server parked the ask because it needs an
+/// argument, and is holding a `pending_id` open for the answer.
+///
+/// 🔴 The interview is RE-ENTRANT. `flow.py` comments it verbatim — *"Interview
+/// continues — re-ask the next arg on the SAME pending_id"* — so a
+/// three-argument question is three round trips on ONE id, and a client that
+/// treats the first `resume` as terminal renders the answer card after turn one
+/// and never asks the second question. That is Rick's ruling 5 silently
+/// half-implemented (AC-S4.12).
+class QuickAskInterview extends Equatable {
+  /// Held open by the server across every turn. Re-posted verbatim.
+  final String       pendingId;
+
+  /// The server's question for THIS turn — carried in the response's `answer`.
+  final String       question;
+
+  /// What the server still lacks. It shrinks by one each turn; that shrinking
+  /// is how a caller can tell a genuine second turn from a repeat.
+  final List<String> argsMissing;
+
+  /// 1-based, for "question N" affordances. Round 1 shows no wizard chrome.
+  final int          turn;
+
+  const QuickAskInterview( {
+    required this.pendingId,
+    required this.question,
+    this.argsMissing = const [],
+    this.turn        = 1,
+  } );
+
+  @override
+  List<Object?> get props => [ pendingId, question, argsMissing, turn ];
+}
+
 class QuickAskState extends Equatable {
   /// Oldest first. The screen renders `.reversed` (AC-S2.3) — newest at the
   /// top, matching `focus_chat_pane.dart:172-178`. Storing newest-first here
@@ -56,6 +90,10 @@ class QuickAskState extends Equatable {
 
   /// Id of a `response_requested` prompt the user has not answered.
   final String? pendingPromptId;
+
+  /// The live Door-A interview turn, if the ask parked (AC-S4.12). Null
+  /// whenever the server is not waiting on an argument.
+  final QuickAskInterview? interview;
 
   final bool connected;
 
@@ -76,6 +114,7 @@ class QuickAskState extends Equatable {
     this.liveJobId,
     this.liveQuestion,
     this.pendingPromptId,
+    this.interview,
     this.connected       = false,
     this.capturing       = false,
     this.errorMessage,
@@ -86,7 +125,7 @@ class QuickAskState extends Equatable {
   /// deterministic when more than one is false.
   QuickAskBlockReason? get blockReason {
     if ( liveJobId != null || phase == QuickAskPhase.waiting ) return QuickAskBlockReason.liveJobInFlight;
-    if ( pendingPromptId != null )                             return QuickAskBlockReason.unansweredPrompt;
+    if ( pendingPromptId != null || interview != null )        return QuickAskBlockReason.unansweredPrompt;
     if ( !connected )                                          return QuickAskBlockReason.socketDisconnected;
     final busy = capturing
         || phase == QuickAskPhase.transcribing
@@ -115,6 +154,7 @@ class QuickAskState extends Equatable {
     String?              liveJobId,
     String?              liveQuestion,
     String?              pendingPromptId,
+    QuickAskInterview?   interview,
     bool?                connected,
     bool?                capturing,
     String?              errorMessage,
@@ -122,6 +162,7 @@ class QuickAskState extends Equatable {
     bool clearLiveJobId       = false,
     bool clearLiveQuestion    = false,
     bool clearPendingPromptId = false,
+    bool clearInterview       = false,
     bool clearError           = false,
   } ) => QuickAskState(
     entries         : entries         ?? this.entries,
@@ -129,6 +170,7 @@ class QuickAskState extends Equatable {
     liveJobId       : clearLiveJobId       ? null : ( liveJobId       ?? this.liveJobId ),
     liveQuestion    : clearLiveQuestion    ? null : ( liveQuestion    ?? this.liveQuestion ),
     pendingPromptId : clearPendingPromptId ? null : ( pendingPromptId ?? this.pendingPromptId ),
+    interview       : clearInterview       ? null : ( interview       ?? this.interview ),
     connected       : connected       ?? this.connected,
     capturing       : capturing       ?? this.capturing,
     errorMessage    : clearError           ? null : ( errorMessage    ?? this.errorMessage ),
@@ -137,7 +179,7 @@ class QuickAskState extends Equatable {
 
   @override
   List<Object?> get props => [
-    entries, phase, liveJobId, liveQuestion, pendingPromptId,
+    entries, phase, liveJobId, liveQuestion, pendingPromptId, interview,
     connected, capturing, errorMessage, lost,
   ];
 }
