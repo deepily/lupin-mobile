@@ -190,6 +190,21 @@ void main() {
   } );
 
   group( 'AC-S4.11 — bodies stay status-blind and door-agnostic', () {
+    // 🔴 FALSIFIED 2026-08-29. These two are SOURCE checks — they read a file
+    // and look for strings — so they are the easiest kind of test to write
+    // wrong and never notice: a typo'd needle passes forever against every
+    // possible source. Each was cut and each went red, in a private worktree:
+    //
+    //   a body imports the notification repository        +11 -1
+    //   a body names "/api/v2/resume"                     +11 -1
+    //   a body takes a `String status` (OPTIONAL, so the
+    //     tree still compiles and the CHECK is what fires) +11 -1
+    //   a body takes a `pendingId` — it knows the door     +11 -1
+    //
+    // ⚠️ The status mutant was cut TWICE. The first version made the parameter
+    // `required`, which broke every call site: red, but red from the COMPILER,
+    // which proves only that the mutant cannot exist. A source check is
+    // falsified by a mutant the compiler accepts.
     final src = File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync();
 
     test( 'no repository import, and neither endpoint is named', () {
