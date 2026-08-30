@@ -195,6 +195,10 @@ class TestKeys {
   static const quickAskInterviewQ     = 'quickAsk.interview.question';
   static const quickAskInterviewCancel= 'quickAsk.interview.cancel';
   static const quickAskNeedsInputCard = 'quickAsk.needsInput';
+  // AC-S4.6 — the Door C interlock surface, live WHILE an ask is in flight.
+  static const quickAskPrompt         = 'quickAsk.prompt';
+  static const quickAskPromptQuestion = 'quickAsk.prompt.question';
+  static const quickAskPromptDismiss  = 'quickAsk.prompt.dismiss';
 
   // ── Suppressed-question notice (S4.14 / S4.15) ──────────────────────────
   static const promptSuppressedNotice = 'prompt.suppressed.notice';

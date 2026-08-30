@@ -125,7 +125,7 @@ void main() {
     testWidgets( 'each block reason renders its OWN message, not a shared one', ( tester ) async {
       final cases = <QuickAskState, String>{
         const QuickAskState( connected: false ) : 'Not connected — reconnecting',
-        const QuickAskState( connected: true, pendingPromptId: 'p' ) : 'Answer the question above first',
+        const QuickAskState( connected: true, pendingPrompt: QuickAskPrompt( id: 'p', question: 'q' ) ) : 'Answer the question above first',
         const QuickAskState( connected: true, liveJobId: 'j' ) : 'Waiting on your last question',
         const QuickAskState( connected: true, capturing: true ) : 'Already recording somewhere else',
       };

@@ -49,6 +49,10 @@ class QuickAskScreen extends StatelessWidget {
                 reason    : 'Tap replay on an answer to resume.',
               ),
               _RecordHeader( state: state ),
+              // AC-S4.6 — the Door C interlock. This surface stays LIVE while
+              // an ask is in flight (the record button does not), because the
+              // ask is blocked on exactly this question.
+              if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
               if ( state.interview != null ) _InterviewPrompt( interview: state.interview! ),
               if ( state.errorMessage != null ) _InlineError( message: state.errorMessage! ),
               if ( state.lost ) const _LostBanner(),
@@ -165,6 +169,69 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
           ),
         );
       },
+    );
+  }
+}
+
+/// The Door B/C question — a `response_requested` notification that arrived
+/// over the WebSocket, rendered while our own ask is still in flight.
+///
+/// 🔴 Door C's confirm BLOCKS the ask it belongs to (`_user_confirms` holds
+/// the HTTP thread, ~210s worst case) and defaults to **"no"** when nobody
+/// replies. Before this surface existed the id was recorded, the record button
+/// was disabled by it, and the question itself was never shown — so the
+/// confirm always expired to "no" and the user saw a mysterious pause. The
+/// bodies are the SHARED, door-agnostic ones (AC-S4.11); this host picks the
+/// door.
+class _PendingPrompt extends StatelessWidget {
+  final QuickAskPrompt prompt;
+  const _PendingPrompt( { required this.prompt } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final scheme = Theme.of( context ).colorScheme;
+    void respond( String v ) =>
+        context.read<QuickAskBloc>().add( QuickAskPromptAnswered( v ) );
+
+    return Container(
+      key     : const Key( TestKeys.quickAskPrompt ),
+      width   : double.infinity,
+      color   : scheme.tertiaryContainer,
+      padding : const EdgeInsets.all( 12 ),
+      child   : Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon( Icons.live_help_outlined, size: 18 ),
+              const SizedBox( width: 8 ),
+              Expanded(
+                child: Text(
+                  key   : const Key( TestKeys.quickAskPromptQuestion ),
+                  prompt.question,
+                  style : const TextStyle( fontWeight: FontWeight.w600 ),
+                ),
+              ),
+              IconButton(
+                key       : const Key( TestKeys.quickAskPromptDismiss ),
+                icon      : const Icon( Icons.close ),
+                // NOT a local hide — dismissing POSTS the default, so the
+                // blocked ask stops waiting instead of burning its ladder.
+                tooltip   : 'Dismiss (answers "${prompt.defaultAnswer}")',
+                onPressed : () => context.read<QuickAskBloc>()
+                    .add( const QuickAskPromptDismissed() ),
+              ),
+            ],
+          ),
+          // Door C is always yes/no. Anything else on this channel gets a
+          // free-text box rather than a dead end — a string is a valid
+          // `response_value` on the notification door for every type.
+          if ( prompt.isYesNo )
+            YesNoPromptBody( onRespond: respond )
+          else
+            OpenEndedPromptBody( onRespond: respond ),
+        ],
+      ),
     );
   }
 }

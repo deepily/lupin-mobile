@@ -12,6 +12,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/queue/data/queue_models.dart';
+import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/features/queue/data/queue_repository.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
@@ -20,6 +21,7 @@ import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 class MockQueueRepository  extends Mock implements QueueRepository  {}
 class MockAsrService       extends Mock implements AsrService       {}
 class MockWebSocketService extends Mock implements WebSocketService {}
+class MockNotificationRepository extends Mock implements NotificationRepository {}
 
 const ourEmail   = 'rick@lupin.test';
 const ourSession = 'wise penguin';
@@ -90,6 +92,9 @@ NotificationItem notif( {
   String  message           = 'hello',
   bool    responseRequested = false,
   String? jobId,
+  String? responseType,
+  String? responseDefault,
+  Map<String, dynamic>? responseOptions,
 } ) => NotificationItem(
   id                     : id,
   message                : message,
@@ -99,6 +104,9 @@ NotificationItem notif( {
   played                 : false,
   playCount              : 0,
   responseRequested      : responseRequested,
+  responseType           : responseType,
+  responseDefault        : responseDefault,
+  responseOptions        : responseOptions,
   suppressDing           : false,
   jobId                  : jobId,
   displayQualifierWidget : false,
@@ -110,6 +118,7 @@ class Harness {
   late final MockQueueRepository  repo;
   late final MockAsrService       asr;
   late final MockWebSocketService ws;
+  late final MockNotificationRepository notifications;
   late final StreamController<bool> connCtrl;
   late final QuickAskBloc         bloc;
 
@@ -126,6 +135,15 @@ class Harness {
     repo     = MockQueueRepository();
     asr      = MockAsrService();
     ws       = MockWebSocketService();
+    notifications = MockNotificationRepository();
+    // Registered HERE, not in each file's `setUpAll`: the default stub below
+    // uses `any()`, so every harness user would otherwise have to know about a
+    // type it never mentions. `registerFallbackValue` is idempotent.
+    registerFallbackValue( const NotificationResponsePayload(
+      notificationId: '_fallback', responseValue: '_fallback' ) );
+    // Default: the notification door ACKS. A test that cares stubs it again.
+    when( () => notifications.respond( any() ) ).thenAnswer(
+      ( _ ) async => const NotificationResponseAck( status: 'ok', notificationId: 'n-1' ) );
     connCtrl = StreamController<bool>.broadcast();
 
     when( () => ws.sessionId ).thenReturn( sessionId );
@@ -144,6 +162,7 @@ class Harness {
       repo,
       asr                  : asr,
       ws                   : ws,
+      notifications        : notifications,
       userEmail            : ourEmail,
       now                  : now,
       requestMicPermission : () async { micRequests++; return micGranted; },

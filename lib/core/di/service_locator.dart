@@ -331,8 +331,12 @@ class ServiceLocator {
     _getIt.registerLazySingleton<QuickAskBloc>(
       () => QuickAskBloc(
         _getIt<QueueRepository>(),
-        asr : _getIt<AsrService>(),
-        ws  : _getIt<WebSocketService>(),
+        asr           : _getIt<AsrService>(),
+        ws            : _getIt<WebSocketService>(),
+        // AC-S4.6 — the second door. Door C's near-match confirm is a
+        // notification, and the ask it blocks cannot proceed until it is
+        // answered on `POST /api/notify/response`.
+        notifications : _getIt<NotificationRepository>(),
       ),
     );
 

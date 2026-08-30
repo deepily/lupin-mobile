@@ -79,3 +79,22 @@ class QuickAskErrorDismissed extends QuickAskEvent {
 class QuickAskWatchdogFired extends QuickAskEvent {
   const QuickAskWatchdogFired();
 }
+
+/// The user answered a `response_requested` prompt from the Door B/C channel
+/// (AC-S4.6). It posts to `POST /api/notify/response` — a DIFFERENT door from
+/// the interview's `/api/v2/resume` — and must leave the in-flight ask alone.
+class QuickAskPromptAnswered extends QuickAskEvent {
+  final String answer;
+  const QuickAskPromptAnswered( this.answer );
+  @override
+  List<Object?> get props => [ answer ];
+}
+
+/// The user dismissed the prompt. This is NOT a local hide: it posts the
+/// server's own `response_default` — `no` for Door C — so the blocked ask
+/// stops waiting instead of running out its retry ladder in silence.
+class QuickAskPromptDismissed extends QuickAskEvent {
+  const QuickAskPromptDismissed();
+  @override
+  List<Object?> get props => [];
+}

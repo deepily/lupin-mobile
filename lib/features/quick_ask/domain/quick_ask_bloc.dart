@@ -5,6 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../services/asr/asr_service.dart';
 import '../../../services/permissions/mic_permission.dart' as mic;
 import '../../../services/websocket/websocket_service.dart';
+import '../../notifications/data/ask_resolution.dart';
+import '../../notifications/data/notification_models.dart';
+import '../../notifications/data/notification_repository.dart';
 import '../../queue/data/queue_models.dart';
 import '../../queue/data/queue_repository.dart';
 import '../../queue/domain/job_lifecycle.dart';
@@ -33,6 +36,11 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   final QueueRepository  _repo;
   final AsrService       _asr;
   final WebSocketService _ws;
+
+  /// The OTHER door. Door C's confirm is a notification, so it is answered on
+  /// `POST /api/notify/response` — never on `/api/v2/resume`, which belongs to
+  /// the interview. Two doors, two repositories, one screen (AC-S4.6).
+  final NotificationRepository _notifications;
 
   /// Our identity, used as the buffer's insert-time filter keys. `userEmail`
   /// is the one that CLOSES the admin fan-out hole rather than narrowing it.
@@ -87,16 +95,18 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
   QuickAskBloc(
     this._repo, {
-    required AsrService       asr,
-    required WebSocketService ws,
+    required AsrService          asr,
+    required WebSocketService    ws,
+    required NotificationRepository notifications,
     String?                   userEmail,
     DateTime Function()?      now,
     mic.MicPermissionRequester? requestMicPermission,
-  } )  : _asr        = asr,
-        _ws         = ws,
-        _userEmail  = userEmail,
-        _now        = now ?? DateTime.now,
-        _requestMic = requestMicPermission ?? mic.requestMicPermission,
+  } )  : _asr           = asr,
+        _ws            = ws,
+        _notifications = notifications,
+        _userEmail     = userEmail,
+        _now           = now ?? DateTime.now,
+        _requestMic    = requestMicPermission ?? mic.requestMicPermission,
         super( const QuickAskState() ) {
 
     on<QuickAskRecordPressed>( _onRecordPressed );
@@ -105,6 +115,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskTransitionReceived>( _onTransition );
     on<QuickAskNotificationReceived>( _onNotification );
     on<QuickAskConnectionChanged>( _onConnectionChanged );
+    on<QuickAskPromptAnswered>( _onPromptAnswered );
+    on<QuickAskPromptDismissed>( _onPromptDismissed );
     on<QuickAskInterviewAnswered>( _onInterviewAnswered );
     on<QuickAskInterviewCancelled>( _onInterviewCancelled );
     on<QuickAskErrorDismissed>( _onErrorDismissed );
@@ -364,6 +376,45 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     return false;
   }
 
+  // ── Door B/C: the question channel that runs ALONGSIDE an ask ────────────
+
+  Future<void> _onPromptAnswered( QuickAskPromptAnswered e, Emitter<QuickAskState> emit ) =>
+      _respondToPrompt( e.answer, emit );
+
+  Future<void> _onPromptDismissed( QuickAskPromptDismissed e, Emitter<QuickAskState> emit ) {
+    final prompt = state.pendingPrompt;
+    if ( prompt == null ) return Future.value();
+    return _respondToPrompt( prompt.defaultAnswer, emit );
+  }
+
+  /// 🔴 THE INTERLOCK. Every emit here clears the prompt and NOTHING ELSE:
+  /// no phase change, no entry rewrite, no `liveJobId` touch, no watchdog
+  /// call. The ask this confirm is blocking is still in flight on its own
+  /// 240s socket, and disturbing it is exactly the failure AC-S4.6 names.
+  Future<void> _respondToPrompt( String answer, Emitter<QuickAskState> emit ) async {
+    final prompt = state.pendingPrompt;
+    if ( prompt == null ) return;
+
+    try {
+      await _notifications.respond( NotificationResponsePayload(
+        notificationId : prompt.id,
+        responseValue  : answer,
+      ) );
+    } on NotificationApiException catch ( ex ) {
+      // AC-S4.9's vocabulary, on this door too: "already responded" and
+      // "grace period exceeded" are ENDINGS, not errors — another device
+      // answered, or the window closed. Either way the prompt is finished
+      // and holding it open would block recording forever.
+      final resolution = classifyRespondFailure( ex.message );
+      emit( resolution.isResolved
+          ? state.copyWith( clearPendingPrompt: true )
+          : state.copyWith( errorMessage: ex.message ) );
+      return;
+    }
+
+    emit( state.copyWith( clearPendingPrompt: true, clearError: true ) );
+  }
+
   Future<void> _onInterviewAnswered( QuickAskInterviewAnswered e, Emitter<QuickAskState> emit ) async {
     final live = state.interview;
     if ( live == null ) return;
@@ -549,7 +600,16 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     // to reconcile: no job_id to look up, every probe "not found", and the UI
     // declaring `lost` on a request that is alive and waiting for the user.
     if ( n.responseRequested ) {
-      emit( state.copyWith( pendingPromptId: n.id ) );
+      // AC-S4.6 — held WHOLE, so it can actually be rendered and answered.
+      // Holding the id alone blocked the record button on a question the user
+      // was never shown, and Door C then timed out to its "no".
+      emit( state.copyWith( pendingPrompt: QuickAskPrompt(
+        id              : n.id,
+        question        : n.message,
+        responseType    : n.responseType,
+        responseDefault : n.responseDefault,
+        responseOptions : n.responseOptions,
+      ) ) );
       _armWatchdog( reset: true );
       return;
     }
