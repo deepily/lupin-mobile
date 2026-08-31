@@ -13,6 +13,66 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 ---
 
 
+
+## 2026.08.30 | Session `0e3df8ca` (Tiffany 💍, MANAGER) — Board burned down: 2 rows closed, 1 parked, 1 new P1 found live with Rick at the keyboard (SESSION-END)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Commit**: `0df6a66` · **Store rows**: `54589356` (ruled, handed off) · `82883a4e` (closed) · `734bd1bf` (parked) · `0e7c9214` (NEW P1)
+
+**Shape of the session**: no crew — the four workers from 2026-08-29 were already stood down. I drove my own
+board, verified other people's claims before recording them, and handed every piece of server work to a
+server seat rather than doing it myself. Rick's no-new-tickets moratorium was in force all day; he lifted it
+for me alone so we could file what we found together.
+
+**Accomplishments**:
+- **`82883a4e` closed with receipts.** Arnold had finished the four UI-half ACs before being stood down and
+  the row was never transitioned — **false liveness, not missing work**. Verified 34 tests pass (S4.14 ×2,
+  S4.15 ×21, S4.2 ×3, S4.12 ×8), deliberately **not by grep**, since the row itself warns an older mobile plan
+  reuses the `AC-S4.n` namespace. Then, per the crew's own standing rule that *mutation beats naming*, forced
+  the second-parked loop-back guard false at `quick_ask_bloc.dart:503` — the exact defect its docstring names —
+  and the run went red at **precisely one** test, `Expected <2> Actual <1>`. Mutant cut in a throwaway
+  worktree and removed.
+- **`54589356` ruled and handed off.** Walked Rick through it; he ruled that both forms of reuse gate on
+  `answer_is_correct is True`, unset counts as not-correct, and accepted the cache-miss cost on the record.
+  Pocholo then closed the last open question: `/api/v2/submit` never calls `_may_serve`, so it is the **front
+  door**, and `v2 executor = queued` routes a refusal into a queue whose `100.0` floor matches the very
+  snapshot v2 just refused — the guard fires, is logged as a refusal, and is undone one step later.
+- **`0e7c9214` — new P1, found live, two independent bugs.** Rick ran the AC-G3 probe in the web Q&A and
+  reported he got *"New math job"* and then silence. The log arithmetic closed both halves with no residue:
+  **4 asks, 1 answer delivered, 3 "notification skipped" warnings, 0 env fallbacks.** Cause (1): `get_copy()`
+  injects the requester's email but never their `user_id`, so a replayed snapshot emits its completion to the
+  original creator's stale id — and **all 13 rows in `lupin_db_dev` carry the old-format key, zero carry the
+  UUID**, so it is the whole cache, not one row. The correct id is in scope one line away, used to scope the
+  job's id_hash but not the job's user. Cause (2): empty `user_email` upstream hits a bare `return` in
+  `FifoQueue._notify` — the answer is computed and then dropped with only a printed warning.
+- **AC-S2.8 resolved, and the premise was wrong** (`0df6a66`). It was never undefined — it lives in the June
+  focus-mode plan with a live pin. A cross-document citation nobody followed. The actual defect was stranger
+  and smaller: the plan instructed an amendment *from* the phrase "sole caller", which appears in **no**
+  document; every source already says "sole dispatcher".
+
+**Two mistakes of mine worth carrying forward, because both were caught by someone else**:
+- **I picked an instrument that could not measure the thing.** I told Rick to watch `total_replays` for the
+  AC-G3 probe. That counter is written on the *queue cache* path; the run took the *snapshot* path. A zero
+  there was never evidence about the guard, and I would have read it as evidence. What caught it was Rick
+  mentioning something I had not asked him to look at — that no answer came back at all.
+- **I drifted across a repo boundary, twice.** `54589356` is a lupin server row that spent a night on a
+  lupin-mobile manager's board; Rick spotted it. Later I routed `0e7c9214` to Mr Radio on my own judgement
+  minutes after telling Rick he could place it. Both times the correction was cheap; the pattern is that a
+  mobile seat reading server code keeps deciding it may also fix server code.
+
+**Verified, do not re-derive**: every claim relayed by a peer this session arrived flagged *"condensed in
+transit"* and was re-checked in source before being written to a row — the two `_may_serve` call sites, the
+`flow.py:231` comment text, both ini values, the executor wiring, `get_copy`'s body, and the `_notify` return.
+None of it is recorded on trust. Also: the reported *"store writes are 403ing"* alarm was **false for this
+session** — a live write returned 200 (audit event 10279), and Mr Radio retracted it as inherited-unverified.
+The real gate is narrow: `tasks.py:627` blocks *minting* a row directly in `blocked` status, and the documented
+workaround (create queued, then transition) is what I was already doing.
+
+**Open at close**: where `user_email` is lost upstream of `_notify` (Pocholo's, on `0e7c9214`); the
+`log_query()` empty-embedding crash, undiagnosed; `734bd1bf` parked behind both until 2026-09-02; the device
+check of the Quick Ask screen, still never run on hardware.
+
+**Files**: `src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md` (`0df6a66`), `TODO.md`, `history.md`.
+
 ## 2026.08.29 | Session `4000b44a` (Tiffany 💍, MANAGER) — Quick Ask push-to-talk screen: cascaded review → full implementation, 62 commits (SESSION-END)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` (62 ahead of origin at close) · **Doc**: `src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md` + `src/rnd/2026.08.29-cascade-quick-ask-recon-checklist.md`
