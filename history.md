@@ -15,6 +15,37 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+
+## 2026.08.31 | Session `0e3df8ca` (Tiffany 💍) — INCIDENT: the lupin-mobile backup destination was gutted and restored
+
+**Durable record, moved here from a DM at Mr Radio's prompting** — a report that lives only in a peer message dies with the seat.
+
+## What was observed
+
+| | earlier that evening | at the next ritual run |
+|---|---|---|
+| files at `/mnt/DATA02/…/lupin/src/lupin-mobile/` | **20,432**, matched byte-for-byte | **5,950** |
+| `history.md` at destination | present | **absent** |
+| top-level dirs | full tree | 4 — `android`, `build`, `flutter`, `src` |
+
+**Caught by a mismatch, not by luck**: the dry run reported **20,223 creations** where ~18 were expected. That number is what stopped the write and sent me to look at the destination. Restored and verified — **22,655 files**, `history.md` and `TODO.md` matching by checksum.
+
+## What is established
+
+- **No scheduled job writes to that destination.** Checked the user crontab (9 entries, none matching `rsync`/`backup`/`DATA02`/`lupin-mobile`) and systemd timers (only `dpkg-db-backup`, unrelated). ⇒ **Mr Radio's deadline concern — that a periodic rsync would repeat the wipe on its next run — does not apply.** Nothing is scheduled to recur.
+- **The only script pointing at that destination is this repo's own `src/scripts/backup.sh`.**
+- **This session's write did not do it.** The `--write` run that evening reported `deleted 0, created 0, transferred 18` against a then-complete destination, and rsync reports the deletions it makes. The destination directory's own mtime is **23:23**, eleven minutes *after* this session's backup-fix commit at **23:12:32**, with no write from here in between.
+
+## What is NOT established — and this is the honest limit
+
+**Who or what removed ~14,000 files.** No cron, no timer, and the only project script aimed there is this one. That leaves a manual action, another session, or a tool outside the project scripts — **and I did not identify it.** I am recording that I cannot fully exonerate this session either: the evidence is a `deleted 0` in my own run's output, which is strong but is still my own instrument reporting on itself.
+
+## The standing hazard this sits next to
+
+Hours earlier, this repo's backup script was found pointing at a **path that no longer existed** — the old `lupin/src/lupin-mobile/` subtree location, from before this repo went standalone. It failed loudly at rsync code 23, so nothing was lost. **But the script runs `--delete`**, so the same stale-path shape in another project's script would silently wipe whatever its source lacks. Fixed here in `732b70b`; **nobody has audited the other destinations under that tree.**
+
+⇒ **A backup silently holding a third of its content is worse than no backup**, because nobody discovers it until they need it. The check that caught this was comparing the dry run's file count against what was expected — worth doing every time, since the failure is invisible in the success message.
+
 ## 2026.08.31 | Session `0e3df8ca` (Tiffany 💍, MANAGER) — Post-checkpoint delta: both server fixes merged, a third P1 found, board left honest (SESSION-END)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Continues the 2026.08.30 entry below** — same session, second checkpoint after the board kept moving.
