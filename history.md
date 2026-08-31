@@ -14,6 +14,34 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+
+## 2026.08.31 | Session `0e3df8ca` (Tiffany 💍, MANAGER) — Post-checkpoint delta: both server fixes merged, a third P1 found, board left honest (SESSION-END)
+
+**Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Continues the 2026.08.30 entry below** — same session, second checkpoint after the board kept moving.
+
+**What changed after the first checkpoint** (`ed7002b` / `732b70b`):
+
+- **A third P1, `88347f65`** — Pocholo handed me a partly-diagnosed symptom and the measurement turned out bigger than the report. Rick's browser session dropped **3,775 frames in 3 hours** while the server printed `is_connected=True` and a ✓ before each one. The sibling comparison is what reshaped it: `foolish goat` shows **0 drops and 0 pre-WebSocket registrations** — silence, not health — and there were **zero** successful deliveries to *either* browser session, with **no browser session recording a subscription in six hours**. My original "stale ghost tab" theory does not survive that: a stale tab would leave a working sibling, and there is no working sibling. **Priority deliberately held at P1, not raised** — six hours of log is a window, not a history, and I cannot distinguish a same-day regression from a long-standing condition.
+- **Both `0e7c9214` causes merged** — `0b57602f` at `c91bd1bb`, and `6306a166` at `7aac0061`. Verified with `git merge-base --is-ancestor` rather than taken from the relay. **Neither row closed on the merge**, because auto-reload is off on `:7999`: the merged fix is not the served code, and a probe run now would measure the bug and read as a *failed* fix.
+- **`734bd1bf` un-parked.** Its park reason was *"park it behind the server bugs"* and that condition is gone; leaving the quote alive would make the row lie about why it waits. Now blocked-on-Rick, chase aligned to `88347f65` at 13:00Z so both reach him in one sitting rather than as two interruptions.
+- **Auto-reload verified on the live process, not from the doc.** I had asserted it to Rick from the standing instructions and then checked: `reload_enabled` gates on `LUPIN_RELOAD`, and the running container has no such variable. The claim held, but I had stated it one level more confidently than my evidence supported. Useful side-finding: that gate is read at container **start**, so a plain `docker restart` would not arm reload — it needs a recreate.
+
+**The near-miss worth keeping** — a peer reported that this session's store writes were returning 403 and that the remedy was a `/clear`. **It was false for this session**, inherited unverified from another report; a live write returned 200. Had I complied I would have lost the day's context, and María was told the same thing.
+
+Asked afterwards what made complying look safe, the honest answer was **not** the specifics that decorated it — the census-shaped count, the named code path, the story explaining exactly who was affected. It was that **the stated harm was ongoing and the remedy was routine.** When damage is described as accumulating now and the fix is cheap, waiting looks like the risky choice and verification starts to feel like foot-dragging. ⇒ **A claim about your own state that you can test in one call should always be tested before you act on it.** The tell, in hindsight: the message contained no observation. Every sentence was a verdict, and nobody had written down a single thing they saw.
+
+**Board at close** — 3 rows, none faked to done:
+
+| row | status | who |
+|---|---|---|
+| `0e7c9214` | in_progress, fixes merged, awaiting the live probe | Pocholo (I chase) |
+| `734bd1bf` | blocked on Rick, chase 13:00Z | me |
+| `88347f65` | blocked on Rick, **unassigned**, chase 13:00Z | needs a web-client seat |
+
+**The closing sequence, one sitting**: bounce `:7999` → Rick asks a calculator question twice → expects the answer both times. That single run closes `0e7c9214` and gives the clean AC-G3 read that closes `734bd1bf`. **Two rows, one probe.**
+
+**Files**: `history.md`, `TODO.md`.
+
 ## 2026.08.30 | Session `0e3df8ca` (Tiffany 💍, MANAGER) — Board burned down: 2 rows closed, 1 parked, 1 new P1 found live with Rick at the keyboard (SESSION-END)
 
 **Branch**: `wip-v0.1.6-2026.04.16-tracking-lupin-work` · **Commit**: `0df6a66` · **Store rows**: `54589356` (ruled, handed off) · `82883a4e` (closed) · `734bd1bf` (parked) · `0e7c9214` (NEW P1)
