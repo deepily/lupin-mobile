@@ -18,6 +18,18 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-01 (backup)
+
+> Rick's **new-ticket moratorium** in force — carried as narrative, not filed as store rows.
+
+- [ ] [LUPIN-MOBILE] **DATA02 mirror holds ~812 MB of now-excluded content that `--delete` will never reclaim.** The destination is 858 MB: `flutter/` 625 MB, `build/` 117 MB, `.venv/` 35 MB, `.dart_tool/` 35 MB, plus a 47 MB `.git`. Those paths are now in the exclusion list, and **rsync protects excluded files on the receiving side** — so `--delete` reports 0 deletions and the stale copy sits there forever. Needs a **one-time manual cleanup, Rick's word required** (destructive op on a backup, moratorium in force). Safe form, leaves `.git` and the real work alone:
+  ```
+  rm -rf /mnt/DATA02/include/www.deepily.ai/projects/lupin-mobile/{flutter,build,.venv,.dart_tool,.idea}
+  ```
+  ⚠️ Do **not** reach for `--delete-excluded` in the script instead — it would also delete the destination's `.git`, which is in the exclusion list.
+
+- [ ] [LUPIN-MOBILE] **Upstream gap in planning-is-prompting: the canonical exclusion list has no Flutter/Dart block.** Both copies (`scripts/rsync-exclude-default.txt` and `src/scripts/conf/rsync-exclude.txt`, identical at line 74) carry a commented `# Node.js (if applicable)` block — `node_modules/`, `npm-debug.log`, `yarn-error.log` — and **nothing for Flutter/Dart at all**. The list's design is "uncomment what applies", so a Flutter project copying it silently backs up its vendored SDK, which is exactly what happened here (1.79 GB → 6.22 MB once fixed, commit `717e94c`). Suggested upstream change: a parallel commented block — `# flutter/`, `# .dart_tool/`, `# .flutter-plugins*`, `# .gradle/`. **Not this repo's file to change**; hand to whoever owns planning-is-prompting.
+
 ## 🆕 Open from 2026-08-29 (Quick Ask)
 
 > Rick's **new-ticket moratorium** was in force at session end (2026-08-29 22:52 broadcast) — these
