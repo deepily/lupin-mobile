@@ -15,8 +15,10 @@
 # 2026-08-30: this repo is standalone at projects/lupin-mobile/, no longer a subtree
 # at lupin/src/lupin-mobile/. The old path no longer exists, so every run failed at
 # rsync code 23 (loudly, not silently — nothing was lost).
+# 2026-09-01: destination repointed to the standalone mirror projects/lupin-mobile/,
+# which mirrors the source path one-for-one.
 SOURCE_DIR="/mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/"
-DEST_DIR="/mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/"
+DEST_DIR="/mnt/DATA02/include/www.deepily.ai/projects/lupin-mobile/"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 EXCLUDE_FILE="$SCRIPT_DIR/conf/rsync-exclude.txt"
 PROJECT_NAME="Lupin Mobile"
