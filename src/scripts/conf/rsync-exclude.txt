@@ -80,3 +80,13 @@ temp/
 # *.db
 
 # Project-specific exclusions (add your patterns below)
+
+# Flutter/Dart — vendored SDK and generated tooling (2026-09-01)
+# flutter/ is a full SDK clone (~1.9 GB), gitignored and re-obtainable via
+# `git clone` of the Flutter repo. It was the entire content of the backup.
+flutter/
+.flutter/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.gradle/
