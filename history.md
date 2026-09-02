@@ -16,6 +16,20 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+## 2026.09.01 | Session `5b101cc5` (Tiffany 💍) — the backup was 99% Flutter SDK, and the bounce we were waiting on had already happened
+
+**Backup fixed twice, then verified.** The 2026-08-30 fix corrected `SOURCE_DIR` but left `DEST_DIR` naming the retired subtree `lupin/src/lupin-mobile/`; repointed to the standalone mirror `projects/lupin-mobile/` (`1da5b72`). The first green dry run then turned out to be backing up the wrong thing: `flutter/` is a vendored 1.9 GB SDK clone, gitignored and re-obtainable, and the exclusion file was the generic Python list shipped with the canonical script — it knows `.venv/` and `build/` and nothing about Dart. Added `flutter/`, `.flutter/`, `.dart_tool/`, `.flutter-plugins*`, `.gradle/` (`717e94c`). **1.79 GB / 20,433 files → 6.22 MB / 794.**
+
+**Verified rather than assumed.** Diffed `git ls-files` (532) against rsync's own `--out-format='%n'` list: 530 of 532 tracked files reach the mirror, the two absent being `.gitignore` and `android/.gitignore`, caught by the canonical list's own pattern. Rick ran the cleanup `rm` (858 MB → 47 MB) and then the `--write` run; walked all 532 against the destination filesystem afterwards — **missing: 0**. One residue noted: the destination's root `.gitignore` is a stale April copy, since rsync neither updates nor deletes excluded files on the receiving side.
+
+**Two stale facts corrected** (`9f175bd`, `ce6e218`). `TODO.md` carried "bounce `:7999` first" as the next action; measured, the container had started 2026-09-01 23:13 UTC with both fixes (`c91bd1bb`, `7aac0061`, merged 2026-08-30) already ancestors of the served HEAD, over a live `/src` bind-mount — **a bounce would have changed nothing.** And I had twice told Rick row `734bd1bf` was "blocked on you at the mic"; it had not been since its 2026-08-31 amendment.
+
+**`734bd1bf` worked from the server side, then handed off.** Ran `test_9b_the_read_guard.py` — 14 passed, including "a confirmed exact hit is still served" — eliminating `_may_serve` as the explanation for Rick's probe. `path`/`route_reason` turned out to already ship in the response body (`_finish` → `_emit`); the web Q&A UI simply does not surface them. Found that `test_v2_ask_roundtrip.py:141`'s strict-xfail exit condition is unreachable: it never confirms the answer, so a free consumer is necessary but not sufficient. Proposed a two-ask remedy, then **corrected myself** — that hits the same drain wall on `:8000`. The design that works uses tier 1's plain question equality (no embedding): seed a confirmed row, ask once, read `path`. Rick ruled the implementation is not a mobile seat's job → handed to Mr Radio 🦉 by DM `aeee9014`. Four amendments on the row carry the full trail.
+
+**Files**: `src/scripts/backup.sh`, `src/scripts/conf/rsync-exclude.txt`, `TODO.md`, `history.md`
+
+---
+
 ## 2026.08.31 | Session `0e3df8ca` (Tiffany 💍) — INCIDENT: the lupin-mobile backup destination was gutted and restored
 
 **Durable record, moved here from a DM at Mr Radio's prompting** — a report that lives only in a peer message dies with the seat.
