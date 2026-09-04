@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/notification_filter/notification_stop_list.dart';
@@ -75,6 +76,14 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   /// Ask's internals. Null ⇒ no live ask surface (focus mode alone), and
   /// only the QUESTION arms of [shouldSpeakVerbatim] apply.
   final bool Function( String jobId )? _isQuickAskJob;
+
+  /// Wiring probe for bug 9adff476. Setter 1 above went UNINJECTED in
+  /// production while `actionable_speech_test` stayed green, because that
+  /// test supplies the very dependency it exercises — a test that hands in
+  /// the thing under test cannot fail on the thing being absent. This
+  /// exposes the seam so a DI-level test can assert PRODUCTION wired it.
+  @visibleForTesting
+  bool get hasQuickAskProbe => _isQuickAskJob != null;
 
   FocusChatBloc(
     this._repo, {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,6 +114,36 @@ class ServiceLocator {
 
     _isInitialized = true;
   }
+
+  /// PRODUCTION construction of [FocusChatBloc], extracted from its
+  /// registration so a test can exercise the real wiring without booting the
+  /// whole locator — [init] needs `path_provider` platform channels, which is
+  /// why the DI suite is quarantined and why bug 9adff476 survived so long
+  /// unseen. This is the ONLY place `isQuickAskJob` is supplied.
+  ///
+  /// Requires:
+  ///   - NotificationRepository, TtsOrchestrator and NotificationStopList are
+  ///     registered; QuickAskBloc is registered before the returned bloc's
+  ///     probe is CALLED (not before it is built)
+  ///
+  /// Ensures:
+  ///   - returns a FocusChatBloc whose `isQuickAskJob` probe is non-null
+  @visibleForTesting
+  static FocusChatBloc buildFocusChatBloc() => FocusChatBloc(
+    _getIt<NotificationRepository>(),
+    tts          : _getIt<TtsOrchestrator>(),
+    // Recency-band aging tick (plan 2026.06.25 §4.4) — production only;
+    // tests construct the bloc without one so pumpAndSettle can settle.
+    tickInterval : const Duration( seconds: 30 ),
+    stopList     : _getIt<NotificationStopList>(),
+    // Setter 1 of the two-setter verbatim contract (rnd 2026.08.29 §71).
+    // Without it `_isQuickAskJob` is null, shouldSpeakVerbatim short-circuits
+    // at speech_intent.dart:83, and the answer the user ASKED for is cut to
+    // `ttsFraction` — or, with `speakSystemSenders` off, never spoken at all.
+    // Resolved through a closure, NOT a tear-off: QuickAskBloc is registered
+    // AFTER this one, so the lookup must defer to call time.
+    isQuickAskJob : ( jobId ) => _getIt<QuickAskBloc>().isQuickAskJob( jobId ),
+  );
 
   /// Initialize core dependencies
   static Future<void> _initializeCore() async {
@@ -311,16 +342,7 @@ class ServiceLocator {
     );
 
     // Focus-mode state engine (S2) — the sole TTS dispatcher per above.
-    _getIt.registerLazySingleton<FocusChatBloc>(
-      () => FocusChatBloc(
-        _getIt<NotificationRepository>(),
-        tts          : _getIt<TtsOrchestrator>(),
-        // Recency-band aging tick (plan 2026.06.25 §4.4) — production only;
-        // tests construct the bloc without one so pumpAndSettle can settle.
-        tickInterval : const Duration( seconds: 30 ),
-        stopList     : _getIt<NotificationStopList>(),
-      ),
-    );
+    _getIt.registerLazySingleton<FocusChatBloc>( buildFocusChatBloc );
 
     // Voice-reply ASR (S4): record-pkg push-to-talk → parent Whisper WAV
     // endpoint. Rides the SHARED auth-wired Dio (endpoint needs no auth per
