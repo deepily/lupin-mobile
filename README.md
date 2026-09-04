@@ -105,6 +105,9 @@ src/lupin-mobile/
 ### Project Planning
 - **[Project Initialization Plan](src/rnd/2025.07.06-project-initialization-plan.md)** - Initial project setup and milestone planning
 
+### Long-Running Jobs on Mobile (2026-09)
+- **[Long-Running Quick Ask: Progress, Interrupts, and a Notification Pane](src/rnd/2026.09.04-long-running-quick-ask-notification-pane.md)** - What happens when a Quick Ask becomes a 2-20 minute job: today's progress-as-answer defect, what the browser client already does (job Activity Log + in-place progress rows + a queued Action Required pane), what mobile's focus mode can and cannot do, and three design options with a recommendation. **Plan only; nothing implemented.**
+
 ### Notification Suppression (2026-09)
 - **[Demo-Time Notification Toggle](src/rnd/2026.09.04-demo-time-notification-toggle.md)** - Four options for silencing duplicated announcements and interrupting manager asks on the emulator, plus the WebSocket-to-TTS path trace behind them. **Awaiting a decision; nothing implemented.**
 
