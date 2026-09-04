@@ -90,6 +90,22 @@ class QuickAskInterviewCancelled extends QuickAskEvent {
   const QuickAskInterviewCancelled();
 }
 
+/// The user tapped the X on a question card — take it off the list.
+///
+/// 🔴 If that card's job is still RUNNING this also CANCELS it server-side.
+/// Hiding a live card locally would leave the job working, still holding the
+/// record button, and still speaking its answer when it finished — a card the
+/// user deliberately dismissed talking back at them.
+///
+/// [jobId] is null for the one card that has no id yet: the question submitted
+/// but not yet attributed to a job.
+class QuickAskEntryDismissed extends QuickAskEvent {
+  final String? jobId;
+  const QuickAskEntryDismissed( this.jobId );
+  @override
+  List<Object?> get props => [ jobId ];
+}
+
 /// The user dismissed the inline error.
 class QuickAskErrorDismissed extends QuickAskEvent {
   const QuickAskErrorDismissed();

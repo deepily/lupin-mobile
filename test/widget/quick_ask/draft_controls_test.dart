@@ -14,6 +14,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:get_it/get_it.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/queue/data/queue_models.dart';
+import 'package:lupin_mobile/features/queue/domain/job_lifecycle.dart';
+import 'package:lupin_mobile/features/quick_ask/data/quick_ask_models.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_event.dart';
@@ -157,6 +160,63 @@ void main() {
 
       verifyNever( () => b.add( const QuickAskDraftCleared() ) );
       verifyNever( () => b.add( const QuickAskDraftSent() ) );
+    } );
+  } );
+
+  group( 'every question card carries an X in its upper-left corner', () {
+
+    QuickAskState withCard( { required JobLifecycleState lifecycle } ) => QuickAskState(
+      connected : true,
+      entries   : [ QuickAskEntry(
+        questionText : 'what is the weather',
+        state        : lifecycle,
+        source       : QuickAskSource.transition,
+        jobId        : 'j-1',
+        details      : const JobSummary(
+          jobId        : 'j-1',
+          questionText : 'what is the weather',
+          status       : 'completed',
+          responseText : 'Sunny.',
+        ),
+      ) ],
+    );
+
+    testWidgets( 'the X is mounted and sits in the card\'s upper-left', ( tester ) async {
+      await pump( tester, withCard( lifecycle: JobLifecycleState.completed ) );
+
+      final x    = find.byKey( const Key( '${TestKeys.quickAskCardDismissPrefix}j-1' ) );
+      final card = find.byKey( const Key( '${TestKeys.quickAskCardPrefix}j-1' ) );
+      expect( x, findsOneWidget );
+
+      final xBox    = tester.getRect( x );
+      final cardBox = tester.getRect( card );
+      // Upper: in the top half. Left: in the left half.
+      expect( xBox.center.dy, lessThan( cardBox.center.dy ) );
+      expect( xBox.center.dx, lessThan( cardBox.center.dx ) );
+    } );
+
+    testWidgets( 'tapping it tells the bloc to dismiss THAT job', ( tester ) async {
+      final b = await pump( tester, withCard( lifecycle: JobLifecycleState.completed ) );
+
+      await tester.tap( find.byKey( const Key( '${TestKeys.quickAskCardDismissPrefix}j-1' ) ) );
+      await tester.pump();
+
+      verify( () => b.add( const QuickAskEntryDismissed( 'j-1' ) ) ).called( 1 );
+    } );
+
+    testWidgets( 'a running card says it will CANCEL, a finished one says remove',
+        ( tester ) async {
+      // The tooltip is the only place the user is told which of the two they
+      // are about to get, so it is worth a test rather than a code comment.
+      await pump( tester, withCard( lifecycle: JobLifecycleState.running ) );
+      var btn = tester.widget<IconButton>(
+          find.byKey( const Key( '${TestKeys.quickAskCardDismissPrefix}j-1' ) ) );
+      expect( btn.tooltip, 'Cancel and remove' );
+
+      await pump( tester, withCard( lifecycle: JobLifecycleState.completed ) );
+      btn = tester.widget<IconButton>(
+          find.byKey( const Key( '${TestKeys.quickAskCardDismissPrefix}j-1' ) ) );
+      expect( btn.tooltip, 'Remove' );
     } );
   } );
 

@@ -121,6 +121,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskPromptDismissed>( _onPromptDismissed );
     on<QuickAskInterviewAnswered>( _onInterviewAnswered );
     on<QuickAskInterviewCancelled>( _onInterviewCancelled );
+    on<QuickAskEntryDismissed>( _onEntryDismissed );
     on<QuickAskErrorDismissed>( _onErrorDismissed );
     on<QuickAskWatchdogFired>( _onWatchdogFired );
 
@@ -256,6 +257,61 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       clearDraft        : true,
       clearError        : true,
     ) );
+  }
+
+  /// The X on a question card. Takes the card off the list, and CANCELS the
+  /// job first when it is still running.
+  ///
+  /// 🔴 The cancel is not optional politeness. A dismissed card whose job keeps
+  /// running would still hold `liveJobId` — blocking the record button — and
+  /// would still speak its answer on arrival. Clearing `liveJobId` here is also
+  /// what makes late frames for that job DROP rather than resurrect the card:
+  /// `_onTransition` returns early when `liveEntry` is null, and
+  /// `_replaceEntry` only ever replaces a row it can already find.
+  Future<void> _onEntryDismissed( QuickAskEntryDismissed e, Emitter<QuickAskState> emit ) async {
+    final match = _findEntry( e.jobId );
+    if ( match == null ) return;
+
+    // Cancel BEFORE dropping it locally: if the call throws we have not yet
+    // told the user it is gone.
+    if ( !match.isTerminal && match.jobId != null && match.jobId!.isNotEmpty ) {
+      try {
+        await _repo.cancelJob( match.jobId! );
+      } on QueueApiException catch ( ex ) {
+        emit( state.copyWith( errorMessage: 'Could not cancel that question: ${ex.message}' ) );
+        return;
+      }
+    }
+
+    final wasLive = match.jobId != null && match.jobId == state.liveJobId;
+    if ( wasLive ) _cancelWatchdog();
+
+    final remaining = state.entries
+        .where( ( x ) => !identical( x, match ) )
+        .toList( growable: false );
+
+    emit( state.copyWith(
+      entries           : remaining,
+      // Only the LIVE card's removal frees the button; dismissing an old
+      // answered card must not disturb a question currently in flight.
+      phase             : wasLive ? QuickAskPhase.idle : state.phase,
+      clearLiveJobId    : wasLive,
+      clearLiveQuestion : wasLive,
+      lost              : wasLive ? false : state.lost,
+    ) );
+  }
+
+  /// Newest-first match on [jobId]. A null id addresses the one card that has
+  /// no job yet — the pre-attribution question — so it stays dismissible.
+  QuickAskEntry? _findEntry( String? jobId ) {
+    for ( final e in state.entries.reversed ) {
+      if ( jobId == null ) {
+        if ( e.jobId == null || e.jobId!.isEmpty ) return e;
+      } else if ( e.jobId == jobId ) {
+        return e;
+      }
+    }
+    return null;
   }
 
   // ── Submission ───────────────────────────────────────────────────────────

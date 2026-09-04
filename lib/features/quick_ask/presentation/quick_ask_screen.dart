@@ -486,7 +486,22 @@ class _QuickAskCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Upper-left X. On a card whose job is still running this
+                // CANCELS it as well as removing it — see the tooltip, which
+                // says which of the two the user is about to get.
+                IconButton(
+                  key           : Key( '${TestKeys.quickAskCardDismissPrefix}${entry.jobId ?? "pending"}' ),
+                  icon          : const Icon( Icons.close, size: 18 ),
+                  tooltip       : entry.isTerminal ? 'Remove' : 'Cancel and remove',
+                  visualDensity : VisualDensity.compact,
+                  constraints   : const BoxConstraints( minWidth: 32, minHeight: 32 ),
+                  padding       : EdgeInsets.zero,
+                  onPressed     : () => context.read<QuickAskBloc>()
+                      .add( QuickAskEntryDismissed( entry.jobId ) ),
+                ),
+                const SizedBox( width: 4 ),
                 _LaneChip( lane: entry.lane ),
                 const SizedBox( width: 8 ),
                 Expanded( child: Text( entry.questionText,

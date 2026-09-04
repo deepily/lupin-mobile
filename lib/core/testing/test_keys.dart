@@ -188,6 +188,7 @@ class TestKeys {
   static const quickAskEmpty          = 'quickAsk.empty';
   static const quickAskLostBanner     = 'quickAsk.lost';
   static const quickAskCardPrefix     = 'quickAsk.card.';      // + jobId
+  static const quickAskCardDismissPrefix = 'quickAsk.card.dismiss.'; // + jobId
   static const quickAskChipPrefix     = 'quickAsk.chip.';      // + lane name
   static const quickAskAnswerPrefix   = 'quickAsk.answer.';    // + jobId
   static const quickAskErrorCardPrefix = 'quickAsk.errorCard.';// + jobId

@@ -105,6 +105,9 @@ src/lupin-mobile/
 ### Project Planning
 - **[Project Initialization Plan](src/rnd/2025.07.06-project-initialization-plan.md)** - Initial project setup and milestone planning
 
+### Notification Suppression (2026-09)
+- **[Demo-Time Notification Toggle](src/rnd/2026.09.04-demo-time-notification-toggle.md)** - Four options for silencing duplicated announcements and interrupting manager asks on the emulator, plus the WebSocket-to-TTS path trace behind them. **Awaiting a decision; nothing implemented.**
+
 ### Focus-Mode Voice Chat + FCM Wake-Up (2026-06)
 - **[Focus-Mode Voice Chat doc-set](src/rnd/2026.06.11-focus-mode-voice-chat/00-index.md)** - Multi-stage plan-of-record: focus-mode default surface (badge rail + serial TTS with pause/resume + Whisper-ASR voice replies) and the FCM silent-relay wake-up; cascade-shaped sections S1-S6, awaiting `/plan-review-cascaded`
 - **[PIP Redline Draft: Workflow-Guidance Ledger](src/rnd/2026.06.12-pip-redline-draft-workflow-guidance-ledger.md)** - Draft (NOT landed) redlines folding the 14-entry cascade-focus-mode ledger into planning-is-prompting canonical docs; postgame ratification checklist
