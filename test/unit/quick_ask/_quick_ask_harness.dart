@@ -90,6 +90,7 @@ QueueResponse queueWith( String name, List<JobSummary> jobs ) => QueueResponse(
 NotificationItem notif( {
   String  id                = 'n-1',
   String  message           = 'hello',
+  String  type              = 'task',
   bool    responseRequested = false,
   String? jobId,
   String? responseType,
@@ -98,7 +99,7 @@ NotificationItem notif( {
 } ) => NotificationItem(
   id                     : id,
   message                : message,
-  type                   : 'task',
+  type                   : type,
   priority               : 'high',
   timestamp              : DateTime( 2026, 8, 29 ),
   played                 : false,

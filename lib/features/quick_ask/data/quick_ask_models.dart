@@ -32,12 +32,21 @@ class QuickAskEntry {
   /// insert-time buffer filter keys.
   final String            questionText;
 
+  /// Latest `progress`-type notification text for this job (bug 1829eb26).
+  /// A long-running job reports milestones on the way to its answer; those
+  /// used to be read as the answer itself, which ended the card on the first
+  /// one and dropped the real result minutes later. They live HERE instead —
+  /// beside the answer, never in it — so the card can show the job is alive
+  /// without ever claiming to be finished. Null ⇒ nothing reported yet.
+  final String?           progressText;
+
   const QuickAskEntry( {
     required this.questionText,
     required this.state,
     required this.source,
     this.jobId,
     this.details,
+    this.progressText,
   } );
 
   JobLane get lane       => state.lane;
@@ -106,12 +115,14 @@ class QuickAskEntry {
     QuickAskSource?    source,
     JobSummary?        details,
     String?            questionText,
+    String?            progressText,
   } ) => QuickAskEntry(
     questionText : questionText ?? this.questionText,
     state        : state        ?? this.state,
     source       : source       ?? this.source,
     jobId        : jobId        ?? this.jobId,
     details      : details      ?? this.details,
+    progressText : progressText ?? this.progressText,
   );
 
   @override

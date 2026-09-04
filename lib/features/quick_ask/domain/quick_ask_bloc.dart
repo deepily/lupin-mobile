@@ -33,6 +33,12 @@ class _BufferedFrame {
 /// silence watchdog. The three mechanisms answer three different findings and
 /// are kept separate on purpose.
 class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
+  /// The `type` discriminator carried by an in-flight milestone
+  /// (`notification_models.dart:56` — task | progress | alert | custom | ...).
+  /// Named rather than inlined because the belt channel's correctness turns
+  /// on it: see the guard in [_onNotification] and bug 1829eb26.
+  static const String progressNotificationType = 'progress';
+
   final QueueRepository  _repo;
   final AsrService       _asr;
   final WebSocketService _ws;
@@ -780,6 +786,24 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
     final current = state.liveEntry;
     if ( current == null || current.isTerminal ) return;
+
+    // 🔴 bug 1829eb26 — the belt channel's premise is "this message IS the
+    // answer", and that premise is FALSE for a progress frame. Without this
+    // guard a long-running job's FIRST milestone marked the card completed,
+    // rendered "Fetching sources…" where the answer belongs, cleared
+    // liveJobId and cancelled the watchdog — so the real answer, arriving
+    // minutes later, was dropped by the `n.jobId != live` test above. Silent,
+    // and it produced a WRONG answer rather than an error.
+    //
+    // Rick's ruling (2026-09-04): keep the card OPEN and show the milestone
+    // as a status line, so a 15-minute job visibly breathes. The progress
+    // text is stored BESIDE the answer, never in it.
+    if ( n.type == progressNotificationType ) {
+      emit( _replaceEntry( current.copyWith( progressText: n.message ) ) );
+      // Progress is proof of life: an alive job must not age toward `lost`.
+      _armWatchdog( reset: true );
+      return;
+    }
 
     final completed = current.copyWith(
       state   : JobLifecycleState.completed,

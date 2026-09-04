@@ -540,6 +540,35 @@ class _QuickAskCard extends StatelessWidget {
                   onPressed : () => tts.replay( message: entry.answer!, title: 'Quick Ask' ),
                 ),
               ),
+            ] else if ( entry.progressText != null ) ...[
+              // Bug 1829eb26, Rick's ruling: a long-running job's milestone is
+              // shown so the card visibly breathes — but as a STATUS LINE, in
+              // the muted style with a spinner, never in the answer's slot and
+              // never styled like one. It is deliberately the LAST branch: an
+              // answer or an error always outranks it, so the moment the real
+              // result lands this disappears rather than competing with it.
+              const SizedBox( height: 8 ),
+              Row(
+                crossAxisAlignment : CrossAxisAlignment.center,
+                children : [
+                  const SizedBox(
+                    width  : 12,
+                    height : 12,
+                    child  : CircularProgressIndicator( strokeWidth: 2 ),
+                  ),
+                  const SizedBox( width: 8 ),
+                  Expanded(
+                    child : Text(
+                      key   : Key( '${TestKeys.quickAskProgressPrefix}${entry.jobId ?? "pending"}' ),
+                      entry.progressText!,
+                      style : TextStyle(
+                        fontStyle : FontStyle.italic,
+                        color     : Theme.of( context ).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ],
         ),
