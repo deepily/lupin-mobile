@@ -256,7 +256,7 @@ void main() {
 
       expect( find.byKey( const Key( TestKeys.quickAskError ) ), findsOneWidget );
       expect( find.text( 'Transcription came back empty' ), findsOneWidget );
-      expect( find.text( 'Hold to ask' ), findsOneWidget );
+      expect( find.text( 'Tap to ask' ), findsOneWidget );
     } );
 
     testWidgets( 'dismissing the error tells the bloc', ( tester ) async {

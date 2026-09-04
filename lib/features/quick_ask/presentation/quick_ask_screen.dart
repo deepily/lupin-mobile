@@ -12,8 +12,14 @@ import '../domain/quick_ask_bloc.dart';
 import '../domain/quick_ask_event.dart';
 import '../domain/quick_ask_state.dart';
 
-/// Quick Ask — hold the button, speak a question, release, get an answer back,
-/// with an honest status indicator in between.
+/// Quick Ask — tap the button, speak a question, tap again to stop, then send
+/// it deliberately and get an answer back, with an honest status indicator in
+/// between.
+///
+/// 🔴 The button is a TAP TOGGLE, not a hold. Holding meant a stumble that
+/// broke the press sent a half-finished question; now stopping only parks the
+/// transcript, and the small send button under the mic is the only thing that
+/// puts it on the wire.
 ///
 /// Layout per Rick's ruling 3: the record button is a FIXED HEADER (not list
 /// item 0, so the list below can become round 2's grouped card view untouched),
@@ -71,9 +77,12 @@ class _RecordHeader extends StatelessWidget {
 
   @override
   Widget build( BuildContext context ) {
-    final bloc    = context.read<QuickAskBloc>();
-    final enabled = state.canRecord;
-    final holding = state.phase == QuickAskPhase.recording;
+    final bloc      = context.read<QuickAskBloc>();
+    final recording = state.phase == QuickAskPhase.recording;
+    // `canRecord` already goes false while a draft is held, so the mic cannot
+    // be tapped out from under a question the user has spoken but not sent.
+    final enabled   = state.canRecord;
+    final hasDraft  = state.hasDraft;
 
     return Material(
       elevation : 2,
@@ -81,15 +90,66 @@ class _RecordHeader extends StatelessWidget {
         padding : const EdgeInsets.symmetric( vertical: 16, horizontal: 12 ),
         child   : Column(
           children: [
-            GestureDetector(
-              key                 : const Key( TestKeys.quickAskRecordButton ),
-              onLongPressStart    : enabled ? ( _ ) => bloc.add( const QuickAskRecordPressed() )   : null,
-              onLongPressEnd      : enabled ? ( _ ) => bloc.add( const QuickAskRecordReleased() )  : null,
-              onLongPressCancel   : enabled ? ()    => bloc.add( const QuickAskRecordCancelled() ) : null,
-              child               : _PulsingMic( active: holding, enabled: enabled ),
+            SizedBox(
+              width  : 232,
+              height : 168,
+              child  : Stack(
+                alignment : Alignment.topCenter,
+                children  : [
+                  GestureDetector(
+                    key     : const Key( TestKeys.quickAskRecordButton ),
+                    // One tap starts, the next stops. `onTap` and not a long
+                    // press: the whole point is that no finger stays down.
+                    onTap   : enabled
+                        ? () => bloc.add( recording
+                            ? const QuickAskRecordReleased()
+                            : const QuickAskRecordPressed() )
+                        : null,
+                    child   : _PulsingMic( active: recording, enabled: enabled ),
+                  ),
+                  Positioned(
+                    left    : 0,
+                    bottom  : 0,
+                    child   : _DraftAction(
+                      actionKey : const Key( TestKeys.quickAskClearButton ),
+                      icon      : Icons.close,
+                      tooltip   : 'Clear',
+                      colour    : Theme.of( context ).colorScheme.error,
+                      onPressed : hasDraft
+                          ? () => bloc.add( const QuickAskDraftCleared() )
+                          : null,
+                    ),
+                  ),
+                  Positioned(
+                    right   : 0,
+                    bottom  : 0,
+                    child   : _DraftAction(
+                      actionKey : const Key( TestKeys.quickAskSendButton ),
+                      icon      : Icons.play_arrow,
+                      tooltip   : 'Send',
+                      colour    : Theme.of( context ).colorScheme.primary,
+                      onPressed : hasDraft
+                          ? () => bloc.add( const QuickAskDraftSent() )
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox( height: 8 ),
             Text( _headline( state ), style: Theme.of( context ).textTheme.bodyMedium ),
+            // What the send button will actually send. Without it "ready to
+            // send" asks the user to trust a transcript they have not seen.
+            if ( hasDraft )
+              Padding(
+                padding : const EdgeInsets.only( top: 4, left: 16, right: 16 ),
+                child   : Text(
+                  key       : const Key( TestKeys.quickAskDraftText ),
+                  '“${state.draftTranscript}”',
+                  textAlign : TextAlign.center,
+                  style     : Theme.of( context ).textTheme.bodySmall,
+                ),
+              ),
             if ( state.blockedMessage != null )
               Padding(
                 padding : const EdgeInsets.only( top: 4 ),
@@ -107,12 +167,53 @@ class _RecordHeader extends StatelessWidget {
 
   String _headline( QuickAskState s ) {
     switch ( s.phase ) {
-      case QuickAskPhase.recording:     return 'Listening…';
+      case QuickAskPhase.recording:     return 'Listening… tap to stop';
       case QuickAskPhase.transcribing:  return 'Transcribing…';
+      case QuickAskPhase.review:        return 'Ready to send';
       case QuickAskPhase.submitting:    return 'Sending…';
       case QuickAskPhase.waiting:       return 'Working on it…';
-      case QuickAskPhase.idle:          return 'Hold to ask';
+      case QuickAskPhase.idle:          return 'Tap to ask';
     }
+  }
+}
+
+/// One of the two small controls flanking the microphone: clear on the lower
+/// left, send on the lower right. Deliberately much smaller than the mic — the
+/// mic is the thing you aim at, these are the things you confirm with.
+class _DraftAction extends StatelessWidget {
+  final Key           actionKey;
+  final IconData      icon;
+  final String        tooltip;
+  final Color         colour;
+  final VoidCallback? onPressed;
+
+  const _DraftAction( {
+    required this.actionKey,
+    required this.icon,
+    required this.tooltip,
+    required this.colour,
+    required this.onPressed,
+  } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final live = onPressed != null;
+    return IconButton(
+      key       : actionKey,
+      icon      : Icon( icon, size: 26 ),
+      tooltip   : tooltip,
+      onPressed : onPressed,
+      style     : IconButton.styleFrom(
+        backgroundColor : live
+            ? colour.withValues( alpha: 0.15 )
+            : Theme.of( context ).colorScheme.onSurface.withValues( alpha: 0.06 ),
+        foregroundColor : live
+            ? colour
+            : Theme.of( context ).colorScheme.onSurface.withValues( alpha: 0.25 ),
+        shape           : const CircleBorder(),
+        padding         : const EdgeInsets.all( 12 ),
+      ),
+    );
   }
 }
 
@@ -162,10 +263,10 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
         return Transform.scale(
           scale : scale,
           child : Container(
-            width       : 96,
-            height      : 96,
+            width       : 128,
+            height      : 128,
             decoration  : BoxDecoration( shape: BoxShape.circle, color: colour ),
-            child       : Icon( Icons.mic, size: 44, color: scheme.onPrimary ),
+            child       : Icon( Icons.mic, size: 60, color: scheme.onPrimary ),
           ),
         );
       },
@@ -280,8 +381,15 @@ class _InterviewPrompt extends StatelessWidget {
               ),
             ],
           ),
+          // 🔴 KEYED BY TURN. `OpenEndedPromptBody` owns a
+          // `TextEditingController` in its State, and the interview re-renders
+          // IN PLACE on the same `pending_id` — so without a key that changes,
+          // Flutter reuses the State and turn 2 opens with turn 1's answer
+          // still in the field. "Which day?" pre-filled with "Washington",
+          // one Submit away from being posted as the day.
           OpenEndedPromptBody(
-            onRespond: ( text ) => context.read<QuickAskBloc>()
+            key       : ValueKey( '${interview.pendingId}:${interview.turn}' ),
+            onRespond : ( text ) => context.read<QuickAskBloc>()
                 .add( QuickAskInterviewAnswered( text ) ),
           ),
         ],

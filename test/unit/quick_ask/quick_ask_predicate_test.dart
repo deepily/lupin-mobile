@@ -77,6 +77,8 @@ void main() {
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
       await settle();
+      h.bloc.add( const QuickAskDraftSent() );
+      await settle();
 
       expect( h.bloc.state.liveJobId,   ourJob );
       expect( h.bloc.state.canRecord,   isFalse );
@@ -151,6 +153,8 @@ void main() {
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
       await settle();
+      h.bloc.add( const QuickAskDraftSent() );
+      await settle();
 
       verifyNever( () => h.repo.ask( any() ) );
       expect( h.bloc.state.phase,        QuickAskPhase.idle );
@@ -204,6 +208,8 @@ void main() {
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
       await settle();
+      h.bloc.add( const QuickAskDraftSent() );
+      await settle();
 
       verify( () => h.repo.ask( any() ) ).called( 1 );
       await h.dispose();
@@ -221,6 +227,8 @@ void main() {
       h.bloc.add( const QuickAskRecordCancelled() );
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
+      await settle();
+      h.bloc.add( const QuickAskDraftSent() );
       await settle();
 
       verifyNever( () => h.repo.ask( any() ) );
@@ -242,6 +250,8 @@ void main() {
       h.bloc.add( const QuickAskRecordPressed() );
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
+      await settle();
+      h.bloc.add( const QuickAskDraftSent() );
       await settle();
 
       // The user drags off mid-upload.
@@ -329,6 +339,8 @@ void main() {
       h.bloc.add( const QuickAskRecordPressed() );
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
+      await settle();
+      h.bloc.add( const QuickAskDraftSent() );
       await settle();
       expect( h.micRequests, 1 );
       await h.dispose();

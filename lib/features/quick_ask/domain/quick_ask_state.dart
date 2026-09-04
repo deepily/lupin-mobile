@@ -4,7 +4,13 @@ import '../data/quick_ask_models.dart';
 
 /// What the capture pipeline is doing right now. Distinct from the JOB's
 /// lifecycle state, which lives on the entry.
-enum QuickAskPhase { idle, recording, transcribing, submitting, waiting }
+///
+/// 🔴 [review] is the STOP-AND-HOLD step. Stopping the recording used to submit
+/// the question in the same breath, so a stumble that let go of the button sent
+/// a half-finished sentence. Now the transcript lands in [QuickAskState.draftTranscript]
+/// and waits there until the user taps send — nothing leaves the phone on a
+/// slip of the thumb.
+enum QuickAskPhase { idle, recording, transcribing, review, submitting, waiting }
 
 /// Which clause of [QuickAskState.canRecord] is false. Exposed as an enum
 /// rather than a bare string so a test can assert THAT CLAUSE and no other
@@ -158,6 +164,11 @@ class QuickAskState extends Equatable {
   /// focus mode's `VoiceReplyField` on the same singleton.
   final bool capturing;
 
+  /// The transcript we captured and are HOLDING, unsent. Non-null exactly
+  /// while [QuickAskPhase.review] is showing. The user sends it or clears it;
+  /// nothing else can move it.
+  final String? draftTranscript;
+
   /// Inline error text (empty transcript, mic denied, submit failure).
   final String? errorMessage;
 
@@ -174,9 +185,13 @@ class QuickAskState extends Equatable {
     this.interview,
     this.connected       = false,
     this.capturing       = false,
+    this.draftTranscript,
     this.errorMessage,
     this.lost            = false,
   } );
+
+  /// A captured question is sitting in the holding pen, waiting to be sent.
+  bool get hasDraft => draftTranscript != null && draftTranscript!.isNotEmpty;
 
   /// The four clauses, evaluated in a FIXED order so the exposed reason is
   /// deterministic when more than one is false.
@@ -193,7 +208,11 @@ class QuickAskState extends Equatable {
 
   /// The one-live-question guard, as a single predicate — lifting it in round
   /// 2 is one clause, not a redesign.
-  bool get canRecord => blockReason == null || phase == QuickAskPhase.recording;
+  /// The mic is inert while a draft is held: the two small controls under it
+  /// (clear and send) are the only way out, so a stray tap on the big button
+  /// cannot silently throw away a question the user already spoke.
+  bool get canRecord =>
+      ( blockReason == null || phase == QuickAskPhase.recording ) && !hasDraft;
 
   /// What the button shows when it is disabled. Null when it is enabled.
   String? get blockedMessage => canRecord ? null : blockReason?.message;
@@ -214,12 +233,14 @@ class QuickAskState extends Equatable {
     QuickAskInterview?   interview,
     bool?                connected,
     bool?                capturing,
+    String?              draftTranscript,
     String?              errorMessage,
     bool?                lost,
     bool clearLiveJobId       = false,
     bool clearLiveQuestion    = false,
     bool clearPendingPrompt   = false,
     bool clearInterview       = false,
+    bool clearDraft           = false,
     bool clearError           = false,
   } ) => QuickAskState(
     entries         : entries         ?? this.entries,
@@ -230,6 +251,7 @@ class QuickAskState extends Equatable {
     interview       : clearInterview       ? null : ( interview       ?? this.interview ),
     connected       : connected       ?? this.connected,
     capturing       : capturing       ?? this.capturing,
+    draftTranscript : clearDraft            ? null : ( draftTranscript ?? this.draftTranscript ),
     errorMessage    : clearError           ? null : ( errorMessage    ?? this.errorMessage ),
     lost            : lost            ?? this.lost,
   );
@@ -237,6 +259,6 @@ class QuickAskState extends Equatable {
   @override
   List<Object?> get props => [
     entries, phase, liveJobId, liveQuestion, pendingPrompt, interview,
-    connected, capturing, errorMessage, lost,
+    connected, capturing, draftTranscript, errorMessage, lost,
   ];
 }

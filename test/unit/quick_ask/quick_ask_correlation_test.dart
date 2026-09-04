@@ -40,6 +40,8 @@ void main() {
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
       await settle();
+      h.bloc.add( const QuickAskDraftSent() );
+      await settle();
 
       // ── the pre-attribution window ──
       h.bloc.add( QuickAskTransitionReceived( transitionFrame( to: 'queued' ) ) );
@@ -70,6 +72,8 @@ void main() {
       h.bloc.add( const QuickAskRecordPressed() );
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
+      await settle();
+      h.bloc.add( const QuickAskDraftSent() );
       await settle();
       return h;
     }
@@ -163,6 +167,8 @@ void main() {
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
       await settle();
+      h.bloc.add( const QuickAskDraftSent() );
+      await settle();
 
       // OUR frame goes in first, then a flood of MORE THAN THE CAP of foreign
       // frames. On an admin account the transition fan-out is every other
@@ -201,6 +207,8 @@ void main() {
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
       await settle();
+      h.bloc.add( const QuickAskDraftSent() );
+      await settle();
 
       // The residual a text-only filter leaves open: another user asking the
       // IDENTICAL question. The email key closes it.
@@ -232,6 +240,8 @@ void main() {
       h.bloc.add( const QuickAskRecordPressed() );
       await settle();
       h.bloc.add( const QuickAskRecordReleased() );
+      await settle();
+      h.bloc.add( const QuickAskDraftSent() );
       await settle();
 
       final sent = verify( () => h.repo.ask( captureAny() ) ).captured.single as AskRequest;

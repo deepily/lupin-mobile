@@ -117,6 +117,8 @@ void main() {
     await tester.pump();
     h.bloc.add( const QuickAskRecordReleased() );
     await tester.pump();
+    h.bloc.add( const QuickAskDraftSent() );
+    await tester.pump();
   }
 
   group( 'AC-S4.6 — a confirm arriving mid-ask is ANSWERABLE', () {

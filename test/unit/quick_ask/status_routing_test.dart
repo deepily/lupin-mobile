@@ -90,6 +90,8 @@ void main() {
     await settle();
     h.bloc.add( const QuickAskRecordReleased() );
     await settle();
+    h.bloc.add( const QuickAskDraftSent() );
+    await settle();
     return h;
   }
 

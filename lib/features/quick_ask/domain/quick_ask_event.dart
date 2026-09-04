@@ -11,20 +11,40 @@ sealed class QuickAskEvent extends Equatable {
   List<Object?> get props => const [];
 }
 
-/// The user pressed and held the record button.
+/// FIRST TAP on the record button — start capturing.
+///
+/// The name predates the tap-to-toggle button and is kept so the twenty-odd
+/// existing tests still name the same thing; it means "start", not "a finger
+/// is currently down".
 class QuickAskRecordPressed extends QuickAskEvent {
   const QuickAskRecordPressed();
 }
 
-/// The user released the button — stop the capture, transcribe, submit.
+/// SECOND TAP — stop the capture and transcribe, then HOLD the result.
+///
+/// 🔴 This no longer submits. The transcript lands in `draftTranscript` and
+/// waits for [QuickAskDraftSent]. Under the old hold-to-talk button, letting
+/// go WAS the send, so any stumble that broke the press fired a half-finished
+/// question at the server.
 class QuickAskRecordReleased extends QuickAskEvent {
   const QuickAskRecordReleased();
 }
 
-/// The gesture was cancelled mid-press (drag-off, system interruption). Any
-/// in-flight transcription result is discarded rather than submitted.
+/// The capture was abandoned (system interruption, screen left). Any in-flight
+/// transcription result is discarded rather than held.
 class QuickAskRecordCancelled extends QuickAskEvent {
   const QuickAskRecordCancelled();
+}
+
+/// The user tapped SEND on the held draft. This is the only path from a
+/// captured transcript to the server.
+class QuickAskDraftSent extends QuickAskEvent {
+  const QuickAskDraftSent();
+}
+
+/// The user tapped CLEAR on the held draft — throw it away, back to idle.
+class QuickAskDraftCleared extends QuickAskEvent {
+  const QuickAskDraftCleared();
 }
 
 /// A `job_state_transition` frame, verbatim off the wire.

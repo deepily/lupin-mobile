@@ -53,6 +53,8 @@ void main() {
       async.elapse( const Duration( milliseconds: 10 ) );
       h.bloc.add( const QuickAskRecordReleased() );
       async.elapse( const Duration( milliseconds: 50 ) );
+      h.bloc.add( const QuickAskDraftSent() );
+      async.elapse( const Duration( milliseconds: 50 ) );
 
       expect( h.bloc.state.liveJobId, ourJob, reason: 'setup failed — no live job to watch' );
       body( async, h );
@@ -183,6 +185,8 @@ void main() {
         async.elapse( const Duration( milliseconds: 10 ) );
         h.bloc.add( const QuickAskRecordReleased() );
         async.elapse( const Duration( milliseconds: 50 ) );
+        h.bloc.add( const QuickAskDraftSent() );
+        async.elapse( const Duration( milliseconds: 50 ) );
 
         // Two strikes accumulate...
         async.elapse( QuickAskBloc.watchdogLadder[ 0 ] + QuickAskBloc.watchdogLadder[ 1 ]
@@ -236,6 +240,8 @@ void main() {
         async.elapse( const Duration( milliseconds: 10 ) );
         h.bloc.add( const QuickAskRecordReleased() );
         async.elapse( const Duration( milliseconds: 50 ) );
+        h.bloc.add( const QuickAskDraftSent() );
+        async.elapse( const Duration( milliseconds: 50 ) );
 
         h.bloc.add( QuickAskTransitionReceived( transitionFrame(
           from: 'running', to: 'completed', responseText: 'the real answer' ) ) );
@@ -274,6 +280,8 @@ void main() {
         h.bloc.add( const QuickAskRecordPressed() );
         async.elapse( const Duration( milliseconds: 10 ) );
         h.bloc.add( const QuickAskRecordReleased() );
+        async.elapse( const Duration( milliseconds: 50 ) );
+        h.bloc.add( const QuickAskDraftSent() );
         async.elapse( const Duration( milliseconds: 50 ) );
         expect( h.bloc.state.liveJobId, isNull, reason: 'the ask is still blocked — no job id yet' );
 

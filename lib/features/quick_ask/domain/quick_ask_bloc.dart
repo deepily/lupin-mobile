@@ -112,6 +112,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskRecordPressed>( _onRecordPressed );
     on<QuickAskRecordReleased>( _onRecordReleased );
     on<QuickAskRecordCancelled>( _onRecordCancelled );
+    on<QuickAskDraftSent>( _onDraftSent );
+    on<QuickAskDraftCleared>( _onDraftCleared );
     on<QuickAskTransitionReceived>( _onTransition );
     on<QuickAskNotificationReceived>( _onNotification );
     on<QuickAskConnectionChanged>( _onConnectionChanged );
@@ -178,6 +180,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     }
   }
 
+  /// Second tap: stop, transcribe, and HOLD. The submit that used to live at
+  /// the end of this method now lives behind the send button.
   Future<void> _onRecordReleased( QuickAskRecordReleased e, Emitter<QuickAskState> emit ) async {
     if ( state.phase != QuickAskPhase.recording ) return;
     final epoch = _opEpoch;
@@ -198,13 +202,48 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     // The cancel landed while the upload was in flight — drop the result.
     if ( epoch != _opEpoch ) return;
 
+    // A blank transcript held as a draft would put a live send button in front
+    // of the user with nothing behind it. Say so instead.
+    if ( transcript.trim().isEmpty ) {
+      emit( state.copyWith(
+        phase        : QuickAskPhase.idle,
+        errorMessage : 'Did not catch anything — tap the microphone and try again.',
+        capturing    : _asr.isCapturing,
+        clearDraft   : true,
+      ) );
+      return;
+    }
+
+    emit( state.copyWith(
+      phase           : QuickAskPhase.review,
+      draftTranscript : transcript,
+      capturing       : _asr.isCapturing,
+    ) );
+  }
+
+  /// The send button — the ONLY route from a held transcript to the server.
+  Future<void> _onDraftSent( QuickAskDraftSent e, Emitter<QuickAskState> emit ) async {
+    final transcript = state.draftTranscript;
+    if ( state.phase != QuickAskPhase.review || transcript == null ) return;
+
     emit( state.copyWith(
       phase        : QuickAskPhase.submitting,
       liveQuestion : transcript,
-      capturing    : _asr.isCapturing,
+      clearDraft   : true,
     ) );
 
     await _submit( transcript, emit );
+  }
+
+  /// The clear button — throw the held transcript away.
+  Future<void> _onDraftCleared( QuickAskDraftCleared e, Emitter<QuickAskState> emit ) async {
+    _opEpoch++;                       // anything still in flight is now stale
+    emit( state.copyWith(
+      phase             : QuickAskPhase.idle,
+      clearDraft        : true,
+      clearLiveQuestion : true,
+      clearError        : true,
+    ) );
   }
 
   Future<void> _onRecordCancelled( QuickAskRecordCancelled e, Emitter<QuickAskState> emit ) async {
@@ -214,6 +253,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       phase             : QuickAskPhase.idle,
       capturing         : _asr.isCapturing,
       clearLiveQuestion : true,
+      clearDraft        : true,
       clearError        : true,
     ) );
   }
