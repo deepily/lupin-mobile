@@ -30,7 +30,9 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ### Pending decisions — Rick's
 
 - [ ] [LUPIN-MOBILE] **The `similarity threshold confirmation = 90.0` bar.** Rick's *"what's the sum of 2 plus 2"* scores **84.85**, five points under, so it silently falls through to a new job. Three options, none chosen: **(a)** lower the bar — widens what is *offered*, not what is served silently, since the user still confirms; **(b)** leave it, 84.85 may be correctly below; **(c)** converge paraphrases upward via normalisation/gist. ⚠️ The tier-1 floor of `100.0` is **irrelevant** to this symptom — do not touch it. Mr Radio holds this for the next decisions walk.
-- [ ] [LUPIN-MOBILE] **The README entry for the plan doc still calls the progress-as-answer case a live defect.** `649f458` fixed it. One-line correction, offered and unruled.
+- [x] [LUPIN-MOBILE] **README entry corrected** — it called the progress-as-answer case a live defect; `649f458` fixed it. Offered twice and unruled, so I made the correction myself at shutdown: a factual staleness in my own doc is not a decision worth carrying overnight.
+
+⇒ **ONE decision goes into the night, and it is durable in the store, not only here**: the 90.0 bar below, carried on Mr Radio's row `0b11bd5a` for his next decisions walk with Rick.
 
 ### Carried forward — not mine, named so they are not lost
 
