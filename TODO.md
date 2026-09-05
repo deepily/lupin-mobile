@@ -18,6 +18,25 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-04 (Quick Ask + the cache handoff)
+
+### Decisions Log — 2026-09-04
+
+- **Rick ruled the plan doc ships as-is** (voice, ~22:47Z). Committed `ff2e90c` after being offered four times across two respins. No implementation authorised with it.
+- **Rick corrected his own V1 ruling, twice in three minutes.** First "restore what version 1 did"; then *"I don't need to restore V1 verbatim — I mean use the logic, or copy the logic, that V1 uses. Do NOT resuscitate V1. Do not!"* Both readings are on `fe1c0d3f` under `user_direct`. V1 is a reference for the behaviour, never a target to revive.
+- **Rick ruled the Lupin repo is off-limits to a mobile seat**: *"file that as a bug and have someone else look into it, it's not your job to edit the Lupin repo."* Filing is mine; editing and diagnosing are the server team's. `fe1c0d3f` handed to Pocholo, Mr Radio accountable.
+- **Mr Radio ruled `3658ec66` queued under Pocholo** (00:14Z), deliberately NOT routing the threshold decision to Rick — a P3 he called not-burning does not earn an interrupt.
+
+### Pending decisions — Rick's
+
+- [ ] [LUPIN-MOBILE] **The `similarity threshold confirmation = 90.0` bar.** Rick's *"what's the sum of 2 plus 2"* scores **84.85**, five points under, so it silently falls through to a new job. Three options, none chosen: **(a)** lower the bar — widens what is *offered*, not what is served silently, since the user still confirms; **(b)** leave it, 84.85 may be correctly below; **(c)** converge paraphrases upward via normalisation/gist. ⚠️ The tier-1 floor of `100.0` is **irrelevant** to this symptom — do not touch it. Mr Radio holds this for the next decisions walk.
+- [ ] [LUPIN-MOBILE] **The README entry for the plan doc still calls the progress-as-answer case a live defect.** `649f458` fixed it. One-line correction, offered and unruled.
+
+### Carried forward — not mine, named so they are not lost
+
+- [ ] [LUPIN-MOBILE] **`3658ec66` was dropped in error by me at 02:49Z and needs reinstating to `queued`.** Pocholo's row, Mr Radio accountable and already ruled. `dropped` is terminal, so the correction is a post-terminal amendment on the row; only Mr Radio can reinstate. **Root cause worth keeping: `task_get` returned his full ruling seconds before I called the transition and I acted on a condensed DM summary instead of the row.**
+- [ ] [LUPIN-MOBILE] **The plan doc's cap change is written but unbuilt.** Reveal the `ask.flow` bucket the persona-less default rail scope hides; raise the per-sender cap of 7; queue the second interrupt via the browser's deferred-countdown trick. `claude_code` is the one builder of eleven not emitting a per-job sender id — a one-line fix in the parent repo, not mine to make.
+
 ## 🆕 Open from 2026-09-01 (backup)
 
 > Rick's **new-ticket moratorium** in force — carried as narrative, not filed as store rows.

@@ -16,6 +16,38 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+## 2026.09.04 | Session `3d7921bc` (Tiffany 💍) — Quick Ask shipped three fixes; the cache bug I found was filed, not taken
+
+**Five commits, 220/220 green** (was 130 at session start), analyze clean on every touched file.
+
+| commit | what |
+|---|---|
+| `1ee125b` | Quick Ask tap-to-toggle recording with a deliberate send (15 files) |
+| `32c7980` | card dismiss X, cancelling the job if it is still running (8 files) |
+| `153ac19` | inject `isQuickAskJob` so answers speak in full — DI registration extracted to `ServiceLocator.buildFocusChatBloc()` so the seam is testable without `path_provider` |
+| `649f458` | a progress notification is not the answer — belt channel guards on `n.type`, `QuickAskEntry.progressText`, spinner + muted status line rendered LAST so an answer outranks a stale milestone |
+| `ff2e90c` | the long-running-jobs plan doc (507 lines) + README entry, on Rick's ruling |
+
+Both behaviour commits were mutation-checked, not just run.
+
+**The plan doc's bottom line corrects its own premise.** It is not "build a notification pane" — it is a **cap change**. All eleven agentic builders were checked: **10 of 11 already emit a per-job sender id**, so focus mode's sender-keyed windows already group by job; `claude_code` is the sole exception. What actually needs doing is revealing the `ask.flow` bucket the persona-less default rail scope hides, raising the per-sender cap of 7 (right for a chatty human, wrong for a job emitting ~10 milestones), and queuing the second interrupt. Two of my own mid-plan mechanisms are logged as wrong in its §11: `progress_group_id` is not the job key, and job grouping did not need building.
+
+**A cache defect found, filed, and handed off — what I got wrong was the timing.** While chasing Rick's paraphrase-replay report I measured 5,028 trace records and found **103 PERFECT (100.0) cache matches refused and re-run as fresh jobs**. `_may_serve` (`flow.py:1099`) serves only on `answer_is_correct is True` and fails closed at None; **every refusal reads `:None`, not one `:False`** — nobody is ever asked, because the only confirmation sought lands on a daemon thread that times out. V1 (`todo_fifo_queue.py:534-640`, still present, not deleted) auto-accepted >=100 with no gate and asked the 90-band with 3 retries and backoff. Both V2 behaviours are regressions, and Rick diagnosed both from observable behaviour before either file was opened.
+
+Filed as `fe1c0d3f`, reassigned to **Pocholo** with **Mr Radio** accountable, on Rick's instruction: *"file that as a bug and have someone else look into it, it's not your job to edit the Lupin repo."* I stayed read-only throughout, which was right — **but I should have found an owner at filing time instead of working the row for another ten minutes.**
+
+**Rick corrected his own ruling and the row carries both readings.** First *"restore what version 1 did"*, then immediately: *"I don't need to restore V1 verbatim — I mean use the logic, or copy the logic, that V1 uses. Do NOT resuscitate V1. Do not!"* Amended under `user_direct` and relayed to Pocholo and Mr Radio, who had been about to route it back to Rick as an open proposal.
+
+**Six of my hypotheses died today, every one refuted by someone checking recorded state.** tier-1 floor as mechanism · `_may_serve` as Rick's cause · silent exits as the diagnostic gap · "no score on this path" · `snapshotable` explaining `usage_count` · `confirmation_threshold is None`. The largest withdrawal: I argued "286 asks cleared the 90.0 bar and only 1 ever replayed, so the funnel is blocked downstream." Pocholo established that **`_near_match_replay` postdates the trace corpus** — those asks had no branch to traverse. **You cannot measure a gate on traffic that predates it.** Whether 90.0 is the right bar is open again. Every one of the six was reasoning forward from source; every refutation was measurement.
+
+**🔴 An error at the wrap, recorded because a dropped row is easy to lose.** I dropped `3658ec66` — Pocholo's row, Mr Radio accountable — on standing authority. Mr Radio had already ruled it queued at 00:14Z; his DM reply reached me **condensed** as "not within my team's responsibility," which I read as a drop instruction when he almost certainly meant his crew were not working it during the wrap. `dropped` is terminal, so the correction is a post-terminal amendment on the row and reinstatement is his call. **The failure was not the misreading — `task_get` returned his full ruling to me seconds before I called the transition and I acted on the DM summary instead of the row I was acting on.** Same shape as the six above: a condensed secondhand account beat the recorded state that was already in my hands.
+
+**Session ran through two self-respins** at the 50% context line, both clean — memento written, nonce verified, wake proof confirmed against `claude_code.session_id` rather than introspection.
+
+**Files**: `lib/features/quick_ask/**`, `lib/features/focus_mode/domain/focus_chat_bloc.dart`, `lib/core/di/service_locator.dart`, `lib/core/testing/test_keys.dart`, `test/unit/quick_ask/**`, `test/widget/quick_ask/**`, `test/service_integration/quick_ask_probe_wiring_test.dart`, `src/rnd/2026.09.04-long-running-quick-ask-notification-pane.md`, `README.md`
+
+---
+
 ## 2026.09.01 | Session `5b101cc5` (Tiffany 💍) — the backup was 99% Flutter SDK, and the bounce we were waiting on had already happened
 
 **Backup fixed twice, then verified.** The 2026-08-30 fix corrected `SOURCE_DIR` but left `DEST_DIR` naming the retired subtree `lupin/src/lupin-mobile/`; repointed to the standalone mirror `projects/lupin-mobile/` (`1da5b72`). The first green dry run then turned out to be backing up the wrong thing: `flutter/` is a vendored 1.9 GB SDK clone, gitignored and re-obtainable, and the exclusion file was the generic Python list shipped with the canonical script — it knows `.venv/` and `build/` and nothing about Dart. Added `flutter/`, `.flutter/`, `.dart_tool/`, `.flutter-plugins*`, `.gradle/` (`717e94c`). **1.79 GB / 20,433 files → 6.22 MB / 794.**
