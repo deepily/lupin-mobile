@@ -34,7 +34,8 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 
 ### Carried forward — not mine, named so they are not lost
 
-- [ ] [LUPIN-MOBILE] **`3658ec66` was dropped in error by me at 02:49Z and needs reinstating to `queued`.** Pocholo's row, Mr Radio accountable and already ruled. `dropped` is terminal, so the correction is a post-terminal amendment on the row; only Mr Radio can reinstate. **Root cause worth keeping: `task_get` returned his full ruling seconds before I called the transition and I acted on a condensed DM summary instead of the row.**
+- [x] [LUPIN-MOBILE] **`3658ec66` was dropped in error by me and is now RESOLVED — Mr Radio minted `0b11bd5a` and took it himself** (P3, owner and accountable both him, `queued`, verified in the store). `dropped` is terminal so neither of us could walk it back; the replacement row carries the reinstatement in its own title. **Root cause worth keeping: `task_get` returned his full ruling seconds before I called the transition and I acted on a condensed DM summary instead of the row in front of me.** Same shape bit me twice in one hour — see the `35404747` stale relay below.
+- [x] [LUPIN-MOBILE] **Reported `35404747` to Rick as "blocked on María" when it had already shipped.** Merged `59465317`, served token `20260904g`, verified running. I read the row at its 21:39 state and it had moved twice since. María's own note: the row moved four times in two hours. **The lesson is the same one: a condensed or stale account is not the row.**
 - [ ] [LUPIN-MOBILE] **The plan doc's cap change is written but unbuilt.** Reveal the `ask.flow` bucket the persona-less default rail scope hides; raise the per-sender cap of 7; queue the second interrupt via the browser's deferred-countdown trick. `claude_code` is the one builder of eleven not emitting a per-job sender id — a one-line fix in the parent repo, not mine to make.
 
 ## 🆕 Open from 2026-09-01 (backup)
