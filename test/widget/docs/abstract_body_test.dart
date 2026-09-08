@@ -16,15 +16,13 @@ import 'package:lupin_mobile/features/docs/presentation/doc_viewer_screen.dart';
 /// A DocRepository that answers from memory, so no server is involved.
 class _FakeDocRepository implements DocRepository {
   final DocContent? content;
-  final Object?     error;
   DocLink?          lastRequested;
 
-  _FakeDocRepository( { this.content, this.error } );
+  _FakeDocRepository( { this.content } );
 
   @override
   Future<DocContent> fetch( DocLink link ) async {
     lastRequested = link;
-    if ( error != null ) throw error!;
     return content ??
         const DocContent(
           kind      : DocContentKind.markdown,

@@ -17,7 +17,9 @@ enum DocContentKind {
   /// would mangle `#` comments into headings.
   source,
 
-  /// `text/html` — render with flutter_html.
+  /// `text/html`. Currently rendered as SOURCE alongside the other text kinds —
+  /// kept as its own kind so the distinction survives for the day a real
+  /// abstract links an .html file and earns a dedicated renderer.
   html,
 
   /// `image/*` — render the bytes directly.
