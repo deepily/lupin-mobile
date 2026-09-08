@@ -108,6 +108,10 @@ src/lupin-mobile/
 ### Long-Running Jobs on Mobile (2026-09)
 - **[Long-Running Quick Ask: Progress, Interrupts, and a Notification Pane](src/rnd/2026.09.04-long-running-quick-ask-notification-pane.md)** - What happens when a Quick Ask becomes a 2-20 minute job: the progress-as-answer defect (since fixed in `649f458`), what the browser client already does (job Activity Log + in-place progress rows + a queued Action Required pane), what mobile's focus mode can and cannot do, and three design options with a recommendation. **Plan only; the cap change it recommends is not implemented.**
 
+### In-App Document Viewer (2026-09)
+- **[Abstract Doc-Link Viewer — Feasibility & Implementation Plan](src/rnd/2026.09.08-abstract-doc-link-viewer-feasibility.md)** - Can the app show an icon on abstracts that carry a doc link, and render the document in-app? Yes, and cheaper than expected: `/api/docs/file` returns **raw** markdown/text/code over the Dio that already injects the Bearer token, so no WebView and no second auth path. Covers the Flutter-vs-native-Android toolkit answer, the `flutter_markdown` discontinuation, the link shapes to parse, and a 4-phase plan. **Plan only; nothing implemented.**
+- **[Abstract Rendering + Doc-Link Viewer — Implementation Plan](src/rnd/2026.09.08-abstract-doc-link-viewer-implementation-plan.md)** - The build plan behind the feasibility study: conditional markdown rendering of `abstract` inline in notification cards, an icon badge when the abstract carries a doc link, and a polymorphic in-app viewer for the target (markdown / source / image / directory). 4 phases, file-by-file, with the test matrix and acceptance criteria. **Plan only; awaiting go.**
+
 ### Notification Suppression (2026-09)
 - **[Demo-Time Notification Toggle](src/rnd/2026.09.04-demo-time-notification-toggle.md)** - Four options for silencing duplicated announcements and interrupting manager asks on the emulator, plus the WebSocket-to-TTS path trace behind them. **Awaiting a decision; nothing implemented.**
 

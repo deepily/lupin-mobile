@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../docs/data/doc_repository.dart';
+import '../../docs/presentation/abstract_body.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_filter/progress_group_collapse.dart';
 import '../data/notification_models.dart';
@@ -305,16 +307,9 @@ class _MessageCard extends StatelessWidget {
             Text( message.message ),
             if ( message.abstractText != null && message.abstractText!.isNotEmpty ) ...[
               const SizedBox( height: 8 ),
-              Container(
-                padding: const EdgeInsets.all( 8 ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular( 6 ),
-                ),
-                child: Text(
-                  message.abstractText!,
-                  style: theme.textTheme.bodySmall,
-                ),
+              AbstractBody(
+                abstractText : message.abstractText,
+                repository   : ServiceLocator.instance<DocRepository>(),
               ),
             ],
             if ( hasResponse ) ...[

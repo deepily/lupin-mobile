@@ -23,6 +23,7 @@ import '../../services/auth/session_persistence.dart';
 import '../../features/auth/domain/auth_bloc.dart';
 
 // Tier 2 data layer
+import '../../features/docs/data/doc_repository.dart';
 import '../../features/notifications/data/notification_repository.dart';
 import '../../features/decision_proxy/data/decision_proxy_repository.dart';
 
@@ -240,6 +241,12 @@ class ServiceLocator {
     // injects Bearer token automatically).
     _getIt.registerSingleton<NotificationRepository>(
       NotificationRepository(_getIt<Dio>()),
+    );
+
+    // Doc-viewer fetches for links found in notification abstracts. Same shared
+    // Dio, so the auth interceptor supplies the Bearer token.
+    _getIt.registerSingleton<DocRepository>(
+      DocRepository(_getIt<Dio>()),
     );
     _getIt.registerSingleton<DecisionProxyRepository>(
       DecisionProxyRepository(_getIt<Dio>()),

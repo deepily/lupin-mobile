@@ -45,6 +45,18 @@ class TestKeys {
   static const trustStateRowPrefix             = 'trust.state.row.';     // + '<domain>:<category>'
   static const trustStateDomainHeaderPrefix    = 'trust.state.domain.';  // + domain
 
+  // Abstract rendering + doc-link viewer
+  static const abstractBody         = 'docs.abstract.body';
+  static const abstractDocBadge     = 'docs.abstract.badge';
+  static const abstractExpandToggle = 'docs.abstract.expand';
+  static const docViewerScreen      = 'docs.viewer.screen';
+  static const docViewerMarkdown    = 'docs.viewer.markdown';
+  static const docViewerSource      = 'docs.viewer.source';
+  static const docViewerImage       = 'docs.viewer.image';
+  static const docViewerError       = 'docs.viewer.error';
+  static const docViewerShareButton = 'docs.viewer.share';
+  static const docDirEntryPrefix    = 'docs.dir.entry.';   // + entry name
+
   // Deep research form
   static const drQueryField     = 'dr.query';
   static const drDryRunCheckbox = 'dr.dryRun';

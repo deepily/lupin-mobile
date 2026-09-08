@@ -67,8 +67,27 @@ dependencies:
   # Authentication
   local_auth: ^2.3.0
 
-  # Markdown rendering
-  flutter_markdown: ^0.7.3
+  # Markdown rendering.
+  # 2026-09-08: migrated flutter_markdown -> flutter_markdown_plus. Google marked
+  # flutter_markdown DISCONTINUED on 2025-05-30 (flutter/flutter#162966); Foresight
+  # Mobile's flutter_markdown_plus is the maintained continuation of the same
+  # codebase, so the widget API (Markdown / MarkdownBody / MarkdownStyleSheet /
+  # onTapLink) is unchanged and the migration is an import swap.
+  #
+  # PINNED to 1.0.7, NOT the latest 1.0.12: flutter_markdown_plus >=1.0.8 pulls
+  # markdown >=7.3.1, which requires Dart ^3.9.0, and this toolchain is Dart 3.8.0
+  # (flutter/ pinned in-tree). 1.0.7 carries the same widget API we use. Raise this
+  # ceiling when the bundled Flutter SDK moves to Dart >=3.9.
+  flutter_markdown_plus: ^1.0.7
+
+  # Static HTML rendering for .html doc-viewer targets. Parses to native Flutter
+  # widgets — deliberately NOT webview_flutter: the doc endpoint returns raw source,
+  # so we never need JS execution or a platform WebView.
+  flutter_html: ^3.0.0
+
+  # External http(s) links found in notification abstracts — opened in the system
+  # browser behind a confirm, never in-app.
+  url_launcher: ^6.3.0
 
   # File sharing and opening
   share_plus: ^10.0.0

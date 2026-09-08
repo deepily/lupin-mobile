@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../docs/data/doc_repository.dart';
+import '../../docs/presentation/abstract_body.dart';
 import '../data/notification_models.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
@@ -208,13 +211,9 @@ class _NotificationItemCard extends StatelessWidget {
             Text( item.message ),
             if ( item.abstractText != null && item.abstractText!.isNotEmpty ) ...[
               const SizedBox( height: 8 ),
-              Container(
-                padding: const EdgeInsets.all( 8 ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular( 6 ),
-                ),
-                child: Text( item.abstractText!, style: theme.textTheme.bodySmall ),
+              AbstractBody(
+                abstractText : item.abstractText,
+                repository   : ServiceLocator.instance<DocRepository>(),
               ),
             ],
             if ( showRespond ) ...[
