@@ -16,6 +16,41 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+## 2026.09.08 | Session `a08d762c` (Tiffany 💍) — Abstracts render as markdown; doc links open in-app
+
+**One commit `756ae43`, 69 new tests, suite 882 → 951 passing.** Analyze clean on every touched file.
+
+A notification's `abstract` was rendered with a plain `Text` widget, so the markdown the fleet
+already writes into it showed as literal brackets and parens and the doc links were dead. Now a
+null/empty abstract renders nothing (unchanged), a present one renders formatted inline, and a doc
+link inside it is tappable and opens the target in-app.
+
+**The finding that shrank the job**: `GET /api/docs/file` returns RAW source text over the shared
+Dio that already injects the Bearer token. No WebView, no second auth path, no backend change — the
+expensive design (embed the Lupin SPA in a browser view) was never the design we needed.
+
+| Phase | What landed |
+|---|---|
+| P1 | `flutter_markdown` → `flutter_markdown_plus`. Google discontinued the former 2025-05-30; we shipped it until today. Pinned 1.0.7 (not 1.0.12 — ≥1.0.8 needs Dart 3.9, toolchain is 3.8.0). New pure parser `doc_link.dart` + `doc_models.dart`. |
+| P2 | `DocRepository` dispatching on content-type rather than file extension (a directory has no extension) + `DocViewerScreen` for markdown / source / image. Server refusals surface verbatim. |
+| P3 | `AbstractBody` wired into both conversation card screens, with a document icon badge shown only when a *fetchable* link is present. |
+
+**Rick's amendment**: modern link format only. A legacy `?scope=` link classifies `unknown` and
+renders inert rather than being rewritten — the backend 400s on that parameter, so a tap would offer
+a guaranteed failure. Detected explicitly so it stays a decision someone can find and reverse.
+
+**Two defects the tests caught**: `DocViewerScreen`'s `FutureBuilder` did not subscribe until the
+next frame, so a fast rejection escaped as an unhandled async error instead of reaching the error
+view (replaced with explicit load state); and `setState()` was handed a closure returning a Future.
+
+The 46 pre-existing suite failures are unchanged and identical test-for-test — 44 in
+`legacy_quarantine/`, 2 requiring a sibling `../cosa` checkout this standalone clone lacks.
+
+Docs: `src/rnd/2026.09.08-abstract-doc-link-viewer-feasibility.md`,
+`src/rnd/2026.09.08-abstract-doc-link-viewer-implementation-plan.md`. **P4 not yet built.**
+
+---
+
 ## 2026.09.04 | Session `3d7921bc` (Tiffany 💍) — Quick Ask shipped three fixes; the cache bug I found was filed, not taken
 
 **Five commits, 220/220 green** (was 130 at session start), analyze clean on every touched file.

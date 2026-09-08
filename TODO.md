@@ -18,6 +18,45 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-08 (abstract rendering + doc-link viewer)
+
+### Decisions Log — 2026-09-08
+
+- **Render abstracts as markdown, in-app, with no WebView.** `GET /api/docs/file` returns raw
+  source text over the shared Dio that already carries the Bearer token, so the client fetches
+  bytes and renders them natively. **Why**: the alternative — embedding the Lupin SPA in a browser
+  view — would have cost WebView memory and a second auth path to buy nothing.
+- **Modern doc-link format only; legacy `?scope=` is deliberately unsupported** (Rick's amendment).
+  A legacy link classifies `unknown` and renders as inert text. **Why**: the backend answers 400 on
+  that parameter, so offering a tap would offer a guaranteed failure. Detected explicitly rather
+  than by fallthrough, so it stays reversible.
+- **Link text is the only tap target**, not the whole card. **Why**: the card already carries a
+  Respond tap target and a second whole-card gesture would collide with it.
+- **Long abstracts collapse at 8 lines** behind Show more. **Why**: some abstracts are multi-row
+  tables that would otherwise swamp the notification list.
+- **External `http(s)` links open the system browser behind a confirm.** **Why**: leaving the app
+  should be deliberate.
+- **`flutter_markdown` → `flutter_markdown_plus`, landed as its own phase ahead of the feature.**
+  **Why**: Google discontinued `flutter_markdown` on 2025-05-30 and we were still shipping it; the
+  swap is standalone hygiene and de-risks everything built on top. Pinned to 1.0.7 because ≥1.0.8
+  requires Dart 3.9 and the in-tree toolchain is 3.8.0 — **raise the ceiling when the bundled
+  Flutter SDK moves.**
+
+### Open — mine
+
+- [ ] **P4 of the doc-link viewer** — directory listings (tap to descend), the `flutter_html`
+  branch for `.html` targets, the `url_launcher` external-link confirm, and a live-server
+  integration test. Plan §6. P1-P3 are committed in `756ae43`; P4 is the only unbuilt phase.
+- [ ] **Store row `2df54cf6` is stuck in `not_approved`** — Rick's go was verbal and I cannot
+  self-admit the row (approver personas only). Needs his click to reflect reality.
+
+### Pending decisions — Rick's
+
+- [ ] Ship P4 now, or leave the viewer at markdown/source/image until a real `.html` or directory
+  target shows up in an abstract? Nothing currently blocks on it.
+
+---
+
 ## 🆕 Open from 2026-09-04 (Quick Ask + the cache handoff)
 
 ### Decisions Log — 2026-09-04
