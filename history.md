@@ -46,8 +46,23 @@ view (replaced with explicit load state); and `setState()` was handed a closure 
 The 46 pre-existing suite failures are unchanged and identical test-for-test — 44 in
 `legacy_quarantine/`, 2 requiring a sibling `../cosa` checkout this standalone clone lacks.
 
+**Session end**: Rick scoped P4 down to the two loose ends and `2e8d02c` closed them — the
+external-link confirm, which had shipped with zero tests, now has 7 (with `url_launcher` mocked at
+its MethodChannel, so they assert what the platform was actually *asked* to do); and `flutter_html`
+was removed, having been added and imported nowhere. The `.html` and directory renderers stay
+descoped until a real abstract links one; both degrade to a readable source view.
+
+**Final**: 76 new tests, suite 882 → **958 passing**, 46 pre-existing failures unchanged
+test-for-test. Ticket `2df54cf6` closed with receipts. **Pushed** — `a55ed01..2e8d02c`, verified
+0 ahead of origin.
+
+One finding worth carrying: tapping a markdown link *embedded in prose* needs
+`tester.tapOnText( find.textRange.ofSubstring(...) )`. `find.textContaining` returns the whole
+paragraph, whose centre is the surrounding words rather than the link span, so a test written the
+obvious way passes for the wrong reason.
+
 Docs: `src/rnd/2026.09.08-abstract-doc-link-viewer-feasibility.md`,
-`src/rnd/2026.09.08-abstract-doc-link-viewer-implementation-plan.md`. **P4 not yet built.**
+`src/rnd/2026.09.08-abstract-doc-link-viewer-implementation-plan.md`.
 
 ---
 

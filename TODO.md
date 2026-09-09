@@ -44,16 +44,23 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 
 ### Open — mine
 
-- [ ] **P4 of the doc-link viewer** — directory listings (tap to descend), the `flutter_html`
-  branch for `.html` targets, the `url_launcher` external-link confirm, and a live-server
-  integration test. Plan §6. P1-P3 are committed in `756ae43`; P4 is the only unbuilt phase.
-- [ ] **Store row `2df54cf6` is stuck in `not_approved`** — Rick's go was verbal and I cannot
-  self-admit the row (approver personas only). Needs his click to reflect reality.
+- [x] **P4 — scoped down by Rick and CLOSED** (`2e8d02c`). He chose "close my loose ends only":
+  the external-link confirm is now tested (7 widget tests, `url_launcher` mocked at its
+  MethodChannel) and the unused `flutter_html` dependency is removed.
+- [x] **Store row `2df54cf6`** — approved, then closed **done** with receipts.
+- [x] **Pushed** — `a55ed01..2e8d02c` on origin, verified 0 ahead.
 
-### Pending decisions — Rick's
+### Deliberately descoped — revisit only on a real case
 
-- [ ] Ship P4 now, or leave the viewer at markdown/source/image until a real `.html` or directory
-  target shows up in an abstract? Nothing currently blocks on it.
+- [ ] **`.html` and directory renderers.** Both currently fall to the source view, which is
+  readable and honest rather than an error. `DocContentKind.html` survives as its own kind so the
+  distinction is not lost. **Trigger to revisit**: a real notification abstract that links an
+  `.html` file or a directory. Until then, building them is building for a hypothesis.
+- [ ] **Live-server integration test** for the doc-fetch flow. Needs `:7999` up; an environment
+  call, not a code one.
+- [ ] **`flutter_markdown_plus` is pinned to 1.0.7**, not the current 1.0.12 — ≥1.0.8 requires
+  Dart 3.9 and the in-tree toolchain is 3.8.0. **Raise the ceiling when the bundled Flutter SDK
+  moves.**
 
 ---
 
