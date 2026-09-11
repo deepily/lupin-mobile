@@ -1,0 +1,15 @@
+floor_health                               {'n': 20, 'median': 0.8, 'p90': 0.9, 'min': 0.7, 'max': 1.3}
+legA_total[rick-2.8s-44k.wav]              {'n': 10, 'median': 278.2, 'p90': 279.4, 'min': 277.2, 'max': 280.8}
+legA_headers[rick-2.8s-44k.wav]            {'n': 10, 'median': 277.7, 'p90': 279.0, 'min': 276.7, 'max': 280.1}
+legA_total[speech-30s-44k.wav]             {'n': 10, 'median': 467.9, 'p90': 473.1, 'min': 465.9, 'max': 477.4}
+legA_headers[speech-30s-44k.wav]           {'n': 10, 'median': 466.0, 'p90': 471.5, 'min': 464.1, 'max': 475.0}
+legB_total                                 {'n': 10, 'median': 455.0, 'p90': 469.7, 'min': 444.0, 'max': 472.8}
+legB_server_t_complete                     {'n': 10, 'median': 425.3, 'p90': 437.3, 'min': 417.0, 'max': 439.9}
+oneleg_mp3_total                           {'n': 10, 'median': 744.5, 'p90': 759.5, 'min': 726.5, 'max': 765.1}
+oneleg_ask_t_complete                      {'n': 10, 'median': 427.0, 'p90': 430.4, 'min': 411.1, 'max': 431.7}
+mp3_dictation_total                        {'n': 10, 'median': 286.2, 'p90': 300.9, 'min': 280.5, 'max': 305.2}
+question: Do you see where the potential savings is?
+legB paths: ['receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting']
+oneleg paths: ['receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting', 'receptionist/waiting']
+oneleg last body: {'mode': 'multimodal agent', 'prefix': 'multimodal agent', 'transcription': 'Do you see where the potential savings is?'}
+legB timings: {'t_recv': 0.0, 't_router': 0.008, 't_enqueue': 426.353, 't_first_useful': 426.618, 't_complete': 426.626}

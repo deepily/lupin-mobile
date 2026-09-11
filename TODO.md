@@ -18,6 +18,17 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-11 (spoken Quick Ask: two legs or one)
+
+### Decisions Log — 2026-09-11 (Rick, by keypress, walked through brief §7; row `9df9f1c2`)
+Brief: `src/rnd/2026.09.11-voice-one-leg-ask-decision-brief.md`
+1. **After speaking**: add a phone setting, *send immediately* / *review first*, **default review first**.
+2. **Build path**: **streamed two-part reply** on a new opt-in spoken-ask door. Line 1 is the transcript (~280 ms), line 2 is `job_id`/`status`/`pending_id` (~745 ms). The wav door stays text-only for voice replies.
+3. **Measurement**: **phone round-trip probe** on wifi and LTE only; the full 09-10 instrumentation plan is not built.
+4. **Recording format**: **compressed Opus or AAC (~32 kbps) after an accuracy check** on real phone recordings. Changed by Rick ~14:35 from "16 kHz WAV". The `record` package has no MP3 encoder; the browser already sends WebM/Opus.
+Rick is separately filing the bug that makes `/io/recording.mp3` unique per sender; `/io/last_response.json` has the same sharing. **Fixed and merged** as `91a45173` (row `27bcdd79`).
+5. **Plan review** (`src/rnd/2026.09.11-spoken-ask-streamed-door-implementation-plan.md`, ~15:40): approved "for the most part" **pending a cascaded review** · toggle on the Quick Ask screen · auto-cancel before the job ID · staffing split (Mr. Radio staffs the server, Tiffany builds the phone). Mr. Radio has been asked to run the cascade.
+
 ## 🆕 Open from 2026-09-08 (abstract rendering + doc-link viewer)
 
 ### Decisions Log — 2026-09-08

@@ -1,0 +1,253 @@
+{
+  "base": "http://localhost:8000",
+  "n": 10,
+  "started": "2026-09-11 12:23:47 EDT",
+  "raw": {
+    "floor_health": [
+      1.308177999817417,
+      0.9190199998556636,
+      0.8723580012883758,
+      0.816035999378073,
+      0.7478629995603114,
+      0.7347820010181749,
+      0.7393229989247629,
+      0.7349019997491268,
+      0.7532230010838248,
+      0.8065150013862876,
+      0.808676000815467,
+      0.7882139998400817,
+      0.7865750012570061,
+      0.7875640003476292,
+      0.7732740014034789,
+      0.796894999439246,
+      0.7794440007273806,
+      0.781453998570214,
+      0.7930350002425257,
+      0.7837239991204115
+    ],
+    "legA_total[rick-2.8s-44k.wav]": [
+      278.0715120006789,
+      277.194573000088,
+      279.4275899996137,
+      278.056828001354,
+      277.58969699971203,
+      279.0851030003978,
+      279.38752400041267,
+      278.3999900002527,
+      277.4173770012567,
+      280.8193559994834
+    ],
+    "legA_headers[rick-2.8s-44k.wav]": [
+      277.66200000000003,
+      276.683,
+      278.954,
+      277.58500000000004,
+      277.074,
+      278.638,
+      278.77200000000005,
+      277.795,
+      276.89399999999995,
+      280.09499999999997
+    ],
+    "legA_total[speech-30s-44k.wav]": [
+      477.35000499960734,
+      468.7734509989241,
+      467.80328299973917,
+      473.104835000413,
+      466.1364549992868,
+      465.8580029990844,
+      467.1374250010558,
+      466.83545999985654,
+      469.4610919996194,
+      468.01324599982763
+    ],
+    "legA_headers[speech-30s-44k.wav]": [
+      475.011,
+      466.294,
+      465.67900000000003,
+      471.549,
+      464.66200000000003,
+      464.10400000000004,
+      464.901,
+      465.424,
+      467.928,
+      466.559
+    ],
+    "legB_total": [
+      469.71049800049514,
+      448.73610400100006,
+      456.1749919994327,
+      453.831740998794,
+      456.43094799925166,
+      444.0026280008169,
+      449.3139919995883,
+      466.4492320007412,
+      453.79315500031225,
+      472.75026200077264
+    ],
+    "legB_server_t_complete": [
+      439.944,
+      421.312,
+      429.864,
+      425.51,
+      425.149,
+      417.005,
+      422.738,
+      437.273,
+      422.925,
+      426.626
+    ],
+    "oneleg_mp3_total": [
+      744.341933999749,
+      747.1327410003141,
+      759.4610390005982,
+      758.8930319998326,
+      765.1424719988427,
+      744.5675309991202,
+      726.5345639989391,
+      730.7034530003875,
+      742.2631650006224,
+      738.1774259993108
+    ],
+    "oneleg_ask_t_complete": [
+      427.955,
+      420.169,
+      419.799,
+      426.731,
+      431.672,
+      430.108,
+      411.125,
+      418.017,
+      427.229,
+      430.406
+    ],
+    "mp3_dictation_total": [
+      293.8853460000246,
+      283.53710000010324,
+      284.5998109987704,
+      305.15338400073233,
+      286.1589599997387,
+      294.2788300006214,
+      286.2491449996014,
+      280.4544580012589,
+      283.0526560010185,
+      300.86940900037007
+    ]
+  },
+  "upload_bytes[rick-2.8s-44k.wav]": 248802,
+  "upload_bytes[speech-30s-44k.wav]": 2646078,
+  "question": "Do you see where the potential savings is?",
+  "legB_paths": [
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting"
+  ],
+  "oneleg_paths": [
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting",
+    "receptionist/waiting"
+  ],
+  "legB_last_body_timings": {
+    "t_recv": 0.0,
+    "t_router": 0.008,
+    "t_enqueue": 426.353,
+    "t_first_useful": 426.618,
+    "t_complete": 426.626
+  },
+  "oneleg_last_body": {
+    "mode": "multimodal agent",
+    "prefix": "multimodal agent",
+    "transcription": "Do you see where the potential savings is?"
+  },
+  "transcripts": {
+    "rick-2.8s-44k.wav": "Do you see where the potential savings is?",
+    "speech-30s-44k.wav": "Finds maybe the top five most similar past decisions sees that five out of five were approved and recommends approval with high confidence. 768 dimensions. That's a lot more complex than my three-dimensional world. But here's what concerns me. What if the code base changes significantly? Won't all decisions become outdated? A brilliant observation. They've implemented what they call time-weighted decay with a 14-day half-life. Older decisions gradually lose influence, preventing"
+  },
+  "summary_ms": {
+    "floor_health": {
+      "n": 20,
+      "median": 0.8,
+      "p90": 0.9,
+      "min": 0.7,
+      "max": 1.3
+    },
+    "legA_total[rick-2.8s-44k.wav]": {
+      "n": 10,
+      "median": 278.2,
+      "p90": 279.4,
+      "min": 277.2,
+      "max": 280.8
+    },
+    "legA_headers[rick-2.8s-44k.wav]": {
+      "n": 10,
+      "median": 277.7,
+      "p90": 279.0,
+      "min": 276.7,
+      "max": 280.1
+    },
+    "legA_total[speech-30s-44k.wav]": {
+      "n": 10,
+      "median": 467.9,
+      "p90": 473.1,
+      "min": 465.9,
+      "max": 477.4
+    },
+    "legA_headers[speech-30s-44k.wav]": {
+      "n": 10,
+      "median": 466.0,
+      "p90": 471.5,
+      "min": 464.1,
+      "max": 475.0
+    },
+    "legB_total": {
+      "n": 10,
+      "median": 455.0,
+      "p90": 469.7,
+      "min": 444.0,
+      "max": 472.8
+    },
+    "legB_server_t_complete": {
+      "n": 10,
+      "median": 425.3,
+      "p90": 437.3,
+      "min": 417.0,
+      "max": 439.9
+    },
+    "oneleg_mp3_total": {
+      "n": 10,
+      "median": 744.5,
+      "p90": 759.5,
+      "min": 726.5,
+      "max": 765.1
+    },
+    "oneleg_ask_t_complete": {
+      "n": 10,
+      "median": 427.0,
+      "p90": 430.4,
+      "min": 411.1,
+      "max": 431.7
+    },
+    "mp3_dictation_total": {
+      "n": 10,
+      "median": 286.2,
+      "p90": 300.9,
+      "min": 280.5,
+      "max": 305.2
+    }
+  },
+  "finished": "2026-09-11 12:24:09 EDT"
+}
