@@ -1,6 +1,7 @@
 # TODO
 
-Last updated: 2026-09-02 (Session `5b101cc5` — Tiffany 💍): **AC-G3 `734bd1bf` CLOSED with receipts** (`ts-fee0022f`, Rio ⚡ implementing). **Backup fixed twice and verified end to end** — destination repointed to the standalone mirror, then the vendored 1.9 GB Flutter SDK excluded (1.79 GB → 6.22 MB); all 532 tracked files verified present at the mirror after the write run. Two stale facts corrected: the `:7999` bounce precondition was already satisfied, and `734bd1bf` had not been blocked on Rick since 2026-08-31.
+Last updated: 2026-09-11 (Session `afe9bfdc` — Tiffany 💍): **spoken-ask door cascade CLOSED — plan rev 8 → rev 12, six pins in git, NOTHING BUILT.** Nine review stages plus two verification passes; both passes found defects introduced *by the folds themselves*. Rick declined a build at 22:39 ("it's 1030 at night"); rev 13 is **held, not cancelled**, and its 11 items are a **list-to-verify** whose coordinates have drifted ~49 lines. Five items parked on Rick, chase 09:00. Row `9df9f1c2` handed to Mr. Radio with receipt.
+Prior: 2026-09-02 (Session `5b101cc5` — Tiffany 💍): **AC-G3 `734bd1bf` CLOSED with receipts** (`ts-fee0022f`, Rio ⚡ implementing). **Backup fixed twice and verified end to end** — destination repointed to the standalone mirror, then the vendored 1.9 GB Flutter SDK excluded (1.79 GB → 6.22 MB); all 532 tracked files verified present at the mirror after the write run. Two stale facts corrected: the `:7999` bounce precondition was already satisfied, and `734bd1bf` had not been blocked on Rick since 2026-08-31.
 Prior: 2026-08-30 (Session `0e3df8ca` — Tiffany 💍, MANAGER): **board driven down; two of the three items carried from 2026-08-29 are closed and the third is parked with a chase.** Arnold's row `82883a4e` closed with receipts (mutation-verified, not just green). AC-S2.8 resolved — it was never undefined (commit `0df6a66`). Rick ruled on `54589356`; handed to Pocholo. **New P1 `0e7c9214`** found live with Rick at the keyboard: a repeat ask computes its answer and never announces it — two independent server bugs, both root-caused the same evening.
 Prior: 2026-08-29 (Session `4000b44a` — Tiffany 💍, MANAGER): **Quick Ask push-to-talk screen implemented end to end** across 62 commits after a cascaded review (doc `src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md`, recon sheet `src/rnd/2026.08.29-cascade-quick-ask-recon-checklist.md`). Suite 710 → **835 passing**; 44 errors all inside `legacy_quarantine/`, zero outside. Crew of four stood down with verified mementos; mementos are now gitignored.
 Prior: 2026-08-21 (Session `e082edd7` — Tiffany 💍): v2 cutover **wave 2 DONE** (nine submit doors → `/api/v2/submit`, against integration 799e43d0; doc `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md`); lane-2 harness door fix merged to integration (3c3f1f5e). **TODO horizon archive pass executed this session** — past content (2026-04-15 → 2026-06-12: postgame decisions, completed blocks, breadcrumb, superseded voice-persona runbook, parked conditionals, all `[x]` items) moved to `todo-archive/2026-04-15-to-06-12-todo.md`.
@@ -28,6 +29,21 @@ Brief: `src/rnd/2026.09.11-voice-one-leg-ask-decision-brief.md`
 4. **Recording format**: **compressed Opus or AAC (~32 kbps) after an accuracy check** on real phone recordings. Changed by Rick ~14:35 from "16 kHz WAV". The `record` package has no MP3 encoder; the browser already sends WebM/Opus.
 Rick is separately filing the bug that makes `/io/recording.mp3` unique per sender; `/io/last_response.json` has the same sharing. **Fixed and merged** as `91a45173` (row `27bcdd79`).
 5. **Plan review** (`src/rnd/2026.09.11-spoken-ask-streamed-door-implementation-plan.md`, ~15:40): approved "for the most part" **pending a cascaded review** · toggle on the Quick Ask screen · auto-cancel before the job ID · staffing split (Mr. Radio staffs the server, Tiffany builds the phone). Mr. Radio has been asked to run the cascade.
+6. **No build tonight** (~22:39, keypress, `default_used=false`): *"It's 1030 at night This is basically time to run the end of session ritual."* Session-end instead; all workers checkpoint and **resume exactly where we left off tomorrow morning**. Rev 13's fold is **held, not cancelled**.
+
+### Cascade outcome — 2026-09-11 (row `9df9f1c2`, now Mr. Radio's)
+Plan went **rev 8 → rev 12**; six pins in git (`b505bfb` `32b2055` `3a97776` `99c4eeb` `feda7bf` `2def6e4`). Nine stages closed, two verification passes folded, **nothing built**. Current pin: rev 12 `ccc0430b`, 646 lines, commit `2def6e4`. Memento `38e7a298`.
+
+### ⏳ Parked on Rick — chase 09:00, none answered
+- [ ] `ccd7d20e` — build go/no-go on rev 12. *Answered "no" for tonight only; the project-level go/no-go is still open.*
+- [ ] `7b5458f5` — **CB4's real ruling**. The `FormData.clone()` fix is Mr. Radio's **provisional** call, never ratified. Must not be written as ratified.
+- [ ] `79c4ad06` — restart Tiffany's seat. A `/clear` does **not** reload the MCP subprocess; needs Rick's hands in the pane.
+- [ ] `c51e92da` — phone round-trip probe (wifi + LTE). **Approval is `9df9f1c2`'s closing condition.**
+- [ ] `9b1f7701` — Opus/AAC accuracy check at ~32 kbps. **Same.**
+
+### 🔜 Rev 13 — held, 11 items, **verify before applying**
+Items measured at **rev 11** against a **rev-12 head**, so cited line numbers have drifted ~49 lines: **resolve every row by content, never by number.** Item 5 (J-POS-1) is **struck** — already fixed in rev 12. Still live: J-ABS-1/2/3/4, S-D2, S-D3, S-D4, SC4. Full text in memento `38e7a298` and row `9df9f1c2`.
+- [ ] **Coverage gate points at the wrong test root** — §2.4 names three *source* files and no *test* files. `src/tests/` vs `src/cosa/tests/` are separate trees; the module's own auth tests live in the latter. Select tests by **what imports the module**, not by filename resemblance. `speech.py` is the only real coverage blocker, and its 18% figure bounds *one suite's* contribution, not the file's total.
 
 ## 🆕 Open from 2026-09-08 (abstract rendering + doc-link viewer)
 

@@ -16,6 +16,24 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+## 2026.09.11 | Session `afe9bfdc` (Tiffany 💍) — Cascaded review closed; plan rev 8 → rev 12, nothing built
+
+**RESUME HERE**: plan rev 12 committed `2def6e4` (sha256 `ccc0430b`, 646 lines); six pins in git. Nine-stage cascade closed plus two verification passes folded. **Nothing built** — Rick's plan-only ruling held all session, and he declined a build at 22:39.
+
+1. **Cascade closed, 9/9 stages, 0 escalations, 0 votes.** Every finding folded across five committed revisions. The resumption point is task row `9df9f1c2` plus memento `38e7a298`.
+2. **Verification found what the cascade could not.** Rev 9 scored 19 PASS / 1 FAIL; rev 10 scored 3 PASS / 4 FAIL. Both passes surfaced defects introduced *by the folds themselves* — a population no findings-checklist covers by construction.
+3. **Five over-claims retracted**, mine and the manager's, each caught by re-measuring rather than trusting a summary. Rules earned: *a self-inconsistent file hashes perfectly* · *renumbering a list edits every reference to it* · *"same" is positional* · *a durable record needs revising when the world moves, not only when the work does*.
+4. **Rev 13 is owed and held** — 11 items, framed as a **list-to-verify, not a list-to-apply**: measured at rev 11 against a rev-12 head, so coordinates have drifted ~49 lines.
+5. **Five items parked on Rick**, chase 09:00 — build go/no-go `ccd7d20e` (answered *no* tonight), CB4's ruling `7b5458f5`, seat restart `79c4ad06`, and approval of `c51e92da` + `9b1f7701`, the last two being `9df9f1c2`'s own closing condition.
+
+**Checkpoint**: rev 12 committed + manager-verified; row `9df9f1c2` reassigned to Mr. Radio with receipt (event `13786`); memento final `38e7a298`, record ≡ mirror; seat handed off at ~89% context.
+
+**Files**: `src/rnd/2026.09.11-spoken-ask-streamed-door-implementation-plan.md` · `src/rnd/2026.09.11-voice-one-leg-ask-decision-brief.md` · `.claude-memento-tiffany-afe9bfdc.md` · `TODO.md` · `history.md`
+
+**Detail**: task row `9df9f1c2` (all findings, rulings, parked items) · `projects-data/lupin/cascade-pins/` (reviewer findings files, fold queue, per-rev pins)
+
+---
+
 ## 2026.09.08 | Session `a08d762c` (Tiffany 💍) — Abstracts render as markdown; doc links open in-app
 
 **One commit `756ae43`, 69 new tests, suite 882 → 951 passing.** Analyze clean on every touched file.
