@@ -191,6 +191,7 @@ class TestKeys {
 
   // ── Quick Ask (S2) ──────────────────────────────────────────────────────
   static const quickAskRecordButton   = 'quickAsk.record';
+  static const quickAskSendModeToggle = 'quickAsk.sendMode';
   static const quickAskClearButton    = 'quickAsk.clear';
   static const quickAskSendButton     = 'quickAsk.send';
   static const quickAskDraftText      = 'quickAsk.draft';

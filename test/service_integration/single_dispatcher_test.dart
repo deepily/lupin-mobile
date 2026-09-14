@@ -31,6 +31,7 @@ import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import 'package:lupin_mobile/services/quick_ask/quick_ask_preferences.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 
 class _MockNotifRepo extends Mock implements NotificationRepository {}
@@ -39,6 +40,7 @@ class _MockAudio     extends Mock implements NotificationAudioService {}
 class _MockTts       extends Mock implements TtsOrchestrator {}
 class _MockAsr       extends Mock implements AsrService {}
 class _MockWs        extends Mock implements WebSocketService {}
+class _MockQaPrefs   extends Mock implements QuickAskPreferences {}
 
 Map<String, dynamic> _queueUpdateFrame() => {
   'type'         : 'notification_queue_update',
@@ -92,7 +94,9 @@ void main() {
           NotificationBloc( notifRepo, audio: audio ) );
       focusBloc = FocusChatBloc( notifRepo, tts: tts );
       GetIt.instance.registerSingleton<FocusChatBloc>( focusBloc );
-      quickAsk = QuickAskBloc( queueRepo, asr: _MockAsr(), ws: ws, notifications: notifRepo );
+      final qaPrefs = _MockQaPrefs();
+      when( () => qaPrefs.sendImmediately ).thenReturn( false );
+      quickAsk = QuickAskBloc( queueRepo, asr: _MockAsr(), ws: ws, notifications: notifRepo, prefs: qaPrefs );
       GetIt.instance.registerSingleton<QuickAskBloc>( quickAsk );
 
       dispatcher = WsBlocDispatcher();
