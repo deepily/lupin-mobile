@@ -176,6 +176,14 @@ class QuickAskState extends Equatable {
   /// spanning more than the server's own stall threshold.
   final bool lost;
 
+  /// The screen's Review first | Send immediately control, as last written.
+  ///
+  /// 🔴 RENDER-ONLY (plan §3.1, J-ABS-2). The release path reads
+  /// `QuickAskPreferences` at release time and never this field, so a flip
+  /// made outside the bloc still takes effect on the next recording. The one
+  /// writer is `QuickAskSendModeChanged`.
+  final bool sendImmediately;
+
   const QuickAskState( {
     this.entries         = const [],
     this.phase           = QuickAskPhase.idle,
@@ -188,6 +196,7 @@ class QuickAskState extends Equatable {
     this.draftTranscript,
     this.errorMessage,
     this.lost            = false,
+    this.sendImmediately = false,
   } );
 
   /// A captured question is sitting in the holding pen, waiting to be sent.
@@ -236,6 +245,7 @@ class QuickAskState extends Equatable {
     String?              draftTranscript,
     String?              errorMessage,
     bool?                lost,
+    bool?                sendImmediately,
     bool clearLiveJobId       = false,
     bool clearLiveQuestion    = false,
     bool clearPendingPrompt   = false,
@@ -254,11 +264,12 @@ class QuickAskState extends Equatable {
     draftTranscript : clearDraft            ? null : ( draftTranscript ?? this.draftTranscript ),
     errorMessage    : clearError           ? null : ( errorMessage    ?? this.errorMessage ),
     lost            : lost            ?? this.lost,
+    sendImmediately : sendImmediately ?? this.sendImmediately,
   );
 
   @override
   List<Object?> get props => [
     entries, phase, liveJobId, liveQuestion, pendingPrompt, interview,
-    connected, capturing, draftTranscript, errorMessage, lost,
+    connected, capturing, draftTranscript, errorMessage, lost, sendImmediately,
   ];
 }

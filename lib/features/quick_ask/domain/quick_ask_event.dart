@@ -126,6 +126,19 @@ class QuickAskPromptAnswered extends QuickAskEvent {
   List<Object?> get props => [ answer ];
 }
 
+/// The user picked Review first or Send immediately on the screen's control.
+///
+/// The ONE writer of the send mode (plan §3.1, J-ABS-2): the bloc writes
+/// `QuickAskPreferences` first, then emits `QuickAskState.sendImmediately` so
+/// the control re-renders. Public, and declared here, because `QuickAskEvent`
+/// is sealed — a subclass outside this library does not compile (CC6).
+class QuickAskSendModeChanged extends QuickAskEvent {
+  final bool sendImmediately;
+  const QuickAskSendModeChanged( this.sendImmediately );
+  @override
+  List<Object?> get props => [ sendImmediately ];
+}
+
 /// The user dismissed the prompt. This is NOT a local hide: it posts the
 /// server's own `response_default` — `no` for Door C — so the blocked ask
 /// stops waiting instead of running out its retry ladder in silence.

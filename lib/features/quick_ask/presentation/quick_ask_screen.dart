@@ -90,6 +90,22 @@ class _RecordHeader extends StatelessWidget {
         padding : const EdgeInsets.symmetric( vertical: 16, horizontal: 12 ),
         child   : Column(
           children: [
+            // Rick's ruling (§6 row 2): the send-mode control lives HERE, above
+            // the record button. Widget shape from `server_context_toggle.dart`
+            // (:73-82); the mode itself comes from state, not widget-local
+            // state, and a pick goes back through the bloc (J-ABS-2).
+            Padding(
+              padding : const EdgeInsets.only( bottom: 12 ),
+              child   : SegmentedButton<bool>(
+                key      : const Key( TestKeys.quickAskSendModeToggle ),
+                segments : const [
+                  ButtonSegment<bool>( value: false, label: Text( 'Review first' ) ),
+                  ButtonSegment<bool>( value: true,  label: Text( 'Send immediately' ) ),
+                ],
+                selected           : { state.sendImmediately },
+                onSelectionChanged : ( s ) => bloc.add( QuickAskSendModeChanged( s.first ) ),
+              ),
+            ),
             SizedBox(
               width  : 232,
               height : 168,

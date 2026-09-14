@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/asr/asr_service.dart';
 import '../../../services/permissions/mic_permission.dart' as mic;
+import '../../../services/quick_ask/quick_ask_preferences.dart';
 import '../../../services/websocket/websocket_service.dart';
 import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/data/notification_models.dart';
@@ -99,21 +100,28 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   /// have been the third private copy in the tree.
   final mic.MicPermissionRequester _requestMic;
 
+  /// Review first or send immediately (plan §3.1, CC5). A constructor
+  /// dependency, not a locator lookup, so the unit harness can build the bloc
+  /// without DI. Read at RELEASE time, never cached (J-ABS-2 / C-J1).
+  final QuickAskPreferences _prefs;
+
   QuickAskBloc(
     this._repo, {
     required AsrService          asr,
     required WebSocketService    ws,
     required NotificationRepository notifications,
+    required QuickAskPreferences prefs,
     String?                   userEmail,
     DateTime Function()?      now,
     mic.MicPermissionRequester? requestMicPermission,
   } )  : _asr           = asr,
         _ws            = ws,
         _notifications = notifications,
+        _prefs         = prefs,
         _userEmail     = userEmail,
         _now           = now ?? DateTime.now,
         _requestMic    = requestMicPermission ?? mic.requestMicPermission,
-        super( const QuickAskState() ) {
+        super( QuickAskState( sendImmediately: prefs.sendImmediately ) ) {
 
     on<QuickAskRecordPressed>( _onRecordPressed );
     on<QuickAskRecordReleased>( _onRecordReleased );
@@ -130,6 +138,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskEntryDismissed>( _onEntryDismissed );
     on<QuickAskErrorDismissed>( _onErrorDismissed );
     on<QuickAskWatchdogFired>( _onWatchdogFired );
+    on<QuickAskSendModeChanged>( _onSendModeChanged );
 
     // Seeded by the stream's replay-on-subscribe (AC-S1.8), so a bloc
     // constructed while already disconnected knows it immediately.
@@ -921,6 +930,14 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
   Future<void> _onErrorDismissed( QuickAskErrorDismissed e, Emitter<QuickAskState> emit ) async {
     emit( state.copyWith( clearError: true ) );
+  }
+
+  /// The send-mode control's one writer (J-ABS-2): persist FIRST, then emit
+  /// the render-only state field. The release path reads the preference, so
+  /// the write is what changes behaviour; the emit only redraws the control.
+  Future<void> _onSendModeChanged( QuickAskSendModeChanged e, Emitter<QuickAskState> emit ) async {
+    await _prefs.setSendImmediately( e.sendImmediately );
+    emit( state.copyWith( sendImmediately: e.sendImmediately ) );
   }
 
   @override

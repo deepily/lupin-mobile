@@ -16,12 +16,28 @@ import 'package:lupin_mobile/features/notifications/data/notification_repository
 import 'package:lupin_mobile/features/queue/data/queue_repository.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
+import 'package:lupin_mobile/services/quick_ask/quick_ask_preferences.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 
 class MockQueueRepository  extends Mock implements QueueRepository  {}
 class MockAsrService       extends Mock implements AsrService       {}
 class MockWebSocketService extends Mock implements WebSocketService {}
 class MockNotificationRepository extends Mock implements NotificationRepository {}
+
+/// An in-memory `QuickAskPreferences`. A FAKE rather than a mock so a test can
+/// flip the stored mode mid-session (C-J1) and read back what the bloc wrote,
+/// without `SharedPreferences`' async `getInstance()` in a sync constructor.
+class FakeQuickAskPreferences implements QuickAskPreferences {
+  bool stored;
+  int  writes = 0;
+  FakeQuickAskPreferences( { this.stored = false } );
+
+  @override
+  bool get sendImmediately => stored;
+
+  @override
+  Future<void> setSendImmediately( bool v ) async { writes++; stored = v; }
+}
 
 const ourEmail   = 'rick@lupin.test';
 const ourSession = 'wise penguin';
@@ -120,6 +136,7 @@ class Harness {
   late final MockAsrService       asr;
   late final MockWebSocketService ws;
   late final MockNotificationRepository notifications;
+  late final FakeQuickAskPreferences prefs;
   late final StreamController<bool> connCtrl;
   late final QuickAskBloc         bloc;
 
@@ -132,11 +149,15 @@ class Harness {
   int  micRequests = 0;
   bool micGranted  = true;
 
-  Harness( { bool connected = true, String? sessionId = ourSession, DateTime Function()? now } ) {
+  /// [sendImmediately] seeds the stored send mode. Default review first, so
+  /// every pre-existing suite runs the path it was written against.
+  Harness( { bool connected = true, String? sessionId = ourSession, DateTime Function()? now,
+             bool sendImmediately = false } ) {
     repo     = MockQueueRepository();
     asr      = MockAsrService();
     ws       = MockWebSocketService();
     notifications = MockNotificationRepository();
+    prefs    = FakeQuickAskPreferences( stored: sendImmediately );
     // Registered HERE, not in each file's `setUpAll`: the default stub below
     // uses `any()`, so every harness user would otherwise have to know about a
     // type it never mentions. `registerFallbackValue` is idempotent.
@@ -164,6 +185,7 @@ class Harness {
       asr                  : asr,
       ws                   : ws,
       notifications        : notifications,
+      prefs                : prefs,
       userEmail            : ourEmail,
       now                  : now,
       requestMicPermission : () async { micRequests++; return micGranted; },

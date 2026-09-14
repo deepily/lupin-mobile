@@ -52,6 +52,7 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 // Notification audio (ding + TTS on high/urgent)
 import '../../services/notification_audio/notification_audio_service.dart';
 import '../../services/notification_audio/notification_preferences.dart';
+import '../../services/quick_ask/quick_ask_preferences.dart';
 import '../../services/notification_filter/notification_stop_list.dart';
 
 // Agent-narration TTS (ElevenLabs primary, flutter_tts fallback)
@@ -280,6 +281,10 @@ class ServiceLocator {
     _getIt.registerSingleton<NotificationPreferences>(
       NotificationPreferences(_getIt<SharedPreferences>()),
     );
+    // Quick Ask send mode — review first (default) or send immediately.
+    _getIt.registerSingleton<QuickAskPreferences>(
+      QuickAskPreferences(_getIt<SharedPreferences>()),
+    );
     _getIt.registerSingleton<NotificationAudioService>(
       NotificationAudioService(prefs: _getIt<NotificationPreferences>()),
     );
@@ -366,6 +371,7 @@ class ServiceLocator {
         // notification, and the ask it blocks cannot proceed until it is
         // answered on `POST /api/notify/response`.
         notifications : _getIt<NotificationRepository>(),
+        prefs         : _getIt<QuickAskPreferences>(),
       ),
     );
 
