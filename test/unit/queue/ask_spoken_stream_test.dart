@@ -498,13 +498,18 @@ void main() {
       final env  = Platform.environment[ 'LUPIN_FIXTURE_REF' ];
       final ref  = ( env == null || env.isEmpty ) ? defaultLupinRef : env;
       final root = lupinRoot();
+      final sha  = Process.runSync( 'git', [ '-C', root, 'rev-parse', '--verify', '$ref^{commit}' ] );
+      final at   = sha.exitCode == 0 ? ( sha.stdout as String ).trim() : '<unresolved: ${( sha.stderr as String ).trim()}>';
+      // Printed on every run, pass or fail, so a green says WHICH lupin it matched.
+      // ignore: avoid_print
+      print( 'fixture currency: lupin ref $ref @ $at' );
       final r    = Process.runSync( 'git', [ '-C', root, 'show', '$ref:$lupinPath' ], stdoutEncoding: null );
       if ( r.exitCode != 0 ) {
-        fail( 'git show $ref:$lupinPath failed in $root: ${r.stderr}'
+        fail( 'git show $ref:$lupinPath failed in $root (ref $ref @ $at): ${r.stderr}'
               'Until §A merges, run with LUPIN_FIXTURE_REF=sam/ask-audio-door-a.' );
       }
       expect( Uint8List.fromList( r.stdout as List<int> ), File( phonePath ).readAsBytesSync(),
-          reason: 'lupin $ref has a different $lupinPath — re-copy it byte for byte' );
+          reason: 'lupin $ref @ $at has a different $lupinPath — re-copy it byte for byte' );
     } );
   } );
 }
