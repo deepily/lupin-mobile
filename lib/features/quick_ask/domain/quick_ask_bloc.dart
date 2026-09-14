@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/asr/asr_service.dart';
@@ -139,6 +140,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskErrorDismissed>( _onErrorDismissed );
     on<QuickAskWatchdogFired>( _onWatchdogFired );
     on<QuickAskSendModeChanged>( _onSendModeChanged );
+    on<QuickAskSpokenEventArrived>( _onSpokenEventArrived );
 
     // Seeded by the stream's replay-on-subscribe (AC-S1.8), so a bloc
     // constructed while already disconnected knows it immediately.
@@ -203,6 +205,14 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     final epoch = _opEpoch;
     emit( state.copyWith( phase: QuickAskPhase.transcribing ) );
 
+    // 🔴 The PREFERENCE, read now — never `state.sendImmediately`, never a
+    // value cached at construction. The bloc lives for the whole app session,
+    // so a cached mode would ignore a flip until restart (C-J1 / J-ABS-2).
+    if ( _prefs.sendImmediately ) {
+      await _releaseSpoken( epoch, emit );
+      return;
+    }
+
     String transcript;
     try {
       transcript = await _asr.stopAndTranscribe();
@@ -235,6 +245,149 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       draftTranscript : transcript,
       capturing       : _asr.isCapturing,
     ) );
+  }
+
+  // ── Send immediately: one request, a two-line reply (plan §3.3) ───────────
+
+  /// Open spoken streams, keyed by the epoch they were released under.
+  ///
+  /// 🔴 A MAP, never one shared handle (CC2). Cancel does not stop a read, and
+  /// `canRecord` is true again straight after a cancel, so a second press can
+  /// start a second stream while the first is unresolved. Each terminal event
+  /// removes ITS OWN key; nulling a single field removed the live one.
+  final Map<int, StreamSubscription<SpokenAskEvent>> _spokenSubs = {};
+
+  /// Each spoken stream's recording, keyed by the same epoch (rev-15 ruling
+  /// C2-A). One shared path would let stream A's ending delete stream B's
+  /// file after a cancel-then-press.
+  final Map<int, String> _spokenPaths = {};
+
+  /// The live-epoch keys of the open spoken streams (§3.3 step 7, C-J2). The
+  /// map is library-private, so without this a test has no way to see that
+  /// two streams are tracked and that each terminal removes only its own.
+  @visibleForTesting
+  Set<int> get liveSpokenEpochs => Set.unmodifiable( _spokenSubs.keys );
+
+  /// Stop, post the audio, and subscribe. Everything after this re-enters
+  /// through [QuickAskSpokenEventArrived].
+  Future<void> _releaseSpoken( int epoch, Emitter<QuickAskState> emit ) async {
+    // 🔴 A `catch`, NOT a `finally` (J-ABS-1). `.listen()` returns as soon as
+    // the subscription exists, so a `finally` would run while the upload is
+    // still in flight and delete the recording out from under it. The catch
+    // is the never-subscribed path, and it adds no key to the map.
+    try {
+      // Throws `AsrException` with nothing retained, so a throw here has no
+      // recording to discard and no path is recorded.
+      final path = await _asr.stopToFile();
+      _spokenPaths[ epoch ] = path;
+
+      // Cancelled while the recorder was stopping: nothing has been sent, so
+      // send nothing. Same rule as the review path's stale transcript (:210).
+      if ( epoch != _opEpoch ) {
+        _discardRecording( epoch );
+        return;
+      }
+
+      // CC1 — ARM THE BUFFER HERE, at subscribe time. D4 starts the ask before
+      // line 1 leaves the server, so its first transitions can land before the
+      // transcript does; `_shouldBuffer` keys on a live spoken stream for that
+      // window. This is the spoken twin of `_submit`'s clear-BEFORE-the-call.
+      // 🔴 Departure from rev 14 §3.3 step 2, ruled by Mr. Radio 2026-09-14
+      // 16:35: the Transcript arm does NOT clear. Clearing there would drop
+      // exactly the pre-transcript frames this arming exists to keep.
+      _buffer.clear();
+
+      _spokenSubs[ epoch ] = _repo
+          .askSpoken( path, _ws.sessionId ?? '' )
+          .listen( ( ev ) => add( QuickAskSpokenEventArrived( epoch, ev ) ) );
+    } catch ( ex ) {
+      _discardRecording( epoch );
+      if ( epoch != _opEpoch ) return;
+      emit( state.copyWith(
+        phase        : QuickAskPhase.idle,
+        errorMessage : ex is AsrException ? ex.message : 'Could not send that question: $ex',
+        capturing    : _asr.isCapturing,
+      ) );
+    }
+  }
+
+  Future<void> _onSpokenEventArrived( QuickAskSpokenEventArrived e, Emitter<QuickAskState> emit ) async {
+    final ev = e.event;
+
+    // Step 6 + step 8, on EVERY terminal, current epoch or stale (rev-15
+    // ruling C2-B): forget this stream's own key and release its own
+    // recording BEFORE the stale return below, never after it.
+    if ( ev.isTerminal ) {
+      _spokenSubs.remove( e.epoch );
+      _discardRecording( e.epoch );
+    }
+
+    // ── Stale: a cancel, a clear or a new press happened after release ──
+    // Rick's ruling 3: the server already started this work, so a Result that
+    // names a job is cancelled on arrival. No card, no state change.
+    if ( e.epoch != _opEpoch ) {
+      if ( ev is SpokenAskResult ) {
+        final jobId = ev.response.jobId;
+        if ( jobId != null && jobId.isNotEmpty ) {
+          unawaited( _repo.cancelJob( jobId ).catchError( ( Object _ ) {} ) );
+        }
+      }
+      return;
+    }
+
+    switch ( ev ) {
+      case SpokenAskTranscript():
+        emit( state.copyWith(
+          phase        : QuickAskPhase.submitting,
+          liveQuestion : ev.text,
+          capturing    : _asr.isCapturing,
+        ) );
+
+      case SpokenAskResult():
+        // CC4 — the transcript arrived on a DIFFERENT event; its carrier is
+        // `liveQuestion`, which the Transcript arm wrote. A cancel in between
+        // clears it, but that path is stale and never reaches here.
+        await _applyResolvedAsk( ev.response, state.liveQuestion ?? '', emit );
+
+      case SpokenAskFailed():
+        emit( state.copyWith(
+          phase             : QuickAskPhase.idle,
+          errorMessage      : ev.detail,
+          capturing         : _asr.isCapturing,
+          clearLiveQuestion : true,
+        ) );
+
+      case SpokenAskCutOff():
+        // The question WAS asked (D4) and its answer may still arrive as a
+        // notification, but without a job id there is nothing to track or
+        // cancel. Say exactly that.
+        emit( state.copyWith(
+          phase   : QuickAskPhase.idle,
+          entries : [ ...state.entries, QuickAskEntry(
+            questionText : ev.transcript,
+            state        : JobLifecycleState.failed,
+            source       : QuickAskSource.askResponse,
+            details      : JobSummary(
+              jobId        : '',
+              questionText : ev.transcript,
+              status       : 'failed',
+              error        : cutOffMessage,
+            ),
+          ) ],
+          capturing         : _asr.isCapturing,
+          clearLiveQuestion : true,
+        ) );
+    }
+  }
+
+  /// The card text for a reply that stopped after the transcript.
+  static const String cutOffMessage = 'Sent, but the reply was cut off. The answer may still arrive.';
+
+  /// §3.3 step 8 — `AsrService` owns the recording; the bloc is the caller
+  /// that tells it when to let go, naming THIS epoch's file (C2-A).
+  void _discardRecording( int epoch ) {
+    final path = _spokenPaths.remove( epoch );
+    if ( path != null ) _asr.discardPendingUpload( path );
   }
 
   /// The send button — the ONLY route from a held transcript to the server.
@@ -653,7 +806,11 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   /// three frames: `user_email`, plus `question_text` or `session_id`.
   bool _shouldBuffer( Map<String, dynamic> frame ) {
     final live = state.liveQuestion;
-    if ( live == null || live.isEmpty ) return false;   // no submission in flight
+    // CC1 — a send-immediately stream is a submission in flight BEFORE its
+    // transcript exists, and D4 means its frames can arrive in that window.
+    // Only the session branch below can match then, which needs no text.
+    final spokenLive = _spokenSubs.containsKey( _opEpoch );
+    if ( ( live == null || live.isEmpty ) && !spokenLive ) return false;   // no submission in flight
 
     final rawMeta = frame[ 'metadata' ];
     final meta    = rawMeta is Map ? Map<String, dynamic>.from( rawMeta ) : <String, dynamic>{};
@@ -944,6 +1101,14 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   Future<void> close() {
     _watchdog?.cancel();
     _connSub?.cancel();
+    // App teardown only (the bloc is an app-root singleton). A job whose line
+    // 2 was still in flight runs uncancelled and its answer still arrives as a
+    // notification — accepted, there is no card left to attach it to. Its
+    // recording stays in temp, also accepted (rev-15 ruling C2-D).
+    for ( final sub in _spokenSubs.values ) {
+      sub.cancel();
+    }
+    _spokenSubs.clear();
     return super.close();
   }
 }

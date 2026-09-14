@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../notifications/data/notification_models.dart';
+import '../../queue/data/queue_models.dart';
 
 /// Events driving [QuickAskBloc]. Round 1 is one live question at a time; the
 /// one-live-question guard is a single predicate clause so lifting it in round
@@ -124,6 +125,23 @@ class QuickAskPromptAnswered extends QuickAskEvent {
   const QuickAskPromptAnswered( this.answer );
   @override
   List<Object?> get props => [ answer ];
+}
+
+/// Internal — one event read off a send-immediately stream, re-entering the
+/// bloc so state changes still happen inside a handler (plan §3.3 step 1).
+///
+/// [epoch] is the capture's `_opEpoch` at release. A cancel, a clear or a new
+/// press bumps the live epoch, so an arrival whose [epoch] no longer matches is
+/// STALE: a stale Result carrying a job id is cancelled, anything else dropped.
+///
+/// Public, and declared here, because `QuickAskEvent` is sealed (CC6/SC1 —
+/// Sam's findings call it `SpokenAskArrived`). Not dispatched by the UI.
+class QuickAskSpokenEventArrived extends QuickAskEvent {
+  final int            epoch;
+  final SpokenAskEvent event;
+  const QuickAskSpokenEventArrived( this.epoch, this.event );
+  @override
+  List<Object?> get props => [ epoch, event ];
 }
 
 /// The user picked Review first or Send immediately on the screen's control.
