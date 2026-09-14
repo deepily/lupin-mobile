@@ -14,7 +14,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/queue/data/queue_models.dart';
@@ -159,7 +158,7 @@ void main() {
         whole.sublist( e + 1, mid2 ),
         whole.sublist( mid2 ),
       ];
-      expect( utf8.decode( chunks[ 0 ], allowMalformed: true ), endsWith( '�' ),
+      expect( utf8.decode( chunks[ 0 ], allowMalformed: true ), endsWith( '\uFFFD' ),
           reason: 'positive control: the first chunk really ends mid-character' );
       expect( utf8.decode( chunks[ 0 ], allowMalformed: true ), isNot( contains( '\n' ) ),
           reason: 'positive control: the first chunk really ends mid-line' );
@@ -462,18 +461,20 @@ void main() {
   } );
 
   group( 'ask-audio contract fixture CURRENCY, not presence (SB-fix)', () {
-    // 🔴 Departure from rev 14, accepted by Mr. Radio for rev 15: the plan's
-    // row names `_capture.lupin_sha`, but the lupin fixture carries
-    // `lupin_base_sha` and cannot hold its own commit sha. So the commit and
-    // the blob hash are pinned HERE, outside the file, and checked against the
-    // lupin repo with git. A missing lupin repo FAILS, never skips: a skip
-    // reads as green.
-    const pinnedCommit = '36314bf78ed1501876dc67a3c04ce9571cbf2149';
-    const pinnedSha256 = '5b2ae8021bd78dd23ea9cdc5d54780d8ec6aa4f76bf8b7a3599646ac0896e079';
-    const lupinPath    = 'src/tests/fixtures/ask_audio_ndjson_contract.json';
-    const phonePath    = 'test/fixtures/asr/ask_audio_ndjson_contract.json';
-
-    Uint8List phoneBytes() => File( phonePath ).readAsBytesSync();
+    // 🔴 Departure from rev 14, ruled by Mr. Radio 16:36–16:38 for rev 15 (John's
+    // catch). The plan's row asserts `_capture.lupin_sha`, but the lupin fixture
+    // carries `lupin_base_sha` and cannot hold its own commit sha. So the WHOLE
+    // check is a byte comparison against lupin's fixture at a git ref:
+    //   - default ref: lupin's working branch (below) — `main` is 1,715 commits
+    //     behind and never sees the fixture;
+    //   - `$LUPIN_FIXTURE_REF` overrides it. Until §A merges, the fixture lives
+    //     only on `sam/ask-audio-door-a`, so this is RED on the default ref by
+    //     design: run with LUPIN_FIXTURE_REF=sam/ask-audio-door-a until then.
+    // Provenance, comment only: copied from lupin 36314bf7 (sam/ask-audio-door-a).
+    // A missing lupin repo FAILS, never skips: a skip reads as green.
+    const lupinPath       = 'src/tests/fixtures/ask_audio_ndjson_contract.json';
+    const phonePath       = 'test/fixtures/asr/ask_audio_ndjson_contract.json';
+    const defaultLupinRef = 'wip-v0.2.1-2026.08.29-cjflow-v2-followup';
 
     /// The lupin checkout: `$LUPIN_ROOT`, else the sibling of this repo's
     /// main checkout (works from a worktree too).
@@ -493,29 +494,17 @@ void main() {
             'Set LUPIN_ROOT to the lupin checkout. This test does not skip.' );
     }
 
-    Uint8List gitShow( String root, String rev ) {
-      final r = Process.runSync( 'git', [ '-C', root, 'show', '$rev:$lupinPath' ], stdoutEncoding: null );
-      if ( r.exitCode != 0 ) fail( 'git show $rev:$lupinPath failed in $root: ${r.stderr}' );
-      return Uint8List.fromList( r.stdout as List<int> );
-    }
-
-    test( 'the phone copy hashes to the pinned lupin blob', () {
-      expect( sha256.convert( phoneBytes() ).toString(), pinnedSha256 );
-    } );
-
-    test( 'the pinned lupin commit really holds these exact bytes', () {
-      expect( gitShow( lupinRoot(), pinnedCommit ), phoneBytes() );
-    } );
-
-    test( 'no newer lupin commit on any ref has changed the fixture', () {
+    test( 'the phone copy is byte-identical to lupin\'s fixture at \$LUPIN_FIXTURE_REF (default: lupin working branch)', () {
+      final env  = Platform.environment[ 'LUPIN_FIXTURE_REF' ];
+      final ref  = ( env == null || env.isEmpty ) ? defaultLupinRef : env;
       final root = lupinRoot();
-      final r    = Process.runSync( 'git', [ '-C', root, 'log', '--all', '-1', '--format=%H', '--', lupinPath ] );
-      expect( r.exitCode, 0, reason: '${r.stderr}' );
-      final newest = ( r.stdout as String ).trim();
-      expect( newest, isNotEmpty, reason: 'no lupin ref carries $lupinPath' );
-      expect( gitShow( root, newest ), phoneBytes(),
-          reason: 'lupin $newest changed the fixture after $pinnedCommit — re-copy it byte for byte '
-                  'and re-pin the commit and sha256 here' );
+      final r    = Process.runSync( 'git', [ '-C', root, 'show', '$ref:$lupinPath' ], stdoutEncoding: null );
+      if ( r.exitCode != 0 ) {
+        fail( 'git show $ref:$lupinPath failed in $root: ${r.stderr}'
+              'Until §A merges, run with LUPIN_FIXTURE_REF=sam/ask-audio-door-a.' );
+      }
+      expect( Uint8List.fromList( r.stdout as List<int> ), File( phonePath ).readAsBytesSync(),
+          reason: 'lupin $ref has a different $lupinPath — re-copy it byte for byte' );
     } );
   } );
 }
