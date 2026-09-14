@@ -4,6 +4,8 @@
 /// `cosa/rest/routers/queues.py` and `cosa/rest/job_persistence.py`.
 library;
 
+import 'package:equatable/equatable.dart';
+
 DateTime? _parseDt( dynamic v ) =>
     v == null ? null : DateTime.tryParse( v.toString() );
 
@@ -311,6 +313,122 @@ class AskResponse {
     timingsMs     : _as<Map<String, dynamic>>( j[ 'timings_ms' ] ) ?? const {},
     error         : _as<String>( j[ 'error' ] ),
   );
+}
+
+// ─────────────────────────────────────────────
+// POST /api/v2/ask-audio — the spoken-ask stream
+// ─────────────────────────────────────────────
+
+/// One event read off the `POST /api/v2/ask-audio` NDJSON body, as returned by
+/// `QueueRepository.askSpoken`.
+///
+/// 🔴 This file's FIRST `sealed` type and first `Equatable`, deliberately (plan
+/// rev 14 §3.2 SB3). Every other class here is a plain data model; this one is
+/// borrowed from the app's only union precedent, `quick_ask_event.dart:8`,
+/// because the bloc compares emitted events by value. A plain abstract class
+/// with `==` unimplemented would make those comparisons identity checks —
+/// failing a correct parser, or passing because both sides are one instance.
+/// It lives here, not in its own file, because it is the element type of a
+/// stream this directory's repository returns and [SpokenAskResult] wraps
+/// [AskResponse], which already lives here.
+///
+/// End-of-stream rules (§3.2 — what the bloc may rely on):
+///
+/// | Wire outcome                                   | Event(s), in order                          |
+/// |------------------------------------------------|---------------------------------------------|
+/// | non-200                                        | [SpokenAskFailed] with `statusCode`         |
+/// | body closes before any line                    | [SpokenAskFailed]                           |
+/// | `transcript` line                              | [SpokenAskTranscript] (stream continues)    |
+/// | `ask` line                                     | [SpokenAskResult]                           |
+/// | `error` line                                   | [SpokenAskFailed], after the Transcript     |
+/// | body closes after the transcript, no 2nd line  | [SpokenAskCutOff]                           |
+/// | malformed line / network error mid-body        | Failed before the transcript, CutOff after  |
+///
+/// A stream emits AT MOST ONE terminal event ([isTerminal]) and then closes. It
+/// never throws: every failure arrives as an event.
+sealed class SpokenAskEvent extends Equatable {
+  const SpokenAskEvent();
+
+  /// True for [SpokenAskResult], [SpokenAskFailed] and [SpokenAskCutOff] —
+  /// the three events after which the stream closes.
+  bool get isTerminal;
+}
+
+/// Line 1: the server's transcript of the audio. Not terminal — the ask is
+/// already running server-side when this arrives (§2.1 D4).
+class SpokenAskTranscript extends SpokenAskEvent {
+  final String text;
+  const SpokenAskTranscript( this.text );
+
+  @override
+  bool get isTerminal => false;
+
+  @override
+  List<Object?> get props => [ text ];
+}
+
+/// Line 2: the full [AskResponse], carrying the `job_id` that tracking and
+/// cancelling key on.
+class SpokenAskResult extends SpokenAskEvent {
+  final AskResponse response;
+  const SpokenAskResult( this.response );
+
+  @override
+  bool get isTerminal => true;
+
+  /// [AskResponse] has no value equality, so equality is taken over its
+  /// fields — two Results parsed from the same bytes compare equal.
+  @override
+  List<Object?> get props => [
+    response.path,
+    response.status,
+    response.routeReason,
+    response.answer,
+    response.answerRaw,
+    response.command,
+    response.argsKnown,
+    response.argsMissing,
+    response.pendingId,
+    response.jobId,
+    response.snapshotId,
+    response.similarity,
+    response.wroteSnapshot,
+    response.cacheHit,
+    response.spoke,
+    response.timingsMs,
+    response.traceId,
+    response.error,
+  ];
+}
+
+/// Nothing usable came back: a non-200 (then NOTHING was asked, §2.1 D1), a
+/// body that closed or broke before the transcript, or an `error` line after
+/// it. `statusCode` is set only when the server answered with a non-200.
+class SpokenAskFailed extends SpokenAskEvent {
+  final String detail;
+  final int?   statusCode;
+  const SpokenAskFailed( this.detail, { this.statusCode } );
+
+  @override
+  bool get isTerminal => true;
+
+  @override
+  List<Object?> get props => [ detail, statusCode ];
+}
+
+/// The transcript arrived and then the body ended without a second line — a
+/// dropped connection, a malformed line or a network error. The ask WAS sent
+/// and is still running server-side (§2.1 D4), so its answer may yet arrive
+/// over the WebSocket; only the job ID is lost.
+class SpokenAskCutOff extends SpokenAskEvent {
+  final String transcript;
+  const SpokenAskCutOff( this.transcript );
+
+  @override
+  bool get isTerminal => true;
+
+  @override
+  List<Object?> get props => [ transcript ];
 }
 
 // ─────────────────────────────────────────────

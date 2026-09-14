@@ -66,6 +66,14 @@ class AuthInterceptor extends Interceptor {
       final retryOpts        = err.requestOptions;
       retryOpts.extra[ "_auth_retried" ] = true;
       retryOpts.headers[ "Authorization" ] = "Bearer ${rotated.accessToken}";
+      // A multipart body is single-use: the first attempt finalized it, and
+      // replaying the same FormData throws inside fetch, so the retry would
+      // fail and read as a refresh failure. Clone it (files re-read from
+      // their source) so the refresh stays invisible to the user — Rick's
+      // CB4 ruling, plan rev 14 §3.2.
+      if ( retryOpts.data is FormData ) {
+        retryOpts.data = ( retryOpts.data as FormData ).clone();
+      }
 
       final retry = await _dio.fetch<dynamic>( retryOpts );
       handler.resolve( retry );

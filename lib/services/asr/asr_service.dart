@@ -100,13 +100,24 @@ class AsrService {
     _activePath = path;
   }
 
-  /// Stop the capture, upload the WAV, return the transcript. The temp file
-  /// is deleted afterwards — success or failure.
+  /// Recordings handed out by [stopToFile] and not yet discarded.
+  ///
+  /// 🔴 A SET, not one path (plan rev 14 §3.2 SB2/CB3, amended): two spoken
+  /// asks can be unresolved at once (§3.3 CC2), so a single field would let
+  /// the second stop overwrite the first — orphaning it — and the first
+  /// stream's disposal would then delete the second recording mid-upload.
+  final Set<String> _pendingUploadPaths = {};
+
+  /// Stop the capture and hand back the recording's path, WITHOUT uploading.
+  ///
+  /// The service keeps ownership of the file: the caller uploads it however
+  /// it likes and then MUST call [discardPendingUpload] with the returned
+  /// path. `_activePath` is cleared here, so [cancelRecording] can no longer
+  /// reach this file.
   ///
   /// Raises:
-  ///   - [AsrException] for recorder-no-file, HTTP/network failure, an
-  ///     unexpected response shape, or an EMPTY transcript
-  Future<String> stopAndTranscribe() async {
+  ///   - [AsrException] if the recorder fails to stop or produced no file
+  Future<String> stopToFile() async {
     String? stopped;
     try {
       stopped = await _recorder.stop();
@@ -123,6 +134,27 @@ class AsrService {
     if ( filePath == null ) {
       throw const AsrException( 'Recorder produced no file' );
     }
+    _pendingUploadPaths.add( filePath );
+    return filePath;
+  }
+
+  /// Delete a recording [stopToFile] handed out, once its upload is over —
+  /// on every outcome, including a stream that was never listened to.
+  ///
+  /// Only paths this service handed out are deleted; any other path, or a
+  /// second call for the same one, does nothing.
+  void discardPendingUpload( String path ) {
+    if ( _pendingUploadPaths.remove( path ) ) _deleteQuietly( File( path ) );
+  }
+
+  /// Stop the capture, upload the WAV, return the transcript. The temp file
+  /// is deleted afterwards — success or failure.
+  ///
+  /// Raises:
+  ///   - [AsrException] for recorder-no-file, HTTP/network failure, an
+  ///     unexpected response shape, or an EMPTY transcript
+  Future<String> stopAndTranscribe() async {
+    final filePath = await stopToFile();
 
     final file = File( filePath );
     try {
@@ -157,7 +189,7 @@ class AsrService {
         statusCode: e.response?.statusCode,
       );
     } finally {
-      _deleteQuietly( file );
+      discardPendingUpload( filePath );
     }
   }
 
