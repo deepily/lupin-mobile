@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import 'queue_models.dart';
@@ -44,6 +46,160 @@ class QueueRepository {
       return AskResponse.fromJson( res.data! );
     } on DioException catch ( e ) {
       throw _err( e, 'ask failed' );
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // POST /api/v2/ask-audio  (one request, two NDJSON lines — plan rev 14 §2.1)
+  // ─────────────────────────────────────────────
+
+  static const String askAudioPath = '/api/v2/ask-audio';
+
+  /// Upload a recording and ask it in ONE request. The reply is read as it
+  /// arrives: [SpokenAskTranscript] as soon as the server has transcribed
+  /// (~280 ms), then one terminal event — see [SpokenAskEvent] for the
+  /// end-of-stream rules.
+  ///
+  /// 🔴 `websocketId` goes on the QUERY STRING, never in the form. The server
+  /// reads `websocket_id` as a query parameter; sent as a form field it is
+  /// silently ignored, both lines still arrive, and the answer goes to a
+  /// session nobody is listening on (§2.1 CB1).
+  ///
+  /// The multipart field is `file` (the server binds `file: UploadFile`) and
+  /// the filename is the recording's own name, so the server's temp-file
+  /// suffix matches the real format (§3.2 CB2).
+  ///
+  /// Never throws: every failure is emitted as an event. It does NOT delete
+  /// `audioPath` — `AsrService` owns the recording (§3.2 SB2/CB3), and this
+  /// stream is lazy, so nothing here runs until someone listens.
+  ///
+  /// Uses [askReceiveTimeout]: line 2 waits on the same blocking confirm
+  /// ladder inside `flow.ask` that [ask] does.
+  Stream<SpokenAskEvent> askSpoken( String audioPath, String websocketId ) async* {
+    final ResponseBody body;
+    try {
+      final form = FormData.fromMap( {
+        'file': await MultipartFile.fromFile(
+          audioPath,
+          filename: audioPath.substring( audioPath.lastIndexOf( '/' ) + 1 ),
+        ),
+      } );
+      final res = await _dio.post<ResponseBody>(
+        askAudioPath,
+        data            : form,
+        queryParameters : { 'websocket_id': websocketId },
+        options         : Options(
+          responseType   : ResponseType.stream,
+          receiveTimeout : askReceiveTimeout,
+        ),
+      );
+      final data = res.data;
+      if ( data == null ) {
+        yield const SpokenAskFailed( 'closed before transcript' );
+        return;
+      }
+      body = data;
+    } on DioException catch ( e ) {
+      // SB5 — BUILD-THEN-EMIT. `_err` is the house mapping; every other caller
+      // throws its result, and a throw here would reach §C as an unhandled
+      // stream error instead of a SpokenAskFailed. A streamed error body is
+      // still unread bytes, so decode it first for `_err` to find `detail`.
+      await _decodeStreamedErrorBody( e );
+      final err = _err( e, 'ask-audio failed' );
+      yield SpokenAskFailed( err.message, statusCode: err.statusCode );
+      return;
+    } catch ( e ) {
+      // The recording could not be read, or anything else before a response.
+      yield SpokenAskFailed( 'ask-audio failed: $e' );
+      return;
+    }
+
+    String? transcript;
+    try {
+      final lines = body.stream
+          .cast<List<int>>()
+          .transform( utf8.decoder )
+          .transform( const LineSplitter() );
+      await for ( final line in lines ) {
+        if ( line.trim().isEmpty ) continue;
+        final obj  = _decodeLine( line );
+        final type = obj?[ 'type' ];
+
+        if ( transcript == null ) {
+          final text = obj?[ 'transcription' ];
+          if ( type == 'transcript' && text is String ) {
+            transcript = text;
+            yield SpokenAskTranscript( text );
+            continue;
+          }
+          // Anything else first is a broken body: nothing usable arrived.
+          yield SpokenAskFailed( type == 'error' && obj?[ 'detail' ] is String
+              ? obj![ 'detail' ] as String
+              : 'malformed line before transcript' );
+          return;
+        }
+
+        if ( type == 'ask' && obj?[ 'result' ] is Map<String, dynamic> ) {
+          final AskResponse response;
+          try {
+            response = AskResponse.fromJson( obj![ 'result' ] as Map<String, dynamic> );
+          } catch ( _ ) {
+            yield SpokenAskCutOff( transcript );
+            return;
+          }
+          yield SpokenAskResult( response );
+          return;
+        }
+        if ( type == 'error' ) {
+          final detail = obj?[ 'detail' ];
+          yield SpokenAskFailed( detail is String ? detail : 'ask failed' );
+          return;
+        }
+        // Malformed second line: the ask was sent, its result is unreadable.
+        yield SpokenAskCutOff( transcript );
+        return;
+      }
+    } catch ( _ ) {
+      // Network error, receive timeout or undecodable bytes mid-body: the
+      // closed-body row for its position.
+      yield transcript == null
+          ? const SpokenAskFailed( 'closed before transcript' )
+          : SpokenAskCutOff( transcript );
+      return;
+    }
+    // The body closed without a terminal line.
+    yield transcript == null
+        ? const SpokenAskFailed( 'closed before transcript' )
+        : SpokenAskCutOff( transcript );
+  }
+
+  /// One NDJSON line as a JSON object, or null when it is not one.
+  static Map<String, dynamic>? _decodeLine( String line ) {
+    try {
+      final v = jsonDecode( line );
+      return v is Map<String, dynamic> ? v : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// A non-200 on a `ResponseType.stream` request carries its body as an
+  /// unread [ResponseBody]. Replace it with the decoded JSON (or text) so
+  /// [_err] can read `detail`. Best-effort: a body that cannot be read leaves
+  /// `_err` its `message` fallback.
+  static Future<void> _decodeStreamedErrorBody( DioException e ) async {
+    final response = e.response;
+    if ( response == null || response.data is! ResponseBody ) return;
+    try {
+      final text = await utf8.decodeStream(
+        ( response.data as ResponseBody ).stream.cast<List<int>>() );
+      try {
+        response.data = jsonDecode( text );
+      } on FormatException {
+        response.data = text;
+      }
+    } catch ( _ ) {
+      response.data = null;
     }
   }
 
