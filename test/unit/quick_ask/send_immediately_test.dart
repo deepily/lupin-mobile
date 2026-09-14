@@ -280,26 +280,33 @@ void main() {
           reason: 'the pre-transcript frame was buffered and drained, not lost' );
     } );
 
-    // Departure from rev 14 §3.3 step 2 (Mr. Radio, 16:35): the buffer clears
-    // at SUBSCRIBE, so a later stream's arming cannot inherit an earlier
-    // stream's frames, and the drain's job-id filter keeps A's frames off B.
-    test( "cancel-then-press: stream A's frames never reach stream B's card", () async {
+    // Departure from rev 14 §3.3 step 2 (Mr. Radio, 16:35), test shape per
+    // rev 16 (FC-1): fill the buffer to `bufferCap` with stream A's frames,
+    // press B, and B's pre-Transcript frame must still be delivered.
+    test( "cancel-then-press with the buffer FULL of A's frames: B's pre-transcript frame survives", () async {
       await speak( h );
       final a = s.last;
-      h.bloc.add( QuickAskTransitionReceived( transitionFrame(
-        jobId: 'job-a', from: 'queued', to: 'running', question: null, sessionId: ourSession ) ) );
-      await settle();
+      for ( var i = 0; i < QuickAskBloc.bufferCap; i++ ) {
+        h.bloc.add( QuickAskTransitionReceived( transitionFrame(
+          jobId: 'job-a', from: 'queued', to: 'running', question: null, sessionId: ourSession ) ) );
+      }
+      await settle( 64 );
+      expect( h.bloc.bufferedFrameCount, QuickAskBloc.bufferCap, reason: 'positive control: the buffer really is full' );
 
       h.bloc.add( const QuickAskRecordCancelled() );
       await settle();
       await speak( h );
       final b = s.last;
 
-      // A second frame for A lands while B is the live stream.
+      // 🔴 The guard on the subscribe-time clear itself. Behaviour alone
+      // cannot see it — FIFO eviction keeps B's frame either way — so a
+      // deleted clear would otherwise pass this whole test (measured, FC-1).
+      expect( h.bloc.bufferedFrameCount, 0, reason: "B's subscribe emptied A's leftovers" );
+
       h.bloc.add( QuickAskTransitionReceived( transitionFrame(
-        jobId: 'job-a', from: 'running', to: 'completed', question: null, sessionId: ourSession,
-        responseText: "A's answer" ) ) );
+        jobId: 'job-b', from: 'queued', to: 'running', question: null, sessionId: ourSession ) ) );
       await settle();
+      expect( h.bloc.bufferedFrameCount, 1 );
 
       await push( b, const SpokenAskTranscript( 'question b' ) );
       await push( a, resultFor( jobId: 'job-a' ) );
@@ -307,7 +314,7 @@ void main() {
 
       final card = h.bloc.state.entries.single;
       expect( card.jobId, 'job-b' );
-      expect( card.state, JobLifecycleState.pending, reason: "none of A's frames folded into B" );
+      expect( card.state, JobLifecycleState.running, reason: "B's pre-transcript frame was not evicted" );
       expect( h.bloc.state.liveJobId, 'job-b' );
       verify( () => h.repo.cancelJob( 'job-a' ) ).called( 1 );
     } );
@@ -449,14 +456,43 @@ void main() {
       expect( h.bloc.state.entries, isEmpty );
     } );
 
-    test( 'close() mid-stream cancels the subscription', () async {
+    // N-C1: the row says "cancels EVERY subscription", so two are live here —
+    // a close() that cancelled only the current epoch's stream would pass a
+    // one-stream test.
+    test( 'close() mid-stream cancels EVERY live subscription, and discards nothing', () async {
       await speak( h );
       await push( s.last, const SpokenAskTranscript( spokenText ) );
-      expect( s.cancelled.single, isFalse );
+      h.bloc.add( const QuickAskRecordCancelled() );
+      await settle();
+      await speak( h );
+      expect( h.bloc.liveSpokenEpochs, hasLength( 2 ) );
+      expect( s.cancelled, [ false, false ] );
 
       await h.bloc.close();
 
-      expect( s.cancelled.single, isTrue );
+      expect( s.cancelled, [ true, true ] );
+      verifyNever( () => h.asr.discardPendingUpload( any() ) );    // C2-D
+    } );
+
+    // N-C3: `connected` goes true only after the session id is validated
+    // (websocket_service.dart:153-167), but `disconnect()` nulls it (:412-413)
+    // without stopping a capture that already started. A release then has no
+    // session to route the answer to, and an empty websocket_id would make
+    // the server fall back to api-<uid8>, where nobody is listening.
+    test( 'no session id at release: nothing is sent, the recording is discarded, and the user is told', () async {
+      final r = Harness( sendImmediately: true, sessionId: null );
+      final rs = SpokenStubs( r );
+      addTearDown( r.dispose );
+      await settle();
+
+      await speak( r );
+
+      verifyNever( () => r.repo.askSpoken( any(), any() ) );
+      verify( () => r.asr.discardPendingUpload( recordingPathFor( 0 ) ) ).called( 1 );
+      expect( rs.streams, isEmpty );
+      expect( r.bloc.liveSpokenEpochs, isEmpty );
+      expect( r.bloc.state.phase, QuickAskPhase.idle );
+      expect( r.bloc.state.errorMessage, QuickAskBloc.noSessionMessage );
     } );
   } );
 }

@@ -268,6 +268,14 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   @visibleForTesting
   Set<int> get liveSpokenEpochs => Set.unmodifiable( _spokenSubs.keys );
 
+  /// How many frames the pre-attribution buffer holds (FC-1). The
+  /// subscribe-time clear is NOT observable through behaviour: eviction is
+  /// oldest-first (:669-670), so a later stream's frames survive or not by
+  /// how many frames arrive AFTER them, whatever an earlier stream left
+  /// behind. Its guard is therefore on the buffer itself.
+  @visibleForTesting
+  int get bufferedFrameCount => _buffer.length;
+
   /// Stop, post the audio, and subscribe. Everything after this re-enters
   /// through [QuickAskSpokenEventArrived].
   Future<void> _releaseSpoken( int epoch, Emitter<QuickAskState> emit ) async {
@@ -288,6 +296,23 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         return;
       }
 
+      // N-C3 (measured): `connected` only goes true after the session id is
+      // validated (websocket_service.dart:153-167), but `disconnect()` nulls
+      // it (:412-413) without stopping a capture already under way. Sending
+      // then would put an empty websocket_id on the query string, and the
+      // server would route the answer to api-<uid8>, where nobody listens —
+      // the silent CB1 failure by another road. Send nothing and say so.
+      final sessionId = _ws.sessionId;
+      if ( sessionId == null || sessionId.isEmpty ) {
+        _discardRecording( epoch );
+        emit( state.copyWith(
+          phase        : QuickAskPhase.idle,
+          errorMessage : noSessionMessage,
+          capturing    : _asr.isCapturing,
+        ) );
+        return;
+      }
+
       // CC1 — ARM THE BUFFER HERE, at subscribe time. D4 starts the ask before
       // line 1 leaves the server, so its first transitions can land before the
       // transcript does; `_shouldBuffer` keys on a live spoken stream for that
@@ -298,7 +323,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       _buffer.clear();
 
       _spokenSubs[ epoch ] = _repo
-          .askSpoken( path, _ws.sessionId ?? '' )
+          .askSpoken( path, sessionId )
           .listen( ( ev ) => add( QuickAskSpokenEventArrived( epoch, ev ) ) );
     } catch ( ex ) {
       _discardRecording( epoch );
@@ -379,6 +404,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         ) );
     }
   }
+
+  /// The error for a send-immediately release with no WebSocket session.
+  static const String noSessionMessage = 'Not connected — your question was not sent. Try again once reconnected.';
 
   /// The card text for a reply that stopped after the transcript.
   static const String cutOffMessage = 'Sent, but the reply was cut off. The answer may still arrive.';
