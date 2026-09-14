@@ -475,8 +475,9 @@ void main() {
     } );
 
     // N-C3: `connected` goes true only after the session id is validated
-    // (websocket_service.dart:153-167), but `disconnect()` nulls it (:412-413)
-    // without stopping a capture that already started. A release then has no
+    // (`WebSocketService._establishConnection`), but
+    // `WebSocketService.disconnect()` nulls it without stopping a capture
+    // that already started. A release then has no
     // session to route the answer to, and an empty websocket_id would make
     // the server fall back to api-<uid8>, where nobody is listening.
     test( 'no session id at release: nothing is sent, the recording is discarded, and the user is told', () async {

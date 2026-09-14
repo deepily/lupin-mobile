@@ -269,10 +269,10 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   Set<int> get liveSpokenEpochs => Set.unmodifiable( _spokenSubs.keys );
 
   /// How many frames the pre-attribution buffer holds (FC-1). The
-  /// subscribe-time clear is NOT observable through behaviour: eviction is
-  /// oldest-first (:669-670), so a later stream's frames survive or not by
-  /// how many frames arrive AFTER them, whatever an earlier stream left
-  /// behind. Its guard is therefore on the buffer itself.
+  /// subscribe-time clear is NOT observable through behaviour: past
+  /// `bufferCap`, `_insertBuffered` evicts oldest-first, so a later stream's
+  /// frames survive or not by how many frames arrive AFTER them, whatever an
+  /// earlier stream left behind. Its guard is therefore on the buffer itself.
   @visibleForTesting
   int get bufferedFrameCount => _buffer.length;
 
@@ -290,15 +290,16 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       _spokenPaths[ epoch ] = path;
 
       // Cancelled while the recorder was stopping: nothing has been sent, so
-      // send nothing. Same rule as the review path's stale transcript (:210).
+      // send nothing. Same rule as `_onRecordReleased`'s stale-transcript drop.
       if ( epoch != _opEpoch ) {
         _discardRecording( epoch );
         return;
       }
 
       // N-C3 (measured): `connected` only goes true after the session id is
-      // validated (websocket_service.dart:153-167), but `disconnect()` nulls
-      // it (:412-413) without stopping a capture already under way. Sending
+      // validated (`WebSocketService._establishConnection`), but
+      // `WebSocketService.disconnect()` nulls it without stopping a capture
+      // already under way. Sending
       // then would put an empty websocket_id on the query string, and the
       // server would route the answer to api-<uid8>, where nobody listens —
       // the silent CB1 failure by another road. Send nothing and say so.

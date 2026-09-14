@@ -91,9 +91,10 @@ class _RecordHeader extends StatelessWidget {
         child   : Column(
           children: [
             // Rick's ruling (§6 row 2): the send-mode control lives HERE, above
-            // the record button. Widget shape from `server_context_toggle.dart`
-            // (:73-82); the mode itself comes from state, not widget-local
-            // state, and a pick goes back through the bloc (J-ABS-2).
+            // the record button. Widget shape from the SegmentedButton in
+            // `_ServerContextToggleState.build` (server_context_toggle.dart);
+            // the mode itself comes from state, not widget-local state, and a
+            // pick goes back through the bloc (J-ABS-2).
             //
             // COMPACT on purpose, and HIDDEN while a Door C prompt or an
             // interview is live: the header is fixed, so every pixel it gains
