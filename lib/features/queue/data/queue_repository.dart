@@ -140,14 +140,9 @@ class QueueRepository {
         }
 
         if ( type == 'ask' && obj?[ 'result' ] is Map<String, dynamic> ) {
-          final AskResponse response;
-          try {
-            response = AskResponse.fromJson( obj![ 'result' ] as Map<String, dynamic> );
-          } catch ( _ ) {
-            yield SpokenAskCutOff( transcript );
-            return;
-          }
-          yield SpokenAskResult( response );
+          // A result AskResponse cannot parse throws here and lands in the
+          // catch below, which reads it as CutOff: the ask was sent.
+          yield SpokenAskResult( AskResponse.fromJson( obj![ 'result' ] as Map<String, dynamic> ) );
           return;
         }
         if ( type == 'error' ) {

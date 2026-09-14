@@ -19,13 +19,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/queue/data/queue_models.dart';
 import 'package:lupin_mobile/features/queue/data/queue_repository.dart';
+import 'package:lupin_mobile/services/asr/asr_service.dart';
 import 'package:lupin_mobile/services/auth/auth_interceptor.dart';
 import 'package:lupin_mobile/services/auth/auth_repository.dart';
 import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:record/record.dart';
 
 import '../../_helpers/fixture_loader.dart';
 
 typedef _Responder = ResponseBody Function( RequestOptions options );
+
+class _MockRecorder extends Mock implements AudioRecorder {}
+class _MockDio      extends Mock implements Dio {}
 
 /// One captured request: its options, the body object AT SEND TIME, and the
 /// bytes that actually went out. `data` is snapshotted because the auth retry
@@ -205,7 +211,9 @@ void main() {
     } );
 
     test( 'malformed line BEFORE the transcript → Failed', () async {
-      final ( repo, _ ) = build( [ ( _ ) => _chunked( [ _bytes( 'not json\n$_askLine' ) ] ) ] );
+      // A VALID transcript and ask follow the bad line: a reader that skipped
+      // it would emit Transcript + Result, and this row would catch that.
+      final ( repo, _ ) = build( [ ( _ ) => _chunked( [ _bytes( 'not json\n$_transcriptLine$_askLine' ) ] ) ] );
       final events = await _drain( repo.askSpoken( audioPath, 'ws-1' ) );
       expect( events, hasLength( 1 ) );
       expect( events.single, isA<SpokenAskFailed>() );
@@ -361,6 +369,95 @@ void main() {
       expect( retry.text, contains( 'name="file"; filename="asr-reply-123.ogg"' ) );
       expect( retry.text, contains( 'OGG-AUDIO-BYTES' ), reason: 'the retried body carries the audio again' );
       expect( retry.bytes.length, first.bytes.length );
+    } );
+  } );
+
+  group( 'recording disposal — B-J3, with a denominator', () {
+    // §3.2's seven wire-outcome rows, plus the stream nobody listens to (CB3).
+    // For each: askSpoken leaves the recording alone (positive control — so
+    // the delete really is discardPendingUpload's doing), and
+    // discardPendingUpload then leaves no file.
+    final outcomes = <String, _Responder>{
+      'non-200'                          : ( _ ) => _jsonError( 503, { 'detail': 'busy' } ),
+      'body closes before any line'      : ( _ ) => _chunked( [] ),
+      'transcript line then ask line'    : ( _ ) => _chunked( [ _bytes( _transcriptLine + _askLine ) ] ),
+      'error line'                       : ( _ ) => _chunked( [ _bytes( _transcriptLine + _errorLine ) ] ),
+      'body closes after the transcript' : ( _ ) => _chunked( [ _bytes( _transcriptLine ) ] ),
+      'malformed line'                   : ( _ ) => _chunked( [ _bytes( '${_transcriptLine}garbage\n' ) ] ),
+      'network error mid-body'           : ( _ ) => _breaksAfter( _transcriptLine ),
+    };
+    test( 'the denominator is §3.2\'s seven wire-outcome rows', () {
+      expect( outcomes, hasLength( 7 ) );
+    } );
+
+    late _MockRecorder recorder;
+    late AsrService    asr;
+    late String        recordedPath;
+
+    setUpAll( () => registerFallbackValue( const RecordConfig() ) );
+
+    setUp( () {
+      recorder = _MockRecorder();
+      asr      = AsrService( dio: _MockDio(), recorder: recorder, tempDirProvider: () async => tempDir );
+      when( () => recorder.hasPermission() ).thenAnswer( ( _ ) async => true );
+      when( () => recorder.start( any(), path: any( named: 'path' ) ) ).thenAnswer( ( inv ) async {
+        recordedPath = inv.namedArguments[ #path ] as String;
+        File( recordedPath ).writeAsBytesSync( utf8.encode( 'WAV-BYTES' ) );
+      } );
+      when( () => recorder.stop() ).thenAnswer( ( _ ) async => recordedPath );
+    } );
+
+    Future<String> record() async {
+      await asr.startRecording();
+      final path = await asr.stopToFile();
+      expect( path, recordedPath );
+      expect( asr.isCapturing, isFalse, reason: 'stopToFile clears the active capture' );
+      expect( File( path ).existsSync(), isTrue );
+      return path;
+    }
+
+    for ( final entry in outcomes.entries ) {
+      test( '${entry.key} → the stream leaves the file, discardPendingUpload removes it', () async {
+        final path        = await record();
+        final ( repo, _ ) = build( [ entry.value ] );
+        await _drain( repo.askSpoken( path, 'ws-1' ) );
+        expect( File( path ).existsSync(), isTrue, reason: 'askSpoken must not own the recording' );
+        asr.discardPendingUpload( path );
+        expect( File( path ).existsSync(), isFalse );
+      } );
+    }
+
+    test( 'never-subscribed stream → discardPendingUpload still removes the file', () async {
+      final path              = await record();
+      final ( repo, adapter ) = build( [ outcomes.values.first ] );
+      repo.askSpoken( path, 'ws-1' );                        // held, never listened to
+      await Future<void>.delayed( Duration.zero );
+      expect( adapter.sent, isEmpty );
+      asr.discardPendingUpload( path );
+      expect( File( path ).existsSync(), isFalse );
+    } );
+
+    test( 'two pending recordings: discarding one leaves the other (CC2 — two live streams)', () async {
+      final first  = await record();
+      final second = await record();
+      expect( first, isNot( second ) );
+      asr.discardPendingUpload( first );
+      expect( File( first ).existsSync(), isFalse );
+      expect( File( second ).existsSync(), isTrue, reason: 'the second stream is still uploading' );
+      asr.discardPendingUpload( second );
+      expect( File( second ).existsSync(), isFalse );
+    } );
+
+    test( 'only paths stopToFile handed out are deleted, and a second call is a no-op', () async {
+      final stranger = File( '${tempDir.path}/not-a-recording.txt' )..writeAsStringSync( 'keep me' );
+      asr.discardPendingUpload( stranger.path );
+      expect( stranger.existsSync(), isTrue );
+
+      final path = await record();
+      asr.discardPendingUpload( path );
+      File( path ).writeAsStringSync( 'a new file at the same path' );
+      asr.discardPendingUpload( path );
+      expect( File( path ).existsSync(), isTrue, reason: 'the path was already released' );
     } );
   } );
 
