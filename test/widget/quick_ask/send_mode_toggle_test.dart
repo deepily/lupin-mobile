@@ -141,6 +141,27 @@ void main() {
       expect( QuickAskPreferences( await SharedPreferences.getInstance() ).sendImmediately, isFalse );
     } );
 
+    // The header is fixed height, so the control yields its row while a
+    // Door C prompt or an interview needs the space (the mic is blocked then).
+    testWidgets( 'hidden while a prompt or an interview is live, shown again after', ( tester ) async {
+      Future<void> pumpState( QuickAskState st ) async {
+        final b = MockQuickAskBloc();
+        whenListen( b, Stream<QuickAskState>.fromIterable( const [] ), initialState: st );
+        await pumpScreen( tester, b );
+      }
+
+      await pumpState( const QuickAskState( connected: true,
+          pendingPrompt: QuickAskPrompt( id: 'n-1', question: 'Is that the same as: weather?' ) ) );
+      expect( toggle(), findsNothing );
+
+      await pumpState( const QuickAskState( connected: true,
+          interview: QuickAskInterview( pendingId: 'p-1', question: 'Which city?' ) ) );
+      expect( toggle(), findsNothing );
+
+      await pumpState( const QuickAskState( connected: true ) );
+      expect( toggle(), findsOneWidget );
+    } );
+
     // Wiring only — the mock stands in for the bloc so the assertion is
     // about WHICH event the tap adds, nothing more.
     testWidgets( 'the tap adds QuickAskSendModeChanged carrying the picked mode', ( tester ) async {

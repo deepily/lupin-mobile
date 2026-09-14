@@ -94,10 +94,23 @@ class _RecordHeader extends StatelessWidget {
             // the record button. Widget shape from `server_context_toggle.dart`
             // (:73-82); the mode itself comes from state, not widget-local
             // state, and a pick goes back through the bloc (J-ABS-2).
-            Padding(
-              padding : const EdgeInsets.only( bottom: 12 ),
+            //
+            // COMPACT on purpose, and HIDDEN while a Door C prompt or an
+            // interview is live: the header is fixed, so every pixel it gains
+            // comes out of the column below, and those surfaces must stay on
+            // screen (a prompt plus its error overflowed 800×600 by 29px even
+            // at compact density). The mic is blocked in exactly those states
+            // (`unansweredPrompt`), so there is no recording for a mode to
+            // govern until they are answered.
+            if ( state.pendingPrompt == null && state.interview == null ) Padding(
+              padding : const EdgeInsets.only( bottom: 4 ),
               child   : SegmentedButton<bool>(
                 key      : const Key( TestKeys.quickAskSendModeToggle ),
+                showSelectedIcon : false,
+                style    : const ButtonStyle(
+                  visualDensity   : VisualDensity.compact,
+                  tapTargetSize   : MaterialTapTargetSize.shrinkWrap,
+                ),
                 segments : const [
                   ButtonSegment<bool>( value: false, label: Text( 'Review first' ) ),
                   ButtonSegment<bool>( value: true,  label: Text( 'Send immediately' ) ),
