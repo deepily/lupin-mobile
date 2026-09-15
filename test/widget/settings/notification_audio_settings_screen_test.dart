@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -60,6 +62,34 @@ void main() {
       await tester.pump();
       expect( tester.widget<SwitchListTile>( key ).value, isFalse );
       expect( prefs.speakSystemSenders, isFalse );
+    } );
+
+    testWidgets( "keep-voice-recordings switch: default OFF, toggles, persists, shows the folder (row 9b1f7701)", ( tester ) async {
+      await tester.pumpWidget( MaterialApp(
+        home: NotificationAudioSettingsScreen(
+          prefs             : prefs,
+          keptRecordingsDir : () async => Directory( '/sdcard/Android/data/ai.deepily.lupin_mobile/files/recordings' ),
+        ),
+      ) );
+      await tester.pump();
+      final key = find.byKey( const Key( TestKeys.settingsKeepVoiceRecordings ) );
+      await tester.dragUntilVisible( key, find.byType( ListView ), const Offset( 0, -200 ) );
+      await tester.pump();
+
+      expect( key, findsOneWidget );
+      expect( find.text( 'Keep voice recordings' ), findsOneWidget );
+      expect( find.textContaining( 'Folder: /sdcard/Android/data/ai.deepily.lupin_mobile/files/recordings' ), findsOneWidget );
+      expect( tester.widget<SwitchListTile>( key ).value, isFalse );
+      expect( prefs.keepVoiceRecordings, isFalse );
+
+      await tester.tap( key );
+      await tester.pump();
+      expect( tester.widget<SwitchListTile>( key ).value, isTrue );
+      expect( prefs.keepVoiceRecordings, isTrue );
+
+      // Persisted: a fresh prefs object over the same store reads it back.
+      final reread = NotificationPreferences( await SharedPreferences.getInstance() );
+      expect( reread.keepVoiceRecordings, isTrue );
     } );
 
     testWidgets( "toggling master mute flips the switch immediately", ( tester ) async {

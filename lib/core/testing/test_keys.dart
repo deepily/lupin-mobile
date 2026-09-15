@@ -163,6 +163,8 @@ class TestKeys {
   static const settingsStopListTogglePrefix  = 'settings.stopList.toggle.';   // + pattern
   // Debug: network round-trip probe (task c51e92da)
   static const settingsOpenRoundTripProbe    = 'settings.debug.openRoundTripProbe';
+  // Debug: keep voice recordings as WAV (row 9b1f7701)
+  static const settingsKeepVoiceRecordings   = 'settings.debug.keepVoiceRecordings';
   static const probeRunButton                = 'probe.run';
   static const probeCopyPathButton           = 'probe.copyPath';
   static const probeProgress                 = 'probe.progress';

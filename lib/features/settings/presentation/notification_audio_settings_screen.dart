@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../../core/di/service_locator.dart';
+import '../../../services/asr/asr_service.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import 'notification_filter_settings_screen.dart';
@@ -13,7 +16,14 @@ import 'round_trip_probe_screen.dart';
 /// speech, urgent = distinct ding + speech. Master mute overrides all.
 class NotificationAudioSettingsScreen extends StatefulWidget {
   final NotificationPreferences prefs;
-  const NotificationAudioSettingsScreen( { super.key, required this.prefs } );
+  /// Resolves the kept-recordings folder shown under the debug switch.
+  /// Injectable because path_provider has no platform channel in tests.
+  final Future<Directory> Function() keptRecordingsDir;
+  const NotificationAudioSettingsScreen( {
+    super.key,
+    required this.prefs,
+    this.keptRecordingsDir = AsrService.keptRecordingsDirectory,
+  } );
 
   @override
   State<NotificationAudioSettingsScreen> createState() =>
@@ -30,6 +40,8 @@ class _NotificationAudioSettingsScreenState
   late bool _speakOnHigh;
   late bool _speakSystem;
   late bool _speakOnUrgent;
+  late bool _keepRecordings;
+  String?   _keptDirPath;
 
   @override
   void initState() {
@@ -42,6 +54,18 @@ class _NotificationAudioSettingsScreenState
     _speakOnHigh   = p.speakOnHigh;
     _speakSystem   = p.speakSystemSenders;
     _speakOnUrgent = p.speakOnUrgent;
+    _keepRecordings = p.keepVoiceRecordings;
+    _resolveKeptDir();
+  }
+
+  Future<void> _resolveKeptDir() async {
+    String path;
+    try {
+      path = ( await widget.keptRecordingsDir() ).path;
+    } catch ( _ ) {
+      path = 'unavailable on this device';
+    }
+    if ( mounted ) setState( () => _keptDirPath = path );
   }
 
   /// Flip local state immediately (for UI responsiveness + test determinism)
@@ -55,6 +79,7 @@ class _NotificationAudioSettingsScreenState
   void _toggleSpeakHigh(     bool v ) { setState( () => _speakOnHigh   = v ); widget.prefs.setSpeakOnHigh(   v ); }
   void _toggleSpeakUrgent(   bool v ) { setState( () => _speakOnUrgent = v ); widget.prefs.setSpeakOnUrgent( v ); }
   void _toggleSpeakSystem(   bool v ) { setState( () => _speakSystem   = v ); widget.prefs.setSpeakSystemSenders( v ); }
+  void _toggleKeepRecordings( bool v ) { setState( () => _keepRecordings = v ); widget.prefs.setKeepVoiceRecordings( v ); }
 
   @override
   Widget build( BuildContext context ) {
@@ -146,6 +171,16 @@ class _NotificationAudioSettingsScreenState
             onTap    : () => Navigator.of( context ).push( MaterialPageRoute(
               builder: ( _ ) => RoundTripProbeScreen( dio: ServiceLocator.get<Dio>() ),
             ) ),
+          ),
+          SwitchListTile(
+            key        : const Key( TestKeys.settingsKeepVoiceRecordings ),
+            secondary  : const Icon( Icons.save_alt ),
+            title      : const Text( 'Keep voice recordings' ),
+            subtitle   : Text( 'Debug: save a WAV copy of each recording before it is deleted.\n'
+                               'Folder: ${_keptDirPath ?? '…'}' ),
+            isThreeLine : true,
+            value      : _keepRecordings,
+            onChanged  : _toggleKeepRecordings,
           ),
         ],
       ),
