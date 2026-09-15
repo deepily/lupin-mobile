@@ -16,6 +16,20 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+## 2026.09.14 | Session `b3e285b8` (Tiffany 💍) — Spoken-ask door built and merged: §B `83f19a7`, §C `16d73f8`
+
+**RESUME HERE**: the phone half of the spoken-ask door is merged on wip. At 09:00 on 09-15 Rick gives a device session for `c51e92da` (round-trip probe) and `9b1f7701` (Opus/AAC check). See TODO.md § Owed.
+
+1. **Build go** 15:48 (`ccd7d20e`), conditional on rev 13. Sam folded rev 13 and Chloé verified it 13/13 (`7a6ca84`); revs 14–19 were folded while the build ran.
+2. **Staffed two builders** from Rick's seat grant: Rachel on §B (5 commits) and Maya on §C (5 commits), each in its own worktree after the spawn dropped both into the main tree. Every handoff was pinned to a sha and checked on disk; the contract fixture blob `5b2ae802` was byte-identical across lupin → phone.
+3. **Merged**: `83f19a7` and `16d73f8` (`--no-ff`, commit `-F`). `git diff d867576 HEAD -- lib test` is empty, and Mr. Radio verified it independently. Tests: the same 46 already failing before and after, 1030 passing, 72 of them new. §A merged in lupin (`993be2b6`).
+4. **Filed**: `5ac999f5` (46 pre-existing failures) and `9cddb791` (320×568 overflow, 10/82px). Rick kept both.
+5. **Post-game** (María): 6 own misses posted, including a duplicate María spawn, a hold file written where the hook never reads, and a reap run in the same batch as the memento edit it cited. Q4 was measured: the hold was ignored because of its location, not its fields. R2's wording was extended to cover claims carried in another call's arguments.
+
+**Files**: `TODO.md` · `history.md` · merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work` · memory `never-ask-rick-about-push.md`
+
+---
+
 ## 2026.09.11 | Session `afe9bfdc` (Tiffany 💍) — Cascaded review closed; plan rev 8 → rev 12, nothing built
 
 **RESUME HERE**: plan rev 12 committed `2def6e4` (sha256 `ccc0430b`, 646 lines); six pins in git. Nine-stage cascade closed plus two verification passes folded. **Nothing built** — Rick's plan-only ruling held all session, and he declined a build at 22:39.
