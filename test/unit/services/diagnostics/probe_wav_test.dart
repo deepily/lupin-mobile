@@ -9,6 +9,15 @@ String _ascii( Uint8List b, int offset, int len ) =>
 
 void main() {
   group( 'ProbeWav', () {
+    test( 'generateInBackground returns the same bytes as generate', () async {
+      final background = await ProbeWav.generateInBackground( sampleRate: 16000, seconds: 2 );
+      expect( background, ProbeWav.generate( sampleRate: 16000, seconds: 2 ) );
+    } );
+
+    test( 'generateInBackground surfaces argument errors through the future', () async {
+      await expectLater( ProbeWav.generateInBackground( sampleRate: 0 ), throwsArgumentError );
+    } );
+
     test( '30 s at 44.1 kHz is 2,646,044 bytes (the ~2.6 MB being measured)', () {
       final wav = ProbeWav.generate( sampleRate: 44100 );
       expect( wav.length, 44 + 44100 * 30 * 2 );

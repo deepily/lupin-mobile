@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -20,7 +21,22 @@ class _ProbeAdapter implements HttpClientAdapter {
   /// Zero-based request indices that should answer 500.
   final Set<int> serverErrorOn;
 
-  _ProbeAdapter( { this.throwOn = const {}, this.serverErrorOn = const {} } );
+  /// Zero-based request indices whose body is NOT drained (send never completes).
+  final Set<int> skipDrainOn;
+
+  /// Called as each request arrives, with its zero-based index.
+  final void Function( int index )? onFetch;
+
+  /// Zero-based request indices that never answer on their own (only a cancel ends them).
+  final Set<int> hangOn;
+
+  _ProbeAdapter( {
+    this.throwOn       = const {},
+    this.serverErrorOn = const {},
+    this.skipDrainOn   = const {},
+    this.hangOn        = const {},
+    this.onFetch,
+  } );
 
   @override
   Future<ResponseBody> fetch(
@@ -30,8 +46,12 @@ class _ProbeAdapter implements HttpClientAdapter {
   ) async {
     final index = requests.length;
     requests.add( options );
+    onFetch?.call( index );
+    if ( hangOn.contains( index ) ) {
+      await Completer<void>().future;
+    }
     var n = 0;
-    if ( requestStream != null ) {
+    if ( requestStream != null && !skipDrainOn.contains( index ) ) {
       await for ( final chunk in requestStream ) {
         n += chunk.length;
       }
@@ -76,7 +96,7 @@ class _CountingInterceptor extends Interceptor {
   }
 }
 
-Uint8List _tinyClip( int rate ) => Uint8List( 44 + rate ~/ 100 );
+Future<Uint8List> _tinyClip( int rate ) async => Uint8List( 44 + rate ~/ 100 );
 
 void main() {
   group( 'RoundTripProbe.percentile (nearest rank)', () {
@@ -243,13 +263,118 @@ void main() {
           expect( m[ 'sample_rate' ], anyOf( 44100, 16000 ) );
           expect( m[ 'bytes' ], isA<int>() );
           expect( m.containsKey( 'send_ms' ), isTrue );
+          expect( m[ 'total_ms_includes_transcription' ], isTrue );
+          expect( m[ 'send_ms' ], isNotNull );
+          expect( m.containsKey( 'send_ms_null_reason' ), isFalse );
         } else {
           expect( m.containsKey( 'sample_rate' ), isFalse );
+          expect( m.containsKey( 'total_ms_includes_transcription' ), isFalse );
+          expect( m.containsKey( 'send_ms_null_reason' ), isFalse );
         }
       }
       final first = jsonDecode( sink.lines.first ) as Map<String, dynamic>;
       expect( first[ 'error' ], isNotNull );
     } );
+
+    test( 'an upload whose body never finished sending logs send_ms null with reason not_fully_sent', () async {
+      adapter = _ProbeAdapter( skipDrainOn: { 20 }, throwOn: { 20 } );
+      dio.httpClientAdapter = adapter;
+      await probeWith().run( sink );
+
+      final m = jsonDecode( sink.lines[ 20 ] ) as Map<String, dynamic>;
+      expect( m[ 'kind' ], 'upload' );
+      expect( m[ 'send_ms' ], isNull );
+      expect( m[ 'send_ms_null_reason' ], 'not_fully_sent' );
+      expect( m[ 'total_ms_includes_transcription' ], isTrue );
+    } );
+
+    test( 'both clips are built once, before the first request is timed', () async {
+      final builtBeforeFirstRequest = <int>[];
+      final built                   = <int>[];
+      adapter = _ProbeAdapter( onFetch: ( i ) {
+        if ( i == 0 ) builtBeforeFirstRequest.addAll( built );
+      } );
+      dio.httpClientAdapter = adapter;
+
+      await RoundTripProbe(
+        dio         : dio,
+        networkType : () async => 'wifi',
+        clipFor     : ( rate ) async { built.add( rate ); return _tinyClip( rate ); },
+      ).run( sink );
+
+      expect( built, [ 44100, 16000 ] );
+      expect( builtBeforeFirstRequest, [ 44100, 16000 ] );
+    } );
+
+    test( 'cancel between samples: no further requests, final line is kind=cancelled', () async {
+      final token  = CancelToken();
+      final result = await probeWith().run( sink, cancelToken: token, onProgress: ( done, _, __ ) {
+        if ( done == 5 ) token.cancel( 'probe screen closed' );
+      } );
+
+      expect( adapter.requests.length, 5 );
+      expect( result.cancelled, isTrue );
+      expect( result.samples.length, 5 );
+      expect( sink.lines.length, 6 );
+      final last = jsonDecode( sink.lines.last ) as Map<String, dynamic>;
+      expect( last[ 'kind' ], 'cancelled' );
+      expect( last[ 'completed' ], 5 );
+      expect( last[ 'total' ], 26 );
+      expect( last[ 'reason' ], 'probe screen closed' );
+
+      // Nothing trickles in afterwards.
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      expect( adapter.requests.length, 5 );
+      expect( sink.lines.length, 6 );
+    } );
+
+    test( 'cancel during an in-flight upload aborts it, discards its sample, and stops', () async {
+      final token = CancelToken();
+      adapter = _ProbeAdapter(
+        hangOn  : { 21 },
+        onFetch : ( i ) { if ( i == 21 ) Future<void>.microtask( () => token.cancel( 'closed' ) ); },
+      );
+      dio.httpClientAdapter = adapter;
+
+      final result = await probeWith().run( sink, cancelToken: token );
+
+      expect( adapter.requests.length, 22 );
+      expect( result.cancelled, isTrue );
+      expect( result.samples.length, 21 );
+      expect( sink.lines.length, 22 );
+      expect( ( jsonDecode( sink.lines.last ) as Map<String, dynamic> )[ 'kind' ], 'cancelled' );
+    } );
+
+    test( 'a token cancelled before the run starts makes no requests', () async {
+      final token = CancelToken()..cancel();
+      final result = await probeWith().run( sink, cancelToken: token );
+      expect( adapter.requests, isEmpty );
+      expect( result.cancelled, isTrue );
+      expect( sink.lines.length, 1 );
+      expect( ( jsonDecode( sink.lines.single ) as Map<String, dynamic> )[ 'kind' ], 'cancelled' );
+    } );
+
+    test( 'a run that finishes is not marked cancelled and has no cancelled line', () async {
+      final result = await probeWith().run( sink, cancelToken: CancelToken() );
+      expect( result.cancelled, isFalse );
+      expect( sink.lines.map( ( l ) => ( jsonDecode( l ) as Map )[ 'kind' ] ), isNot( contains( 'cancelled' ) ) );
+    } );
+  } );
+
+  test( 'ProbeSample.toJson: unknown body length is reported as send_ms_null_reason unknown_length', () {
+    final m = ProbeSample(
+      timestamp        : DateTime.utc( 2026 ),
+      kind             : 'upload',
+      sampleRate       : 16000,
+      networkType      : 'mobile',
+      totalMs          : 900,
+      status           : 200,
+      bytes            : 960044,
+      sendMsNullReason : ProbeSample.sendNullUnknownLength,
+    ).toJson();
+    expect( m[ 'send_ms' ], isNull );
+    expect( m[ 'send_ms_null_reason' ], 'unknown_length' );
+    expect( m[ 'total_ms_includes_transcription' ], isTrue );
   } );
 
   test( 'summarise: percentiles exclude failures, max is the slowest ok sample', () {

@@ -96,6 +96,15 @@ class ProbeSample {
   final int?     bytes;         // uploads only: WAV size
   final double?  sendMs;        // uploads only: until the body finished sending
 
+  /// Uploads only, and only when [sendMs] is null: why it could not be timed.
+  final String?  sendMsNullReason;
+
+  /// The body's total length was unknown, so "fully sent" cannot be detected.
+  static const String sendNullUnknownLength = 'unknown_length';
+
+  /// Send progress never reached the body's full length (e.g. the request failed mid-send).
+  static const String sendNullNotFullySent  = 'not_fully_sent';
+
   const ProbeSample( {
     required this.timestamp,
     required this.kind,
@@ -106,11 +115,18 @@ class ProbeSample {
     this.error,
     this.bytes,
     this.sendMs,
+    this.sendMsNullReason,
   } );
 
   /// True when the request got a 2xx response and raised no error.
   bool get ok => error == null && status != null && status! >= 200 && status! < 300;
 
+  /// One JSONL record.
+  ///
+  /// Ensures:
+  ///   - uploads carry `total_ms_includes_transcription: true` (the endpoint
+  ///     transcribes before it answers) and `send_ms`
+  ///   - an upload with a null `send_ms` also carries `send_ms_null_reason`
   Map<String, dynamic> toJson() => {
     'timestamp'    : timestamp.toUtc().toIso8601String(),
     'kind'         : kind,
@@ -118,7 +134,9 @@ class ProbeSample {
     'network_type' : networkType,
     if ( bytes != null ) 'bytes' : bytes,
     'total_ms'     : totalMs,
+    if ( kind == 'upload' ) 'total_ms_includes_transcription' : true,
     if ( kind == 'upload' ) 'send_ms' : sendMs,
+    if ( kind == 'upload' && sendMs == null ) 'send_ms_null_reason' : sendMsNullReason ?? sendNullNotFullySent,
     'status'       : status,
     'error'        : error,
   };
@@ -150,11 +168,15 @@ class ProbeResult {
   final Set<String>             networkTypes;
   final String                  outputPath;
 
+  /// True when the run was cancelled before every request was made.
+  final bool                    cancelled;
+
   const ProbeResult( {
     required this.samples,
     required this.groups,
     required this.networkTypes,
     required this.outputPath,
+    this.cancelled = false,
   } );
 }
 
@@ -177,19 +199,21 @@ class RoundTripProbe {
   final NetworkTypeProvider      _networkType;
   final Stopwatch Function()     _newStopwatch;
   final DateTime Function()      _now;
-  final Uint8List Function( int sampleRate ) _clipFor;
+  final Future<Uint8List> Function( int sampleRate ) _clipFor;
 
+  /// [clipFor] builds the upload clip for a sample rate; the default builds
+  /// the 30 s sweep on a background isolate.
   RoundTripProbe( {
     required Dio dio,
     NetworkTypeProvider? networkType,
     Stopwatch Function()? stopwatchFactory,
     DateTime Function()? clock,
-    Uint8List Function( int sampleRate )? clipFor,
+    Future<Uint8List> Function( int sampleRate )? clipFor,
   } ) : _dio          = dio,
         _networkType  = networkType      ?? connectivityNetworkType,
         _newStopwatch = stopwatchFactory ?? Stopwatch.new,
         _now          = clock            ?? DateTime.now,
-        _clipFor      = clipFor          ?? ( ( rate ) => ProbeWav.generate( sampleRate: rate ) );
+        _clipFor      = clipFor          ?? ( ( rate ) => ProbeWav.generateInBackground( sampleRate: rate ) );
 
   /// Total number of requests one run makes.
   static int get totalRequests => healthCount + uploadRepeats * uploadSampleRates.length;
@@ -251,18 +275,25 @@ class RoundTripProbe {
   ///   - [sink] is open; the caller owns closing it
   ///
   /// Ensures:
+  ///   - both upload clips are built once, before any request is timed
   ///   - exactly [healthCount] health requests and
   ///     uploadRepeats × uploadSampleRates.length uploads are attempted, in
-  ///     sequence, on the injected Dio
+  ///     sequence, on the injected Dio — unless [cancelToken] is cancelled
   ///   - a failed request becomes a sample with its error and the run goes on
   ///   - [onProgress] is called after every sample with (done, total, sample)
-  ///   - returns every sample, the summary, and the network types seen
+  ///   - on cancel: [cancelToken] is checked between samples and handed to the
+  ///     in-flight request; no further request is made, the interrupted
+  ///     request's sample is discarded, a final `{"kind":"cancelled",...}`
+  ///     line is written, and the result has cancelled = true
+  ///   - returns every recorded sample, the summary, and the network types seen
   Future<ProbeResult> run(
     ProbeSink sink, {
     void Function( int done, int total, ProbeSample sample )? onProgress,
+    CancelToken? cancelToken,
   } ) async {
     final samples = <ProbeSample>[];
     final total   = totalRequests;
+    bool isCancelled() => cancelToken?.isCancelled ?? false;
 
     Future<void> record( ProbeSample s ) async {
       samples.add( s );
@@ -270,15 +301,36 @@ class RoundTripProbe {
       onProgress?.call( samples.length, total, s );
     }
 
-    for ( var i = 0; i < healthCount; i++ ) {
-      await record( await _health() );
+    // Build the ~2.6 MB and ~1 MB clips up front, off the UI isolate, so
+    // neither the generation nor its jank lands inside a timed request.
+    final clips = <int, Uint8List>{};
+    for ( final rate in uploadSampleRates ) {
+      if ( isCancelled() ) break;
+      clips[ rate ] = await _clipFor( rate );
     }
 
-    final clips = { for ( final rate in uploadSampleRates ) rate: _clipFor( rate ) };
-    for ( var i = 0; i < uploadRepeats; i++ ) {
-      for ( final rate in uploadSampleRates ) {
-        await record( await _upload( rate, clips[ rate ]! ) );
-      }
+    final steps = <Future<ProbeSample> Function()>[
+      for ( var i = 0; i < healthCount; i++ ) () => _health( cancelToken ),
+      for ( var i = 0; i < uploadRepeats; i++ )
+        for ( final rate in uploadSampleRates ) () => _upload( rate, clips[ rate ]!, cancelToken ),
+    ];
+
+    var cancelled = false;
+    for ( final step in steps ) {
+      if ( isCancelled() ) { cancelled = true; break; }
+      final sample = await step();
+      if ( isCancelled() ) { cancelled = true; break; }   // interrupted mid-request: not a real timing
+      await record( sample );
+    }
+
+    if ( cancelled ) {
+      await sink.writeLine( jsonEncode( {
+        'timestamp' : _now().toUtc().toIso8601String(),
+        'kind'      : 'cancelled',
+        'completed' : samples.length,
+        'total'     : total,
+        'reason'    : cancelToken?.cancelError?.error?.toString(),
+      } ) );
     }
 
     return ProbeResult(
@@ -286,6 +338,7 @@ class RoundTripProbe {
       groups       : summarise( samples ),
       networkTypes : samples.map( ( s ) => s.networkType ).toSet(),
       outputPath   : sink.path,
+      cancelled    : cancelled,
     );
   }
 
@@ -304,14 +357,14 @@ class RoundTripProbe {
 
   static double _ms( Stopwatch sw ) => sw.elapsedMicroseconds / 1000.0;
 
-  Future<ProbeSample> _health() async {
+  Future<ProbeSample> _health( CancelToken? cancelToken ) async {
     final network   = await _safeNetworkType();
     final timestamp = _now();
     final sw        = _newStopwatch()..start();
     int?    status;
     String? error;
     try {
-      final res = await _dio.get<dynamic>( healthPath );
+      final res = await _dio.get<dynamic>( healthPath, cancelToken: cancelToken );
       status = res.statusCode;
     } on DioException catch ( e ) {
       status = e.response?.statusCode;
@@ -330,7 +383,7 @@ class RoundTripProbe {
     );
   }
 
-  Future<ProbeSample> _upload( int sampleRate, Uint8List clip ) async {
+  Future<ProbeSample> _upload( int sampleRate, Uint8List clip, CancelToken? cancelToken ) async {
     final network   = await _safeNetworkType();
     final timestamp = _now();
     final form      = FormData.fromMap( {
@@ -342,18 +395,21 @@ class RoundTripProbe {
     } );
     final sw = _newStopwatch()..start();
     double? sendMs;
+    var     lengthUnknown = false;
     int?    status;
     String? error;
     try {
       final res = await _dio.post<dynamic>(
         AsrService.endpointPath,
         data           : form,
+        cancelToken    : cancelToken,
         options        : Options(
           // Same budgets as AsrService: cellular upload + Whisper inference.
           sendTimeout    : const Duration( seconds: 60 ),
           receiveTimeout : const Duration( seconds: 120 ),
         ),
         onSendProgress : ( sent, totalBytes ) {
+          if ( totalBytes <= 0 ) lengthUnknown = true;
           if ( sendMs == null && totalBytes > 0 && sent >= totalBytes ) sendMs = _ms( sw );
         },
       );
@@ -366,15 +422,18 @@ class RoundTripProbe {
     }
     sw.stop();
     return ProbeSample(
-      timestamp   : timestamp,
-      kind        : 'upload',
-      sampleRate  : sampleRate,
-      networkType : network,
-      totalMs     : _ms( sw ),
-      status      : status,
-      error       : error,
-      bytes       : clip.length,
-      sendMs      : sendMs,
+      timestamp        : timestamp,
+      kind             : 'upload',
+      sampleRate       : sampleRate,
+      networkType      : network,
+      totalMs          : _ms( sw ),
+      status           : status,
+      error            : error,
+      bytes            : clip.length,
+      sendMs           : sendMs,
+      sendMsNullReason : sendMs != null
+          ? null
+          : ( lengthUnknown ? ProbeSample.sendNullUnknownLength : ProbeSample.sendNullNotFullySent ),
     );
   }
 
