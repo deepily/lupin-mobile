@@ -105,12 +105,29 @@ class AsrService {
     return Directory( '${base.path}/recordings' );
   }
 
-  /// `rec-<yyyyMMdd-HHmmss>-<n>.wav`.
+  /// `rec-<yyyyMMdd-HHmmssSSS>Z-<n>.wav`, stamped in UTC.
+  ///
+  /// [n] restarts at 1 on every app launch, so it is NOT what makes the name
+  /// unique: two runs that record in the same second used to produce the same
+  /// name, and the second run's copy silently overwrote the first run's. The
+  /// milliseconds carry the uniqueness; UTC keeps the names sortable across a
+  /// DST change, where local time repeats a whole hour.
+  ///
+  /// Requires:
+  ///   - n is positive
+  ///
+  /// Ensures:
+  ///   - the name is fixed-width and zero-padded, so a plain sort is
+  ///     chronological
+  ///   - two instants a millisecond apart never yield the same name, whatever
+  ///     [n] is
   @visibleForTesting
   static String keptFileNameFor( DateTime t, int n ) {
+    final u = t.toUtc();
     String two( int v ) => v.toString().padLeft( 2, '0' );
-    final stamp = '${t.year.toString().padLeft( 4, '0' )}${two( t.month )}${two( t.day )}'
-                  '-${two( t.hour )}${two( t.minute )}${two( t.second )}';
+    final stamp = '${u.year.toString().padLeft( 4, '0' )}${two( u.month )}${two( u.day )}'
+                  '-${two( u.hour )}${two( u.minute )}${two( u.second )}'
+                  '${u.millisecond.toString().padLeft( 3, '0' )}Z';
     return 'rec-$stamp-$n.wav';
   }
 

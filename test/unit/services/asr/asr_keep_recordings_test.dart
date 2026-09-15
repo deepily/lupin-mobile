@@ -55,13 +55,16 @@ void main() {
     if ( keptDir.parent.existsSync() ) await keptDir.parent.delete( recursive: true );
   } );
 
-  AsrService build() => AsrService(
+  /// UTC clock on purpose: the kept-file name is stamped in UTC, so a local
+  /// `DateTime` here would make the expected names depend on the machine's
+  /// timezone.
+  AsrService build( { DateTime Function()? clock } ) => AsrService(
     dio             : _MockDio(),
     recorder        : recorder,
     tempDirProvider : () async => tempDir,
     keepRecordings  : () => keepOn,
     keptDirProvider : () async => keptDir,
-    clock           : () => DateTime( 2026, 9, 15, 7, 8, 9 ),
+    clock           : clock ?? () => DateTime.utc( 2026, 9, 15, 7, 8, 9, 123 ),
     copyFile        : ( src, dest ) async {
       copies++;
       if ( copyThrows ) throw const FileSystemException( 'disk full' );
@@ -101,7 +104,7 @@ void main() {
       await asr.lastKeep;
 
       expect( File( path ).existsSync(), isFalse );
-      final kept = File( '${keptDir.path}/rec-20260915-070809-1.wav' );
+      final kept = File( '${keptDir.path}/rec-20260915-070809123Z-1.wav' );
       expect( kept.existsSync(), isTrue );
       expect( kept.readAsBytesSync(), _wavBytes );
 
@@ -109,7 +112,7 @@ void main() {
       final second = await recordToFile( asr );
       asr.discardPendingUpload( second );
       await asr.lastKeep;
-      expect( File( '${keptDir.path}/rec-20260915-070809-2.wav' ).existsSync(), isTrue );
+      expect( File( '${keptDir.path}/rec-20260915-070809123Z-2.wav' ).existsSync(), isTrue );
       expect( File( second ).existsSync(), isFalse );
     } );
 
@@ -202,7 +205,7 @@ void main() {
       await asr.lastKeep;
 
       expect( File( askedPath! ).existsSync(), isFalse );
-      final kept = File( '${keptDir.path}/rec-20260915-070809-1.wav' );
+      final kept = File( '${keptDir.path}/rec-20260915-070809123Z-1.wav' );
       expect( kept.existsSync(), isTrue );
       expect( kept.readAsBytesSync(), _wavBytes );
 
@@ -211,7 +214,54 @@ void main() {
     } );
   } );
 
-  test( 'keptFileNameFor pads every field', () {
-    expect( AsrService.keptFileNameFor( DateTime( 2026, 1, 2, 3, 4, 5 ), 7 ), 'rec-20260102-030405-7.wav' );
+  /// Fold-later from the 3a1626f review (row 8d9b2a0c): `<n>` restarts at 1 on
+  /// every app launch, so it cannot make the name unique across runs. Two runs
+  /// recording in the same second produced the same name and the second copy
+  /// overwrote the first — exactly the case the debug switch exists for,
+  /// since Rick pulls the folder off the phone AFTER several sessions.
+  group( 'kept-recording names survive an app restart', () {
+    test( 'two runs a millisecond apart keep both files, though both counters say 1', () async {
+      keepOn = true;
+
+      // Run 1 — a fresh AsrService, so its kept-counter starts at zero.
+      final first     = build( clock: () => DateTime.utc( 2026, 9, 15, 7, 8, 9, 400 ) );
+      final firstPath = await recordToFile( first );
+      first.discardPendingUpload( firstPath );
+      await first.lastKeep;
+
+      // Run 2 — the app was restarted: another AsrService, counter back to zero,
+      // same wall-clock second.
+      final second     = build( clock: () => DateTime.utc( 2026, 9, 15, 7, 8, 9, 401 ) );
+      final secondPath = await recordToFile( second );
+      second.discardPendingUpload( secondPath );
+      await second.lastKeep;
+
+      final kept = keptDir.listSync().whereType<File>().map( ( f ) => f.uri.pathSegments.last ).toList()..sort();
+      expect( kept, [ 'rec-20260915-070809400Z-1.wav', 'rec-20260915-070809401Z-1.wav' ],
+        reason: 'the second run must not overwrite the first' );
+      expect( copies, 2 );
+    } );
+
+    test( 'the same instant and the same counter still collide — the stamp is what separates runs', () {
+      final t = DateTime.utc( 2026, 9, 15, 7, 8, 9, 400 );
+      expect( AsrService.keptFileNameFor( t, 1 ), AsrService.keptFileNameFor( t, 1 ) );
+      expect(
+        AsrService.keptFileNameFor( t, 1 ),
+        isNot( AsrService.keptFileNameFor( t.add( const Duration( milliseconds: 1 ) ), 1 ) ),
+      );
+    } );
+  } );
+
+  test( 'keptFileNameFor pads every field, down to the milliseconds', () {
+    expect(
+      AsrService.keptFileNameFor( DateTime.utc( 2026, 1, 2, 3, 4, 5, 6 ), 7 ),
+      'rec-20260102-030405006Z-7.wav',
+    );
+  } );
+
+  test( 'keptFileNameFor stamps UTC, whatever timezone the device is in', () {
+    final instant = DateTime.utc( 2026, 1, 2, 3, 4, 5, 6 );
+    // Same instant, expressed in the machine's local zone: the name must not move.
+    expect( AsrService.keptFileNameFor( instant.toLocal(), 7 ), 'rec-20260102-030405006Z-7.wav' );
   } );
 }
