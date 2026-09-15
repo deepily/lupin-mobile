@@ -29,7 +29,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutRequested>( _onLogout );
     on<AuthBiometricUnlockRequested>( _onBiometric );
     on<AuthSessionValidationRequested>( _onValidate );
-    on<AuthServerContextChanged>( _onContextChanged );
     on<AuthServerContextSwitchRequested>( _onContextSwitchRequested );
   }
 
@@ -188,15 +187,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     await _context.setActive( event.contextId );
     final email = await _store.readLastEmail( event.contextId );
-    emit( AuthUnauthenticated( lastEmail: email ) );
-  }
-
-  Future<void> _onContextChanged(
-    AuthServerContextChanged _,
-    Emitter<AuthState> emit,
-  ) async {
-    clearAccessToken();
-    final email = await _store.readLastEmail( _ctxId );
     emit( AuthUnauthenticated( lastEmail: email ) );
   }
 }
