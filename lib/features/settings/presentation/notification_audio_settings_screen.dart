@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
@@ -5,6 +6,7 @@ import '../../../core/di/service_locator.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import 'notification_filter_settings_screen.dart';
+import 'round_trip_probe_screen.dart';
 
 /// User-facing toggles for notification ding + TTS speech behavior. Mirrors
 /// the Lupin web client's priority tiers: medium = ding only, high = ding +
@@ -128,6 +130,21 @@ class _NotificationAudioSettingsScreenState
               builder: ( _ ) => NotificationFilterSettingsScreen(
                 stopList: ServiceLocator.get<NotificationStopList>(),
               ),
+            ) ),
+          ),
+          const Divider(),
+          // Visible in every build, release included: the owner measures on
+          // release-ish builds. Labelled debug so nobody mistakes it for a setting.
+          const _SectionHeader( 'Debug' ),
+          ListTile(
+            key      : const Key( TestKeys.settingsOpenRoundTripProbe ),
+            leading  : const Icon( Icons.network_check ),
+            title    : const Text( 'Network round-trip probe' ),
+            subtitle : const Text( 'Debug: time 20 health calls and 30 s WAV uploads to the server.' ),
+            trailing : const Icon( Icons.chevron_right ),
+            enabled  : ServiceLocator.isRegistered<Dio>(),
+            onTap    : () => Navigator.of( context ).push( MaterialPageRoute(
+              builder: ( _ ) => RoundTripProbeScreen( dio: ServiceLocator.get<Dio>() ),
             ) ),
           ),
         ],

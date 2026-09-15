@@ -161,6 +161,11 @@ class TestKeys {
   static const settingsStopListReset         = 'settings.stopList.reset';
   static const settingsStopListRowPrefix     = 'settings.stopList.row.';      // + pattern
   static const settingsStopListTogglePrefix  = 'settings.stopList.toggle.';   // + pattern
+  // Debug: network round-trip probe (task c51e92da)
+  static const settingsOpenRoundTripProbe    = 'settings.debug.openRoundTripProbe';
+  static const probeRunButton                = 'probe.run';
+  static const probeCopyPathButton           = 'probe.copyPath';
+  static const probeProgress                 = 'probe.progress';
   // TTS preview-fraction slider pinned at the top of the focus pane (Rick 2026-08-21)
   static const focusTtsFractionBar             = 'focus.ttsFraction.bar';
   static const focusTtsFractionSlider          = 'focus.ttsFraction.slider';
