@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
@@ -36,6 +37,15 @@ class AsrService {
   final AudioRecorder _recorder;
   final Future<Directory> Function() _tempDirProvider;
 
+  /// Debug "Keep voice recordings" (row 9b1f7701): read on every discard, so
+  /// a flip in Settings applies to the next recording without a restart.
+  final bool Function()                                   _keepRecordings;
+  final Future<Directory> Function()                      _keptDirProvider;
+  final Future<void> Function( File source, String dest ) _copyFile;
+  final DateTime Function()                               _clock;
+  int           _keptCount = 0;
+  Future<void>? _lastKeep;
+
   static const String endpointPath = '/api/upload-and-transcribe-wav';
 
   /// OSQ-2 RATIFIED-AS-AMENDED params, mirrored from the parent GUI client
@@ -62,9 +72,52 @@ class AsrService {
     required Dio           dio,
     required AudioRecorder recorder,
     Future<Directory> Function()? tempDirProvider,
+    bool Function()?              keepRecordings,
+    Future<Directory> Function()? keptDirProvider,
+    Future<void> Function( File source, String dest )? copyFile,
+    DateTime Function()?          clock,
   } ) : _dio             = dio,
         _recorder        = recorder,
-        _tempDirProvider = tempDirProvider ?? getTemporaryDirectory;
+        _tempDirProvider = tempDirProvider ?? getTemporaryDirectory,
+        _keepRecordings  = keepRecordings  ?? _never,
+        _keptDirProvider = keptDirProvider ?? keptRecordingsDirectory,
+        _copyFile        = copyFile        ?? _copy,
+        _clock           = clock           ?? DateTime.now;
+
+  static bool _never() => false;
+  static Future<void> _copy( File source, String dest ) => source.copy( dest );
+
+  /// Where kept recordings go: `<external files dir>/recordings`, pullable
+  /// from `/sdcard/Android/data/<applicationId>/files/recordings/`; the app
+  /// documents directory when there is no external one.
+  ///
+  /// Ensures:
+  ///   - returns the directory path; does NOT create it
+  static Future<Directory> keptRecordingsDirectory() async {
+    Directory? base;
+    try {
+      base = await getExternalStorageDirectory();
+    } catch ( _ ) {
+      // Not supported on this platform (e.g. iOS) — fall through.
+      base = null;
+    }
+    base ??= await getApplicationDocumentsDirectory();
+    return Directory( '${base.path}/recordings' );
+  }
+
+  /// `rec-<yyyyMMdd-HHmmss>-<n>.wav`.
+  @visibleForTesting
+  static String keptFileNameFor( DateTime t, int n ) {
+    String two( int v ) => v.toString().padLeft( 2, '0' );
+    final stamp = '${t.year.toString().padLeft( 4, '0' )}${two( t.month )}${two( t.day )}'
+                  '-${two( t.hour )}${two( t.minute )}${two( t.second )}';
+    return 'rec-$stamp-$n.wav';
+  }
+
+  /// The most recent keep-then-delete, so a test can await it. Null until a
+  /// discard ran with keeping ON.
+  @visibleForTesting
+  Future<void>? get lastKeep => _lastKeep;
 
   /// Begin a push-to-talk capture to a temp WAV under the app cache dir.
   ///
@@ -143,8 +196,33 @@ class AsrService {
   ///
   /// Only paths this service handed out are deleted; any other path, or a
   /// second call for the same one, does nothing.
+  ///
+  /// With "Keep voice recordings" ON, a copy goes to [keptRecordingsDirectory]
+  /// first and the delete follows once the copy settles. A copy failure is
+  /// logged and swallowed: the original is deleted regardless. OFF is the
+  /// plain synchronous delete, with no extra I/O.
   void discardPendingUpload( String path ) {
-    if ( _pendingUploadPaths.remove( path ) ) _deleteQuietly( File( path ) );
+    if ( !_pendingUploadPaths.remove( path ) ) return;
+    if ( !_keepRecordings() ) {
+      _deleteQuietly( File( path ) );
+      return;
+    }
+    _lastKeep = _keepThenDelete( File( path ) );
+  }
+
+  Future<void> _keepThenDelete( File source ) async {
+    try {
+      final dir = await _keptDirProvider();
+      await dir.create( recursive: true );
+      _keptCount++;
+      final dest = '${dir.path}/${keptFileNameFor( _clock(), _keptCount )}';
+      await _copyFile( source, dest );
+      debugPrint( 'AsrService: kept recording at $dest' );
+    } catch ( e ) {
+      debugPrint( 'AsrService: could not keep recording ${source.path}: $e' );
+    } finally {
+      _deleteQuietly( source );
+    }
   }
 
   /// Stop the capture, upload the WAV, return the transcript. The temp file

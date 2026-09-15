@@ -377,8 +377,10 @@ class ServiceLocator {
 
     _getIt.registerLazySingleton<AsrService>(
       () => AsrService(
-        dio      : _getIt<Dio>(),
-        recorder : AudioRecorder(),
+        dio            : _getIt<Dio>(),
+        recorder       : AudioRecorder(),
+        // Debug "Keep voice recordings" (row 9b1f7701), read per discard.
+        keepRecordings : () => _getIt<NotificationPreferences>().keepVoiceRecordings,
       ),
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(

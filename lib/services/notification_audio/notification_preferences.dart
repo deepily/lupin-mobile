@@ -28,6 +28,10 @@ class NotificationPreferences {
   /// every persona-less sender in one switch; personas keep speaking.
   /// Default ON (today's behaviour).
   static const keySpeakSystemSenders = 'notif_audio.speak_system_senders';
+  /// Debug (row 9b1f7701): keep a WAV copy of every voice recording before
+  /// it is deleted, for the Opus/AAC accuracy check. Lives here because this
+  /// screen's Debug section is its only home. Default OFF.
+  static const keyKeepVoiceRecordings = 'debug.keep_voice_recordings';
 
   final SharedPreferences _prefs;
   const NotificationPreferences( this._prefs );
@@ -39,6 +43,7 @@ class NotificationPreferences {
   bool get speakOnUrgent => _prefs.getBool( _keySpeakOnUrgent ) ?? true;
   bool get masterMute    => _prefs.getBool( _keyMasterMute    ) ?? false;
   bool get speakSystemSenders => _prefs.getBool( keySpeakSystemSenders ) ?? true;
+  bool get keepVoiceRecordings => _prefs.getBool( keyKeepVoiceRecordings ) ?? false;
 
   /// Spoken fraction of each message, snapped to 10% steps in [0.0, 1.0].
   double get ttsFraction {
@@ -56,5 +61,6 @@ class NotificationPreferences {
   Future<void> setSpeakOnUrgent( bool v ) => _prefs.setBool( _keySpeakOnUrgent, v );
   Future<void> setMasterMute(    bool v ) => _prefs.setBool( _keyMasterMute,    v );
   Future<void> setSpeakSystemSenders( bool v ) => _prefs.setBool( keySpeakSystemSenders, v );
+  Future<void> setKeepVoiceRecordings( bool v ) => _prefs.setBool( keyKeepVoiceRecordings, v );
   Future<void> setTtsFraction( double v ) => _prefs.setDouble( keyTtsFraction, snapTtsFraction( v ) );
 }
