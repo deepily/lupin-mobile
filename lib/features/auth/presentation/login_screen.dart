@@ -123,7 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   // Pick the server BEFORE signing in: a real handset can't
                   // reach the emulator-only 10.0.2.2 contexts, so it needs
                   // LAN DEV / LAN TEST, and Settings is behind the login.
-                  const SizedBox( height: 32 ),
+                  // Renders nothing in a release build, its own leading gap
+                  // included — see ServerContextToggle.offered.
                   ServerContextToggle(
                     service   : widget.serverContext,
                     onChanged : ( _ ) { if ( mounted ) setState( () {} ); },
