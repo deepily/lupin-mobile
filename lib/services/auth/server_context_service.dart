@@ -86,11 +86,33 @@ class ServerContextService {
   /// Every context in the JSON, in file order.
   List<ServerContextConfig> get all => _contexts.values.toList();
 
-  /// Switch the active context. Callers are responsible for invoking any
-  /// logout / session-clear hooks before or after this call; this service
-  /// only mutates the stored URL selection.
+  final List<void Function( ServerContextConfig )> _listeners = [];
+
+  /// Register [listener] to run, synchronously, every time [setActive]
+  /// switches to a different context. Anything that captured a base URL at
+  /// start-up (the shared Dio's `options.baseUrl`, a screen showing the
+  /// active server) must follow the switch through here, or its requests
+  /// keep going to the old host while AppConstants readers use the new one.
+  void addListener( void Function( ServerContextConfig ) listener ) => _listeners.add( listener );
+
+  void removeListener( void Function( ServerContextConfig ) listener ) => _listeners.remove( listener );
+
+  /// Switch the active context: updates AppConstants, notifies listeners,
+  /// and persists the choice. Callers are responsible for clearing the OLD
+  /// context's session BEFORE calling this (see AuthBloc's
+  /// AuthServerContextSwitchRequested); this service only owns the URL
+  /// selection.
   ///
-  /// Throws [ArgumentError] if [id] is not a context in the JSON.
+  /// Requires:
+  ///   - [id] is a context key in server-contexts.json
+  ///
+  /// Ensures:
+  ///   - AppConstants URLs and every listener see the new context before the
+  ///     returned future's first await
+  ///   - a no-op (no listener calls) when [id] is already active
+  ///
+  /// Raises:
+  ///   - ArgumentError if [id] is not a context in the JSON
   Future<void> setActive( String id ) async {
     if ( !_contexts.containsKey( id ) ) {
       throw ArgumentError.value( id, "id", "unknown server context" );
@@ -98,6 +120,9 @@ class ServerContextService {
     if ( id == _active ) return;
     _active = id;
     _applyToAppConstants();
+    for ( final listener in List.of( _listeners ) ) {
+      listener( activeConfig );
+    }
     await _prefs.setString( _prefsKey, id );
   }
 }

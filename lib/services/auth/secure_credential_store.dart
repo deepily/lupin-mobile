@@ -57,7 +57,9 @@ class SecureCredentialStore {
     await deleteRefreshToken( contextId );
     final all = await _storage.readAll();
     final prefix = "auth.$contextId.session.";
-    for ( final key in all.keys ) {
+    // Snapshot the keys: a platform may hand back its live map, and deleting
+    // while iterating it throws (flutter_secure_storage's test platform does).
+    for ( final key in all.keys.toList() ) {
       if ( key.startsWith( prefix ) ) await _storage.delete( key: key );
     }
   }

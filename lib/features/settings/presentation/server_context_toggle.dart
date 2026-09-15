@@ -12,10 +12,11 @@ Color serverContextColor( String id ) =>
 
 /// A drop-in widget that switches between every server context listed in
 /// `server-contexts.json` (DEV, TEST, LAN DEV, LAN TEST, ...).
-/// Prompts for confirmation, then forces logout (via AuthBloc) before
-/// flipping the context so the next login lands on the chosen server.
+/// Prompts for confirmation, then asks AuthBloc to log out of the current
+/// server and switch; the widget redraws when the service reports the switch.
 /// Mounted on the login screen, because a phone can't reach Settings until
 /// it can reach a server.
+// Shown in ALL builds for now (a release-mode phone test may need it); a candidate for a debug/profile-only gate later.
 class ServerContextToggle extends StatefulWidget {
   final ServerContextService service;
 
@@ -36,6 +37,19 @@ class _ServerContextToggleState extends State<ServerContextToggle> {
   void initState() {
     super.initState();
     _selected = widget.service.active;
+    widget.service.addListener( _onServiceSwitched );
+  }
+
+  @override
+  void dispose() {
+    widget.service.removeListener( _onServiceSwitched );
+    super.dispose();
+  }
+
+  void _onServiceSwitched( ServerContextConfig config ) {
+    if ( !mounted ) return;
+    setState( () => _selected = config.id );
+    widget.onChanged?.call( config.id );
   }
 
   Future<void> _onPick( String id ) async {
@@ -62,13 +76,9 @@ class _ServerContextToggleState extends State<ServerContextToggle> {
     );
     if ( confirmed != true || !mounted ) return;
 
-    // Force logout locally, then flip the stored context.
-    final auth = context.read<AuthBloc>();
-    auth.add( const AuthLogoutRequested() );
-    await widget.service.setActive( id );
-    auth.add( const AuthServerContextChanged() );
-    if ( mounted ) setState( () => _selected = id );
-    widget.onChanged?.call( id );
+    // AuthBloc clears the CURRENT server's session, then switches; the
+    // service listener above redraws this widget once the switch lands.
+    context.read<AuthBloc>().add( AuthServerContextSwitchRequested( id ) );
   }
 
   @override

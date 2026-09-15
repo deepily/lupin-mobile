@@ -194,9 +194,32 @@ class ServiceLocator {
       SessionPersistence(_getIt<SecureCredentialStore>()),
     );
 
-    // Dio HTTP client
+    // Dio HTTP client — its base URL follows the server switch.
+    registerSharedDio(serverContext);
+  }
+
+  /// PRODUCTION construction + registration of the shared [Dio], extracted
+  /// so a test can exercise the real wiring without booting the whole
+  /// locator (see [buildFocusChatBloc] for why).
+  ///
+  /// HttpService stamps `options.baseUrl` once at start-up and AuthRepository
+  /// posts relative paths ("/auth/login"), so without this listener a switch
+  /// to LAN DEV would keep signing in against the old host while WebSocket
+  /// code (reading AppConstants) followed the new one.
+  ///
+  /// Requires:
+  ///   - no Dio is registered yet
+  ///
+  /// Ensures:
+  ///   - a Dio is registered in GetIt and returned
+  ///   - its `options.baseUrl` is the new context's baseUrl after every
+  ///     [ServerContextService.setActive] switch
+  @visibleForTesting
+  static Dio registerSharedDio(ServerContextService serverContext) {
     final dio = Dio();
+    serverContext.addListener((config) => dio.options.baseUrl = config.baseUrl);
     _getIt.registerSingleton<Dio>(dio);
+    return dio;
   }
 
   /// Initialize services
