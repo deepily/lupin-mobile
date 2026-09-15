@@ -12,6 +12,11 @@ class TestKeys {
   static const loginPasswordField = 'login.password';
   static const loginSubmitButton  = 'login.submit';
 
+  // Server switch (ServerContextToggle) — segments suffixed with the context
+  // id from server-contexts.json, e.g. '${serverContextSegmentPrefix}lan-dev'
+  static const serverContextToggle        = 'server_context.toggle';
+  static const serverContextSegmentPrefix = 'server_context.segment.';
+
   // Inbox — suffixed with senderId at use-site, e.g. '${inboxSenderTilePrefix}s-1'
   static const inboxSenderTilePrefix = 'inbox.sender.';
 

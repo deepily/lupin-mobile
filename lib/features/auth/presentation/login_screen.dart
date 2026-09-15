@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../../services/auth/server_context_service.dart';
+import '../../settings/presentation/server_context_toggle.dart';
 import '../domain/auth_bloc.dart';
 import '../domain/auth_event.dart';
 import '../domain/auth_state.dart';
@@ -60,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Padding(
             padding: const EdgeInsets.only( right: 12 ),
             child: Center(
-              child: _ContextBadge( label: ctx.label ),
+              child: _ContextBadge( id: ctx.id, label: ctx.label ),
             ),
           ),
         ],
@@ -75,7 +76,9 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         builder: ( context, state ) {
           final busy = state is AuthLoading;
-          return Padding(
+          // Scrollable: the server switch below the form would otherwise
+          // push past the bottom of a small phone once the keyboard is up.
+          return SingleChildScrollView(
             padding: const EdgeInsets.all( 24 ),
             child: Form(
               key: _form,
@@ -117,6 +120,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         )
                       : const Text( "Sign in" ),
                   ),
+                  // Pick the server BEFORE signing in: a real handset can't
+                  // reach the emulator-only 10.0.2.2 contexts, so it needs
+                  // LAN DEV / LAN TEST, and Settings is behind the login.
+                  const SizedBox( height: 32 ),
+                  ServerContextToggle(
+                    service   : widget.serverContext,
+                    onChanged : ( _ ) { if ( mounted ) setState( () {} ); },
+                  ),
                 ],
               ),
             ),
@@ -128,16 +139,17 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _ContextBadge extends StatelessWidget {
+  final String id;
   final String label;
-  const _ContextBadge( { required this.label } );
+  const _ContextBadge( { required this.id, required this.label } );
 
   @override
   Widget build( BuildContext context ) {
-    final color = label == "DEV" ? Colors.green : Colors.orange;
+    final color = serverContextColor( id );
     return Container(
       padding: const EdgeInsets.symmetric( horizontal: 10, vertical: 4 ),
       decoration: BoxDecoration(
-        color: color.withOpacity( 0.15 ),
+        color: color.withValues( alpha: 0.15 ),
         border: Border.all( color: color, width: 1.5 ),
         borderRadius: BorderRadius.circular( 12 ),
       ),

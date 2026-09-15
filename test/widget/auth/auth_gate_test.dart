@@ -2,7 +2,6 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_bloc.dart';
@@ -25,7 +24,7 @@ void main() {
     setUp(() {
       auth = MockAuthBloc();
       ctx  = MockServerContextService();
-      when( () => ctx.activeConfig ).thenReturn( testContextConfig() );
+      stubServerContext( ctx );
     });
 
     Widget underTest() {
