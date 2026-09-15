@@ -35,9 +35,16 @@ class ServerContextToggle extends StatefulWidget {
   /// (src/scripts/build-and-deploy-lupin-mobile.sh), so this hides nothing
   /// anyone is using.
   ///
-  /// ⚠️ If a real-phone RELEASE build is ever wanted, fix the default context
-  /// first: it is "dev" (10.0.2.2), an emulator-only address, so a release
-  /// build without this switch reaches no server at all.
+  /// ⚠️ Release APKs ALREADY EXIST, and this gate strands them. CI builds
+  /// them today: `.github/workflows/release.yml` attaches a release APK and
+  /// AAB to every `v*.*.*` tag, and `.github/workflows/flutter-ci.yml:144`
+  /// uploads a release APK on every run. The login screen is this widget's
+  /// only mount, so those artifacts now have NO server picker anywhere, and
+  /// `assets/config/server-contexts.json` defaults them to "dev"
+  /// (10.0.2.2) — an emulator-only address. A real phone installing one
+  /// cannot reach any server and can no longer switch its way out, which it
+  /// could before this gate. Fix the shipped default before anyone installs
+  /// a CI release build on a handset.
   ///
   /// Injectable so a widget test can render the release arm, which
   /// `kReleaseMode` alone never lets a test see.
