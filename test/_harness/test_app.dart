@@ -52,6 +52,23 @@ ServerContextConfig testContextConfig( { String label = "DEV" } ) {
   );
 }
 
+/// Stubs everything the login screen's server switch reads from a
+/// [MockServerContextService]: a DEV context (active) plus a LAN DEV one.
+void stubServerContext( MockServerContextService ctx ) {
+  final dev    = testContextConfig();
+  const lanDev = ServerContextConfig(
+    id      : "lan-dev",
+    label   : "LAN DEV",
+    baseUrl : "http://192.168.1.21:7999",
+    wsUrl   : "ws://192.168.1.21:7999",
+  );
+  when( () => ctx.activeConfig ).thenReturn( dev );
+  when( () => ctx.active ).thenReturn( "dev" );
+  when( () => ctx.all ).thenReturn( [ dev, lanDev ] );
+  when( () => ctx.configFor( "dev" ) ).thenReturn( dev );
+  when( () => ctx.configFor( "lan-dev" ) ).thenReturn( lanDev );
+}
+
 /// Wraps [child] in a MaterialApp + MultiBlocProvider for widget tests.
 ///
 /// Pass a pre-configured [authBloc] (typically a [MockAuthBloc] with

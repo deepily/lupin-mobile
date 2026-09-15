@@ -10,6 +10,16 @@
       "label": "TEST",
       "baseUrl": "http://10.0.2.2:8000",
       "wsUrl": "ws://10.0.2.2:8000"
+    },
+    "lan-dev": {
+      "label": "LAN DEV",
+      "baseUrl": "http://192.168.1.21:7999",
+      "wsUrl": "ws://192.168.1.21:7999"
+    },
+    "lan-test": {
+      "label": "LAN TEST",
+      "baseUrl": "http://192.168.1.21:8000",
+      "wsUrl": "ws://192.168.1.21:8000"
     }
   }
 }

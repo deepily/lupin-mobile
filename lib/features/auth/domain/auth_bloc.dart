@@ -30,6 +30,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthBiometricUnlockRequested>( _onBiometric );
     on<AuthSessionValidationRequested>( _onValidate );
     on<AuthServerContextChanged>( _onContextChanged );
+    on<AuthServerContextSwitchRequested>( _onContextSwitchRequested );
   }
 
   String get _ctxId => _context.activeConfig.id;
@@ -156,6 +157,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final email = await _store.readLastEmail( _ctxId );
       emit( AuthError( message: e.message, lastEmail: email ) );
     }
+  }
+
+  /// Log out of the current server, clear ITS stored session, then switch.
+  ///
+  /// One handler on purpose: bloc runs handlers for different event types
+  /// concurrently, so a separate logout event raced the switch and cleared
+  /// the new server's session instead of the old one.
+  ///
+  /// Ensures:
+  ///   - the server logout (best effort) goes to the OLD host, and the OLD
+  ///     context's refresh token and session ids are deleted
+  ///   - the NEW context's stored session is untouched
+  ///   - ends AuthUnauthenticated with the new context's last email
+  Future<void> _onContextSwitchRequested(
+    AuthServerContextSwitchRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final oldId = _ctxId;
+    if ( event.contextId == oldId ) return;
+
+    final token = readAccessToken();
+    try {
+      if ( token != null ) await _repo.logout( token );
+    } catch ( _ ) {
+      // Swallow — local state must still clear.
+    }
+    clearAccessToken();
+    await _store.clearContextSession( oldId );
+
+    await _context.setActive( event.contextId );
+    final email = await _store.readLastEmail( event.contextId );
+    emit( AuthUnauthenticated( lastEmail: email ) );
   }
 
   Future<void> _onContextChanged(

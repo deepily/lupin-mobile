@@ -1,8 +1,21 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:lupin_mobile/core/constants/app_constants.dart';
+import 'package:lupin_mobile/core/di/service_locator.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/auth/domain/auth_bloc.dart';
+import 'package:lupin_mobile/services/auth/auth_repository.dart';
+import 'package:lupin_mobile/services/auth/biometric_gate.dart';
+import 'package:lupin_mobile/services/auth/secure_credential_store.dart';
+import 'package:lupin_mobile/services/auth/server_context_service.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_event.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_state.dart';
 import 'package:lupin_mobile/features/auth/presentation/login_screen.dart';
@@ -20,7 +33,7 @@ void main() {
       auth = MockAuthBloc();
       ctx  = MockServerContextService();
       when( () => auth.state ).thenReturn( const AuthUnauthenticated() );
-      when( () => ctx.activeConfig ).thenReturn( testContextConfig() );
+      stubServerContext( ctx );
     });
 
     Widget underTest() => testApp(
@@ -104,4 +117,106 @@ void main() {
       ) ).called( 1 );
     });
   });
+
+  // The server switch on the login screen, driven end to end: the REAL
+  // AuthBloc, service, credential store and shared Dio, the SHIPPED
+  // server-contexts.json, at phone width. Only the network repo is mocked.
+  group( "LoginScreen server switch", () {
+    final shippedJson = File( "assets/config/server-contexts.json" ).readAsStringSync();
+
+    late _MockRepo repo;
+
+    setUp(() async {
+      repo = _MockRepo();
+      SharedPreferences.setMockInitialValues( {} );
+      FlutterSecureStorage.setMockInitialValues( {
+        "auth.dev.refresh_token"     : "dev-refresh",
+        "auth.lan-dev.refresh_token" : "lan-refresh",
+      } );
+      await ServiceLocator.reset();
+    });
+
+    tearDown( () async => ServiceLocator.reset() );
+
+    Future<( ServerContextService, SharedPreferences, SecureCredentialStore )> pumpReal( WidgetTester tester ) async {
+      tester.binding.defaultBinaryMessenger.setMockMessageHandler( "flutter/assets", ( message ) async {
+        final key = const StringCodec().decodeMessage( message );
+        return key == "assets/config/server-contexts.json"
+          ? const StringCodec().encodeMessage( shippedJson )
+          : null;
+      } );
+      tester.view.physicalSize     = const Size( 360, 690 );
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown( tester.view.reset );
+
+      final ( svc, prefs ) = await tester.runAsync( () async {
+        final prefs = await SharedPreferences.getInstance();
+        return ( await ServerContextService.load( prefs ), prefs );
+      } ) as ( ServerContextService, SharedPreferences );
+      ServiceLocator.registerSharedDio( svc );
+      final store = SecureCredentialStore( const FlutterSecureStorage() );
+      final bloc  = AuthBloc( repo: repo, store: store, context: svc, biometric: _MockBiometric() );
+      addTearDown( bloc.close );
+      await tester.pumpWidget( testApp( authBloc: bloc, child: LoginScreen( serverContext: svc ) ) );
+      return ( svc, prefs, store );
+    }
+
+    Finder segment( String id ) => find.byKey( Key( "${TestKeys.serverContextSegmentPrefix}$id" ) );
+
+    testWidgets( "offers every context, LAN DEV and LAN TEST included, with DEV selected", ( tester ) async {
+      await pumpReal( tester );
+
+      expect( find.byKey( const Key( TestKeys.serverContextToggle ) ), findsOneWidget );
+      for ( final id in [ "dev", "test", "lan-dev", "lan-test" ] ) {
+        expect( segment( id ), findsOneWidget, reason: "segment $id" );
+      }
+      final toggle = tester.widget<SegmentedButton<String>>(
+        find.byKey( const Key( TestKeys.serverContextToggle ) ) );
+      expect( toggle.selected, { "dev" } );
+      expect( find.text( "DEV · http://10.0.2.2:7999" ), findsOneWidget );
+      expect( tester.takeException(), isNull, reason: "four segments fit at 360 px" );
+    } );
+
+    testWidgets( "tapping LAN DEV and confirming switches server, Dio and badge, and clears only the old session", ( tester ) async {
+      final ( svc, prefs, store ) = await pumpReal( tester );
+
+      await tester.tap( segment( "lan-dev" ) );
+      await tester.pumpAndSettle();
+      expect( find.text( "Switch server?" ), findsOneWidget );
+      await tester.tap( find.widgetWithText( FilledButton, "Switch" ) );
+      await tester.pumpAndSettle();
+
+      expect( svc.active, "lan-dev" );
+      expect( AppConstants.apiBaseUrl, "http://192.168.1.21:7999" );
+      expect( AppConstants.wsBaseUrl,  "ws://192.168.1.21:7999" );
+      expect( ServiceLocator.get<Dio>().options.baseUrl, "http://192.168.1.21:7999" );
+      expect( prefs.getString( "active_server_context" ), "lan-dev" );
+      expect( find.text( "LAN DEV · http://192.168.1.21:7999" ), findsOneWidget );
+      expect( tester.widget<SegmentedButton<String>>(
+        find.byKey( const Key( TestKeys.serverContextToggle ) ) ).selected, { "lan-dev" } );
+      expect( find.descendant( of: find.byType( AppBar ), matching: find.text( "LAN DEV" ) ), findsOneWidget );
+
+      final ( devToken, lanToken ) = await tester.runAsync( () async =>
+        ( await store.readRefreshToken( "dev" ), await store.readRefreshToken( "lan-dev" ) ) ) as ( String?, String? );
+      expect( devToken, isNull,          reason: "old server's session cleared" );
+      expect( lanToken, "lan-refresh",   reason: "new server's session untouched" );
+    } );
+
+    testWidgets( "cancelling the dialog leaves the server on DEV", ( tester ) async {
+      final ( svc, prefs, store ) = await pumpReal( tester );
+
+      await tester.tap( segment( "lan-dev" ) );
+      await tester.pumpAndSettle();
+      await tester.tap( find.widgetWithText( TextButton, "Cancel" ) );
+      await tester.pumpAndSettle();
+
+      expect( svc.active, "dev" );
+      expect( prefs.getString( "active_server_context" ), isNull );
+      final devToken = await tester.runAsync( () => store.readRefreshToken( "dev" ) );
+      expect( devToken, "dev-refresh" );
+    } );
+  } );
 }
+
+class _MockRepo      extends Mock implements AuthRepository {}
+class _MockBiometric extends Mock implements BiometricGate {}
