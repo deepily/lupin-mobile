@@ -17,7 +17,10 @@ class RoundTripProbeScreen extends StatefulWidget {
   /// Network-type lookup; defaults to connectivity_plus.
   final NetworkTypeProvider? networkType;
 
-  const RoundTripProbeScreen( { super.key, required this.dio, this.openSink, this.networkType } );
+  /// Upload clip builder; defaults to the probe's background-isolate sweep.
+  final Future<Uint8List> Function( int sampleRate )? clipFor;
+
+  const RoundTripProbeScreen( { super.key, required this.dio, this.openSink, this.networkType, this.clipFor } );
 
   @override
   State<RoundTripProbeScreen> createState() => _RoundTripProbeScreenState();
@@ -31,6 +34,17 @@ class _RoundTripProbeScreenState extends State<RoundTripProbeScreen> {
   String?      _error;
   ProbeResult? _result;
 
+  /// Cancels the in-progress run; set for the life of one run.
+  CancelToken? _cancelToken;
+
+  @override
+  void dispose() {
+    // Leaving the screen stops the probe: no further requests, and the
+    // in-flight one is aborted. The run writes its "cancelled" line itself.
+    _cancelToken?.cancel( 'probe screen closed' );
+    super.dispose();
+  }
+
   Future<void> _run() async {
     setState( () {
       _running = true;
@@ -41,12 +55,14 @@ class _RoundTripProbeScreenState extends State<RoundTripProbeScreen> {
       _result  = null;
     } );
     ProbeSink? sink;
+    final cancelToken = _cancelToken = CancelToken();
     try {
       final opener = widget.openSink ?? openProbeFileSink;
       sink         = await opener( DateTime.now() );
       if ( mounted ) setState( () => _path = sink!.path );
-      final result = await RoundTripProbe( dio: widget.dio, networkType: widget.networkType ).run(
+      final result = await RoundTripProbe( dio: widget.dio, networkType: widget.networkType, clipFor: widget.clipFor ).run(
         sink,
+        cancelToken: cancelToken,
         onProgress: ( done, total, s ) {
           if ( !mounted ) return;
           setState( () {
@@ -62,6 +78,7 @@ class _RoundTripProbeScreenState extends State<RoundTripProbeScreen> {
       if ( mounted ) setState( () => _error = e.toString() );
     } finally {
       await sink?.close();
+      if ( identical( _cancelToken, cancelToken ) ) _cancelToken = null;
       if ( mounted ) setState( () => _running = false );
     }
   }
@@ -106,6 +123,12 @@ class _RoundTripProbeScreenState extends State<RoundTripProbeScreen> {
           ],
           if ( result != null ) ...[
             const SizedBox( height: 16 ),
+            Text(
+              'p50 / p90 / max are over successful samples only; failures are counted separately. '
+              'Upload times include server-side transcription.',
+              style: Theme.of( context ).textTheme.bodySmall,
+            ),
+            const SizedBox( height: 8 ),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(

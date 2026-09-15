@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -78,12 +79,55 @@ void main() {
     expect( find.text( 'upload 16 kHz' ), findsOneWidget );
     expect( find.text( 'Log: ${sink.path}' ), findsOneWidget );
     expect( find.byKey( const Key( TestKeys.probeCopyPathButton ) ), findsOneWidget );
+    expect( find.textContaining( 'over successful samples only' ), findsOneWidget );
+  } );
+
+  testWidgets( 'leaving the probe screen cancels the run: no further requests, cancelled line written', ( tester ) async {
+    final adapter = _OkAdapter( hangOn: 3 );
+    final dio     = Dio( BaseOptions( baseUrl: 'http://probe.test' ) )..httpClientAdapter = adapter;
+    final sink    = _MemorySink();
+    await tester.pumpWidget( MaterialApp(
+      home: RoundTripProbeScreen(
+        dio         : dio,
+        openSink    : ( _ ) async => sink,
+        networkType : () async => 'wifi',
+        clipFor     : ( rate ) async => Uint8List( 44 + rate ~/ 100 ),
+      ),
+    ) );
+
+    await tester.tap( find.byKey( const Key( TestKeys.probeRunButton ) ) );
+    // Fake time must advance too (the probe's network-type lookup has a timeout).
+    for ( var i = 0; i < 400 && adapter.requests < 4; i++ ) {
+      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 10 ) ) );
+      await tester.pump( const Duration( milliseconds: 100 ) );
+    }
+    expect( adapter.requests, 4 );   // request index 3 is in flight
+
+    await tester.pumpWidget( const MaterialApp( home: SizedBox() ) );   // dispose the screen
+    for ( var i = 0; i < 100 && !sink.closed; i++ ) {
+      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 10 ) ) );
+      await tester.pump( const Duration( milliseconds: 100 ) );
+    }
+
+    expect( sink.lines.length, 4 );   // 3 samples + the cancelled line
+    expect( sink.lines.last, contains( '"kind":"cancelled"' ) );
+    expect( sink.closed, isTrue );
+    await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 50 ) ) );
+    expect( adapter.requests, 4 );
   } );
 }
 
 class _OkAdapter implements HttpClientAdapter {
+  /// Zero-based request index that never answers on its own; null for none.
+  final int? hangOn;
+  int requests = 0;
+
+  _OkAdapter( { this.hangOn } );
+
   @override
   Future<ResponseBody> fetch( RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture ) async {
+    final index = requests++;
+    if ( index == hangOn ) await Completer<void>().future;
     if ( requestStream != null ) await requestStream.drain<void>();
     return ResponseBody.fromString( '"ok"', 200,
         headers: { Headers.contentTypeHeader: [ Headers.jsonContentType ] } );
@@ -99,6 +143,7 @@ class _MemorySink implements ProbeSink {
   String get path => '/memory/round-trip-probe-widget.jsonl';
   @override
   Future<void> writeLine( String line ) async => lines.add( line );
+  bool closed = false;
   @override
-  Future<void> close() async {}
+  Future<void> close() async => closed = true;
 }

@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -83,4 +84,19 @@ class ProbeWav {
     }
     return bytes;
   }
+
+  /// Build the clip on a background isolate so the UI thread never stalls.
+  ///
+  /// Requires:
+  ///   - sampleRate > 0 and seconds > 0
+  ///
+  /// Ensures:
+  ///   - completes with exactly the bytes [generate] returns for the same
+  ///     arguments
+  ///
+  /// Raises:
+  ///   - ArgumentError (through the future) if sampleRate or seconds is not
+  ///     positive
+  static Future<Uint8List> generateInBackground( { required int sampleRate, int seconds = defaultSeconds } ) =>
+      Isolate.run( () => generate( sampleRate: sampleRate, seconds: seconds ) );
 }
