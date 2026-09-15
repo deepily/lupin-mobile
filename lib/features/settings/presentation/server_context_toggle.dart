@@ -40,6 +40,21 @@ class _ServerContextToggleState extends State<ServerContextToggle> {
     widget.service.addListener( _onServiceSwitched );
   }
 
+  /// A parent that hands this widget a DIFFERENT service (a rebuild after
+  /// ServiceLocator.reset, a screen that swaps the service it was given)
+  /// keeps the same State object. Without this, the subscription would still
+  /// be on the old service: the new one's switches would never redraw the
+  /// segments, and the old one would keep calling a listener nobody wants.
+  @override
+  void didUpdateWidget( ServerContextToggle oldWidget ) {
+    super.didUpdateWidget( oldWidget );
+    if ( !identical( oldWidget.service, widget.service ) ) {
+      oldWidget.service.removeListener( _onServiceSwitched );
+      widget.service.addListener( _onServiceSwitched );
+      _selected = widget.service.active;
+    }
+  }
+
   @override
   void dispose() {
     widget.service.removeListener( _onServiceSwitched );
