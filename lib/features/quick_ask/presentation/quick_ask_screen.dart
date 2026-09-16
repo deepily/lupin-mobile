@@ -636,8 +636,17 @@ class _ScrollbackState extends State<_Scrollback> {
             );
           }
 
+          // `_QuickAskCard` carries `margin: vertical 6`, and the list padding
+          // is now zero, so the first card sits 6px under the header where it
+          // used to sit 14 — the 8 came from the list's old `all( 8 )`. Put
+          // those 8 back on the first card ONLY, and only when no full-bleed
+          // band precedes it: a band is meant to be flush with the header, and
+          // the empty-state placeholder sizes itself to `constraints.maxHeight`,
+          // so list-level padding would push the idle screen into a needless
+          // scroll.
+          final firstCard = i == leading.length && leading.isEmpty;
           return Padding(
-            padding : const EdgeInsets.symmetric( horizontal: 8 ),
+            padding : EdgeInsets.only( left: 8, right: 8, top: firstCard ? 8 : 0 ),
             child   : _QuickAskCard( entry: ordered[ i - leading.length ], tts: widget.tts ),
           );
         },
