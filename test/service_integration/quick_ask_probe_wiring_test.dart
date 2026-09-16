@@ -14,8 +14,9 @@
 ///
 /// It calls the extracted production factory rather than `ServiceLocator
 /// .init()`, which needs `path_provider` platform channels — the reason the
-/// existing DI suite sits in `legacy_quarantine` and the reason nothing was
-/// watching this seam in the first place.
+/// old DI suite never ran (it was quarantined, then deleted with the rest of
+/// `legacy_quarantine` in row 5ac999f5) and the reason nothing was watching
+/// this seam in the first place.
 library;
 
 import 'package:bloc_test/bloc_test.dart';

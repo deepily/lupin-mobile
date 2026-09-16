@@ -69,6 +69,20 @@ NotificationItem _makeItem( {
   );
 }
 
+/// Where the cosa source these wire-contract tests read lives, or null.
+///
+/// This repo used to sit inside lupin at `lupin/src/lupin-mobile`, where cosa
+/// was the sibling `../cosa`. As a standalone clone next to `lupin/`, cosa is
+/// `../lupin/src/cosa`. A clone with neither SKIPS these tests and says why,
+/// rather than failing on a layout question (row 5ac999f5).
+final String? _cosaRoot = [ "../cosa", "../lupin/src/cosa" ]
+    .where( ( p ) => File( "$p/rest/routers/notifications.py" ).existsSync() )
+    .firstOrNull;
+
+const _noCosaReason =
+    "needs the cosa source to ground the wire contract, and neither ../cosa "
+    "nor ../lupin/src/cosa exists next to this clone";
+
 void main() {
   group( "NotificationBloc — inner-type dispatch (Phase 0)", () {
     late StubAdapter             adapter;
@@ -310,10 +324,11 @@ void main() {
   group( "NotificationBloc — Section A wire-contract grounding (AC-A5)", () {
     test(
       "mobile commons-* case-label constants exact-match cosa valid_types whitelist",
+      skip: _cosaRoot == null ? _noCosaReason : false,
       () async {
         // Resolve cosa whitelist path relative to the lupin-mobile repo root
         // (which is `Directory.current` under `flutter test`).
-        const cosaRelPath = "../cosa/rest/routers/notifications.py";
+        final cosaRelPath = "${_cosaRoot!}/rest/routers/notifications.py";
         final file = File( cosaRelPath );
 
         expect(
@@ -666,8 +681,9 @@ void main() {
       test(
         "speakerphone_changed payload field names exact-match the cosa emit site "
         "(commit e420ec0)",
+        skip: _cosaRoot == null ? _noCosaReason : false,
         () async {
-          const cosaDir = "../cosa";
+          final cosaDir = _cosaRoot!;
           final dir = Directory( cosaDir );
 
           expect(
