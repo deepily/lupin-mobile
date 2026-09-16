@@ -85,13 +85,21 @@ class _RecordHeader extends StatelessWidget {
     // be tapped out from under a question the user has spoken but not sent.
     final enabled   = state.canRecord;
     final hasDraft  = state.hasDraft;
-    // Bug 9cddb791 — while a Door C prompt or an interview turn is live the
-    // mic is INERT (`blockReason == unansweredPrompt`), so a 128px circle is
-    // 128px of screen spent on a control that cannot be used, taken from the
-    // question that is holding the ask open. Shrink it in exactly those
-    // states: on a 320×568 phone that is the difference between the whole
-    // prompt being on screen and its answer buttons sitting under the fold.
-    final blocked   = state.pendingPrompt != null || state.interview != null;
+    // Bug 9cddb791 — while a Door C prompt or an interview turn is live AND
+    // the mic is actually inert, a 128px circle is 128px of screen spent on a
+    // control that cannot be pressed, taken from the question that is holding
+    // the ask open. Shrink it in exactly those states: on a 320×568 phone that
+    // is the difference between the whole prompt being on screen and its
+    // answer buttons sitting under the fold.
+    //
+    // 🔴 `!enabled` is LOAD-BEARING, not belt-and-braces. `canRecord` has a
+    // `phase == recording` escape hatch (`quick_ask_state.dart:225-226`), and
+    // `_onNotification` (`quick_ask_bloc.dart:962-973`) sets `pendingPrompt`
+    // with NO phase guard — so a `response_requested` that arrives mid-capture
+    // lands on a screen whose mic is the live "tap to stop" control. Shrinking
+    // that by a third under a recording user's thumb is a moving target for a
+    // gesture already in progress. It stays 128 until the capture ends.
+    final blocked   = ( state.pendingPrompt != null || state.interview != null ) && !enabled;
     final micSize   = blocked ?  84.0 : 128.0;
     final micIcon   = blocked ?  40.0 :  60.0;
     final stackTall = blocked ? 124.0 : 168.0;
@@ -113,9 +121,12 @@ class _RecordHeader extends StatelessWidget {
             // interview is live: the header is fixed, so every pixel it gains
             // comes out of the column below, and those surfaces must stay on
             // screen (a prompt plus its error overflowed 800×600 by 29px even
-            // at compact density). The mic is blocked in exactly those states
-            // (`unansweredPrompt`), so there is no recording for a mode to
-            // govern until they are answered.
+            // at compact density). Nothing NEW can be recorded until they are
+            // answered, so there is no send mode left to pick. The one gap is
+            // a capture already running when the prompt arrived, which keeps
+            // whatever mode it started under — this control is render-only
+            // (J-ABS-2) and the release path reads `QuickAskPreferences`, so
+            // hiding it cannot change that capture's outcome.
             if ( state.pendingPrompt == null && state.interview == null ) Padding(
               padding : const EdgeInsets.only( bottom: 4 ),
               child   : SegmentedButton<bool>(
