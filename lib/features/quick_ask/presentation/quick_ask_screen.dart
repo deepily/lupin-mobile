@@ -523,15 +523,25 @@ class _ScrollbackState extends State<_Scrollback> {
   /// a prepended item silently lands above whatever the user was reading.
   final ScrollController _scroll = ScrollController();
 
+  /// How many frames the re-anchor is allowed to keep trying for. Bounded so
+  /// it can never loop: see [_anchorTop].
+  static const int _anchorAttempts = 5;
+
   /// The interlock band as identity TAGS, in render order — the same order
   /// and the same conditions as the widgets built in [build]. Widgets cannot
   /// be compared across builds, so the decision to re-anchor is taken on
-  /// these instead. The interview carries its turn because turn 2 is a NEW
-  /// question on the same `pending_id`.
+  /// these instead.
+  ///
+  /// Every tag carries the IDENTITY of what it stands for, not merely that
+  /// the slot is occupied: the interview because turn 2 is a new question on
+  /// the same `pending_id`, and the error because error B replacing error A
+  /// in a band that is already live and off screen is new text the user has
+  /// not seen. `lost` is the one true boolean — there is only one way to be
+  /// lost, and the banner says the same sentence every time.
   static List<String> _leadingTags( QuickAskState s ) => <String>[
     if ( s.pendingPrompt != null ) 'prompt:${s.pendingPrompt!.id}',
     if ( s.interview != null )     'interview:${s.interview!.pendingId}:${s.interview!.turn}',
-    if ( s.errorMessage != null )  'error',
+    if ( s.errorMessage != null )  'error:${s.errorMessage.hashCode}',
     if ( s.lost )                  'lost',
   ];
 
@@ -562,14 +572,42 @@ class _ScrollbackState extends State<_Scrollback> {
   /// question has to be readable the frame it arrives, not 300ms later. The
   /// arriving surface is a full-width coloured band, so the jump is legible
   /// as "something appeared" without needing the travel to say so.
-  void _anchorTop() {
+  ///
+  /// 🔴 ONE JUMP IS NOT ENOUGH, and which shapes it fails on is decided by the
+  /// scrollback's content rather than by anything in this file. When items are
+  /// prepended to a scrolled list, `RenderSliverList` issues a
+  /// `scrollOffsetCorrection` during the NEXT layout — it has just measured the
+  /// new leading child and is compensating so the old content does not appear
+  /// to leap. That correction lands after this callback and undoes it. Measured
+  /// at 320x568, dragged up 600px, then a Door C prompt emitted:
+  ///
+  ///     long question, no answer   frames=[0, 0, 0, …]    settles at 0    ✔
+  ///     short question + answer    frames=[0, 96, 96, …]  settles at 96   ✘
+  ///     short question, no answer  frames=[0, 172, 172, …] settles at 172 ✘
+  ///
+  /// The correction is sized by child extent, so it is the same 96 for 6, 12
+  /// and 20 cards — short cards, not long lists, are what break it. At 96 the
+  /// band's top sits at y=170 with the viewport starting at 266, so `ListView`'s
+  /// default hard clip eats the question while leaving Yes and No visible and
+  /// tappable. On a door whose dismissal POSTS the default, that is a user
+  /// answering a question they cannot read — the same harm as the bug this
+  /// re-anchor exists to fix, one layer down.
+  ///
+  /// So the anchor is re-checked each frame until it holds, capped at
+  /// [_anchorAttempts] frames. It stops the moment the list is at the top, and
+  /// the cap means a shape that somehow never settles costs five frames and
+  /// then gives up rather than spinning forever.
+  void _anchorTop( { int attempt = 0 } ) {
     // After the frame: the new item has not been laid out yet when
     // `didUpdateWidget` runs, and a list that has never been scrolled has no
     // attached position to move.
     WidgetsBinding.instance.addPostFrameCallback( ( _ ) {
       if ( !mounted || !_scroll.hasClients ) return;
-      if ( _scroll.position.pixels == _scroll.position.minScrollExtent ) return;
-      _scroll.jumpTo( _scroll.position.minScrollExtent );
+      final position = _scroll.position;
+      if ( position.pixels == position.minScrollExtent ) return;
+      if ( attempt >= _anchorAttempts ) return;
+      position.jumpTo( position.minScrollExtent );
+      _anchorTop( attempt: attempt + 1 );
     } );
   }
 
