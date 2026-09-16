@@ -55,6 +55,7 @@ class TestKeys {
   static const abstractDocBadge     = 'docs.abstract.badge';
   static const abstractExpandToggle = 'docs.abstract.expand';
   static const docViewerScreen      = 'docs.viewer.screen';
+  static const docPanel             = 'docs.panel';
   static const docViewerMarkdown    = 'docs.viewer.markdown';
   static const docViewerSource      = 'docs.viewer.source';
   static const docViewerImage       = 'docs.viewer.image';

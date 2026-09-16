@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/testing/test_keys.dart';
 import '../data/doc_link.dart';
 import '../data/doc_repository.dart';
-import 'doc_viewer_screen.dart';
+import 'doc_panel.dart';
 
 /// Renders a notification's `abstract` inline in a card.
 ///
@@ -63,9 +63,10 @@ class _AbstractBodyState extends State<AbstractBody> {
     final link = classifyDocHref( href );
 
     if ( link.isFetchable ) {
-      await Navigator.of( context ).push( MaterialPageRoute(
-        builder: ( _ ) => DocViewerScreen( link: link, repository: widget.repository ),
-      ) );
+      // Half the screen, not all of it (row d7f56574): the right half on an
+      // unfolded Fold, the bottom half on a phone-shaped screen, so the
+      // message that linked the document stays in view.
+      await showDocPanel( context: context, link: link, repository: widget.repository );
       return;
     }
 

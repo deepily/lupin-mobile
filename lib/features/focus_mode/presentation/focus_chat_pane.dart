@@ -10,6 +10,8 @@ import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_filter/progress_group_collapse.dart';
 import '../../../services/tts/speech_intent.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
+import '../../docs/data/doc_repository.dart';
+import '../../docs/presentation/abstract_body.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
 import '../../notifications/presentation/message_stamp.dart';
 import '../../notifications/presentation/persona_badge.dart';
@@ -311,6 +313,17 @@ class _MessageBubble extends StatelessWidget {
         if ( msg.item.title != null && msg.item.title!.isNotEmpty )
           Text( msg.item.title!, style: theme.textTheme.labelLarge ),
         Text( msg.item.message ),
+        // Row d7f56574: the abstract, where senders put doc links, was never
+        // rendered on this surface, so the links could not be tapped. The
+        // card renders nothing for an empty abstract, and the repository is
+        // only looked up when there is one to show.
+        if ( msg.item.abstractText?.isNotEmpty ?? false ) ...[
+          const SizedBox( height: 6 ),
+          AbstractBody(
+            abstractText : msg.item.abstractText,
+            repository   : ServiceLocator.instance<DocRepository>(),
+          ),
+        ],
         // AC-S4.14 — a question the stop-list suppressed says so, names the
         // rule, and offers speak-anyway. It renders HERE, above the prompt
         // zone, so the normal answer controls below it stay intact: the user
