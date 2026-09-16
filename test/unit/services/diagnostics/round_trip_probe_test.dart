@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -427,5 +428,29 @@ void main() {
     expect( health.max, 30 );
     expect( groups[ 1 ].n, 0 );
     expect( groups[ 1 ].p50, isNull );
+  } );
+
+  // Row 7ef8f124: probe logs moved from the external app folder, which
+  // Android 11+ will not let adb or run-as read, to internal storage.
+  group( 'probe logs land where a debug build can hand them over', () {
+    test( 'openProbeFileSink writes <base>/round-trip-probe-<stamp>.jsonl under the injected base', () async {
+      final base = await Directory.systemTemp.createTemp( 'probe-base-' );
+      addTearDown( () => base.delete( recursive: true ) );
+      final now  = DateTime( 2026, 9, 16, 14, 5, 9 );
+
+      final sink = await openProbeFileSink( now, baseDir: () async => base );
+      await sink.writeLine( '{"kind":"health"}' );
+      await sink.close();
+
+      expect( sink.path, '${base.path}/${RoundTripProbe.fileNameFor( now )}' );
+      expect( File( sink.path ).readAsStringSync(), '{"kind":"health"}\n' );
+    } );
+
+    test( 'the documented pull command uses run-as against internal files/, never the external folder', () {
+      expect( probeLogPullHint, contains( 'run-as ai.deepily.lupin_mobile' ) );
+      expect( probeLogPullHint, contains( 'files/' ) );
+      expect( probeLogPullHint, isNot( contains( '/sdcard' ) ) );
+      expect( probeLogPullHint, isNot( contains( 'Android/data' ) ) );
+    } );
   } );
 }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -58,6 +59,14 @@ class AsrService {
 
   String? _activePath;
 
+  /// Wall-clock start of the active capture (row 4be8fe63).
+  ///
+  /// The decisive measurement for the lost-tail bug is NOT the file size on
+  /// its own — it is the file size AGAINST how long the microphone was open.
+  /// A capture held for 3.0s that yields 2.6s of audio has dropped 0.4s, and
+  /// no single number reveals that; the pair does.
+  DateTime? _captureStartedAt;
+
   /// AC-S2.2c — true iff a capture is in flight on THIS recorder.
   ///
   /// The state lives on the service, not on a caller, because the recorder and
@@ -87,21 +96,278 @@ class AsrService {
   static bool _never() => false;
   static Future<void> _copy( File source, String dest ) => source.copy( dest );
 
-  /// Where kept recordings go: `<external files dir>/recordings`, pullable
-  /// from `/sdcard/Android/data/<applicationId>/files/recordings/`; the app
-  /// documents directory when there is no external one.
+  // ── Capture diagnostics (row 4be8fe63) ────────────────────────────────────
+  //
+  // WHY THIS EXISTS. Two capture failures were diagnosed blind because nothing
+  // on the client said how much audio it had actually recorded. First a silent
+  // emulator mic produced a well-formed WAV of zeros, which Whisper answered
+  // with its silence hallucination "Thank you." Then, permission fixed, tails
+  // began disappearing: "what's 2+2" came back "What's two", and "Testing,
+  // testing, is this thing on?" lost its "on?". Both are INVISIBLE from the
+  // server, which sees a valid WAV and a plausible transcript either way, and
+  // deletes the upload in a finally block before anyone can measure it.
+  //
+  // WHAT IT MEASURES, and what each line rules in or out:
+  //  - size at stop vs how long the mic was open: a short file means the
+  //    recorder lost audio; a full-length file means it did not
+  //  - size again after a settle delay: growth would mean the encoder was
+  //    still writing when the upload began (never observed)
+  //  - an exact-zero run after live signal: the INPUT stopped delivering
+  //  - the transcript paired with the seconds that produced it
+  //
+  // WHAT IT FOUND (2026-09-16). The recorder was innocent every time. The
+  // truncation came from the input: an emulator mic that injected mostly
+  // noise, then drop-outs to exact zeros. On noisy audio the server's Whisper
+  // decoding also stopped at the first pause (lupin row 05ddc8f0). A wait
+  // before stop() was tried and withdrawn: it fixed nothing.
+
+  /// PCM frame rate implied by [recordConfig]: 44100 Hz × 1 channel × 16-bit.
+  static const int _bytesPerSecond = 44100 * 1 * 2;
+
+  /// Canonical WAV header size for the 16-bit PCM the recorder writes.
+  static const int _wavHeaderBytes = 44;
+
+  /// How long to wait before the second size read. Long enough for a lagging
+  /// encoder flush to land, short enough to sit inside the upload latency we
+  /// already pay.
+  static const Duration _settleProbeDelay = Duration( milliseconds: 250 );
+
+  /// Shortfall between microphone-open time and recorded audio that counts as
+  /// a dropped tail rather than ordinary start-up and teardown overhead.
+  /// Below this, the gap is the cost of opening and closing the device; above
+  /// it, words are going missing.
+  static const double _droppedTailThresholdSeconds = 0.2;
+
+  /// A sample louder than this counts as live input. Real microphone noise
+  /// never sits at exactly zero, so the bar only has to clear rounding.
+  static const int _liveSampleFloor = 64;
+
+  /// Exact-zero run that counts as a dropout when it reaches the END of the
+  /// capture. Short, because a dead input rarely comes back before the stop.
+  static const double _dropoutTailSeconds = 0.10;
+
+  /// Exact-zero run that counts as a dropout MID-capture. Longer, so a codec
+  /// or device glitch of a frame or two is not reported.
+  static const double _dropoutMidSeconds = 0.25;
+
+  /// The 16-bit little-endian PCM samples of a WAV file, header excluded.
+  ///
+  /// Walks the RIFF chunks to find `data`, rather than assuming a 44-byte
+  /// header, because some encoders insert extra chunks before it.
+  ///
+  /// Requires:
+  ///   - bytes is a RIFF/WAVE file holding 16-bit PCM
   ///
   /// Ensures:
-  ///   - returns the directory path; does NOT create it
-  static Future<Directory> keptRecordingsDirectory() async {
-    Directory? base;
-    try {
-      base = await getExternalStorageDirectory();
-    } catch ( _ ) {
-      // Not supported on this platform (e.g. iOS) — fall through.
-      base = null;
+  ///   - returns the samples of the `data` chunk, clamped to the bytes present
+  ///   - returns an empty list when there is no `data` chunk
+  @visibleForTesting
+  static Int16List pcmFromWav( Uint8List bytes ) {
+    final view = ByteData.sublistView( bytes );
+    var offset = 12;
+    while ( offset + 8 <= bytes.length ) {
+      final id   = String.fromCharCodes( bytes.sublist( offset, offset + 4 ) );
+      final size = view.getUint32( offset + 4, Endian.little );
+      final body = offset + 8;
+      if ( id == 'data' ) {
+        final end   = ( body + size ).clamp( body, bytes.length );
+        final count = ( end - body ) ~/ 2;
+        final out   = Int16List( count );
+        for ( var i = 0; i < count; i++ ) {
+          out[ i ] = view.getInt16( body + i * 2, Endian.little );
+        }
+        return out;
+      }
+      offset = body + size + ( size.isOdd ? 1 : 0 );
     }
-    base ??= await getApplicationDocumentsDirectory();
+    return Int16List( 0 );
+  }
+
+  /// Where the audio input stopped delivering, if it did (row 7ef8f124).
+  ///
+  /// The signature, measured 2026-09-16 on two emulator captures: live signal
+  /// that jumps mid-waveform to EXACT zeros (-7337 → 0, 1273 → 0) and stays
+  /// there, while the recorder keeps writing. A voice fading out never lands
+  /// on exact zeros for tens of milliseconds, and neither does a quiet room.
+  ///
+  /// Requires:
+  ///   - sampleRate is positive
+  ///
+  /// Ensures:
+  ///   - returns null when no sample is live; a silent mic is a different
+  ///     fault, already reported as header-only or empty
+  ///   - otherwise returns the FIRST run of exact zeros after live signal that
+  ///     is at least [_dropoutMidSeconds] long, or that reaches the end and is
+  ///     at least [_dropoutTailSeconds] long
+  ///   - returns null when no run qualifies
+  @visibleForTesting
+  static ( { double startSeconds, double lengthSeconds } )? findDropout( Int16List pcm, int sampleRate ) {
+    var live = -1;
+    for ( var i = 0; i < pcm.length; i++ ) {
+      if ( pcm[ i ].abs() > _liveSampleFloor ) { live = i; break; }
+    }
+    if ( live < 0 ) return null;
+
+    var runStart = -1;
+    for ( var i = live; i <= pcm.length; i++ ) {
+      final atEnd = i == pcm.length;
+      if ( !atEnd && pcm[ i ] == 0 ) {
+        if ( runStart < 0 ) runStart = i;
+        continue;
+      }
+      if ( runStart >= 0 ) {
+        final length = ( i - runStart ) / sampleRate;
+        final bar    = atEnd ? _dropoutTailSeconds : _dropoutMidSeconds;
+        if ( length >= bar ) {
+          return ( startSeconds: runStart / sampleRate, lengthSeconds: length );
+        }
+        runStart = -1;
+      }
+    }
+    return null;
+  }
+
+  /// Seconds of 16-bit mono PCM that [bytes] represents, header excluded.
+  ///
+  /// Requires:
+  ///   - bytes is non-negative
+  ///
+  /// Ensures:
+  ///   - returns 0.0 for a file at or below the header size, never a negative
+  ///   - returns bytes beyond the header divided by the PCM frame rate
+  @visibleForTesting
+  static double wavSeconds( int bytes ) {
+    final payload = bytes - _wavHeaderBytes;
+    if ( payload <= 0 ) return 0.0;
+    return payload / _bytesPerSecond;
+  }
+
+  /// Log the size of a just-stopped recording, then log it AGAIN after
+  /// [_settleProbeDelay] so a late encoder flush shows up as growth.
+  ///
+  /// Fire-and-forget by design: the caller does not await the settle read, so
+  /// this never delays an upload. Every failure is swallowed — a diagnostic
+  /// that can break the capture path is worse than no diagnostic.
+  ///
+  /// Requires:
+  ///   - path names a file the recorder just finished writing
+  ///
+  /// Ensures:
+  ///   - logs one line at stop and one line after the settle delay
+  ///   - the second line names the delta in bytes and flags GREW when positive
+  ///   - never throws, whatever the file system does
+  void _logCaptureSize( String path, Duration? heldFor ) {
+    int first;
+    try {
+      first = File( path ).lengthSync();
+    } catch ( e ) {
+      debugPrint( 'AsrService: capture size unreadable at stop for $path: $e' );
+      return;
+    }
+    final recorded = wavSeconds( first );
+    debugPrint(
+      'AsrService: capture stopped — ${first}B '
+      '(~${recorded.toStringAsFixed( 2 )}s) $path',
+    );
+
+    // Row 4be8fe63: file size alone cannot show audio that never reached the
+    // file. Comparing it with how long the microphone was open can. On
+    // 2026-09-16 this line cleared the recorder: held 5.61s, recorded 5.56s,
+    // yet the transcript was one word, so the missing speech was never in the
+    // audio the device delivered.
+    if ( heldFor != null ) {
+      final held    = heldFor.inMilliseconds / 1000.0;
+      final missing = held - recorded;
+      debugPrint(
+        'AsrService: held ${held.toStringAsFixed( 2 )}s, recorded '
+        '${recorded.toStringAsFixed( 2 )}s',
+      );
+      if ( missing > _droppedTailThresholdSeconds ) {
+        debugPrint(
+          'AsrService: ⚠️ SHORT CAPTURE — the file holds '
+          '${missing.toStringAsFixed( 2 )}s less audio than the microphone was open.',
+        );
+      }
+    }
+    if ( first <= _wavHeaderBytes ) {
+      debugPrint(
+        'AsrService: ⚠️ capture is header-only or empty — no audio was written. '
+        'Check microphone permission and, on an emulator, that host audio input is enabled.',
+      );
+    }
+    // Row 7ef8f124: scan for an input dropout on the next event-loop turn, so
+    // the upload is never held up. The file is deleted once the upload
+    // finishes, so a miss here is expected and silent.
+    Future( () {
+      try {
+        final pcm     = pcmFromWav( File( path ).readAsBytesSync() );
+        final dropout = findDropout( pcm, recordConfig.sampleRate );
+        if ( dropout != null ) {
+          debugPrint(
+            'AsrService: ⚠️ INPUT DROPOUT — audio went silent (exact zeros) at '
+            '${dropout.startSeconds.toStringAsFixed( 2 )}s for '
+            '${dropout.lengthSeconds.toStringAsFixed( 2 )}s; the microphone '
+            'stopped delivering, not the app.',
+          );
+        }
+      } catch ( _ ) {}
+    } );
+    Future.delayed( _settleProbeDelay, () {
+      try {
+        final second = File( path ).lengthSync();
+        final delta  = second - first;
+        if ( delta > 0 ) {
+          debugPrint(
+            'AsrService: ⚠️ FLUSH RACE — file GREW by ${delta}B '
+            '(~${wavSeconds( delta ).toStringAsFixed( 2 )}s) in the '
+            '${_settleProbeDelay.inMilliseconds}ms after stop() returned. '
+            'Audio uploaded before this point was TRUNCATED.',
+          );
+        } else {
+          debugPrint(
+            'AsrService: capture settled — still ${second}B after '
+            '${_settleProbeDelay.inMilliseconds}ms, no late flush.',
+          );
+        }
+      } catch ( _ ) {
+        // The file is normally deleted right after upload; a miss here is
+        // expected and says nothing.
+      }
+    } );
+  }
+
+  /// The shell command that copies one kept recording off a debug build.
+  static const String keptRecordingPullHint =
+      'adb exec-out run-as ai.deepily.lupin_mobile cat files/recordings/<name>.wav > <name>.wav';
+
+  /// Where kept recordings go: `<app support dir>/recordings`, which on
+  /// Android is `/data/user/0/<applicationId>/files/recordings/`.
+  ///
+  /// Why INTERNAL storage and not the external app folder (row 4be8fe63).
+  /// This used to be `getExternalStorageDirectory()` —
+  /// `/sdcard/Android/data/<applicationId>/files/recordings/` — on the belief
+  /// that it was "pullable". Since Android 11 it is not: scoped storage denies
+  /// `adb pull` there, and `adb exec-out run-as … cat` is refused too, because
+  /// run-as does not get the app's view of external storage. Measured
+  /// 2026-09-16 on the emulator: both returned "Permission denied", and the
+  /// "recording" that arrived on the desktop was 128 bytes of error text. A
+  /// real, unrooted handset is stricter still, so the feature could not do the
+  /// job it was built for.
+  ///
+  /// Internal storage IS readable by `run-as` on any debuggable build,
+  /// emulator or phone, and run-as starts in the app's data directory, so the
+  /// relative path in [keptRecordingPullHint] works as written.
+  ///
+  /// Requires:
+  ///   - baseDir, when given, resolves to an existing directory
+  ///
+  /// Ensures:
+  ///   - returns `<baseDir>/recordings`; does NOT create it
+  ///   - baseDir defaults to the app support directory (internal storage)
+  static Future<Directory> keptRecordingsDirectory( {
+    Future<Directory> Function() baseDir = getApplicationSupportDirectory,
+  } ) async {
+    final base = await baseDir();
     return Directory( '${base.path}/recordings' );
   }
 
@@ -161,13 +427,21 @@ class AsrService {
     final path = '${dir.path}/asr-reply-${DateTime.now().microsecondsSinceEpoch}.wav';
     try {
       await _recorder.start( recordConfig, path: path );
+      // Row 4be8fe63: name the config in the log, so a transcript that reads
+      // wrong can be checked against the format that produced it without
+      // anyone having to guess at the defaults.
+      debugPrint(
+        'AsrService: capture started — ${recordConfig.encoder.name} '
+        '${recordConfig.sampleRate}Hz ${recordConfig.numChannels}ch $path',
+      );
     } catch ( e ) {
       // F-S4-IMPL-1 (optional half): a start()-throw can leave a zero-byte
       // orphan at the target path on some platforms — best-effort cleanup.
       _deleteQuietly( File( path ) );
       throw AsrException( 'Recorder failed to start: $e' );
     }
-    _activePath = path;
+    _activePath       = path;
+    _captureStartedAt = _clock();
   }
 
   /// Recordings handed out by [stopToFile] and not yet discarded.
@@ -195,7 +469,8 @@ class AsrService {
       // F-S4-IMPL-1: recorder failure surfaces as the §4.1-promised typed
       // exception, never a raw platform error. Clean up the active capture.
       final orphan = _activePath;
-      _activePath = null;
+      _activePath       = null;
+      _captureStartedAt = null;
       if ( orphan != null ) _deleteQuietly( File( orphan ) );
       throw AsrException( 'Recorder failed to stop: $e' );
     }
@@ -205,6 +480,12 @@ class AsrService {
       throw const AsrException( 'Recorder produced no file' );
     }
     _pendingUploadPaths.add( filePath );
+    final startedAt = _captureStartedAt;
+    _captureStartedAt = null;
+    _logCaptureSize(
+      filePath,
+      startedAt == null ? null : _clock().difference( startedAt ),
+    );
     return filePath;
   }
 
@@ -256,6 +537,14 @@ class AsrService {
       if ( !file.existsSync() ) {
         throw const AsrException( 'Recording file missing before upload' );
       }
+      // Row 4be8fe63: the size AS UPLOADED. This is the number that matters —
+      // the stop-time reading above is what the recorder had written, this is
+      // what Whisper actually received. A gap between them is the truncation.
+      final uploadBytes = file.lengthSync();
+      debugPrint(
+        'AsrService: uploading ${uploadBytes}B '
+        '(~${wavSeconds( uploadBytes ).toStringAsFixed( 2 )}s) to $endpointPath',
+      );
       final form = FormData.fromMap( {
         'file': await MultipartFile.fromFile( filePath, filename: 'voice-reply.wav' ),
       } );
@@ -274,6 +563,14 @@ class AsrService {
         throw AsrException( 'Unexpected transcription response shape: ${data.runtimeType}' );
       }
       final transcript = data.trim();
+      // Row 4be8fe63: pairing the transcript with the seconds that produced it
+      // is what makes truncation legible. "What's two" off 2.9s of audio is a
+      // transcription problem; off 0.8s it is a capture problem, and the log
+      // line says which without anyone pulling the file.
+      debugPrint(
+        'AsrService: transcript (${transcript.length} chars) from '
+        '~${wavSeconds( uploadBytes ).toStringAsFixed( 2 )}s: [$transcript]',
+      );
       if ( transcript.isEmpty ) {
         throw const AsrException( 'Transcription came back empty' );
       }
@@ -292,7 +589,8 @@ class AsrService {
   /// removed (the recorder's own cancel() deletes it too — this is the belt).
   Future<void> cancelRecording() async {
     final path = _activePath;
-    _activePath = null;
+    _activePath       = null;
+    _captureStartedAt = null;
     await _recorder.cancel();
     if ( path != null ) _deleteQuietly( File( path ) );
   }

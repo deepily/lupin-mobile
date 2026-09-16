@@ -45,25 +45,33 @@ class FileProbeSink implements ProbeSink {
   }
 }
 
+/// The shell command that copies one probe log off a debug build.
+const String probeLogPullHint =
+    'adb exec-out run-as ai.deepily.lupin_mobile cat files/<name>.jsonl > <name>.jsonl';
+
 /// Open the probe's JSONL file for a run starting at [now].
 ///
+/// Why INTERNAL storage (row 7ef8f124). This used to write to
+/// `getExternalStorageDirectory()`, i.e. `/sdcard/Android/data/<package>/files/`,
+/// on the belief that it was pullable. Since Android 11 it is not: `adb pull`
+/// and `adb exec-out run-as … cat` are both refused there. Measured
+/// 2026-09-16 for kept recordings (row 4be8fe63), which lived in the same
+/// place. The app support directory (`/data/user/0/<package>/files/` on
+/// Android) is readable by `run-as` on any debuggable build, and run-as starts
+/// in the app data directory, so [probeLogPullHint] works as written.
+///
 /// Requires:
-///   - running on a device where path_provider is available
+///   - baseDir, when given, resolves to an existing directory
 ///
 /// Ensures:
-///   - the file lives in the app's external files directory when there is one
-///     (pullable from /sdcard/Android/data/<package>/files/), else in the
-///     app documents directory
+///   - the file lives directly in baseDir, which defaults to the app support
+///     directory (internal storage)
 ///   - the file is named round-trip-probe-<yyyyMMdd-HHmmss>.jsonl
-Future<FileProbeSink> openProbeFileSink( DateTime now ) async {
-  Directory? dir;
-  try {
-    dir = await getExternalStorageDirectory();
-  } catch ( _ ) {
-    // Not supported on this platform (e.g. iOS) — fall through.
-    dir = null;
-  }
-  dir ??= await getApplicationDocumentsDirectory();
+Future<FileProbeSink> openProbeFileSink(
+  DateTime now, {
+  Future<Directory> Function() baseDir = getApplicationSupportDirectory,
+} ) async {
+  final dir = await baseDir();
   return FileProbeSink( File( '${dir.path}/${RoundTripProbe.fileNameFor( now )}' ) );
 }
 

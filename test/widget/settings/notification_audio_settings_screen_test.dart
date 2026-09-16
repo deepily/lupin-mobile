@@ -68,7 +68,7 @@ void main() {
       await tester.pumpWidget( MaterialApp(
         home: NotificationAudioSettingsScreen(
           prefs             : prefs,
-          keptRecordingsDir : () async => Directory( '/sdcard/Android/data/ai.deepily.lupin_mobile/files/recordings' ),
+          keptRecordingsDir : () async => Directory( '/data/user/0/ai.deepily.lupin_mobile/files/recordings' ),
         ),
       ) );
       await tester.pump();
@@ -78,7 +78,7 @@ void main() {
 
       expect( key, findsOneWidget );
       expect( find.text( 'Keep voice recordings' ), findsOneWidget );
-      expect( find.textContaining( 'Folder: /sdcard/Android/data/ai.deepily.lupin_mobile/files/recordings' ), findsOneWidget );
+      expect( find.textContaining( 'Folder: /data/user/0/ai.deepily.lupin_mobile/files/recordings' ), findsOneWidget );
       expect( tester.widget<SwitchListTile>( key ).value, isFalse );
       expect( prefs.keepVoiceRecordings, isFalse );
 

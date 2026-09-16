@@ -264,4 +264,29 @@ void main() {
     // Same instant, expressed in the machine's local zone: the name must not move.
     expect( AsrService.keptFileNameFor( instant.toLocal(), 7 ), 'rec-20260102-030405006Z-7.wav' );
   } );
+
+  // Row 4be8fe63: kept recordings moved from the external app folder, which
+  // Android 11+ will not let adb or run-as read, to internal storage.
+  group( 'kept recordings live where a debug build can hand them over', () {
+    test( 'the folder is <base>/recordings under the injected base', () async {
+      final base = await Directory.systemTemp.createTemp( 'asr-kept-base-' );
+      addTearDown( () => base.delete( recursive: true ) );
+
+      final dir = await AsrService.keptRecordingsDirectory( baseDir: () async => base );
+
+      expect( dir.path, '${base.path}/recordings' );
+      expect( dir.existsSync(), isFalse, reason: 'resolving the folder must not create it' );
+    } );
+
+    test( 'the documented pull command targets internal storage via run-as', () {
+      // The default base (getApplicationSupportDirectory) needs the platform
+      // channel, so the device pull is its real test. This pins the command
+      // people will copy, so it cannot drift back to the unreadable folder.
+      expect( AsrService.keptRecordingPullHint, contains( 'run-as ai.deepily.lupin_mobile' ) );
+      expect( AsrService.keptRecordingPullHint, contains( 'files/recordings/' ),
+          reason: 'run-as starts in the app data dir; getApplicationSupportDirectory is <data>/files' );
+      expect( AsrService.keptRecordingPullHint, isNot( contains( '/sdcard' ) ) );
+      expect( AsrService.keptRecordingPullHint, isNot( contains( 'Android/data' ) ) );
+    } );
+  } );
 }
