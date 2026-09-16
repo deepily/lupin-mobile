@@ -8,13 +8,19 @@ import '../domain/auth_state.dart';
 /// from `AuthBloc` state transitions. Kept as a pure widget so callbacks can
 /// be injected by tests and the production wiring in `app.dart`.
 ///
+/// `onAuthenticated` receives BOTH identities because they are not
+/// interchangeable: `userId` is the account UUID from `/me`, while every
+/// email-keyed server route (senders-visible, FCM register-token) 404s or
+/// mis-keys on it. Passing only the UUID is how the reconnect cold start
+/// came to ask for a UUID's senders.
+///
 /// `listenWhen` filters on runtime-type change so successive
 /// `AuthAuthenticated` emissions (e.g. token refresh) do not trigger a
 /// redundant connect.
 class WsLifecycleListener extends StatelessWidget {
   final Widget child;
-  final Future<void> Function( String userId ) onAuthenticated;
-  final Future<void> Function()                onSignedOut;
+  final Future<void> Function( String userId, String email ) onAuthenticated;
+  final Future<void> Function()                              onSignedOut;
 
   const WsLifecycleListener( {
     super.key,
@@ -29,7 +35,7 @@ class WsLifecycleListener extends StatelessWidget {
       listenWhen: ( prev, curr ) => prev.runtimeType != curr.runtimeType,
       listener : ( _, state ) async {
         if ( state is AuthAuthenticated ) {
-          await onAuthenticated( state.userId );
+          await onAuthenticated( state.userId, state.email );
         } else if ( state is AuthUnauthenticated || state is AuthError ) {
           await onSignedOut();
         }

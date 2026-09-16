@@ -39,7 +39,7 @@ void main() {
       );
     }
 
-    testWidgets( "AuthLoading → AuthAuthenticated calls onAuthenticated(userId)", ( tester ) async {
+    testWidgets( "AuthLoading → AuthAuthenticated calls onAuthenticated(userId, email)", ( tester ) async {
       whenListen(
         auth,
         Stream<AuthState>.fromIterable( [
@@ -56,7 +56,10 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pumpAndSettle();
 
+      // Both identities, in order — the email is what email-keyed routes
+      // need (row 588c8dc9); a hook given only the id reintroduces the 404s.
       expect( hooks.authenticatedCalls, [ "u-1" ] );
+      expect( hooks.authenticatedEmails, [ "a@b.com" ] );
       expect( hooks.signOutCalls,       0 );
     });
 
@@ -143,11 +146,13 @@ void main() {
 }
 
 class _FakeHooks {
-  final List<String> authenticatedCalls = [];
+  final List<String> authenticatedCalls  = [];
+  final List<String> authenticatedEmails = [];
   int signOutCalls = 0;
 
-  Future<void> onAuthenticated( String userId ) async {
+  Future<void> onAuthenticated( String userId, String email ) async {
     authenticatedCalls.add( userId );
+    authenticatedEmails.add( email );
   }
 
   Future<void> onSignedOut() async {

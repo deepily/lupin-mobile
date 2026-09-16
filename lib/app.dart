@@ -29,18 +29,47 @@ import 'services/push/fcm_bootstrap.dart';
 import 'services/tts/streaming_tts_player.dart';
 import 'services/websocket/websocket_service.dart';
 
+/// Login hook behind `WsLifecycleListener.onAuthenticated`, extracted so
+/// the identity routing is testable: the UUID goes to the WebSocket (which
+/// authenticates by bearer token and uses the id only as a connect gate),
+/// the EMAIL goes to every email-keyed consumer.
+///
+/// Requires:
+///   - userId is the account UUID and email the account email, both non-empty
+///
+/// Ensures:
+///   - dispatcher.lastAuthenticatedEmail == email
+///   - ws.connect( userId: userId ) is called iff ws is not connected
+///   - registerPush receives email, never userId
+Future<void> onWsAuthenticated( {
+  required WsBlocDispatcher dispatcher,
+  required WebSocketService ws,
+  required String           userId,
+  required String           email,
+  Future<void> Function( String userEmail ) registerPush = fcmOnAuthenticated,
+} ) async {
+  dispatcher.lastAuthenticatedEmail = email;
+  if ( !ws.isConnected ) await ws.connect( userId: userId );
+  // S5 token-lifecycle writer 1 (login hook — the auth-state AUTHENTICATED
+  // transition, Arnold residual #1). No-op unless built with
+  // --dart-define=ENABLE_FCM=true. POST /api/fcm/register-token's body
+  // field is `user_email`.
+  await registerPush( email );
+}
+
 /// WS frame → bloc dispatch bridge. Extracted from the private app State so
 /// the cross-bloc dispatch contracts (AC-S2.8 single-TTS-dispatch pin,
 /// AC-S2.10 reconnect re-hydration) are testable against the REAL wiring
 /// rather than a copy. Resolves blocs lazily via ServiceLocator at dispatch
 /// time, matching the prior inline behavior.
 class WsBlocDispatcher {
-  /// Set by `WsLifecycleListener.onAuthenticated`; stamps
-  /// `FocusColdStartRequested` on `auth_success` frames. Every successful
-  /// (re)connection completes WS auth, so the auth_success frame doubles as
-  /// the reconnect re-hydration trigger (S2 §3.3; the seam Stage 2's FCM
-  /// wake path terminates into, F-S5-1c).
-  String? lastAuthenticatedUserId;
+  /// Set by `onWsAuthenticated`; stamps `FocusColdStartRequested` on
+  /// `auth_success` frames. Every successful (re)connection completes WS
+  /// auth, so the auth_success frame doubles as the reconnect re-hydration
+  /// trigger (S2 §3.3; the seam Stage 2's FCM wake path terminates into,
+  /// F-S5-1c). It holds the EMAIL — it was once fed the account UUID, and
+  /// senders-visible 404'd on every reconnect (row 588c8dc9).
+  String? lastAuthenticatedEmail;
 
   void dispatch( String type, Map<String, dynamic> data ) {
     switch ( type ) {
@@ -118,7 +147,7 @@ class WsBlocDispatcher {
       case AppConstants.eventAuthSuccess:
         // WS (re)connect re-hydration: cold start on first connect,
         // merge-refresh on reconnect — the bloc is mode-dependent.
-        final email = lastAuthenticatedUserId;
+        final email = lastAuthenticatedEmail;
         if ( email != null ) {
           ServiceLocator.get<FocusChatBloc>().add(
             FocusColdStartRequested( userEmail: email ),
@@ -246,15 +275,12 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         ),
       ],
       child: WsLifecycleListener(
-        onAuthenticated: ( userId ) async {
-          _dispatcher.lastAuthenticatedUserId = userId;
-          final ws = ServiceLocator.get<WebSocketService>();
-          if ( !ws.isConnected ) await ws.connect( userId: userId );
-          // S5 token-lifecycle writer 1 (login hook — the auth-state
-          // AUTHENTICATED transition, Arnold residual #1). No-op unless
-          // built with --dart-define=ENABLE_FCM=true.
-          await fcmOnAuthenticated( userId );
-        },
+        onAuthenticated: ( userId, email ) => onWsAuthenticated(
+          dispatcher : _dispatcher,
+          ws         : ServiceLocator.get<WebSocketService>(),
+          userId     : userId,
+          email      : email,
+        ),
         onSignedOut: () async {
           final ws = ServiceLocator.get<WebSocketService>();
           if ( ws.isConnected ) await ws.disconnect();

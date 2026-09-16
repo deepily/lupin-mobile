@@ -25,10 +25,12 @@ import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_event.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_state.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 
 class _MockRepo  extends Mock implements NotificationRepository {}
 class _MockAudio extends Mock implements NotificationAudioService {}
 class _MockTts   extends Mock implements TtsOrchestrator {}
+class _MockWs    extends Mock implements WebSocketService {}
 
 /// The dispatcher reaches for `QuickAskBloc` on the belt channel (S1 §3).
 /// Registered as a MOCK, deliberately: this file pins the DISPATCH wiring,
@@ -242,7 +244,7 @@ void main() {
       when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )
           .thenAnswer( ( _ ) async => [] );
 
-      dispatcher.lastAuthenticatedUserId = 'rick@test.com';
+      dispatcher.lastAuthenticatedEmail = 'rick@test.com';
       dispatcher.dispatch( 'auth_success', { 'type': 'auth_success' } );
       await pump();
 
@@ -304,6 +306,61 @@ void main() {
       expect( focusBloc.state.exitedSenders, { 'sender-1' } );
       expect( focusBloc.state.visibleOrder, isEmpty );
       expect( focusBloc.state.senderOrder, [ 'sender-1' ], reason: 'retained — visibility only' );
+    } );
+  } );
+
+  // ── Row 588c8dc9 — the login hook routes each identity to the consumer
+  // that expects it. It once handed the account UUID to every consumer, so
+  // the reconnect cold start asked senders-visible for a UUID (10 × 404 in
+  // the dev log) and FCM registered the token under `user_email: <UUID>`.
+  // The UUID and the email are deliberately DIFFERENT strings here: with
+  // equal fixtures a swap would pass.
+  group( 'onWsAuthenticated (login hook identity routing)', () {
+    const uuid  = '7217ccef-72fb-4bc1-bf46-8b0ab5d82594';
+    const email = 'rick@test.com';
+
+    late _MockWs          ws;
+    late WsBlocDispatcher dispatcher;
+    late List<String>     pushed;
+
+    setUp( () {
+      ws         = _MockWs();
+      dispatcher = WsBlocDispatcher();
+      pushed     = [];
+      when( () => ws.connect( userId: any( named: 'userId' ) ) ).thenAnswer( ( _ ) async {} );
+    } );
+
+    Future<void> login( { bool connected = false } ) async {
+      when( () => ws.isConnected ).thenReturn( connected );
+      await onWsAuthenticated(
+        dispatcher   : dispatcher,
+        ws           : ws,
+        userId       : uuid,
+        email        : email,
+        registerPush : ( e ) async => pushed.add( e ),
+      );
+    }
+
+    test( 'cold-start dispatcher is stamped with the EMAIL, not the UUID', () async {
+      await login();
+      expect( dispatcher.lastAuthenticatedEmail, email );
+    } );
+
+    test( 'push registration receives the EMAIL, not the UUID', () async {
+      await login();
+      expect( pushed, [ email ] );
+    } );
+
+    test( 'the WebSocket still connects with the UUID (it authenticates by bearer token)', () async {
+      await login();
+      verify( () => ws.connect( userId: uuid ) ).called( 1 );
+    } );
+
+    test( 'an already-connected socket is not reconnected, but the email is still stamped and pushed', () async {
+      await login( connected: true );
+      verifyNever( () => ws.connect( userId: any( named: 'userId' ) ) );
+      expect( dispatcher.lastAuthenticatedEmail, email );
+      expect( pushed, [ email ] );
     } );
   } );
 }
