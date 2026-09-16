@@ -30,6 +30,20 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 ---
 
+## 2026.09.15 evening | Session `71d94067` (Tiffany 💍) — Two merges, four reviews, and one defect shape that kept reappearing
+
+**RESUME HERE**: both device rows are queued and wait only on Rick recording about ten voice memos — no device session, no emulator and no working laptop build are needed. Krishna's row `0b3f063a` is queued and approved with two open nits.
+
+1. **Release picker merged** `dcc7263`. A context clear left a builder alive that I did not know about, so two independent implementations arrived for one bug; a reviewer ruled between them and found a third way to hide the picker — `bool.fromEnvironment("dart.vm.product")` — that escaped every assertion on both branches. The tests now strip comments before grepping, so the docstring can finally name the constant it warns against.
+2. **Quick Ask overflow merged** `82c97cc`, nine commits, after **three review rounds that each found a real defect**: a question arriving post-scroll was never rendered; the re-anchor fixing that landed short on short cards; and the tests could not see either because all four used one content shape. Filed figures were wrong — prompt-plus-error is 114px, not 82, and an ordinary 360×640 phone clipped by 2px, voiding the P3 reasoning.
+3. **JDK 21 proven, not just recommended**: a worker built a real debug APK end to end. Rick's own `flutter doctor -v` then killed his own JBR proposal and my stale research row — **Android Studio 2026.1 bundles JBR 25.0.3**, the very Java breaking his build. Corrected in `ac880d2`. Flutter 3.35.1 was investigated and changes nothing: its Gradle cap is identical.
+4. **Peer reviews delivered**: Mr. Radio's janitor fix approved with nits (the summary card still made the false claim his commit was named after); Krishna's visual-normalizer fix blocked, reworked, then approved across 31 mutants.
+5. **The through-line, worth more than any single fix**: five separate findings tonight were all **a check whose success condition is weaker than the claim it supports** — a dead selector, a stub that never ran its JS, a shared id resolving on the wrong page, a control that re-implemented its checker, and a measurement that was incomplete rather than mistaken.
+
+**Files**: `src/rnd/2026.09.15-android-toolchain-briefing-for-outside-review.md` (new) · `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md` · `README.md` · merges `dcc7263`, `82c97cc` · commits `6a07f64`, `ac880d2` · nothing pushed
+
+---
+
 ## 2026.09.14 | Session `b3e285b8` (Tiffany 💍) — Spoken-ask door built and merged: §B `83f19a7`, §C `16d73f8`
 
 **RESUME HERE**: the phone half of the spoken-ask door is merged on wip. At 09:00 on 09-15 Rick gives a device session for `c51e92da` (round-trip probe) and `9b1f7701` (Opus/AAC check). See TODO.md § Owed.

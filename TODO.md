@@ -60,9 +60,20 @@ Plan went **rev 8 → rev 12**; six pins in git (`b505bfb` `32b2055` `3a97776` `
 - **Branch triage gate `970940df` ruled**: Rachel's gitignore change lands (`fb9c099f`); Sam's legacy-JS guard, Rio's `local_state` fixture and the Tiberius doctrine branch are all dropped, branches kept.
 - **Opus accuracy runs through the :8000 submit door**, not ad hoc.
 
+### Decisions Log — 2026-09-15 evening (session `71d94067`, post-clear)
+- **Release picker reversed and shipped** (`dcc7263`). Rick: *show the picker on the sign-in screen in release builds too.* The flag was deleted rather than relabelled — reviewer's reasoning: "hiding cannot be asked for at all" beats "hiding must be asked for by name", and no production code ever set it.
+- **Mic shrink kept** (~21:55, `answered=true`): it drops 128→84 only while a question waits and only when nothing is recording. Two wrong gates were refused with measurements — the original would have shrunk the live stop control mid-capture, and my own suggested alternative would have shrunk it whenever a draft was held.
+- **Voice memos: yes** — Rick records about ten on any device he owns. This replaces the device session entirely; the integration test takes a directory of WAVs and does the 32 kbps encode itself.
+- **Both device rows un-parked** by Rick himself; their park reason had expired twelve hours earlier.
+- **Java: a separate Temurin 21, not Android Studio's JBR.** His own `flutter doctor -v` settled it — Studio 2026.1 bundles JBR **25.0.3**, so his proposal pointed at the very Java breaking the build, and our research note's "JBR 21" row was stale. Flutter 3.35.1 investigated: Gradle cap identical, no path opens.
+- **Fleet ticket gate refused a new row** at ratio 1.32, so the rebaseline work lives as an amendment on `0b3f063a` rather than its own row.
+
 ### ⏳ Owed — 2026-09-16
-- [ ] **`2070a906` release picker** — flip on branch `tiffany/release-picker` off `a349f0a`; invert the `ca07b57` release-gate tests to pin the new behaviour, mutant-check, rewrite the docstring, review, merge. The row itself is still in the holding area: admitting it needs Rick, and while the sword-of-Damocles rule is on it also costs one of my live tickets. Card with him.
-- [ ] **JDK ruling** — recommendation is JDK 21 plus `flutter config --jdk-dir`, no repo change. Evidence in `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md`. Rick has not answered.
+- [x] ~~**release picker**~~ — merged `dcc7263` (row `1b11f18d`; `2070a906` dropped as superseded).
+- [x] ~~**JDK ruling**~~ — settled by Rick's own `flutter doctor -v`. Install a separate Temurin 21 and `flutter config --jdk-dir`; his Android Studio bundles 25.0.3, so pointing at its JBR points at the problem. Proven end to end on the desktop.
+- [ ] **Rick's laptop, three things in order**: install Temurin 21 → `flutter config --jdk-dir` → `flutter doctor --android-licenses` (the licence tool runs on the *selected* JDK, so it must come second). Expect ~2.7 GB of SDK download and a wall of NDK/compileSdk warnings from 18 plugins that look like failure and are not. His terminal also runs under Rosetta — costs speed, changes no compatibility.
+- [ ] **Outside expert review** — briefing at `src/rnd/2026.09.15-android-toolchain-briefing-for-outside-review.md`, written for someone arriving cold. Three questions: is there a reason to distrust the JDK 21 fix we cannot see from inside; is the vendored-Flutter-versus-PATH arrangement worth paying down; are we right to treat the heap request and NDK skew as noise.
+- [ ] **`9cddb791` priority re-rate** — closed and merged, but its P3 rested on "320-wide devices are rare" and a 360-wide phone clips too. Handed to Mr. Radio, who is accountable manager and deliberately declined to re-rate on a relayed figure before it was independently reproduced. It has been.
 - [ ] **`9b1f7701` Opus accuracy** — tooling merged in lupin `74c9822a`; it skips until `LUPIN_OPUS_ACCURACY_DIR` points at recordings. Put them in `lupin/io/opus-accuracy/recordings/`, then submit integration with `-v -k opus_vs_wav` after `venue_idle`.
 - [ ] **`c51e92da` phone round-trip probe** — parked until a real handset is in hand. Pull the JSONL and the recordings, report p50/p90 upload on wifi.
 - [ ] **Laptop one-time cleanup** — `rm -rf ~/Projects/lupin-mobile/.claude ~/Projects/lupin-mobile/io`. The rsync script excludes them now, but rsync never deletes what it excludes.
