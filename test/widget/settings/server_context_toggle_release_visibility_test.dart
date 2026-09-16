@@ -11,6 +11,11 @@
 /// `!kReleaseMode` would render identically here. Source is the only place
 /// that difference is visible, hence the source assertions below: they are
 /// what actually fails if the gate comes back.
+///
+/// Those source assertions read the code with its comments stripped. A test
+/// that forbids a string everywhere in a file, comments and all, forbids
+/// writing down the hazard it exists to guard — and the first person who
+/// hits that deletes the test, not the comment.
 library;
 
 import 'dart:io';
@@ -23,6 +28,71 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/settings/presentation/server_context_toggle.dart';
 import 'package:lupin_mobile/services/auth/server_context_service.dart';
+
+/// Build-mode constants a gate could be written against. `dart.vm.product` is
+/// on the list because `const bool.fromEnvironment( "dart.vm.product" )` is
+/// release mode under another name, reads false under `flutter test` like the
+/// rest of them, and is already an idiom in this repo
+/// (lib/core/monitoring/performance_monitor.dart:663).
+///
+/// `bool.fromEnvironment` in general is NOT forbidden: a `--dart-define` the
+/// build sets deliberately is one of the escape hatches the widget's docstring
+/// offers to anyone who wants the picker hidden from strangers. It is the
+/// build MODE that must not decide this, not compile-time configuration.
+const buildModeGates = [
+  "kReleaseMode",
+  "kProfileMode",
+  "kDebugMode",
+  "dart.vm.product",
+];
+
+/// A file's code with every comment removed, so prose may name the constants
+/// the assertions forbid. Strips `//` to end of line, `/* ... */` blocks, and
+/// tracks quotes so a `//` inside a string literal — a URL, say — survives.
+String codeOnly( String path ) {
+  final source = File( path ).readAsStringSync();
+  final code   = StringBuffer();
+  String? quote;
+  var inBlock = false;
+
+  for ( var i = 0; i < source.length; i++ ) {
+    final char = source[ i ];
+    final next = i + 1 < source.length ? source[ i + 1 ] : "";
+
+    if ( inBlock ) {
+      if ( char == "*" && next == "/" ) {
+        inBlock = false;
+        i      += 1;
+      }
+      continue;
+    }
+    if ( quote == null && char == "/" && next == "/" ) {
+      while ( i < source.length && source[ i ] != "\n" ) {
+        i += 1;
+      }
+      code.write( "\n" );
+      continue;
+    }
+    if ( quote == null && char == "/" && next == "*" ) {
+      inBlock = true;
+      i      += 1;
+      continue;
+    }
+    if ( quote != null && char == r"\" ) {
+      code.write( char );
+      i += 1;
+      if ( i < source.length ) code.write( source[ i ] );
+      continue;
+    }
+    if ( char == quote ) {
+      quote = null;
+    } else if ( quote == null && ( char == "'" || char == '"' ) ) {
+      quote = char;
+    }
+    code.write( char );
+  }
+  return code.toString();
+}
 
 void main() {
   const togglePath = "lib/features/settings/presentation/server_context_toggle.dart";
@@ -66,44 +136,42 @@ void main() {
     expect( height, greaterThan( 32 ), reason: "the widget's own 32px lead-in plus the tile and segments" );
   } );
 
-  testWidgets( "every shipped context is reachable as a segment, so a phone can leave 10.0.2.2", ( tester ) async {
-    final svc = await loadService( tester );
-    await pumpAndMeasure( tester, svc );
-
-    for ( final c in svc.all ) {
-      expect(
-        find.byKey( Key( "${TestKeys.serverContextSegmentPrefix}${c.id}" ) ),
-        findsOneWidget,
-        reason: "${c.id} has to be pickable pre-auth, including in a release build",
-      );
-    }
-  } );
+  // That every shipped context is reachable as a segment on the real login
+  // screen is already pinned by test/widget/auth/login_screen_test.dart:166-178,
+  // which pumps LoginScreen and asserts the toggle plus all four segments.
 
   test( "the widget carries no build-mode gate on its visibility", () {
     // The mutant this catches: reintroducing `offered = !kReleaseMode` and an
     // early `SizedBox.shrink()`. Every widget test above still passes under
     // that mutant, because `flutter test` runs in debug — only the source
     // tells the two apart.
-    final source = File( togglePath ).readAsStringSync();
-    expect(
-      source,
-      isNot( contains( "kReleaseMode" ) ),
-      reason: "a release build is exactly the build that needs the picker most",
-    );
-    expect( source, isNot( contains( "kProfileMode" ) ) );
-    expect( source, isNot( contains( "kDebugMode" ) ) );
+    final code = codeOnly( togglePath );
+    for ( final gate in buildModeGates ) {
+      expect(
+        code,
+        isNot( contains( gate ) ),
+        reason: "a release build is exactly the build that needs the picker most, so $gate must not decide this",
+      );
+    }
   } );
 
-  test( "the login screen mounts the switch unconditionally", () {
+  test( "the login screen's mount carries no build-mode gate either", () {
     // The login screen is the toggle's ONLY mount and the only pre-auth
     // surface, so a build-mode gate at the call site strands a phone just as
     // thoroughly as one inside the widget.
-    final source = File( loginPath ).readAsStringSync();
-    expect( source, contains( "ServerContextToggle(" ) );
-    expect(
-      source,
-      isNot( contains( "kReleaseMode" ) ),
-      reason: "Settings sits behind AuthGate, so there is no second place to put this",
-    );
+    //
+    // That the mount is reached at RUNTIME is login_screen_test.dart's job,
+    // not this one's: a gate on some other compile-time flag leaves this
+    // source assertion green and reddens that file instead, which is where a
+    // pumped LoginScreen can see the toggle go missing.
+    final code = codeOnly( loginPath );
+    expect( code, contains( "ServerContextToggle(" ) );
+    for ( final gate in buildModeGates ) {
+      expect(
+        code,
+        isNot( contains( gate ) ),
+        reason: "Settings sits behind AuthGate, so there is no second place to put this — $gate cannot gate the mount",
+      );
+    }
   } );
 }

@@ -26,16 +26,19 @@ Color serverContextColor( String id ) =>
 /// it can never reach, with no screen anywhere that lets it point elsewhere.
 ///
 /// That is not hypothetical: `.github/workflows/release.yml` attaches a
-/// release APK and AAB to every `v*.*.*` tag, and `.github/workflows/
-/// flutter-ci.yml:144` uploads a release APK on every run. Those are the
-/// builds people actually install on a phone.
+/// release APK and AAB to every `v*.*.*` tag, and the `build-android` job in
+/// `.github/workflows/flutter-ci.yml` builds a release APK on every run
+/// (:144) and uploads it as an artifact (:152). Those are the builds people
+/// actually install on a phone.
 ///
 /// A host picker on a sign-in screen does look like a development affordance,
-/// and a build-mode gate here was tried (ca07b57) and reverted for the reason
-/// above. If it should ever be hidden from strangers, hide it behind
-/// something the app can still reach without a server — a long-press, a
-/// build-time --dart-define, a first-run setup step — never behind a build
-/// mode that leaves the phone with no way back.
+/// and gating it on `kReleaseMode` was tried (ca07b57) and reverted for the
+/// reason above — as would gating it on `kProfileMode`, `kDebugMode`, or
+/// `const bool.fromEnvironment( "dart.vm.product" )`, which is the same gate
+/// spelled differently. If it should ever be hidden from strangers, hide it
+/// behind something the app can still reach without a server — a long-press,
+/// a build-time --dart-define the build sets deliberately, a first-run setup
+/// step — never behind a build mode that leaves the phone with no way back.
 class ServerContextToggle extends StatefulWidget {
   final ServerContextService service;
 
