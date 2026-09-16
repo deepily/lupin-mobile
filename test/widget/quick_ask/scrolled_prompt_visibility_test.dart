@@ -25,6 +25,7 @@ import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/queue/data/queue_models.dart';
 import 'package:lupin_mobile/features/queue/domain/job_lifecycle.dart';
 import 'package:lupin_mobile/features/quick_ask/data/quick_ask_models.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
@@ -50,15 +51,45 @@ const QuickAskInterview turnOne = QuickAskInterview(
   question  : 'Which city?',
 );
 
-/// Enough answered cards that the list is several screens tall and a 600px
-/// drag actually moves it.
-List<QuickAskEntry> history( int n ) => List<QuickAskEntry>.generate( n, ( i ) =>
-    QuickAskEntry(
-      questionText : 'Question number $i, long enough to fill a card row',
+/// Enough cards that the list is several screens tall and a 600px drag
+/// actually moves it.
+///
+/// 🔴 THE SHAPE OF THESE CARDS IS PART OF THE TEST. When items are prepended
+/// to a scrolled list, `RenderSliverList` issues a `scrollOffsetCorrection`
+/// on the next layout, sized by the CHILD EXTENT it just measured — so how far
+/// the re-anchor is pushed back depends on how tall a card is, and on nothing
+/// else. A suite that only ever builds one card shape proves the anchor works
+/// for that shape. Measured at 320×568 with a single jump and no re-check:
+/// long question with no answer settled at 0 and passed, while short question
+/// plus answer settled at 96 and short question alone at 172 — identically for
+/// 6, 12 and 20 cards, because it is never about list length.
+///
+/// This is the same criticism the suite next door makes of its own viewport
+/// case: a test tuned to one content shape passes for a reason it does not
+/// state. Vary the shape, or the next content change silently re-opens this.
+List<QuickAskEntry> cards( int n, { required String q, String? answer } ) =>
+    List<QuickAskEntry>.generate( n, ( i ) => QuickAskEntry(
+      questionText : '$q $i',
       state        : JobLifecycleState.completed,
       source       : QuickAskSource.transition,
       jobId        : 'job-$i',
+      details      : answer == null ? null : JobSummary(
+        jobId        : 'job-$i',
+        status       : 'completed',
+        responseText : answer,
+      ),
     ) );
+
+/// The three card shapes, by the height they give a card. The tall one is what
+/// the suite used to test exclusively, and the only one a single jump survived.
+final Map<String, List<QuickAskEntry>> kShapes = {
+  'tall cards — long question, no answer' :
+      cards( 12, q: 'Question number, long enough to fill a card row' ),
+  'medium cards — question plus a short answer' :
+      cards( 12, q: 'What is the weather today', answer: 'It will be sunny and mild.' ),
+  'short cards — two-word question, no answer' :
+      cards( 12, q: 'Hi' ),
+};
 
 /// Where the scrollback is currently parked, in pixels from the top.
 ///
@@ -71,6 +102,28 @@ double offset( WidgetTester tester ) => tester.state<ScrollableState>(
     matching : find.byType( Scrollable ),
   ).first,
 ).position.pixels;
+
+/// 🔴 ASSERT ON THE BAND, NOT ON THE NUMBER. An offset of 0 is evidence that
+/// the anchor ran, not that the user can read anything: the question is what
+/// has to be visible. `ListView` clips hard at its viewport, so a band pushed
+/// even 96px above it renders its Yes and No buttons — fully visible, fully
+/// tappable — under a question whose text is hidden behind the record header.
+/// On Door C, where dismissing POSTS the default, that is a user answering a
+/// question they cannot read.
+void expectQuestionReadable( WidgetTester tester, { required String shape } ) {
+  final viewportTop = tester.getTopLeft( find.byKey( const Key( TestKeys.quickAskList ) ) ).dy;
+  final question    = find.byKey( const Key( TestKeys.quickAskPromptQuestion ) );
+  final yes         = find.byKey( const Key( TestKeys.promptYesButton ) );
+
+  expect( question, findsOneWidget, reason: shape );
+  expect( yes,      findsOneWidget, reason: shape );
+
+  expect( tester.getTopLeft( question ).dy, greaterThanOrEqualTo( viewportTop ),
+      reason : '$shape: the question is clipped above the list viewport, so the '
+               'user would be answering text they cannot see' );
+  expect( tester.getBottomLeft( yes ).dy, lessThanOrEqualTo( kSmallPhone.height ),
+      reason : '$shape: the answer row must be on screen too' );
+}
 
 void main() {
   late MockQuickAskBloc         bloc;
@@ -129,35 +182,32 @@ void main() {
 
   group( 'bug 9cddb791 — a prompt arriving on a SCROLLED list', () {
 
-    testWidgets( 'a Door C prompt is scrolled back into view and is answerable',
-        ( tester ) async {
-      final entries = history( 12 );
-      final resting = await mountAndScroll( tester,
-          QuickAskState( connected: true, entries: entries ) );
-      expect( resting, greaterThan( 0 ),
-          reason : 'the probe is meaningless unless the drag actually scrolled' );
+    // One case per card shape. See `kShapes` for why the shape is the variable
+    // that matters here and list length is not.
+    for ( final shape in kShapes.entries ) {
+      testWidgets( 'a Door C prompt is scrolled back into view and is READABLE — ${shape.key}',
+          ( tester ) async {
+        final entries = shape.value;
+        final resting = await mountAndScroll( tester,
+            QuickAskState( connected: true, entries: entries ) );
+        expect( resting, greaterThan( 0 ),
+            reason : 'the probe is meaningless unless the drag actually scrolled' );
 
-      await emit( tester, QuickAskState(
-        connected     : true,
-        entries       : entries,
-        pendingPrompt : doorC,
-      ) );
+        await emit( tester, QuickAskState(
+          connected     : true,
+          entries       : entries,
+          pendingPrompt : doorC,
+        ) );
 
-      expect( offset( tester ), 0,
-          reason : 'the list must re-anchor so the prepended prompt is on screen' );
-
-      // Built AND inside the viewport — "built" alone was true of the old
-      // fixed-Column layout too, and is satisfied by a widget under the fold.
-      final yes = find.byKey( const Key( TestKeys.promptYesButton ) );
-      expect( yes, findsOneWidget );
-      expect( tester.getBottomLeft( yes ).dy,
-          lessThanOrEqualTo( kSmallPhone.height ),
-          reason : 'the mic is inert on this question, so it has to be answerable' );
-    } );
+        expect( offset( tester ), 0,
+            reason : 'the list must re-anchor so the prepended prompt is on screen' );
+        expectQuestionReadable( tester, shape: shape.key );
+      } );
+    }
 
     testWidgets( 'an interview turn arriving on a scrolled list is brought back too',
         ( tester ) async {
-      final entries = history( 12 );
+      final entries = cards( 12, q: 'Hi' );
       await mountAndScroll( tester, QuickAskState( connected: true, entries: entries ) );
 
       await emit( tester, QuickAskState(
@@ -168,11 +218,17 @@ void main() {
 
       expect( offset( tester ), 0 );
       expect( find.byKey( const Key( TestKeys.quickAskInterview ) ), findsOneWidget );
+      expect(
+        tester.getTopLeft( find.byKey( const Key( TestKeys.quickAskInterviewQ ) ) ).dy,
+        greaterThanOrEqualTo(
+            tester.getTopLeft( find.byKey( const Key( TestKeys.quickAskList ) ) ).dy ),
+        reason : 'the interview question must not be clipped under the header either',
+      );
     } );
 
     testWidgets( 'a SECOND surface beside a live prompt re-anchors as well',
         ( tester ) async {
-      final entries = history( 12 );
+      final entries = cards( 12, q: 'Hi' );
       final prompted = QuickAskState(
         connected     : true,
         entries       : entries,
@@ -202,6 +258,57 @@ void main() {
       ) );
 
       expect( offset( tester ), 0 );
+      expectQuestionReadable( tester, shape: 'prompt plus a late error' );
+    } );
+
+    testWidgets( 'a DIFFERENT error replacing the first one re-anchors',
+        ( tester ) async {
+      // The error tag carries the message's identity, like the prompt's id and
+      // the interview's turn. Without that, error B replacing error A in a
+      // band that is already live and off screen is new text the user is never
+      // shown — the same harm, reached through the one surface whose slot was
+      // already occupied.
+      final entries = cards( 12, q: 'Hi' );
+      final firstError = QuickAskState(
+        connected    : true,
+        entries      : entries,
+        errorMessage : 'Could not accept the audio. Nothing was asked.',
+      );
+      final resting = await mountAndScroll( tester, firstError );
+      expect( resting, greaterThan( 0 ) );
+
+      await emit( tester, QuickAskState(
+        connected    : true,
+        entries      : entries,
+        errorMessage : 'The server refused that question. Try rephrasing it.',
+      ) );
+
+      expect( offset( tester ), 0,
+          reason : 'a replacement error is text the user has not seen yet' );
+      expect( find.text( 'The server refused that question. Try rephrasing it.' ),
+          findsOneWidget );
+    } );
+
+    testWidgets( 'the SAME error re-delivered does not move the list',
+        ( tester ) async {
+      // The other half of the identity claim: an unchanged band is not new,
+      // so a rebuild carrying the same error must not yank the list.
+      final entries = cards( 12, q: 'Hi' );
+      const same    = 'Could not accept the audio. Nothing was asked.';
+      final resting = await mountAndScroll( tester, QuickAskState(
+        connected    : true,
+        entries      : entries,
+        errorMessage : same,
+      ) );
+      expect( resting, greaterThan( 0 ) );
+
+      await emit( tester, QuickAskState(
+        connected    : true,
+        entries      : entries,
+        errorMessage : same,
+      ) );
+
+      expect( offset( tester ), resting );
     } );
 
     testWidgets( 'ANSWERING a prompt does not yank the list back to the top',
@@ -209,7 +316,7 @@ void main() {
       // The re-anchor fires on a surface ARRIVING. A band that empties is the
       // user finishing something, and moving the list under them then would
       // be a new annoyance in place of the old bug.
-      final entries  = history( 12 );
+      final entries  = cards( 12, q: 'Hi' );
       final prompted = QuickAskState(
         connected     : true,
         entries       : entries,
