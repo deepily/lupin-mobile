@@ -56,19 +56,25 @@ void main() {
       return file;
     }
 
+    /// A `/api/v2/transcribe` 200 body carrying [text].
+    Map<String, dynamic> v2( String text ) => {
+      'transcription' : text,
+      'trace'         : { 'stt_ms': 12.5, 'upload_bytes': 4 },
+    };
+
     Response<dynamic> response( dynamic data, { int status = 200 } ) => Response(
       requestOptions : RequestOptions( path: AsrService.endpointPath ),
       data           : data,
       statusCode     : status,
     );
 
-    test( 'AC-S4.1 — happy path: stop → multipart POST to the WAV endpoint with field name "file" → transcript', () async {
+    test( 'AC-S4.1 — happy path: stop → multipart POST to /api/v2/transcribe with field name "file" → transcript', () async {
       final file = await startWithFile();
       when( () => dio.post<dynamic>(
         any(),
         data    : any( named: 'data' ),
         options : any( named: 'options' ),
-      ) ).thenAnswer( ( _ ) async => response( 'Focus mode voice chat test one two three.' ) );
+      ) ).thenAnswer( ( _ ) async => response( v2( 'Focus mode voice chat test one two three.' ) ) );
 
       final transcript = await asr.stopAndTranscribe();
 
@@ -78,7 +84,7 @@ void main() {
         data    : captureAny( named: 'data' ),
         options : any( named: 'options' ),
       ) ).captured;
-      expect( captured[ 0 ], '/api/upload-and-transcribe-wav' );
+      expect( captured[ 0 ], '/api/v2/transcribe', reason: 'the v2 door (row fcebf532), not the pre-v2 upload-and-transcribe-wav' );
       final form = captured[ 1 ] as FormData;
       expect( form.files.single.key, 'file', reason: 'multipart field name pinned' );
       expect( file.existsSync(), isFalse, reason: 'temp WAV deleted after success' );
@@ -125,7 +131,7 @@ void main() {
         any(),
         data    : any( named: 'data' ),
         options : any( named: 'options' ),
-      ) ).thenAnswer( ( _ ) async => response( '   ' ) );
+      ) ).thenAnswer( ( _ ) async => response( v2( '   ' ) ) );
 
       await expectLater(
         asr.stopAndTranscribe(),
@@ -133,6 +139,54 @@ void main() {
             .having( ( e ) => e.message, 'message', contains( 'empty' ) ) ),
       );
       expect( file.existsSync(), isFalse );
+    } );
+
+    test( 'v2 — a 422 (empty upload or no speech) is the empty-transcript error, not a transport error', () async {
+      final file = await startWithFile();
+      when( () => dio.post<dynamic>(
+        any(),
+        data    : any( named: 'data' ),
+        options : any( named: 'options' ),
+      ) ).thenThrow( DioException(
+        requestOptions : RequestOptions( path: AsrService.endpointPath ),
+        response       : response( { 'detail': 'No speech was recognised.' }, status: 422 ),
+        type           : DioExceptionType.badResponse,
+      ) );
+
+      await expectLater(
+        asr.stopAndTranscribe(),
+        throwsA( isA<AsrException>()
+            .having( ( e ) => e.statusCode, 'statusCode', 422 )
+            .having( ( e ) => e.message, 'message', contains( 'empty' ) ) ),
+      );
+      expect( file.existsSync(), isFalse );
+    } );
+
+    test( 'v2 — a 503 (GPU busy) tells the user to try again', () async {
+      await startWithFile();
+      when( () => dio.post<dynamic>(
+        any(),
+        data    : any( named: 'data' ),
+        options : any( named: 'options' ),
+      ) ).thenThrow( DioException(
+        requestOptions : RequestOptions( path: AsrService.endpointPath ),
+        response       : response( { 'detail': 'busy' }, status: 503 ),
+        type           : DioExceptionType.badResponse,
+      ) );
+
+      await expectLater(
+        asr.stopAndTranscribe(),
+        throwsA( isA<AsrException>()
+            .having( ( e ) => e.statusCode, 'statusCode', 503 )
+            .having( ( e ) => e.message, 'message', contains( 'Try again' ) ) ),
+      );
+    } );
+
+    test( 'v2 — transcriptFrom reads the transcription field and refuses the old bare-string body', () {
+      expect( AsrService.transcriptFrom( v2( 'hello' ) ), 'hello' );
+      expect( () => AsrService.transcriptFrom( 'hello' ), throwsA( isA<AsrException>() ),
+          reason: 'a bare string is the pre-v2 shape; accepting it would hide a wrong endpoint' );
+      expect( () => AsrService.transcriptFrom( { 'text': 'hello' } ), throwsA( isA<AsrException>() ) );
     } );
 
     test( 'AC-S4.3 — cancel discards the recording: no upload fired, temp file removed', () async {

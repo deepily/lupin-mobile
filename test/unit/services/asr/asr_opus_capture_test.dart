@@ -41,7 +41,7 @@ void main() {
       options : any( named: 'options' ),
     ) ).thenAnswer( ( _ ) async => Response(
       requestOptions : RequestOptions( path: AsrService.endpointPath ),
-      data           : 'what is two plus two',
+      data           : { 'transcription': 'what is two plus two', 'trace': { 'stt_ms': 9.0, 'upload_bytes': 4 } },
       statusCode     : 200,
     ) );
   } );

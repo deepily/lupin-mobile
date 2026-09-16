@@ -27,10 +27,13 @@ class AsrException implements Exception {
 /// justification; the multipart mechanics themselves follow the existing
 /// `http_service.dart:197-198` pattern).
 ///
-/// Endpoint (OSQ-1, Phase-0 wire-grounded): `POST /api/upload-and-transcribe-wav`
-/// — NO auth required (`speech.py:646-653`); the injected [dio] is the app's
-/// SHARED auth-wired instance and its bearer is harmless. Response is a JSON
-/// string literal of the transcript. The MP3 sibling endpoint queues a
+/// Endpoint: `POST /api/v2/transcribe` (lupin `v2_ask.py`, row fcebf532;
+/// Rick 2026-09-16: the phone should not stay on the pre-v2 door).
+/// It needs the bearer the injected [dio] already carries, and answers
+/// `{ transcription, trace: { stt_ms, upload_bytes } }`. 422 means an empty
+/// upload or no recognisable speech; 503 carries Retry-After (GPU busy).
+/// Before this it was `POST /api/upload-and-transcribe-wav`, which answered a
+/// bare JSON string and needed no auth. The MP3 sibling endpoint queues a
 /// multimodal JOB — wrong tool for chat replies (F-S4-2 trap; see the
 /// deprecation note on `HttpService.uploadAndTranscribe`).
 class AsrService {
@@ -47,7 +50,7 @@ class AsrService {
   int           _keptCount = 0;
   Future<void>? _lastKeep;
 
-  static const String endpointPath = '/api/upload-and-transcribe-wav';
+  static const String endpointPath = '/api/v2/transcribe';
 
   /// The capture format: Ogg/Opus, mono, 32 kbps (row 9b1f7701).
   ///
@@ -630,11 +633,7 @@ class AsrService {
         ),
       );
 
-      final data = res.data;
-      if ( data is! String ) {
-        throw AsrException( 'Unexpected transcription response shape: ${data.runtimeType}' );
-      }
-      final transcript = data.trim();
+      final transcript = transcriptFrom( res.data ).trim();
       // Row 4be8fe63: pairing the transcript with the seconds that produced it
       // is what makes truncation legible. "What's two" off 2.9s of audio is a
       // transcription problem; off 0.8s it is a capture problem, and the log
@@ -647,13 +646,41 @@ class AsrService {
       }
       return transcript;
     } on DioException catch ( e ) {
+      final status = e.response?.statusCode;
+      // The v2 door says "nothing was heard" with a 422 rather than an empty
+      // 200, and "GPU busy, try again" with a 503; both read better to a user
+      // than a raw transport message.
+      if ( status == 422 ) {
+        throw const AsrException( 'Transcription came back empty', statusCode: 422 );
+      }
+      if ( status == 503 ) {
+        throw const AsrException( 'The server is busy transcribing. Try again in a few seconds.', statusCode: 503 );
+      }
       throw AsrException(
         'Transcription upload failed: ${e.message ?? e.type.name}',
-        statusCode: e.response?.statusCode,
+        statusCode: status,
       );
     } finally {
       discardPendingUpload( filePath );
     }
+  }
+
+  /// The transcript out of a `/api/v2/transcribe` 200 body.
+  ///
+  /// Requires:
+  ///   - data is the decoded response body
+  ///
+  /// Ensures:
+  ///   - returns `data['transcription']` when data is a map holding a string there
+  ///
+  /// Raises:
+  ///   - [AsrException] for any other shape, naming what arrived
+  @visibleForTesting
+  static String transcriptFrom( Object? data ) {
+    if ( data is Map && data[ 'transcription' ] is String ) {
+      return data[ 'transcription' ] as String;
+    }
+    throw AsrException( 'Unexpected transcription response shape: ${data.runtimeType}' );
   }
 
   /// Discard the in-progress capture; no upload fires. The temp file is
