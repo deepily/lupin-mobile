@@ -55,13 +55,15 @@ class QuickAskScreen extends StatelessWidget {
                 reason    : 'Tap replay on an answer to resume.',
               ),
               _RecordHeader( state: state ),
-              // AC-S4.6 — the Door C interlock. This surface stays LIVE while
-              // an ask is in flight (the record button does not), because the
-              // ask is blocked on exactly this question.
-              if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
-              if ( state.interview != null ) _InterviewPrompt( interview: state.interview! ),
-              if ( state.errorMessage != null ) _InlineError( message: state.errorMessage! ),
-              if ( state.lost ) const _LostBanner(),
+              // Bug 9cddb791 — EVERYTHING below the fixed header scrolls
+              // together. The interlock surfaces used to be fixed children of
+              // this Column, so on a 320×568 phone the header plus a Door C
+              // prompt was already 10px taller than the body, and a prompt
+              // plus an error 114px taller: a `Column` cannot shrink a
+              // non-flexible child, so it overflowed rather than scrolled.
+              // They are now the LEADING ITEMS of the scrollback list (see
+              // `_Scrollback`), which is the only arrangement that cannot
+              // overflow whatever combination of them is live.
               Expanded( child: _Scrollback( state: state, tts: tts ) ),
             ],
           );
@@ -83,11 +85,22 @@ class _RecordHeader extends StatelessWidget {
     // be tapped out from under a question the user has spoken but not sent.
     final enabled   = state.canRecord;
     final hasDraft  = state.hasDraft;
+    // Bug 9cddb791 — while a Door C prompt or an interview turn is live the
+    // mic is INERT (`blockReason == unansweredPrompt`), so a 128px circle is
+    // 128px of screen spent on a control that cannot be used, taken from the
+    // question that is holding the ask open. Shrink it in exactly those
+    // states: on a 320×568 phone that is the difference between the whole
+    // prompt being on screen and its answer buttons sitting under the fold.
+    final blocked   = state.pendingPrompt != null || state.interview != null;
+    final micSize   = blocked ?  84.0 : 128.0;
+    final micIcon   = blocked ?  40.0 :  60.0;
+    final stackTall = blocked ? 124.0 : 168.0;
+    final padTall   = blocked ?  10.0 :  16.0;
 
     return Material(
       elevation : 2,
       child     : Padding(
-        padding : const EdgeInsets.symmetric( vertical: 16, horizontal: 12 ),
+        padding : EdgeInsets.symmetric( vertical: padTall, horizontal: 12 ),
         child   : Column(
           children: [
             // Rick's ruling (§6 row 2): the send-mode control lives HERE, above
@@ -121,8 +134,10 @@ class _RecordHeader extends StatelessWidget {
               ),
             ),
             SizedBox(
+              // The WIDTH is unchanged so the clear/send buttons keep their
+              // corners clear of the circle even at the smaller mic size.
               width  : 232,
-              height : 168,
+              height : stackTall,
               child  : Stack(
                 alignment : Alignment.topCenter,
                 children  : [
@@ -135,7 +150,12 @@ class _RecordHeader extends StatelessWidget {
                             ? const QuickAskRecordReleased()
                             : const QuickAskRecordPressed() )
                         : null,
-                    child   : _PulsingMic( active: recording, enabled: enabled ),
+                    child   : _PulsingMic(
+                      active   : recording,
+                      enabled  : enabled,
+                      size     : micSize,
+                      iconSize : micIcon,
+                    ),
                   ),
                   Positioned(
                     left    : 0,
@@ -248,9 +268,16 @@ class _DraftAction extends StatelessWidget {
 }
 
 class _PulsingMic extends StatefulWidget {
-  final bool active;
-  final bool enabled;
-  const _PulsingMic( { required this.active, required this.enabled } );
+  final bool   active;
+  final bool   enabled;
+  final double size;
+  final double iconSize;
+  const _PulsingMic( {
+    required this.active,
+    required this.enabled,
+    required this.size,
+    required this.iconSize,
+  } );
 
   @override
   State<_PulsingMic> createState() => _PulsingMicState();
@@ -293,10 +320,10 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
         return Transform.scale(
           scale : scale,
           child : Container(
-            width       : 128,
-            height      : 128,
+            width       : widget.size,
+            height      : widget.size,
             decoration  : BoxDecoration( shape: BoxShape.circle, color: colour ),
-            child       : Icon( Icons.mic, size: 60, color: scheme.onPrimary ),
+            child       : Icon( Icons.mic, size: widget.iconSize, color: scheme.onPrimary ),
           ),
         );
       },
@@ -477,24 +504,61 @@ class _Scrollback extends StatelessWidget {
 
   @override
   Widget build( BuildContext context ) {
-    if ( state.entries.isEmpty && state.liveQuestion == null ) {
-      return const Center(
-        key   : Key( TestKeys.quickAskEmpty ),
-        child : Text( 'Nothing asked yet.' ),
-      );
-    }
+    // The interlock surfaces ride ABOVE the cards, in the same scrollable.
+    //
+    // AC-S4.6 — the Door C interlock. This surface stays LIVE while an ask is
+    // in flight (the record button does not), because the ask is blocked on
+    // exactly this question. Scrolling is what keeps it reachable on a small
+    // screen; being a fixed child is what used to push it off one.
+    final leading = <Widget>[
+      if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
+      if ( state.interview != null )     _InterviewPrompt( interview: state.interview! ),
+      if ( state.errorMessage != null )  _InlineError( message: state.errorMessage! ),
+      if ( state.lost )                  const _LostBanner(),
+    ];
 
     // NEWEST AT THE TOP (Rick's ruling 3), by the established `.reversed`
     // mechanism — NOT `reverse: true`, which anchors scroll to the BOTTOM and
     // would fight the pinned header above. Same convention as
     // `focus_chat_pane.dart:172-178`; `reverse: true` has zero uses in `lib/`.
-    final ordered = state.entries.reversed.toList( growable: false );
+    final ordered   = state.entries.reversed.toList( growable: false );
+    final showEmpty = ordered.isEmpty && state.liveQuestion == null;
+    final bodyCount = showEmpty ? 1 : ordered.length;
 
-    return ListView.builder(
-      key         : const Key( TestKeys.quickAskList ),
-      padding     : const EdgeInsets.all( 8 ),
-      itemCount   : ordered.length,
-      itemBuilder : ( context, i ) => _QuickAskCard( entry: ordered[ i ], tts: tts ),
+    return LayoutBuilder(
+      builder : ( context, constraints ) => ListView.builder(
+        key         : const Key( TestKeys.quickAskList ),
+        // Zero, not `all( 8 )`: the interlock surfaces are full-bleed colour
+        // bands and an inset would break them into floating blocks. The cards
+        // carry the horizontal inset themselves, below.
+        padding     : EdgeInsets.zero,
+        itemCount   : leading.length + bodyCount,
+        itemBuilder : ( context, i ) {
+          if ( i < leading.length ) return leading[ i ];
+
+          if ( showEmpty ) {
+            return SizedBox(
+              // With nothing above it the placeholder still owns the whole
+              // area and sits dead centre, exactly as it did before. With a
+              // prompt above it, it takes only the room it needs rather than
+              // pushing the question it belongs under off the screen.
+              height : leading.isEmpty ? constraints.maxHeight : null,
+              child  : const Padding(
+                padding : EdgeInsets.all( 24 ),
+                child   : Center(
+                  key   : Key( TestKeys.quickAskEmpty ),
+                  child : Text( 'Nothing asked yet.' ),
+                ),
+              ),
+            );
+          }
+
+          return Padding(
+            padding : const EdgeInsets.symmetric( horizontal: 8 ),
+            child   : _QuickAskCard( entry: ordered[ i - leading.length ], tts: tts ),
+          );
+        },
+      ),
     );
   }
 }
