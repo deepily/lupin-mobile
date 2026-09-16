@@ -497,19 +497,90 @@ class _LostBanner extends StatelessWidget {
   }
 }
 
-class _Scrollback extends StatelessWidget {
+class _Scrollback extends StatefulWidget {
   final QuickAskState   state;
   final TtsOrchestrator tts;
   const _Scrollback( { required this.state, required this.tts } );
 
   @override
+  State<_Scrollback> createState() => _ScrollbackState();
+}
+
+class _ScrollbackState extends State<_Scrollback> {
+  /// Owned here so a newly-arrived interlock surface can be scrolled back
+  /// into view. Without a controller the list has no way to move itself, and
+  /// a prepended item silently lands above whatever the user was reading.
+  final ScrollController _scroll = ScrollController();
+
+  /// The interlock band as identity TAGS, in render order — the same order
+  /// and the same conditions as the widgets built in [build]. Widgets cannot
+  /// be compared across builds, so the decision to re-anchor is taken on
+  /// these instead. The interview carries its turn because turn 2 is a NEW
+  /// question on the same `pending_id`.
+  static List<String> _leadingTags( QuickAskState s ) => <String>[
+    if ( s.pendingPrompt != null ) 'prompt:${s.pendingPrompt!.id}',
+    if ( s.interview != null )     'interview:${s.interview!.pendingId}:${s.interview!.turn}',
+    if ( s.errorMessage != null )  'error',
+    if ( s.lost )                  'lost',
+  ];
+
+  @override
+  void didUpdateWidget( covariant _Scrollback old ) {
+    super.didUpdateWidget( old );
+    // Bug 9cddb791 — an interlock surface is PREPENDED at index 0, and a
+    // `ListView` keeps its pixel offset when that happens, so on a list the
+    // user has scrolled the new surface lands entirely above the viewport.
+    // The record button then goes inert with "Answer the question above
+    // first" pointing at a question that is nowhere on screen, and Door C
+    // times out to its "no" — the very failure `_onNotification` says it
+    // fixed by holding the prompt whole rather than by its id. AC-S4.6 asks
+    // for an ANSWERABLE question, and answerability cannot depend on where
+    // the user happened to leave the scroll.
+    final was = _leadingTags( old.state );
+    final now = _leadingTags( widget.state );
+    // Anything NEW in the band — a first surface, a second one beside it, or
+    // a fresh question in a slot that was already occupied. Dismissing one
+    // removes a tag and moves nothing, so answering a prompt does not yank
+    // the list out from under the user.
+    if ( now.any( ( t ) => !was.contains( t ) ) ) _anchorTop();
+  }
+
+  /// 🔴 `jumpTo`, not `animateTo`. An animation is a race the user can win:
+  /// a fling already in flight cancels it and leaves the question off screen
+  /// again, which is the exact bug. Door C is on a timeout ladder, so the
+  /// question has to be readable the frame it arrives, not 300ms later. The
+  /// arriving surface is a full-width coloured band, so the jump is legible
+  /// as "something appeared" without needing the travel to say so.
+  void _anchorTop() {
+    // After the frame: the new item has not been laid out yet when
+    // `didUpdateWidget` runs, and a list that has never been scrolled has no
+    // attached position to move.
+    WidgetsBinding.instance.addPostFrameCallback( ( _ ) {
+      if ( !mounted || !_scroll.hasClients ) return;
+      if ( _scroll.position.pixels == _scroll.position.minScrollExtent ) return;
+      _scroll.jumpTo( _scroll.position.minScrollExtent );
+    } );
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build( BuildContext context ) {
+    final state = widget.state;
+
     // The interlock surfaces ride ABOVE the cards, in the same scrollable.
     //
     // AC-S4.6 — the Door C interlock. This surface stays LIVE while an ask is
     // in flight (the record button does not), because the ask is blocked on
     // exactly this question. Scrolling is what keeps it reachable on a small
     // screen; being a fixed child is what used to push it off one.
+    //
+    // 🔴 Kept in lockstep with `_leadingTags` above — same conditions, same
+    // order. The tags drive the re-anchor; these draw it.
     final leading = <Widget>[
       if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
       if ( state.interview != null )     _InterviewPrompt( interview: state.interview! ),
@@ -528,6 +599,7 @@ class _Scrollback extends StatelessWidget {
     return LayoutBuilder(
       builder : ( context, constraints ) => ListView.builder(
         key         : const Key( TestKeys.quickAskList ),
+        controller  : _scroll,
         // Zero, not `all( 8 )`: the interlock surfaces are full-bleed colour
         // bands and an inset would break them into floating blocks. The cards
         // carry the horizontal inset themselves, below.
@@ -555,7 +627,7 @@ class _Scrollback extends StatelessWidget {
 
           return Padding(
             padding : const EdgeInsets.symmetric( horizontal: 8 ),
-            child   : _QuickAskCard( entry: ordered[ i - leading.length ], tts: tts ),
+            child   : _QuickAskCard( entry: ordered[ i - leading.length ], tts: widget.tts ),
           );
         },
       ),
