@@ -16,6 +16,20 @@ Most recent entries (2026-05-21 onward — notif-client sync, focus-mode milesto
 
 
 
+## 2026.09.15 | Session `71d94067` (Tiffany 💍) — Device-session build shipped, six fold-laters merged, release-picker reversal ruled
+
+**RESUME HERE**: the release-picker flip is on branch `tiffany/release-picker` off `a349f0a`, and its row `2070a906` is still in the holding area waiting on Rick's admit. Both device rows (`c51e92da`, `9b1f7701`) remain parked on his laptop and handset.
+
+1. **Device-session build merged** on `77b86b7`: the Settings→Debug network round-trip probe, the "Keep voice recordings" switch, and the LAN DEV / LAN TEST server switch on the sign-in screen. Script written at `src/rnd/2026.09.15-phone-device-session-script.md`. The switch was reviewed twice; the first review returned a BLOCK, which was fixed before merge.
+2. **Six fold-laters merged** as `a349f0a` (row `8d9b2a0c`): the shared Dio baseUrl now set at registration, a dead event removed, the toggle re-subscribes on `didUpdateWidget`, recording names moved to UTC so a restart cannot collide, the probe's `unknown_length` branch covered through a real request, and the server switch gated to non-release builds. Suite 1100 pass / 1 fail / 46 known — the old "1071 pass" baseline was stale, the untouched tip is 1083.
+3. **That release gate was then reversed by Rick** at ~20:39: the sign-in screen is the only pre-auth surface, since Settings sits behind `AuthGate`, so hiding the switch in release strands any phone installing a CI artifact at the emulator-only `10.0.2.2`. Filed as bug `2070a906`; builder staffed to flip it back and invert the `ca07b57` tests.
+4. **Laptop build diagnosed**: JDK 25.0.3 against Gradle 8.12. Flutter 3.32 caps Gradle at 8.12 / AGP 8.7.3 — exactly our pins — and AGP 9.4.0 still lists JDK 17, so no upgrade path reaches 25. Written up in `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md`, linked from the README; the recommendation is JDK 21 plus `flutter config --jdk-dir`, no repo change.
+5. **rsync fixed**: `src/scripts/rsync-lupin-mobile.sh` now excludes `.claude/` and `io/`. The sync was carrying 878 MB of agent worktrees; it is 29 MB now. The laptop needs a one-time `rm -rf` of those two paths, because rsync never deletes what it excludes.
+
+**Files**: `README.md` · `src/scripts/rsync-lupin-mobile.sh` · `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md` · `src/rnd/2026.09.15-phone-device-session-script.md` · merges `77b86b7`, `a349f0a` on `wip-v0.1.6-2026.04.16-tracking-lupin-work` · nothing pushed
+
+---
+
 ## 2026.09.14 | Session `b3e285b8` (Tiffany 💍) — Spoken-ask door built and merged: §B `83f19a7`, §C `16d73f8`
 
 **RESUME HERE**: the phone half of the spoken-ask door is merged on wip. At 09:00 on 09-15 Rick gives a device session for `c51e92da` (round-trip probe) and `9b1f7701` (Opus/AAC check). See TODO.md § Owed.

@@ -45,13 +45,28 @@ Plan went **rev 8 → rev 12**; six pins in git (`b505bfb` `32b2055` `3a97776` `
 - **Keep both P3 bugs** (22:20 keypress).
 
 ### ⏳ Owed — 2026-09-15
-- [ ] **09:00 device session with Rick** — `c51e92da` phone round-trip probe (wifi + LTE, wifi off) and `9b1f7701` Opus/AAC ~32 kbps accuracy check. Send a step-by-step script first, and install a fresh build from wip `16d73f8`.
+- [x] ~~**09:00 device session with Rick**~~ — superseded, see the 2026-09-15 log below. The build and the script were both delivered (`77b86b7`, `src/rnd/2026.09.15-phone-device-session-script.md`); the session slipped to 2 PM and then to the emulator, and Rick's laptop build is broken on JDK 25. Both rows stay parked.
 - [ ] `5ac999f5` (P3 bug): 46 tests already failing before the build (44 `legacy_quarantine/`, 2 need `../cosa`), plus 3 missing ids. List saved at `projects-data/lupin-mobile/2026.09.14-flutter-failing-before-908b796.txt`. Awaiting Rick's admit.
 - [ ] `9cddb791` (P3 bug): Quick Ask Door C overflows at 320×568, 10px in prompt and 82px in prompt+error; predates §C. The measuring test is in `projects-data/lupin/cascade-pins/overflow-320-measure-test.dart`. Awaiting Rick's admit.
 - [ ] Nine leftover worktrees under `.claude/worktrees/` (seats, gates, Chloé's review copies): remove on Mr. Radio's OK. Rows `6698d40f` (hold poke text names no directory) and `2f0932ba` (no lupin-mobile seat-worktree script) are María's post-game follow-ups.
 
 ### ✅ Closed this cascade
 `ccd7d20e` build go · `79c4ad06` seat restart (dropped, fresh seat) · `39639293` §C (commit `16d73f8`) · `136d1c1b` §B (commit `83f19a7`, closed by Mr. Radio). The rev-13 hold list folded into revs 13–19.
+
+### Decisions Log — 2026-09-15 (session `71d94067`)
+- **Device session moved to 2 PM, then to the emulator** (~18:45): *"emulator now, phone later."* Roughly ten real recordings on the emulator close `9b1f7701`; the wifi upload timings in `c51e92da` still need the handset, and the LTE half still waits for an address reachable from outside the house.
+- **Server address settled**: desktop wired at `192.168.1.21`, phone on wifi. It is the only non-emulator address that exists anywhere, which is why "ship a better default" was dropped as an option on `2070a906`.
+- **Release picker reversed** (~20:39): *show the picker on the sign-in screen in release builds too.* Mounting it in Settings was rejected because `AuthGate` sits in front of Settings (`auth_gate.dart:50-51` → `app.dart:272`), so a stranded phone could never reach it.
+- **Branch triage gate `970940df` ruled**: Rachel's gitignore change lands (`fb9c099f`); Sam's legacy-JS guard, Rio's `local_state` fixture and the Tiberius doctrine branch are all dropped, branches kept.
+- **Opus accuracy runs through the :8000 submit door**, not ad hoc.
+
+### ⏳ Owed — 2026-09-16
+- [ ] **`2070a906` release picker** — flip on branch `tiffany/release-picker` off `a349f0a`; invert the `ca07b57` release-gate tests to pin the new behaviour, mutant-check, rewrite the docstring, review, merge. The row itself is still in the holding area: admitting it needs Rick, and while the sword-of-Damocles rule is on it also costs one of my live tickets. Card with him.
+- [ ] **JDK ruling** — recommendation is JDK 21 plus `flutter config --jdk-dir`, no repo change. Evidence in `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md`. Rick has not answered.
+- [ ] **`9b1f7701` Opus accuracy** — tooling merged in lupin `74c9822a`; it skips until `LUPIN_OPUS_ACCURACY_DIR` points at recordings. Put them in `lupin/io/opus-accuracy/recordings/`, then submit integration with `-v -k opus_vs_wav` after `venue_idle`.
+- [ ] **`c51e92da` phone round-trip probe** — parked until a real handset is in hand. Pull the JSONL and the recordings, report p50/p90 upload on wifi.
+- [ ] **Laptop one-time cleanup** — `rm -rf ~/Projects/lupin-mobile/.claude ~/Projects/lupin-mobile/io`. The rsync script excludes them now, but rsync never deletes what it excludes.
+- [ ] **Worktree cleanup** — the merged worktrees under `.claude/worktrees/` in both repos. An earlier removal was refused by the permission classifier.
 
 ## 🆕 Open from 2026-09-08 (abstract rendering + doc-link viewer)
 
