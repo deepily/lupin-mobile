@@ -135,6 +135,7 @@ class TestKeys {
   static const focusPausedBanner    = 'focus.pausedBanner';
   static const focusRetryBanner     = 'focus.retryBanner';
   static const focusBatchFallbackPrefix = 'focus.batchFallback.';  // + notificationId
+  static const focusBubblePrefix        = 'focus.bubble.';         // + notificationId
   // Focus rail visibility lens (2026.06.25 plan, built 2026-08-21)
   static const focusFilterBar            = 'focus.filterBar';
   static const focusFilterLive           = 'focus.filter.live';

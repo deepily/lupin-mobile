@@ -42,6 +42,11 @@ class FocusChatPane extends StatefulWidget {
 
   const FocusChatPane( { super.key, this.userEmail, this.stopList, this.prefs } );
 
+  /// Share of the pane's width a bubble may use (row 3681bd9e). A fixed
+  /// 320 px cap left bubbles at about half the width of an unfolded Pixel
+  /// Fold while the header spanned all of it; a fraction follows the screen.
+  static const double bubbleWidthFraction = 0.9;
+
   @override
   State<FocusChatPane> createState() => _FocusChatPaneState();
 }
@@ -320,11 +325,14 @@ class _MessageBubble extends StatelessWidget {
       ],
     );
 
-    return Align(
+    return LayoutBuilder( builder: ( context, box ) => Align(
       alignment: _isUserReply ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
+        key        : Key( '${TestKeys.focusBubblePrefix}${msg.item.id}' ),
         margin     : const EdgeInsets.symmetric( vertical: 4 ),
-        constraints: const BoxConstraints( maxWidth: 320 ),
+        constraints: BoxConstraints(
+          maxWidth: box.maxWidth * FocusChatPane.bubbleWidthFraction,
+        ),
         clipBehavior: Clip.antiAlias,
         decoration : BoxDecoration(
           color: _isUserReply
@@ -349,7 +357,7 @@ class _MessageBubble extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ) );
   }
 
   Widget _promptZone( BuildContext context ) {
