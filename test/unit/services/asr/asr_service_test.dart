@@ -21,6 +21,7 @@ void main() {
       registerFallbackValue( FormData() );
       registerFallbackValue( Options() );
       registerFallbackValue( const RecordConfig() );
+      registerFallbackValue( AudioEncoder.wav );
     } );
 
     setUp( () async {
@@ -34,6 +35,7 @@ void main() {
       );
 
       when( () => recorder.hasPermission() ).thenAnswer( ( _ ) async => true );
+      when( () => recorder.isEncoderSupported( any() ) ).thenAnswer( ( _ ) async => true );
       when( () => recorder.start( any(), path: any( named: 'path' ) ) )
           .thenAnswer( ( _ ) async {} );
       when( () => recorder.cancel() ).thenAnswer( ( _ ) async {} );

@@ -49,10 +49,11 @@ void main() {
     } );
 
     test( 'the maths matches the recorder config it claims to describe', () {
-      // The constant is derived from recordConfig, so a future change to the
-      // sample rate or channel count that forgets the diagnostic fails HERE
-      // rather than silently reporting wrong durations in the field.
-      const cfg = AsrService.recordConfig;
+      // The constant describes the WAV format (the fallback since row
+      // 9b1f7701), so a change to its sample rate or channel count that
+      // forgets the diagnostic fails HERE rather than silently reporting
+      // wrong durations in the field.
+      const cfg = AsrService.wavFallbackConfig;
       expect( cfg.encoder,     AudioEncoder.wav );
       expect( cfg.sampleRate,  44100 );
       expect( cfg.numChannels, 1 );

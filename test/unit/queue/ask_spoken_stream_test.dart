@@ -393,12 +393,16 @@ void main() {
     late AsrService    asr;
     late String        recordedPath;
 
-    setUpAll( () => registerFallbackValue( const RecordConfig() ) );
+    setUpAll( () {
+      registerFallbackValue( const RecordConfig() );
+      registerFallbackValue( AudioEncoder.wav );
+    } );
 
     setUp( () {
       recorder = _MockRecorder();
       asr      = AsrService( dio: _MockDio(), recorder: recorder, tempDirProvider: () async => tempDir );
       when( () => recorder.hasPermission() ).thenAnswer( ( _ ) async => true );
+      when( () => recorder.isEncoderSupported( any() ) ).thenAnswer( ( _ ) async => true );
       when( () => recorder.start( any(), path: any( named: 'path' ) ) ).thenAnswer( ( inv ) async {
         recordedPath = inv.namedArguments[ #path ] as String;
         File( recordedPath ).writeAsBytesSync( utf8.encode( 'WAV-BYTES' ) );

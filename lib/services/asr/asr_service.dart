@@ -49,13 +49,46 @@ class AsrService {
 
   static const String endpointPath = '/api/upload-and-transcribe-wav';
 
-  /// OSQ-2 RATIFIED-AS-AMENDED params, mirrored from the parent GUI client
-  /// (`lupin_client.py:79-81` — paInt16 / mono / 44100 Hz).
+  /// The capture format: Ogg/Opus, mono, 32 kbps (row 9b1f7701).
+  ///
+  /// Rick ruled Opus at ~32 kbps only after an accuracy check, and it passed:
+  /// 9 real phone recordings sent as WAV and as 32 kbps Opus differed by one
+  /// word in 176 (0.57% pooled, limit 5%; :8000 run ts-66e2828c), with files
+  /// about 23x smaller. 48 kHz because Android's Opus encoder only takes
+  /// 8/12/16/24/48 kHz and silently rounds anything else. The server's upload
+  /// doors keep the file's extension, so an `.ogg` name is what tells them.
   static const RecordConfig recordConfig = RecordConfig(
+    encoder     : AudioEncoder.opus,
+    sampleRate  : 48000,
+    numChannels : 1,
+    bitRate     : 32000,
+  );
+
+  /// What a device WITHOUT an Opus encoder records: the WAV the app shipped
+  /// before the switch (OSQ-2, mirrored from `lupin_client.py:79-81` — paInt16 /
+  /// mono / 44100 Hz), known to transcribe. Android gained its Opus encoder
+  /// and Ogg writer in API 29, and minSdk is 24, so this path is real.
+  static const RecordConfig wavFallbackConfig = RecordConfig(
     encoder     : AudioEncoder.wav,
     sampleRate  : 44100,
     numChannels : 1,
   );
+
+  /// The file extension a recording in [encoder]'s format is written and
+  /// uploaded under: `ogg` for Opus, `wav` otherwise.
+  static String fileExtensionFor( AudioEncoder encoder ) =>
+      encoder == AudioEncoder.opus ? 'ogg' : 'wav';
+
+  static String _extensionOf( String path ) {
+    final dot = path.lastIndexOf( '.' );
+    return dot < 0 ? 'wav' : path.substring( dot + 1 );
+  }
+
+  static bool _isWav( String path ) => _extensionOf( path ) == 'wav';
+
+  /// Answers whether this device can record Opus; asked once, then cached.
+  final Future<bool> Function() _opusSupported;
+  bool? _opusAvailable;
 
   String? _activePath;
 
@@ -85,13 +118,16 @@ class AsrService {
     Future<Directory> Function()? keptDirProvider,
     Future<void> Function( File source, String dest )? copyFile,
     DateTime Function()?          clock,
+    Future<bool> Function()?      opusSupported,
   } ) : _dio             = dio,
         _recorder        = recorder,
         _tempDirProvider = tempDirProvider ?? getTemporaryDirectory,
         _keepRecordings  = keepRecordings  ?? _never,
         _keptDirProvider = keptDirProvider ?? keptRecordingsDirectory,
         _copyFile        = copyFile        ?? _copy,
-        _clock           = clock           ?? DateTime.now;
+        _clock           = clock           ?? DateTime.now,
+        _opusSupported   = opusSupported   ??
+            ( () => recorder.isEncoderSupported( AudioEncoder.opus ) );
 
   static bool _never() => false;
   static Future<void> _copy( File source, String dest ) => source.copy( dest );
@@ -121,7 +157,8 @@ class AsrService {
   // decoding also stopped at the first pause (lupin row 05ddc8f0). A wait
   // before stop() was tried and withdrawn: it fixed nothing.
 
-  /// PCM frame rate implied by [recordConfig]: 44100 Hz × 1 channel × 16-bit.
+  /// PCM frame rate implied by [wavFallbackConfig]: 44100 Hz × 1 channel × 16-bit.
+  /// Only a WAV's size says how long it is; an Opus file's size does not.
   static const int _bytesPerSecond = 44100 * 1 * 2;
 
   /// Canonical WAV header size for the 16-bit PCM the recorder writes.
@@ -264,6 +301,18 @@ class AsrService {
       debugPrint( 'AsrService: capture size unreadable at stop for $path: $e' );
       return;
     }
+    if ( !_isWav( path ) ) {
+      // Compressed audio: its size does not give its length, and the zero-run
+      // dropout scan needs raw samples. Log what is still true.
+      debugPrint( 'AsrService: capture stopped — ${first}B ${_extensionOf( path )} $path' );
+      if ( heldFor != null ) {
+        debugPrint( 'AsrService: held ${( heldFor.inMilliseconds / 1000.0 ).toStringAsFixed( 2 )}s' );
+      }
+      if ( first == 0 ) {
+        debugPrint( 'AsrService: ⚠️ capture is empty — no audio was written. Check microphone permission.' );
+      }
+      return;
+    }
     final recorded = wavSeconds( first );
     debugPrint(
       'AsrService: capture stopped — ${first}B '
@@ -301,7 +350,7 @@ class AsrService {
     Future( () {
       try {
         final pcm     = pcmFromWav( File( path ).readAsBytesSync() );
-        final dropout = findDropout( pcm, recordConfig.sampleRate );
+        final dropout = findDropout( pcm, wavFallbackConfig.sampleRate );
         if ( dropout != null ) {
           debugPrint(
             'AsrService: ⚠️ INPUT DROPOUT — audio went silent (exact zeros) at '
@@ -338,7 +387,7 @@ class AsrService {
 
   /// The shell command that copies one kept recording off a debug build.
   static const String keptRecordingPullHint =
-      'adb exec-out run-as ai.deepily.lupin_mobile cat files/recordings/<name>.wav > <name>.wav';
+      'adb exec-out run-as ai.deepily.lupin_mobile cat files/recordings/<name>.ogg > <name>.ogg';
 
   /// Where kept recordings go: `<app support dir>/recordings`, which on
   /// Android is `/data/user/0/<applicationId>/files/recordings/`.
@@ -371,7 +420,8 @@ class AsrService {
     return Directory( '${base.path}/recordings' );
   }
 
-  /// `rec-<yyyyMMdd-HHmmssSSS>Z-<n>.wav`, stamped in UTC.
+  /// `rec-<yyyyMMdd-HHmmssSSS>Z-<n>.<extension>`, stamped in UTC. The
+  /// extension is the recording's own, so a kept Opus file stays `.ogg`.
   ///
   /// [n] restarts at 1 on every app launch, so it is NOT what makes the name
   /// unique: two runs that record in the same second used to produce the same
@@ -388,13 +438,13 @@ class AsrService {
   ///   - two instants a millisecond apart never yield the same name, whatever
   ///     [n] is
   @visibleForTesting
-  static String keptFileNameFor( DateTime t, int n ) {
+  static String keptFileNameFor( DateTime t, int n, { String extension = 'wav' } ) {
     final u = t.toUtc();
     String two( int v ) => v.toString().padLeft( 2, '0' );
     final stamp = '${u.year.toString().padLeft( 4, '0' )}${two( u.month )}${two( u.day )}'
                   '-${two( u.hour )}${two( u.minute )}${two( u.second )}'
                   '${u.millisecond.toString().padLeft( 3, '0' )}Z';
-    return 'rec-$stamp-$n.wav';
+    return 'rec-$stamp-$n.$extension';
   }
 
   /// The most recent keep-then-delete, so a test can await it. Null until a
@@ -402,7 +452,26 @@ class AsrService {
   @visibleForTesting
   Future<void>? get lastKeep => _lastKeep;
 
-  /// Begin a push-to-talk capture to a temp WAV under the app cache dir.
+  /// The format this device records in: [recordConfig] when it can encode
+  /// Opus, otherwise [wavFallbackConfig]. A failed check counts as "cannot",
+  /// because WAV is the format known to work.
+  Future<RecordConfig> _captureConfig() async {
+    var ok = _opusAvailable;
+    if ( ok == null ) {
+      try {
+        ok = await _opusSupported();
+      } catch ( e ) {
+        debugPrint( 'AsrService: Opus support check failed ($e) — recording WAV' );
+        ok = false;
+      }
+      _opusAvailable = ok;
+      if ( !ok ) debugPrint( 'AsrService: no Opus encoder on this device — recording WAV' );
+    }
+    return ok ? recordConfig : wavFallbackConfig;
+  }
+
+  /// Begin a push-to-talk capture to a temp file under the app cache dir, in
+  /// Ogg/Opus where the device supports it and WAV where it does not.
   ///
   /// Raises:
   ///   - [AsrException] if mic permission is denied or the recorder fails
@@ -423,16 +492,18 @@ class AsrService {
     if ( !await _recorder.hasPermission() ) {
       throw const AsrException( 'Microphone permission denied' );
     }
-    final dir  = await _tempDirProvider();
-    final path = '${dir.path}/asr-reply-${DateTime.now().microsecondsSinceEpoch}.wav';
+    final config = await _captureConfig();
+    final dir    = await _tempDirProvider();
+    final path   = '${dir.path}/asr-reply-${DateTime.now().microsecondsSinceEpoch}'
+                   '.${fileExtensionFor( config.encoder )}';
     try {
-      await _recorder.start( recordConfig, path: path );
+      await _recorder.start( config, path: path );
       // Row 4be8fe63: name the config in the log, so a transcript that reads
       // wrong can be checked against the format that produced it without
       // anyone having to guess at the defaults.
       debugPrint(
-        'AsrService: capture started — ${recordConfig.encoder.name} '
-        '${recordConfig.sampleRate}Hz ${recordConfig.numChannels}ch $path',
+        'AsrService: capture started — ${config.encoder.name} '
+        '${config.sampleRate}Hz ${config.numChannels}ch ${config.bitRate}bps $path',
       );
     } catch ( e ) {
       // F-S4-IMPL-1 (optional half): a start()-throw can leave a zero-byte
@@ -513,7 +584,7 @@ class AsrService {
       final dir = await _keptDirProvider();
       await dir.create( recursive: true );
       _keptCount++;
-      final dest = '${dir.path}/${keptFileNameFor( _clock(), _keptCount )}';
+      final dest = '${dir.path}/${keptFileNameFor( _clock(), _keptCount, extension: _extensionOf( source.path ) )}';
       await _copyFile( source, dest );
       debugPrint( 'AsrService: kept recording at $dest' );
     } catch ( e ) {
@@ -523,7 +594,7 @@ class AsrService {
     }
   }
 
-  /// Stop the capture, upload the WAV, return the transcript. The temp file
+  /// Stop the capture, upload the recording, return the transcript. The temp file
   /// is deleted afterwards — success or failure.
   ///
   /// Raises:
@@ -541,12 +612,13 @@ class AsrService {
       // the stop-time reading above is what the recorder had written, this is
       // what Whisper actually received. A gap between them is the truncation.
       final uploadBytes = file.lengthSync();
-      debugPrint(
-        'AsrService: uploading ${uploadBytes}B '
-        '(~${wavSeconds( uploadBytes ).toStringAsFixed( 2 )}s) to $endpointPath',
-      );
+      final extension   = _extensionOf( filePath );
+      final seconds     = _isWav( filePath )
+          ? '~${wavSeconds( uploadBytes ).toStringAsFixed( 2 )}s'
+          : extension;
+      debugPrint( 'AsrService: uploading ${uploadBytes}B ($seconds) to $endpointPath' );
       final form = FormData.fromMap( {
-        'file': await MultipartFile.fromFile( filePath, filename: 'voice-reply.wav' ),
+        'file': await MultipartFile.fromFile( filePath, filename: 'voice-reply.$extension' ),
       } );
       final res = await _dio.post<dynamic>(
         endpointPath,
@@ -568,8 +640,7 @@ class AsrService {
       // transcription problem; off 0.8s it is a capture problem, and the log
       // line says which without anyone pulling the file.
       debugPrint(
-        'AsrService: transcript (${transcript.length} chars) from '
-        '~${wavSeconds( uploadBytes ).toStringAsFixed( 2 )}s: [$transcript]',
+        'AsrService: transcript (${transcript.length} chars) from $seconds: [$transcript]',
       );
       if ( transcript.isEmpty ) {
         throw const AsrException( 'Transcription came back empty' );

@@ -33,6 +33,7 @@ void main() {
 
   setUpAll( () {
     registerFallbackValue( const RecordConfig() );
+    registerFallbackValue( AudioEncoder.wav );
     registerFallbackValue( const AskRequest( question: '_fallback' ) );
   } );
 
@@ -46,6 +47,7 @@ void main() {
     copyThrows = false;
 
     when( () => recorder.hasPermission() ).thenAnswer( ( _ ) async => true );
+    when( () => recorder.isEncoderSupported( any() ) ).thenAnswer( ( _ ) async => true );
     when( () => recorder.start( any(), path: any( named: 'path' ) ) ).thenAnswer( ( _ ) async {} );
     when( () => recorder.cancel() ).thenAnswer( ( _ ) async {} );
   } );
@@ -95,7 +97,7 @@ void main() {
       expect( keptDir.existsSync(), isFalse, reason: 'OFF touches no folder' );
     } );
 
-    test( 'ON → copy with the same bytes, named rec-<stamp>-<n>.wav, then the original is deleted', () async {
+    test( 'ON → copy with the same bytes, named rec-<stamp>-<n>.ogg, then the original is deleted', () async {
       keepOn     = true;
       final asr  = build();
       final path = await recordToFile( asr );
@@ -104,7 +106,7 @@ void main() {
       await asr.lastKeep;
 
       expect( File( path ).existsSync(), isFalse );
-      final kept = File( '${keptDir.path}/rec-20260915-070809123Z-1.wav' );
+      final kept = File( '${keptDir.path}/rec-20260915-070809123Z-1.ogg' );
       expect( kept.existsSync(), isTrue );
       expect( kept.readAsBytesSync(), _wavBytes );
 
@@ -112,7 +114,7 @@ void main() {
       final second = await recordToFile( asr );
       asr.discardPendingUpload( second );
       await asr.lastKeep;
-      expect( File( '${keptDir.path}/rec-20260915-070809123Z-2.wav' ).existsSync(), isTrue );
+      expect( File( '${keptDir.path}/rec-20260915-070809123Z-2.ogg' ).existsSync(), isTrue );
       expect( File( second ).existsSync(), isFalse );
     } );
 
@@ -205,7 +207,7 @@ void main() {
       await asr.lastKeep;
 
       expect( File( askedPath! ).existsSync(), isFalse );
-      final kept = File( '${keptDir.path}/rec-20260915-070809123Z-1.wav' );
+      final kept = File( '${keptDir.path}/rec-20260915-070809123Z-1.ogg' );
       expect( kept.existsSync(), isTrue );
       expect( kept.readAsBytesSync(), _wavBytes );
 
@@ -237,7 +239,7 @@ void main() {
       await second.lastKeep;
 
       final kept = keptDir.listSync().whereType<File>().map( ( f ) => f.uri.pathSegments.last ).toList()..sort();
-      expect( kept, [ 'rec-20260915-070809400Z-1.wav', 'rec-20260915-070809401Z-1.wav' ],
+      expect( kept, [ 'rec-20260915-070809400Z-1.ogg', 'rec-20260915-070809401Z-1.ogg' ],
         reason: 'the second run must not overwrite the first' );
       expect( copies, 2 );
     } );

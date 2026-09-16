@@ -182,4 +182,6 @@ When sending document viewer links from this repo, use:
 - **Source of truth**: Lupin's `lupin-app.ini` § `external repos`
 - **Runtime discovery**: inspect the `doc_scope` field returned by `mcp__cosa-voice__get_session_info()`
 
-Example: `/app/docs?path=README.md&scope=lupin-mobile`
+Example: `/app/docs?path=lupin-mobile/README.md`
+
+The project name is the **first segment of `path`**. The old `&scope=` parameter was retired on 2026-05-21: a link like `path=src/rnd/x.md&scope=lupin-mobile` reads `src` as the project and 404s (this happened on 2026-09-16).
