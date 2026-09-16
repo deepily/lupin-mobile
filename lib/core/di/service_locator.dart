@@ -207,16 +207,26 @@ class ServiceLocator {
   /// to LAN DEV would keep signing in against the old host while WebSocket
   /// code (reading AppConstants) followed the new one.
   ///
+  /// The baseUrl is ALSO stamped here, at start-up. Waiting for HttpService's
+  /// constructor to do it leaves this Dio on an empty baseUrl for the whole
+  /// stretch of `_initializeServices` where AuthRepository and AuthInterceptor
+  /// are already holding it — a relative "/auth/login" posted in that window
+  /// goes nowhere. Cold start with LAN DEV saved must reach the LAN host
+  /// without depending on registration order.
+  ///
   /// Requires:
   ///   - no Dio is registered yet
   ///
   /// Ensures:
   ///   - a Dio is registered in GetIt and returned
+  ///   - its `options.baseUrl` is the SAVED context's baseUrl before this
+  ///     method returns
   ///   - its `options.baseUrl` is the new context's baseUrl after every
   ///     [ServerContextService.setActive] switch
   @visibleForTesting
   static Dio registerSharedDio(ServerContextService serverContext) {
     final dio = Dio();
+    dio.options.baseUrl = serverContext.baseUrl;
     serverContext.addListener((config) => dio.options.baseUrl = config.baseUrl);
     _getIt.registerSingleton<Dio>(dio);
     return dio;

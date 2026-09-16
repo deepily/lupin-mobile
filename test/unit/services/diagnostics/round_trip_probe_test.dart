@@ -96,6 +96,23 @@ class _CountingInterceptor extends Interceptor {
   }
 }
 
+/// Gives the upload a body whose length the client cannot state: the data
+/// becomes a raw byte stream and content-length says -1, so Dio reports send
+/// progress against a non-positive total. That is the only way `_upload` can
+/// see `totalBytes <= 0`, and it is what a chunked / unknown-length body looks
+/// like from inside the request. The probe's own code still decides what to
+/// log — nothing about ProbeSample is faked here.
+class _UnknownLengthBody extends Interceptor {
+  @override
+  void onRequest( RequestOptions options, RequestInterceptorHandler handler ) {
+    if ( options.path == AsrService.endpointPath ) {
+      options.data = Stream<List<int>>.fromIterable( [ [ 1, 2, 3 ], [ 4, 5, 6 ] ] );
+      options.headers[ Headers.contentLengthHeader ] = '-1';
+    }
+    handler.next( options );
+  }
+}
+
 Future<Uint8List> _tinyClip( int rate ) async => Uint8List( 44 + rate ~/ 100 );
 
 void main() {
@@ -286,6 +303,25 @@ void main() {
       expect( m[ 'send_ms' ], isNull );
       expect( m[ 'send_ms_null_reason' ], 'not_fully_sent' );
       expect( m[ 'total_ms_includes_transcription' ], isTrue );
+    } );
+
+    // Fold-later from the probe review (row 8d9b2a0c): the unknown_length arm
+    // of `_upload` was only ever seen through a hand-built ProbeSample, so
+    // nothing proved the probe itself could reach it. This drives the real
+    // request path.
+    test( 'an upload whose body length the client cannot state logs send_ms null with reason unknown_length', () async {
+      dio.interceptors.add( _UnknownLengthBody() );
+      await probeWith().run( sink );
+
+      final m = jsonDecode( sink.lines[ 20 ] ) as Map<String, dynamic>;
+      expect( m[ 'kind' ], 'upload' );
+      expect( m[ 'status' ], 200, reason: 'the request SUCCEEDED — only its send time is unmeasurable' );
+      expect( m[ 'send_ms' ], isNull );
+      expect(
+        m[ 'send_ms_null_reason' ],
+        'unknown_length',
+        reason: 'not_fully_sent would blame the network for a body nobody could measure',
+      );
     } );
 
     test( 'both clips are built once, before the first request is timed', () async {

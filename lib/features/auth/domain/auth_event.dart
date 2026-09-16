@@ -50,9 +50,3 @@ class AuthServerContextSwitchRequested extends AuthEvent {
   @override
   List<Object?> get props => [ contextId ];
 }
-
-/// Emitted when the user switches server context (Dev ↔ Test).
-/// Forces logout and clears the cached session.
-class AuthServerContextChanged extends AuthEvent {
-  const AuthServerContextChanged();
-}
