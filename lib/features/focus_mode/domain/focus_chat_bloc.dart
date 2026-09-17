@@ -566,7 +566,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       }
       windows[ event.senderId ] = window;
 
-      emit( state.copyWith( windows: windows ) );
+      emit( state.copyWith(
+        windows              : windows,
+        lastActivityBySender : _activityBumped( event.senderId, _now() ),
+        asOf                 : _now(),
+      ) );
     } on NotificationApiException catch ( e ) {
       // AC-S4.9 — two of these 400s are not errors, they are ENDINGS.
       // "already responded" and "grace period exceeded" both mean the ask
@@ -714,7 +718,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         window.removeAt( 0 );
       }
       windows[ senderId ] = window;
-      emit( state.copyWith( windows: windows ) );
+      emit( state.copyWith(
+        windows              : windows,
+        lastActivityBySender : _activityBumped( senderId, _now() ),
+        asOf                 : _now(),
+      ) );
     } on NotificationApiException catch ( e ) {
       print( '[FocusChat] direct message to $senderId failed: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
@@ -735,6 +743,14 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   /// WHICH rule did it cannot render the notice Rick asked for.
   StopPattern? _suppressionRule( NotificationItem item ) =>
       item.type == 'user_initiated_message' ? null : _stopList?.matchFor( item.message );
+
+  /// Rick 2026-09-17: the Live lens counts traffic in BOTH directions —
+  /// "notifications sent or received in the last hour". A session the user
+  /// just wrote to is live by that fact alone, so a successful send bumps
+  /// its activity (and refreshes the clock the band re-derives from) exactly
+  /// as an inbound arrival does.
+  Map<String, DateTime> _activityBumped( String senderId, DateTime now ) =>
+      Map<String, DateTime>.from( state.lastActivityBySender )..[ senderId ] = now;
 
   /// Merge fetched `lastActivity` into the registry (fetched wins — it is
   /// the server's view; a live arrival after this emit bumps it again).
