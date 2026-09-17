@@ -118,6 +118,41 @@ void main() {
     });
   });
 
+  // Rick 2026-09-17: an eye in the password field shows and hides what was typed.
+  group( "LoginScreen password visibility", () {
+    late MockAuthBloc auth;
+    late MockServerContextService ctx;
+
+    setUp(() {
+      auth = MockAuthBloc();
+      ctx  = MockServerContextService();
+      when( () => auth.state ).thenReturn( const AuthUnauthenticated() );
+      stubServerContext( ctx );
+    });
+
+    bool obscured( WidgetTester tester ) => tester.widget<EditableText>( find.descendant(
+      of: find.byKey( const Key( TestKeys.loginPasswordField ) ), matching: find.byType( EditableText ) ) ).obscureText;
+
+    testWidgets( "password starts hidden; the eye toggles it shown and back, keeping the text", ( tester ) async {
+      await tester.pumpWidget( testApp( authBloc: auth, child: LoginScreen( serverContext: ctx ) ) );
+      await tester.enterText( find.byKey( const Key( TestKeys.loginPasswordField ) ), "hunter2" );
+
+      expect( obscured( tester ), isTrue );
+      expect( find.byIcon( Icons.visibility ), findsOneWidget );
+
+      await tester.tap( find.byKey( const Key( TestKeys.loginPasswordVisibility ) ) );
+      await tester.pump();
+      expect( obscured( tester ), isFalse );
+      expect( find.byIcon( Icons.visibility_off ), findsOneWidget );
+      expect( find.text( "hunter2" ), findsOneWidget );
+
+      await tester.tap( find.byKey( const Key( TestKeys.loginPasswordVisibility ) ) );
+      await tester.pump();
+      expect( obscured( tester ), isTrue );
+      verifyNever( () => auth.add( any() ) );
+    } );
+  });
+
   // The server switch on the login screen, driven end to end: the REAL
   // AuthBloc, service, credential store and shared Dio, the SHIPPED
   // server-contexts.json, at phone width. Only the network repo is mocked.

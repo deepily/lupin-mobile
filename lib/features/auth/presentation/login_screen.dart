@@ -28,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _email;
   late final TextEditingController _password;
   final GlobalKey<FormState> _form = GlobalKey<FormState>();
+  bool _passwordVisible = false;
 
   @override
   void initState() {
@@ -99,8 +100,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     key: const Key( TestKeys.loginPasswordField ),
                     controller: _password,
-                    decoration: const InputDecoration( labelText: "Password" ),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: "Password",
+                      suffixIcon: IconButton(
+                        key: const Key( TestKeys.loginPasswordVisibility ),
+                        icon: Icon( _passwordVisible ? Icons.visibility_off : Icons.visibility ),
+                        tooltip: _passwordVisible ? "Hide password" : "Show password",
+                        onPressed: () => setState( () => _passwordVisible = !_passwordVisible ),
+                      ),
+                    ),
+                    obscureText: !_passwordVisible,
                     // Rick 2026-08-21: the keyboard's enter/done key submits —
                     // no reaching up to tap "Sign in" after typing the password.
                     textInputAction: TextInputAction.done,

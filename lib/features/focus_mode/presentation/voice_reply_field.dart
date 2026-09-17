@@ -8,6 +8,16 @@ import '../../../services/asr/asr_service.dart';
 
 enum _VoiceReplyPhase { idle, recording, transcribing, review }
 
+/// Rick 2026-09-17: the composer row was too thin to hit reliably with a
+/// thumb. Every phase row is 25% taller than a stock 48 dp IconButton row,
+/// and its buttons grow to match so the whole height is a tap target.
+const double kVoiceReplyRowHeight = 60.0;   // 48 × 1.25
+const double _kIconSize           = 30.0;   // 24 × 1.25
+const BoxConstraints _kButtonConstraints = BoxConstraints(
+  minWidth  : kVoiceReplyRowHeight,
+  minHeight : kVoiceReplyRowHeight,
+);
+
 /// Self-contained record→transcribe→edit→send composer (S4 §4.2). The
 /// widget NEVER dispatches responses itself (F-S3-2): Send invokes the
 /// injected [onSubmit] EXACTLY ONCE with the edited text and resets to
@@ -162,7 +172,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
               ],
             ),
           ),
-        _buildPhaseRow( context ),
+        ConstrainedBox(
+          constraints : const BoxConstraints( minHeight: kVoiceReplyRowHeight ),
+          child       : _buildPhaseRow( context ),
+        ),
       ],
     );
   }
@@ -174,10 +187,12 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton(
-              key       : const Key( TestKeys.voiceReplyMic ),
-              icon      : const Icon( Icons.mic ),
-              tooltip   : 'Record a voice reply',
-              onPressed : _onMicPressed,
+              key         : const Key( TestKeys.voiceReplyMic ),
+              icon        : const Icon( Icons.mic ),
+              tooltip     : 'Record a voice reply',
+              onPressed   : _onMicPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
             ),
           ],
         );
@@ -186,17 +201,21 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton(
-              key       : const Key( TestKeys.voiceReplyMic ),
-              icon      : const Icon( Icons.stop_circle ),
-              tooltip   : 'Stop and transcribe',
-              onPressed : _onMicPressed,
+              key         : const Key( TestKeys.voiceReplyMic ),
+              icon        : const Icon( Icons.stop_circle ),
+              tooltip     : 'Stop and transcribe',
+              onPressed   : _onMicPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
             ),
             Text( 'Recording… ${_elapsedSeconds}s' ),
             IconButton(
-              key       : const Key( TestKeys.voiceReplyCancel ),
-              icon      : const Icon( Icons.delete_outline ),
-              tooltip   : 'Discard recording',
-              onPressed : _onCancelPressed,
+              key         : const Key( TestKeys.voiceReplyCancel ),
+              icon        : const Icon( Icons.delete_outline ),
+              tooltip     : 'Discard recording',
+              onPressed   : _onCancelPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
             ),
           ],
         );
@@ -212,10 +231,12 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
             const SizedBox( width: 12 ),
             const Text( 'Transcribing…' ),
             IconButton(
-              key       : const Key( TestKeys.voiceReplyCancel ),
-              icon      : const Icon( Icons.close ),
-              tooltip   : 'Cancel transcription',
-              onPressed : _onCancelPressed,
+              key         : const Key( TestKeys.voiceReplyCancel ),
+              icon        : const Icon( Icons.close ),
+              tooltip     : 'Cancel transcription',
+              onPressed   : _onCancelPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
             ),
           ],
         );
@@ -234,16 +255,20 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
               ),
             ),
             IconButton(
-              key       : const Key( TestKeys.voiceReplySend ),
-              icon      : const Icon( Icons.send ),
-              tooltip   : 'Send reply',
-              onPressed : _onSendPressed,
+              key         : const Key( TestKeys.voiceReplySend ),
+              icon        : const Icon( Icons.send ),
+              tooltip     : 'Send reply',
+              onPressed   : _onSendPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
             ),
             IconButton(
-              key       : const Key( TestKeys.voiceReplyCancel ),
-              icon      : const Icon( Icons.close ),
-              tooltip   : 'Discard reply',
-              onPressed : _onCancelPressed,
+              key         : const Key( TestKeys.voiceReplyCancel ),
+              icon        : const Icon( Icons.close ),
+              tooltip     : 'Discard reply',
+              onPressed   : _onCancelPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
             ),
           ],
         );

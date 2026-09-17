@@ -41,6 +41,13 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build( BuildContext context ) {
     return BlocBuilder<AuthBloc, AuthState>(
+      // Rick 2026-09-17: a failed sign-in must not wipe the password. A login
+      // attempt goes login → AuthLoading → AuthError; rebuilding on the
+      // AuthLoading step swapped LoginScreen for the spinner Scaffold, which
+      // threw away its State and both text controllers. LoginScreen already
+      // shows its own busy spinner, so leave it mounted through that step.
+      buildWhen: ( previous, current ) =>
+        !( current is AuthLoading && _rendersLogin( previous ) ),
       builder: ( context, state ) {
         if ( state is AuthInitial || state is AuthLoading ) {
           return const Scaffold(
@@ -66,4 +73,7 @@ class _AuthGateState extends State<AuthGate> {
       },
     );
   }
+
+  static bool _rendersLogin( AuthState state ) =>
+    state is AuthUnauthenticated || state is AuthError;
 }

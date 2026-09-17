@@ -8,9 +8,10 @@ class TestKeys {
   TestKeys._();
 
   // Login
-  static const loginEmailField    = 'login.email';
-  static const loginPasswordField = 'login.password';
-  static const loginSubmitButton  = 'login.submit';
+  static const loginEmailField         = 'login.email';
+  static const loginPasswordField      = 'login.password';
+  static const loginSubmitButton       = 'login.submit';
+  static const loginPasswordVisibility = 'login.passwordVisibility';
 
   // Server switch (ServerContextToggle) — segments suffixed with the context
   // id from server-contexts.json, e.g. '${serverContextSegmentPrefix}lan-dev'

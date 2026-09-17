@@ -146,5 +146,24 @@ void main() {
       verifyNever( () => asr.stopAndTranscribe() );
       expect( byKeyStr( TestKeys.voiceReplyMic ), findsOneWidget );
     } );
+
+    // Rick 2026-09-17: the composer was too thin for a thumb — 25% taller.
+    testWidgets( 'the mic row and its buttons are 25% taller than a stock 48 dp row', ( tester ) async {
+      await tester.pumpWidget( host() );
+      expect( kVoiceReplyRowHeight, 48.0 * 1.25 );
+
+      final mic = tester.getSize( byKeyStr( TestKeys.voiceReplyMic ) );
+      expect( mic.height, greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: 'idle mic tap target' );
+      expect( mic.width,  greaterThanOrEqualTo( kVoiceReplyRowHeight ) );
+      expect( tester.getSize( find.byType( VoiceReplyField ) ).height,
+          greaterThanOrEqualTo( kVoiceReplyRowHeight ) );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyMic ) );   // → recording
+      await tester.pump();
+      expect( tester.getSize( byKeyStr( TestKeys.voiceReplyMic ) ).height,
+          greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: 'stop button' );
+      expect( tester.getSize( byKeyStr( TestKeys.voiceReplyCancel ) ).height,
+          greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: 'discard button' );
+    } );
   } );
 }
