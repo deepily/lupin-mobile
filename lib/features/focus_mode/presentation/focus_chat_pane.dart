@@ -127,6 +127,8 @@ class _FocusChatPaneState extends State<FocusChatPane> {
     final stored  = state.windows[ focused ] ?? const <FocusMessage>[];
     final pending = state.pendingPromptFor( focused );
     final persona = state.personasBySender[ focused ];
+    final personaRaw   = ( persona?.displayName ?? persona?.name ?? '' ).trim();
+    final personaLabel = personaRaw.isEmpty ? null : personaRaw;
 
     // Stop-list RENDER lens (2026-08-21, Rick: "Done: Bash is checked yet
     // still shows"): ingest suppression only catches NEW arrivals, so a
@@ -177,10 +179,26 @@ class _FocusChatPaneState extends State<FocusChatPane> {
               if ( persona != null )
                 PersonaBadge( persona: persona, senderId: focused, diameter: 28 ),
               if ( persona != null ) const SizedBox( width: 8 ),
+              // Row de12b7bc: the header named the e-mail and session but not
+              // WHO — basic information. Persona name first, bold; the sender
+              // id stays, italic and quieter, so both read at a glance.
+              if ( personaLabel != null ) ...[
+                Text(
+                  personaLabel,
+                  key   : const Key( TestKeys.focusHeaderPersonaName ),
+                  style : Theme.of( context ).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold ),
+                ),
+                const SizedBox( width: 8 ),
+              ],
               Expanded(
                 child: Text(
                   focused,
-                  style    : Theme.of( context ).textTheme.titleMedium,
+                  key      : const Key( TestKeys.focusHeaderSenderId ),
+                  style    : Theme.of( context ).textTheme.bodySmall?.copyWith(
+                    fontStyle : FontStyle.italic,
+                    color     : Theme.of( context ).colorScheme.outline,
+                  ),
                   overflow : TextOverflow.ellipsis,
                 ),
               ),
@@ -221,15 +239,18 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                         return _MessageBubble(
                           msg            : m,
                           senderId       : focused,
+                          personaColor   : PersonaBadge.colorOf( persona ),
                           isPendingPrompt: pending?.item.id == m.item.id,
                         );
                       }
                       return _CollapsedGroup(
                         key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
                         count    : g.count,
-                        summary  : _MessageBubble( msg: g.latest, senderId: focused, isPendingPrompt: false ),
+                        summary  : _MessageBubble( msg: g.latest, senderId: focused,
+                            personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ),
                         children : [ for ( final m in g.items.reversed )
-                          _MessageBubble( msg: m, senderId: focused, isPendingPrompt: false ) ],
+                          _MessageBubble( msg: m, senderId: focused,
+                              personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ) ],
                       );
                     },
                   );
@@ -276,6 +297,7 @@ class _RetryBanner extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final FocusMessage msg;
   final String       senderId;
+  final Color?       personaColor;
   final bool         isPendingPrompt;
 
   /// AC-S4.14's speak-anyway hook. Reaching the orchestrator's
@@ -290,8 +312,14 @@ class _MessageBubble extends StatelessWidget {
     required this.msg,
     required this.senderId,
     required this.isPendingPrompt,
+    this.personaColor,
   } );
 
+  /// The SENDER's own colour (row de12b7bc). Rick: with Tiffany, María and Mr.
+  /// Radio on the rail in yellow, pink and orange, every bubble carried the
+  /// same orange — because the bar was keyed to PRIORITY, and `high` is
+  /// orange. It now says who sent it; the priority palette is the fallback for
+  /// a sender with no colour.
   static const _priorityAccent = {
     'low'    : Colors.blueGrey,
     'medium' : Colors.blue,
@@ -304,7 +332,7 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build( BuildContext context ) {
     final theme  = Theme.of( context );
-    final accent = _priorityAccent[ msg.item.priority ] ?? Colors.blueGrey;
+    final accent = personaColor ?? _priorityAccent[ msg.item.priority ] ?? Colors.blueGrey;
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,7 +386,7 @@ class _MessageBubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Priority accent bar (Claude-sent bubbles only).
+              // Sender-colour accent bar (Claude-sent bubbles only).
               if ( !_isUserReply ) Container( width: 3, color: accent ),
               Flexible(
                 child: Padding(

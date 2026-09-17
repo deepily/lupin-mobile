@@ -47,6 +47,11 @@ class PersonaBadge extends StatelessWidget {
     this.diameter = 40.0,
   } );
 
+  /// The persona's own colour, or null when it has none or the hex is
+  /// malformed. Public because the badge is no longer the only thing tinted by
+  /// it: focus-mode bubbles carry the SENDER's colour too (row de12b7bc).
+  static Color? colorOf( VoicePersona? persona ) => _parseHex( persona?.color );
+
   /// Convert `#RRGGBB` or `#AARRGGBB` hex strings to `Color`. Returns null on
   /// any malformed input — caller falls back to the theme primary color so
   /// the badge still renders per the failure-mode contract.
