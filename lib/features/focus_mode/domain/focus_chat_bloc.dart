@@ -112,6 +112,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     on<FocusSenderScopeChanged>( _onSenderScopeChanged );
     on<FocusActivityTick>( _onActivityTick );
     on<FocusSenderExited>( _onSenderExited );
+    on<FocusRosterRefreshRequested>( _onRosterRefresh );
 
     final interval = _tickInterval;
     if ( interval != null ) {
@@ -337,6 +338,80 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     } else {
       await _reconnectRefresh( emit );
     }
+    // Rick 2026-09-17: the live seats join on EVERY cold start, not only the
+    // first — a reconnect is exactly when a newly spawned seat should appear.
+    await _mergeLiveSeats( emit );
+  }
+
+  /// Toolbar refresh (Rick 2026-09-17): the same merge cold start does, on
+  /// demand. Needs the user e-mail the cold start recorded; without it there
+  /// is nothing to fetch and the tap is a no-op rather than an error.
+  Future<void> _onRosterRefresh(
+    FocusRosterRefreshRequested event,
+    Emitter<FocusChatState> emit,
+  ) async {
+    if ( _userEmail == null ) return;
+    await _reconnectRefresh( emit );
+    await _mergeLiveSeats( emit );
+  }
+
+  /// Merge the LIVE-SEAT roster (`/api/commons/active-sessions`) into the
+  /// rail (Rick 2026-09-17). The notification-derived list only knows senders
+  /// who have written to this user, so a running seat he had never heard from
+  /// was unreachable on the phone — he had to open the browser to start the
+  /// conversation. A seat appears here with an EMPTY window; tapping it
+  /// focuses it and the (ungated) composer writes to it.
+  ///
+  /// Only seats the server addresses with a full `sender_id` can join: the
+  /// rail is keyed by it, and guessing one from `session_id` would invent a
+  /// sender. A roster failure is NOT fatal — the written-senders rail still
+  /// stands, so it logs and leaves state alone.
+  Future<void> _mergeLiveSeats( Emitter<FocusChatState> emit ) async {
+    final List<ActiveSession> seats;
+    try {
+      seats = await _repo.activeSessions();
+    } catch ( e ) {
+      // Deliberately catch EVERYTHING, not just NotificationApiException: this
+      // roster is an ADDITION to a rail that already works. A server that
+      // doesn't serve the endpoint, a shape we didn't expect, anything at all
+      // — the written-senders rail must survive it untouched.
+      print( '[FocusChat] live-seat roster unavailable: $e' );
+      return;
+    }
+
+    final order    = List<String>.from( state.senderOrder );
+    final personas = Map<String, VoicePersona?>.from( state.personasBySender );
+    final activity = Map<String, DateTime>.from( state.lastActivityBySender );
+    var   changed  = false;
+
+    for ( final seat in seats ) {
+      final sid = seat.senderId;
+      if ( sid == null || sid.isEmpty ) continue;
+      if ( !order.contains( sid ) ) {
+        order.add( sid );
+        changed = true;
+      }
+      // A live bridge is the freshest persona there is, and `last_seen_iso`
+      // is what the band needs; neither overwrites a value we already have
+      // from a real message or a live persona event.
+      if ( !personas.containsKey( sid ) ) {
+        personas[ sid ] = seat.persona;
+        changed = true;
+      }
+      final seen = seat.lastSeen;
+      if ( seen != null && ( activity[ sid ] == null || activity[ sid ]!.isBefore( seen ) ) ) {
+        activity[ sid ] = seen;
+        changed = true;
+      }
+    }
+    if ( !changed ) return;   // no churn when the roster says nothing new
+
+    emit( state.copyWith(
+      senderOrder          : order,
+      personasBySender     : personas,
+      lastActivityBySender : activity,
+      asOf                 : _now(),
+    ) );
   }
 
   /// COLD START (OSQ-3 as amended, F-S2-S2-1): ONE `sendersVisible()` fetch

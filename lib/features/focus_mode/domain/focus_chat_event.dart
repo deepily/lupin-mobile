@@ -87,6 +87,15 @@ class FocusColdStartRequested extends FocusChatEvent {
   List<Object?> get props => [ userEmail ];
 }
 
+/// Toolbar refresh tap (Rick 2026-09-17): re-read BOTH rosters — the senders
+/// who have written, and the live seats from the bridges — so a seat that has
+/// never notified this user can still be reached from the phone.
+class FocusRosterRefreshRequested extends FocusChatEvent {
+  const FocusRosterRefreshRequested();
+  @override
+  List<Object?> get props => const [];
+}
+
 /// WS `voice_persona_assigned` / `voice_persona_released` bridge.
 /// `persona == null` ⇒ released.
 class FocusPersonaUpdated extends FocusChatEvent {

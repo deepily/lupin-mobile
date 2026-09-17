@@ -81,6 +81,16 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
         ),
         title   : const Text( 'Lupin Focus' ),
         actions : [
+          // Rick 2026-09-17: re-read the written-senders list AND the live-seat
+          // roster, so a seat that has never messaged him can still be reached.
+          IconButton(
+            key       : const Key( TestKeys.focusRosterRefreshButton ),
+            icon      : const Icon( Icons.refresh ),
+            tooltip   : 'Refresh sessions',
+            onPressed : () => context
+                .read<FocusChatBloc>()
+                .add( const FocusRosterRefreshRequested() ),
+          ),
           _QueueButton( tts: _tts ),
           // AC-S3.5c — the promoted shared control; behavior is asserted in
           // test/widget/shared/pause_control_test.dart, not here.

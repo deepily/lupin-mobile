@@ -125,6 +125,43 @@ void main() {
       expect(r.status, "queued");
     });
 
+    test("activeSessions parses the live-seat roster, keeps a seat with no persona, drops an id-less row", () async {
+      adapter.handlers["GET /api/commons/active-sessions"] = (_) => jsonBody({
+        "sessions": [
+          {
+            "session_id"      : "abc12345",
+            "sender_id"       : "claude.code@lupin-mobile.deepily.ai#abc12345",
+            "persona_name"    : "Tiffany",
+            "persona_icon"    : "\u{1F48D}",
+            "persona_color"   : "#FFD600",
+            "last_seen_iso"   : "2026-09-17T19:00:00Z",
+            "speakerphone_on" : true,
+          },
+          { "session_id": "deadbeef" },                       // live, no persona yet
+          { "persona_name": "Nobody" },                       // no session id → dropped
+        ],
+      });
+      final seats = await repo.activeSessions();
+      expect(seats.length, 2);
+      expect(seats[0].senderId,       "claude.code@lupin-mobile.deepily.ai#abc12345");
+      expect(seats[0].persona?.name,  "Tiffany");
+      expect(seats[0].speakerphoneOn, isTrue);
+      expect(seats[0].lastSeen,       DateTime.utc(2026, 9, 17, 19));
+      expect(seats[1].sessionId,      "deadbeef");
+      expect(seats[1].persona,        isNull, reason: "no badge invented for a persona-less seat");
+      expect(seats[1].senderId,       isNull, reason: "older server: listed, not addressable");
+      expect(seats[1].speakerphoneOn, isFalse);
+    });
+
+    test("activeSessions returns empty on a malformed envelope, and maps a failure to the typed exception", () async {
+      adapter.handlers["GET /api/commons/active-sessions"] = (_) => jsonBody({"sessions": "nope"});
+      expect(await repo.activeSessions(), isEmpty);
+
+      adapter.handlers["GET /api/commons/active-sessions"] =
+          (_) => jsonBody({"detail": "unauthorized"}, status: 401);
+      expect(() => repo.activeSessions(), throwsA(isA<NotificationApiException>()));
+    });
+
     test("the retired /api/dm/send door is gone from the repository", () async {
       final src = File("lib/features/notifications/data/notification_repository.dart").readAsStringSync();
       expect(src.contains("/api/dm/send"), isFalse);

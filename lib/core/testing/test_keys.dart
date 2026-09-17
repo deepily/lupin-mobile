@@ -147,6 +147,7 @@ class TestKeys {
   static const focusRailGroupDivider     = 'focus.rail.groupDivider';
   static const focusComposerCaption      = 'focus.composer.caption';
   static const focusQueueButton          = 'focus.queueButton';
+  static const focusRosterRefreshButton  = 'focus.rosterRefreshButton';
   static const focusQueueBadge           = 'focus.queueButton.badge';
   static const ttsQueueSheet             = 'ttsQueue.sheet';
   static const ttsQueueEmpty             = 'ttsQueue.empty';

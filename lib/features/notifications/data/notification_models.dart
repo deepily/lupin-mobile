@@ -379,6 +379,50 @@ class SenderSummary {
   }
 }
 
+/// One live Claude Code seat from `GET /api/commons/active-sessions` — the
+/// roster the SESSION BRIDGES know about, not the one notifications imply.
+/// Rick 2026-09-17: a seat that has never notified him was invisible on the
+/// phone, so he had to start the conversation in the browser. The mux
+/// broadcast card reads the same endpoint for its recipient chips.
+///
+/// `senderId` is the rail's key (`email#hash`). The server projected only
+/// `session_id` until 2026-09-17; it stays nullable so an older server
+/// degrades to "listed but not addressable" instead of throwing.
+class ActiveSession {
+  final String        sessionId;
+  final String?       senderId;
+  final VoicePersona? persona;
+  final DateTime?     lastSeen;
+  final bool          speakerphoneOn;
+
+  const ActiveSession( {
+    required this.sessionId,
+    this.senderId,
+    this.persona,
+    this.lastSeen,
+    this.speakerphoneOn = false,
+  } );
+
+  /// Liberal parse, like every other envelope here: the persona is assembled
+  /// from the FLAT `persona_*` fields this endpoint uses (not the nested
+  /// `voice_persona` block `senders-visible` returns), and a seat with no
+  /// persona name parses with a null persona rather than an empty badge.
+  factory ActiveSession.fromJson( Map<String, dynamic> json ) {
+    final name = _as<String>( json["persona_name"] );
+    return ActiveSession(
+      sessionId      : ( json["session_id"] ?? "" ).toString(),
+      senderId       : _as<String>( json["sender_id"] ),
+      persona        : ( name == null || name.isEmpty ) ? null : VoicePersona(
+        name  : name,
+        icon  : _as<String>( json["persona_icon"]  ),
+        color : _as<String>( json["persona_color"] ),
+      ),
+      lastSeen       : _parseDt( json["last_seen_iso"] ),
+      speakerphoneOn : json["speakerphone_on"] == true,
+    );
+  }
+}
+
 /// `GET /api/notifications/sender-dates/...` entry.
 class DateSummary {
   final String date;     // YYYY-MM-DD

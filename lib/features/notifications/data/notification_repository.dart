@@ -352,6 +352,27 @@ class NotificationRepository {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // GET /api/commons/active-sessions  (the live-seat roster, Rick 2026-09-17)
+  // ---------------------------------------------------------------------
+  /// Every live CC seat of the authenticated user, from the session bridges.
+  /// Unlike `sendersVisible`, a seat appears here even if it has never sent
+  /// the user anything — that is the whole point. Envelope: `{"sessions": []}`.
+  Future<List<ActiveSession>> activeSessions() async {
+    try {
+      final res  = await _dio.get<Map<String, dynamic>>( "/api/commons/active-sessions" );
+      final list = res.data?["sessions"];
+      if ( list is! List ) return const [];
+      return list
+          .whereType<Map>()
+          .map( ( m ) => ActiveSession.fromJson( Map<String, dynamic>.from( m ) ) )
+          .where( ( s ) => s.sessionId.isNotEmpty )
+          .toList();
+    } on DioException catch ( e ) {
+      throw _err( e, "List active sessions failed" );
+    }
+  }
+
   NotificationApiException _err( DioException e, String fallback ) {
     final sc  = e.response?.statusCode;
     final msg = e.response?.data is Map<String, dynamic>
