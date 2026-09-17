@@ -68,6 +68,19 @@ Plan went **rev 8 → rev 12**; six pins in git (`b505bfb` `32b2055` `3a97776` `
 - **Java: a separate Temurin 21, not Android Studio's JBR.** His own `flutter doctor -v` settled it — Studio 2026.1 bundles JBR **25.0.3**, so his proposal pointed at the very Java breaking the build, and our research note's "JBR 21" row was stale. Flutter 3.35.1 investigated: Gradle cap identical, no path opens.
 - **Fleet ticket gate refused a new row** at ratio 1.32, so the rebaseline work lives as an amendment on `0b3f063a` rather than its own row.
 
+### Decisions Log — 2026-09-16 (session `b0157e13`)
+- **Tail-drain wait withdrawn** — Rick: an ugly hack; the recorder drops at most one ~80 ms buffer, which cannot explain word loss.
+- **Opus adopted** for questions after 0.57% WER on 9 real clips.
+- **Phone build: yes, after the video** (Rick, ~21:44, answered during the demo take). Not a staged answer — act on it.
+- **Demo takes**: say your scripted line, then nothing — no post-line notify, before or after "cut" (workflow doc §3b).
+- **Evening seats**: mine donated to Mr. Radio; nothing on my board is worker-able while Rick edits.
+
+### ⏳ Owed — 2026-09-17 (pick up here)
+- [ ] **`c3fc62bf` device check** — Rick builds on the laptop, voice Quick Ask with *Send immediately* OFF, paste the `[HTTP] Request: POST` line (expect `/api/v2/transcribe`); close with `a2f1d75`. Gate row `372d82b8` closes with it.
+- [ ] **`168922f9` María's Stage-1 audit** — admitted only after the phone check; read-only diff of plan rev 2 vs rev 1 and the five §3 rulings' file:line receipts.
+- [ ] **`c51e92da` / `edba76c6`** — parked until 2026-10-01.
+- [ ] **Hygiene**: the `[HTTP]` logger prints the full bearer token in logcat — consider a row.
+
 ### ⏳ Owed — 2026-09-16
 - [x] ~~**release picker**~~ — merged `dcc7263` (row `1b11f18d`; `2070a906` dropped as superseded).
 - [x] ~~**JDK ruling**~~ — settled by Rick's own `flutter doctor -v`. Install a separate Temurin 21 and `flutter config --jdk-dir`; his Android Studio bundles 25.0.3, so pointing at its JBR points at the problem. Proven end to end on the desktop.
