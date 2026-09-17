@@ -147,6 +147,50 @@ void main() {
       expect( byKeyStr( TestKeys.voiceReplyMic ), findsOneWidget );
     } );
 
+    // Row 0b40272e — what Rick called truncation. Both halves: a capture that
+    // heard nothing used to open an EMPTY review box with a live Send button,
+    // and the transcript shared one row with two buttons at four lines.
+    testWidgets( 'a capture that heard nothing says so and stays idle — no empty review box', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => '   ' );
+
+      await tester.pumpWidget( host() );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyMic ) );
+      await tester.pump();
+      await tester.tap( byKeyStr( TestKeys.voiceReplyMic ) );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( byKeyStr( TestKeys.voiceReplyTranscript ), findsNothing,
+          reason: 'nothing was heard, so there is nothing to review or send' );
+      expect( byKeyStr( TestKeys.voiceReplyError ), findsOneWidget );
+      expect( find.textContaining( 'Did not catch anything' ), findsOneWidget );
+      expect( byKeyStr( TestKeys.voiceReplyMic ), findsOneWidget, reason: 'still idle' );
+      expect( submitted, isEmpty );
+    } );
+
+    testWidgets( 'the review transcript gets the FULL width, with the buttons below it', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async =>
+          'a reply long enough that a four-line box beside two icon buttons would cut it off '
+          'well before the end of what was actually said out loud' );
+
+      await tester.pumpWidget( host() );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyMic ) );
+      await tester.pump();
+      await tester.tap( byKeyStr( TestKeys.voiceReplyMic ) );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      final field = tester.getRect( byKeyStr( TestKeys.voiceReplyTranscript ) );
+      final pane  = tester.getRect( find.byType( VoiceReplyField ) );
+      expect( field.width, pane.width,
+          reason: 'THE BUG: the transcript used to share its row with Send and Discard' );
+
+      final send = tester.getRect( byKeyStr( TestKeys.voiceReplySend ) );
+      expect( send.top, greaterThanOrEqualTo( field.bottom ),
+          reason: 'buttons below the text, not beside it' );
+      expect( tester.widget<TextField>( byKeyStr( TestKeys.voiceReplyTranscript ) ).maxLines, 8 );
+    } );
+
     // Rick 2026-09-17: the composer was too thin for a thumb — 25% taller.
     testWidgets( 'the mic row and its buttons are 25% taller than a stock 48 dp row', ( tester ) async {
       await tester.pumpWidget( host() );

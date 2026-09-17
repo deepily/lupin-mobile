@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../../../services/permissions/mic_permission.dart' as mic;
+import '../../../services/asr/voice_capture_session.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../../services/asr/asr_service.dart';
@@ -64,67 +64,53 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   Timer? _elapsedTimer;
   int    _elapsedSeconds = 0;
 
-  /// Bumped on cancel: an in-flight stopAndTranscribe() result whose epoch
-  /// is stale gets dropped instead of resurrecting a cancelled review.
-  int _opEpoch = 0;
-
-  /// AC-S2.7 — delegates to the ONE shared requester rather than holding a
-  /// private second copy. The widget's `requestMicPermission` test seam is
-  /// unchanged; only the default it falls back to moved.
-  Future<bool> _defaultMicPermission() => mic.requestMicPermission();
+  /// Row 0b40272e: permission, the cancel epoch, the error strings and the
+  /// blank-transcript guard are no longer this widget's own — they live in the
+  /// shared session, so Quick Ask and this composer cannot drift again.
+  late final VoiceCaptureSession _session = VoiceCaptureSession(
+    asr                : widget.asr,
+    requestPermission  : widget.requestMicPermission,
+  );
 
   Future<void> _onMicPressed() async {
     if ( _phase == _VoiceReplyPhase.idle ) {
       setState( () => _error = null );
-      final granted =
-          await ( widget.requestMicPermission ?? _defaultMicPermission )();
-      if ( !mounted ) return;
-      if ( !granted ) {
-        setState( () => _error =
-            'Microphone permission needed — enable it in system settings.' );
+      final start = await _session.start();
+      if ( !mounted || start.isStale ) return;
+      if ( !start.started ) {
+        setState( () => _error = start.errorMessage );
         return;
       }
-      try {
-        await widget.asr.startRecording();
-        if ( !mounted ) return;
-        setState( () {
-          _phase          = _VoiceReplyPhase.recording;
-          _elapsedSeconds = 0;
-        } );
-        _elapsedTimer?.cancel();
-        _elapsedTimer = Timer.periodic( const Duration( seconds: 1 ), ( _ ) {
-          if ( mounted ) setState( () => _elapsedSeconds++ );
-        } );
-      } on AsrException catch ( e ) {
-        if ( mounted ) setState( () => _error = e.message );
-      }
+      setState( () {
+        _phase          = _VoiceReplyPhase.recording;
+        _elapsedSeconds = 0;
+      } );
+      _elapsedTimer?.cancel();
+      _elapsedTimer = Timer.periodic( const Duration( seconds: 1 ), ( _ ) {
+        if ( mounted ) setState( () => _elapsedSeconds++ );
+      } );
     } else if ( _phase == _VoiceReplyPhase.recording ) {
       _elapsedTimer?.cancel();
-      final epoch = _opEpoch;
       setState( () => _phase = _VoiceReplyPhase.transcribing );
-      try {
-        final transcript = await widget.asr.stopAndTranscribe();
-        if ( !mounted || epoch != _opEpoch ) return;   // cancelled mid-flight
-        setState( () {
-          _controller.text = transcript;
+      final capture = await _session.stopAndTranscribe();
+      if ( !mounted || capture.isStale ) return;   // cancelled mid-flight
+      setState( () {
+        if ( capture.wasHeard ) {
+          _controller.text = capture.transcript!;
           _phase           = _VoiceReplyPhase.review;
-        } );
-      } on AsrException catch ( e ) {
-        if ( !mounted || epoch != _opEpoch ) return;
-        setState( () {
-          _error = e.message;
+        } else {
+          // Including a capture that heard NOTHING, which used to open an
+          // empty review box with a live Send button behind it.
+          _error = capture.errorMessage;
           _phase = _VoiceReplyPhase.idle;
-        } );
-      }
+        }
+      } );
     }
   }
 
   void _onCancelPressed() {
     _elapsedTimer?.cancel();
-    _opEpoch++;                       // drop any in-flight transcribe result
-    if ( _phase == _VoiceReplyPhase.recording ) {
-      unawaited( widget.asr.cancelRecording() );
-    }
+    _session.cancel();                // drops any in-flight transcribe result
     setState( () {
       _phase = _VoiceReplyPhase.idle;
       _controller.clear();
@@ -241,34 +227,48 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
           ],
         );
       case _VoiceReplyPhase.review:
-        return Row(
+        // Row 0b40272e: the transcript used to share ONE row with both
+        // buttons, four lines tall — a couple of spoken sentences ran out of
+        // room and read as truncated. It now gets the full width and grows to
+        // eight lines before scrolling, with the buttons underneath.
+        return Column(
+          crossAxisAlignment : CrossAxisAlignment.stretch,
+          mainAxisSize       : MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                key        : const Key( TestKeys.voiceReplyTranscript ),
-                controller : _controller,
-                minLines   : 1,
-                maxLines   : 4,
-                decoration : const InputDecoration(
-                  hintText: 'Edit your reply…',
-                ),
+            TextField(
+              key        : const Key( TestKeys.voiceReplyTranscript ),
+              controller : _controller,
+              minLines   : 2,
+              maxLines   : 8,
+              keyboardType : TextInputType.multiline,
+              decoration : const InputDecoration(
+                hintText  : 'Edit your reply…',
+                isDense   : true,
+                border    : OutlineInputBorder(),
+                contentPadding : EdgeInsets.symmetric( horizontal: 10, vertical: 8 ),
               ),
             ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplySend ),
-              icon        : const Icon( Icons.send ),
-              tooltip     : 'Send reply',
-              onPressed   : _onSendPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyCancel ),
-              icon        : const Icon( Icons.close ),
-              tooltip     : 'Discard reply',
-              onPressed   : _onCancelPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
+            const SizedBox( height: 4 ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  key         : const Key( TestKeys.voiceReplyCancel ),
+                  icon        : const Icon( Icons.close ),
+                  tooltip     : 'Discard reply',
+                  onPressed   : _onCancelPressed,
+                  iconSize    : _kIconSize,
+                  constraints : _kButtonConstraints,
+                ),
+                IconButton(
+                  key         : const Key( TestKeys.voiceReplySend ),
+                  icon        : const Icon( Icons.send ),
+                  tooltip     : 'Send reply',
+                  onPressed   : _onSendPressed,
+                  iconSize    : _kIconSize,
+                  constraints : _kButtonConstraints,
+                ),
+              ],
             ),
           ],
         );

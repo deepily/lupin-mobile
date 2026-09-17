@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/asr/asr_service.dart';
+import '../../../services/asr/voice_capture_session.dart';
 import '../../../services/permissions/mic_permission.dart' as mic;
 import '../../../services/quick_ask/quick_ask_preferences.dart';
 import '../../../services/websocket/websocket_service.dart';
@@ -153,12 +154,19 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   bool isQuickAskJob( String? jobId ) =>
       jobId != null && jobId.isNotEmpty && jobId == state.liveJobId;
 
-  /// Cancel guard, mirroring `voice_reply_field.dart`'s `_opEpoch` (`:59`,
-  /// captured `:93`, compared `:97`/`:103`, bumped on cancel `:114`) rather
-  /// than re-inventing it: a cancel bumps the epoch, and an in-flight
-  /// `stopAndTranscribe()` whose epoch no longer matches is DROPPED. That is
-  /// what makes "exactly one submit, including when cancelled mid-press" true.
-  int _opEpoch = 0;
+  /// The shared record → transcribe core (row 0b40272e). This bloc used to
+  /// hold its own copy of the permission request, the cancel epoch and the
+  /// blank-transcript guard, and `VoiceReplyField` held a second copy that had
+  /// drifted. Both now call the one session, so the cancel guard that makes
+  /// "exactly one submit, including when cancelled mid-press" true is a single
+  /// implementation. The epoch is still read here, because the spoken-stream
+  /// maps below are keyed by it.
+  late final VoiceCaptureSession _session = VoiceCaptureSession(
+    asr               : _asr,
+    requestPermission : _requestMic,
+  );
+
+  int get _opEpoch => _session.epoch;
 
   // ── Capture ──────────────────────────────────────────────────────────────
 
@@ -169,33 +177,26 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     // start therefore belongs here, not in the predicate.
     if ( state.phase == QuickAskPhase.recording ) return;
     if ( !state.canRecord ) return;
-    final epoch = ++_opEpoch;
 
-    // AC-S2.7 — REQUEST before capturing. `AsrService.startRecording()` only
-    // checks `hasPermission()` and throws; on a fresh install that produces
-    // "Microphone permission denied" for a user who was never asked.
-    final granted = await _requestMic();
-    if ( epoch != _opEpoch ) return;
-    if ( !granted ) {
+    // AC-S2.7 — the session REQUESTS the microphone before capturing.
+    // `AsrService.startRecording()` only checks `hasPermission()` and throws;
+    // on a fresh install that produces "Microphone permission denied" for a
+    // user who was never asked.
+    final start = await _session.start();
+    if ( start.isStale ) return;
+    if ( !start.started ) {
       emit( state.copyWith(
         phase        : QuickAskPhase.idle,
-        errorMessage : 'Microphone permission needed — enable it in system settings.',
+        errorMessage : start.errorMessage,
+        capturing    : _asr.isCapturing,
       ) );
       return;
     }
-
-    try {
-      await _asr.startRecording();
-      if ( epoch != _opEpoch ) return;
-      emit( state.copyWith( phase: QuickAskPhase.recording, clearError: true, capturing: _asr.isCapturing ) );
-    } on AsrException catch ( ex ) {
-      if ( epoch != _opEpoch ) return;
-      emit( state.copyWith(
-        phase        : QuickAskPhase.idle,
-        errorMessage : ex.message,
-        capturing    : _asr.isCapturing,
-      ) );
-    }
+    emit( state.copyWith(
+      phase      : QuickAskPhase.recording,
+      clearError : true,
+      capturing  : _asr.isCapturing,
+    ) );
   }
 
   /// Second tap: stop, transcribe, and HOLD. The submit that used to live at
@@ -213,27 +214,15 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       return;
     }
 
-    String transcript;
-    try {
-      transcript = await _asr.stopAndTranscribe();
-    } on AsrException catch ( ex ) {
-      if ( epoch != _opEpoch ) return;
+    // The session handles the recorder's error, the cancel-in-flight drop and
+    // the blank transcript — the last of which a held draft must never be,
+    // since it would put a live send button in front of nothing.
+    final capture = await _session.stopAndTranscribe();
+    if ( capture.isStale ) return;
+    if ( !capture.wasHeard ) {
       emit( state.copyWith(
         phase        : QuickAskPhase.idle,
-        errorMessage : ex.message,
-        capturing    : _asr.isCapturing,
-      ) );
-      return;
-    }
-    // The cancel landed while the upload was in flight — drop the result.
-    if ( epoch != _opEpoch ) return;
-
-    // A blank transcript held as a draft would put a live send button in front
-    // of the user with nothing behind it. Say so instead.
-    if ( transcript.trim().isEmpty ) {
-      emit( state.copyWith(
-        phase        : QuickAskPhase.idle,
-        errorMessage : 'Did not catch anything — tap the microphone and try again.',
+        errorMessage : capture.errorMessage,
         capturing    : _asr.isCapturing,
         clearDraft   : true,
       ) );
@@ -242,7 +231,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
     emit( state.copyWith(
       phase           : QuickAskPhase.review,
-      draftTranscript : transcript,
+      draftTranscript : capture.transcript,
       capturing       : _asr.isCapturing,
     ) );
   }
@@ -435,7 +424,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
   /// The clear button — throw the held transcript away.
   Future<void> _onDraftCleared( QuickAskDraftCleared e, Emitter<QuickAskState> emit ) async {
-    _opEpoch++;                       // anything still in flight is now stale
+    _session.invalidate();            // anything still in flight is now stale
     emit( state.copyWith(
       phase             : QuickAskPhase.idle,
       clearDraft        : true,
@@ -445,8 +434,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   }
 
   Future<void> _onRecordCancelled( QuickAskRecordCancelled e, Emitter<QuickAskState> emit ) async {
-    _opEpoch++;                       // anything in flight is now stale
-    await _asr.cancelRecording();
+    await _session.cancelAwaiting();  // anything in flight is now stale
     emit( state.copyWith(
       phase             : QuickAskPhase.idle,
       capturing         : _asr.isCapturing,
