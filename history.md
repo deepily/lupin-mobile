@@ -13,6 +13,23 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.17 | Session `7e82da5f` (Tiffany 💍) — Seven commits: the split screen made real, one capture core, and every live seat on the rail
+
+**RESUME HERE**: everything below is committed locally and **not pushed**, and all of it waits on ONE device rebuild (`build-and-deploy-lupin-mobile.sh`). Also confirm `a2f1d75` on that same run — type a message to a seat and Mr. Radio closes lupin `80f10bdd` when the `:7999` log shows `POST /api/notify` with `direction=human_to_ai`. Open question for Rick: should the rail keep opening on the Live hour, or default to 24h?
+
+1. **UI tweaks `4672ac2c`** (`bc98024`): password survives a failed sign-in (AuthGate no longer swaps the form for the spinner mid-attempt), 👁️ show/hide on the field, voice-reply row and buttons 60 dp.
+2. **Phone→session messages `cfb8285`**: the composer now uses the browsers' `POST /api/notify` (`user_initiated_message`, `direction=human_to_ai`) instead of `/api/dm/send`, which framed the phone as a peer nobody could reply to (lupin `80f10bdd`). `/api/dm/send` removed from the phone; the frozen `focus_chat_bloc_test.dart` re-pinned by blob in `frozen_surface_test.dart`, reason recorded.
+3. **Live hour is two-way `6dba6fc`**: a message YOU send bumps that sender's activity, so writing to a quiet seat pulls it back onto the rail. A failed send does not.
+4. **Live-seat roster + refresh `cf5280a`**: cold start and a new toolbar refresh read `GET /api/commons/active-sessions` and merge every live seat in, even one that has never notified him — the reason he had to start conversations in the browser. Pairs with lupin `82b163b9` (Mr. Radio added `sender_id`).
+5. **The 50/50 split, for real `91b2139`** (`2416d2c5`, `e0843a8a`): the first fix was a half-screen dialog, which cannot resize what is under it, so the bubbles stayed full width behind the document. `DocSplitHost` lays conversation and viewer out as equal halves — side by side ≥600 dp, stacked below.
+6. **Who sent it, and their colour `d7aaacd`** (`de12b7bc`): the accent bar was keyed to PRIORITY (`high` = orange), so every sender looked like Mr. Radio; it now carries the sender's own colour. The pane header gains the persona name in bold, sender id italic.
+7. **One capture core `fc8d9dc`** (`0b40272e`): there was no second recording engine — both composers already drove the same `AsrService`. The duplicated WRAPPER is now `VoiceCaptureSession` (permission, cancel epoch, error strings, blank-transcript guard), called by both. The focus review box moved from a shared 4-line row to full width with the buttons below; that cramped row was the "truncation".
+8. **Audit `168922f9`**: revision 2 of the mux parity plan — six Stage-1 findings dropped, four softened, five rulings faithful, and the reuse citations nobody had checked verified at the plan's own commit. One count changed work (`wireSectionCollapse` is in eight renderers, not five). Closed by María's manager attestation; revisions 3–5 had already fixed two of the three recommendations.
+
+**Files**: `lib/features/{auth,focus_mode,docs,notifications,quick_ask}/…` · `lib/services/asr/voice_capture_session.dart` (new) · `lib/features/docs/presentation/doc_split_host.dart` (new) · 5 new test files · `history.md` · `.claude-session.md` · commits `bc98024` `cfb8285` `6dba6fc` `cf5280a` `91b2139` `d7aaacd` `fc8d9dc` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`. Suite after each: **1211 passed / 0 failed / 1 skipped**.
+
+---
+
 ## 2026.09.16 | Session `b0157e13` (Tiffany 💍) — Recording bug closed, seven phone commits, the fleet demo clip filmed
 
 **RESUME HERE**: Rick said **yes** (~21:44, for real, during the take) to building today's fixes onto his phone after the video. Next: he runs `build-and-deploy-lupin-mobile.sh` on the laptop, asks by voice in Quick Ask with *Send immediately* OFF, and pastes the `[HTTP] Request: POST` line — expect `/api/v2/transcribe`. That closes `c3fc62bf` with commit `a2f1d75`. Then María's audit `168922f9` waits on his admit.

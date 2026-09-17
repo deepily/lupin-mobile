@@ -403,3 +403,7 @@ COMPLETE 2026-06-12T09:14Z (lifecycle + per-section status in the index banner/t
 - [ ] [LUPIN-MOBILE] CI job that runs `capture-*-fixtures.py` on a schedule + opens a PR when fixtures diff — catches silent backend drift
 
 ### Cross-cutting
+
+### Decisions pending — Rick (2026-09-17)
+- [ ] [LUPIN-MOBILE] **Focus rail's opening lens**: keep Live (activity within 1 hour, sent or received since `6dba6fc`) or default to 24h on the phone? One-line change plus tests, own commit. Asked 2026-09-17, unanswered.
+- [ ] [LUPIN-MOBILE] **Device confirmation owed for seven local commits** (`bc98024` `cfb8285` `6dba6fc` `cf5280a` `91b2139` `d7aaacd` `fc8d9dc`) plus `a2f1d75` (v2 transcribe, row `c3fc62bf`). One rebuild covers all of them.
