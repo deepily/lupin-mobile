@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
@@ -110,36 +111,23 @@ void main() {
       expect(ack.responseValue, "yes");
     });
 
-    test("sendDm posts the DM body to /api/dm/send (nulls omitted) and parses {message_id, thread_id}", () async {
-      adapter.handlers["POST /api/dm/send"] = (opts) {
-        final d = opts.data as Map;
-        expect(d["sender_session_id"], "lupin-mobile:rick@x");
-        expect(d["body"],              "re-run the suite");
-        expect(d["recipient_persona"], "Tiffany");
-        expect(d["sender_persona"],    "Rick");
-        expect(d["sender_icon"],       "📱");
-        expect(d["sender_project"],    "lupin-mobile");
-        expect(d.containsKey("recipient_session_id"), isFalse);
-        return jsonBody({"message_id": "m-9", "thread_id": "t-9", "recipient_persona": "Tiffany"});
+    test("notify sends direction when set (the phone's message to a session, Rick 2026-09-17)", () async {
+      adapter.handlers["POST /api/notify"] = (opts) {
+        expect(opts.queryParameters["type"],      "user_initiated_message");
+        expect(opts.queryParameters["direction"], "human_to_ai");
+        expect(opts.queryParameters["job_id"],    "abc12345");
+        return jsonBody({"status": "queued", "target_user": "cc@x", "connection_count": 1});
       };
-      final ack = await repo.sendDm(const DmSendRequest(
-        senderSessionId  : "lupin-mobile:rick@x",
-        body             : "re-run the suite",
-        recipientPersona : "Tiffany",
-        senderPersona    : "Rick",
-        senderIcon       : "📱",
-        senderProject    : "lupin-mobile",
+      final r = await repo.notify(const NotifyRequest(
+        message: "hi", targetUser: "cc@x", type: "user_initiated_message",
+        direction: "human_to_ai", jobId: "abc12345",
       ));
-      expect(ack.messageId, "m-9");
-      expect(ack.threadId,  "t-9");
+      expect(r.status, "queued");
     });
 
-    test("sendDm maps a 422 (recipient unresolved) to NotificationApiException", () async {
-      adapter.handlers["POST /api/dm/send"] = (opts) => jsonBody({"detail": "no such persona"}, status: 422);
-      expect(
-        () => repo.sendDm(const DmSendRequest(senderSessionId: "s", body: "b", recipientPersona: "Nobody")),
-        throwsA(isA<NotificationApiException>()),
-      );
+    test("the retired /api/dm/send door is gone from the repository", () async {
+      final src = File("lib/features/notifications/data/notification_repository.dart").readAsStringSync();
+      expect(src.contains("/api/dm/send"), isFalse);
     });
 
     test("conversation URL-encodes senderId with `/` and userEmail with `@`", () async {

@@ -42,6 +42,19 @@ const frozenFiles = <String>[
   'test/unit/notifications/notification_bloc_test.dart',
 ];
 
+/// Frozen files a later BEHAVIOUR change ordered by Rick had to edit, each
+/// pinned to the exact contents that change left (`git hash-object`), so any
+/// further edit still goes red. This is not a re-baseline to hide a
+/// regression: the behaviour the old tests asserted was retired on purpose.
+///
+/// - focus_chat_bloc_test.dart — Rick 2026-09-17 (lupin bug 80f10bdd): the
+///   composer's message to a session goes through the browsers' `POST
+///   /api/notify` user_initiated_message, not `/api/dm/send`. The three DM
+///   tests and AC-S2.9(iii) now assert the new door; nothing else changed.
+const repinnedFrozenFiles = <String, String>{
+  'test/unit/focus_mode/focus_chat_bloc_test.dart' : 'bb5dd7b82371234675421ce5d129b6cde3500797',
+};
+
 /// A file S4 unambiguously DID change. Diffing it is how this test proves the
 /// diff can come back dirty at all.
 const knownChangedFile = 'lib/features/quick_ask/domain/quick_ask_bloc.dart';
@@ -89,6 +102,14 @@ void main() {
 
     test( 'no frozen file has been edited since the pre-S4 revision', () {
       for ( final f in frozenFiles ) {
+        final pinned = repinnedFrozenFiles[ f ];
+        if ( pinned != null ) {
+          final h = _git( [ 'hash-object', f ] );
+          expect( ( h.stdout as String ).trim(), pinned,
+              reason: 'AC-S4.10a VIOLATED — $f was re-pinned to blob $pinned '
+                      'and has changed again since.' );
+          continue;
+        }
         final r = _git( [ 'diff', '--exit-code', preS4Sha, '--', f ] );
         expect( r.exitCode, 0,
             reason: 'AC-S4.10a VIOLATED — $f changed since $preS4Sha.\n'

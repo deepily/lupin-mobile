@@ -519,7 +519,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     if ( targetId == null ) {
       // No unanswered ask ⇒ this is a DIRECT MESSAGE to the session (Rick
       // 2026-08-21: the composer is ungated; a reply with nothing to reply
-      // to is a DM). Same event, same bubble — a different door.
+      // to is a DM). Same event, same bubble — a different door: since
+      // 2026-09-17 the browsers' `POST /api/notify` user_initiated_message.
       await _sendDirectMessage( event.senderId, event.text, emit );
       return;
     }
@@ -650,38 +651,30 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return windows;
   }
 
-  /// Sender identity stamped on outbound DMs (Rick 2026-08-21). The app
-  /// has no display name — derive a readable one from the e-mail local
-  /// part ("ricardo.felipe.ruiz@…" → "Ricardo"); icon marks the phone.
-  static const String dmSenderIcon    = '📱';
-  static const String dmSenderProject = 'lupin-mobile';
-
-  static String dmSenderPersona( String? email ) {
-    final local = ( email ?? '' ).split( '@' ).first.trim();
-    if ( local.isEmpty ) return 'Mobile user';
-    final first = local.split( RegExp( r'[._\-]' ) ).first;
-    if ( first.isEmpty ) return 'Mobile user';
-    return first[ 0 ].toUpperCase() + first.substring( 1 );
-  }
-
-  /// Address a chip: persona NAME when the registry has one (the server's
-  /// preferred resolver), else the `#hash8` session suffix of the sender id
-  /// (prefix-tolerant on the server), else the raw sender id.
-  DmSendRequest dmRequestFor( String senderId, String text ) {
-    final persona = state.personasBySender[ senderId ];
-    final name    = ( persona?.name ?? '' ).trim();
-    final hashIdx = senderId.lastIndexOf( '#' );
-    final sessionSuffix = hashIdx >= 0 && hashIdx < senderId.length - 1
-        ? senderId.substring( hashIdx + 1 )
-        : null;
-    return DmSendRequest(
-      senderSessionId    : 'lupin-mobile:${_userEmail ?? 'anonymous'}',
-      body               : text,
-      recipientPersona   : name.isNotEmpty ? name : null,
-      recipientSessionId : name.isNotEmpty ? null : ( sessionSuffix ?? senderId ),
-      senderPersona      : dmSenderPersona( _userEmail ),
-      senderIcon         : dmSenderIcon,
-      senderProject      : dmSenderProject,
+  /// The query a browser sends when the user types into a session's box:
+  /// `POST /api/notify` as a `user_initiated_message`, `direction=human_to_ai`,
+  /// addressed to the listener email (the sender id before `#`) with the
+  /// session hash (after `#`) as `job_id`. Rick 2026-09-17: the phone uses
+  /// the exact endpoint the legacy and mux clients use — not `/api/dm/send`,
+  /// which framed the phone as a peer session nobody could reply to (lupin
+  /// bug 80f10bdd). Legacy: notifications.js; mux: SenderCardRecorderRenderer.ts.
+  ///
+  /// Returns null when the message cannot be addressed: no signed-in email,
+  /// or a sender id without an `email#hash` shape (the browsers refuse those
+  /// too).
+  NotifyRequest? sessionMessageFor( String senderId, String text ) {
+    final email   = _userEmail;
+    final hashIdx = senderId.indexOf( '#' );
+    if ( email == null || email.isEmpty ) return null;
+    if ( hashIdx <= 0 || hashIdx == senderId.length - 1 ) return null;
+    return NotifyRequest(
+      message    : text,
+      type       : 'user_initiated_message',
+      direction  : 'human_to_ai',
+      priority   : 'medium',
+      targetUser : senderId.substring( 0, hashIdx ),
+      senderId   : email,
+      jobId      : senderId.substring( hashIdx + 1 ),
     );
   }
 
@@ -690,14 +683,20 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     String text,
     Emitter<FocusChatState> emit,
   ) async {
+    final request = sessionMessageFor( senderId, text );
+    if ( request == null ) {
+      print( '[FocusChat] cannot address a message to $senderId (email: $_userEmail)' );
+      emit( state.copyWith( hydration: FocusHydration.error ) );
+      return;
+    }
     try {
-      await _repo.sendDm( dmRequestFor( senderId, text ) );
+      await _repo.notify( request );
       final windows = _copyWindows();
       final window  = List<FocusMessage>.from( windows[ senderId ] ?? const [] );
       final now     = DateTime.now();
       window.add( FocusMessage(
         item: NotificationItem(
-          id                     : 'local-dm-${now.microsecondsSinceEpoch}',
+          id                     : 'local-msg-${now.microsecondsSinceEpoch}',
           message                : text,
           type                   : 'user_initiated_message',
           priority               : 'low',

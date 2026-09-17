@@ -112,7 +112,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   /// message to a persona chip"): any focused session takes a voice/text
   /// message. With an unanswered ask it is a REPLY (the bloc's
   /// `pendingPromptFor` fallback resolves the target, F-S2-S2-3); without
-  /// one it is a DIRECT MESSAGE through `/api/dm/send`. The caption says
+  /// one it is a DIRECT MESSAGE through `POST /api/notify`, the same call the
+  /// browsers make (Rick 2026-09-17). The caption says
   /// which, so the user knows what Send will do.
   Widget _composer( BuildContext context ) {
     return BlocBuilder<FocusChatBloc, FocusChatState>(

@@ -106,7 +106,7 @@ void main() {
         notificationId : 'fallback',
         responseValue  : 'fallback',
       ) );
-      registerFallbackValue( const DmSendRequest( senderSessionId: 'fallback', body: 'fallback' ) );
+      registerFallbackValue( const NotifyRequest( message: 'fallback', targetUser: 'fallback' ) );
     } );
 
     setUp( () {
@@ -286,12 +286,13 @@ void main() {
       expect( senders[ 2 ].senderId, 'sys@lupin#1' );
     } );
 
-    // ── Direct message door (Rick 2026-08-21: ungated composer → /api/dm/send) ──
-    test( 'DM: respond with NO pending ask → sendDm() addressed by persona NAME, sender stamped, bubble appended; respond() never called', () async {
-      when( () => repo.sendDm( any() ) ).thenAnswer( ( _ ) async =>
-          DmSendAck.fromJson( { 'message_id': 'm-1', 'thread_id': 't-1' } ) );
+    // ── Direct message door (Rick 2026-09-17: the browsers' POST /api/notify, not /api/dm/send) ──
+    NotifyDispatchResponse queued() => NotifyDispatchResponse.fromJson(
+        { 'status': 'queued', 'target_user': 'claude.code@lupin.deepily.ai', 'connection_count': 1 } );
+
+    test( 'DM: respond with NO pending ask → notify() with the browsers\' exact user_initiated_message query; bubble appended; respond() never called', () async {
+      when( () => repo.notify( any() ) ).thenAnswer( ( _ ) async => queued() );
       when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => const [] );
-      // cold start only to record the user e-mail the sender stamp derives from
       bloc!.add( const FocusColdStartRequested( userEmail: 'ricardo.felipe.ruiz@gmail.com' ) );
       await pump();
       bloc!.add( FocusPersonaUpdated( senderId: 'claude.code@lupin.deepily.ai#abc12345',
@@ -303,50 +304,60 @@ void main() {
       await pump();
 
       verifyNever( () => repo.respond( any() ) );
-      final req = verify( () => repo.sendDm( captureAny() ) ).captured.single as DmSendRequest;
-      expect( req.recipientPersona,   'Tiffany' );
-      expect( req.recipientSessionId, isNull );
-      expect( req.body,               'please re-run the suite' );
-      expect( req.senderPersona,      'Ricardo' );
-      expect( req.senderIcon,         FocusChatBloc.dmSenderIcon );
-      expect( req.senderProject,      'lupin-mobile' );
-      expect( req.senderSessionId,    'lupin-mobile:ricardo.felipe.ruiz@gmail.com' );
-      expect( req.toJson().containsKey( 'recipient_session_id' ), isFalse, reason: 'nulls are omitted on the wire' );
+      final req = verify( () => repo.notify( captureAny() ) ).captured.single as NotifyRequest;
+      expect( req.toQuery(), {
+        'message'     : 'please re-run the suite',
+        'type'        : 'user_initiated_message',
+        'direction'   : 'human_to_ai',
+        'priority'    : 'medium',
+        'target_user' : 'claude.code@lupin.deepily.ai',
+        'sender_id'   : 'ricardo.felipe.ruiz@gmail.com',
+        'job_id'      : 'abc12345',
+      }, reason: 'same keys and values as notifications.js — nothing extra, no persona' );
 
       final window = bloc!.state.windows[ 'claude.code@lupin.deepily.ai#abc12345' ]!;
       expect( window.last.item.type,    'user_initiated_message' );
       expect( window.last.item.message, 'please re-run the suite' );
-      expect( window.last.item.id,      startsWith( 'local-dm-' ) );
+      expect( window.last.item.id,      startsWith( 'local-msg-' ) );
       expect( bloc!.state.hydration, isNot( FocusHydration.error ) );
     } );
 
-    test( 'DM: persona-less sender → addressed by the #hash8 session suffix; no # → raw sender id', () async {
-      when( () => repo.sendDm( any() ) ).thenAnswer( ( _ ) async => const DmSendAck() );
+    test( 'DM: a sender id without email#hash, or no signed-in email, is refused like the browsers do — error, no call, no bubble', () async {
+      when( () => repo.notify( any() ) ).thenAnswer( ( _ ) async => queued() );
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => const [] );
       bloc!.add( FocusInboundNotification( _item( 'n1', 'sys@lupin#deadbeef' ) ) );
       bloc!.add( FocusInboundNotification( _item( 'n2', 'plain-sender' ) ) );
       await pump();
 
+      expect( bloc!.sessionMessageFor( 'sys@lupin#deadbeef', 'hi' ), isNull, reason: 'no email yet' );
       bloc!.add( const FocusRespondRequested( senderId: 'sys@lupin#deadbeef', text: 'hi' ) );
+      await pump();
+      expect( bloc!.state.hydration, FocusHydration.error );
+
+      bloc!.add( const FocusColdStartRequested( userEmail: 'rick@x.com' ) );
+      await pump();
+      expect( bloc!.sessionMessageFor( 'plain-sender', 'yo' ),  isNull );
+      expect( bloc!.sessionMessageFor( '#deadbeef',    'yo' ),  isNull );
+      expect( bloc!.sessionMessageFor( 'sys@lupin#',   'yo' ),  isNull );
+      expect( bloc!.sessionMessageFor( 'sys@lupin#deadbeef', 'yo' )!.jobId, 'deadbeef' );
       bloc!.add( const FocusRespondRequested( senderId: 'plain-sender', text: 'yo' ) );
       await pump();
 
-      final reqs = verify( () => repo.sendDm( captureAny() ) ).captured.cast<DmSendRequest>();
-      expect( reqs[ 0 ].recipientSessionId, 'deadbeef' );
-      expect( reqs[ 0 ].recipientPersona,   isNull );
-      expect( reqs[ 1 ].recipientSessionId, 'plain-sender' );
-      expect( FocusChatBloc.dmSenderPersona( null ), 'Mobile user' );
-      expect( FocusChatBloc.dmSenderPersona( 'rick@x.com' ), 'Rick' );
+      verifyNever( () => repo.notify( any() ) );
+      expect( bloc!.state.windows[ 'plain-sender' ]!.where( ( m ) => m.item.type == 'user_initiated_message' ), isEmpty );
     } );
 
     test( 'DM: transport failure → hydration error, NO local bubble (nothing pretends to be sent)', () async {
-      when( () => repo.sendDm( any() ) ).thenThrow(
-          const NotificationApiException( 'Direct message failed', statusCode: 422 ) );
-      bloc!.add( FocusInboundNotification( _item( 'n1', 'S' ) ) );
+      when( () => repo.notify( any() ) ).thenThrow(
+          const NotificationApiException( 'Notify dispatch failed', statusCode: 401 ) );
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => const [] );
+      bloc!.add( const FocusColdStartRequested( userEmail: 'rick@x.com' ) );
+      bloc!.add( FocusInboundNotification( _item( 'n1', 'S@x#1' ) ) );
       await pump();
-      bloc!.add( const FocusRespondRequested( senderId: 'S', text: 'hello?' ) );
+      bloc!.add( const FocusRespondRequested( senderId: 'S@x#1', text: 'hello?' ) );
       await pump();
       expect( bloc!.state.hydration, FocusHydration.error );
-      expect( bloc!.state.windows[ 'S' ]!.where( ( m ) => m.item.type == 'user_initiated_message' ), isEmpty );
+      expect( bloc!.state.windows[ 'S@x#1' ]!.where( ( m ) => m.item.type == 'user_initiated_message' ), isEmpty );
     } );
 
     test( 'AC-S2.9(i) — explicit typed promptContext → respond() with THAT notificationId + user reply appended', () async {
@@ -393,17 +404,19 @@ void main() {
           reason: 'newest-selection rule, not any-pending' );
     } );
 
-    test( 'AC-S2.9(iii) — no context, no pending ask → NO respond() call; since 2026-08-21 the text goes out as a DIRECT MESSAGE instead', () async {
-      when( () => repo.sendDm( any() ) ).thenAnswer( ( _ ) async => const DmSendAck() );
-      bloc!.add( FocusInboundNotification( _item( 'plain', 'S' ) ) );
+    test( 'AC-S2.9(iii) — no context, no pending ask → NO respond() call; since 2026-08-21 the text goes out as a DIRECT MESSAGE instead (POST /api/notify since 2026-09-17)', () async {
+      when( () => repo.notify( any() ) ).thenAnswer( ( _ ) async => queued() );
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => const [] );
+      bloc!.add( const FocusColdStartRequested( userEmail: 'rick@x.com' ) );
+      bloc!.add( FocusInboundNotification( _item( 'plain', 'S@x#1' ) ) );
       await pump();
 
-      bloc!.add( const FocusRespondRequested( senderId: 'S', text: 'orphan reply' ) );
+      bloc!.add( const FocusRespondRequested( senderId: 'S@x#1', text: 'orphan reply' ) );
       await pump();
 
       verifyNever( () => repo.respond( any() ) );
-      verify( () => repo.sendDm( any() ) ).called( 1 );
-      expect( bloc!.state.windows[ 'S' ]!.last.item.message, 'orphan reply' );
+      verify( () => repo.notify( any() ) ).called( 1 );
+      expect( bloc!.state.windows[ 'S@x#1' ]!.last.item.message, 'orphan reply' );
     } );
 
     test( 'AC-S2.9(failure) — repository failure sets hydration = error', () async {
