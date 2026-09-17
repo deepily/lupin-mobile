@@ -21,10 +21,16 @@ class DocViewerScreen extends StatefulWidget {
   final DocLink       link;
   final DocRepository repository;
 
+  /// Set when the viewer shares the screen instead of owning a route (the
+  /// 50/50 split, rows 2416d2c5 / e0843a8a): there is nothing to pop, so the
+  /// app bar needs its own close button. Null keeps the plain route behaviour.
+  final VoidCallback? onClose;
+
   const DocViewerScreen( {
     super.key,
     required this.link,
     required this.repository,
+    this.onClose,
   } );
 
   @override
@@ -94,6 +100,12 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     return Scaffold(
       key: const Key( TestKeys.docViewerScreen ),
       appBar: AppBar(
+        leading: widget.onClose == null ? null : IconButton(
+          key      : const Key( TestKeys.docViewerCloseButton ),
+          icon     : const Icon( Icons.close ),
+          tooltip  : "Close document",
+          onPressed: widget.onClose,
+        ),
         title: Text( widget.link.displayName, overflow: TextOverflow.ellipsis ),
         actions: [
           if ( _content?.text != null )

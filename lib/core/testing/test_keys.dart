@@ -57,11 +57,14 @@ class TestKeys {
   static const abstractExpandToggle = 'docs.abstract.expand';
   static const docViewerScreen      = 'docs.viewer.screen';
   static const docPanel             = 'docs.panel';
+  static const docSplitRow          = 'docs.split.row';
+  static const docSplitColumn       = 'docs.split.column';
   static const docViewerMarkdown    = 'docs.viewer.markdown';
   static const docViewerSource      = 'docs.viewer.source';
   static const docViewerImage       = 'docs.viewer.image';
   static const docViewerError       = 'docs.viewer.error';
   static const docViewerShareButton = 'docs.viewer.share';
+  static const docViewerCloseButton = 'docs.viewer.close';
   static const docDirEntryPrefix    = 'docs.dir.entry.';   // + entry name
 
   // Deep research form

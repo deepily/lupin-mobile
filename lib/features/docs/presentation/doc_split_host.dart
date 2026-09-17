@@ -1,0 +1,100 @@
+import 'package:flutter/material.dart';
+
+import '../../../core/testing/test_keys.dart';
+import '../data/doc_link.dart';
+import '../data/doc_repository.dart';
+import 'doc_panel.dart';
+import 'doc_viewer_screen.dart';
+
+/// A REAL split, not an overlay (rows 2416d2c5 / e0843a8a — Rick: "the
+/// notification bubbles are still covered up by the doc link document, when
+/// they should re-render in the leftmost 50%").
+///
+/// The first fix opened the document in a half-screen dialog. The document sat
+/// in the right half, but the conversation underneath was still laid out at
+/// full width, so the bubbles it was meant to keep readable ran on behind it.
+/// This host instead puts both in one layout: the child is given half the
+/// space and the document the other half, so the bubbles reflow into their
+/// half and nothing is occluded.
+///
+/// Placement follows [docPanelPlacementFor]: side by side at 600 logical
+/// pixels and up (an unfolded Fold), stacked on a phone-shaped screen.
+class DocSplitHost extends StatefulWidget {
+  /// The surface that shares the screen with the document — the rail and the
+  /// conversation, in focus mode.
+  final Widget child;
+
+  /// Repository handed to the viewer, resolved LAZILY — only when a document
+  /// is actually opened. A host that resolved it at build time would make
+  /// every screen that mounts one require a registered DocRepository, which
+  /// is a dependency the conversation itself does not have.
+  final DocRepository Function() repository;
+
+  const DocSplitHost( {
+    super.key,
+    required this.child,
+    required this.repository,
+  } );
+
+  /// The nearest host, or null when there is none. A surface with no host
+  /// (the legacy conversation screens) keeps opening documents full screen
+  /// or in the panel — nothing is forced to adopt the split.
+  static DocSplitHostState? maybeOf( BuildContext context ) =>
+      context.findAncestorStateOfType<DocSplitHostState>();
+
+  @override
+  State<DocSplitHost> createState() => DocSplitHostState();
+}
+
+class DocSplitHostState extends State<DocSplitHost> {
+  DocLink? _link;
+
+  /// The document currently sharing the screen, or null.
+  DocLink? get link => _link;
+
+  /// Show [link] beside (or below) the child, replacing any open document.
+  void open( DocLink link ) {
+    if ( !link.isFetchable ) return;
+    setState( () => _link = link );
+  }
+
+  /// Close the document and give the child the whole screen back.
+  void close() => setState( () => _link = null );
+
+  @override
+  Widget build( BuildContext context ) {
+    final link = _link;
+    if ( link == null ) return widget.child;
+
+    final placement = docPanelPlacementFor( MediaQuery.sizeOf( context ) );
+    final doc = SizedBox(
+      key   : const Key( TestKeys.docPanel ),
+      child : DocViewerScreen(
+        link       : link,
+        repository : widget.repository(),
+        onClose    : close,
+      ),
+    );
+
+    // Equal halves, and a divider so the seam is visible on both themes.
+    // `Expanded` on both sides is what makes the child RE-LAY OUT rather than
+    // keep its full-width layout under a panel.
+    return placement == DocPanelPlacement.rightHalf
+      ? Row(
+          key: const Key( TestKeys.docSplitRow ),
+          children: [
+            Expanded( child: widget.child ),
+            const VerticalDivider( width: 1 ),
+            Expanded( child: doc ),
+          ],
+        )
+      : Column(
+          key: const Key( TestKeys.docSplitColumn ),
+          children: [
+            Expanded( child: widget.child ),
+            const Divider( height: 1 ),
+            Expanded( child: doc ),
+          ],
+        );
+  }
+}

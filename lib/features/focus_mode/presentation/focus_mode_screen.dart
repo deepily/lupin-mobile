@@ -9,6 +9,8 @@ import '../../../services/tts/tts_orchestrator.dart';
 import '../../auth/domain/auth_bloc.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../decision_proxy/presentation/trust_dashboard_screen.dart';
+import '../../docs/data/doc_repository.dart';
+import '../../docs/presentation/doc_split_host.dart';
 import '../../home/home_screen.dart';
 import '../../notifications/presentation/inbox_screen.dart';
 import '../../queue/presentation/queue_dashboard_screen.dart';
@@ -102,14 +104,21 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
         children: [
           TtsPausedBanner( tts: _tts, bannerKey: const Key( TestKeys.focusPausedBanner ) ),
           const FocusFilterBar(),
+          // Rows 2416d2c5 / e0843a8a: a tapped doc link SHARES this space
+          // with the conversation instead of floating over it, so the bubbles
+          // reflow into their half. The composer below stays full width — it
+          // writes to the focused session either way.
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SessionRail(),
-                const VerticalDivider( width: 1 ),
-                Expanded( child: FocusChatPane( userEmail: _authedEmail() ) ),
-              ],
+            child: DocSplitHost(
+              repository: () => ServiceLocator.instance<DocRepository>(),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SessionRail(),
+                  const VerticalDivider( width: 1 ),
+                  Expanded( child: FocusChatPane( userEmail: _authedEmail() ) ),
+                ],
+              ),
             ),
           ),
           _composer( context ),

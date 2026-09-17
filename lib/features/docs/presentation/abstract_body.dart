@@ -6,6 +6,7 @@ import '../../../core/testing/test_keys.dart';
 import '../data/doc_link.dart';
 import '../data/doc_repository.dart';
 import 'doc_panel.dart';
+import 'doc_split_host.dart';
 
 /// Renders a notification's `abstract` inline in a card.
 ///
@@ -66,6 +67,17 @@ class _AbstractBodyState extends State<AbstractBody> {
       // Half the screen, not all of it (row d7f56574): the right half on an
       // unfolded Fold, the bottom half on a phone-shaped screen, so the
       // message that linked the document stays in view.
+      //
+      // Rows 2416d2c5 / e0843a8a: on a surface that hosts a split (focus
+      // mode), hand the link to the host so the conversation RE-LAYS OUT into
+      // its half. The half-screen dialog left the bubbles at full width behind
+      // the document, which is the occlusion Rick reported twice. Surfaces
+      // with no host keep the dialog.
+      final host = DocSplitHost.maybeOf( context );
+      if ( host != null ) {
+        host.open( link );
+        return;
+      }
       await showDocPanel( context: context, link: link, repository: widget.repository );
       return;
     }
