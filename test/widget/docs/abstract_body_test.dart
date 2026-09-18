@@ -6,12 +6,15 @@ import 'package:lupin_mobile/features/docs/data/doc_link.dart';
 import 'package:lupin_mobile/features/docs/data/doc_models.dart';
 import 'package:lupin_mobile/features/docs/data/doc_repository.dart';
 import 'package:lupin_mobile/features/docs/presentation/abstract_body.dart';
+import 'package:lupin_mobile/features/docs/presentation/doc_split_host.dart';
 import 'package:lupin_mobile/features/docs/presentation/doc_viewer_screen.dart';
 
-/// P3 — the abstract renders inline, conditionally, with a badge and live links.
+/// The abstract, disclosed on request (Rick 2026-09-18: "the whole idea
+/// behind using abstracts as a notion is progressive disclosure").
 ///
-/// These are the acceptance criteria from the plan (§8, items 1-4) expressed as
-/// tests.
+/// The bubble shows one compact row and never the abstract's text. A tap opens
+/// the whole abstract in the document viewer, where it renders as markdown and
+/// its links are live. Replaces P3's inline render, badge and collapse.
 
 /// A DocRepository that answers from memory, so no server is involved.
 class _FakeDocRepository implements DocRepository {
@@ -40,25 +43,34 @@ void main() {
     WidgetTester tester,
     String? abstractText, {
     DocRepository? repository,
-    int collapsedMaxLines = 8,
   } ) async {
     await tester.pumpWidget( MaterialApp(
       home: Scaffold(
         body: AbstractBody(
-          abstractText      : abstractText,
-          repository        : repository ?? _FakeDocRepository(),
-          collapsedMaxLines : collapsedMaxLines,
+          abstractText : abstractText,
+          repository   : repository ?? _FakeDocRepository(),
         ),
       ),
     ) );
   }
 
-  group( "AC-1 — the conditional render", () {
+  Future<void> openIt( WidgetTester tester ) async {
+    await tester.tap( find.byKey( const Key( TestKeys.abstractOpenButton ) ) );
+    await tester.pumpAndSettle();
+  }
+
+  // Twelve source lines, so "the whole abstract" is a real claim.
+  final long = [
+    "# Twelve lines",
+    for ( var i = 2; i <= 11; i++ ) "Line $i of the abstract.",
+    "The very last line.",
+  ].join( "\n" );
+
+  group( "the conditional render", () {
     testWidgets( "a null abstract renders nothing at all", ( tester ) async {
       await pump( tester, null );
 
       expect( find.byKey( const Key( TestKeys.abstractBody ) ), findsNothing );
-      expect( find.byType( MarkdownBody ),                      findsNothing );
     } );
 
     testWidgets( "an empty abstract renders nothing at all", ( tester ) async {
@@ -66,144 +78,115 @@ void main() {
 
       expect( find.byKey( const Key( TestKeys.abstractBody ) ), findsNothing );
     } );
-
-    testWidgets( "a present abstract renders the card body", ( tester ) async {
-      await pump( tester, "Some prose." );
-
-      expect( find.byKey( const Key( TestKeys.abstractBody ) ), findsOneWidget );
-      expect( find.byType( MarkdownBody ),                      findsOneWidget );
-    } );
   } );
 
-  group( "AC-2 — markdown actually formats", () {
-    testWidgets( "prose goes through the markdown renderer, not a plain Text", ( tester ) async {
-      await pump( tester, "**bold** and `code`" );
+  group( "progressive disclosure: the bubble never renders the abstract", () {
+    testWidgets( "a present abstract is one tappable row, with none of its text", ( tester ) async {
+      await pump( tester, "**The secret sentence** and a table:\n\n| a | b |\n|---|---|\n| 1 | 2 |" );
 
-      expect( find.byType( MarkdownBody ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.abstractOpenButton ) ), findsOneWidget );
+      expect( find.text( "Abstract" ),                                 findsOneWidget );
+      expect( find.byType( MarkdownBody ),                             findsNothing );
+      expect( find.textContaining( "secret sentence" ),                findsNothing );
     } );
 
-    testWidgets( "a bulleted list renders", ( tester ) async {
-      await pump( tester, "- first\n- second\n- third" );
-
-      expect( find.byType( MarkdownBody ), findsOneWidget );
-      expect( tester.takeException(),      isNull );
-    } );
-
-    testWidgets( "a table renders without throwing", ( tester ) async {
-      await pump( tester, "| a | b |\n|---|---|\n| 1 | 2 |" );
-
-      expect( find.byType( MarkdownBody ), findsOneWidget );
-      expect( tester.takeException(),      isNull );
-    } );
-
-    testWidgets( "headings render without throwing", ( tester ) async {
-      await pump( tester, "# Heading\n\nbody text" );
-
-      expect( tester.takeException(), isNull );
-    } );
-  } );
-
-  group( "AC-3 — the document badge", () {
-    testWidgets( "appears when the abstract carries a doc link", ( tester ) async {
+    testWidgets( "an abstract with a doc link says so on the row", ( tester ) async {
       await pump( tester, "See [plan](/app/docs?path=lupin-mobile/src/rnd/plan.md)" );
 
-      expect( find.byKey( const Key( TestKeys.abstractDocBadge ) ), findsOneWidget );
+      expect( find.text( "Abstract · has a document" ), findsOneWidget );
+      expect( find.textContaining( "plan" ),            findsNothing );
     } );
 
-    testWidgets( "is ABSENT for a link-free abstract", ( tester ) async {
-      await pump( tester, "Just **prose**, no links." );
-
-      expect( find.byKey( const Key( TestKeys.abstractDocBadge ) ), findsNothing );
-    } );
-
-    testWidgets( "is ABSENT when the only link is external", ( tester ) async {
-      // The badge promises in-app content; an external URL is not that.
+    testWidgets( "an external-only link does not count as a document", ( tester ) async {
       await pump( tester, "See [pub](https://pub.dev/packages/dio)" );
 
-      expect( find.byKey( const Key( TestKeys.abstractDocBadge ) ), findsNothing );
-    } );
-
-    testWidgets( "is ABSENT when the only link is the retired legacy form", ( tester ) async {
-      await pump( tester, "See [old](/app/docs?path=x.md&scope=lupin-mobile)" );
-
-      expect( find.byKey( const Key( TestKeys.abstractDocBadge ) ), findsNothing );
+      expect( find.text( "Abstract" ), findsOneWidget );
     } );
   } );
 
-  group( "AC-4 — tapping a doc link opens the viewer", () {
-    testWidgets( "tap pushes DocViewerScreen and requests the right path", ( tester ) async {
+  group( "a tap opens the WHOLE abstract in the viewer", () {
+    testWidgets( "as a page titled Abstract, all of it, with nothing fetched", ( tester ) async {
       final repo = _FakeDocRepository();
-      await pump(
-        tester,
-        "[Open: plan.md](/app/docs?path=lupin-mobile/src/rnd/plan.md)",
-        repository: repo,
+      await pump( tester, long, repository: repo );
+
+      await openIt( tester );
+
+      expect( find.byType( DocViewerScreen ),                       findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.docViewerMarkdown ) ), findsOneWidget );
+      expect( find.text( "Abstract" ),                              findsOneWidget, reason: "the viewer's title" );
+      expect( find.textContaining( "The very last line." ),         findsOneWidget );
+      expect( repo.lastRequested, isNull, reason: "the abstract is in hand; nothing to fetch" );
+    } );
+
+    testWidgets( "inside a split host, it opens in the split instead of a new page", ( tester ) async {
+      await tester.pumpWidget( MaterialApp(
+        home: Scaffold(
+          body: DocSplitHost(
+            repository : () => _FakeDocRepository(),
+            child      : AbstractBody( abstractText: long, repository: _FakeDocRepository() ),
+          ),
+        ),
+      ) );
+
+      await openIt( tester );
+
+      expect( tester.state<DocSplitHostState>( find.byType( DocSplitHost ) ).showsText, isTrue );
+      expect( find.byKey( const Key( TestKeys.docPanel ) ),     findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.abstractBody ) ), findsOneWidget,
+          reason: "the bubble's row is still there beside the viewer" );
+    } );
+  } );
+
+  group( "links inside the opened abstract are live", () {
+    testWidgets( "a doc link opens that document and requests the right path", ( tester ) async {
+      final repo = _FakeDocRepository(
+        content: const DocContent( kind: DocContentKind.markdown, mediaType: "text/markdown", text: "# The fetched heading" ),
       );
+      await pump( tester, "[Open: plan.md](/app/docs?path=lupin-mobile/src/rnd/plan.md)", repository: repo );
+      await openIt( tester );
 
       await tester.tap( find.textContaining( "Open: plan.md" ) );
       await tester.pumpAndSettle();
 
-      expect( find.byType( DocViewerScreen ),                    findsOneWidget );
-      expect( find.byKey( const Key( TestKeys.docViewerScreen ) ), findsOneWidget );
-      expect( repo.lastRequested,                                isNotNull );
-      expect( repo.lastRequested!.project,                       "lupin-mobile" );
-      expect( repo.lastRequested!.relPath,                       "src/rnd/plan.md" );
-      expect( repo.lastRequested!.apiPath,                       "/api/docs/file" );
+      expect( repo.lastRequested!.project, "lupin-mobile" );
+      expect( repo.lastRequested!.relPath, "src/rnd/plan.md" );
+      expect( repo.lastRequested!.apiPath, "/api/docs/file" );
+      expect( find.textContaining( "The fetched heading" ), findsOneWidget );
     } );
 
-    testWidgets( "the fetched markdown is rendered in the viewer", ( tester ) async {
-      final repo = _FakeDocRepository(
-        content: const DocContent(
-          kind      : DocContentKind.markdown,
-          mediaType : "text/markdown",
-          text      : "# The fetched heading",
+    testWidgets( "in the split, a doc link REPLACES the abstract in the same half", ( tester ) async {
+      final repo = _FakeDocRepository();
+      await tester.pumpWidget( MaterialApp(
+        home: Scaffold(
+          body: DocSplitHost(
+            repository : () => repo,
+            child      : AbstractBody(
+              abstractText : "[Open: plan.md](/app/docs?path=lupin-mobile/src/rnd/plan.md)",
+              repository   : repo,
+            ),
+          ),
         ),
-      );
-      await pump( tester, "[doc](/app/docs?path=p/a.md)", repository: repo );
+      ) );
+      await openIt( tester );
 
-      await tester.tap( find.textContaining( "doc" ) );
+      await tester.tap( find.textContaining( "Open: plan.md" ) );
       await tester.pumpAndSettle();
 
-      expect( find.byKey( const Key( TestKeys.docViewerMarkdown ) ), findsOneWidget );
+      final host = tester.state<DocSplitHostState>( find.byType( DocSplitHost ) );
+      expect( host.showsText,          isFalse );
+      expect( host.link!.relPath,      "src/rnd/plan.md" );
+      expect( find.byType( DocViewerScreen ), findsOneWidget, reason: "one half, not a stack of panels" );
     } );
 
     testWidgets( "a retired legacy link does NOT navigate", ( tester ) async {
       final repo = _FakeDocRepository();
       await pump( tester, "[old](/app/docs?path=x.md&scope=p)", repository: repo );
+      await openIt( tester );
 
       await tester.tap( find.textContaining( "old" ) );
       await tester.pumpAndSettle();
 
-      expect( find.byType( DocViewerScreen ), findsNothing );
-      expect( repo.lastRequested,             isNull );
-    } );
-  } );
-
-  group( "Q2 — long abstracts collapse", () {
-    const long = "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12";
-
-    testWidgets( "a long abstract offers Show more", ( tester ) async {
-      await pump( tester, long, collapsedMaxLines: 4 );
-
-      expect( find.byKey( const Key( TestKeys.abstractExpandToggle ) ), findsOneWidget );
-      expect( find.text( "Show more" ),                                findsOneWidget );
-    } );
-
-    testWidgets( "a short abstract offers no toggle", ( tester ) async {
-      await pump( tester, "one\ntwo", collapsedMaxLines: 8 );
-
-      expect( find.byKey( const Key( TestKeys.abstractExpandToggle ) ), findsNothing );
-    } );
-
-    testWidgets( "the toggle flips to Show less and back", ( tester ) async {
-      await pump( tester, long, collapsedMaxLines: 4 );
-
-      await tester.tap( find.byKey( const Key( TestKeys.abstractExpandToggle ) ) );
-      await tester.pumpAndSettle();
-      expect( find.text( "Show less" ), findsOneWidget );
-
-      await tester.tap( find.byKey( const Key( TestKeys.abstractExpandToggle ) ) );
-      await tester.pumpAndSettle();
-      expect( find.text( "Show more" ), findsOneWidget );
+      expect( repo.lastRequested, isNull );
     } );
   } );
 }

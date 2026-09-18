@@ -90,16 +90,25 @@ void main() {
     } );
   } );
 
+  /// Since 2026-09-18 the bubble shows only the abstract's row; its links
+  /// live in the viewer the row opens (a page here — this pane has no split
+  /// host), and a doc link tapped there opens in the half-screen panel.
+  Future<void> openLink( WidgetTester tester ) async {
+    await tester.tap( find.byKey( const Key( TestKeys.abstractOpenButton ) ) );
+    await tester.pumpAndSettle();
+    await tester.tap( find.textContaining( 'Open: how-to' ) );
+    await tester.pumpAndSettle();
+  }
+
   group( 'focus-mode bubble', () {
-    testWidgets( 'renders the abstract, and its doc link is tappable', ( tester ) async {
+    testWidgets( 'shows the abstract row, and the doc link inside it is tappable', ( tester ) async {
       stateWith( _item( abstractText: _link ) );
       await pumpAt( tester, const Size( 412, 915 ) );
 
       expect( find.byKey( const Key( TestKeys.abstractBody ) ), findsOneWidget );
-      await tester.tap( find.textContaining( 'Open: how-to' ) );
-      await tester.pumpAndSettle();
+      await openLink( tester );
 
-      expect( find.byType( DocViewerScreen ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.docPanel ) ), findsOneWidget );
       expect( repo.lastRequested!.project, 'lupin-mobile' );
       expect( repo.lastRequested!.relPath, 'src/rnd/2026.09.16-phone-install-and-record-how-to.md' );
     } );
@@ -116,8 +125,7 @@ void main() {
     testWidgets( 'unfolded (wide): the document takes the right half, full height', ( tester ) async {
       stateWith( _item( abstractText: _link ) );
       await pumpAt( tester, const Size( 1000, 900 ) );
-      await tester.tap( find.textContaining( 'Open: how-to' ) );
-      await tester.pumpAndSettle();
+      await openLink( tester );
 
       final panel = find.byKey( const Key( TestKeys.docPanel ) );
       expect( tester.getSize( panel ), const Size( 500, 900 ) );
@@ -127,8 +135,7 @@ void main() {
     testWidgets( 'folded (narrow): the document takes the bottom half, full width', ( tester ) async {
       stateWith( _item( abstractText: _link ) );
       await pumpAt( tester, const Size( 400, 900 ) );
-      await tester.tap( find.textContaining( 'Open: how-to' ) );
-      await tester.pumpAndSettle();
+      await openLink( tester );
 
       final panel = find.byKey( const Key( TestKeys.docPanel ) );
       expect( tester.getSize( panel ), const Size( 400, 450 ) );
@@ -138,13 +145,13 @@ void main() {
     testWidgets( 'tapping the uncovered half closes the document', ( tester ) async {
       stateWith( _item( abstractText: _link ) );
       await pumpAt( tester, const Size( 1000, 900 ) );
-      await tester.tap( find.textContaining( 'Open: how-to' ) );
-      await tester.pumpAndSettle();
-      expect( find.byType( DocViewerScreen ), findsOneWidget );
+      await openLink( tester );
+      expect( find.byKey( const Key( TestKeys.docPanel ) ), findsOneWidget );
 
       await tester.tapAt( const Offset( 100, 450 ) );
       await tester.pumpAndSettle();
-      expect( find.byType( DocViewerScreen ), findsNothing );
+      expect( find.byKey( const Key( TestKeys.docPanel ) ), findsNothing );
+      expect( find.byType( DocViewerScreen ), findsOneWidget, reason: 'back on the abstract' );
     } );
   } );
 }

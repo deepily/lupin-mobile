@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../data/doc_link.dart';
+import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
 import 'doc_panel.dart';
 import 'doc_viewer_screen.dart';
@@ -47,33 +48,66 @@ class DocSplitHost extends StatefulWidget {
 }
 
 class DocSplitHostState extends State<DocSplitHost> {
-  DocLink? _link;
+  DocLink?    _link;
+  DocContent? _text;
+  String?     _textTitle;
 
   /// The document currently sharing the screen, or null.
   DocLink? get link => _link;
 
+  /// True while in-hand text (an abstract), not a fetched document, is open.
+  bool get showsText => _text != null;
+
   /// Show [link] beside (or below) the child, replacing any open document.
   void open( DocLink link ) {
     if ( !link.isFetchable ) return;
-    setState( () => _link = link );
+    setState( () {
+      _link      = link;
+      _text      = null;
+      _textTitle = null;
+    } );
+  }
+
+  /// Show [markdown] the caller already has — a notification's abstract —
+  /// in the same half, replacing any open document (Rick 2026-09-18).
+  void openText( { required String title, required String markdown } ) {
+    setState( () {
+      _link      = null;
+      _text      = DocContent( kind: DocContentKind.markdown, mediaType: "text/markdown", text: markdown );
+      _textTitle = title;
+    } );
   }
 
   /// Close the document and give the child the whole screen back.
-  void close() => setState( () => _link = null );
+  void close() => setState( () {
+    _link      = null;
+    _text      = null;
+    _textTitle = null;
+  } );
 
   @override
   Widget build( BuildContext context ) {
     final link = _link;
-    if ( link == null ) return widget.child;
+    final text = _text;
+    if ( link == null && text == null ) return widget.child;
 
     final placement = docPanelPlacementFor( MediaQuery.sizeOf( context ) );
     final doc = SizedBox(
       key   : const Key( TestKeys.docPanel ),
-      child : DocViewerScreen(
-        link       : link,
-        repository : widget.repository(),
-        onClose    : close,
-      ),
+      child : text != null
+          ? DocViewerScreen(
+              key     : ValueKey( text ),   // a second abstract replaces the first
+              content    : text,
+              title      : _textTitle,
+              repository : widget.repository(),
+              onClose    : close,
+            )
+          : DocViewerScreen(
+              key        : ValueKey( link ),
+              link       : link,
+              repository : widget.repository(),
+              onClose    : close,
+            ),
     );
 
     // Equal halves, and a divider so the seam is visible on both themes.

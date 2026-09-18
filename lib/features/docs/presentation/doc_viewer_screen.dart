@@ -10,6 +10,7 @@ import '../../../core/testing/test_keys.dart';
 import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
+import 'doc_link_tap.dart';
 
 /// Full-screen viewer for a document reached from a notification abstract.
 ///
@@ -18,8 +19,17 @@ import '../data/doc_repository.dart';
 /// in P4; until then they fall back to a readable source view rather than an
 /// error, because showing the bytes is always better than showing nothing.
 class DocViewerScreen extends StatefulWidget {
-  final DocLink       link;
-  final DocRepository repository;
+  /// The document to fetch. Null when [content] is already in hand.
+  final DocLink?       link;
+  final DocRepository? repository;
+
+  /// Content the caller already has — a notification's abstract (Rick
+  /// 2026-09-18: tapping the abstract icon should render the abstract the way
+  /// a document renders). Shown as-is; nothing is fetched.
+  final DocContent? content;
+
+  /// App-bar title. Defaults to the link's file name.
+  final String? title;
 
   /// Set when the viewer shares the screen instead of owning a route (the
   /// 50/50 split, rows 2416d2c5 / e0843a8a): there is nothing to pop, so the
@@ -28,10 +38,16 @@ class DocViewerScreen extends StatefulWidget {
 
   const DocViewerScreen( {
     super.key,
-    required this.link,
-    required this.repository,
+    this.link,
+    this.repository,
+    this.content,
+    this.title,
     this.onClose,
-  } );
+  } ) : assert( content != null || ( link != null && repository != null ),
+                'give the viewer either content or a link and a repository to fetch it' );
+
+  /// What the app bar shows, and the shared file's name.
+  String get displayTitle => title ?? link?.displayName ?? "Document";
 
   @override
   State<DocViewerScreen> createState() => _DocViewerScreenState();
@@ -55,6 +71,16 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
   }
 
   Future<void> _load() async {
+    final inHand = widget.content;
+    if ( inHand != null ) {
+      setState( () {
+        _content = inHand;
+        _error   = null;
+        _loading = false;
+      } );
+      return;
+    }
+
     setState( () {
       _loading = true;
       _error   = null;
@@ -62,7 +88,7 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     } );
 
     try {
-      final content = await widget.repository.fetch( widget.link );
+      final content = await widget.repository!.fetch( widget.link! );
       if ( !mounted ) return;
       setState( () {
         _content = content;
@@ -83,7 +109,8 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     if ( content.text == null ) return;
     try {
       final dir  = await getTemporaryDirectory();
-      final file = File( "${dir.path}/${widget.link.displayName}" );
+      final name = widget.link?.displayName ?? "${widget.displayTitle.replaceAll( RegExp( r'[^A-Za-z0-9._-]+' ), '-' )}.md";
+      final file = File( "${dir.path}/$name" );
       await file.writeAsString( content.text! );
       await Share.shareXFiles( [ XFile( file.path ) ] );
     } catch ( e ) {
@@ -106,7 +133,7 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
           tooltip  : "Close document",
           onPressed: widget.onClose,
         ),
-        title: Text( widget.link.displayName, overflow: TextOverflow.ellipsis ),
+        title: Text( widget.displayTitle, overflow: TextOverflow.ellipsis ),
         actions: [
           if ( _content?.text != null )
             IconButton(
@@ -124,15 +151,16 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
   Widget _buildBody() {
     if ( _loading )        return const Center( child: CircularProgressIndicator() );
     if ( _error != null )  return _ErrorView( error: _error!, onRetry: _load );
-    return _ContentView( content: _content! );
+    return _ContentView( content: _content!, repository: widget.repository );
   }
 }
 
 /// Renders one fetched document according to its kind.
 class _ContentView extends StatelessWidget {
-  final DocContent content;
+  final DocContent     content;
+  final DocRepository? repository;
 
-  const _ContentView( { required this.content } );
+  const _ContentView( { required this.content, this.repository } );
 
   @override
   Widget build( BuildContext context ) {
@@ -143,6 +171,12 @@ class _ContentView extends StatelessWidget {
           data      : content.text ?? "",
           selectable: true,
           padding   : const EdgeInsets.all( 16 ),
+          // Links are live here too: an abstract's doc link now lives only in
+          // the viewer (Rick 2026-09-18, progressive disclosure), so a tap on
+          // it opens the document in place of the abstract.
+          onTapLink : ( text, href, title ) {
+            if ( href != null ) openMarkdownHref( context: context, href: href, repository: repository );
+          },
         );
 
       case DocContentKind.image:

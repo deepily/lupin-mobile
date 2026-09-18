@@ -53,8 +53,7 @@ class TestKeys {
 
   // Abstract rendering + doc-link viewer
   static const abstractBody         = 'docs.abstract.body';
-  static const abstractDocBadge     = 'docs.abstract.badge';
-  static const abstractExpandToggle = 'docs.abstract.expand';
+  static const abstractOpenButton   = 'docs.abstract.open';   // opens the whole abstract (2026-09-18)
   static const docViewerScreen      = 'docs.viewer.screen';
   static const docPanel             = 'docs.panel';
   static const docSplitRow          = 'docs.split.row';

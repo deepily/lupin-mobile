@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/docs/data/doc_link.dart';
 import 'package:lupin_mobile/features/docs/data/doc_models.dart';
 import 'package:lupin_mobile/features/docs/data/doc_repository.dart';
@@ -9,6 +10,9 @@ import 'package:lupin_mobile/features/docs/presentation/doc_viewer_screen.dart';
 
 /// Q4 — leaving the app is deliberate: an external `http(s)` link in an abstract
 /// asks before it launches.
+///
+/// Since 2026-09-18 an abstract's links live in the document viewer, not the
+/// bubble (progressive disclosure), so each test opens the abstract first.
 ///
 /// This path shipped in `756ae43` with no coverage. Untested-but-shipped is the
 /// worse state: it either works or silently does not, and nothing says which.
@@ -56,16 +60,18 @@ void main() {
         body: AbstractBody( abstractText: abstractText, repository: repo ),
       ),
     ) );
+    await tester.tap( find.byKey( const Key( TestKeys.abstractOpenButton ) ) );
+    await tester.pumpAndSettle();
   }
 
   group( "external links ask before leaving the app", () {
     testWidgets( "tapping an external link raises a confirm naming the URL", ( tester ) async {
       final repo = _FakeDocRepository();
-      await pump( tester, "See [pub](https://pub.dev/packages/dio)", repo );
+      await pump( tester, "[pub](https://pub.dev/packages/dio)", repo );
 
-      // The link sits INSIDE prose here, so the paragraph's centre is the word
-      // "See", not the link. Tap the link's own text range.
-      await tester.tapOnText( find.textRange.ofSubstring( "pub" ) );
+      // The viewer's markdown is selectable, which renders as editable text
+      // that `tapOnText` cannot range over, so the link stands alone here.
+      await tester.tap( find.textContaining( "pub" ) );
       await tester.pumpAndSettle();
 
       expect( find.text( "Open outside the app?" ),          findsOneWidget );
@@ -124,7 +130,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect( find.text( "Open outside the app?" ), findsNothing );
-      expect( find.byType( DocViewerScreen ),       findsOneWidget );
+      expect( find.byType( DocViewerScreen ),       findsNWidgets( 2 ),
+          reason: "the abstract's viewer, and the document opened from it" );
       expect( launcherCalls,                        isEmpty );
       expect( repo.lastRequested?.relPath,          "src/rnd/plan.md" );
     } );
@@ -137,7 +144,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect( find.text( "Open outside the app?" ), findsNothing );
-      expect( find.byType( DocViewerScreen ),       findsNothing );
+      expect( find.byType( DocViewerScreen ),       findsOneWidget, reason: "only the abstract's own viewer" );
       expect( launcherCalls,                        isEmpty );
       expect( repo.lastRequested,                   isNull );
     } );

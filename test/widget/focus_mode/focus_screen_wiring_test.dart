@@ -265,6 +265,10 @@ void main() {
       await settle( tester );
       expect( find.text( 'The how-to is ready' ), findsOneWidget );
 
+      // The bubble shows the abstract's row only (progressive disclosure,
+      // 2026-09-18); the link is inside the abstract it opens in the split.
+      await tester.tap( find.byKey( const Key( TestKeys.abstractOpenButton ) ) );
+      await settle( tester );
       await tester.tap( find.textContaining( 'Open: how-to' ) );
       await settle( tester );
 
@@ -280,6 +284,44 @@ void main() {
       expect( pane.right, lessThanOrEqualTo( 420 + 1 ),
           reason: 'the bubbles live in the LEFT half, not full width behind the document' );
       expect( viewer.left, greaterThanOrEqualTo( 420 - 1 ) );
+    } );
+
+    // Rick 2026-09-18: tapping the abstract's icon did nothing, and the
+    // abstract should not render in the bubble at all. The row now opens the
+    // whole abstract in the same half a doc link uses.
+    testWidgets( 'the abstract icon opens the whole abstract in the split, beside the conversation', ( tester ) async {
+      written( clock.subtract( const Duration( minutes: 5 ) ) );
+      final abstractText = [
+        '# Twelve lines',
+        for ( var i = 2; i <= 11; i++ ) 'Line \$i of the abstract.',
+        'The very last line.',
+      ].join( '\n' );
+      when( () => repo.conversation( any(), any(), hours: any( named: 'hours' ) ) )
+          .thenAnswer( ( _ ) async => [
+            ConversationMessage.fromJson( {
+              'id'        : 'n2',
+              'sender_id' : _written,
+              'message'   : 'Here is the summary',
+              'type'      : 'custom',
+              'priority'  : 'high',
+              'state'     : 'delivered',
+              'abstract'  : abstractText,
+              'timestamp' : clock.subtract( const Duration( minutes: 5 ) ).toIso8601String(),
+            } ),
+          ] );
+      await pumpScreen( tester, screen: const Size( 840, 900 ) );
+      await tester.tap( railBadge( _written ) );
+      await settle( tester );
+      expect( find.textContaining( 'The very last line.' ), findsNothing, reason: 'setup: the bubble shows none of the abstract' );
+
+      await tester.tap( find.byKey( const Key( TestKeys.abstractOpenButton ) ) );
+      await settle( tester );
+
+      final viewer = find.byType( DocViewerScreen );
+      expect( viewer, findsOneWidget );
+      expect( find.descendant( of: viewer, matching: find.textContaining( 'The very last line.' ) ), findsOneWidget );
+      expect( tester.getRect( find.byType( FocusChatPane ) ).right, lessThanOrEqualTo( 420 + 1 ) );
+      expect( docs.lastRequested, isNull, reason: 'nothing fetched: the abstract was already here' );
     } );
 
     testWidgets( 'phone (412 wide): the conversation shrinks to the top half, full width', ( tester ) async {

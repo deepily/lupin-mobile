@@ -140,4 +140,23 @@ void main() {
       expect( repo.fetchCount, 2 );
     } );
   } );
+
+  // Rick 2026-09-18: the abstract icon opens the abstract itself, which the
+  // caller already holds — there is no file to fetch.
+  group( "content in hand", () {
+    testWidgets( "renders the given markdown under the given title, with no link or repository", ( tester ) async {
+      await tester.pumpWidget( const MaterialApp(
+        home: DocViewerScreen(
+          content : DocContent( kind: DocContentKind.markdown, mediaType: "text/markdown", text: "# Heading\n\n| a | b |\n|---|---|\n| 1 | 2 |" ),
+          title   : "Abstract",
+        ),
+      ) );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.docViewerMarkdown ) ), findsOneWidget );
+      expect( find.text( "Abstract" ), findsOneWidget );
+      expect( find.text( "Heading" ), findsOneWidget );
+      expect( find.byType( CircularProgressIndicator ), findsNothing, reason: "nothing to load" );
+    } );
+  } );
 }
