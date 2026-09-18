@@ -58,6 +58,12 @@ class TtsPreviewTruncator {
     return slice.replaceAll( _mask, '.' ).trim();
   }
 
+  /// Rick 2026-09-18: "0% playback. That is nothing." The slider at 0% is
+  /// silence — not the first sentence, not a short message spoken whole,
+  /// not a title, not an answer he asked for. Every speech path checks this
+  /// BEFORE it enqueues, the background FCM path included.
+  static bool silences( double fraction ) => fraction <= 0;
+
   /// The speech the orchestrator should send for [message] at [fraction]:
   /// full text when the slider is at 100%, the message is under [minChars],
   /// or the scan reaches the end anyway (web parity opt-outs).

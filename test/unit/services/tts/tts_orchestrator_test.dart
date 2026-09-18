@@ -904,11 +904,30 @@ void main() {
       // time), so a second enqueue on `o` would queue, not speak.
       await o.dispose();
       await setUpMocks();
-      await prefs.setTtsFraction( 0.0 );
+      await prefs.setTtsFraction( 0.1 );
       final o2 = newOrch();
       o2.enqueueAlways( priority: "low", message: "Build finished", title: null );
       await Future<void>.delayed( Duration.zero );
       verify( () => player.speak( text: "Build finished", sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) ).called( 1 );
+    } );
+
+    // Rick 2026-09-18: "When I put the slider on 0%, that means I literally
+    // want 0% playback. That is nothing." Until then 0% still spoke the first
+    // sentence, any message under 80 characters, every title, and answers.
+    test( "fraction: 0% speaks NOTHING on any path — short, titled, verbatim, high-priority, or speak-anyway", () async {
+      await setUpMocks();
+      await prefs.setTtsFraction( 0.0 );
+      final o = newOrch();
+      final long = List.generate( 6, ( i ) => "Sentence number ${i + 1} is here and long enough." ).join( " " );
+
+      o.enqueueAlways( priority: "low", message: "Build finished", title: "Tiffany" );
+      o.enqueueAlways( priority: "high", message: long, title: null, verbatim: true );
+      o.enqueueIfSpeakable( priority: "high", message: "Build finished" );
+      o.speakAnyway( const TtsSuppression( priority: "low", message: "Build finished", rule: "Build" ) );
+      await Future<void>.delayed( Duration.zero );
+
+      verifyNever( () => player.speak( text: any( named: "text" ), sessionId: any( named: "sessionId" ), voiceId: any( named: "voiceId" ) ) );
+      expect( o.queueDepth, 0, reason: "nothing queued either — not spoken later when the slider moves" );
     } );
   } );
 

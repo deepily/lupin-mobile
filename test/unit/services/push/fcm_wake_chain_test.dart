@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 
 import 'package:lupin_mobile/services/push/fcm_wake_chain.dart';
+import 'package:lupin_mobile/services/tts/tts_preview_truncator.dart';
 
 void main() {
   group( 'FcmWakeChain (S5 §3.2.4)', () {
@@ -17,6 +18,7 @@ void main() {
     late List<String> logs;
     late List<String> spoken;
     late bool         speakAllowed;
+    late double       sliderFraction;
     late Map<String, dynamic>? nextItem;
 
     Map<String, dynamic> wakePayload( { String reason = 'undelivered' } ) =>
@@ -36,8 +38,9 @@ void main() {
       calls        = [];
       logs         = [];
       spoken       = [];
-      speakAllowed = true;
-      nextItem     = wireItem();
+      speakAllowed   = true;
+      sliderFraction = 1.0;
+      nextItem       = wireItem();
 
       chain = FcmWakeChain(
         readCredentials: () async {
@@ -62,6 +65,7 @@ void main() {
           calls.add( 'prefs($priority)' );
           return speakAllowed;
         },
+        ttsFraction: () async => sliderFraction,
         speak: ( text ) async {
           calls.add( 'speak' );
           spoken.add( text );
@@ -104,6 +108,34 @@ void main() {
       expect( spoken.single.contains( 'abstract' ), isFalse );
     } );
 
+    // Rick 2026-09-18: he heard whole high-priority messages with the slider
+    // at 0%. This path spoke the full `message` and never read the slider.
+    test( 'the TTS slider at 0%: fetch + show fire, NOTHING is spoken — not even a short message', () async {
+      sliderFraction = 0.0;
+      final outcome = await chain.handleWake( wakePayload() );
+
+      expect( calls.where( ( c ) => c.startsWith( 'show' ) ), hasLength( 1 ),
+          reason: 'the notification still appears; only the speech is off' );
+      expect( spoken, isEmpty );
+      expect( outcome.spoke, isFalse );
+      expect( calls.contains( 'played(n-77)' ), isTrue,
+          reason: 'still marked played, so the next wake does not re-fetch it' );
+      expect( logs.any( ( l ) => l.contains( 'muted by the TTS slider at 0%' ) ), isTrue );
+    } );
+
+    test( 'the TTS slider at 20%: a long message is cut exactly as the foreground cuts it', () async {
+      sliderFraction = 0.2;
+      const long = 'The build finished on the third attempt. The flake was in the '
+                   'websocket teardown. Nothing else changed in this run at all.';
+      nextItem = { ...wireItem(), 'message': long };
+
+      await chain.handleWake( wakePayload() );
+
+      expect( spoken.single, 'The build finished on the third attempt.' );
+      expect( spoken.single, TtsPreviewTruncator.previewFor( long, 0.2 ),
+          reason: 'one truncator, both paths' );
+    } );
+
     test( 'AC-S5.3 — speak-toggle prefs OFF: fetch + show fire, speak does NOT', () async {
       speakAllowed = false;
       final outcome = await chain.handleWake( wakePayload() );
@@ -139,6 +171,7 @@ void main() {
         fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
         showNotification       : ( _, __ ) async => fail( 'must not show' ),
         shouldSpeak            : ( _ ) async => true,
+        ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
         log                    : logs.add,
@@ -165,6 +198,7 @@ void main() {
         fetchNextNotification  : ( _, __ ) async => throw Exception( 'net down' ),
         showNotification       : ( _, __ ) async {},
         shouldSpeak            : ( _ ) async => true,
+        ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
         log                    : logs.add,
@@ -183,6 +217,7 @@ void main() {
         fetchNextNotification  : ( _, __ ) async => wireItem(),
         showNotification       : ( _, __ ) async {},
         shouldSpeak            : ( _ ) async => true,
+        ttsFraction            : () async => 1.0,
         speak                  : ( t ) async { spoken.add( t ); },
         markPlayed             : ( _, __ ) async => throw Exception( 'flaky 500' ),
         log                    : logs.add,

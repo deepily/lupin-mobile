@@ -24,6 +24,8 @@
 ///     environment note) — no connection-state inference here.
 library;
 
+import '../tts/tts_preview_truncator.dart';
+
 /// Outcome record for the §4 debug hook — every wake logs
 /// `reason + fetched n / shown / spoke|muted` so the chain is
 /// field-debuggable from `adb logcat`.
@@ -86,6 +88,12 @@ class FcmWakeChain {
   /// high iff speakOnHigh, urgent iff speakOnUrgent, masterMute silences.)
   final Future<bool> Function( String priority ) shouldSpeak;
 
+  /// Prefs seam: the TTS slider's fraction (`NotificationPreferences.
+  /// ttsFraction`). The background path honours it exactly as the foreground
+  /// orchestrator does: 0% speaks nothing, anything else is cut the same way
+  /// (Rick 2026-09-18 — he heard whole messages here with the slider at 0%).
+  final Future<double> Function() ttsFraction;
+
   /// TTS seam: ONE utterance, fresh flutter_tts instance behind it.
   final Future<void> Function( String message ) speak;
 
@@ -104,6 +112,7 @@ class FcmWakeChain {
     required this.fetchNextNotification,
     required this.showNotification,
     required this.shouldSpeak,
+    required this.ttsFraction,
     required this.speak,
     required this.markPlayed,
     required this.log,
@@ -169,11 +178,15 @@ class FcmWakeChain {
       // truncates and NOTHING is lost (server-side durable store +
       // foreground re-hydration; NO auto re-speak — badges carry it).
       final maySpeak = await shouldSpeak( priority );
-      if ( maySpeak ) {
-        await speak( message );
-        log( '[FcmWake] spoke (message field only)' );
-      } else {
+      final fraction = maySpeak ? await ttsFraction() : 0.0;
+      final spoke    = maySpeak && !TtsPreviewTruncator.silences( fraction );
+      if ( !maySpeak ) {
         log( '[FcmWake] muted by speak-toggle prefs' );
+      } else if ( TtsPreviewTruncator.silences( fraction ) ) {
+        log( '[FcmWake] muted by the TTS slider at 0%' );
+      } else {
+        await speak( TtsPreviewTruncator.previewFor( message, fraction ) );
+        log( '[FcmWake] spoke (message field only)' );
       }
 
       if ( id.isNotEmpty ) {
@@ -187,7 +200,7 @@ class FcmWakeChain {
 
       return FcmWakeOutcome(
         handled : true, reason: reason, fetched: 1,
-        shown   : true, spoke: maySpeak, detail: 'id=$id',
+        shown   : true, spoke: spoke, detail: 'id=$id',
       );
     } catch ( e ) {
       log( '[FcmWake] chain failed: $e' );

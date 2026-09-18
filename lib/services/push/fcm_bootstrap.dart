@@ -186,6 +186,7 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
         default:       return false;   // low / medium never spoken
       }
     },
+    ttsFraction: () async => audio.ttsFraction,
     speak: ( text ) async {
       // Fresh instance; strict fetch-one-speak-one (flutter_tts#260).
       // awaitSpeakCompletion keeps the handler alive through the

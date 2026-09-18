@@ -261,6 +261,7 @@ class TtsOrchestrator {
     TtsSender?      sender,
   } ) {
     if ( _prefs.masterMute ) return;
+    if ( _sliderAtZero ) return;                            // Rick 2026-09-18: 0% is silence
     if ( _stopList?.matches( message ) ?? false ) return;   // stop-list: muted
     if ( _systemSenderMuted( sender ) ) return;             // Rick 2026-08-21
     if ( !_isSpeakable( priority ) ) return;
@@ -326,6 +327,11 @@ class TtsOrchestrator {
     TtsSender?      sender,
     bool            verbatim = false,
   } ) {
+    // Gate 0 — the slider at 0% (Rick 2026-09-18: "0% playback. That is
+    // nothing."). It outranks `verbatim` and runs before the stop-list, so a
+    // silenced item is neither spoken nor offered back as speak-anyway.
+    if ( _sliderAtZero ) return null;
+
     // The ONLY gates on this path (F-S1-1 keeps it ungated by priority and
     // master-mute) are the user's explicit "never speak this" rulings: a
     // checked stop-list pattern, and — since 2026-08-21 — the
@@ -371,6 +377,7 @@ class TtsOrchestrator {
   /// so the preview-fraction preference still governs ordinary chatter the
   /// user chose to unmute.
   void speakAnyway( TtsSuppression s ) {
+    if ( _sliderAtZero ) return;   // 0% is silence, even on a tap (Rick 2026-09-18)
     _enqueueUngated(
       priority : s.priority,
       text     : _formatSpeech( title: s.title, message: s.message, verbatim: s.verbatim ),
@@ -495,6 +502,9 @@ class TtsOrchestrator {
   ///
   /// [verbatim] skips the cut ONLY (ruling 4) — the title still leads, as
   /// it always has, because it was never the truncated part.
+  /// The TTS slider is at 0%: nothing is spoken on any path.
+  bool get _sliderAtZero => TtsPreviewTruncator.silences( _prefs.ttsFraction );
+
   String _formatSpeech( { required String message, String? title, bool verbatim = false } ) {
     final spoken = verbatim
         ? message
