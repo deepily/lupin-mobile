@@ -16,7 +16,7 @@
 #   ./rsync-lupin-mobile.sh /custom/source /custom/tgt  # Custom paths, dry-run
 #
 # Default Paths:
-#   Source: /Volumes/data/include/www.deepily.ai/projects/lupin/src/lupin-mobile/
+#   Source: /Volumes/data/include/www.deepily.ai/projects/lupin-mobile/
 #   Target: ~/Projects/lupin-mobile
 #
 # Modeled on rsync-kotlin-java-client.sh from the Gemini project.
@@ -41,7 +41,7 @@ OPTIONS:
     --help, -h      Show this help
 
 DEFAULT PATHS:
-    SOURCE: /Volumes/data/include/www.deepily.ai/projects/lupin/src/lupin-mobile/
+    SOURCE: /Volumes/data/include/www.deepily.ai/projects/lupin-mobile/
     TARGET: ~/Projects/lupin-mobile
 
 MODES:
@@ -67,6 +67,10 @@ EXCLUSIONS:
 
     Version control:
       .git/                       (do not sync git state)
+      .claude/                    (agent worktrees — each is a full checkout; ~850 MB of noise)
+
+    Session data:
+      io/                         (probe logs, pulled recordings, analysis output)
 
 SAFETY:
     - Default mode is DRY-RUN (no changes)
@@ -80,7 +84,7 @@ EOF
 # Defaults
 # ============================================================================
 
-DEFAULT_SOURCE="/Volumes/data/include/www.deepily.ai/projects/lupin/src/lupin-mobile/"
+DEFAULT_SOURCE="/Volumes/data/include/www.deepily.ai/projects/lupin-mobile/"
 DEFAULT_TARGET="~/Projects/lupin-mobile"
 
 # ============================================================================
@@ -223,6 +227,8 @@ RSYNC_OPTS=(
     --exclude='.DS_Store'
     --exclude='android/local.properties'
     --exclude='.git/'
+    --exclude='.claude/'
+    --exclude='io/'
 )
 
 if [ "$WRITE_MODE" = false ]; then

@@ -16,7 +16,7 @@
 #   (Press Ctrl+C to stop logcat)
 #
 # Recommended laptop alias:
-#   alias bndm='cd /Volumes/data/include/www.deepily.ai/projects/lupin/src/lupin-mobile/src/scripts && ./build-and-deploy-lupin-mobile.sh'
+#   alias bndm='cd /Volumes/data/include/www.deepily.ai/projects/lupin-mobile/src/scripts && ./build-and-deploy-lupin-mobile.sh'
 #
 # Modeled on build-and-deploy-kotlin-java-client.sh from the Gemini project.
 #
