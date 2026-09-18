@@ -90,3 +90,6 @@ flutter/
 .flutter-plugins
 .flutter-plugins-dependencies
 .gradle/
+
+# Claude Code agent worktrees (each is a full checkout)
+.claude/worktrees/
