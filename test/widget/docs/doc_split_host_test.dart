@@ -213,6 +213,59 @@ void main() {
       expect( find.byKey( const Key( TestKeys.docSplitColumn ) ), findsOneWidget );
     } );
 
+    // Rick 2026-09-18: "It appears to reload the document when it goes from
+    // horizontal to vertical ... refetch across a possible cell network."
+    testWidgets( 'flipping beside ⇄ below does NOT fetch the document again', ( tester ) async {
+      final host = await pumpWith( tester, _foldWidth, await freshPrefs() );
+      host.open( link );
+      await tester.pumpAndSettle();
+      verify( () => repo.fetch( any() ) ).called( 1 );
+
+      await tester.tap( toggle );
+      await tester.pumpAndSettle();
+      await tester.tap( toggle );
+      await tester.pumpAndSettle();
+
+      verifyNever( () => repo.fetch( any() ) );
+      expect( find.text( 'the document' ), findsOneWidget, reason: 'still showing, not reloading' );
+    } );
+
+    testWidgets( 'a DIFFERENT document is still fetched: the cache is per open document', ( tester ) async {
+      final host = await pumpWith( tester, _foldWidth, await freshPrefs() );
+      host.open( link );
+      await tester.pumpAndSettle();
+      host.open( classifyDocHref( '/app/docs?path=lupin-mobile/history.md' ) );
+      await tester.pumpAndSettle();
+
+      verify( () => repo.fetch( any() ) ).called( 2 );
+    } );
+
+    testWidgets( 'the conversation keeps its state when a document opens, flips and closes', ( tester ) async {
+      tester.view.physicalSize     = const Size( _foldWidth, 900 );
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown( tester.view.reset );
+      await tester.pumpWidget( MaterialApp(
+        home: Scaffold(
+          body: DocSplitHost(
+            repository : () => repo,
+            child      : const TextField( key: Key( 'half-typed-reply' ) ),
+          ),
+        ),
+      ) );
+      await tester.enterText( find.byKey( const Key( 'half-typed-reply' ) ), 'half a thought' );
+      final host = tester.state<DocSplitHostState>( find.byType( DocSplitHost ) );
+
+      host.open( link );
+      await tester.pumpAndSettle();
+      await tester.tap( toggle );
+      await tester.pumpAndSettle();
+      host.close();
+      await tester.pumpAndSettle();
+
+      expect( find.text( 'half a thought' ), findsOneWidget,
+          reason: 'a layout change must not throw away what he was typing' );
+    } );
+
     testWidgets( 'folded: no toggle — below is the only layout that fits', ( tester ) async {
       final host = await pumpWith( tester, _phoneWidth, await freshPrefs() );
       host.open( link );

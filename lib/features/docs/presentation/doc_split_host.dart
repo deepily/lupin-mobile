@@ -59,6 +59,16 @@ class DocSplitHostState extends State<DocSplitHost> {
   String?     _textTitle;
   late bool   _belowWhenWide = widget.prefs?.docsBelowWhenWide ?? false;
 
+  // Rick 2026-09-18: flipping beside ⇄ below RE-FETCHED the document — over a
+  // cell network, for a layout change. Row and Column are different parents,
+  // so without a GlobalKey Flutter throws the viewer away and builds a new
+  // one, whose initState fetches again. A GlobalKey moves the SAME state to
+  // the new parent: no refetch, scroll position kept. The conversation gets
+  // one too, so opening or closing a document stops resetting its scroll and
+  // any half-typed reply.
+  final GlobalKey _childKey = GlobalKey( debugLabel: 'doc-split-child' );
+  GlobalKey       _docKey   = GlobalKey( debugLabel: 'doc-split-viewer' );
+
   /// On a wide screen, does the document sit below the conversation?
   bool get belowWhenWide => _belowWhenWide;
 
@@ -83,6 +93,7 @@ class DocSplitHostState extends State<DocSplitHost> {
       _link      = link;
       _text      = null;
       _textTitle = null;
+      _docKey    = GlobalKey( debugLabel: 'doc-split-viewer' );   // a NEW document is a new viewer
     } );
   }
 
@@ -93,6 +104,7 @@ class DocSplitHostState extends State<DocSplitHost> {
       _link      = null;
       _text      = DocContent( kind: DocContentKind.markdown, mediaType: "text/markdown", text: markdown );
       _textTitle = title;
+      _docKey    = GlobalKey( debugLabel: 'doc-split-viewer' );
     } );
   }
 
@@ -105,23 +117,24 @@ class DocSplitHostState extends State<DocSplitHost> {
 
   @override
   Widget build( BuildContext context ) {
-    final link = _link;
-    final text = _text;
-    if ( link == null && text == null ) return widget.child;
+    final link  = _link;
+    final text  = _text;
+    final child = KeyedSubtree( key: _childKey, child: widget.child );
+    if ( link == null && text == null ) return child;
 
     final placement = docPanelPlacementFor( MediaQuery.sizeOf( context ), belowWhenWide: _belowWhenWide );
     final doc = SizedBox(
       key   : const Key( TestKeys.docPanel ),
       child : text != null
           ? DocViewerScreen(
-              key     : ValueKey( text ),   // a second abstract replaces the first
+              key        : _docKey,
               content    : text,
               title      : _textTitle,
               repository : widget.repository(),
               onClose    : close,
             )
           : DocViewerScreen(
-              key        : ValueKey( link ),
+              key        : _docKey,
               link       : link,
               repository : widget.repository(),
               onClose    : close,
@@ -135,7 +148,7 @@ class DocSplitHostState extends State<DocSplitHost> {
       ? Row(
           key: const Key( TestKeys.docSplitRow ),
           children: [
-            Expanded( child: widget.child ),
+            Expanded( child: child ),
             const VerticalDivider( width: 1 ),
             Expanded( child: doc ),
           ],
@@ -143,7 +156,7 @@ class DocSplitHostState extends State<DocSplitHost> {
       : Column(
           key: const Key( TestKeys.docSplitColumn ),
           children: [
-            Expanded( child: widget.child ),
+            Expanded( child: child ),
             const Divider( height: 1 ),
             Expanded( child: doc ),
           ],
