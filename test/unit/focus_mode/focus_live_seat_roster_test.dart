@@ -140,4 +140,126 @@ void main() {
       verifyNever( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) );
     } );
   } );
+
+  // Row cea58ee0 (Rick, P0): Krishna, Rio and Rachel each appeared twice. The
+  // server resolves a seat's project inside a container that cannot see the
+  // host path, so a WORKTREE seat is served as `claude.code@seat-…#hash`
+  // while its own notifications say `claude.code@lupin…#hash`. Same session
+  // hash, same seat — one row.
+  group( 'one seat, one row, whatever project segment the roster sends', () {
+    const String hash     = 'a1b2c3d4';
+    const String real     = 'claude.code@lupin.deepily.ai#$hash';
+    const String alias    = 'claude.code@seat-cc-author-mr-radio-2.deepily.ai#$hash';
+
+    late _MockRepo repo;
+    late _MockTts  tts;
+    late DateTime  clock;
+    FocusChatBloc? bloc;
+
+    setUp( () {
+      repo  = _MockRepo();
+      tts   = _MockTts();
+      clock = DateTime.utc( 2026, 9, 18, 21, 0 );
+      when( () => tts.enqueueAlways(
+        message  : any( named: 'message'  ),
+        priority : any( named: 'priority' ),
+        title    : any( named: 'title'    ),
+        voiceId  : any( named: 'voiceId'  ),
+        sender   : any( named: 'sender'   ),
+        verbatim : any( named: 'verbatim' ),
+      ) ).thenReturn( null );
+      when( () => repo.conversation( any(), any(), hours: any( named: 'hours' ) ) )
+          .thenAnswer( ( _ ) async => const [] );
+      bloc = FocusChatBloc( repo, tts: tts, now: () => clock );
+    } );
+
+    tearDown( () async => bloc?.close() );
+
+    Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 10 ) );
+
+    ActiveSession seat( String sid, String name ) => ActiveSession(
+      sessionId : 'sess-$name',
+      senderId  : sid,
+      persona   : VoicePersona( name: name, icon: '🙂' ),
+      lastSeen  : clock,
+    );
+
+    test( 'the exact report: three worktree seats that have written, served under seat-… ids', () async {
+      final seats = {
+        'Krishna' : '11111111',
+        'Rio'     : '22222222',
+        'Rachel'  : '33333333',
+      };
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => [
+        for ( final e in seats.entries ) SenderSummary(
+          senderId     : 'claude.code@lupin.deepily.ai#${e.value}',
+          lastActivity : clock.subtract( const Duration( minutes: 3 ) ),
+          count        : 2,
+          voicePersona : VoicePersona( name: e.key, icon: '🙂' ),
+        ),
+      ] );
+      when( () => repo.activeSessions() ).thenAnswer( ( _ ) async => [
+        for ( final e in seats.entries )
+          seat( 'claude.code@seat-cc-author-mr-radio-2.deepily.ai#${e.value}', e.key ),
+      ] );
+
+      bloc!.add( const FocusColdStartRequested( userEmail: 'ricardo.felipe.ruiz@gmail.com' ) );
+      await pump();
+
+      expect( bloc!.state.senderOrder, [
+        for ( final h in seats.values ) 'claude.code@lupin.deepily.ai#$h',
+      ], reason: 'three seats, three rows, all under the id their messages carry' );
+      for ( final h in seats.values ) {
+        expect( bloc!.state.lastActivityBySender[ 'claude.code@lupin.deepily.ai#$h' ], clock,
+            reason: 'the roster still bumps the real row: the seat is live' );
+      }
+    } );
+
+    test( 'a roster alias seen FIRST is replaced in place when the seat first speaks', () async {
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )
+          .thenAnswer( ( _ ) async => const [] );
+      when( () => repo.activeSessions() ).thenAnswer( ( _ ) async => [ seat( alias, 'Rio' ) ] );
+      bloc!.add( const FocusColdStartRequested( userEmail: 'ricardo.felipe.ruiz@gmail.com' ) );
+      await pump();
+      bloc!.add( const FocusSenderSelected( alias ) );   // he opened it before it ever spoke
+      await pump();
+      expect( bloc!.state.senderOrder, [ alias ] );
+
+      bloc!.add( FocusInboundNotification( NotificationItem(
+        id: 'n1', message: 'hello from Rio', type: 'task', priority: 'low', senderId: real,
+        timestamp: clock, played: true, playCount: 0, responseRequested: false,
+        suppressDing: true, displayQualifierWidget: false,
+      ) ) );
+      await pump();
+
+      expect( bloc!.state.senderOrder, [ real ], reason: 'the alias is gone, not kept beside it' );
+      expect( bloc!.state.focusedSender, real, reason: 'focus follows the seat' );
+      expect( bloc!.state.personasBySender[ real ]?.name, 'Rio' );
+      expect( bloc!.state.windows[ real ]!.single.item.message, 'hello from Rio' );
+    } );
+
+    test( 'a different session with the same persona name is NOT merged', () async {
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) ).thenAnswer( ( _ ) async => [
+        SenderSummary( senderId: real, lastActivity: clock, count: 1,
+            voicePersona: const VoicePersona( name: 'Rio', icon: '🙂' ) ),
+      ] );
+      const other = 'claude.code@seat-cc-author-maria-2.deepily.ai#99999999';
+      when( () => repo.activeSessions() ).thenAnswer( ( _ ) async => [ seat( other, 'Rio' ) ] );
+
+      bloc!.add( const FocusColdStartRequested( userEmail: 'ricardo.felipe.ruiz@gmail.com' ) );
+      await pump();
+
+      expect( bloc!.state.senderOrder, [ real, other ],
+          reason: 'identity is the session hash, never the persona name' );
+    } );
+  } );
+
+  group( 'sessionHashOf', () {
+    test( 'reads the 8 hex after the #, and nothing without one', () {
+      expect( sessionHashOf( 'claude.code@lupin.deepily.ai#a1b2c3d4' ), 'a1b2c3d4' );
+      expect( sessionHashOf( 'queue.done@lupin.deepily.ai' ), isNull );
+      expect( sessionHashOf( 'x#' ), isNull );
+      expect( sessionHashOf( null ), isNull );
+    } );
+  } );
 }

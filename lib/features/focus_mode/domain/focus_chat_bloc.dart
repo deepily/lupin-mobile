@@ -57,6 +57,14 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   /// selection still backfills and merges (OSQ-4).
   final Set<String> _backfilled = {};
 
+  /// Senders that are on the rail ONLY because the live-seat roster listed
+  /// them — nothing has arrived from them yet. Row cea58ee0: the roster's
+  /// sender id can disagree with the one the seat's own notifications carry
+  /// (the server resolves the project inside a container that cannot see the
+  /// host path, so a worktree seat comes back as `claude.code@seat-…`). When
+  /// the real id turns up, it takes over the alias's place on the rail.
+  final Set<String> _rosterOnly = {};
+
   /// Injectable clock (deterministic band tests) + timers.
   final DateTime Function() _now;
   final Duration?           _tickInterval;   // null ⇒ no periodic tick (tests / DI decides)
@@ -142,6 +150,9 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       print( '[FocusChat] inbound without sender_id dropped (id=${item.id})' );
       return;
     }
+
+    _rosterOnly.remove( sid );
+    _adoptRosterAlias( sid, emit );                   // row cea58ee0 — before `order` is read
 
     final order = List<String>.from( state.senderOrder );
     if ( !order.contains( sid ) ) order.add( sid );   // establishment order (Q7)
@@ -327,6 +338,49 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
   }
 
+  /// Row cea58ee0: [realSid] has just been seen from a real source (a
+  /// message, or the written-senders list). If a roster-only alias of the
+  /// same session is on the rail, [realSid] takes over its place, focus,
+  /// persona, activity and counts, and the alias disappears. No-op otherwise.
+  void _adoptRosterAlias( String realSid, Emitter<FocusChatState> emit ) {
+    if ( state.senderOrder.contains( realSid ) ) return;
+    final hash = sessionHashOf( realSid );
+    if ( hash == null ) return;
+    String? alias;
+    for ( final s in _rosterOnly ) {
+      if ( s != realSid && sessionHashOf( s ) == hash ) { alias = s; break; }
+    }
+    if ( alias == null ) return;
+    final from = alias;
+
+    _rosterOnly.remove( from );
+    // A backfill under the alias fetched nothing (the server files the seat's
+    // messages under the real id), so the real id is NOT marked backfilled.
+    _backfilled.remove( from );
+    final timer = _exitTimers.remove( from );
+    if ( timer != null ) _exitTimers[ realSid ] = timer;
+
+    Map<String, T> rekey<T>( Map<String, T> m ) {
+      if ( !m.containsKey( from ) ) return m;
+      final copy = Map<String, T>.from( m );
+      copy[ realSid ] = copy.remove( from ) as T;
+      return copy;
+    }
+
+    emit( state.copyWith(
+      senderOrder          : [ for ( final s in state.senderOrder ) s == from ? realSid : s ],
+      personasBySender     : rekey( state.personasBySender ),
+      windows              : rekey( state.windows ),
+      unreadBySender       : rekey( state.unreadBySender ),
+      lastActivityBySender : rekey( state.lastActivityBySender ),
+      hiddenCountBySender  : rekey( state.hiddenCountBySender ),
+      exitedSenders        : state.exitedSenders.contains( from )
+          ? ( Set<String>.from( state.exitedSenders )..remove( from )..add( realSid ) )
+          : state.exitedSenders,
+      focusedSender        : state.focusedSender == from ? realSid : null,
+    ) );
+  }
+
   Future<void> _onColdStart(
     FocusColdStartRequested event,
     Emitter<FocusChatState> emit,
@@ -385,11 +439,20 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     var   changed  = false;
 
     for ( final seat in seats ) {
-      final sid = seat.senderId;
+      var sid = seat.senderId;
       if ( sid == null || sid.isEmpty ) continue;
+      // Row cea58ee0: the same session under a different project segment is
+      // the SAME seat. Merge into the sender already on the rail rather than
+      // adding a second row for it.
       if ( !order.contains( sid ) ) {
-        order.add( sid );
-        changed = true;
+        final known = senderWithSessionHash( order, sessionHashOf( sid ) );
+        if ( known != null ) {
+          sid = known;
+        } else {
+          order.add( sid );
+          _rosterOnly.add( sid );
+          changed = true;
+        }
       }
       // A live bridge is the freshest persona there is, and `last_seen_iso`
       // is what the band needs; neither overwrites a value we already have
@@ -488,6 +551,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
       // Phase 2 — ONE synchronous re-read → merge → emit; no await between
       // the state read and the emit (the _onSenderSelected discipline).
+      for ( final s in senders ) {
+        _rosterOnly.remove( s.senderId );
+        _adoptRosterAlias( s.senderId, emit );   // row cea58ee0
+      }
       final order = List<String>.from( state.senderOrder );
       for ( final s in senders ) {
         if ( !order.contains( s.senderId ) ) order.add( s.senderId );
@@ -896,4 +963,22 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         ? merged.sublist( merged.length - windowCap )
         : merged;
   }
+}
+
+/// The 8-hex session hash after the `#` of a Claude Code sender id, or null.
+/// Two sender ids with the same hash are the same session (row cea58ee0).
+String? sessionHashOf( String? senderId ) {
+  if ( senderId == null ) return null;
+  final i = senderId.lastIndexOf( '#' );
+  if ( i < 0 || i == senderId.length - 1 ) return null;
+  return senderId.substring( i + 1 );
+}
+
+/// The first sender in [order] whose session hash is [hash], or null.
+String? senderWithSessionHash( List<String> order, String? hash ) {
+  if ( hash == null ) return null;
+  for ( final s in order ) {
+    if ( sessionHashOf( s ) == hash ) return s;
+  }
+  return null;
 }
