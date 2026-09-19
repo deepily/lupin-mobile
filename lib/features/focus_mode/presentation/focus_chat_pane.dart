@@ -12,6 +12,7 @@ import '../../../services/tts/speech_intent.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/abstract_body.dart';
+import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
 import '../../notifications/presentation/message_stamp.dart';
 import '../../notifications/presentation/persona_badge.dart';
@@ -402,7 +403,52 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _promptZone( BuildContext context ) {
+    // Row b00e076c (2026-09-18): an answer that never left the phone says so
+    // on its card, instead of vanishing.
+    final unsent = msg.unsentAnswer;
+    if ( unsent != null ) {
+      final theme = Theme.of( context );
+      if ( msg.answered ) {
+        final why = msg.resolution == AskResolution.expired
+            ? 'Expired — your answer "$unsent" was not sent'
+            : 'Closed before your answer "$unsent" was sent';
+        return Padding(
+          padding : const EdgeInsets.only( top: 6 ),
+          child   : Row( mainAxisSize: MainAxisSize.min, children: [
+            Icon( Icons.cloud_off, size: 16, color: theme.colorScheme.error ),
+            const SizedBox( width: 6 ),
+            Flexible( child: Text( why,
+              key   : const Key( TestKeys.focusUnsentClosed ),
+              style : theme.textTheme.bodySmall?.copyWith( color: theme.colorScheme.error ) ) ),
+          ] ),
+        );
+      }
+      return Column(
+        crossAxisAlignment : CrossAxisAlignment.start,
+        mainAxisSize       : MainAxisSize.min,
+        children: [
+          Padding(
+            padding : const EdgeInsets.only( top: 6 ),
+            child   : TextButton.icon(
+              key       : const Key( TestKeys.focusUnsentResend ),
+              icon      : Icon( Icons.sync_problem, size: 16, color: theme.colorScheme.error ),
+              label     : Text( 'Not sent: "$unsent" — tap to resend',
+                  style: TextStyle( color: theme.colorScheme.error ) ),
+              onPressed : () => context.read<FocusChatBloc>().add( FocusRespondRequested(
+                senderId      : senderId,
+                text          : unsent,
+                promptContext : FocusPromptContext( notificationId: msg.item.id, promptType: msg.item.responseType ),
+              ) ),
+            ),
+          ),
+          _promptControls( context ),
+        ],
+      );
+    }
+    return _promptControls( context );
+  }
 
+  Widget _promptControls( BuildContext context ) {
     if ( msg.answered ) {
       return const Padding(
         padding : EdgeInsets.only( top: 6 ),

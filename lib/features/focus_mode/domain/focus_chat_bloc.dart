@@ -391,6 +391,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       await _coldStartBuild( emit );
     } else {
       await _reconnectRefresh( emit );
+      _resendUnsentAnswers();   // row b00e076c — after the refresh has marked what closed meanwhile
     }
     // Rick 2026-09-17: the live seats join on EVERY cold start, not only the
     // first — a reconnect is exactly when a newly spawned seat should appear.
@@ -676,10 +677,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       final windows = _copyWindows();
       final window  = List<FocusMessage>.from( windows[ event.senderId ] ?? const [] );
 
-      // Flip the answered ask so pendingPromptFor stops returning it.
+      // Flip the answered ask so pendingPromptFor stops returning it — and
+      // clear any earlier unsent copy: this one got through (row b00e076c).
       for ( var i = 0; i < window.length; i++ ) {
         if ( window[ i ].item.id == targetId ) {
-          window[ i ] = window[ i ].copyWith( answered: true );
+          window[ i ] = window[ i ].copyWith( answered: true, clearUnsentAnswer: true );
           break;
         }
       }
@@ -725,8 +727,46 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         return;
       }
       print( '[FocusChat] respond failed for $targetId: $e' );
-      emit( state.copyWith( hydration: FocusHydration.error ) );
+      // Row b00e076c (2026-09-18): the answer used to vanish here — not
+      // sent, not queued, and the card never said so. Keep it ON the card,
+      // so it reads "not sent", can be resent with a tap, and is resent
+      // automatically on reconnect (see [_resendUnsentAnswers]).
+      emit( state.copyWith(
+        windows   : _windowsWithUnsent( event.senderId, targetId, event.text ),
+        hydration : FocusHydration.error,
+      ) );
     }
+  }
+
+  Map<String, List<FocusMessage>> _windowsWithUnsent( String senderId, String targetId, String text ) {
+    final windows = _copyWindows();
+    final window  = List<FocusMessage>.from( windows[ senderId ] ?? const [] );
+    for ( var i = 0; i < window.length; i++ ) {
+      if ( window[ i ].item.id == targetId ) {
+        window[ i ] = window[ i ].copyWith( unsentAnswer: text );
+        break;
+      }
+    }
+    windows[ senderId ] = window;
+    return windows;
+  }
+
+  /// Row b00e076c: on reconnect, every answer that never left the phone is
+  /// sent again — if its ask is still open. One the server closed meanwhile
+  /// (expired, or answered elsewhere) keeps its unsent text, and the card
+  /// says it was not sent.
+  void _resendUnsentAnswers() {
+    state.windows.forEach( ( sid, window ) {
+      for ( final m in window ) {
+        final text = m.unsentAnswer;
+        if ( text == null || m.answered ) continue;
+        add( FocusRespondRequested(
+          senderId      : sid,
+          text          : text,
+          promptContext : FocusPromptContext( notificationId: m.item.id, promptType: m.item.responseType ),
+        ) );
+      }
+    } );
   }
 
   /// `notification_expired` — AC-S4.3. The ask timed out and the server

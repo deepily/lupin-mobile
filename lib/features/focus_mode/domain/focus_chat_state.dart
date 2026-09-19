@@ -78,12 +78,18 @@ class FocusMessage extends Equatable {
   /// user what the server did on their behalf (AC-S4.3).
   final String?          resolutionDetail;
 
+  /// The answer the user gave that never reached the server (row b00e076c:
+  /// tapped while offline, 2026-09-18). Kept so the card can say "not sent"
+  /// and resend it — never dropped quietly. Null once it is delivered.
+  final String?          unsentAnswer;
+
   const FocusMessage( {
     required this.item,
     this.answered = false,
     this.suppression,
     this.resolution,
     this.resolutionDetail,
+    this.unsentAnswer,
   } );
 
   factory FocusMessage.fromConversation( ConversationMessage msg ) {
@@ -106,17 +112,20 @@ class FocusMessage extends Equatable {
     TtsSuppression? suppression,
     AskResolution?  resolution,
     String?         resolutionDetail,
+    String?         unsentAnswer,
+    bool            clearUnsentAnswer = false,
   } ) => FocusMessage(
         item             : item,
         answered         : answered ?? this.answered,
         suppression      : suppression ?? this.suppression,
         resolution       : resolution ?? this.resolution,
         resolutionDetail : resolutionDetail ?? this.resolutionDetail,
+        unsentAnswer     : clearUnsentAnswer ? null : ( unsentAnswer ?? this.unsentAnswer ),
       );
 
   @override
   List<Object?> get props =>
-      [ item.id, answered, suppressedRule, resolution, resolutionDetail ];
+      [ item.id, answered, suppressedRule, resolution, resolutionDetail, unsentAnswer ];
 }
 
 /// State contract for the focus surface (S2 §3.1; consumed by S3).

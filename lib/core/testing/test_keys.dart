@@ -153,6 +153,8 @@ class TestKeys {
   static const focusComposerCaption      = 'focus.composer.caption';
   static const focusQueueButton          = 'focus.queueButton';
   static const focusRosterRefreshButton  = 'focus.rosterRefreshButton';
+  static const focusUnsentResend         = 'focus.unsent.resend';   // row b00e076c
+  static const focusUnsentClosed         = 'focus.unsent.closed';
   static const focusQueueBadge           = 'focus.queueButton.badge';
   static const ttsQueueSheet             = 'ttsQueue.sheet';
   static const ttsQueueEmpty             = 'ttsQueue.empty';
