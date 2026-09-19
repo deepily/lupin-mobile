@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/logging/log_redaction.dart';
 
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
@@ -51,12 +53,23 @@ class HttpService {
       'Accept': 'application/json',
     };
 
-    // Add interceptors for logging and error handling
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-      logPrint: (obj) => print('[HTTP] $obj'),
-    ));
+    // Verbose body logging is a DEBUG-ONLY diagnostic, and even there it is
+    // scrubbed (row a7de7d69). Three controls, deliberately independent:
+    //   1. `kDebugMode` — a release APK registers this interceptor at all.
+    //   2. `requestHeader: false` — the Authorization header is never offered
+    //      to the sink. Method and URI still reach it via the wrapper below,
+    //      which is what device checks actually read.
+    //   3. `redactSecrets` — anything that still prints is masked, so a token
+    //      carried in a field we did not anticipate does not reach logcat.
+    // A credential therefore needs two of the three to fail, not one.
+    if ( kDebugMode ) {
+      _dio.interceptors.add(LogInterceptor(
+        requestHeader: false,
+        requestBody: true,
+        responseBody: true,
+        logPrint: (obj) => print('[HTTP] ${redactSecrets(obj.toString())}'),
+      ));
+    }
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
