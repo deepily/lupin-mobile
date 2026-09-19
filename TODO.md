@@ -31,6 +31,45 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 - **Wire shape settled: null/absent, never a sentinel string.** Asked as one disambiguating question rather than inferred from a condensed DM. The phone already skips null (`focus_chat_bloc.dart:444`, pinned test), so option B needs **no phone change**.
 - **`67c7a2e1` agreed P3 by Mr. Radio**, fix endorsed (`sessionHashOf( sid ) == null`) — insurance against a contract violation, not a live bug, which is why I recommended deferring it.
 
+### Decisions Log — 2026-09-19 evening: the four (now five) fleet panes
+Plan: `planning-is-prompting → src/rnd/2026.09.19-mobile-client-fleet-panes.md` · store row `72d16636` · epic `mobile-pane-parity` · author María 🌸
+- **🛑 DO NOT IMPLEMENT** (Rick, by voice, ~19:02): *"you will not be implementing yet. We need to flesh it out and we need to run it through Cascade Review."* This **overrides María's "Phase 0 plumbing is safe to start"** — she sent that before he ruled, so it was current when written and is not now. My in-flight build-tonight ask was **stopped** rather than left to return an answer contradicting him.
+- **Full parity, reads AND writes** (Rick, to María): she had assumed read-only for v1; he ruled the Holding Area's per-row and batch actions and the Task List's row actions all ship, in Phases 3–4 after the row and transport are proven. The disclosed controls row becomes the pane's primary verb surface on a phone.
+- **A fifth navigation destination** (Rick, broadcast ~19:05): the broadcast-to-all-CC-sessions sub-accordion. *"Not a high-use piece of UI, but it is high value for sure."*
+- **No socket for the task/fleet panes** — María measured all four at `subscribes=0`; lupin emits no task or fleet event type at all. Socket-first would be **lupin-side work first**, filed separately, not ours.
+- **Open, Rick's to rule**: batch won't-fix has no confirm on web. María recommends adding one on a phone, where a mis-tap is likelier and it kills a filer's whole group. **Until he rules, build to match web — no confirm.**
+
+### My contributions to the plan (research only, no code)
+- **Destination 5 is the ONE surface that is genuinely socket-driven**, and it breaks §3/§6's "all panes poll" generalization: every `commons_broadcast_ack` arrives inside `notification_queue_update`, an event type lupin does emit and the phone **already subscribes to**. Polling it would be a downgrade. Endpoints: `GET /api/commons/active-sessions` (the focus rail already consumes it), `POST /api/commons/broadcast-to-cc-sessions`, `GET /api/commons/broadcast-history`. Source `commons.py:1046` / `:1089`, UI `static/js/broadcast-panel.js`.
+- **`char_budget=0` is a byte-budget opt-out, not a truncation length** (`tasks.py:2958`, `Query( default=None, ge=0 )`; `:3196` shows 0 opts out). Answers §10 check 1 — and copying the web query verbatim hands a phone **500 unbudgeted rows**, backwards for LTE. Keep the server default on mobile.
+- **The web is not uniformly confirm-free**: the broadcast panel has a confirm modal (`broadcast-panel.js:240`, AC8), which María confirmed. So a phone confirm on batch won't-fix would be *consistent* with an existing surface rather than a divergence — offered to make Rick's ruling easier.
+- **The 5-minute ack TTL is a phone constraint**: background the app through it and the aggregate is gone on resume; the pane must say so rather than render an empty success.
+- **Verified every claim the plan makes about this repo** — `lib/core/repositories/`, all three test tiers, and both cited lupin files exist at the stated paths; `ROW_SCHEMA` matches her table field-for-field.
+
+### Cascade review — CLOSED 2026-09-19 ~19:32 EDT (Tiffany managing, row `4b16174d`)
+Doc frozen at `planning-is-prompting` commit **`c65c41e`** · sha256 `be890581…` · 413 lines. Three reviewers, one dimension each, all delivered. Reports + fold directive: `projects-data/lupin-mobile/cascade-findings-2026.09.19/`.
+
+| Reviewer | Dimension | Result |
+|---|---|---|
+| Chloé 🗼 | contract fidelity | 715 lines; the two-write-doors material |
+| Rachel 🕊️ | shared row + accessibility | 9 MAJOR · 1 MINOR · 1 verified-correct · **0 BLOCKER** |
+| Sam 🎙️ | phone behaviour + §6 refresh | 2 BLOCKER · 4 MAJOR · 3 MINOR · 1 NIT |
+
+**The plan's spine held** — §6's polling-for-v1 call and the destination-5 carve-out were attacked directly and survived ("I tried to break both and could not").
+
+**Four must-fix before minting**: (1) **two write doors, doc names one** — `PATCH /api/tasks/{id}` never changes status, `POST /api/tasks/{id}/transition` does, so approve-as-PATCH 404s or silently no-ops; (2) **§12 contradicts §8.3 — my error**: dropping `char_budget=0` yields ~24 rows of 500, `terse=true` was the lever; (3) **foreground-only polling has no mechanism** given app-root BLoC providers, and its own acceptance test passes without it; (4) **§5's architecture map wrong four ways**, including the BLoC layer being absent from the plan entirely.
+
+**Best output was not a defect**: destination 5 needs **reconciliation** though it correctly needs no polling — a phone's socket stops every time the app backgrounds, making that pane the textbook case of the hazard §6 itself names. Remedy: drain `/api/notifications/undelivered` filtered on `commons_broadcast_ack`, then decide expired-vs-partial. Sam's.
+
+**Process lessons worth keeping**: the pin caught the doc moving mid-cascade within two minutes, and all three reviewers halted rather than producing findings against dead coordinates · the DM condenser shredded every detailed report, so findings moved to files in `projects-data` · two reviewers inferred a body insertion from a new Version-history row, which line arithmetic refuted.
+
+### Decisions Log — 2026-09-19, cascade rulings
+- **Rick, §11 q1, on a corrected premise**: *keep the reason box required, ADD a confirm to approve-all.* He had been queued to rule on "won't-fix has no confirm — add one?"; two reviewers independently found won't-fix is **already gated** by a mandatory non-blank reason box (deliberately chosen over a dialog, because `confirm()` freezes the extension's event loop) and **approve-all is the ungated one** — the immediate DOM sibling, ~20px against Android's 48dp minimum, tooltips being `title` attributes that do not exist on a phone.
+- **Rick, fleet cap**: raised 5 → 9 at my ask. Every session counts, managers included, so 3 managers + 3 workers had already exceeded 5 and zero reviewers could be spawned.
+- **Tiffany (manager)**: freeze the doc + fold queue + **one fold at the end**, never rolling folds — the September spoken-ask cascade folded incrementally and both verification passes then found defects introduced *by the folds themselves*.
+- **Tiffany (manager)**: Rachel's findings doc in `src/rnd/` **stays** — new file, nothing overwritten, declared in her manifest section; `src/rnd/` is this repo's conventional home for review records and `projects-data` stays the scratch drop.
+- **Tiffany (manager)**: reviewers do **not** fold their own findings — the author folds, or nobody is left who read the change without having written it.
+
 ### ⏳ Owed — 2026-09-19
 - [ ] **`a7de7d69` (P2, recommend P1) — the logcat token leak.** `LogInterceptor` at `lib/services/network/http_service.dart:55` prints `Authorization: Bearer …` on every request (Dio defaults `requestHeader: true`) and prints both tokens in the sign-in response body; **no `kDebugMode` guard**, so release builds do it too. Demonstrated live: Rick's own paste carried his JWT twice. Fix is one line plus tests; the narrow interceptor at line 63 that produces the device-check receipt stays. **Held, awaiting his admit.**
 - [ ] **`67c7a2e1` (P3) — sentinel guard.** `""` is skipped, `"none"` is not (measured: 11 passed / 1 failed). Swap the absence test for `sessionHashOf( sid ) == null`; promote the two probes to named cases; ⚠️ first confirm no legitimate roster sender id lacks a `#`. **Held, awaiting his admit.**
