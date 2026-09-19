@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../../services/notification_audio/notification_preferences.dart';
 import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
@@ -31,10 +32,15 @@ class DocSplitHost extends StatefulWidget {
   /// is a dependency the conversation itself does not have.
   final DocRepository Function() repository;
 
+  /// Where the beside/below choice is remembered. Null keeps it for this
+  /// screen's lifetime only (tests, and surfaces without preferences).
+  final NotificationPreferences? prefs;
+
   const DocSplitHost( {
     super.key,
     required this.child,
     required this.repository,
+    this.prefs,
   } );
 
   /// The nearest host, or null when there is none. A surface with no host
@@ -51,6 +57,18 @@ class DocSplitHostState extends State<DocSplitHost> {
   DocLink?    _link;
   DocContent? _text;
   String?     _textTitle;
+  late bool   _belowWhenWide = widget.prefs?.docsBelowWhenWide ?? false;
+
+  /// On a wide screen, does the document sit below the conversation?
+  bool get belowWhenWide => _belowWhenWide;
+
+  /// Flip beside ⇄ below, and remember it (Rick 2026-09-18: the viewer's
+  /// title-bar toggle). Narrow screens are always below; this changes them
+  /// nothing.
+  void togglePlacement() {
+    setState( () => _belowWhenWide = !_belowWhenWide );
+    widget.prefs?.setDocsBelowWhenWide( _belowWhenWide );
+  }
 
   /// The document currently sharing the screen, or null.
   DocLink? get link => _link;
@@ -91,7 +109,7 @@ class DocSplitHostState extends State<DocSplitHost> {
     final text = _text;
     if ( link == null && text == null ) return widget.child;
 
-    final placement = docPanelPlacementFor( MediaQuery.sizeOf( context ) );
+    final placement = docPanelPlacementFor( MediaQuery.sizeOf( context ), belowWhenWide: _belowWhenWide );
     final doc = SizedBox(
       key   : const Key( TestKeys.docPanel ),
       child : text != null

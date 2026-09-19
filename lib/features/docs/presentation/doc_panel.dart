@@ -25,10 +25,17 @@ const double docPanelSplitWidth = 600;
 /// Which half a document opens in on a screen of [size].
 ///
 /// Ensures:
-///   - returns [DocPanelPlacement.rightHalf] when size.width >= [docPanelSplitWidth]
-///   - returns [DocPanelPlacement.bottomHalf] otherwise
-DocPanelPlacement docPanelPlacementFor( Size size ) =>
-    size.width >= docPanelSplitWidth ? DocPanelPlacement.rightHalf : DocPanelPlacement.bottomHalf;
+///   - returns [DocPanelPlacement.bottomHalf] on a narrow screen, always
+///   - on a wide screen (width >= [docPanelSplitWidth]) returns
+///     [DocPanelPlacement.bottomHalf] when [belowWhenWide] (Rick 2026-09-18:
+///     tables get the full width), else [DocPanelPlacement.rightHalf]
+DocPanelPlacement docPanelPlacementFor( Size size, { bool belowWhenWide = false } ) =>
+    size.width >= docPanelSplitWidth && !belowWhenWide
+        ? DocPanelPlacement.rightHalf
+        : DocPanelPlacement.bottomHalf;
+
+/// True when [size] is wide enough that beside-or-below is a real choice.
+bool docPlacementIsChoosable( Size size ) => size.width >= docPanelSplitWidth;
 
 /// Open [link] in a panel over half of the screen.
 ///

@@ -64,6 +64,7 @@ class TestKeys {
   static const docViewerError       = 'docs.viewer.error';
   static const docViewerShareButton = 'docs.viewer.share';
   static const docViewerCloseButton = 'docs.viewer.close';
+  static const docViewerPlacementToggle = 'docs.viewer.placement';   // beside ⇄ below on a wide screen
   static const docDirEntryPrefix    = 'docs.dir.entry.';   // + entry name
 
   // Deep research form

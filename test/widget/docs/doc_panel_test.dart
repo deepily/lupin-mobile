@@ -84,6 +84,10 @@ void main() {
     test( 'a folded or ordinary phone (narrow) gets the bottom half', () {
       expect( docPanelPlacementFor( const Size( 412, 915 ) ), DocPanelPlacement.bottomHalf );
     } );
+    test( 'wide with belowWhenWide (Rick 2026-09-18): the bottom half, so tables get the full width', () {
+      expect( docPanelPlacementFor( const Size( 850, 900 ), belowWhenWide: true ), DocPanelPlacement.bottomHalf );
+      expect( docPanelPlacementFor( const Size( 412, 915 ), belowWhenWide: true ), DocPanelPlacement.bottomHalf );
+    } );
     test( 'the boundary is Material\'s compact/medium line, 600', () {
       expect( docPanelPlacementFor( const Size( 599, 900 ) ), DocPanelPlacement.bottomHalf );
       expect( docPanelPlacementFor( const Size( 600, 900 ) ), DocPanelPlacement.rightHalf );

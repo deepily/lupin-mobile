@@ -111,6 +111,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           Expanded(
             child: DocSplitHost(
               repository: () => ServiceLocator.instance<DocRepository>(),
+              prefs     : ServiceLocator.isRegistered<NotificationPreferences>()
+                  ? ServiceLocator.get<NotificationPreferences>()
+                  : null,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

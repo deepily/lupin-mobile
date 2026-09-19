@@ -11,6 +11,8 @@ import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
 import 'doc_link_tap.dart';
+import 'doc_panel.dart';
+import 'doc_split_host.dart';
 
 /// Full-screen viewer for a document reached from a notification abstract.
 ///
@@ -124,6 +126,7 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
 
   @override
   Widget build( BuildContext context ) {
+    final host = DocSplitHost.maybeOf( context );
     return Scaffold(
       key: const Key( TestKeys.docViewerScreen ),
       appBar: AppBar(
@@ -135,6 +138,16 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
         ),
         title: Text( widget.displayTitle, overflow: TextOverflow.ellipsis ),
         actions: [
+          // Rick 2026-09-18: on an open Fold, choose where the document sits —
+          // beside the conversation, or below it so tables get the full width.
+          // Only inside a split, and only where the choice exists.
+          if ( host != null && docPlacementIsChoosable( MediaQuery.sizeOf( context ) ) )
+            IconButton(
+              key      : const Key( TestKeys.docViewerPlacementToggle ),
+              icon     : Icon( host.belowWhenWide ? Icons.vertical_split_outlined : Icons.horizontal_split_outlined ),
+              tooltip  : host.belowWhenWide ? "Show beside the conversation" : "Show below the conversation",
+              onPressed: host.togglePlacement,
+            ),
           if ( _content?.text != null )
             IconButton(
               key      : const Key( TestKeys.docViewerShareButton ),

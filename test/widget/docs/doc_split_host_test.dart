@@ -11,12 +11,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/docs/data/doc_link.dart';
 import 'package:lupin_mobile/features/docs/data/doc_models.dart';
 import 'package:lupin_mobile/features/docs/data/doc_repository.dart';
 import 'package:lupin_mobile/features/docs/presentation/doc_split_host.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 
 class _MockRepo extends Mock implements DocRepository {}
 
@@ -148,5 +150,76 @@ void main() {
     ) );
     expect( DocSplitHost.maybeOf( hostless ), isNull,
         reason: 'the legacy conversation screens keep their own behaviour' );
+  } );
+
+  // Rick 2026-09-18: on an open Fold a table beside the conversation is
+  // crushed to ~420 dp. The viewer's title bar flips the document below,
+  // where it gets the full width, and the choice is remembered.
+  group( 'beside ⇄ below on a wide screen', () {
+    Future<DocSplitHostState> pumpWith( WidgetTester tester, double width, NotificationPreferences prefs ) async {
+      tester.view.physicalSize     = Size( width, 900 );
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown( tester.view.reset );
+      await tester.pumpWidget( MaterialApp(
+        home: Scaffold(
+          body: DocSplitHost(
+            repository : () => repo,
+            prefs      : prefs,
+            child      : Container( key: const Key( 'the-conversation' ), color: Colors.blue ),
+          ),
+        ),
+      ) );
+      await tester.pump();
+      return tester.state<DocSplitHostState>( find.byType( DocSplitHost ) );
+    }
+
+    Future<NotificationPreferences> freshPrefs() async {
+      SharedPreferences.setMockInitialValues( {} );
+      return NotificationPreferences( await SharedPreferences.getInstance() );
+    }
+
+    final toggle = find.byKey( const Key( TestKeys.docViewerPlacementToggle ) );
+
+    testWidgets( 'unfolded: the toggle moves the document below, full width, and back', ( tester ) async {
+      final prefs = await freshPrefs();
+      final host  = await pumpWith( tester, _foldWidth, prefs );
+      host.open( link );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.docSplitRow ) ), findsOneWidget, reason: 'default: beside' );
+
+      await tester.tap( toggle );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.docSplitColumn ) ), findsOneWidget );
+      expect( tester.getSize( find.byKey( const Key( TestKeys.docPanel ) ) ).width, _foldWidth,
+          reason: 'the whole point: a table gets all 840 dp' );
+      expect( sizeOfChild( tester ).height, closeTo( 900 / 2, 1.0 ) );
+      expect( prefs.docsBelowWhenWide, isTrue, reason: 'remembered' );
+
+      await tester.tap( toggle );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.docSplitRow ) ), findsOneWidget );
+      expect( prefs.docsBelowWhenWide, isFalse );
+    } );
+
+    testWidgets( 'the choice survives: a new host opens below if you left it below', ( tester ) async {
+      final prefs = await freshPrefs();
+      await prefs.setDocsBelowWhenWide( true );
+      final host = await pumpWith( tester, _foldWidth, prefs );
+
+      host.open( link );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.docSplitColumn ) ), findsOneWidget );
+    } );
+
+    testWidgets( 'folded: no toggle — below is the only layout that fits', ( tester ) async {
+      final host = await pumpWith( tester, _phoneWidth, await freshPrefs() );
+      host.open( link );
+      await tester.pump();
+
+      expect( find.byKey( const Key( TestKeys.docSplitColumn ) ), findsOneWidget );
+      expect( toggle, findsNothing );
+    } );
   } );
 }

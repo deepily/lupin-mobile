@@ -32,6 +32,10 @@ class NotificationPreferences {
   /// it is deleted, for the Opus/AAC accuracy check. Lives here because this
   /// screen's Debug section is its only home. Default OFF.
   static const keyKeepVoiceRecordings = 'debug.keep_voice_recordings';
+  /// Documents on a wide screen (an open Fold): beside the conversation, or
+  /// below it so tables get the full width (Rick 2026-09-18). Flipped from
+  /// the viewer's own title bar and remembered. Default OFF (beside).
+  static const keyDocsBelowWhenWide = 'docs.below_when_wide';
 
   final SharedPreferences _prefs;
   const NotificationPreferences( this._prefs );
@@ -44,6 +48,7 @@ class NotificationPreferences {
   bool get masterMute    => _prefs.getBool( _keyMasterMute    ) ?? false;
   bool get speakSystemSenders => _prefs.getBool( keySpeakSystemSenders ) ?? true;
   bool get keepVoiceRecordings => _prefs.getBool( keyKeepVoiceRecordings ) ?? false;
+  bool get docsBelowWhenWide   => _prefs.getBool( keyDocsBelowWhenWide ) ?? false;
 
   /// Spoken fraction of each message, snapped to 10% steps in [0.0, 1.0].
   double get ttsFraction {
@@ -62,5 +67,6 @@ class NotificationPreferences {
   Future<void> setMasterMute(    bool v ) => _prefs.setBool( _keyMasterMute,    v );
   Future<void> setSpeakSystemSenders( bool v ) => _prefs.setBool( keySpeakSystemSenders, v );
   Future<void> setKeepVoiceRecordings( bool v ) => _prefs.setBool( keyKeepVoiceRecordings, v );
+  Future<void> setDocsBelowWhenWide( bool v ) => _prefs.setBool( keyDocsBelowWhenWide, v );
   Future<void> setTtsFraction( double v ) => _prefs.setDouble( keyTtsFraction, snapTtsFraction( v ) );
 }
