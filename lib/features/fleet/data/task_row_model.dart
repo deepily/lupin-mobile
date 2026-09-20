@@ -18,6 +18,13 @@ class TaskRowModel {
   final String? createdBy;
   final String? project;
 
+  /// ⚠️ NOT A SCHEMA CELL, AND CARRIED ANYWAY. `ROW_SCHEMA` has `accountable` and
+  /// `filer` but no owner column, so this renders nowhere — the Task List GROUPS by it
+  /// (`taskListModel.ts:251-252`). Grouping by `accountable_manager` because it is the
+  /// one the row happens to display would produce a pane that renders, looks plausible,
+  /// and groups by the wrong thing.
+  final String? ownerPersona;
+
   /// The task-store `body`. Absent on a terse pull — see the note on [fromJson].
   final String? detail;
 
@@ -32,6 +39,7 @@ class TaskRowModel {
     this.accountableManager,
     this.createdBy,
     this.project,
+    this.ownerPersona,
     this.detail,
   } );
 
@@ -61,6 +69,7 @@ class TaskRowModel {
       accountableManager : json[ 'accountable_manager' ] as String?,
       createdBy          : json[ 'created_by' ] as String?,
       project            : json[ 'project' ] as String?,
+      ownerPersona       : json[ 'owner_persona' ] as String?,
       detail             : json[ 'body' ] as String?,
     );
   }

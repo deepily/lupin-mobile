@@ -24,7 +24,38 @@ import 'package:dio/dio.dart';
 class TaskWriteRepository {
   final Dio _dio;
 
-  const TaskWriteRepository( this._dio );
+  /// The authenticated user's email, resolved at CALL time rather than captured at
+  /// construction — a repository built before login, or surviving a re-login, would
+  /// otherwise stamp every write with a stale identity or none at all.
+  ///
+  /// Injected rather than read from an auth global so this layer stays testable and does
+  /// not reach across into `AuthBloc`'s state.
+  final String? Function() _actorEmail;
+
+  const TaskWriteRepository( this._dio, { String? Function()? actorEmail } )
+      : _actorEmail = actorEmail ?? _noActor;
+
+  static String? _noActor() => null;
+
+  /// The audit `actor` for a UI-originated edit.
+  ///
+  /// 🔴 DERIVED FROM THE AUTHENTICATED USER, NEVER A FIXED LITERAL — Rick's ruling,
+  /// 2026-06-23, implemented web-side as `deriveTaskActor()`
+  /// (`taskListModel.ts:449-452`).
+  ///
+  /// ⚠️ THE SURFACE TAG IS `(mobile)`, NOT `(multiplexer)`, AND COPYING THE WEB'S STRING
+  /// VERBATIM WOULD DEFEAT THE TAG'S ONLY PURPOSE. Its job is to record WHICH CLIENT made
+  /// the edit, so two edits by the same human from different clients can be told apart in
+  /// the audit trail (`authority` already carries provenance; the tag carries surface).
+  /// A phone stamping `(multiplexer)` would file its writes as desktop ones.
+  ///
+  /// The blank fallback mirrors the web's: an authenticated client always carries an
+  /// email claim, so `anonymous` is the pre-hydration / malformed-token safety net and
+  /// never a business literal.
+  static String deriveActor( String? email ) {
+    final id = ( email ?? '' ).trim();
+    return id.isEmpty ? 'anonymous (mobile)' : '$id (mobile)';
+  }
 
   /// The server's marker for "Rick has not been asked yet".
   ///
@@ -119,7 +150,7 @@ class TaskWriteRepository {
     }
   }
 
-  /// Provenance both doors carry.
+  /// Provenance BOTH doors carry. §4.4: *"Both doors carry `actor` and `authority`."*
   ///
   /// `authority: "user_direct"` IS NOT DECORATION — the store's audit trail keys
   /// provenance off it, and recording it as anything weaker would make an operator's
@@ -127,8 +158,20 @@ class TaskWriteRepository {
   /// repository makes is a control an operator pressed, so the value is constant here;
   /// the day something automated writes through this class, it needs its own value and
   /// not a default.
-  Map<String, dynamic> _provenance() => const <String, dynamic>{
+  ///
+  /// 🔴 `actor` SHIPPED MISSING AND THAT WAS A REAL DEFECT, FOUND BY RACHEL BUILDING
+  /// PHASE 4 AGAINST THIS BASE. The two keys answer different questions — `authority`
+  /// says a human decided, `actor` says WHICH human and from where — so sending one
+  /// without the other yields an audit row that knows a person acted and cannot say who.
+  /// It is also the quietest possible failure: every write succeeds, every test that
+  /// checks `authority` passes, and the gap only surfaces when someone reads the trail
+  /// back and finds it anonymous.
+  ///
+  /// ⚠️ This file's own header quoted §4.4 while the implementation carried half of it —
+  /// which is the failure mode the cascade kept finding in the plan, reproduced in code.
+  Map<String, dynamic> _provenance() => <String, dynamic>{
         'authority' : 'user_direct',
+        'actor'     : deriveActor( _actorEmail() ),
       };
 }
 
