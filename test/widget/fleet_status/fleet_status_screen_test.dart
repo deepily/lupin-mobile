@@ -53,6 +53,20 @@ void main() {
     addTearDown( tester.view.resetPhysicalSize );
     addTearDown( tester.view.resetDevicePixelRatio );
 
+    // 🔴 EVERY TEST MUST LEAVE THE ROUTE, or the 60-second Timer.periodic the
+    // screen starts is still pending at teardown and the framework fails the
+    // test on that rather than on anything it asserts. Popping is not test
+    // hygiene invented for the harness: it is the path the app takes when the
+    // operator presses back, and it is what disposes the BlocProvider, closes
+    // the bloc, cancels the timer and cancels the in-flight request.
+    addTearDown( () async {
+      final open = find.byType( FleetStatusScreen );
+      if ( open.evaluate().isNotEmpty ) {
+        Navigator.of( tester.element( open ) ).pop();
+        await tester.pump( const Duration( milliseconds: 50 ) );
+      }
+    } );
+
     await tester.pumpWidget( MaterialApp(
       home: Builder(
         builder: ( context ) => Scaffold(
@@ -69,6 +83,14 @@ void main() {
         ),
       ),
     ) );
+  }
+
+  /// Run a MaterialPageRoute transition to completion WITHOUT pumpAndSettle,
+  /// which never settles against the screen's live 60-second poller.
+  Future<void> openRoute( WidgetTester tester ) async {
+    await tester.pump();                                    // start the transition
+    await tester.pump( const Duration( milliseconds: 400 ) ); // run it out
+    await tester.pump();                                    // let the first build land
   }
 
   group( "🔴 route-scoping IS the zero-request guard", () {
@@ -88,7 +110,7 @@ void main() {
       await pumpApp( tester, repo );
 
       await tester.tap( find.text( "open" ) );
-      await tester.pump( const Duration( milliseconds: 300 ) );
+      await openRoute( tester );
       expect( repo.stateCalls, 1, reason: "visible → refresh once, immediately" );
 
       // Pop the route. Disposal must cancel the timer, so no further request
@@ -111,7 +133,7 @@ void main() {
       await pumpApp( tester, repo );
 
       await tester.tap( find.text( "open" ) );
-      await tester.pump( const Duration( milliseconds: 300 ) );
+      await openRoute( tester );
 
       expect( find.text( "Could not reach the server" ), findsOneWidget );
       expect( find.textContaining( "Connection refused" ), findsOneWidget );
@@ -125,7 +147,7 @@ void main() {
       await pumpApp( tester, repo );
 
       await tester.tap( find.text( "open" ) );
-      await tester.pump( const Duration( milliseconds: 300 ) );
+      await openRoute( tester );
       final afterOpen = repo.stateCalls;
 
       await tester.tap( find.text( "Retry" ) );
@@ -139,7 +161,7 @@ void main() {
       await pumpApp( tester, repo );
 
       await tester.tap( find.text( "open" ) );
-      await tester.pump( const Duration( milliseconds: 300 ) );
+      await openRoute( tester );
 
       expect( find.text( "Fleet Status" ), findsOneWidget );
       expect( find.byKey( const Key( TestKeys.fleetStatusList ) ), findsOneWidget );
@@ -154,7 +176,7 @@ void main() {
       await pumpApp( tester, repo );
 
       await tester.tap( find.text( "open" ) );
-      await tester.pump( const Duration( milliseconds: 300 ) );
+      await openRoute( tester );
 
       expect( find.byKey( const Key( TestKeys.fleetStatusUnreachable ) ), findsOneWidget );
       expect( find.text( "Could not reach the server" ), findsNothing );

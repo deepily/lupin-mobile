@@ -50,21 +50,45 @@ class _FleetStatusView extends StatefulWidget {
 }
 
 class _FleetStatusViewState extends State<_FleetStatusView> {
+  /// 🔴 HELD AS A FIELD BECAUSE `dispose()` CANNOT LOOK UP AN ANCESTOR, AND THE
+  /// FIRST CUT OF THIS CLASS DID EXACTLY THAT. `context.read<FleetStatusBloc>()`
+  /// inside `dispose()` throws *"Looking up a deactivated widget's ancestor is
+  /// unsafe"* — the element is already deactivated by then. The throw meant
+  /// `onPaneHidden()` NEVER RAN, so **the 60-second poll timer survived the
+  /// route**: every time the operator left this pane, the app kept one more
+  /// timer polling a screen nobody was looking at. Exactly the battery defect
+  /// §6.3 exists to prevent, reintroduced by the teardown that was supposed to
+  /// prevent it.
+  ///
+  /// The framework names the remedy in the error text: save the reference in
+  /// `didChangeDependencies()` and use the saved one in `dispose()`.
+  late final FleetStatusBloc _bloc;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bloc = context.read<FleetStatusBloc>();
+  }
+
   @override
   void initState() {
     super.initState();
-    final bloc = context.read<FleetStatusBloc>();
-    bloc.startPolling();
-    // The route says the pane is on screen. The mixin refreshes once now and
-    // then holds the interval while the app stays foregrounded.
-    bloc.onPaneVisible();
+    // Deferred to the first frame: `initState` runs before
+    // `didChangeDependencies`, so the bloc is not resolved yet.
+    WidgetsBinding.instance.addPostFrameCallback( ( _ ) {
+      if ( !mounted ) return;
+      _bloc.startPolling();
+      // The route says the pane is on screen. The mixin refreshes once now and
+      // then holds the interval while the app stays foregrounded.
+      _bloc.onPaneVisible();
+    } );
   }
 
   @override
   void dispose() {
-    // Tell the mixin before the bloc closes, so the timer stops and the
-    // in-flight request is cancelled rather than landing on a dead pane.
-    context.read<FleetStatusBloc>().onPaneHidden();
+    // The SAVED reference — see the field's docstring. This stops the timer and
+    // cancels the in-flight request rather than letting either outlive the route.
+    _bloc.onPaneHidden();
     super.dispose();
   }
 
