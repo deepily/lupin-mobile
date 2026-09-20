@@ -15,7 +15,27 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ## 2026.09.20 | Session `cc9c1f1a` (Tiffany 💍) — Manager on duty: a three-seat cascade review, then five fleet-pane phases built, reviewed and merged in one evening
 
-**RESUME HERE**: **eight merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work`, union verified green, NOTHING PUSHED.** Rick's word is still owed on a push, on admitting Phase 5 (`384591dd`, request pending, pledging `67c7a2e1`), on the phone confirm for batch won't-fix, and on untracking `android/local.properties`. Three asks timed out; P0 `4b16174d` is `blocked` on `user:rick` with a chase at 02:15Z.
+**RESUME HERE**: **nine merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work`, union verified green, PUSHED AND BACKED UP at Rick's 22:55 ritual order.** Rick ruled everything outstanding tonight: admit both held rows (done), batch won't-fix keeps NO confirm matching web (closed), and the phone round-trip probe `c51e92da` is **PARKED to 2026-10-19** — he has no cell service and no public-IP server for at least a month, and told the fleet to stop asking. **Do not re-raise it.** Still owed by him: untracking `android/local.properties`. P0 `4b16174d` remains `blocked` on `user:rick` with a chase at 09:00Z; Rick's own P0 `72e01fb3` (four legacy accordions) was CLOSED on receipts this session.
+
+**CLOSED AFTER THE POST-GAME WAS WRITTEN** (this session continued past `e7afbbb`):
+
+| row | outcome |
+|---|---|
+| `67c7a2e1` roster addressability guard | **merged `488f189`**, 71/71 focus_mode tests green on the merge result |
+| `72e01fb3` Rick's four legacy accordions | **closed on receipts** — verified `lib/features/` carries `fleet_status`, `finished_tasks`, `task_list`, `holding_area`, not taken from a report |
+| `c597c4fc` cross-pane cell-key parity | minted, admitted, **scope and mutation proof both corrected by Rachel before she started** |
+| `384591dd` Phase 5 Broadcast | **blocked on a server defect**, not on Rick — see below |
+| `c51e92da` phone round-trip probe | **parked to 2026-10-19 on Rick's direct order** |
+| `e1e2c545` two re-spin doors read different memento slots | filed to Mr. Radio (Chloé's find) |
+
+**THREE MANAGER ERRORS CAUGHT BY WORKERS BEFORE ANY CODE WAS WRITTEN**, all mine, all recorded on their rows rather than quietly fixed:
+1. I specified a guard that had already shipped with Phase 2 (Rachel).
+2. I prescribed a mutation proof that **could not fail** — both panes render the same shared widget, so mutating a cell key changes both identically and the comparison stays green (Rachel). Her fix: a wrapper at one pane's call site so exactly one side diverges.
+3. I asked Rick to schedule a device sitting whose every option assumed the work was possible. It never was — he has told this fleet repeatedly that he has no cell service and no public IP. **A well-formed answer to a badly-framed question reads exactly like a ruling.** The wrong amendment is left on the row with the correction underneath.
+
+**THE FINDING THAT STOPPED PHASE 5**, and it surfaced only because Chloé was held: `commons_broadcast_ack` appears never to write a notification row. Persistence lives in the `notify_user` route behind a `persist` flag; the ack watcher never goes through that route. If it holds, the DB-backed undelivered drain can never contain acks, so the pane renders **zero** acks after every resume — not a truncated count. Phase 5's entire acceptance clause would have been built, tested, mutation-proven and merged **green** while protecting something unreachable. Filed to Mr. Radio **labelled traced, not measured** — and Chloé caught a defect in her own probe first (reading an error body as an empty population), which is why the trace is trustworthy.
+
+**Durable fact saved to project memory**: no cell service, no public IP, not before ~2026-10-20. The row was never the problem; the repeated asking was.
 
 **THE MERGE CHAIN**, every one reviewed against the tree rather than the worker's report:
 
