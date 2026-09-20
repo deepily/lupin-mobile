@@ -6,23 +6,38 @@
 /// List's shape would invent a collapse the pane does not have.
 library;
 
+import '../../fleet/data/task_row_model.dart';
+
 /// One filer's held rows.
 class FilerGroup {
-  /// The filer, as stored. Rendered through the persona rule at the use site.
+  /// The filer, EXACTLY as the store holds it — `created_by`, which is persona plus
+  /// session hash ("mr radio 078b97cb").
   final String filer;
 
   /// The rows this filer filed, in the order the server returned them.
-  final List<Map<String, dynamic>> rows;
+  final List<TaskRowModel> rows;
 
   const FilerGroup( { required this.filer, required this.rows } );
 
   int get count => rows.length;
+
+  /// The ids this group's batch controls would act on. The blast radius as a value, so
+  /// a caller cannot press approve-all and send a different set than the label counted.
+  List<String> get ids => rows.map( ( r ) => r.id ).toList( growable: false );
 }
 
 /// Group held rows by filer.
 ///
+/// 🔴 THE GROUPING KEY IS THE WHOLE `created_by` STRING, SESSION HASH INCLUDED, AND THAT
+/// IS THE CONSERVATIVE READING RATHER THAN THE OBVIOUS ONE. Stripping the hash to group
+/// by bare persona would merge one persona's sessions into a single group — fewer,
+/// larger groups, and an approve-all whose blast radius is WIDER than the name on the
+/// button suggests. Grouping by the stored string keeps what the batch acts on identical
+/// to what the header displays. If the fleet wants per-persona grouping it is a ruling,
+/// not a tidy-up, because it changes what one press does.
+///
 /// Requires:
-///     - each row carries a `filer` or `created_by` value
+///     - nothing; an empty list yields an empty list
 ///
 /// Ensures:
 ///     - groups are ordered by filer name, case-insensitively, so the pane does not
@@ -30,25 +45,28 @@ class FilerGroup {
 ///     - a row with no filer lands in a single trailing "Unattributed" group rather
 ///       than being dropped — a held row nobody can see is worse than an odd label
 ///     - row order WITHIN a group is the server's, untouched
-List<FilerGroup> groupByFiler( List<Map<String, dynamic>> rows ) {
-  const unattributed = "Unattributed";
-  final byFiler = <String, List<Map<String, dynamic>>>{};
+List<FilerGroup> groupByFiler( List<TaskRowModel> rows ) {
+  final byFiler = <String, List<TaskRowModel>>{};
 
   for ( final row in rows ) {
-    final raw = ( row[ "filer" ] ?? row[ "created_by" ] );
-    final key = ( raw is String && raw.trim().isNotEmpty ) ? raw.trim() : unattributed;
+    final raw = row.createdBy;
+    final key = ( raw != null && raw.trim().isNotEmpty ) ? raw.trim() : kUnattributedFiler;
     byFiler.putIfAbsent( key, () => [] ).add( row );
   }
 
-  final named = byFiler.keys.where( ( k ) => k != unattributed ).toList()
+  final named = byFiler.keys.where( ( k ) => k != kUnattributedFiler ).toList()
     ..sort( ( a, b ) => a.toLowerCase().compareTo( b.toLowerCase() ) );
 
   return [
     for ( final f in named ) FilerGroup( filer: f, rows: byFiler[ f ]! ),
-    if ( byFiler.containsKey( unattributed ) )
-      FilerGroup( filer: unattributed, rows: byFiler[ unattributed ]! ),
+    if ( byFiler.containsKey( kUnattributedFiler ) )
+      FilerGroup( filer: kUnattributedFiler, rows: byFiler[ kUnattributedFiler ]! ),
   ];
 }
+
+/// Where a row with no filer goes. Named rather than inlined because both the grouper
+/// and the tests have to agree on it.
+const String kUnattributedFiler = "Unattributed";
 
 // ── The batch controls' words ────────────────────────────────────────────────────
 //
@@ -97,3 +115,32 @@ const String kHoldingWontFixReasonMissing =
 /// The web prints the count in a span beside the filer name, so the operator reads
 /// the number somewhere other than on the control they are about to press.
 String batchLabel( String verb, int count ) => "$verb ($count)";
+
+// ── The approve-all confirm ──────────────────────────────────────────────────────
+//
+// 🔴 THE CONFIRM IS ON APPROVE-ALL, NOT ON WON'T-FIX-ALL, AND THAT INVERSION IS RICK'S
+// RULING RATHER THAN AN OVERSIGHT. Won't-fix-all is gated by its REQUIRED REASON BOX —
+// the operator has already had to type a justification, which is a slower and more
+// deliberate act than dismissing a dialog. Approve-all had no gate at all, and its
+// blast radius is every held row in the group at once.
+//
+// ⚠️ THE REASON BOX IS NOT A DIALOG, AND THE CONFIRM IS. They are different mechanisms
+// for different jobs and swapping either one loses its point: the box has to be visible
+// and fillable BEFORE the press, and the confirm has to interrupt a press that needs no
+// typing at all.
+
+/// The approve-all confirm's title.
+const String kHoldingApproveAllConfirmTitle = "Approve every held row?";
+
+/// The approve-all confirm's body. The count and the filer are the two facts that decide
+/// the answer, so both are in the sentence rather than inferred from the pane behind it.
+String holdingApproveAllConfirmBody( String filer, int count ) =>
+    "$count row${count == 1 ? '' : 's'} filed by $filer move to queued. This is "
+    "reversible — a row approved by mistake can be demoted straight back.";
+
+/// The confirm's accept label. Repeats the verb rather than saying "OK", so the button
+/// still reads correctly when it is the only thing focus lands on.
+String holdingApproveAllConfirmAccept( int count ) => batchLabel( "Approve", count );
+
+/// The confirm's dismiss label.
+const String kHoldingApproveAllConfirmCancel = "Cancel";
