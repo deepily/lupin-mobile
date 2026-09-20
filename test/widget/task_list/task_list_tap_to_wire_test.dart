@@ -24,6 +24,35 @@ import 'package:lupin_mobile/features/task_list/presentation/task_list_pane.dart
 /// ⇒ These tests drive a REAL TAP through the REAL WIDGET TREE and assert the REQUEST
 /// THAT ACTUALLY WENT OUT. A mock returning what it was told to return proves nothing
 /// about the wire; that is Rachel's principle and the recorder below is her shape.
+///
+/// ─────────────────────────────────────────────────────────────────────────────────
+/// 🔴 MUTATION MATRIX — MEASURED, NOT ASSERTED.
+///
+/// Every test below was shown RED against the defect it guards, by reintroducing that
+/// defect and re-running. A test written against an already-fixed bug is a test nobody
+/// has ever seen fail, and this file exists precisely because a green suite was wrong.
+///
+/// | Test                          | A: verb unwired | B: wrong door | C: double poll |
+/// |-------------------------------|-----------------|---------------|----------------|
+/// | tap puts a POST on the wire   | 🔴 RED          | 🔴 RED        | green          |
+/// | no PATCH for a status change  | green           | 🔴 RED        | green          |
+/// | a 202 leaves the row on screen| 🔴 RED          | green         | green          |
+/// | exactly one GET on mount      | green           | green         | 🔴 RED         |
+///
+///   A — `onVerb` reverted to a no-op comment (the defect that actually shipped)
+///   B — the pane sends `TaskListFieldChanged` instead of `TaskListVerbPressed`
+///       (§4.2's named failure: approve implemented as a field write)
+///   C — a duplicate `TaskListRefreshRequested` added in `initState`
+///
+/// ⚠️ EVERY ROW HAS AT LEAST ONE RED, AND NO COLUMN IS EMPTY. That is the property worth
+/// keeping when this file is edited: a test with no red column guards nothing, and a
+/// defect with no red row is a defect this file would ship.
+///
+/// ⚠️ READ THE GREENS TOO. "no PATCH" stays green under A because A sends NO request at
+/// all — a negative passes when nothing happens. It is not weak, it is narrow: it catches
+/// the wrong door and nothing else, so it must never be the only assertion on this
+/// control. Same trap as the old "polling stops when backgrounded" wording, which passed
+/// with all five timers running.
 
 /// Records what actually went on the wire and answers per request.
 ///
@@ -125,11 +154,9 @@ void main() {
                   'repository test that asserts it in isolation' );
     } );
 
-    // ⚠️ THIS ONE IS A NEGATIVE AND NEGATIVES PASS WHEN NOTHING HAPPENS. Measured: with
-    // the wiring deliberately reverted, this test STILL PASSED while the two around it
-    // went red — a no-op sends no PATCH either. It is worth keeping (it catches the
-    // wrong-door mistake §4.2 names) but it is not load-bearing on its own, and it must
-    // never be the only assertion guarding this control.
+    // ⚠️ NARROW, NOT WEAK — see the mutation matrix in the header. Green under A (a
+    // no-op sends no PATCH either), RED under B (the wrong door). It guards exactly one
+    // failure and must never be the only assertion on this control.
     testWidgets( 'no PATCH is sent for a status change', ( tester ) async {
       final rec = await _mount( tester );
 
