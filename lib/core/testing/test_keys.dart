@@ -263,4 +263,16 @@ class TestKeys {
   static const fleetStatusCapDial     = 'fleetStatus.capDial';
   static const fleetStatusCapValue    = 'fleetStatus.capValue';
   static const fleetStatusCapApply    = 'fleetStatus.capApply';
+
+  // ── Fleet panes: the SHARED task row (Phase 0) ──────────────────────────
+  //
+  // 🔴 THE CELL PREFIX IS THE CELL-IDENTITY GUARD'S ONLY HANDLE, AND THAT IS WHY IT
+  // EXISTS. `find.byType( TaskRow )` passes while the two panes drift four different
+  // ways — a `pane:` parameter branching inside, different field subsets, a bespoke row
+  // for a special case, or a wrapper. Selecting the ORDERED CELL KEYS catches all four,
+  // because it compares what was actually rendered rather than which class rendered it.
+  static const taskRowCellPrefix    = 'taskRow.cell.';      // + RowCell.key
+  static const taskRowDisclosure    = 'taskRow.disclosure';
+  static const taskRowControls      = 'taskRow.controls';
+  static const taskRowVerbPrefix    = 'taskRow.verb.';      // + verb name
 }
