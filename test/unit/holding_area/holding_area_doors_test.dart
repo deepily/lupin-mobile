@@ -214,20 +214,11 @@ void main() {
         await repo.patchFields( id: "abc", priority: "P1" );
         expect( rec.lastBody[ "actor" ], isNotNull );
       },
-      // 🔴 SKIPPED BECAUSE THE SHARED BASE DOES NOT SEND IT YET — a defect found by
-      // this file, reported to Tiffany 2026-09-19, NOT fixed here because the base
-      // is Sam's and a peer's file is not mine to change mid-phase.
-      //
-      // §4.4: "Both doors carry `actor` and `authority`." `_provenance()` returns
-      // authority alone, and a grep for the key over the whole file is empty. Every
-      // write from this base therefore lands without the persona who made it —
-      // `authority: user_direct` says a human did this without saying WHICH human,
-      // through the one door both panes write.
-      //
-      // ⚠️ PRESENT AND SKIPPED RATHER THAN ABSENT, so the gap is visible in the
-      // suite instead of living only in a DM. Delete this skip the moment the key
-      // is added; the test needs no other change.
-      skip: "shared base omits `actor` on both doors — reported, Sam's to fix",
+      // §4.4: "Both doors carry `actor` and `authority`." This ran SKIPPED from
+      // 2026-09-19, when this file found the shared base sending `authority` alone
+      // and the defect was reported rather than patched in a peer's file. Sam added
+      // the key at 6092096 — both doors, identity resolved per call — and the skip
+      // came off here.
     );
   } );
 }
