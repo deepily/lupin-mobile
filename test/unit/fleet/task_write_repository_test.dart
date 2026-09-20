@@ -105,22 +105,77 @@ void main() {
     });
   });
 
-  group("provenance", () {
+  group("provenance — BOTH keys, on BOTH doors", () {
+    // §4.4: "Both doors carry `actor` and `authority`."
+    //
     // authority "user_direct" IS NOT DECORATION — the store's audit trail keys
     // provenance off it, and anything weaker makes an operator's decision read as
     // automation (HoldingAreaStore.ts:302-305).
-    test("both doors carry authority: user_direct", () async {
+    //
+    // 🔴 `actor` SHIPPED MISSING, and Rachel found it building Phase 4 against this base.
+    // The two keys answer different questions — authority says a human decided, actor
+    // says WHICH human and from where — so one without the other is an audit row that
+    // knows a person acted and cannot say who. Every write still succeeded and every
+    // authority assertion still passed, which is why it needed a person to notice.
+    test("both doors carry authority AND actor", () async {
+      final withActor = TaskWriteRepository(
+        makeDio(adapter),
+        actorEmail: () => "rick@example.com",
+      );
+
       adapter.handlers["POST /api/tasks/t1/transition"] = (opts) {
-        expect((opts.data as Map)["authority"], "user_direct");
+        final body = opts.data as Map;
+        expect(body["authority"], "user_direct");
+        expect(body["actor"],     "rick@example.com (mobile)");
         return jsonBody({"status": "ok"});
       };
       adapter.handlers["PATCH /api/tasks/t1"] = (opts) {
-        expect((opts.data as Map)["authority"], "user_direct");
+        final body = opts.data as Map;
+        expect(body["authority"], "user_direct");
+        expect(body["actor"],     "rick@example.com (mobile)");
         return jsonBody({"status": "ok"});
       };
 
-      await repo.transition(id: "t1", verb: TaskVerb.approve());
-      await repo.patchFields(id: "t1", priority: "P1");
+      await withActor.transition(id: "t1", verb: TaskVerb.approve());
+      await withActor.patchFields(id: "t1", priority: "P1");
+    });
+
+    // ⚠️ THE SURFACE TAG IS `(mobile)`, NOT `(multiplexer)`. Its only job is to record
+    // WHICH CLIENT made the edit, so two edits by the same human from different clients
+    // can be told apart. A phone stamping the web's tag would file its writes as desktop
+    // ones — the tag would still be present, still look right, and be wrong.
+    test("the surface tag names this client, not the web one", () {
+      expect(TaskWriteRepository.deriveActor("rick@example.com"),
+          "rick@example.com (mobile)");
+      expect(TaskWriteRepository.deriveActor("rick@example.com"),
+          isNot(contains("multiplexer")));
+    });
+
+    // Derived from the authenticated user, never a fixed literal (Rick, 2026-06-23).
+    // The blank fallback is the pre-hydration / malformed-token safety net.
+    test("a missing identity degrades to anonymous, not to a throw", () {
+      expect(TaskWriteRepository.deriveActor(null),  "anonymous (mobile)");
+      expect(TaskWriteRepository.deriveActor(""),    "anonymous (mobile)");
+      expect(TaskWriteRepository.deriveActor("   "), "anonymous (mobile)");
+    });
+
+    // Resolved at CALL time: a repository built before login, or surviving a re-login,
+    // must not stamp a stale identity.
+    test("the identity is read per call, not captured at construction", () async {
+      var email = "first@example.com";
+      final r = TaskWriteRepository(makeDio(adapter), actorEmail: () => email);
+
+      final seen = <String>[];
+      adapter.handlers["PATCH /api/tasks/t1"] = (opts) {
+        seen.add((opts.data as Map)["actor"] as String);
+        return jsonBody({"status": "ok"});
+      };
+
+      await r.patchFields(id: "t1", priority: "P1");
+      email = "second@example.com";
+      await r.patchFields(id: "t1", priority: "P2");
+
+      expect(seen, ["first@example.com (mobile)", "second@example.com (mobile)"]);
     });
   });
 
