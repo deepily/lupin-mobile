@@ -2,28 +2,28 @@
   "actor": {
     "blank": 0,
     "null": 0,
-    "present": 344
+    "present": 343
   },
   "actor_shapes": {
     "bare_session_id": 0,
     "no_session_id": 51,
     "one_word_persona": 149,
-    "two_word_persona": 144
+    "two_word_persona": 143
   },
   "reason": {
     "blank": 0,
     "null": 3,
-    "present": 341
+    "present": 340
   },
-  "rows": 344,
+  "rows": 343,
   "title": {
     "blank": 0,
     "null": 0,
-    "present": 344
+    "present": 343
   },
   "transition": {
     "blank": 0,
     "null": 0,
-    "present": 344
+    "present": 343
   }
 }

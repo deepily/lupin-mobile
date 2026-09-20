@@ -1,5 +1,5 @@
 {
-  "count": 54,
+  "count": 53,
   "events": [
     {
       "actor": "maria 2b9f67a1",
@@ -583,17 +583,6 @@
       "title": "[LUPIN] TypeScript tier is DEAD on :8000 \u2014 unbound PYTHONPATH under set -u in tree-state.sh:20 kills the run before any ",
       "transition": "not_approved->dropped",
       "ts": "2026-09-06T01:30:52.343232+00:00"
-    },
-    {
-      "actor": "mr radio e97796db",
-      "authority": "standing",
-      "id": 12083,
-      "item_id": "628b6b07-7270-4ed5-adf9-4701ac5f00d1",
-      "reason": "INVALID \u2014 no defect exists. Krishna, the seat that reported the 401, states it came from his own malformed command: not his seat, not worktrees, not the auth model. Rio read the same sensor successfully from a worktree at 00:39:54Z, which is the positive control that was available the whole time and would have killed this row at filing. All three framings were wrong, two of them mine. Dropped rather than done: nothing was fixed because nothing was broken. Full retraction in the body, event 12082. \u00b7 rick-approved (timed-out default, not a keypress)",
-      "receipt_refs": null,
-      "title": "[LUPIN] The sanctioned context-pressure sensor answers 401 from a worker seat \u2014 the fleet's own context-monitoring rule ",
-      "transition": "not_approved->dropped",
-      "ts": "2026-09-06T00:45:29.579837+00:00"
     }
   ]
 }
