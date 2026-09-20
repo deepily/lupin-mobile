@@ -441,7 +441,43 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
     for ( final seat in seats ) {
       var sid = seat.senderId;
-      if ( sid == null || sid.isEmpty ) continue;
+      // 🔴 ADDRESSABILITY, NOT ABSENCE. This used to read
+      // `if ( sid == null || sid.isEmpty ) continue;` — which asks whether the string is
+      // THERE, not whether it names a seat we can reach. A sentinel like "none" or
+      // "unknown" is neither null nor empty, so it sailed through, failed to match any
+      // known session hash two lines below, and was appended to the rail AS ITS OWN
+      // SENDER — one row named after the sentinel, which every unidentifiable seat then
+      // collapses onto.
+      //
+      // MEASURED through the real bloc (Tiffany, 2026-09-19): `""` was skipped, `"none"`
+      // was NOT — 11 passed / 1 failed, the failure being exactly the "none" probe.
+      //
+      // `sessionHashOf` is the predicate this guard always wanted, and it was already
+      // sitting two lines below at the merge check. It subsumes null, "", "unknown",
+      // "none" and anything else without a `#<hash>`.
+      //
+      // ⚠️ THIS ASSUMES EVERY LEGITIMATE ROSTER SEAT CARRIES A SESSION HASH, which holds
+      // because the roster is `/api/commons/active-sessions` — CC seats by construction.
+      // Checked before landing: every roster fixture in the suite has one, and the only
+      // hash-less sender id in the tree is a `target_user` on a dispatch response
+      // (`focus_chat_bloc_test.dart:291`), a different field on a different ingress.
+      // If that ever stops being true, this guard silently drops a real seat — so the
+      // assumption is written here rather than left to be rediscovered.
+      //
+      // ⚠️ NOT A LIVE BUG: Mr. Radio ruled the wire shape is absent-or-null, "no sentinel
+      // string in the payload" (lupin row 2184bebb). This hardens against a CONTRACT
+      // VIOLATION, not against the agreed contract. Cheap insurance, kept because the
+      // phone cannot tell a sentinel from a seat and the cost of being wrong is a rail
+      // that quietly merges strangers.
+      //
+      // ⚠️ THE `sid == null` ARM IS REDUNDANT FOR CORRECTNESS AND REQUIRED BY THE
+      // COMPILER — DO NOT "SIMPLIFY" IT AWAY. `sessionHashOf( null )` already returns
+      // null, so the second arm alone is behaviourally complete. But Dart's flow analysis
+      // promotes `sid` to non-null only from an explicit null test, and everything below
+      // this line uses it as a non-nullable String. Dropping the first arm compiles to
+      // four type errors, not to a subtle bug — which is the good kind of dependency, and
+      // is why it is written out rather than left as a puzzle.
+      if ( sid == null || sessionHashOf( sid ) == null ) continue;
       // Row cea58ee0: the same session under a different project segment is
       // the SAME seat. Merge into the sender already on the rail rather than
       // adding a second row for it.
