@@ -261,4 +261,16 @@ class TestKeys {
   static const finishedRowTitlePrefix   = 'finished.row.title.';  // + event id
   static const finishedRowWhoPrefix     = 'finished.row.who.';    // + event id
   static const finishedRowWhyPrefix     = 'finished.row.why.';    // + event id
+
+  // ── Fleet panes: the SHARED task row (Phase 0) ──────────────────────────
+  //
+  // 🔴 THE CELL PREFIX IS THE CELL-IDENTITY GUARD'S ONLY HANDLE, AND THAT IS WHY IT
+  // EXISTS. `find.byType( TaskRow )` passes while the two panes drift four different
+  // ways — a `pane:` parameter branching inside, different field subsets, a bespoke row
+  // for a special case, or a wrapper. Selecting the ORDERED CELL KEYS catches all four,
+  // because it compares what was actually rendered rather than which class rendered it.
+  static const taskRowCellPrefix    = 'taskRow.cell.';      // + RowCell.key
+  static const taskRowDisclosure    = 'taskRow.disclosure';
+  static const taskRowControls      = 'taskRow.controls';
+  static const taskRowVerbPrefix    = 'taskRow.verb.';      // + verb name
 }
