@@ -29,9 +29,16 @@ class _CountingRepo implements FleetRepository {
   Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async =>
       { "cap": 9, "maximum": 20 };
 
+  /// What the DIAL actually posted, and what the screen got back. The answer
+  /// is cap+1 and never an echo: an echoing fake cannot fail the assertion that
+  /// the screen shows the SERVER'S re-read, so it would be testing nothing.
+  int? postedCap;
+
   @override
-  Future<Map<String, Object?>> setSizeCap( int cap ) async =>
-      { "cap": cap + 1, "maximum": 20 };
+  Future<Map<String, Object?>> setSizeCap( int cap ) async {
+    postedCap = cap;
+    return { "cap": cap + 1, "maximum": 20 };
+  }
 }
 
 // ⚠️ NO pumpAndSettle IN THIS FILE, AND THAT IS NOT A STYLE CHOICE. The screen
@@ -180,6 +187,70 @@ void main() {
 
       expect( find.byKey( const Key( TestKeys.fleetStatusUnreachable ) ), findsOneWidget );
       expect( find.text( "Could not reach the server" ), findsNothing );
+    } );
+  } );
+
+  group( "🔴 the dial's SEAM — the handle all the way through to the repository", () {
+    // WHY THIS EXISTS, since three other files look like they cover it.
+    // `fleet_status_pane_test` drives the real dial against a callback IT
+    // supplies; `fleet_status_bloc_test` calls `setCap` directly and watches
+    // the repository. Each proves one half while handing in the other, so
+    // BOTH stay green if the screen's `onSetCap` closure is wired to the wrong
+    // thing — the dial still renders, the callback is still non-null, and no
+    // assertion anywhere follows the operator's drag to the network. That is
+    // the shape of bug 9adff476, and Tiffany named it before it bit.
+    testWidgets( "dragging and applying reaches setSizeCap with the dragged value", ( tester ) async {
+      final repo = _CountingRepo( live );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await openRoute( tester );
+
+      // The dial only exists once a cap has landed, so let the first poll
+      // resolve before reaching for it.
+      await tester.pump( const Duration( milliseconds: 50 ) );
+
+      await tester.drag( find.byType( Slider ), const Offset( 200, 0 ) );
+      await tester.pump();
+
+      final dragged = int.parse(
+        tester.widget<Text>( find.byKey( const Key( TestKeys.fleetStatusCapValue ) ) ).data!,
+      );
+      expect( dragged, isNot( 9 ), reason: "the drag must have moved the handle" );
+
+      await tester.tap( find.byKey( const Key( TestKeys.fleetStatusCapApply ) ) );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 50 ) );
+
+      expect(
+        repo.postedCap, dragged,
+        reason: "the operator's drag must arrive at the repository unchanged. "
+                "Point the screen's onSetCap at any other bloc method and this "
+                "stays null while every other fleet_status test stays green.",
+      );
+    } );
+
+    testWidgets( "and the handle then shows the SERVER'S re-read, not the posted value", ( tester ) async {
+      final repo = _CountingRepo( live );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await openRoute( tester );
+      await tester.pump( const Duration( milliseconds: 50 ) );
+
+      await tester.drag( find.byType( Slider ), const Offset( 200, 0 ) );
+      await tester.pump();
+      await tester.tap( find.byKey( const Key( TestKeys.fleetStatusCapApply ) ) );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 50 ) );
+
+      // The fake answers cap+1. The cap is re-read fresh from disk on the spawn
+      // path, so the number enforced really can differ from the number posted —
+      // showing the posted one would show a number the fleet is not enforcing.
+      expect(
+        tester.widget<Text>( find.byKey( const Key( TestKeys.fleetStatusCapValue ) ) ).data,
+        "${ repo.postedCap! + 1 }",
+      );
     } );
   } );
 }
