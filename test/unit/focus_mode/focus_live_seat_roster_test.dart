@@ -89,6 +89,37 @@ void main() {
       expect( bloc!.state.personasBySender.containsKey( 'sess' ), isFalse );
     } );
 
+    // 🔴 THE TEST ABOVE ASSERTS ABSENCE; THESE ASSERT UNADDRESSABILITY, AND THAT GAP WAS
+    // A REAL DEFECT. The guard used to read `sid == null || sid.isEmpty`, which asks
+    // whether the string is THERE rather than whether it names a seat we can reach.
+    //
+    // Mr. Radio predicted it; Tiffany measured it through the real bloc rather than
+    // reasoning about it: `""` was skipped (green), `"none"` was NOT (11 passed / 1
+    // failed). A sentinel that is neither null nor empty reached `senderOrder` as its own
+    // rail row — and EVERY unidentifiable seat then collapses onto that one row.
+    //
+    // ⚠️ These were throwaway probes. They are promoted to permanent cases because a red
+    // that nobody kept is a red nobody can re-run: the fix would be safe to revert by
+    // accident and nothing would say so.
+    for ( final sentinel in const [ 'none', 'unknown', '' ] ) {
+      test( 'a roster seat whose id is the sentinel "$sentinel" never reaches the rail',
+          () async {
+        when( () => repo.activeSessions() ).thenAnswer( ( _ ) async => [
+          seat( sentinel, lastSeen: clock, name: 'Imposter' ),
+        ] );
+
+        await coldStart();
+
+        expect( bloc!.state.senderOrder, [ _written ],
+            reason: '"$sentinel" has no session hash, so it names no seat we can address '
+                    '— it must not become a rail row of its own' );
+        expect( bloc!.state.senderOrder, isNot( contains( sentinel ) ) );
+        expect( bloc!.state.personasBySender.containsKey( sentinel ), isFalse,
+                reason: 'and it must not carry a persona either — a named row for an '
+                        'unreachable seat is worse than no row' );
+      } );
+    }
+
     test( 'the roster never overwrites what a real message established', () async {
       final fromMessage = clock.subtract( const Duration( minutes: 5 ) );
       when( () => repo.activeSessions() ).thenAnswer( ( _ ) async => [
