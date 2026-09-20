@@ -123,6 +123,7 @@ class TestKeys {
 
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';
+  static const homeFleetStatusCard  = 'home.fleetStatus';
 
   // Voice persona badge (Phase 3 — voice-persona milestone)
   // Used at every wiring site (inbox tile, conversation header, by-date item).

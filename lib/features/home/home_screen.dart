@@ -12,6 +12,7 @@ import '../auth/domain/auth_state.dart';
 import '../claude_code/domain/claude_code_bloc.dart';
 import '../claude_code/presentation/session_list_screen.dart';
 import '../decision_proxy/presentation/trust_dashboard_screen.dart';
+import '../fleet_status/presentation/fleet_status_screen.dart';
 import '../notifications/presentation/inbox_screen.dart';
 import '../queue/domain/queue_bloc.dart';
 import '../queue/presentation/queue_dashboard_screen.dart';
@@ -131,6 +132,24 @@ class LupinHomeScreen extends StatelessWidget {
             ),
           ) ),
         ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          key        : const Key( TestKeys.homeFleetStatusCard ),
+          icon       : Icons.groups_outlined,
+          title      : 'Fleet Status',
+          subtitle   : 'Seats, liveness and the fleet-size cap',
+          // 🔴 `BlocProvider( create: )` INSIDE THE ROUTE, not
+          // `BlocProvider.value( context.read<…>() )` like every sibling above.
+          // That is a decision, not an oversight: the Fleet Status bloc polls on
+          // a 60-second timer, so a bloc held at the app root would keep polling
+          // whichever pane the operator is actually looking at. Route-scoping is
+          // what makes "a pane you have not opened issues no requests" true.
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => FleetStatusScreen(
+              blocFactory: ( _ ) => ServiceLocator.buildFleetStatusBloc(),
+            ),
+          ) ),
+        ),
       ] ),
     );
   }
@@ -143,6 +162,7 @@ class _NavCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _NavCard( {
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,

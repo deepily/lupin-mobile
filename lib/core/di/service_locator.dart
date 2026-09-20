@@ -44,6 +44,12 @@ import '../../features/claude_code/domain/claude_code_bloc.dart';
 
 // Tier 4 data layer
 import '../../features/agentic/data/agentic_repository.dart';
+
+// Fleet Status (fleet-panes plan Phase 1, row a1962a5b) — the repository is a
+// singleton like every other; its BLOC deliberately is NOT (see
+// [buildFleetStatusBloc]).
+import '../../features/fleet_status/data/fleet_repository.dart';
+import '../../features/fleet_status/domain/fleet_status_bloc.dart';
 import '../../services/artifacts/io_file_service.dart';
 
 // Tier 4 BLoCs
@@ -146,6 +152,31 @@ class ServiceLocator {
     // AFTER this one, so the lookup must defer to call time.
     isQuickAskJob : ( jobId ) => _getIt<QuickAskBloc>().isQuickAskJob( jobId ),
   );
+
+  /// PRODUCTION construction of [FleetStatusBloc] — a NEW bloc every call, and
+  /// that is the point.
+  ///
+  /// 🔴 DELIBERATELY NOT REGISTERED AS A SINGLETON, unlike every sibling bloc
+  /// in [_initializeBLoCs]. A pane bloc registered at the app root outlives its
+  /// route and keeps its 60-second poller running against a destination nobody
+  /// is looking at; five panes built that way means five timers at once, and
+  /// the obvious test — *"polling stops when backgrounded"* — passes with all
+  /// five running. Route-scoping IS the zero-request guard: a pane the operator
+  /// has not opened has no bloc and cannot issue a request, and a pane they
+  /// left is disposed, which cancels the timer AND the in-flight request.
+  ///
+  /// Requires:
+  ///   - FleetRepository is registered
+  ///
+  /// Ensures:
+  ///   - returns a fresh FleetStatusBloc over the registered repository
+  ///   - the caller owns closing it (the route's BlocProvider does)
+  ///
+  /// NOT `@visibleForTesting`, unlike [buildFocusChatBloc]: that one is called
+  /// from inside this file and exposed only so a test can see it, while this one
+  /// is PRODUCTION's construction path — the home screen's route calls it.
+  static FleetStatusBloc buildFleetStatusBloc() =>
+      FleetStatusBloc( _getIt<FleetRepository>() );
 
   /// Initialize core dependencies
   static Future<void> _initializeCore() async {
@@ -300,6 +331,13 @@ class ServiceLocator {
     );
     _getIt.registerSingleton<IoFileService>(
       IoFileService(_getIt<Dio>()),
+    );
+
+    // Fleet Status — read of /api/arbiter/fleet-state plus the one write this
+    // pane owns, PUT /api/arbiter/fleet-size-cap. Stateless over the shared
+    // Dio, so a singleton is right here; the BLOC is route-scoped instead.
+    _getIt.registerSingleton<FleetRepository>(
+      FleetRepository(_getIt<Dio>()),
     );
 
     // Notification audio — preferences backed by SharedPreferences, service
