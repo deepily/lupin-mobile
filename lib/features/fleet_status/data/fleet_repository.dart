@@ -30,6 +30,8 @@ class FleetRepository {
   ///       which the server returns as a 200 on purpose
   ///     - a non-2xx or transport failure raises [FleetApiException] carrying
   ///       the server's own `detail` when it supplied one
+  ///     - a CANCELLED request rethrows the DioException unflattened, so the
+  ///       caller can tell "the pane went away" from "the fetch failed"
   ///
   /// 🔴 DO NOT COLLAPSE "UNREACHABLE" INTO AN EXCEPTION. They are different
   /// facts and the operator needs to tell them apart: an exception means this
@@ -37,11 +39,12 @@ class FleetRepository {
   /// the :8001 arbiter is not. Both render an empty table; only one of them is
   /// a reason to go and restart something. [FleetComposite.isUnreachable]
   /// carries it.
-  Future<FleetComposite> fetchState() async {
+  Future<FleetComposite> fetchState( { CancelToken? cancelToken } ) async {
     try {
       final res = await _dio.get<Object?>(
         fleetStateEndpoint,
-        options: Options( validateStatus: ( _ ) => true ),
+        cancelToken : cancelToken,
+        options     : Options( validateStatus: ( _ ) => true ),
       );
       final status = res.statusCode ?? 0;
       if ( status < 200 || status >= 300 ) {
@@ -49,6 +52,11 @@ class FleetRepository {
       }
       return FleetComposite.fromJson( res.data );
     } on DioException catch ( e ) {
+      // 🔴 A CANCELLATION IS NOT A FAILURE. The pane went away mid-request, and
+      // flattening that into FleetApiException would have the bloc paint an
+      // error on a surface nobody is looking at — and, worse, teach the reader
+      // that the arbiter is down when it is not. Let it propagate.
+      if ( e.type == DioExceptionType.cancel ) rethrow;
       throw FleetApiException( "Fleet state unavailable: ${ e.message ?? e.type.name }" );
     }
   }
@@ -58,11 +66,12 @@ class FleetRepository {
   /// Ensures:
   ///     - returns the server's body on a 2xx
   ///     - raises [FleetApiException] on anything else
-  Future<Map<String, Object?>> fetchSizeCap() async {
+  Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async {
     try {
       final res = await _dio.get<Object?>(
         fleetSizeCapEndpoint,
-        options: Options( validateStatus: ( _ ) => true ),
+        cancelToken : cancelToken,
+        options     : Options( validateStatus: ( _ ) => true ),
       );
       final status = res.statusCode ?? 0;
       if ( status < 200 || status >= 300 ) {
@@ -71,6 +80,7 @@ class FleetRepository {
       final body = res.data;
       return body is Map ? Map<String, Object?>.from( body ) : <String, Object?>{};
     } on DioException catch ( e ) {
+      if ( e.type == DioExceptionType.cancel ) rethrow;
       throw FleetApiException( "Fleet size cap unavailable: ${ e.message ?? e.type.name }" );
     }
   }
