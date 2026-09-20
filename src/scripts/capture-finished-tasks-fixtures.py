@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import os
 import sys
-from urllib.parse import quote
 from pathlib import Path
 
 sys.path.insert( 0, str( Path( __file__ ).resolve().parent ) )
@@ -133,16 +132,15 @@ def main() -> int:
     all_rows : list[dict] = []
 
     for status in STATUSES:
-        # 🔴 QUOTE THE INSTANT. An ISO-8601 offset ends "+00:00", and a raw "+" in a
-        # query string decodes to a SPACE — the server then sees a malformed datetime
-        # and answers 422, with auth having succeeded, which reads like a broken
-        # endpoint rather than a broken caller. Measured here on the first run.
-        # (The Dart client is safe: Dio percent-encodes `queryParameters`.)
-        path = (
-            f"{ENDPOINT}?to_status={quote( status )}"
-            f"&since={quote( since )}"
-            f"&limit={PAGE_LIMIT}"
-        )
+        # The encoding lives in the shared lib, not here — Tiffany's ruling after the
+        # "+00:00 decodes to a space" 422 this script found on its first run. One
+        # encoder means fixing it here fixed it for capture-tasks-fixtures.py too,
+        # which this script never touches.
+        path = lib.build_query( ENDPOINT, {
+            "to_status" : status,
+            "since"     : since,
+            "limit"     : PAGE_LIMIT,
+        } )
         code, body = lib.get_json( base_url, path, headers=auth_hdr )
         if code != 200:
             print( f"  {status}: HTTP {code} — skipped", file=sys.stderr )

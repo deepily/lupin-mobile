@@ -297,4 +297,23 @@ class TestKeys {
   static const taskListView              = 'taskList.view';
   static const taskListIncompleteBanner  = 'taskList.incompleteBanner';
   static const taskListEmptyState        = 'taskList.emptyState';
+
+  // ── Holding Area pane (Phase 4) ─────────────────────────────────────────
+  //
+  // Every per-group key is suffixed with the FILER at the use site, because the
+  // blast radius of a batch control is one group and a test that cannot name which
+  // group it pressed is a test that cannot prove the radius.
+  static const holdingView                 = 'holding.view';
+  static const holdingIncompleteBanner     = 'holding.incompleteBanner';
+  static const holdingEmptyState           = 'holding.emptyState';
+  static const holdingErrorView            = 'holding.error';
+  static const holdingNotice               = 'holding.notice';
+  static const holdingGroupHeaderPrefix    = 'holding.group.';           // + filer
+  static const holdingApproveAllPrefix     = 'holding.approveAll.';      // + filer
+  static const holdingWontFixAllPrefix     = 'holding.wontFixAll.';      // + filer
+  static const holdingReasonFieldPrefix    = 'holding.reason.';          // + filer
+  static const holdingReasonErrorPrefix    = 'holding.reasonError.';     // + filer
+  static const holdingApproveAllConfirm    = 'holding.approveAll.confirm';
+  static const holdingApproveAllConfirmOk  = 'holding.approveAll.confirm.ok';
+  static const holdingApproveAllConfirmNo  = 'holding.approveAll.confirm.cancel';
 }

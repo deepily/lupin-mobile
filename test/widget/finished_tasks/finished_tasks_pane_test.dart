@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/fleet/presentation/task_row.dart';
 import 'package:lupin_mobile/features/finished_tasks/data/finished_tasks_models.dart';
 import 'package:lupin_mobile/features/finished_tasks/data/finished_tasks_repository.dart';
 import 'package:lupin_mobile/features/finished_tasks/domain/finished_tasks_bloc.dart';
@@ -300,14 +301,13 @@ void main() {
     /// ⚠️ A NEGATIVE ASSERTION IS THE ONLY KIND THAT SURVIVES A WELL-MEANING
     /// REFACTOR, because it fails ON the refactor rather than after it.
     ///
-    /// ⚠️ WHY A NAME PREDICATE RATHER THAN `find.byType( TaskRow )`. `TaskRow` is
-    /// Phase 0's and does not exist yet; importing it would not compile. The
-    /// predicate works today and keeps working after Phase 0 lands. When it does,
-    /// replace this with `expect( find.byType( TaskRow ), findsNothing )` and delete
-    /// the teeth test below — a typed assertion cannot go vacuous, so it needs no
-    /// companion.
-    bool isSharedTaskRow( Widget w ) => w.runtimeType.toString() == "TaskRow";
-
+    /// ⚠️ THIS WAS A NAME PREDICATE UNTIL PHASE 0 LANDED. `TaskRow` did not exist, so
+    /// the guard compared `runtimeType.toString()` against the string "TaskRow" and
+    /// needed a companion test plus a local stand-in class to prove it matched
+    /// anything at all. Phase 0 is in this tree now, so the real type is importable and
+    /// the assertion is TYPED — which cannot go vacuous under a rename, because a
+    /// rename that broke it would not compile. The companion and the stand-in went with
+    /// the predicate.
     testWidgets( "this pane does NOT render the shared TaskRow", ( tester ) async {
       final repo = _FakeRepo( byStatus: {
         "done"     : [ _ev( 1, "done" ), _ev( 2, "done" ) ],
@@ -316,29 +316,12 @@ void main() {
       } );
       await pumpPhone( tester, _host( repo ) );
 
-      expect( find.byWidgetPredicate( isSharedTaskRow ), findsNothing );
+      expect( find.byType( TaskRow ), findsNothing );
 
       // And it DOES render its own row, so the assertion above cannot be satisfied
       // by a pane that renders nothing at all.
       expect( find.byType( FinishedTaskRow ), findsWidgets );
     } );
 
-    testWidgets( "the guard above has teeth — the predicate really does catch a TaskRow", ( tester ) async {
-      // Without this, a rename in Phase 0 (`TaskRowWidget`, say) would make the
-      // guard match nothing and pass forever, and a decorative guard is worse than
-      // no guard because it is believed.
-      await pumpPhone( tester, const MaterialApp( home: TaskRow() ) );
-
-      expect( find.byWidgetPredicate( isSharedTaskRow ), findsOneWidget );
-    } );
   } );
-}
-
-/// A stand-in named exactly like Phase 0's shared row, existing only so the guard
-/// above can be shown to work. Delete it with the predicate when `find.byType` takes
-/// over.
-class TaskRow extends StatelessWidget {
-  const TaskRow( { super.key } );
-  @override
-  Widget build( BuildContext context ) => const SizedBox.shrink();
 }

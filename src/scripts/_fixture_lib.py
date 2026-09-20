@@ -161,3 +161,51 @@ def login_for_capture( base_url: str, email: str, password: str ) -> tuple[dict[
         print( f"ERROR: login response missing tokens: {list( body.keys() )}", file=sys.stderr )
         sys.exit( 3 )
     return body, access, refresh
+
+
+# ---------------------------------------------------------------------------
+# Query building — ONE encoder, because the alternative diverged once already
+# ---------------------------------------------------------------------------
+
+def build_query( path: str, params: dict[str, Any] ) -> str:
+    """
+    Build `path?k=v&...` with every value percent-encoded.
+
+    🔴 WHY THIS IS A SHARED FUNCTION RATHER THAN AN f-STRING AT EACH CALL SITE
+    (Tiffany's ruling, 2026-09-19). An ISO-8601 offset ends `+00:00`, and a RAW `+`
+    in a query string decodes to a SPACE — so `since=2026-09-06T00:00:00+00:00`
+    reaches the server as a malformed datetime and earns a 422.
+
+    ⚠️ AND THE SYMPTOM POINTS AT THE WRONG THING. Login has already SUCCEEDED by
+    then, so three endpoints answering 422 in a row reads as "the endpoint is broken"
+    or "my token is wrong". Measured in capture-finished-tasks-fixtures.py on its
+    first run, 2026-09-19; it was nearly filed as a server defect.
+
+    ⇒ The capture scripts stay separate because `/api/tasks` and `/api/tasks/events`
+    return different shapes and want different windowing — but the ENCODING is the
+    same problem for both, and fixing it in one place fixes it for a script this one
+    never touches.
+
+    Requires:
+        - path starts with "/"
+        - params values are str, int, bool or None
+
+    Ensures:
+        - a None value is OMITTED, not sent as the string "None"
+        - a bool is sent lowercase, as the server's query parsers expect
+        - every other value is percent-encoded, so "+", "/", "?" and "#" survive
+        - a params dict that is empty returns the bare path, with no trailing "?"
+    """
+    from urllib.parse import quote
+
+    pairs = []
+    for key, value in params.items():
+        if value is None:
+            continue
+        if isinstance( value, bool ):
+            rendered = "true" if value else "false"
+        else:
+            rendered = str( value )
+        pairs.append( f"{quote( str( key ) )}={quote( rendered )}" )
+
+    return path if not pairs else f"{path}?{'&'.join( pairs )}"
