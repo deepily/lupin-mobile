@@ -71,17 +71,52 @@ NotificationItem _makeItem( {
 
 /// Where the cosa source these wire-contract tests read lives, or null.
 ///
-/// This repo used to sit inside lupin at `lupin/src/lupin-mobile`, where cosa
-/// was the sibling `../cosa`. As a standalone clone next to `lupin/`, cosa is
-/// `../lupin/src/cosa`. A clone with neither SKIPS these tests and says why,
-/// rather than failing on a layout question (row 5ac999f5).
-final String? _cosaRoot = [ "../cosa", "../lupin/src/cosa" ]
-    .where( ( p ) => File( "$p/rest/routers/notifications.py" ).existsSync() )
-    .firstOrNull;
+/// This repo used to sit inside lupin at `lupin/src/lupin-mobile`, where cosa was the
+/// sibling `../cosa`. As a standalone clone next to `lupin/`, cosa is `../lupin/src/cosa`.
+/// A clone with neither SKIPS these tests and says why, rather than failing on a layout
+/// question (row 5ac999f5).
+///
+/// 🔴 THE PROBE USED TO BE RELATIVE TO THE CWD ONLY, AND THAT SILENTLY DISARMED IT IN
+/// EVERY SEAT WORKTREE. A provisioned seat runs from
+/// `<repo>/.claude/worktrees/seat-<name>/`, four levels below the checkout root, so
+/// `../lupin/src/cosa` resolved to `<repo>/.claude/worktrees/lupin/src/cosa` — absent.
+/// Measured 2026-09-19: from the main checkout `../lupin/src/cosa` RESOLVES; from a
+/// worktree it cannot. Two wire-contract tests therefore ran in the main tree and skipped
+/// in every worktree, and the skip string blamed "this clone" for a layout question that
+/// was really about depth.
+///
+/// ⚠️ A SEAT THAT SILENTLY GETS LESS COVERAGE THAN THE MAIN TREE IS WORSE THAN A SEAT
+/// THAT GETS NONE. The run still says "All tests passed", the count differs by two, and
+/// nothing connects the two facts. A measuring instrument that changes with where you
+/// stand is not measuring the thing you think.
+///
+/// ⇒ Walk UP from the current directory and try each candidate at every ancestor. From
+/// the main checkout the first ancestor hits, exactly as before; from a worktree the
+/// fourth does.
+String? _findCosaRoot() {
+  for ( var dir = Directory.current.absolute;; dir = dir.parent ) {
+    for ( final rel in const [ "../cosa", "../lupin/src/cosa" ] ) {
+      final candidate = Directory( "${dir.path}/$rel" );
+      if ( File( "${candidate.path}/rest/routers/notifications.py" ).existsSync() ) {
+        return candidate.path;
+      }
+    }
+    // `parent` of the filesystem root is itself — the only safe stop condition.
+    if ( dir.parent.path == dir.path ) return null;
+  }
+}
 
-const _noCosaReason =
-    "needs the cosa source to ground the wire contract, and neither ../cosa "
-    "nor ../lupin/src/cosa exists next to this clone";
+final String? _cosaRoot = _findCosaRoot();
+
+/// ⚠️ NAMES WHERE IT LOOKED, NOT JUST THAT IT FAILED. The old wording asserted a
+/// conclusion ("neither exists next to this clone") that was false in the case that
+/// actually fired. A skip reason that cannot be checked is a claim, and this one was
+/// wrong for eight months of worktree runs without anyone being able to tell.
+final String _noCosaReason =
+    "needs the cosa source to ground the wire contract. Searched '../cosa' and "
+    "'../lupin/src/cosa' at every ancestor of ${Directory.current.path} and found "
+    "neither. If you are in a seat worktree and this fires, the walk-up is broken — "
+    "it is not a layout question.";
 
 void main() {
   group( "NotificationBloc — inner-type dispatch (Phase 0)", () {
