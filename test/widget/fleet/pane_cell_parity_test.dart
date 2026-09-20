@@ -35,6 +35,30 @@ import '../../unit/_helpers/stub_dio.dart';
 /// Verified present at the time of writing; **not** re-asserted here, because a second
 /// copy of a guard in a file that does not own it is how the two later disagree.
 ///
+/// ## ⚠️ THIS FILE HANGS. READ THIS BEFORE YOU DEBUG IT.
+///
+/// It has never completed a run — killed at 300 s, then again at 150 s. Two things are
+/// known, and the second is a DISPROOF rather than a lead, which is the more useful half.
+///
+/// **KNOWN CAUSE, FIXED:** `TaskListPane` renders a `CircularProgressIndicator` while it
+/// loads (`task_list_pane.dart:60`), and `pumpAndSettle` waits for an animation that
+/// never ends. Every `pumpAndSettle` here is now an explicit `pump`. Real, worth keeping,
+/// and NOT sufficient — it still hung afterwards.
+///
+/// **DISPROVED, so nobody spends the hour I nearly did:** it is NOT the plugin-backed
+/// `NetworkConnectivityService`. That was my hypothesis and the evidence kills it —
+/// `HoldingAreaPane` calls `startConnectivityRefresh()` too
+/// (`holding_area_pane.dart:28`), and `holding_area_pane_test.dart` pumps that pane and
+/// passes twelve tests in FOUR SECONDS.
+///
+/// ⇒ **WHAT IS LEFT, by elimination:** the only thing `TaskListPane` does that
+/// `HoldingAreaPane` does not is `startPolling()` and `onPaneVisible()`
+/// (`task_list_pane.dart:41-44`) — `PanePollingMixin`'s `Timer.periodic` plus its
+/// lifecycle observer. A periodic timer on the test's fake clock, combined with
+/// `runAsync` stepping into real time, is the shape to investigate first. That is a
+/// NARROWED SUSPECT, not a finding: nobody has watched it go green, so do not record it
+/// as the cause until someone has.
+///
 /// ## Mutation proof — RUN IT, do not trust it
 ///
 /// The obvious mutation does not work and must not be used: **reordering a cell key
