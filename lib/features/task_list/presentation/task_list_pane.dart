@@ -133,11 +133,13 @@ class _TaskListPaneState extends State<TaskListPane> {
     return TaskRow(
       model  : item.row!,
       verbs  : _verbsFor( item.row! ),
-      onVerb : ( verb ) {
-        // The pane owns the write; the row owns arming. Wiring the actual call is the
-        // repository's job and lands with the write surface — see TaskWriteRepository,
-        // which already carries both doors and the 202 check.
-      },
+      // The row owns arming; the BLOC owns the write and the rollback. Routing it through
+      // an event rather than calling the repository from here keeps the optimistic
+      // repaint and its undo in one place — a pane that wrote directly would have to
+      // reimplement rollback, and a second rollback is a second thing to get wrong.
+      onVerb : ( verb ) => context
+          .read<TaskListBloc>()
+          .add( TaskListVerbPressed( taskId: item.row!.id, verb: verb ) ),
     );
   }
 

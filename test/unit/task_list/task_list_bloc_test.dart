@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lupin_mobile/features/fleet/data/task_write_repository.dart';
 import 'package:lupin_mobile/features/task_list/data/task_list_repository.dart';
 import 'package:lupin_mobile/features/task_list/domain/task_list_bloc.dart';
 
@@ -11,7 +12,11 @@ void main() {
 
   setUp(() {
     adapter = StubAdapter();
-    bloc    = TaskListBloc(TaskListRepository(makeDio(adapter)));
+    final dio = makeDio(adapter);
+    bloc = TaskListBloc(
+      TaskListRepository(dio),
+      TaskWriteRepository(dio, actorEmail: () => "rick@example.com"),
+    );
   });
 
   tearDown(() async => bloc.close());
@@ -106,6 +111,95 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       expect(bloc.state.incomplete, isFalse);
+    });
+  });
+
+  _writeDoorTests(() => adapter, () => bloc);
+}
+
+void _writeDoorTests(
+  StubAdapter Function() adapterOf,
+  TaskListBloc Function() blocOf,
+) {
+  group("both write doors, wired through the bloc", () {
+    // §4.2 — the door is chosen by WHAT A CONTROL CHANGES, never by which pane it is in.
+    test("a status verb goes through the TRANSITION door", () async {
+      final seen = <String>[];
+      adapterOf().handlers["POST /api/tasks/t1/transition"] = (opts) {
+        seen.add((opts.data as Map)["to_status"] as String);
+        return jsonBody({"status": "ok"});
+      };
+      adapterOf().handlers["GET ${TaskListRepository.path}"] =
+          (_) => jsonBodyFromFixtureLike(hasMore: false, total: 0);
+
+      blocOf().add(TaskListVerbPressed(taskId: "t1", verb: TaskVerb.approve()));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(seen, ["queued"], reason: "approve is a STATUS change, not a field edit");
+    });
+
+    test("a priority change goes through the FIELD door", () async {
+      final seen = <Map>[];
+      adapterOf().handlers["PATCH /api/tasks/t1"] = (opts) {
+        seen.add(opts.data as Map);
+        return jsonBody({"status": "ok"});
+      };
+      adapterOf().handlers["GET ${TaskListRepository.path}"] =
+          (_) => jsonBodyFromFixtureLike(hasMore: false, total: 0);
+
+      blocOf().add(const TaskListFieldChanged(taskId: "t1", priority: "P0"));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(seen.single["priority"], "P0");
+      expect(seen.single.containsKey("status"), isFalse);
+    });
+
+    // 🔴 THE 202 IS NOT A FAILURE AND NOT A SUCCESS. The request succeeded and the change
+    // did not happen — so the row goes BACK and the operator is told it is pending review.
+    // Retrying would only file a second ticket.
+    test("a 202 rolls the row back and says AWAITING, not failed", () async {
+      adapterOf().handlers["GET ${TaskListRepository.path}"] = (_) => jsonBody({
+        "tasks": [
+          {"id": "t1", "title": "a row", "status": "not_approved",
+           "priority": "P1", "owner_persona": "sam"},
+        ],
+        "total": 1, "has_more": false, "truncated": false, "warnings": [],
+      });
+      adapterOf().handlers["POST /api/tasks/t1/transition"] = (_) => jsonBody(
+        {"status": "awaiting_human_approval", "ticket_id": "tk-9"}, status: 202,
+      );
+
+      blocOf().add(const TaskListRefreshRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(blocOf().state.model!.groups.single.tasks.length, 1);
+
+      blocOf().add(TaskListVerbPressed(taskId: "t1", verb: TaskVerb.approve()));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(blocOf().state.model!.groups.single.tasks.length, 1,
+          reason: "the row must come BACK — a 202 did not approve it");
+      expect(blocOf().state.error, contains("awaiting approval"));
+      expect(blocOf().state.error, contains("tk-9"));
+    });
+
+    test("a failed write rolls the row back with the error", () async {
+      adapterOf().handlers["GET ${TaskListRepository.path}"] = (_) => jsonBody({
+        "tasks": [
+          {"id": "t1", "title": "a row", "status": "not_approved",
+           "priority": "P1", "owner_persona": "sam"},
+        ],
+        "total": 1, "has_more": false, "truncated": false, "warnings": [],
+      });
+      adapterOf().handlers["POST /api/tasks/t1/transition"] =
+          (_) => jsonBody({"detail": "nope"}, status: 500);
+
+      blocOf().add(const TaskListRefreshRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      blocOf().add(TaskListVerbPressed(taskId: "t1", verb: TaskVerb.approve()));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(blocOf().state.model!.groups.single.tasks.length, 1);
+      expect(blocOf().state.error, isNotNull);
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/network/network_connectivity_service.dart';
+import '../../fleet/data/task_write_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
 import '../data/task_list_model.dart';
 import '../data/task_list_repository.dart';
@@ -24,6 +25,21 @@ class TaskListRefreshRequested extends TaskListEvent {
 class TaskListGroupToggled extends TaskListEvent {
   final String groupLabel;
   const TaskListGroupToggled( this.groupLabel );
+}
+
+/// An operator pressed a status verb on a row. Goes through the TRANSITION door.
+class TaskListVerbPressed extends TaskListEvent {
+  final String taskId;
+  final TaskVerb verb;
+  const TaskListVerbPressed( { required this.taskId, required this.verb } );
+}
+
+/// An operator changed a row's priority or owner. Goes through the FIELD door.
+class TaskListFieldChanged extends TaskListEvent {
+  final String taskId;
+  final String? priority;
+  final String? ownerPersona;
+  const TaskListFieldChanged( { required this.taskId, this.priority, this.ownerPersona } );
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -85,15 +101,18 @@ class TaskListState extends Equatable {
 class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     with PanePollingMixin<TaskListEvent, TaskListState> {
   final TaskListRepository _repo;
+  final TaskWriteRepository _writes;
   final NetworkConnectivityService _network;
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
-  TaskListBloc( this._repo, { NetworkConnectivityService? network } )
+  TaskListBloc( this._repo, this._writes, { NetworkConnectivityService? network } )
       : _network = network ?? NetworkConnectivityService(),
         super( const TaskListState() ) {
     on<TaskListRefreshRequested>( _onRefresh );
     on<TaskListGroupToggled>( _onToggle );
+    on<TaskListVerbPressed>( _onVerb );
+    on<TaskListFieldChanged>( _onField );
   }
 
   /// 🔴 THE POLL INTERVAL READS THE CONNECTION, AND THE NUMBERS ARE MEASURED.
@@ -156,6 +175,66 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     } on TaskListFetchException catch ( e ) {
       emit( state.copyWith( loading: false, error: e.message ) );
     }
+  }
+
+  /// 🔴 WRITES ARE OPTIMISTIC WITH ROLLBACK (§4.6). The view repaints immediately and the
+  /// row goes back when the call rejects — `TaskListStore.ts:266-284` returns
+  /// `{restoreState, done}` for exactly this shape.
+  ///
+  /// ⚠️ AND THE 202 IS ROUTED INTO THE SAME ROLLBACK. `TaskAwaitingApprovalException` is a
+  /// DISTINCT type rather than a flag, so it cannot be caught as an ordinary failure and
+  /// retried: the request SUCCEEDED, the change did not happen, and pressing again only
+  /// files a second ticket. The operator is told the row is pending review — not that it
+  /// failed, and not that it worked.
+  ///
+  /// ⚠️ AN OPEN TARGET UPDATES IN PLACE; A TERMINAL ONE LEAVES THE VIEW. Removing a row
+  /// that merely moved would tell the operator their approved row had disappeared
+  /// (`TaskListStore.ts:293-299`) — so the refetch, not the optimistic drop, is what
+  /// settles the final shape.
+  Future<void> _onVerb( TaskListVerbPressed event, Emitter<TaskListState> emit ) async {
+    final before = state.model;
+    emit( state.copyWith( model: _withoutRow( before, event.taskId ), clearError: true ) );
+
+    try {
+      await _writes.transition( id: event.taskId, verb: event.verb );
+      add( const TaskListRefreshRequested() );
+    } on TaskAwaitingApprovalException catch ( e ) {
+      emit( state.copyWith(
+        model : before,
+        error : '${event.verb.name} is awaiting approval'
+                '${e.ticketId == null ? '' : ' (ticket ${e.ticketId})'}',
+      ) );
+    } on TaskWriteException catch ( e ) {
+      emit( state.copyWith( model: before, error: e.message ) );
+    }
+  }
+
+  /// The FIELD door — priority and owner only, never status. Status is [_onVerb].
+  Future<void> _onField( TaskListFieldChanged event, Emitter<TaskListState> emit ) async {
+    final before = state.model;
+    try {
+      await _writes.patchFields(
+        id           : event.taskId,
+        priority     : event.priority,
+        ownerPersona : event.ownerPersona,
+      );
+      add( const TaskListRefreshRequested() );
+    } on TaskWriteException catch ( e ) {
+      emit( state.copyWith( model: before, error: e.message ) );
+    }
+  }
+
+  /// Drop one row from the rendered model without refetching — the optimistic half.
+  TaskListModel? _withoutRow( TaskListModel? model, String taskId ) {
+    if ( model == null ) return null;
+    final groups = model.groups
+        .map( ( g ) => TaskGroup(
+              ownerPersona : g.ownerPersona,
+              tasks        : g.tasks.where( ( t ) => t.id != taskId ).toList(),
+            ) )
+        .where( ( g ) => g.tasks.isNotEmpty )
+        .toList();
+    return TaskListModel( totalCount: model.totalCount - 1, groups: groups );
   }
 
   void _onToggle( TaskListGroupToggled event, Emitter<TaskListState> emit ) {
