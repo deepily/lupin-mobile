@@ -28,7 +28,26 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// ⇒ When Phase 2 lands, ALSO add the one-line widget assertion. The two are not
 /// redundant: this one catches the import, that one catches a re-export or an alias.
+/// The shared row's constructor, and not a longer name that merely ends in it.
+final sharedTaskRowUse = RegExp(r"(?<![A-Za-z0-9_])TaskRow\s*\(");
+
 void main() {
+  // 🔴 THE GUARD'S OWN PATTERN IS TESTED, BECAUSE A GUARD THAT MATCHES NOTHING PASSES.
+  // Loosening the pattern until the suite goes green is the obvious repair when it
+  // fires, and it is indistinguishable from fixing it — until the day it should have
+  // fired and did not.
+  group("the pattern tells the two names apart", () {
+    test("it catches a real use of the shared row", () {
+      expect(sharedTaskRowUse.hasMatch("child: TaskRow( model: m )"), isTrue);
+      expect(sharedTaskRowUse.hasMatch("return TaskRow(model: m);"), isTrue);
+    });
+
+    test("it does NOT catch this pane's own FinishedTaskRow", () {
+      expect(sharedTaskRowUse.hasMatch("itemBuilder: (c, i) => FinishedTaskRow("), isFalse);
+      expect(sharedTaskRowUse.hasMatch("class FinishedTaskRow extends StatelessWidget"), isFalse);
+    });
+  });
+
   test("Finished Tasks does not render the shared TaskRow", () {
     final dir = Directory("lib/features/finished_tasks");
 
@@ -45,7 +64,15 @@ void main() {
         .where((f) => f.path.endsWith(".dart"))
         .where((f) {
           final src = f.readAsStringSync();
-          return src.contains("task_row.dart") || src.contains("TaskRow(");
+          // 🔴 A WORD BOUNDARY, NOT A BARE SUBSTRING. `src.contains("TaskRow(")` also
+          // matches `FinishedTaskRow(` — this pane's OWN four-cell row, whose name ends
+          // in the string being searched for. The guard went red the moment Phase 2
+          // landed, accusing the pane of the exact thing it was built not to do, and a
+          // guard that cries wolf about correct code is one the next hand deletes.
+          //
+          // ⚠️ The import check stays a plain substring: `task_row.dart` is a path and
+          // cannot collide the same way.
+          return src.contains("task_row.dart") || sharedTaskRowUse.hasMatch(src);
         })
         .map((f) => f.path)
         .toList();
