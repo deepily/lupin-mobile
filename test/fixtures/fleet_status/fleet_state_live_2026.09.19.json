@@ -1,0 +1,248 @@
+{
+  "status": "ok",
+  "app_timezone": "America/New_York",
+  "fleet_arbiter": {
+    "sessions": [
+      {
+        "session_id": "078b97cb-d34c-4f49-99b3-17d2efcbfe4d",
+        "persona": "mr radio",
+        "state": "holding",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 3,
+          "event_age_s": 144,
+          "commons_age_s": 4695,
+          "idle_prompt_age_s": 3380,
+          "dm_age_s": 77,
+          "hold_age_s": 516,
+          "transcript_age_s": 3,
+          "freshest_age_s": 3,
+          "verdict": "LIVE"
+        },
+        "role": "manager",
+        "manager": null
+      },
+      {
+        "session_id": "2b9f67a1-1841-4ea6-90f5-fffb356b3c4e",
+        "persona": "maria",
+        "state": "holding",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 2090,
+          "event_age_s": 2090,
+          "commons_age_s": 4695,
+          "idle_prompt_age_s": 2029,
+          "dm_age_s": 2119,
+          "hold_age_s": 2763,
+          "transcript_age_s": 212,
+          "freshest_age_s": 212,
+          "verdict": "quiet 3m"
+        },
+        "role": "worker",
+        "manager": null
+      },
+      {
+        "session_id": "2d860f09-7f2b-419a-ad62-9929882dcc22",
+        "persona": "sam",
+        "state": "holding",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 4,
+          "event_age_s": 1119,
+          "commons_age_s": null,
+          "idle_prompt_age_s": 1057,
+          "dm_age_s": 1128,
+          "hold_age_s": 1259,
+          "transcript_age_s": null,
+          "freshest_age_s": 4,
+          "verdict": "LIVE"
+        },
+        "role": "worker",
+        "manager": "Tiffany"
+      },
+      {
+        "session_id": "371d6d91-65b0-4877-bb2e-5ee4ab602c5a",
+        "persona": "maya",
+        "state": "idle",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 14,
+          "event_age_s": 6854,
+          "commons_age_s": 4695,
+          "idle_prompt_age_s": 509,
+          "dm_age_s": 109,
+          "hold_age_s": null,
+          "transcript_age_s": 5,
+          "freshest_age_s": 5,
+          "verdict": "LIVE"
+        },
+        "role": "worker",
+        "manager": "mr radio"
+      },
+      {
+        "session_id": "42899779-d45a-4c99-b175-0e0c33429a9e",
+        "persona": "chloe",
+        "state": "working",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 50,
+          "event_age_s": 104,
+          "commons_age_s": null,
+          "idle_prompt_age_s": 1245,
+          "dm_age_s": 122,
+          "hold_age_s": null,
+          "transcript_age_s": 45,
+          "freshest_age_s": 45,
+          "verdict": "LIVE"
+        },
+        "role": "worker",
+        "manager": "Tiffany"
+      },
+      {
+        "session_id": "49eb34b9-2685-4eb1-982c-458d5c98437f",
+        "persona": "Krishna",
+        "state": "idle",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 1350,
+          "event_age_s": 5970,
+          "commons_age_s": 4695,
+          "idle_prompt_age_s": 1287,
+          "dm_age_s": 1364,
+          "hold_age_s": null,
+          "transcript_age_s": 1347,
+          "freshest_age_s": 1287,
+          "verdict": "stale 21m"
+        },
+        "role": "worker",
+        "manager": "mr radio"
+      },
+      {
+        "session_id": "8cf81418-9e0e-417e-a4dc-102bb4fa015b",
+        "persona": "Rio",
+        "state": "unknown",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 0,
+          "event_age_s": null,
+          "commons_age_s": null,
+          "idle_prompt_age_s": null,
+          "dm_age_s": 4,
+          "hold_age_s": null,
+          "transcript_age_s": 0,
+          "freshest_age_s": 0,
+          "verdict": "LIVE"
+        },
+        "role": "worker",
+        "manager": "mr radio"
+      },
+      {
+        "session_id": "a81c72c4-e97f-47ee-8bf4-012a1d16be5b",
+        "persona": "Rachel",
+        "state": "idle",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 13,
+          "event_age_s": 4595,
+          "commons_age_s": null,
+          "idle_prompt_age_s": 1132,
+          "dm_age_s": 111,
+          "hold_age_s": null,
+          "transcript_age_s": 13,
+          "freshest_age_s": 13,
+          "verdict": "LIVE"
+        },
+        "role": "worker",
+        "manager": "Tiffany"
+      },
+      {
+        "session_id": "cc9c1f1a-8617-491d-ae50-5a827ea2a54b",
+        "persona": "Tiffany",
+        "state": "holding",
+        "holding_on": "peer:Sam",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": 62,
+          "event_age_s": 62,
+          "commons_age_s": 4695,
+          "idle_prompt_age_s": 0,
+          "dm_age_s": 91,
+          "hold_age_s": 125,
+          "transcript_age_s": 61,
+          "freshest_age_s": 0,
+          "verdict": "LIVE"
+        },
+        "role": "manager",
+        "manager": null
+      },
+      {
+        "session_id": "context-pressure-tick",
+        "persona": null,
+        "state": "unknown",
+        "holding_on": "none",
+        "stuck": false,
+        "liveness": {
+          "bridge_age_s": null,
+          "event_age_s": null,
+          "commons_age_s": null,
+          "idle_prompt_age_s": null,
+          "dm_age_s": 915,
+          "hold_age_s": null,
+          "transcript_age_s": null,
+          "freshest_age_s": 915,
+          "verdict": "stale 15m"
+        },
+        "role": "worker",
+        "manager": null
+      }
+    ]
+  },
+  "context_pressure": {
+    "personas": {
+      "maria": {
+        "consumption_pct_of_window": null,
+        "window_size": null
+      },
+      "Tiffany": {
+        "consumption_pct_of_window": 19.5,
+        "window_size": 1000000
+      },
+      "Rio": {
+        "consumption_pct_of_window": 20.7,
+        "window_size": 1000000
+      },
+      "chloe": {
+        "consumption_pct_of_window": 37.5,
+        "window_size": 1000000
+      },
+      "Rachel": {
+        "consumption_pct_of_window": 32.6,
+        "window_size": 1000000
+      },
+      "sam": {
+        "consumption_pct_of_window": null,
+        "window_size": 1000000
+      },
+      "maya": {
+        "consumption_pct_of_window": 16.3,
+        "window_size": 1000000
+      },
+      "Krishna": {
+        "consumption_pct_of_window": 31.3,
+        "window_size": 1000000
+      },
+      "mr radio": {
+        "consumption_pct_of_window": 40.2,
+        "window_size": 1000000
+      }
+    }
+  }
+}

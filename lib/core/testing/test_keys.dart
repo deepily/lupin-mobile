@@ -123,6 +123,7 @@ class TestKeys {
 
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';
+  static const homeFleetStatusCard  = 'home.fleetStatus';
 
   // Voice persona badge (Phase 3 — voice-persona milestone)
   // Used at every wiring site (inbox tile, conversation header, by-date item).
@@ -261,6 +262,24 @@ class TestKeys {
   static const finishedRowTitlePrefix   = 'finished.row.title.';  // + event id
   static const finishedRowWhoPrefix     = 'finished.row.who.';    // + event id
   static const finishedRowWhyPrefix     = 'finished.row.why.';    // + event id
+  // ── Fleet Status pane (fleet-panes plan Phase 1, row a1962a5b) ──────────
+  static const fleetStatusList        = 'fleetStatus.list';
+  static const fleetStatusOfflineToggle = 'fleetStatus.offlineToggle';
+  /// Suffixed with the row's session id, e.g. '${fleetStatusRowPrefix}078b97cb'.
+  static const fleetStatusRowPrefix   = 'fleetStatus.row.';
+  /// The Liveness cell — a TAP target here, because a phone has no hover.
+  static const fleetStatusLivenessPrefix = 'fleetStatus.liveness.';
+  static const fleetStatusLivenessSheet  = 'fleetStatus.livenessSheet';
+  /// 🔴 DISTINCT FROM THE EMPTY STATE ON PURPOSE. The server answers
+  /// `status: "unreachable"` with an HTTP 200, so "we cannot see the fleet" and
+  /// "the fleet has no seats" must be two different things on screen.
+  static const fleetStatusUnreachable = 'fleetStatus.unreachable';
+  static const fleetStatusEmpty       = 'fleetStatus.empty';
+  // The fleet-size cap dial — a real write, PUT /api/arbiter/fleet-size-cap.
+  static const fleetStatusCapDial     = 'fleetStatus.capDial';
+  static const fleetStatusCapValue    = 'fleetStatus.capValue';
+  static const fleetStatusCapApply    = 'fleetStatus.capApply';
+
   // ── Fleet panes: the SHARED task row (Phase 0) ──────────────────────────
   //
   // 🔴 THE CELL PREFIX IS THE CELL-IDENTITY GUARD'S ONLY HANDLE, AND THAT IS WHY IT
