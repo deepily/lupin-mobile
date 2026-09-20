@@ -210,10 +210,27 @@ void main() {
       expect( detail.split( " · " ).length, 5 );
     } );
 
-    test( "the offline toggle keys on the arbiter's verdict, not an age threshold", () {
-      expect( FleetSession.fromJson( { "liveness": { "verdict": "LIVE" } } ).isOffline, isFalse );
-      expect( FleetSession.fromJson( { "liveness": { "verdict": "DEAD" } } ).isOffline, isTrue );
-      expect( FleetSession.fromJson( <String, Object?>{} ).isOffline, isTrue );
+    test( "offline is the exact string 'offline', and no verdict stays LIVE", () {
+      // Ported from fleetModel.ts:155, :161-162. A hand-rolled predicate here
+      // is dangerous because the verdict is FREE-FORM, not an enum: the live
+      // fleet reported LIVE, "quiet 3m" and "stale 21m" on 2026-09-19, and a
+      // stale seat is one the operator needs to chase, not one to hide.
+      expect( FleetSession.fromJson( { "liveness": { "verdict": "offline" } } ).isOffline, isTrue );
+      expect( FleetSession.fromJson( { "liveness": { "verdict": "LIVE" } } ).isOffline,    isFalse );
+      expect( FleetSession.fromJson( { "liveness": { "verdict": "stale 21m" } } ).isOffline, isFalse );
+      expect( FleetSession.fromJson( { "liveness": { "verdict": "quiet 3m" } } ).isOffline,  isFalse );
+      // A row the arbiter has not judged stays visible rather than vanishing.
+      expect( FleetSession.fromJson( <String, Object?>{} ).isOffline, isFalse );
+      expect( FleetSession.fromJson( { "liveness": { "verdict": "OFFLINE" } } ).isOffline, isFalse,
+          reason: "case matters — the server sends lowercase" );
+    } );
+
+    test( "the live capture hides nobody, and that is the correct answer", () {
+      // A filter that never fires is worth proving rather than assuming: none
+      // of the ten seats reported "offline", so the default view shows all ten.
+      final c = FleetComposite.fromJson( live );
+      expect( c.sessions, isNotEmpty );
+      expect( c.sessions.where( ( s ) => s.isOffline ), isEmpty );
     } );
 
     test( "every live session in the real capture carries a verdict", () {

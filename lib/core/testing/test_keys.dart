@@ -245,4 +245,22 @@ class TestKeys {
   static const promptSuppressedNotice = 'prompt.suppressed.notice';
   static const promptSuppressedRule   = 'prompt.suppressed.rule';
   static const promptSpeakAnyway      = 'prompt.suppressed.speakAnyway';
+
+  // ── Fleet Status pane (fleet-panes plan Phase 1, row a1962a5b) ──────────
+  static const fleetStatusList        = 'fleetStatus.list';
+  static const fleetStatusOfflineToggle = 'fleetStatus.offlineToggle';
+  /// Suffixed with the row's session id, e.g. '${fleetStatusRowPrefix}078b97cb'.
+  static const fleetStatusRowPrefix   = 'fleetStatus.row.';
+  /// The Liveness cell — a TAP target here, because a phone has no hover.
+  static const fleetStatusLivenessPrefix = 'fleetStatus.liveness.';
+  static const fleetStatusLivenessSheet  = 'fleetStatus.livenessSheet';
+  /// 🔴 DISTINCT FROM THE EMPTY STATE ON PURPOSE. The server answers
+  /// `status: "unreachable"` with an HTTP 200, so "we cannot see the fleet" and
+  /// "the fleet has no seats" must be two different things on screen.
+  static const fleetStatusUnreachable = 'fleetStatus.unreachable';
+  static const fleetStatusEmpty       = 'fleetStatus.empty';
+  // The fleet-size cap dial — a real write, PUT /api/arbiter/fleet-size-cap.
+  static const fleetStatusCapDial     = 'fleetStatus.capDial';
+  static const fleetStatusCapValue    = 'fleetStatus.capValue';
+  static const fleetStatusCapApply    = 'fleetStatus.capApply';
 }

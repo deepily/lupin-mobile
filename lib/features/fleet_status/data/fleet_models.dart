@@ -161,13 +161,23 @@ class FleetSession {
 
   /// Whether this seat is offline for the purposes of the offline toggle.
   ///
-  /// The toggle is the difference between a readable list and a wall of dead
-  /// seats, so it keys on the arbiter's own verdict rather than on an age
-  /// threshold this client would have to keep in step with the server's.
-  bool get isOffline {
-    final v = liveness.verdict;
-    return v == null || v == "DEAD" || v == "OFFLINE" || v == "unknown";
-  }
+  /// 🔴 THE TEST IS `verdict == "offline"` EXACTLY, AND A ROW WITH NO VERDICT
+  /// STAYS LIVE. Ported from `fleetModel.ts:155`, `:161-162` — its own words:
+  /// "`liveness.verdict === "offline"`; rows without a verdict stay LIVE."
+  ///
+  /// ⚠️ THE VERDICT IS A FREE-FORM STRING, NOT AN ENUM, and that is what makes
+  /// a hand-rolled predicate here dangerous. Measured live 2026-09-19, the ten
+  /// seats reported `LIVE`, `quiet 3m` and `stale 21m` — a stale seat is not an
+  /// offline one, and hiding it would take a seat the operator needs to chase
+  /// off the screen. The web keys its COLOUR on the first whitespace-delimited
+  /// word lowercased (`fleetVerdictClass`, `:211-219`) but keys the TOGGLE on
+  /// the whole string, so this does too.
+  ///
+  /// The first cut of this getter treated a missing verdict, "DEAD" and
+  /// "OFFLINE" as offline and did not match the lowercase "offline" the server
+  /// actually sends. It would have hidden nothing in the live fleet while
+  /// silently hiding every row the arbiter had not yet judged.
+  bool get isOffline => liveness.verdict == "offline";
 }
 
 /// The per-persona context-pressure record, for the "% Window" and "Window"
