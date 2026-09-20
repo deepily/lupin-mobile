@@ -7,50 +7,51 @@ import 'package:mocktail/mocktail.dart';
 
 import '_quick_ask_harness.dart';
 
-/// 🔴 DOES A REPLAYED CACHE-HIT ANSWER ACTUALLY REACH THE PHONE?
+/// 🔴 DOES A REPLAYED (CACHE-HIT) ANSWER ACTUALLY REACH THE PHONE?
 ///
-/// Asked as a question, answered by test rather than by patch — the instruction was to
-/// PROVE whether the answer arrives or not, and a fix applied before the proof would
-/// leave nobody able to say what was broken.
+/// Row 9511aa08, DONE WHEN path (b): *"a phone-side integration assertion that a
+/// replay-path ask is followed by an answer frame on the WS within the timeout, and it
+/// passes."* Built rather than asking Rick to repeat the two-minute loop by hand.
 ///
-/// THE PATH. A cache hit comes back on the ASK response itself, synchronously:
-/// `status: "done"` with an `answer` and `cache_hit: true`. The bloc's own comment on that
-/// branch says *"Served from cache or inline — the answer is already here, no correlation
-/// needed and no watchdog to arm."* Nothing is queued, nothing is correlated, and no
-/// notification carries it — so if the ask response is not fully unpacked, the answer has
-/// no second chance to arrive.
+/// ⚠️ THE FIRST VERSION OF THIS FILE FAILED, AND THE FAILURE WAS MINE — A FIXTURE I
+/// AUTHORED RATHER THAN CAPTURED. I built an `AskResponse` with `status: 'done'`,
+/// `cache_hit: true` and NO `job_id`, reasoned that a cache hit needs no job, and
+/// reported a confirmed defect off the resulting red. The manager escalated on it. Both
+/// of us were wrong, and the product was fine the whole time.
 ///
-/// THE SUSPECT, found by reading the branch rather than the symptom
-/// (`quick_ask_bloc.dart`, the `res.isDone` arm):
+/// THE REAL PAYLOAD — Rick's emulator tail, 2026-09-19 18:31:57 EDT, POST /api/v2/ask:
 ///
-/// ```dart
-/// details : res.jobId == null ? null : JobSummary( … responseText: res.answer … ),
+/// ```json
+/// {"path":"replay","status":"waiting","route_reason":"exact_hit","answer":null,
+///  "cache_hit":true,"spoke":false,
+///  "job_id":"41cce903…::0cf47e2d-d5a1-4cd4-addf-79810fd32b15"}
 /// ```
 ///
-/// and the answer is read back through `quick_ask_models.dart:55`:
+/// ⇒ TWO THINGS MY INVENTED FIXTURE GOT WRONG, AND EACH ALONE WOULD HAVE MISLED:
+///   1. `status` is **"waiting"**, not "done". This is the ENQUEUE-time response; the
+///      answer arrives afterwards over the WebSocket. `spoke: false` and `answer: null`
+///      are what a CORRECT enqueue looks like, not symptoms.
+///   2. `job_id` is **PRESENT**. It is present by construction on this path: the replay
+///      Outcome's job_id IS the snapshot row's id_hash. `flow.py:1699` carries the
+///      measurement — *"job_id present on 85 of 85 exact_hit rows and 0 of 126
+///      replay_error rows"* — and the replay_error path that lacks one does not set
+///      `cache_hit`.
 ///
-/// ```dart
-/// String? get answer => details?.responseText;
-/// ```
+/// ⚠️ WE SPENT THE NIGHT ARGUING FIXTURES MUST BE CAPTURED, NOT AUTHORED, BECAUSE AN
+/// AUTHORED ONE ENCODES ITS AUTHOR'S BELIEFS AND CAN ONLY CONFIRM THEM. That rule earned
+/// its keep here in the OPPOSITE direction: an authored fixture manufactured a red and a
+/// false defect report, where the usual failure is a green that hides a real one. A
+/// fixture that cannot fail honestly cannot pass honestly either.
 ///
-/// ⇒ WITH NO `jobId`, `details` IS NULL, SO `entry.answer` IS NULL — and the Replay
-/// control is rendered only when there is an answer to replay
-/// (`quick_ask_screen.dart:761-764`, `tts.replay( message: entry.answer! )`).
-///
-/// ⚠️ `AskResponse.jobId` IS NULLABLE (`queue_models.dart:220`) and a cache hit is exactly
-/// the case that needs no job — there is nothing to run, so there may be nothing to
-/// identify. The existing coverage never exercises it: `status_routing_test.dart:68`'s
-/// `doneWith()` always supplies `jobId: 'j-done'`, so every `done` test in this suite
-/// takes the branch where `details` survives.
-///
-/// The tests below pin BOTH shapes. Whichever way they land, the answer to Tiffany's
-/// question is a measurement rather than an opinion.
-AskResponse cacheHit( String answer, { String? jobId } ) => AskResponse(
-      path        : 'agent',
-      status      : 'done',
-      routeReason : 'router:cache',
-      traceId     : 'tr-cache',
-      answer      : answer,
+/// ⇒ What this file now asserts is the thing nobody had: that a replay-path ask IS
+/// followed by an answer frame, and that the answer reaches the card the user is looking
+/// at.
+AskResponse replayEnqueue( { String? jobId = ourJob } ) => AskResponse(
+      path        : 'replay',
+      status      : 'waiting',
+      routeReason : 'exact_hit',
+      traceId     : 'tr-replay',
+      answer      : null,      // correct at enqueue time — the answer comes over the WS
       jobId       : jobId,
       cacheHit    : true,
     );
@@ -76,63 +77,56 @@ void main() {
     return h;
   }
 
-  group( 'a cache-hit answer reaches the phone', () {
-    test( 'WITH a jobId — the answer is on the card and replayable', () async {
-      final h = await askReturns( cacheHit( 'seventy two and sunny', jobId: 'j-cache' ) );
-      final entry = h.bloc.state.entries.single;
+  group( 'a replayed cache-hit answer reaches the phone', () {
+    // The enqueue half. `answer: null` and `spoke: false` here are CORRECT — reading them
+    // as a defect is reading a mid-flight state as a final one, which is the mistake the
+    // row itself warned against and which I then made anyway.
+    test( 'the replay ask enqueues and holds the job for correlation', () async {
+      final h = await askReturns( replayEnqueue() );
 
-      expect( entry.state, JobLifecycleState.completed );
-      expect( entry.answer, 'seventy two and sunny',
-          reason: 'entry.answer is what the Replay control speaks' );
-      expect( entry.details?.isCacheHit, isTrue );
+      expect( h.bloc.state.phase,     QuickAskPhase.waiting,
+          reason: 'status "waiting" means the work was accepted and is running behind' );
+      expect( h.bloc.state.liveJobId, ourJob,
+          reason: 'the job_id is the correlation handle the answer frame will arrive on' );
       await h.dispose();
     } );
 
-    // 🔴 THE ONE THAT MATTERS. A cache hit needs no job — there is nothing to run, so
-    // there may be nothing to identify. If the answer is dropped here it is dropped for
-    // good: nothing is queued, nothing is correlated, and no notification carries it.
-    test( 'WITHOUT a jobId — the answer must still reach the card', () async {
-      final h = await askReturns( cacheHit( 'seventy two and sunny' ) );
-      final entry = h.bloc.state.entries.single;
+    // 🔴 THE ASSERTION THE ROW EXISTS FOR. Rick's tail showed the enqueue and never showed
+    // the answer arriving — "not the same thing as seeing 4 announced". This is that.
+    test( 'the answer frame arrives and lands on the card', () async {
+      final h = await askReturns( replayEnqueue() );
 
-      expect( entry.state, JobLifecycleState.completed,
-          reason: 'the ask resolved — the card must not sit as though it is still running' );
+      h.bloc.add( QuickAskTransitionReceived(
+        transitionFrame( from: 'running', to: 'completed', responseText: 'It is sunny.' ) ) );
+      await settle();
 
-      expect(
-        entry.answer,
-        'seventy two and sunny',
-        reason: 'A CACHE HIT WITH NO jobId MUST NOT LOSE ITS ANSWER. `details` is nulled '
-                'when jobId is absent, and `entry.answer` reads `details?.responseText`, '
-                'so the answer is discarded and the Replay control never renders — the '
-                'user asked, the server answered, and the phone shows nothing to replay.',
-      );
+      final entry = h.bloc.state.entries.last;
+      expect( entry.state,  JobLifecycleState.completed );
+      expect( entry.answer, 'It is sunny.',
+          reason: 'entry.answer is what the card shows and what the Replay control '
+                  'speaks — a replay whose answer never lands here is P1 0e7c9214 '
+                  'recurring, which is the whole reason this row was filed' );
+      expect( h.bloc.state.phase,     QuickAskPhase.idle );
+      expect( h.bloc.state.liveJobId, isNull,
+          reason: 'the ask is finished — the job must not stay live and re-arm a watchdog' );
       await h.dispose();
-    },
-        skip: 'PROVEN RED 2026-09-19, committed unfixed on purpose. A cache hit with no '
-              'jobId loses its answer: the bloc nulls `details` when jobId is absent and '
-              'entry.answer reads details?.responseText, so Replay never renders. NOT '
-              'LIVE TODAY - flow.py:1699 measured job_id present on 85 of 85 exact_hit '
-              'rows, and the replay_error path that lacks one does not set cache_hit. A '
-              'latent trap: the client cannot survive a shape the server does not send. '
-              'Unskip with the fix.' );
+    } );
 
-    test( 'WITHOUT a jobId — the cache-hit flag survives too', () async {
-      final h = await askReturns( cacheHit( 'an answer' ) );
-      expect( h.bloc.state.entries.single.details?.isCacheHit, isTrue,
-          reason: 'the badge that tells the user this was served from cache rides the '
-                  'same object as the answer, so it is lost by the same nulling' );
+    // The correlation handle is what makes the frame findable. Without it the answer
+    // arrives on the socket and has nowhere to land — which was the ACTUAL mechanism of
+    // 0e7c9214, one level away from the fields my first fixture was poking at.
+    test( 'the answer is matched to THIS ask, not to whatever arrived', () async {
+      final h = await askReturns( replayEnqueue() );
+
+      h.bloc.add( QuickAskTransitionReceived( transitionFrame(
+        jobId: 'someone-elses-job', from: 'running', to: 'completed',
+        responseText: 'a different answer' ) ) );
+      await settle();
+
+      expect( h.bloc.state.entries.last.answer, isNot( 'a different answer' ) );
+      expect( h.bloc.state.liveJobId, ourJob,
+          reason: 'a frame for another job must not resolve this one' );
       await h.dispose();
-    },
-        skip: 'PROVEN RED 2026-09-19 - same nulling as the test above, same latent '
-              'status. Unskip with the fix.' );
-
-    test( 'either way the ask finishes — no watchdog, no live job', () async {
-      for ( final res in [ cacheHit( 'a', jobId: 'j-1' ), cacheHit( 'a' ) ] ) {
-        final h = await askReturns( res );
-        expect( h.bloc.state.phase,     QuickAskPhase.idle );
-        expect( h.bloc.state.liveJobId, isNull );
-        await h.dispose();
-      }
     } );
   } );
 }
