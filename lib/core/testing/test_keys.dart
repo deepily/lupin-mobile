@@ -245,4 +245,20 @@ class TestKeys {
   static const promptSuppressedNotice = 'prompt.suppressed.notice';
   static const promptSuppressedRule   = 'prompt.suppressed.rule';
   static const promptSpeakAnyway      = 'prompt.suppressed.speakAnyway';
+
+  // ── Finished Tasks pane (Phase 2) ───────────────────────────────────────
+  // The row cell keys are suffixed with the EVENT id at the use site, so a test
+  // can assert the four cells of one identified row rather than counting widgets.
+  static const finishedRefreshButton    = 'finished.refresh';
+  static const finishedStatusPillPrefix = 'finished.pill.';      // + status
+  static const finishedWindowSlider     = 'finished.window.slider';
+  static const finishedWindowLabel      = 'finished.window.label';
+  static const finishedPartialBanner    = 'finished.partialBanner';
+  static const finishedEmptyState       = 'finished.empty';
+  static const finishedErrorView        = 'finished.error';
+  static const finishedRowGlyphPrefix   = 'finished.row.glyph.';  // + event id
+  static const finishedRowWhenPrefix    = 'finished.row.when.';   // + event id
+  static const finishedRowTitlePrefix   = 'finished.row.title.';  // + event id
+  static const finishedRowWhoPrefix     = 'finished.row.who.';    // + event id
+  static const finishedRowWhyPrefix     = 'finished.row.why.';    // + event id
 }

@@ -1,0 +1,29 @@
+{
+  "actor": {
+    "blank": 0,
+    "null": 0,
+    "present": 344
+  },
+  "actor_shapes": {
+    "bare_session_id": 0,
+    "no_session_id": 51,
+    "one_word_persona": 149,
+    "two_word_persona": 144
+  },
+  "reason": {
+    "blank": 0,
+    "null": 3,
+    "present": 341
+  },
+  "rows": 344,
+  "title": {
+    "blank": 0,
+    "null": 0,
+    "present": 344
+  },
+  "transition": {
+    "blank": 0,
+    "null": 0,
+    "present": 344
+  }
+}
