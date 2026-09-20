@@ -1,0 +1,163 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
+import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
+import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
+
+/// Counts what the screen actually asks the network for.
+class _CountingRepo implements FleetRepository {
+  int stateCalls = 0;
+  Object? stateThrows;
+  final FleetComposite composite;
+
+  _CountingRepo( this.composite );
+
+  @override
+  Future<FleetComposite> fetchState( { CancelToken? cancelToken } ) async {
+    stateCalls++;
+    if ( stateThrows != null ) throw stateThrows!;
+    return composite;
+  }
+
+  @override
+  Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async =>
+      { "cap": 9, "maximum": 20 };
+
+  @override
+  Future<Map<String, Object?>> setSizeCap( int cap ) async =>
+      { "cap": cap + 1, "maximum": 20 };
+}
+
+// ⚠️ NO pumpAndSettle IN THIS FILE, AND THAT IS NOT A STYLE CHOICE. The screen
+// starts a 60-second `Timer.periodic` the moment the route opens, so
+// `pumpAndSettle` never settles — it waits for a quiescent frame that a live
+// poller will not produce and fails with "a Timer is still pending". Every
+// wait here is an explicit `pump( duration )`.
+void main() {
+  late FleetComposite live;
+
+  setUpAll( () {
+    final f = File( "test/fixtures/fleet_status/fleet_state_live_2026.09.19.json" );
+    live = FleetComposite.fromJson( jsonDecode( f.readAsStringSync() ) );
+  } );
+
+  Future<void> pumpApp( WidgetTester tester, _CountingRepo repo ) async {
+    tester.view.physicalSize     = const Size( 360, 800 );
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown( tester.view.resetPhysicalSize );
+    addTearDown( tester.view.resetDevicePixelRatio );
+
+    await tester.pumpWidget( MaterialApp(
+      home: Builder(
+        builder: ( context ) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              child: const Text( "open" ),
+              onPressed: () => Navigator.of( context ).push( MaterialPageRoute(
+                builder: ( _ ) => FleetStatusScreen(
+                  blocFactory: ( _ ) => FleetStatusBloc( repo ),
+                ),
+              ) ),
+            ),
+          ),
+        ),
+      ),
+    ) );
+  }
+
+  group( "🔴 route-scoping IS the zero-request guard", () {
+    testWidgets( "a destination never opened issues zero requests", ( tester ) async {
+      final repo = _CountingRepo( live );
+      await pumpApp( tester, repo );
+      await tester.pump( const Duration( milliseconds: 100 ) );
+
+      // The bloc does not exist yet, so it cannot poll. This is the property an
+      // app-root BlocProvider would NOT have, and the reason this route departs
+      // from the app's convention.
+      expect( repo.stateCalls, 0 );
+    } );
+
+    testWidgets( "opening it polls once; leaving it stops", ( tester ) async {
+      final repo = _CountingRepo( live );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await tester.pump( const Duration( milliseconds: 300 ) );
+      expect( repo.stateCalls, 1, reason: "visible → refresh once, immediately" );
+
+      // Pop the route. Disposal must cancel the timer, so no further request
+      // can arrive however long we wait.
+      final before = repo.stateCalls;
+      Navigator.of( tester.element( find.byType( FleetStatusScreen ) ) ).pop();
+      await tester.pump( const Duration( milliseconds: 300 ) );
+      await tester.pump( const Duration( seconds: 2 ) );
+
+      expect( repo.stateCalls, before, reason: "a popped route must not poll" );
+    } );
+  } );
+
+  group( "the screen's own states", () {
+    testWidgets( "a transport failure is NOT the unreachable-arbiter screen", ( tester ) async {
+      // Two different facts: this branch means the PHONE could not reach :7999.
+      // The envelope means :7999 is fine and :8001 is not.
+      final repo = _CountingRepo( live )
+        ..stateThrows = const FleetApiException( "Connection refused" );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await tester.pump( const Duration( milliseconds: 300 ) );
+
+      expect( find.text( "Could not reach the server" ), findsOneWidget );
+      expect( find.textContaining( "Connection refused" ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.fleetStatusUnreachable ) ), findsNothing );
+      expect( find.text( "Retry" ), findsOneWidget );
+    } );
+
+    testWidgets( "Retry re-issues the request", ( tester ) async {
+      final repo = _CountingRepo( live )
+        ..stateThrows = const FleetApiException( "Connection refused" );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await tester.pump( const Duration( milliseconds: 300 ) );
+      final afterOpen = repo.stateCalls;
+
+      await tester.tap( find.text( "Retry" ) );
+      await tester.pump( const Duration( milliseconds: 300 ) );
+
+      expect( repo.stateCalls, greaterThan( afterOpen ) );
+    } );
+
+    testWidgets( "a successful open renders the pane and its rows", ( tester ) async {
+      final repo = _CountingRepo( live );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await tester.pump( const Duration( milliseconds: 300 ) );
+
+      expect( find.text( "Fleet Status" ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.fleetStatusList ) ), findsOneWidget );
+      // The dial is present because the screen supplies onSetCap.
+      expect( find.byKey( const Key( TestKeys.fleetStatusCapDial ) ), findsOneWidget );
+    } );
+
+    testWidgets( "the unreachable ENVELOPE gets the pane's screen, not the transport one", ( tester ) async {
+      final repo = _CountingRepo( FleetComposite.fromJson( const {
+        "status": "unreachable", "fleet_arbiter": null,
+      } ) );
+      await pumpApp( tester, repo );
+
+      await tester.tap( find.text( "open" ) );
+      await tester.pump( const Duration( milliseconds: 300 ) );
+
+      expect( find.byKey( const Key( TestKeys.fleetStatusUnreachable ) ), findsOneWidget );
+      expect( find.text( "Could not reach the server" ), findsNothing );
+    } );
+  } );
+}
