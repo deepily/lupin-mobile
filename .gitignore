@@ -58,7 +58,13 @@ pubspec.lock
 venv/
 
 # Local Flutter installation
-flutter/
+#
+# ⚠️ `/flutter`, NOT `flutter/` — the trailing slash matches a DIRECTORY ONLY, and in a
+# provisioned worktree this entry is a SYMLINK to the main checkout's SDK
+# (src/scripts/link-worktree-venv.sh). Measured 2026-09-19: under `flutter/` the symlink
+# showed as `?? flutter` in every provisioned worktree — untracked, not ignored, and one
+# `git add -A` away from committing a machine-specific absolute path into the repo.
+/flutter
 .flutter/
 
 # Auto-generated Flutter env file (machine-specific paths)
