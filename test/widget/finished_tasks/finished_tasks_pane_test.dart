@@ -60,6 +60,23 @@ Widget _host( _FakeRepo repo ) {
 }
 
 void main() {
+  /// 🔴 EVERY TEST IN THIS FILE RENDERS AT 360x800, NOT THE 800x600 DEFAULT.
+  ///
+  /// Crew standard, Tiffany 2026-09-19, and this pane is the one that earned the
+  /// argument for it: the cascade's §7.2 finding is that four columns plus a control
+  /// leave about 90 dp for the title at 360 dp. A layout test at the harness default
+  /// is 800 dp wide — wider than any phone this ships to — so it proves the layout
+  /// works on a device nobody has, and a real overflow arrives green.
+  setUp( () {} );
+
+  Future<void> pumpPhone( WidgetTester tester, Widget app ) async {
+    tester.view.physicalSize     = const Size( 360, 800 );
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown( tester.view.reset );
+    await tester.pumpWidget( app );
+    await tester.pumpAndSettle();
+  }
+
   group( "the four cells", () {
     testWidgets( "renders When, Title, Who and Why for a row", ( tester ) async {
       final repo = _FakeRepo( byStatus: {
@@ -67,8 +84,7 @@ void main() {
         "dropped"  : const [],
         "wont_fix" : const [],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.byKey( const Key( "${TestKeys.finishedRowWhenPrefix}1" ) ),  findsOneWidget );
       expect( find.byKey( const Key( "${TestKeys.finishedRowTitlePrefix}1" ) ), findsOneWidget );
@@ -81,8 +97,7 @@ void main() {
       final repo = _FakeRepo( byStatus: {
         "done": [ _ev( 1, "done", actor: "mr radio 8353ea70" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
       expect( find.text( "mr radio" ), findsOneWidget );
     } );
 
@@ -90,8 +105,7 @@ void main() {
       final repo = _FakeRepo( byStatus: {
         "done": [ _ev( 1, "done", reason: null ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
       final why = tester.widget<Text>(
         find.byKey( const Key( "${TestKeys.finishedRowWhyPrefix}1" ) ),
       );
@@ -104,8 +118,7 @@ void main() {
       final repo = _FakeRepo( byStatus: {
         "done": [ _ev( 1, "done" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       final glyph = find.byKey( const Key( "${TestKeys.finishedRowGlyphPrefix}1" ) );
       final when  = find.byKey( const Key( "${TestKeys.finishedRowWhenPrefix}1" ) );
@@ -124,8 +137,7 @@ void main() {
       final repo   = _FakeRepo( byStatus: {
         "done": [ _ev( 1, "done", actor: "krishna 420f5ec9" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       // The row announces its status as a WORD…
       // The row announces its status as a WORD. Not anchored at the end: the row's
@@ -146,8 +158,7 @@ void main() {
         "done"     : [ _ev( 1, "done" ) ],
         "wont_fix" : [ _ev( 2, "wont_fix" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       Rect whenBoxOf( int id ) =>
           tester.getRect( find.byKey( Key( "${TestKeys.finishedRowWhenPrefix}$id" ) ) );
@@ -169,8 +180,7 @@ void main() {
         "dropped"  : [ _ev( 2, "dropped" ) ],
         "wont_fix" : [ _ev( 3, "wont_fix" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.byKey( const Key( "${TestKeys.finishedRowTitlePrefix}1" ) ), findsOneWidget );
       expect( find.byKey( const Key( "${TestKeys.finishedRowTitlePrefix}2" ) ), findsNothing );
@@ -185,8 +195,7 @@ void main() {
         "wont_fix" : [ _ev( 2, "wont_fix" ), _ev( 3, "wont_fix" ) ],
         "dropped"  : const [],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.textContaining( "Won't-fix (2)" ), findsOneWidget );
     } );
@@ -197,8 +206,7 @@ void main() {
         byStatus : { "done": [ _ev( 1, "done" ) ], "dropped": const [] },
         failures : { "wont_fix": "boom" },
       );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.textContaining( "Won't-fix ($kFinishedUnmeasured)" ), findsOneWidget );
       expect( find.byKey( const Key( TestKeys.finishedPartialBanner ) ), findsOneWidget );
@@ -209,8 +217,7 @@ void main() {
         "done"     : [ _ev( 1, "done" ) ],
         "wont_fix" : [ _ev( 2, "wont_fix" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
       final callsAfterLoad = repo.calls;
 
       await tester.tap( find.byKey( const Key( "${TestKeys.finishedStatusPillPrefix}wont_fix" ) ) );
@@ -223,8 +230,7 @@ void main() {
   group( "window and refresh", () {
     testWidgets( "the window control is carried, defaulting to 1 day", ( tester ) async {
       final repo = _FakeRepo( byStatus: { "done": [ _ev( 1, "done" ) ] } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.byKey( const Key( TestKeys.finishedWindowSlider ) ), findsOneWidget );
       expect( find.text( "1 day" ), findsWidgets );
@@ -232,8 +238,7 @@ void main() {
 
     testWidgets( "a refresh BUTTON exists, because pull-to-refresh is a gesture a screen reader cannot perform", ( tester ) async {
       final repo = _FakeRepo( byStatus: { "done": [ _ev( 1, "done" ) ] } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
       final callsAfterLoad = repo.calls;
 
       await tester.tap( find.byKey( const Key( TestKeys.finishedRefreshButton ) ) );
@@ -242,10 +247,33 @@ void main() {
       expect( repo.calls, callsAfterLoad + 1 );
     } );
 
+    testWidgets( "a 128-character fleet title does not overflow at 360 dp", ( tester ) async {
+      // The §7.2 finding, exercised rather than argued. Real fleet titles run past a
+      // hundred characters and share a "[LUPIN-MOBILE] Phase N:" prefix; at the
+      // harness's 800 dp default this passes whatever the layout does.
+      final repo = _FakeRepo( byStatus: {
+        "done": [ _ev(
+          1, "done",
+          title : "[LUPIN-MOBILE] Phase 2: Finished Tasks — own four-column table, "
+                  "three terminal statuses, negative row assertion",
+          reason: "landed on branch seat-rachel-finished-tasks with the whole pyramid green",
+        ) ],
+      } );
+      await pumpPhone( tester, _host( repo ) );
+
+      expect( tester.takeException(), isNull, reason: "a long title overflowed at 360 dp" );
+
+      // And the title still gets the room: more than half the width, not the ~90 dp
+      // that four-across would have left it.
+      final titleBox = tester.getRect(
+        find.byKey( const Key( "${TestKeys.finishedRowTitlePrefix}1" ) ),
+      );
+      expect( titleBox.width, greaterThan( 180 ) );
+    } );
+
     testWidgets( "an empty window renders an empty state, not a blank screen", ( tester ) async {
       final repo = _FakeRepo( byStatus: { "done": const [], "dropped": const [], "wont_fix": const [] } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.byKey( const Key( TestKeys.finishedEmptyState ) ), findsOneWidget );
     } );
@@ -286,8 +314,7 @@ void main() {
         "dropped"  : [ _ev( 3, "dropped" ) ],
         "wont_fix" : [ _ev( 4, "wont_fix" ) ],
       } );
-      await tester.pumpWidget( _host( repo ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, _host( repo ) );
 
       expect( find.byWidgetPredicate( isSharedTaskRow ), findsNothing );
 
@@ -300,8 +327,7 @@ void main() {
       // Without this, a rename in Phase 0 (`TaskRowWidget`, say) would make the
       // guard match nothing and pass forever, and a decorative guard is worse than
       // no guard because it is believed.
-      await tester.pumpWidget( const MaterialApp( home: TaskRow() ) );
-      await tester.pumpAndSettle();
+      await pumpPhone( tester, const MaterialApp( home: TaskRow() ) );
 
       expect( find.byWidgetPredicate( isSharedTaskRow ), findsOneWidget );
     } );
