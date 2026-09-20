@@ -22,6 +22,34 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-20 (the build night: five phases merged)
+
+### Decisions Log — 2026-09-20 (session `cc9c1f1a`, Tiffany managing)
+
+- **Source beats spec text wherever they disagree.** Applied twice against my own task items, both caught before a line was written: `FINISHED_DEFAULT_SHOWN = ["done"]` (dropped is dark too), and priority-before-status with terminal rows **filtered, not sorted** — the latter is Rick's own 2026-09-09 ruling, which names **both clients**, so it lands on mobile by his instruction and not by default.
+- **The grouping key stays whole `created_by`**, unsplit, compared as an opaque string. Rachel's capture of 344 live rows contains **two-word personas** and **actors with no session id**; any splitter decides silently on every row and fails by quietly fragmenting or merging groups.
+- **Eight facts survive at 360 dp; the single-row packing does not.** Fleet Status renders three bands. The requirement was legibility, not a row shape.
+- **Detail opens a route rather than revealing in place** — opening a route **moves focus**, so a screen-reader user is carried to the detail and hears it.
+- **No client-side clamp on the fleet-size cap.** The ceiling is read at call time, so a constant in the client would drift from what is enforced, silently.
+- **Merge the shared base freely; never fix a defect found in it inside your own branch.** Report it and it lands once, for all four panes. Issued after a near-miss, and it closed a full loop within five minutes when Rachel found `_provenance()` missing `actor`.
+- **Analyzer exclusions are justified by a measured number, not a category name.** "Generated code" ends an argument; "hides 7744, none ours" invites one. `build/**` is kept and labelled honestly as a claim about the future rather than a measured saving.
+
+### ⏳ Owed — 2026-09-20, all four on Rick and nothing else
+
+1. **Push.** Eight merges sit on this machine only. Never authorised in this session; not done.
+2. **Admit `384591dd` Phase 5 Broadcast** — request pending on his board, pledging `67c7a2e1` (the roster-sentinel row, by its own measurement the least valuable row I owned). Chloé is assigned and was holding correctly: *"no answer means no."*
+3. **The phone confirm on batch won't-fix** — unruled all night; built to match web (no confirm) in the meantime.
+4. **Untracking `android/local.properties`** — tracked, machine-specific, rewritten by flutter on every build, and its committed value still points at the retired subtree path. A repo decision, not a provisioning one.
+
+### Carried, not minted as rows (the ticket gate was not worth spending on them)
+
+- A text surface for **per-row won't-fix** on the shared row — in `734462c8`'s close reason.
+- **`TaskListPage` moves to `fleet/data/`** — same place.
+- **Appendix A item 7**, cross-cutting ordered cell-key parity across Task List and Holding Area only — specified in full on P0 `4b16174d`. Could not even be filed: one admit request at a time is Rick's rule, and Phase 5's is pending.
+- **Items 8–11 routed to Mr. Radio** as a *filing* decision, not a row transfer — he was right to insist on the distinction, and there were no row ids because the gate had refused them.
+
+---
+
 ## 🆕 Open from 2026-09-19 (board-driving session, no code)
 
 ### Decisions Log — 2026-09-19 (session `cc9c1f1a`)

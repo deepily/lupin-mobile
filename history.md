@@ -13,6 +13,38 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.20 | Session `cc9c1f1a` (Tiffany 💍) — Manager on duty: a three-seat cascade review, then five fleet-pane phases built, reviewed and merged in one evening
+
+**RESUME HERE**: **eight merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work`, union verified green, NOTHING PUSHED.** Rick's word is still owed on a push, on admitting Phase 5 (`384591dd`, request pending, pledging `67c7a2e1`), on the phone confirm for batch won't-fix, and on untracking `android/local.properties`. Three asks timed out; P0 `4b16174d` is `blocked` on `user:rick` with a chase at 02:15Z.
+
+**THE MERGE CHAIN**, every one reviewed against the tree rather than the worker's report:
+
+| sha | what |
+|---|---|
+| `6781674` | seat-worktree provisioning scripts (Sam, reviewed by Rachel) |
+| `a9a7f49` | Phase 2 Finished Tasks (Rachel) |
+| `3265c6b` | Phase 0 shared plumbing + Phase 3 Task List (Sam) |
+| `d9b15a3` | Phase 1 Fleet Status (Chloé) |
+| `06884c9` | Phase 4 Holding Area + guard fix (Rachel) |
+| `20c0c17` | replay-ask verification (Sam) |
+| `2c8e131` | measurement integrity (Sam) |
+| `05fbfd8` | analyzer exclusions narrowed to what was authorised (Sam) |
+
+**Verified**: 1578 passed / 1 skipped in the main checkout, that skip genuinely environmental. Analyze **978 issues — identical to the pre-phase baseline `3f807f0`**, so five phase merges introduced zero new issues and zero errors in any new pane. `test_keys.dart` clean by resolve check: 219 keys, 216 refs, no dangling, no duplicates.
+
+1. **The crew corrected me five times and was right every time.** Rachel: my item text said the default filter pills were done+dropped; the source says `FINISHED_DEFAULT_SHOWN = ["done"]`. Sam: my sort wording predated Rick's own 2026-09-09 ruling, which names **both clients** — priority before status, and terminal rows **filtered**, not sorted to the bottom. Sam again: I told him to move verb logic into a directory where his own implementation already lived. Chloé: I routed a fleet-cap write through a task repository that cannot even produce the 202 condition I was guarding — `awaiting_human_approval` has **zero hits** in the arbiter app. Sam a third time: a count overturned my exclusion ruling. **Each was caught before a line was written**, because each seat read the source before building to the spec.
+2. **Every ruling landed as an amendment on the row**, so the correct build cannot later be "fixed" back to match my wrong sentence — the same failure shape Rachel's negative assertion defends against.
+3. **Five defects Chloé found in her own code, all by test, none findable by reading**: `isOffline` inverted in both directions (the liveness verdict is a **free-form string**, not an enum — live seats reported "LIVE", "quiet 3m", "stale 21m"); a 360 dp overflow; cancellation read as "arbiter down"; a failed cap read blanking the table; and **a leaked poll timer**, which ships as a battery bug nobody can attribute.
+4. **Her arm C is the night's best single measurement.** Breaking the dial's wiring **killed 4 tests while 22 stayed green** — every pane and bloc test among them. Three files *looked* like they covered the dial; each proved one half while handing in the other. She watched the ceiling too: a near-total kill would have been a syntax error wearing a finding's clothes.
+5. **My own miss, recorded**: the Phase 2 merge landed a **red** test I did not catch — a guard scanning source for the substring `"TaskRow("`, which also matches `"FinishedTaskRow("`, the pane's own row. It accused the pane of exactly what it was built not to do and sat red for half an hour until Rachel picked up her branch. **I reviewed the guard I was shown and never looked for one I had not been told about.** Rachel's reframe is better than my self-reproach and names an installable control: *the thing that would have caught it is running the suite on the merge result, not on the branch.*
+6. **Sam hit both signs of one defect family in one night.** A substring guard and an authored fixture manufactured **false alarm** — the fixture produced a false defect report that reached me and got a row amended twice. A worktree measuring the wrong specimen manufactured **false comfort**: a bare `flutter analyze` walked the symlinked 2.3 GB SDK for 7801 phantom errors, and two wire-contract tests **silently skipped** in every worktree because the cosa probe was CWD-relative, so a seat saw green with less coverage than the main tree. His line: **a worktree that reports different results from the main tree is a measuring instrument that changes the thing it measures.**
+7. **Asking for a measurement beat both positions.** I ruled Sam's unauthorised generated-file exclusions should go; he defended them. The count said **they match zero files** — this repo has no `.g.dart` or `.freezed.dart`. His reason is better than mine was: **an exclusion that hides nothing is not free.** What remains is labelled with its measured cost, including `build/**` kept and honestly marked as *a claim about the future rather than a measured saving*.
+8. **Gates I refused to game**: the fleet ticket gate offers a P0 exemption and the create gate refuses live status below P0. I declined both rather than relabel honest P1/P2 rows, routing content to `task_amend` and the committed doc instead. Minting reached 5 of 10; items 6–7 are specified in full on P0 `4b16174d`, items 8–11 routed to Mr. Radio as a **filing** decision after I corrected my own implication that rows were being transferred.
+
+**Crew standards earned tonight**, now carried in every memento: tests at **360×800**, never the 800×600 default · fixtures **captured from the real producer**, never authored · **mutation-prove** any test written against a known defect · drive a real tap through the real widget tree and assert the request that went out · when you cut a delta, **look for a second count someone else produced independently**.
+
+---
+
 ## 2026.09.19 | Session `cc9c1f1a` (Tiffany 💍) — Board cleared: three rows closed on receipts, the P0 split before it could bury its server half, and a live token found in a paste
 
 **RESUME HERE**: **no code was written this session** — it was a board-driving session, and the working tree carries only one new doc. Three rows closed with receipts, four filed. Two rows wait on Rick's admit (`a7de7d69` the token leak, `67c7a2e1` the sentinel guard); an `ask_multiple_choice` for both was live at the time of writing, defaulting to "not tonight" so a timeout cannot authorize work.
