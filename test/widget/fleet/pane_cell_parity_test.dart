@@ -185,7 +185,15 @@ void main() {
     // bloc is still alive — and so the poll timer cannot outlive the test.
     await tester.pumpWidget( const SizedBox.shrink() );
     await tester.pump();
-    await bloc.close();
+
+    // 🔴 `runAsync` IS LOAD-BEARING HERE, AND NOT FOR THE REASON THE REST OF THIS FILE
+    // USES IT. `await bloc.close()` inside `testWidgets` NEVER RETURNS for any bloc
+    // carrying at least one `on<Event>` handler: `close()` waits for the handler
+    // subscriptions to cancel, that cancellation only completes on the REAL event loop,
+    // and the fake-async zone a `testWidgets` body runs in never turns it while the body
+    // is parked on an await. `runAsync` steps out to the real loop, so the future
+    // completes. See the hang note above — this line is what was hanging.
+    await tester.runAsync( () => bloc.close() );
 
     return keys;
   }
