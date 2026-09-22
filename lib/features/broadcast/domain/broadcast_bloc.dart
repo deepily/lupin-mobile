@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
+
+import '../../../services/lifecycle/app_lifecycle_service.dart';
 
 import '../../../services/asr/voice_capture_session.dart';
 import '../data/broadcast_models.dart';
@@ -210,6 +213,12 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
   final BroadcastRepository _repo;
   final VoiceCaptureSession? _voice;
 
+  StreamSubscription<AppLifecycleState>? _lifecycleSub;
+  StreamSubscription<bool>?              _socketSub;
+
+  /// Test seams. Default to the app-wide singletons, which is what production uses.
+  Stream<AppLifecycleState> get lifecycleStream => AppLifecycleService().lifecycleStream;
+
   BroadcastBloc( this._repo, { VoiceCaptureSession? voice } )
       : _voice = voice,
         super( const BroadcastState() ) {
@@ -220,6 +229,51 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     on<BroadcastAckReceived>( _onAck );
     on<BroadcastListeningInterrupted>( _onInterrupted );
     on<BroadcastHistoryRequested>( _onHistory );
+  }
+
+  /// 🔴 THE ACCEPTANCE CLAUSE IS DEAD CODE UNTIL SOMETHING FIRES IT.
+  ///
+  /// `AckConfidence.interrupted` is the whole point of this pane, and nothing in the
+  /// pane itself can know the listening window broke. Two signals can:
+  ///
+  ///   · the app leaving the foreground — the OS suspends the socket, by design, and on
+  ///     a phone this is the ordinary case rather than an edge one;
+  ///   · the socket dropping while still foregrounded — a network blip.
+  ///
+  /// ⚠️ `inactive` IS DELIBERATELY NOT TREATED AS AN INTERRUPTION, and this is the one
+  /// judgement call in here. Flutter delivers `inactive` for transient interruptions — a
+  /// notification-shade pull, an incoming-call banner — which do NOT suspend the socket.
+  /// Treating it as a break would make the pane cry wolf on every shade pull, and a guard
+  /// that fires constantly is one people learn to ignore, which converts it into no guard
+  /// at all. `paused`, `hidden` and `detached` are the states where delivery actually
+  /// stops.
+  ///
+  /// ⇒ If that judgement is ever shown wrong, the failure is a FALSE NEGATIVE — a tally
+  /// presented as exact when it is not — so it is worth re-checking against a real device
+  /// rather than trusting this comment. Nobody has measured it on hardware.
+  ///
+  /// Idempotent: calling it twice replaces the subscriptions rather than doubling them.
+  void startListeningWatch( { Stream<bool>? socketStream } ) {
+    _lifecycleSub?.cancel();
+    _lifecycleSub = lifecycleStream.listen( ( state ) {
+      if ( state != AppLifecycleState.resumed && state != AppLifecycleState.inactive ) {
+        add( const BroadcastListeningInterrupted() );
+      }
+    } );
+
+    if ( socketStream != null ) {
+      _socketSub?.cancel();
+      _socketSub = socketStream.listen( ( connected ) {
+        if ( !connected ) add( const BroadcastListeningInterrupted() );
+      } );
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _lifecycleSub?.cancel();
+    _socketSub?.cancel();
+    return super.close();
   }
 
   /// 🔴 THE ROSTER COMES FIRST AND THE HISTORY FOLLOWS IT — SEQUENCED, NOT CONCURRENT.

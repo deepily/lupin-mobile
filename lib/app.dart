@@ -23,6 +23,8 @@ import 'features/notifications/domain/notification_event.dart';
 import 'features/queue/domain/queue_bloc.dart';
 import 'features/quick_ask/domain/quick_ask_bloc.dart';
 import 'features/quick_ask/domain/quick_ask_event.dart';
+import 'features/broadcast/data/broadcast_models.dart';
+import 'features/broadcast/domain/broadcast_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
 import 'services/auth/server_context_service.dart';
 import 'services/push/fcm_bootstrap.dart';
@@ -116,6 +118,22 @@ class WsBlocDispatcher {
         // where a reconcile has nothing to look up (AC-S1.4b).
         if ( notif != null ) {
           ServiceLocator.get<QuickAskBloc>().add( QuickAskNotificationReceived( notif ) );
+        }
+        // 🔴 BROADCAST ACKS RIDE THIS SAME FRAME, AND EVERYTHING THAT IDENTIFIES ONE IS
+        // IN `payload` — `message` is an EMPTY STRING by design
+        // (`commons_ack_watcher.py`, `_push_ack_event`). A reader following this app's
+        // usual habit of looking in `message` sees blank frames, folds nothing, and the
+        // pane renders what looks like a fleet that ignored the operator.
+        //
+        // `BroadcastAck.fromNotification` returns null for anything that is not an ack,
+        // so this arm costs one type comparison on every other notification and cannot
+        // throw on a malformed frame — a socket frame is untrusted input arriving at
+        // arbitrary times, and this stream is shared with every other pane.
+        if ( notif != null ) {
+          final ack = BroadcastAck.fromNotification( notif.raw );
+          if ( ack != null ) {
+            ServiceLocator.get<BroadcastBloc>().add( BroadcastAckReceived( ack ) );
+          }
         }
         break;
       case AppConstants.eventNotificationExpired:
@@ -272,6 +290,22 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         // server's `push()`, before the ask response is even serialized.
         BlocProvider<QuickAskBloc>(
           create: ( _ ) => ServiceLocator.get<QuickAskBloc>(),
+        ),
+        // 🔴 ALSO LOAD-BEARING, and for a cousin of the reason above. Broadcast acks
+        // arrive as `commons_broadcast_ack` frames on the notification stream, and the
+        // dispatch below can only reach a bloc that exists. Constructing it here means
+        // the ack tally also SURVIVES navigating away from the pane — losing ack
+        // information on a screen change is the same defect as losing it on a
+        // background, which is what that pane was built to prevent.
+        BlocProvider<BroadcastBloc>(
+          // 🔴 `startListeningWatch` IS THE HALF THAT MAKES THE GUARD REAL. Without it
+          // `AckConfidence.interrupted` is never reached, the tally always claims to be
+          // exact, and every test of the clause still passes — a control that cannot
+          // fire, which is the shape this pane has been bitten by twice already.
+          create: ( _ ) => ServiceLocator.get<BroadcastBloc>()
+            ..startListeningWatch(
+              socketStream: ServiceLocator.get<WebSocketService>().connectionStream,
+            ),
         ),
       ],
       child: WsLifecycleListener(

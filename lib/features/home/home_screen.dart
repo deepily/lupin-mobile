@@ -13,6 +13,15 @@ import '../claude_code/domain/claude_code_bloc.dart';
 import '../claude_code/presentation/session_list_screen.dart';
 import '../decision_proxy/presentation/trust_dashboard_screen.dart';
 import '../fleet_status/presentation/fleet_status_screen.dart';
+import '../fleet/presentation/pane_host_screen.dart';
+import '../task_list/domain/task_list_bloc.dart';
+import '../task_list/presentation/task_list_pane.dart';
+import '../holding_area/domain/holding_area_bloc.dart';
+import '../holding_area/presentation/holding_area_pane.dart';
+import '../finished_tasks/domain/finished_tasks_bloc.dart';
+import '../finished_tasks/presentation/finished_tasks_screen.dart';
+import '../broadcast/domain/broadcast_bloc.dart';
+import '../broadcast/presentation/broadcast_pane.dart';
 import '../notifications/presentation/inbox_screen.dart';
 import '../queue/domain/queue_bloc.dart';
 import '../queue/presentation/queue_dashboard_screen.dart';
@@ -147,6 +156,76 @@ class LupinHomeScreen extends StatelessWidget {
           onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
             builder: ( _ ) => FleetStatusScreen(
               blocFactory: ( _ ) => ServiceLocator.buildFleetStatusBloc(),
+            ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        // 🔴 THE FOUR CARDS BELOW ARE THE DOOR THAT WAS NEVER BUILT. Phases 2-5 each
+        // shipped a pane that was tested, merged and green — and referenced only by its
+        // own file and its tests. Measured 2026-09-22; wired on Rick's go-ahead.
+        //
+        // ⚠️ Three of them build their bloc INSIDE the route, like Fleet Status above,
+        // because they poll. Broadcast does NOT: its bloc is app-root, because acks
+        // arrive on a socket frame only `app.dart` can route and its tally has to
+        // survive leaving the pane. That asymmetry is deliberate and is explained at
+        // both registration sites.
+        _NavCard(
+          key        : const Key( TestKeys.homeTaskListCard ),
+          icon       : Icons.checklist_outlined,
+          title      : 'Task List',
+          subtitle   : 'The live board, grouped and orderable',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => PaneHostScreen<TaskListBloc>(
+              title       : 'Task List',
+              pane        : const TaskListPane(),
+              blocFactory : ( _ ) => ServiceLocator.buildTaskListBloc(),
+            ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          key        : const Key( TestKeys.homeHoldingAreaCard ),
+          icon       : Icons.inbox_outlined,
+          title      : 'Holding Area',
+          subtitle   : 'Work awaiting an approver, grouped by filer',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => PaneHostScreen<HoldingAreaBloc>(
+              title       : 'Holding Area',
+              pane        : const HoldingAreaPane(),
+              blocFactory : ( _ ) => ServiceLocator.buildHoldingAreaBloc(),
+            ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          key        : const Key( TestKeys.homeFinishedTasksCard ),
+          icon       : Icons.task_alt_outlined,
+          title      : 'Finished Tasks',
+          subtitle   : 'What closed, and how it closed',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => BlocProvider<FinishedTasksBloc>(
+              create : ( _ ) => ServiceLocator.buildFinishedTasksBloc(),
+              // Its own Scaffold already — Phase 2 built a SCREEN, not a pane, which is
+              // why it needs no PaneHostScreen and why it was easy to miscount as one.
+              child  : const FinishedTasksScreen(),
+            ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          key        : const Key( TestKeys.homeBroadcastCard ),
+          icon       : Icons.campaign_outlined,
+          title      : 'Broadcast',
+          subtitle   : 'Say something to the whole fleet at once',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            // `.value`, NOT `create:` — the bloc is app-root and must NOT be disposed
+            // when this route pops, or the ack tally dies with the screen.
+            builder: ( _ ) => Scaffold(
+              appBar : AppBar( title: const Text( 'Broadcast' ) ),
+              body   : BlocProvider<BroadcastBloc>.value(
+                value : ServiceLocator.get<BroadcastBloc>(),
+                child : const BroadcastPane(),
+              ),
             ),
           ) ),
         ),

@@ -342,4 +342,15 @@ class TestKeys {
   /// would invite the next hand to render one.
   static const broadcastAckSummary      = 'broadcast.ackSummary';
   static const broadcastAckRowPrefix    = 'broadcast.ack.';   // + session id
+
+  // ── Home-screen cards for the fleet panes ───────────────────────────────
+  //
+  // 🔴 THESE KEYS EXIST SO "IS IT REACHABLE?" IS A TESTABLE QUESTION. Four panes
+  // shipped green and unreachable because nothing anywhere asserted that a route to
+  // them existed. A passing pane test says the pane works; it says nothing about
+  // whether anyone can get to it.
+  static const homeTaskListCard      = 'home.taskList';
+  static const homeHoldingAreaCard   = 'home.holdingArea';
+  static const homeFinishedTasksCard = 'home.finishedTasks';
+  static const homeBroadcastCard     = 'home.broadcast';
 }

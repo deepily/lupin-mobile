@@ -50,7 +50,25 @@ import '../../features/agentic/data/agentic_repository.dart';
 // [buildFleetStatusBloc]).
 import '../../features/fleet_status/data/fleet_repository.dart';
 import '../../features/fleet_status/domain/fleet_status_bloc.dart';
+
+// Broadcast (fleet-panes plan Phase 5, row 384591dd) — repository AND bloc are both
+// app-root singletons. The bloc's scope is Rick's ruling of 2026-09-22 and is explained
+// at its registration; it is the opposite of Fleet Status above, for a stated reason.
+import '../../features/broadcast/data/broadcast_repository.dart';
+import '../../features/broadcast/domain/broadcast_bloc.dart';
+
+// The remaining fleet panes (plan Phases 2-4) — repositories are singletons, blocs
+// are route-scoped factories. See buildTaskListBloc and its siblings.
+import '../../features/fleet/data/task_write_repository.dart';
+import '../../features/task_list/data/task_list_repository.dart';
+import '../../features/task_list/domain/task_list_bloc.dart';
+import '../../features/holding_area/data/holding_area_repository.dart';
+import '../../features/holding_area/domain/holding_area_bloc.dart';
+import '../../features/finished_tasks/data/finished_tasks_repository.dart';
+import '../../features/finished_tasks/domain/finished_tasks_bloc.dart';
+
 import '../../services/artifacts/io_file_service.dart';
+import '../../services/asr/voice_capture_session.dart';
 
 // Tier 4 BLoCs
 import '../../features/agentic/domain/agentic_submission_bloc.dart';
@@ -177,6 +195,32 @@ class ServiceLocator {
   /// is PRODUCTION's construction path — the home screen's route calls it.
   static FleetStatusBloc buildFleetStatusBloc() =>
       FleetStatusBloc( _getIt<FleetRepository>() );
+
+  /// PRODUCTION construction of the three remaining pane blocs — a NEW bloc every
+  /// call, for the same reason [buildFleetStatusBloc] is.
+  ///
+  /// 🔴 ROUTE-SCOPED BECAUSE THEY POLL. `TaskListBloc` and `HoldingAreaBloc` carry
+  /// `PanePollingMixin`; an app-root instance keeps its timer running against a
+  /// destination nobody is looking at, and five panes built that way means five
+  /// timers at once. Route-scoping IS the zero-request guard.
+  ///
+  /// ⚠️ NOTE THE CONTRAST WITH [BroadcastBloc], which IS app-root. That is not an
+  /// inconsistency: Broadcast has no poller, and its acks arrive on a socket frame
+  /// that only `app.dart` can route — so it must exist for `app.dart` to see, and
+  /// its tally must survive leaving the pane. The rule is "scope a pane bloc to its
+  /// route unless something outside the route must reach it", not "always route-scope".
+  static TaskListBloc buildTaskListBloc() => TaskListBloc(
+    _getIt<TaskListRepository>(),
+    _getIt<TaskWriteRepository>(),
+  );
+
+  static HoldingAreaBloc buildHoldingAreaBloc() => HoldingAreaBloc(
+    _getIt<HoldingAreaRepository>(),
+    _getIt<TaskWriteRepository>(),
+  );
+
+  static FinishedTasksBloc buildFinishedTasksBloc() =>
+      FinishedTasksBloc( _getIt<FinishedTasksRepository>() );
 
   /// Initialize core dependencies
   static Future<void> _initializeCore() async {
@@ -340,6 +384,34 @@ class ServiceLocator {
       FleetRepository(_getIt<Dio>()),
     );
 
+    // Broadcast — the recipient roster, the fan-out door, and recent activity.
+    // Stateless over the shared Dio, same as FleetRepository.
+    _getIt.registerSingleton<BroadcastRepository>(
+      BroadcastRepository(_getIt<Dio>()),
+    );
+
+    // The remaining fleet panes (plan Phases 2-4). Repositories are stateless
+    // singletons over the shared Dio; the BLOCS are route-scoped factories below,
+    // because these three poll and an app-root instance would keep polling a
+    // destination nobody is looking at.
+    //
+    // ⚠️ TaskWriteRepository is SHARED BY BOTH TASK PANES ON PURPOSE. Both press the
+    // same seven verbs through the same two doors, and a per-pane copy of the 202
+    // check is the one defect that is completely silent — the pane paints a row
+    // approved that the server only queued.
+    _getIt.registerSingleton<TaskWriteRepository>(
+      TaskWriteRepository(_getIt<Dio>()),
+    );
+    _getIt.registerSingleton<TaskListRepository>(
+      TaskListRepository(_getIt<Dio>()),
+    );
+    _getIt.registerSingleton<HoldingAreaRepository>(
+      HoldingAreaRepository(_getIt<Dio>()),
+    );
+    _getIt.registerSingleton<FinishedTasksRepository>(
+      FinishedTasksRepository(_getIt<Dio>()),
+    );
+
     // Notification audio — preferences backed by SharedPreferences, service
     // wraps flutter_local_notifications + flutter_tts. Channels register
     // lazily on first handleIncoming() via initialize(); app startup also
@@ -443,6 +515,24 @@ class ServiceLocator {
         // answered on `POST /api/notify/response`.
         notifications : _getIt<NotificationRepository>(),
         prefs         : _getIt<QuickAskPreferences>(),
+      ),
+    );
+
+    // 🔴 APP-ROOT, NOT ROUTE-SCOPED — Rick's ruling, 2026-09-22, and the reason is the
+    // ACK TALLY rather than symmetry with the other blocs. Broadcast acks arrive on the
+    // socket and `app.dart` is the only router for those frames, so it can only dispatch
+    // to a bloc it can see. A route-scoped bloc would also be DESTROYED on navigating
+    // away, taking the tally with it — and losing ack information silently is the exact
+    // defect this whole pane was built to prevent.
+    //
+    // ⚠️ The Fleet Status precedent points the other way and does NOT apply here: that
+    // bloc is route-scoped because it polls on a 60-second timer, so an app-root instance
+    // would keep polling whichever pane the operator is actually looking at. This pane has
+    // NO poller by design, and its roster is fetched only when the pane mounts.
+    _getIt.registerLazySingleton<BroadcastBloc>(
+      () => BroadcastBloc(
+        _getIt<BroadcastRepository>(),
+        voice : VoiceCaptureSession( asr: _getIt<AsrService>() ),
       ),
     );
 
