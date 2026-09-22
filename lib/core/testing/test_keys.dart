@@ -316,4 +316,30 @@ class TestKeys {
   static const holdingApproveAllConfirm    = 'holding.approveAll.confirm';
   static const holdingApproveAllConfirmOk  = 'holding.approveAll.confirm.ok';
   static const holdingApproveAllConfirmNo  = 'holding.approveAll.confirm.cancel';
+
+  // ── Broadcast pane (Phase 5) ────────────────────────────────────────────
+  //
+  // 🔴 THE DISABLED REASON HAS ITS OWN KEY, AND THAT IS THE POINT OF THE SET. On the web
+  // the reason Send is dead lives in `btn.title` — a tooltip, which a phone cannot show.
+  // A key means a test can assert the operator could actually READ why nothing happens.
+  static const broadcastView            = 'broadcast.view';
+  static const broadcastBodyField       = 'broadcast.body';
+  static const broadcastMicButton       = 'broadcast.mic';
+  static const broadcastSendButton      = 'broadcast.send';
+  static const broadcastDisabledReason  = 'broadcast.send.disabledReason';
+  static const broadcastRecipientCount  = 'broadcast.recipients';
+  static const broadcastRecipientRefresh = 'broadcast.recipients.refresh';
+  static const broadcastPreview         = 'broadcast.preview';
+  static const broadcastSendConfirm     = 'broadcast.send.confirm';
+  static const broadcastSendConfirmOk   = 'broadcast.send.confirm.ok';
+  static const broadcastSendConfirmNo   = 'broadcast.send.confirm.cancel';
+  static const broadcastNotice          = 'broadcast.notice';
+  static const broadcastMicError        = 'broadcast.mic.error';
+
+  /// 🔴 THE TALLY'S KEY, AND WHY IT IS NOT CALLED `broadcast.ackCount`.
+  /// It is a SENTENCE, not a number, precisely because after the app stops listening
+  /// there is no honest number to show — see [AckConfidence]. A key named for a count
+  /// would invite the next hand to render one.
+  static const broadcastAckSummary      = 'broadcast.ackSummary';
+  static const broadcastAckRowPrefix    = 'broadcast.ack.';   // + session id
 }
