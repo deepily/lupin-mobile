@@ -35,31 +35,42 @@ import '../../unit/_helpers/stub_dio.dart';
 /// Verified present at the time of writing; **not** re-asserted here, because a second
 /// copy of a guard in a file that does not own it is how the two later disagree.
 ///
-/// ## ⚠️ THIS FILE HANGS. READ THIS BEFORE YOU DEBUG IT.
+/// ## It used to hang. It does not any more, and the cause was none of the obvious ones.
 ///
-/// It has never completed a run — killed at 300 s, then again at 150 s. Two things are
-/// known, and the second is a DISPROOF rather than a lead, which is the more useful half.
+/// This file went months without completing a single run — killed at 300 s, then 150 s,
+/// then 240 s. THREE suspects died before the right one, and the two disproofs are worth
+/// more than the fix, because each was plausible enough to cost someone an evening:
 ///
-/// **KNOWN CAUSE, FIXED:** `TaskListPane` renders a `CircularProgressIndicator` while it
-/// loads (`task_list_pane.dart:60`), and `pumpAndSettle` waits for an animation that
-/// never ends. Every `pumpAndSettle` here is now an explicit `pump`. Real, worth keeping,
-/// and NOT sufficient — it still hung afterwards.
+///   1. **`CircularProgressIndicator` vs `pumpAndSettle`** — real, and fixed (every
+///      `pumpAndSettle` here is an explicit `pump`). NOT the cause; it still hung after.
+///   2. **`NetworkConnectivityService`** — disproved: `HoldingAreaPane` calls
+///      `startConnectivityRefresh()` too (`holding_area_pane.dart:28`) and its own test
+///      passes twelve cases in four seconds.
+///   3. **`PanePollingMixin`'s `Timer.periodic`** — the narrowed suspect, and WRONG. It
+///      looked guilty because `HoldingAreaPane` genuinely does not call `startPolling()`,
+///      so the difference between the panes really was the timer — just not the
+///      difference that mattered.
 ///
-/// **DISPROVED, so nobody spends the hour I nearly did:** it is NOT the plugin-backed
-/// `NetworkConnectivityService`. That was my hypothesis and the evidence kills it —
-/// `HoldingAreaPane` calls `startConnectivityRefresh()` too
-/// (`holding_area_pane.dart:28`), and `holding_area_pane_test.dart` pumps that pane and
-/// passes twelve tests in FOUR SECONDS.
+/// ⇒ **THE ACTUAL CAUSE: `await bloc.close()` inside a `testWidgets` body.** Isolated by
+/// elimination, each case its own probe:
 ///
-/// ⇒ **WHAT IS LEFT, by elimination:** the only thing `TaskListPane` does that
-/// `HoldingAreaPane` does not is `startPolling()` and `onPaneVisible()`
-/// (`task_list_pane.dart:41-44`) — `PanePollingMixin`'s `Timer.periodic` plus its
-/// lifecycle observer. A periodic timer on the test's fake clock, combined with
-/// `runAsync` stepping into real time, is the shape to investigate first. That is a
-/// NARROWED SUSPECT, not a finding: nobody has watched it go green, so do not record it
-/// as the cause until someone has.
+/// | probe | result |
+/// |---|---|
+/// | bare `Bloc`, no handlers, no mixin | closes fine |
+/// | **ONE `on<Event>` handler, no mixin** | **HANGS** |
+/// | `TaskListBloc` / `HoldingAreaBloc` | HANGS |
+/// | all of the above in a plain `test()` | close fine |
 ///
-/// ## Mutation proof — RUN IT, do not trust it
+/// `close()` waits for its handler subscriptions to cancel; that completes only on the
+/// REAL event loop; the fake-async zone a `testWidgets` body runs in never turns while
+/// the body is parked on an await. Fix is at [keysFrom] — `runAsync`, with the reasoning
+/// beside it.
+///
+/// 🔴 **THIS IS NOT SPECIFIC TO THIS FILE.** Any widget test in this repo that awaits a
+/// feature bloc's `close()` will hang identically, with no output and no error. If you
+/// arrived here from a hanging test of your own, that is your answer.
+///
+/// ## Mutation proof — it is executable, and it can fail
 ///
 /// The obvious mutation does not work and must not be used: **reordering a cell key
 /// cannot be done "in one pane"**, because both panes render the same `TaskRow` and pass
@@ -67,10 +78,17 @@ import '../../unit/_helpers/stub_dio.dart';
 /// widget, which changes BOTH panes identically and leaves this comparison GREEN — a
 /// mutation that cannot distinguish a working guard from a broken one.
 ///
-/// The mutation that DOES work wraps one pane's row construction so exactly one side
-/// diverges — `task_list_pane.dart:133` or `holding_area_pane.dart:87`. This file must
-/// go red; both per-pane files must stay green. See `_mutationProof` below, which pins
-/// the discriminating half in executable form.
+/// The manual mutation that DOES work wraps one pane's row construction so exactly one
+/// side diverges — `task_list_pane.dart:133` or `holding_area_pane.dart:87`. Run
+/// 2026-09-22: this file RED on exactly the two pane-to-pane tests, all three per-pane
+/// files GREEN.
+///
+/// ⚠️ But a manual proof decays the moment someone weakens the comparison, which is why
+/// the group at the bottom pins it. **That pin was itself hollow until review caught it**
+/// — it re-tested `orderedEquals` rather than the guard, and stayed green through the
+/// exact weakening its comment claimed to catch. It now routes through [assertParity],
+/// the single function every parity assertion uses, so softening that one function turns
+/// the proof red.
 
 // ── The reader ───────────────────────────────────────────────────────────────────
 //
@@ -78,6 +96,22 @@ import '../../unit/_helpers/stub_dio.dart';
 // "the two-pane comparison lands with the second pane". It is duplicated rather than
 // imported: a test file importing another test file couples two suites so that deleting
 // one breaks the other, and this reader is eight lines.
+
+/// 🔴 THE ONE COMPARISON THIS FILE PERFORMS — AND THE ONLY ONE. Every parity assertion
+/// below routes through here, and so does the mutation proof.
+///
+/// ⚠️ THAT SHARING IS THE WHOLE POINT, NOT TIDINESS. The previous mutation proof built a
+/// drifted list and compared it with a FRESH inline `orderedEquals`, so it asserted a
+/// property of Dart rather than a property of this guard. Weakening the real comparison
+/// to `containsAll` left it GREEN — measured, not argued — which is precisely the threat
+/// its own comment claimed it defended against. Found by María in review; the guard had
+/// teeth, the thing pinning the guard did not.
+///
+/// ⇒ Because the proof calls THIS function, softening it turns the proof RED. A test that
+/// cannot be made to fail is not evidence, and the fix is to give it one throat to choke.
+void assertParity( List<String> expected, List<String> actual ) {
+  expect( actual, orderedEquals( expected ) );
+}
 
 /// Every rendered cell key, in tree order.
 ///
@@ -227,7 +261,7 @@ void main() {
       // ⚠️ THE PANES ARE COMPARED TO EACH OTHER. Neither side is a literal anyone can
       // edit to make this pass — updating one pane's output to "fix" a failure just
       // moves the failure to the other side of the same comparison.
-      expect( holding, taskList );
+      assertParity( taskList, holding );
     } );
 
     testWidgets( "ORDERED, not equal-as-sets — the comparison must see a reorder",
@@ -238,7 +272,7 @@ void main() {
       final taskList = await taskListKeys( tester );
       final holding  = await holdingAreaKeys( tester );
 
-      expect( holding, orderedEquals( taskList ) );
+      assertParity( taskList, holding );
       expect(
         holding.reversed.toList(),
         isNot( orderedEquals( taskList ) ),
@@ -256,8 +290,14 @@ void main() {
 
       expect( taskList, isNotEmpty );
       expect( holding, isNotEmpty );
-      expect( taskList.length, greaterThan( 5 ),
-          reason: 'a disclosed row carries title + nine line2 cells + detail' );
+      // 🔴 DERIVED, NOT TYPED — `task_row_schema.dart:78-81` in this same tree says it
+      // outright: "A count typed as a literal goes wrong silently." This assertion USED
+      // to read `greaterThan( 5 )`, and María counted what that actually permits: the
+      // schema carries 12 cells, 11 of them rendered as Text, so a pane could lose FIVE
+      // of eleven and still pass. A loose bound on a derived quantity is the same defect
+      // as a stale colspan, wearing a test's clothes.
+      expect( taskList.length, RowSchema.cellCount - 1,
+          reason: 'every schema cell but `actions`, which renders as controls not a Text' );
     } );
   } );
 
@@ -294,21 +334,26 @@ void main() {
       // would. If the comparison this file performs cannot see that, the file is
       // decorative.
       final taskList = await taskListKeys( tester );
-      final drifted  = [ ...taskList ]..insert( 2, 'owner' );
 
-      expect( drifted, isNot( orderedEquals( taskList ) ),
+      // ONE pane gaining a cell, exactly as a wrapper at one call site would produce.
+      final drifted = [ ...taskList ]..insert( 2, 'owner' );
+      expect( () => assertParity( taskList, drifted ), throwsA( isA<TestFailure>() ),
           reason: 'one pane gaining a cell must break the comparison' );
-      expect( drifted.length, taskList.length + 1 );
 
-      // And a pure REORDER must break it too — the failure a set comparison sleeps
-      // through.
+      // A pure REORDER must break it too — the failure a set comparison sleeps through.
       final reordered = [ ...taskList ];
       final moved     = reordered.removeAt( 1 );
       reordered.insert( 3, moved );
 
-      expect( reordered, isNot( orderedEquals( taskList ) ) );
+      expect( () => assertParity( taskList, reordered ), throwsA( isA<TestFailure>() ) );
       expect( reordered.toSet(), taskList.toSet(),
           reason: 'identical as SETS — which is precisely why the check is ordered' );
+
+      // 🔴 AND THE HONEST CASE MUST STILL PASS. Without this line, softening
+      // `assertParity` into a no-op would satisfy neither throw above — so whoever
+      // softened it would simply delete the two expectations and see green. This is the
+      // line that makes deleting the proof louder than fixing it. María's addition.
+      expect( () => assertParity( taskList, taskList ), returnsNormally );
     } );
   } );
 }
