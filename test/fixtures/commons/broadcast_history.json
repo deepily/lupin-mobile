@@ -1,0 +1,74 @@
+{
+  "entries": [
+    {
+      "body": "[2026.09.22 at 11:45:50] Operator-gate digest: 1 normal-urgency gate(s) awaiting your decision \u2014 [LUPIN-MOBILE] Slot for the phone device session (round-trip probe + Opus/AAC check). (Urgent gates interrupt separately; low-urgency gates wait in the queue until you pull them.)",
+      "metadata": {
+        "kind": "arbiter-surface"
+      },
+      "persona_color": "#888888",
+      "persona_icon": "\ud83d\udcac",
+      "persona_name": "heartbeat-arbiter",
+      "sender_session_id": "lupin-arbiter-app-8001",
+      "topic": "fleet-escalations",
+      "topic_kind": "free-form",
+      "ts": "2026-09-22T15:45:50.348311+00:00"
+    },
+    {
+      "body": "[2026.09.22 at 11:15:36] Operator-gate digest: 1 normal-urgency gate(s) awaiting your decision \u2014 [LUPIN-MOBILE] Slot for the phone device session (round-trip probe + Opus/AAC check). (Urgent gates interrupt separately; low-urgency gates wait in the queue until you pull them.)",
+      "metadata": {
+        "kind": "arbiter-surface"
+      },
+      "persona_color": "#888888",
+      "persona_icon": "\ud83d\udcac",
+      "persona_name": "heartbeat-arbiter",
+      "sender_session_id": "lupin-arbiter-app-8001",
+      "topic": "fleet-escalations",
+      "topic_kind": "free-form",
+      "ts": "2026-09-22T15:15:36.954669+00:00"
+    },
+    {
+      "body": "[2026.09.22 at 10:45:23] Operator-gate digest: 1 normal-urgency gate(s) awaiting your decision \u2014 [LUPIN-MOBILE] Slot for the phone device session (round-trip probe + Opus/AAC check). (Urgent gates interrupt separately; low-urgency gates wait in the queue until you pull them.)",
+      "metadata": {
+        "kind": "arbiter-surface"
+      },
+      "persona_color": "#888888",
+      "persona_icon": "\ud83d\udcac",
+      "persona_name": "heartbeat-arbiter",
+      "sender_session_id": "lupin-arbiter-app-8001",
+      "topic": "fleet-escalations",
+      "topic_kind": "free-form",
+      "ts": "2026-09-22T14:45:23.839897+00:00"
+    },
+    {
+      "body": "[2026.09.22 at 10:15:11] Operator-gate digest: 1 normal-urgency gate(s) awaiting your decision \u2014 [LUPIN-MOBILE] Slot for the phone device session (round-trip probe + Opus/AAC check). (Urgent gates interrupt separately; low-urgency gates wait in the queue until you pull them.)",
+      "metadata": {
+        "kind": "arbiter-surface"
+      },
+      "persona_color": "#888888",
+      "persona_icon": "\ud83d\udcac",
+      "persona_name": "heartbeat-arbiter",
+      "sender_session_id": "lupin-arbiter-app-8001",
+      "topic": "fleet-escalations",
+      "topic_kind": "free-form",
+      "ts": "2026-09-22T14:15:11.256704+00:00"
+    },
+    {
+      "body": "completed",
+      "metadata": {
+        "body_summary": "@all BTW, you should know that sample I gave you is not exhaustive, but simply indicative of the type of ephemeral work that is accumulating.",
+        "broadcast_id": "8f1f917c-4f9e-4053-b9c0-3a1db1533a0b",
+        "kind": "ack",
+        "status": "completed"
+      },
+      "persona_color": "#FFA000",
+      "persona_icon": "\ud83e\udd89",
+      "persona_name": "mr radio",
+      "sender_session_id": "8fa24215-65fe-4313-9d19-ea821504fe55",
+      "topic": "broadcast-acks",
+      "topic_kind": "reserved",
+      "ts": "2026-09-22T14:14:47.646334+00:00"
+    }
+  ],
+  "next_cursor": null,
+  "since_used": null
+}

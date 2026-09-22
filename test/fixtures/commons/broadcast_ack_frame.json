@@ -1,0 +1,42 @@
+{
+  "type": "notification_queue_update",
+  "notification": {
+    "id": "notif-fixture-ack-1",
+    "id_hash": "notif-fixture-ack-1-hash",
+    "message": "",
+    "title": null,
+    "type": "commons_broadcast_ack",
+    "priority": "medium",
+    "source": "claude_code",
+    "user_id": "uid-fixture",
+    "timestamp": "2026-09-22T16:30:00.000Z",
+    "time_display": "16:30 UTC",
+    "played": false,
+    "play_count": 0,
+    "last_played": null,
+    "response_requested": false,
+    "response_type": null,
+    "response_default": null,
+    "response_options": null,
+    "timeout_seconds": null,
+    "sender_id": "sender-fixture-1",
+    "abstract": null,
+    "suppress_ding": true,
+    "job_id": null,
+    "queue_name": null,
+    "progress_group_id": null,
+    "prediction_hint": null,
+    "display_qualifier_widget": false,
+    "session_name": null,
+    "voice_persona": null,
+    "payload": {
+      "broadcast_id": "b-fixture-0001",
+      "session_id": "sess-fixture-1",
+      "persona_name": "maria",
+      "persona_icon": "🌸",
+      "persona_color": "#F06292",
+      "status": "acked",
+      "body_summary": "On it — picking this up now."
+    }
+  }
+}

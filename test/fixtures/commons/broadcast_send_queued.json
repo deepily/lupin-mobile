@@ -1,0 +1,7 @@
+{
+  "broadcast_id": "b-fixture-0001",
+  "recipients": 3,
+  "failed_recipients": [],
+  "filtered_out": [],
+  "status": "queued"
+}
