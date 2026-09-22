@@ -63,8 +63,16 @@ import '../../unit/_helpers/stub_dio.dart';
 ///
 /// `close()` waits for its handler subscriptions to cancel; that completes only on the
 /// REAL event loop; the fake-async zone a `testWidgets` body runs in never turns while
-/// the body is parked on an await. Fix is at [keysFrom] — `runAsync`, with the reasoning
+/// the body is parked on an await. Fix is at [closedAtTeardown] — the close is registered
+/// with `addTearDown` and runs after the body, outside that zone, with the reasoning
 /// beside it.
+///
+/// ⚠️ **The first working fix was `await tester.runAsync( () => bloc.close() )`**, and it
+/// is the form every earlier note in this file described. It worked for the same reason:
+/// it steps out to the real loop. It was replaced on 2026-09-22 with María's `addTearDown`
+/// form after that form was measured — identical wall-clock, no pending-timer complaint,
+/// and it moves the close out of the body entirely instead of carving a hole in it. If
+/// you are reading a note elsewhere that still says `runAsync`, this paragraph is newer.
 ///
 /// 🔴 **THIS IS NOT SPECIFIC TO THIS FILE.** Any widget test in this repo that awaits a
 /// feature bloc's `close()` will hang identically, with no output and no error. If you
@@ -205,7 +213,7 @@ void main() {
   /// until the row is expanded, so a comparison taken collapsed silently omits the cells
   /// most likely to diverge: the detail cell and the verb surface. Both panes are
   /// disclosed the same way, by the same key.
-  Future<List<String>> keysFrom( WidgetTester tester, Widget pane, Bloc<dynamic, dynamic> bloc ) async {
+  Future<List<String>> keysFrom( WidgetTester tester, Widget pane ) async {
     sizePhone( tester );
     await tester.pumpWidget( MaterialApp( home: Scaffold( body: pane ) ) );
     await settle( tester );
@@ -215,40 +223,75 @@ void main() {
 
     final keys = renderedCellKeys( tester );
 
-    // Tear the pane down before the bloc closes, so the pane's dispose runs while its
-    // bloc is still alive — and so the poll timer cannot outlive the test.
+    // Tear the pane down while its bloc is still alive, so the pane's dispose runs
+    // against a live bloc — and so no widget is left holding one at teardown.
     await tester.pumpWidget( const SizedBox.shrink() );
     await tester.pump();
-
-    // 🔴 `runAsync` IS LOAD-BEARING HERE, AND NOT FOR THE REASON THE REST OF THIS FILE
-    // USES IT. `await bloc.close()` inside `testWidgets` NEVER RETURNS for any bloc
-    // carrying at least one `on<Event>` handler: `close()` waits for the handler
-    // subscriptions to cancel, that cancellation only completes on the REAL event loop,
-    // and the fake-async zone a `testWidgets` body runs in never turns it while the body
-    // is parked on an await. `runAsync` steps out to the real loop, so the future
-    // completes. See the hang note above — this line is what was hanging.
-    await tester.runAsync( () => bloc.close() );
 
     return keys;
   }
 
+  /// 🔴 WHY THE CLOSE IS REGISTERED HERE AND NOT AWAITED IN THE BODY.
+  ///
+  /// `await bloc.close()` inside a `testWidgets` body NEVER RETURNS for any bloc
+  /// carrying at least one `on<Event>` handler: `close()` waits for the handler
+  /// subscriptions to cancel, that cancellation only completes on the REAL event loop,
+  /// and the fake-async zone a `testWidgets` body runs in never turns it while the body
+  /// is parked on an await. That is the hang documented at the top of this file.
+  ///
+  /// `addTearDown` sidesteps it for the same underlying reason `runAsync` did, one step
+  /// later: teardown callbacks run AFTER the body, outside the fake-async zone, on the
+  /// real loop. María suggested this form in review; it replaced
+  /// `await tester.runAsync( () => bloc.close() )` once it was MEASURED rather than
+  /// reasoned about — see the measurement note below.
+  ///
+  /// ⚠️ IT IS NOT A PURE SUBSTITUTION, AND THE DIFFERENCE IS THE PART WORTH CHECKING.
+  /// The `runAsync` form closed each bloc INSIDE the body, before the next pane was
+  /// built. This form leaves both panes' blocs open until the test ends, which means
+  /// `TaskListBloc`'s `Timer.periodic` is still live when `flutter_test` runs its
+  /// pending-timer check. Measured 2026-09-22: five tests green in 5.0 s, no
+  /// "A Timer is still pending" — the pane's dispose cancels the poll before teardown
+  /// is reached. That is a measurement about THIS file, not a general licence; a pane
+  /// that leaked its timer would fail here, which is the behaviour you want.
+  /// ⚠️ AND THE REGISTRATION ORDER BELOW IS THE PART THAT MAKES IT EVIDENCE.
+  ///
+  /// A bare `addTearDown( bloc.close )` is invisible: if it silently did nothing, every
+  /// test here would still pass and the bloc would just leak. That is the same shape as
+  /// the hollow mutation proof María found in this file — a control that cannot fail.
+  ///
+  /// `addTearDown` callbacks run **LIFO**, so the check registered FIRST runs LAST, after
+  /// the close. `isClosed` is therefore read at the one moment it can discriminate.
+  /// Proved by mutation 2026-09-22: commenting out the `bloc.close` line turns all five
+  /// tests RED with "the teardown close did not run", and restoring it turns them green.
+  B closedAtTeardown<B extends BlocBase<dynamic>>( B bloc ) {
+    addTearDown( () => expect(
+      bloc.isClosed,
+      isTrue,
+      reason: "the teardown close did not run — ${bloc.runtimeType} leaked out of this test",
+    ) );
+    addTearDown( bloc.close );
+    return bloc;
+  }
+
   Future<List<String>> taskListKeys( WidgetTester tester ) async {
     final dio  = makeDio( adapter );
-    final bloc = TaskListBloc( TaskListRepository( dio ), TaskWriteRepository( dio ) );
+    final bloc = closedAtTeardown(
+      TaskListBloc( TaskListRepository( dio ), TaskWriteRepository( dio ) ),
+    );
     return keysFrom(
       tester,
       BlocProvider<TaskListBloc>.value( value: bloc, child: const TaskListPane() ),
-      bloc,
     );
   }
 
   Future<List<String>> holdingAreaKeys( WidgetTester tester ) async {
     final dio  = makeDio( adapter );
-    final bloc = HoldingAreaBloc( HoldingAreaRepository( dio ), TaskWriteRepository( dio ) );
+    final bloc = closedAtTeardown(
+      HoldingAreaBloc( HoldingAreaRepository( dio ), TaskWriteRepository( dio ) ),
+    );
     return keysFrom(
       tester,
       BlocProvider<HoldingAreaBloc>.value( value: bloc, child: const HoldingAreaPane() ),
-      bloc,
     );
   }
 
