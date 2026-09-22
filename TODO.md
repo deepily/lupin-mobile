@@ -35,12 +35,32 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 - **Merge the shared base freely; never fix a defect found in it inside your own branch.** Report it and it lands once, for all four panes. Issued after a near-miss, and it closed a full loop within five minutes when Rachel found `_provenance()` missing `actor`.
 - **Analyzer exclusions are justified by a measured number, not a category name.** "Generated code" ends an argument; "hides 7744, none ours" invites one. `build/**` is kept and labelled honestly as a claim about the future rather than a measured saving.
 
-### ⏳ Owed — 2026-09-20, all four on Rick and nothing else
+### ⏳ Owed — 2026-09-20 — **ALL FOUR CLOSED as of 2026-09-22**
 
-1. **Push.** Eight merges sit on this machine only. Never authorised in this session; not done.
-2. **Admit `384591dd` Phase 5 Broadcast** — request pending on his board, pledging `67c7a2e1` (the roster-sentinel row, by its own measurement the least valuable row I owned). Chloé is assigned and was holding correctly: *"no answer means no."*
-3. **The phone confirm on batch won't-fix** — unruled all night; built to match web (no confirm) in the meantime.
-4. **Untracking `android/local.properties`** — tracked, machine-specific, rewritten by flutter on every build, and its committed value still points at the retired subtree path. A repo decision, not a provisioning one.
+1. ~~**Push.**~~ ✅ Done at his 22:55 ritual order on 09-20. This line was stale for two days — a list that carries a done item as owed teaches its reader to skim.
+2. ~~**Admit `384591dd` Phase 5 Broadcast**~~ ✅ He admitted it. The row is now `queued`, unblocked, with its acceptance clause settled (see 09-22 below).
+3. ~~**The phone confirm on batch won't-fix**~~ ✅ Ruled: keeps NO confirm, matching web. Closed.
+4. ~~**Untracking `android/local.properties`**~~ ✅ **Done 2026-09-22** on Rick's keypress, `git rm --cached`. The measurement that had been missing: it was tracked AND already listed at `android/.gitignore:6` — the ignore never bit because the file reached the index first, which is the entire reason it kept churning. Index-only change; the file stays on disk and the SDK still resolves (Flutter 3.32.0 verified after).
+
+---
+
+## 🆕 Open from 2026-09-22 (skeleton crew: one P2 driven to merge, one P0 closed)
+
+### Decisions Log — 2026-09-22 (session `f19a8996`, Tiffany, manager on duty)
+
+- **Skeleton crew means NO workers** (Rick, by keypress, ~14:35Z): *"by definition skeleton crew means no workers So that's how we're going to run it today until 5 o'clock."* The fleet cap (2, against 3 live managers) had already refused my spawn — its own error text says *"a manager with no seat to spare works its own tickets."* Manage-not-build waived by him for `c597c4fc` only.
+- **A reviewer beats a waiver.** I recommended merging `c597c4fc` with the independent review downgraded to a follow-up check, arguing the mutation proof already answered what a reviewer would take on trust. **He declined and assigned María. She found the mutation proof could not fail.** Had he taken my recommendation, a hollow control would have merged wearing a green tick.
+- **An author's run receipt counts when the reviewer who demanded it accepts it** (Rick, by keypress, after asking to be walked through it). That was the narrow question; everything else on the row was closed.
+- **A `[default used]` answer is silence, not a ruling.** My first merge ask timed out and returned `[default used] no`. Recorded as silence in both directions — not permission, not refusal. The row was re-asked rather than resolved on a non-event.
+- **Reconcile a changed count, never round past it.** The suite read 1583 on the branch and 1586 on the merge result. First suspicion (Sam's worktree-skip finding) was wrong; the branch simply predates `488f189`. 1578 + 3 + 5 = 1586, exactly.
+
+### ⏳ Owed — 2026-09-22
+
+- [ ] **Push.** `efe40c9` sits on this machine only. Not authorised this session.
+- [ ] **`addTearDown( bloc.close )` vs `runAsync`** — María's suggestion on `c597c4fc`, her mechanism reads correct, not taken because the `runAsync` form is the measured one. Deserves its own change with its own proof.
+- [ ] **Phase 5 `384591dd` is buildable and unstaffed.** Acceptance settled as *guard absence*, worded "acks could not be confirmed" so it survives the day the two stores are bridged. Needs a seat.
+- [x] **Untracking `android/local.properties`** — ✅ **DONE 2026-09-22**, Rick by keypress. `git rm --cached android/local.properties`; index-only, file untouched on disk. See the 09-20 list above for why the existing ignore rule never applied.
+- [x] **`android/app/google-services.json` — ✅ DECIDED and DONE 2026-09-22**, Rick by keypress: gitignore it. Was untracked *and* matched by no ignore rule, i.e. one careless `git add` from committing Firebase config. Now `android/.gitignore:17`. No collateral — rsync backs up by explicit `--exclude` list (not a gitignore filter) so it is still backed up, and `link-worktree-artifacts.sh` already denied it by name.
 
 ### Carried, not minted as rows (the ticket gate was not worth spending on them)
 
@@ -277,7 +297,7 @@ Plan went **rev 8 → rev 12**; six pins in git (`b505bfb` `32b2055` `3a97776` `
 - [ ] [LUPIN-MOBILE] **Store row `0e7c9214` (P1, parent repo, owner Pocholo, I chase)** — found live 2026-08-30 with Rick at the keyboard. A repeat ask announces "New math job", runs it, completes it, and **never announces the answer**. Two *independent* causes, both root-caused the same evening: (1) dropped `job_state_transition` frames ⇐ `get_copy()` injects the requester's email but never their `user_id`, so a replayed snapshot emits to the original creator's stale id — **all 13 rows in `lupin_db_dev` carry the old-format key, zero carry the UUID**; (2) missing answer announcements ⇐ empty `user_email` upstream hitting a bare `return` in `FifoQueue._notify`. Counts close it with no residue: 4 asks, 1 answer, **3** skip warnings, 0 env fallbacks. Pocholo shipped the `user_id` fix and flagged himself that it does **not** reach (2). Still open: where the email is lost upstream.
 - [ ] [LUPIN-MOBILE] `log_query()` dies with `expected 768 dimensions, not 0` on an empty embedding, *after* the match already scored `exact_match` / `100.0`. Every repeat ask loses its query-log row. Observed 2026-08-30, undiagnosed, recorded on `0e7c9214`.
 - [ ] [LUPIN-MOBILE] Rachel flagged a **render-lens defect** and a **summariser that dropped a test name** as unresolved — read `io/mementos/rachel-a45a8132.md` before picking up her lane.
-- [ ] [LUPIN-MOBILE] `android/app/google-services.json` is untracked and was left uncommitted deliberately (Firebase config, credentials-shaped). Decide: commit, gitignore, or leave.
+- [x] [LUPIN-MOBILE] **DECIDED 2026-09-22 (Rick, keypress): gitignore it.** `android/app/google-services.json` was untracked AND matched by no ignore rule anywhere in the repo — one careless `git add` from committing Firebase config. Now `android/.gitignore:17`. Verified no collateral: the rsync backup excludes by an explicit `--exclude` list, not a gitignore-derived filter, so the file is **still backed up**; and `link-worktree-artifacts.sh` already denied it **by name**, so worktree provisioning is unchanged.
 - [ ] [LUPIN-MOBILE] Device check of the Quick Ask screen — laptop APK rebuild runbook `src/rnd/2026.06.12-poc-laptop-build-runbook.md`.
 
 ## 🆕 Open from 2026-08-21 (wave 2 / lane 2)
