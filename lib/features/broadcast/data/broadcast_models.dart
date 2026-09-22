@@ -1,3 +1,5 @@
+import 'package:equatable/equatable.dart';
+
 /// One live Claude Code session — a potential recipient.
 ///
 /// The roster's LENGTH is half the Send button's enabled condition, so this type exists
@@ -5,7 +7,7 @@
 /// chips, not a bare number: "send to 3 sessions" and "send to Tiffany, María, Mr Radio"
 /// are different amounts of information at the moment someone is about to interrupt the
 /// whole fleet.
-class ActiveSession {
+class ActiveSession extends Equatable {
   final String  sessionId;
   final String? senderId;
   final String? personaName;
@@ -46,6 +48,10 @@ class ActiveSession {
 
   /// What the confirm modal puts on a chip.
   String get label => personaName ?? sessionId;
+
+  @override
+  List<Object?> get props =>
+      [ sessionId, senderId, personaName, personaIcon, personaColor, lastSeenIso, speakerphoneOn ];
 }
 
 /// The recipient roster.
@@ -54,7 +60,7 @@ class ActiveSession {
 /// ordinary state at 3am, and it is the exact case the Send button's second condition
 /// exists for. A roster that threw on empty would turn "nobody is listening" into a
 /// failure banner and lose the distinction.
-class ActiveSessionRoster {
+class ActiveSessionRoster extends Equatable {
   final List<ActiveSession> sessions;
 
   const ActiveSessionRoster( this.sessions );
@@ -75,6 +81,9 @@ class ActiveSessionRoster {
 
   int  get count   => sessions.length;
   bool get isEmpty => sessions.isEmpty;
+
+  @override
+  List<Object?> get props => [ sessions ];
 }
 
 /// What the server said when the broadcast was accepted.
@@ -83,7 +92,7 @@ class ActiveSessionRoster {
 /// hazard the 202 sentinel exists for on the task panes — the pane paints a thing done
 /// that the server only accepted. [failedRecipients] is the field that says otherwise and
 /// it is why this type is not just an int.
-class BroadcastSendResult {
+class BroadcastSendResult extends Equatable {
   final String       broadcastId;
   final int          recipients;
   final List<String> failedRecipients;
@@ -119,6 +128,10 @@ class BroadcastSendResult {
     if ( raw is! List ) return const [];
     return raw.map( ( e ) => e.toString() ).toList();
   }
+
+  @override
+  List<Object?> get props =>
+      [ broadcastId, recipients, failedRecipients, filteredOut, status ];
 }
 
 /// One seat's acknowledgement of one broadcast.
@@ -127,7 +140,7 @@ class BroadcastSendResult {
 /// STRING BY DESIGN (`commons_ack_watcher.py`, `_push_ack_event`). A reader that goes
 /// looking in `message` — which is where every OTHER notification carries its content —
 /// finds nothing, reports zero acks, and looks like a quiet fleet.
-class BroadcastAck {
+class BroadcastAck extends Equatable {
   final String  broadcastId;
   final String  sessionId;
   final String? personaName;
@@ -177,6 +190,10 @@ class BroadcastAck {
   }
 
   String get label => personaName ?? sessionId;
+
+  @override
+  List<Object?> get props =>
+      [ broadcastId, sessionId, personaName, personaIcon, personaColor, status, bodySummary ];
 }
 
 /// Why an ack tally cannot be trusted to be complete.
@@ -209,7 +226,7 @@ enum AckConfidence {
 /// as twelve seats ignoring the operator, when what actually happened is that the phone
 /// was not listening. The recipient count is kept because the confirm modal needs it
 /// BEFORE the send; it is not used to manufacture a fraction afterwards.
-class AckAggregate {
+class AckAggregate extends Equatable {
   final String broadcastId;
 
   /// Recipients the server said it queued to, at send time.
@@ -262,6 +279,9 @@ class AckAggregate {
       confidence       : AckConfidence.interrupted,
     );
   }
+
+  @override
+  List<Object?> get props => [ broadcastId, recipientsAtSend, acksBySession, confidence ];
 
   /// The sentence the pane shows. A statement about the attempt, never about the world.
   ///

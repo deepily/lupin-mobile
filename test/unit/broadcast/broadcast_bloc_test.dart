@@ -350,6 +350,82 @@ void main() {
     } );
   } );
 
+  group( '🔴 STATE EQUALITY — a summary in `props` silently drops rebuilds', () {
+    // bloc skips an emit when the new state compares equal to the old one. So anything
+    // `props` summarises into a NUMBER can change without the pane ever hearing about it.
+    // These three cases are what that actually costs.
+
+    test( '🔴 a RE-ack from a session already counted still changes the state', () async {
+      final bloc = makeBloc();
+      bloc.add( const BroadcastRosterRequested() );
+      bloc.add( const BroadcastBodyChanged( 'x' ) );
+      await rosterSettled( bloc );
+      bloc.add( const BroadcastSendConfirmed() );
+      await sendSettled( bloc );
+
+      bloc.add( const BroadcastAckReceived( BroadcastAck(
+        broadcastId : 'b-fixture-0001', sessionId : 's1', personaName : 'maria',
+      ) ) );
+      await settle();
+      final before = bloc.state;
+
+      // Same session, so the COUNT does not move. Only the summary text arrives.
+      bloc.add( const BroadcastAckReceived( BroadcastAck(
+        broadcastId : 'b-fixture-0001', sessionId : 's1', personaName : 'maria',
+        bodySummary : 'on it — picking this up now',
+      ) ) );
+      await settle();
+
+      expect( bloc.state.aggregate!.ackedCount, 1, reason: 'still one session' );
+      expect( bloc.state, isNot( equals( before ) ),
+              reason: 'the state must differ, or bloc skips the emit and the pane never '
+                      'shows what the seat actually said' );
+      expect( bloc.state.aggregate!.acks.single.bodySummary, isNotEmpty );
+    } );
+
+    test( '🔴 a roster of three replaced by a DIFFERENT three changes the state', () async {
+      final bloc = makeBloc();
+      bloc.add( const BroadcastRosterRequested() );
+      await rosterSettled( bloc );
+      final before = bloc.state;
+
+      // One seat left, another joined. Still three.
+      adapter.handlers[ 'GET ${BroadcastRepository.activeSessionsPath}' ] = ( _ ) => jsonBody( {
+        'sessions' : [
+          { 'session_id' : 'x1', 'persona_name' : 'chloe' },
+          { 'session_id' : 'x2', 'persona_name' : 'sam' },
+          { 'session_id' : 'x3', 'persona_name' : 'rachel' },
+        ],
+      } );
+      bloc.add( const BroadcastRosterRequested() );
+      await until( bloc, ( s ) => s.roster.sessions.any( ( x ) => x.sessionId == 'x1' ),
+                   'the second roster to land' );
+
+      expect( bloc.state.roster.count, 3, reason: 'the count is deliberately unchanged' );
+      expect( bloc.state, isNot( equals( before ) ),
+              reason: 'otherwise the confirm modal names the WRONG PEOPLE — the one screen '
+                      'whose job is saying who is about to be interrupted' );
+    } );
+
+    test( '🔴 history entries swapped for the same NUMBER of entries changes the state',
+        () async {
+      adapter.handlers[ 'GET ${BroadcastRepository.historyPath}' ] =
+          ( _ ) => jsonBody( const { 'entries' : [ { 'body' : 'one' } ] } );
+      final bloc = makeBloc();
+      bloc.add( const BroadcastHistoryRequested() );
+      await until( bloc, ( s ) => s.history.isNotEmpty, 'the first history' );
+      final before = bloc.state;
+
+      adapter.handlers[ 'GET ${BroadcastRepository.historyPath}' ] =
+          ( _ ) => jsonBody( const { 'entries' : [ { 'body' : 'two' } ] } );
+      bloc.add( const BroadcastHistoryRequested() );
+      await until( bloc, ( s ) => s.history.first[ 'body' ] == 'two', 'the second history' );
+
+      expect( bloc.state.history, hasLength( 1 ) );
+      expect( bloc.state, isNot( equals( before ) ) );
+    } );
+  } );
+
   group( 'history — decoration that must not disturb compose', () {
     test( 'a history failure leaves the compose state alone', () async {
       adapter.handlers[ 'GET ${BroadcastRepository.historyPath}' ] =

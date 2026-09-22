@@ -172,11 +172,27 @@ class BroadcastState extends Equatable {
   }
 
   @override
+  /// 🔴 THE WHOLE OBJECTS, NOT SUMMARIES OF THEM — AND THE SUMMARIES WERE A BUG.
+  ///
+  /// This list first read `roster.count`, `aggregate?.ackedCount` and `history.length`.
+  /// Each is a NUMBER STANDING IN FOR A VALUE, and bloc skips an emit when the new state
+  /// compares equal — so any change that kept the number identical was silently dropped
+  /// and the pane never rebuilt. Three real cases, none of them exotic:
+  ///
+  ///   · a seat RE-acks with a `body_summary` it did not send the first time. Same
+  ///     session, so the count stays 1, so no rebuild, so the summary never appears.
+  ///   · one seat leaves and another joins between refreshes. Still 3, so no rebuild —
+  ///     and the confirm modal then names the WRONG PEOPLE, which is the one screen whose
+  ///     entire job is telling the operator who is about to be interrupted.
+  ///   · five history entries replaced by five different ones. Still 5, so no rebuild.
+  ///
+  /// ⇒ The models carry value equality now, so the objects can be compared directly and
+  /// a summary can no longer hide a change behind a matching integer.
+  @override
   List<Object?> get props => [
-    body, roster.count, rosterLoading, rosterError, mic, micError,
+    body, roster, rosterLoading, rosterError, mic, micError,
     sending, sendError, rateLimitedForSeconds,
-    aggregate?.broadcastId, aggregate?.ackedCount, aggregate?.confidence,
-    history.length,
+    aggregate, history,
   ];
 }
 
