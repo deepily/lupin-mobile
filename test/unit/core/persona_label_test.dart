@@ -93,6 +93,31 @@ void main() {
       expect( personaDisplayLabel( 'Rachel 5c88e8d6', 'Unattributed' ), 'Rachel' );
     } );
 
+    test( "🔴 a WORD BOUNDARY is not a space — hyphens and apostrophes case too", () {
+      // 🔴 THE DIVERGENCE THIS PINS, AND IT NEARLY SHIPPED. The web's rule is
+      // `/\b[a-z]/g`; the first version here split on whitespace and cased each piece.
+      // The two agree on every persona on today's board — all six are plain letters —
+      // and disagree the moment a name carries punctuation. Caught by Tiffany in review
+      // 2026-09-23; no fixture could have caught it.
+      expect( personaDisplayLabel( 'mary-jane 5c88e8d6', 'Unattributed' ), 'Mary-Jane' );
+      expect( personaDisplayLabel( "o'brien 5c88e8d6", 'Unattributed' ), "O'Brien" );
+      expect( personaDisplayLabel( 'jean-luc picard', 'Unattributed' ), 'Jean-Luc Picard' );
+    } );
+
+    test( "⚠️ a DIGIT is a word character, so it is NOT a boundary", () {
+      // 🔴 THIS TEST WAS WRITTEN ASSERTING THE OPPOSITE AND THE CODE WAS RIGHT. `\b`
+      // sits between a word character and a non-word one, and a digit is a WORD
+      // character in both Dart and JavaScript — so there is no boundary inside
+      // "agent7smith" and the "s" stays lower-case. Kept, with the expectation
+      // corrected, because "surely a digit breaks a word" is the intuition that wrote it
+      // the first time and the next reader will have it too.
+      //
+      // ⚠️ IT ALSO PINS THE PARITY IN THE DIRECTION THAT MATTERS: Dart's `\b` and
+      // JavaScript's agree here, which is what lets this file claim to reproduce
+      // `/\b[a-z]/g` rather than approximate it.
+      expect( personaDisplayLabel( 'agent7smith', 'Unattributed' ), 'Agent7smith' );
+    } );
+
     test( "🔴 inner capitals SURVIVE — this is not toUpperCase()", () {
       expect( personaDisplayLabel( 'mcCoy 5c88e8d6', 'Unattributed' ), 'McCoy' );
       expect( personaDisplayLabel( 'McCoy 5c88e8d6', 'Unattributed' ), 'McCoy' );
