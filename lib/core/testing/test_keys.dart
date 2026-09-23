@@ -309,12 +309,22 @@ class TestKeys {
   static const reasonSheetCancel    = 'reasonSheet.cancel';
   static const reasonSheetNoReason  = 'reasonSheet.noReasonNotice';
 
+  // ── The SHARED field-door controls (G2) ─────────────────────────────────
+  //
+  // 🔴 NAMED FOR THE DOOR, NOT FOR THE PANE. These two keys are the FIELD door — the
+  // PATCH that may carry `priority` and `owner_persona` and nothing else. A test that
+  // finds `taskField.*` on a request carrying `status` has found §4.2's named failure.
+  static const taskFieldPriority       = 'taskField.priority';
+  static const taskFieldPriorityUpdate = 'taskField.priority.update';
+  static const taskFieldOwner          = 'taskField.owner';
+
   // ── Task List pane (Phase 3) ────────────────────────────────────────────
   static const taskListGroupHeaderPrefix = 'taskList.group.';   // + owner label
   static const taskListRowIndentPrefix   = 'taskList.rowIndent.'; // + task id
   static const taskListView              = 'taskList.view';
   static const taskListIncompleteBanner  = 'taskList.incompleteBanner';
   static const taskListEmptyState        = 'taskList.emptyState';
+  static const taskListWriteNotice       = 'taskList.writeNotice';
 
   // ── Holding Area pane (Phase 4) ─────────────────────────────────────────
   //

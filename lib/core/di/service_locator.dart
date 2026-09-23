@@ -209,9 +209,15 @@ class ServiceLocator {
   /// that only `app.dart` can route — so it must exist for `app.dart` to see, and
   /// its tally must survive leaving the pane. The rule is "scope a pane bloc to its
   /// route unless something outside the route must reach it", not "always route-scope".
+  // ⚠️ `fleet` IS THE REASSIGNMENT ROSTER AND NOTHING ELSE. The owner control needs the
+  // LIVE personas, which only the arbiter knows; the board's own read carries the owners
+  // that HAVE rows, which is a different and smaller set — it cannot hand work to a seat
+  // that owns none yet. Passed here rather than made required, so the pane still renders
+  // when the arbiter is unreachable.
   static TaskListBloc buildTaskListBloc() => TaskListBloc(
     _getIt<TaskListRepository>(),
     _getIt<TaskWriteRepository>(),
+    fleet : _getIt<FleetRepository>(),
   );
 
   static HoldingAreaBloc buildHoldingAreaBloc() => HoldingAreaBloc(

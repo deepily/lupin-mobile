@@ -319,3 +319,46 @@ String formatConsumptionPct( double? pct ) {
   final whole = pct == pct.roundToDouble();
   return whole ? "${ pct.toInt() }%" : "$pct%";
 }
+
+// ---------------------------------------------------------------------------
+// The reassignment roster — ported from taskListModel.ts:474
+// ---------------------------------------------------------------------------
+
+/// The personas a task may be reassigned TO: the LIVE fleet's personas, alpha-sorted.
+///
+/// 🔴 LIVE SESSIONS ONLY, AND THAT IS THE POINT OF THE FILTER. Reassigning a row to an
+/// offline persona files work with nobody — the row moves, the board looks right, and
+/// the seat it now belongs to does not exist. The web applies the same "live" rule the
+/// fleet card shows by default (`splitFleetByLiveness`), which here is
+/// [FleetSession.isOffline]: a row WITHOUT a verdict stays live, because the arbiter
+/// says offline explicitly and silence is not a verdict.
+///
+/// ⚠️ DEGRADE-SAFE BY CONTRACT, NOT BY LUCK. Every way the fleet can fail to answer —
+/// pre-first-poll null, the `status: "unreachable"` envelope, a malformed `sessions` —
+/// collapses to an EMPTY roster rather than a throw. The owner control then offers only
+/// the row's current owner, which is honest: the phone cannot see the fleet, so it does
+/// not know who else exists.
+///
+/// Requires:
+///     - fleet is the composite the fleet pane caches, or null
+///
+/// Ensures:
+///     - null or unreachable → []
+///     - only live sessions contribute; blank personas dropped; duplicates collapsed
+///     - returned alpha-sorted, case-insensitively
+///     - never throws
+List<String> activeReassignTargets( FleetComposite? fleet ) {
+  if ( fleet == null || fleet.isUnreachable ) return const <String>[];
+
+  final seen = <String>{};
+  for ( final session in fleet.sessions ) {
+    if ( session.isOffline ) continue;
+    final persona = session.persona;
+    if ( persona == null || persona.trim().isEmpty ) continue;
+    seen.add( persona );
+  }
+
+  final out = seen.toList();
+  out.sort( ( a, b ) => a.toLowerCase().compareTo( b.toLowerCase() ) );
+  return out;
+}

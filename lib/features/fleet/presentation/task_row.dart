@@ -5,6 +5,7 @@ import '../data/task_row_model.dart';
 import '../data/task_row_schema.dart';
 import '../data/task_verbs.dart';
 import '../data/task_write_repository.dart';
+import 'task_field_controls.dart';
 import 'verb_reason_sheet.dart';
 
 /// The ONE row widget. Task List and Holding Area both render this and produce
@@ -54,11 +55,26 @@ class TaskRow extends StatefulWidget {
   /// rollback.
   final void Function( TaskVerb verb )? onVerb;
 
+  /// Fired when the operator commits a FIELD change — priority or owner, never status.
+  ///
+  /// ⚠️ NULL MEANS "THIS PANE DOES NOT OFFER FIELD EDITS", AND IT IS NOT A PANE
+  /// DISCRIMINATOR. It is the same shape [onVerb] already had: a callback the pane
+  /// supplies or does not, exactly as it supplies a verb list or an empty one. Both
+  /// panes may pass one, and neither can make the row lay itself out differently by
+  /// choosing — the controls appear because there is somewhere for their output to go,
+  /// which is a property of the DATA and not of which pane is asking.
+  final void Function( { String? priority, String? ownerPersona } )? onFieldChanged;
+
+  /// The personas this row may be reassigned to. Data, from the live fleet.
+  final List<String> ownerOptions;
+
   const TaskRow( {
     super.key,
     required this.model,
     this.verbs = const <VerbNeeds>[],
     this.onVerb,
+    this.onFieldChanged,
+    this.ownerOptions = const <String>[],
   } );
 
   @override
@@ -132,8 +148,21 @@ class _TaskRowState extends State<TaskRow> {
       crossAxisAlignment : CrossAxisAlignment.start,
       children : [
         _cell( 'detail', widget.model.cell( 'detail' ) ),
+        // The FIELD door sits above the verbs, and the order is not arbitrary: priority
+        // and owner are reversible edits, the verbs below include two that are not, and
+        // the reversible controls should not be the ones a thumb reaches last.
+        if ( widget.onFieldChanged != null ) _fieldControls( context ),
         _verbBar( context ),
       ],
+    );
+  }
+
+  Widget _fieldControls( BuildContext context ) {
+    return TaskFieldControls(
+      priority       : widget.model.priority,
+      ownerPersona   : widget.model.ownerPersona,
+      ownerOptions   : widget.ownerOptions,
+      onFieldChanged : widget.onFieldChanged!,
     );
   }
 
