@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../notifications/presentation/persona_badge.dart';
 import '../data/broadcast_models.dart';
 import '../domain/broadcast_bloc.dart';
 
@@ -126,11 +127,19 @@ class _BroadcastPaneState extends State<BroadcastPane> {
             key     : Key( '${TestKeys.broadcastMentionChipPrefix}${names[ i ]}' ),
             avatar  : Text( i == 0 ? '📣' : ( state.roster.sessions[ i - 1 ].personaIcon ?? '👤' ) ),
             label   : Text( names[ i ] ),
+            // The seat's own colour as the chip's outline, as on the web card; `@all`
+            // and a seat with no (or a malformed) colour keep the theme's outline.
+            side    : _seatSide( i == 0 ? null : state.roster.sessions[ i - 1 ].personaColor ),
             tooltip : 'Insert @${names[ i ]} into the message',
             onPressed : () => _insertMention( context, names[ i ] ),
           ),
       ],
     );
+  }
+
+  BorderSide? _seatSide( String? hex ) {
+    final color = PersonaBadge.colorOfHex( hex );
+    return color == null ? null : BorderSide( color: color, width: 2 );
   }
 
   /// Insert `@<name> ` at the caret (or over the selection), then hand the new text to

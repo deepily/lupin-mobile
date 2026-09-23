@@ -318,6 +318,22 @@ void main() {
       expect( tester.takeException(), isNull );
     } );
 
+    testWidgets( 'each seat chip wears its persona colour, and every chip is a 48 dp target', ( tester ) async {
+      await mount( tester );
+
+      final tiffany = tester.widget<ActionChip>(
+        find.byKey( const Key( '${TestKeys.broadcastMentionChipPrefix}Tiffany' ) ) );
+      expect( tiffany.side?.color, const Color( 0xFFFFD600 ), reason: 'fixture persona_color #FFD600' );
+      expect( tester.widget<ActionChip>(
+        find.byKey( const Key( '${TestKeys.broadcastMentionChipPrefix}all' ) ) ).side, isNull );
+
+      for ( final name in <String>[ 'all', 'Tiffany', 'maria', 'mr radio' ] ) {
+        final size = tester.getSize( find.byKey( Key( '${TestKeys.broadcastMentionChipPrefix}$name' ) ) );
+        expect( size.height, greaterThanOrEqualTo( 48 ), reason: '$name chip is a thumb target' );
+      }
+      expect( find.byTooltip( 'Insert @Tiffany into the message' ), findsOneWidget );
+    } );
+
     testWidgets( 'a tap inserts at the caret, spaced off the word before it', ( tester ) async {
       await mount( tester );
       await tester.enterText( find.byKey( const Key( TestKeys.broadcastBodyField ) ), 'standup' );

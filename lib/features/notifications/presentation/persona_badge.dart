@@ -52,6 +52,10 @@ class PersonaBadge extends StatelessWidget {
   /// it: focus-mode bubbles carry the SENDER's colour too (row de12b7bc).
   static Color? colorOf( VoicePersona? persona ) => _parseHex( persona?.color );
 
+  /// The same parse for callers holding only the raw hex — the Broadcast roster
+  /// carries `persona_color` without a [VoicePersona] around it.
+  static Color? colorOfHex( String? hex ) => _parseHex( hex );
+
   /// Convert `#RRGGBB` or `#AARRGGBB` hex strings to `Color`. Returns null on
   /// any malformed input — caller falls back to the theme primary color so
   /// the badge still renders per the failure-mode contract.
