@@ -90,11 +90,12 @@ class BroadcastRepository {
   /// Recent commons traffic, for the Recent Activity strip.
   ///
   /// Ensures:
-  ///   - a kill-switched endpoint (`disabled: true`) returns an EMPTY list rather than
-  ///     an error, because a feature the operator turned off is not a fault
+  ///   - a kill-switched endpoint (`disabled: true`) returns `disabled` with no entries
+  ///     rather than an error, because a feature the operator turned off is not a
+  ///     fault — and NOT a bare empty list, because it is not "no activity" either
   ///   - an absent `disabled` key reads as enabled, which is how the live endpoint
   ///     actually answers — the key exists only in the disabled branch
-  Future<List<Map<String, dynamic>>> fetchHistory( { CancelToken? cancelToken } ) async {
+  Future<BroadcastHistory> fetchHistory( { CancelToken? cancelToken } ) async {
     final Response<Map<String, dynamic>> res;
     try {
       res = await _dio.get<Map<String, dynamic>>( historyPath, cancelToken: cancelToken );
@@ -104,15 +105,17 @@ class BroadcastRepository {
     }
 
     final body = res.data ?? const <String, dynamic>{};
-    if ( body[ 'disabled' ] == true ) return const [];
+    if ( body[ 'disabled' ] == true ) return const BroadcastHistory( disabled: true );
 
     final entries = body[ 'entries' ];
-    if ( entries is! List ) return const [];
+    if ( entries is! List ) return const BroadcastHistory();
 
-    return entries
-        .whereType<Map>()
-        .map( ( e ) => Map<String, dynamic>.from( e ) )
-        .toList();
+    return BroadcastHistory(
+      entries : entries
+          .whereType<Map>()
+          .map( ( e ) => Map<String, dynamic>.from( e ) )
+          .toList(),
+    );
   }
 
   /// 🔴 THERE IS NO RECOVERY READ, AND THIS METHOD EXISTS TO SAY SO IN CODE.

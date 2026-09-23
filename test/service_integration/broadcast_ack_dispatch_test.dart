@@ -125,7 +125,7 @@ void main() {
       // group with a `Null is not a Future<...>` from inside `_onHistory` — a cause that
       // reads nothing like the ack path under test.
       when( () => repo.fetchHistory( cancelToken: any( named: 'cancelToken' ) ) )
-          .thenAnswer( ( _ ) async => const <Map<String, dynamic>>[] );
+          .thenAnswer( ( _ ) async => const BroadcastHistory() );
       when( () => repo.fetchActiveSessions( cancelToken: any( named: 'cancelToken' ) ) ).thenAnswer(
         ( _ ) async => const ActiveSessionRoster( [
           ActiveSession( sessionId: 's-radio',  personaName: 'Mr. Radio' ),

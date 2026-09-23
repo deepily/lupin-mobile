@@ -371,6 +371,47 @@ void main() {
     } );
   } );
 
+  /// Row a3ebeb18: history on screen, with the kill switch shown as itself.
+  group( 'recent activity — switched off, quiet, and a list are three answers', () {
+    Future<void> scrollToEnd( WidgetTester tester ) async {
+      await tester.drag( find.byKey( const Key( TestKeys.broadcastView ) ), const Offset( 0, -3000 ) );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets( '🔴 a disabled payload says SWITCHED OFF, not "no broadcasts"', ( tester ) async {
+      adapter.handlers[ 'GET ${BroadcastRepository.historyPath}' ] =
+          ( _ ) => jsonBody( fixture( 'broadcast_history_disabled.json' ) );
+      await mount( tester );
+      await scrollToEnd( tester );
+
+      expect( find.text( 'Broadcast history is switched off on the server' ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.broadcastHistoryEmpty ) ), findsNothing,
+          reason: 'the operator turned it off; nothing is not what happened' );
+    } );
+
+    testWidgets( 'an empty but ENABLED payload shows the quiet state', ( tester ) async {
+      adapter.handlers[ 'GET ${BroadcastRepository.historyPath}' ] =
+          ( _ ) => jsonBody( const { 'entries' : [] } );
+      await mount( tester );
+      await scrollToEnd( tester );
+
+      expect( find.byKey( const Key( TestKeys.broadcastHistoryEmpty ) ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.broadcastHistoryDisabled ) ), findsNothing );
+    } );
+
+    testWidgets( 'entries render, and their bodies are PLAIN TEXT', ( tester ) async {
+      await mount( tester );
+      await scrollToEnd( tester );
+
+      final row = find.byKey( Key( '${TestKeys.broadcastHistoryRowPrefix}0' ) );
+      expect( row, findsOneWidget );
+      expect( find.descendant( of: row, matching: find.textContaining( 'heartbeat-arbiter' ) ), findsOneWidget );
+      expect( find.descendant( of: row, matching: find.byType( MarkdownBody ) ), findsNothing,
+          reason: "another session's words are never rendered as markdown" );
+      expect( tester.takeException(), isNull );
+    } );
+  } );
+
   testWidgets( 'the recipient surface is a count and a refresh, NOT a picker',
       ( tester ) async {
     await mount( tester );

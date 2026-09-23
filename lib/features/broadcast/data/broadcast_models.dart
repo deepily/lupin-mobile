@@ -298,3 +298,19 @@ class AckAggregate extends Equatable {
     return '$ackedCount of $recipientsAtSend acked';
   }
 }
+
+/// One read of recent broadcast history.
+///
+/// 🔴 [disabled] IS NOT THE SAME ANSWER AS AN EMPTY [entries]. The server's kill switch
+/// answers `disabled: true`; a quiet fleet answers an empty list. Collapsing the two
+/// told the operator "nothing happened" when the truth was "you turned this off"
+/// (row a3ebeb18, 2026-09-23).
+class BroadcastHistory extends Equatable {
+  final bool disabled;
+  final List<Map<String, dynamic>> entries;
+
+  const BroadcastHistory( { this.disabled = false, this.entries = const [] } );
+
+  @override
+  List<Object?> get props => [ disabled, entries ];
+}

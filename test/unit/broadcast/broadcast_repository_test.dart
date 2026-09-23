@@ -126,8 +126,11 @@ void main() {
           ( _ ) => jsonBody( fixture( 'broadcast_history_disabled.json' ) );
 
       // A feature the operator turned off is not a fault, and an error banner would
-      // invite someone to go looking for a break that does not exist.
-      expect( await repo.fetchHistory(), isEmpty );
+      // invite someone to go looking for a break that does not exist. Nor is it "no
+      // activity" — the flag carries the difference to the pane (row a3ebeb18).
+      final read = await repo.fetchHistory();
+      expect( read.entries,  isEmpty );
+      expect( read.disabled, isTrue );
     } );
 
     test( '🔴 an ABSENT `disabled` key reads as ENABLED', () async {
@@ -141,7 +144,9 @@ void main() {
         ( fixture( 'broadcast_history.json' ) as Map ).containsKey( 'disabled' ),
         isFalse,
       );
-      expect( await repo.fetchHistory(), isNotEmpty );
+      final read = await repo.fetchHistory();
+      expect( read.entries,  isNotEmpty );
+      expect( read.disabled, isFalse );
     } );
   } );
 

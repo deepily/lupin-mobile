@@ -83,6 +83,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
               _notice( context, _rateLimitText( state.rateLimitedForSeconds! ) ),
             if ( state.hasBody ) ..._preview( context, state ),
             if ( state.aggregate != null ) ..._tally( context, state.aggregate! ),
+            if ( state.historyLoaded ) ..._history( context, state ),
           ],
         );
       },
@@ -272,6 +273,61 @@ class _BroadcastPaneState extends State<BroadcastPane> {
           subtitle : ack.bodySummary.isEmpty ? null : Text( ack.bodySummary ),
         ),
     ];
+  }
+
+  /// Recent broadcast activity (row a3ebeb18).
+  ///
+  /// 🔴 THREE ANSWERS, NEVER TWO. Switched off on the server, quiet, and a list are
+  /// different facts; the first used to render as the second. Entries are OTHER
+  /// sessions' words, so they are plain `Text` — the same rule as [_tally].
+  List<Widget> _history( BuildContext context, BroadcastState state ) {
+    final muted = Theme.of( context ).colorScheme.outline;
+    return [
+      const SizedBox( height: 24 ),
+      Text( 'Recent activity', style: Theme.of( context ).textTheme.labelMedium ),
+      if ( state.historyDisabled )
+        Padding(
+          padding : const EdgeInsets.only( top: 6 ),
+          child   : Text(
+            'Broadcast history is switched off on the server',
+            key   : const Key( TestKeys.broadcastHistoryDisabled ),
+            style : TextStyle( color: muted, fontStyle: FontStyle.italic ),
+          ),
+        )
+      else if ( state.history.isEmpty )
+        Padding(
+          padding : const EdgeInsets.only( top: 6 ),
+          child   : Text(
+            'No recent broadcasts',
+            key   : const Key( TestKeys.broadcastHistoryEmpty ),
+            style : TextStyle( color: muted ),
+          ),
+        )
+      else
+        for ( var i = 0; i < state.history.length; i++ )
+          ListTile(
+            key      : Key( '${TestKeys.broadcastHistoryRowPrefix}$i' ),
+            dense    : true,
+            leading  : Text( state.history[ i ][ 'persona_icon' ]?.toString() ?? '•' ),
+            title    : Text( _historyTitle( state.history[ i ] ) ),
+            // Plain Text. Not MarkdownBody. See the note above.
+            subtitle : Text(
+              state.history[ i ][ 'body' ]?.toString() ?? '',
+              maxLines : 3,
+              overflow : TextOverflow.ellipsis,
+            ),
+          ),
+    ];
+  }
+
+  /// `persona · HH:MM`, in the phone's local time.
+  String _historyTitle( Map<String, dynamic> entry ) {
+    final who = entry[ 'persona_name' ]?.toString() ?? 'unknown';
+    final ts  = DateTime.tryParse( entry[ 'ts' ]?.toString() ?? '' )?.toLocal();
+    if ( ts == null ) return who;
+    final hh  = ts.hour.toString().padLeft( 2, '0' );
+    final mm  = ts.minute.toString().padLeft( 2, '0' );
+    return '$who · $hh:$mm';
   }
 
   Widget _micError( BuildContext context, BroadcastState state ) {

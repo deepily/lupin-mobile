@@ -94,6 +94,13 @@ class BroadcastState extends Equatable {
 
   final List<Map<String, dynamic>> history;
 
+  /// The server's kill switch is on — distinct from an empty [history].
+  final bool historyDisabled;
+
+  /// A history read has answered at least once, so an empty [history] means "quiet"
+  /// rather than "not asked yet".
+  final bool historyLoaded;
+
   const BroadcastState( {
     this.body                  = '',
     this.roster                = const ActiveSessionRoster.empty(),
@@ -106,6 +113,8 @@ class BroadcastState extends Equatable {
     this.rateLimitedForSeconds,
     this.aggregate,
     this.history               = const [],
+    this.historyDisabled       = false,
+    this.historyLoaded         = false,
   } );
 
   bool get hasBody       => body.trim().isNotEmpty;
@@ -156,6 +165,8 @@ class BroadcastState extends Equatable {
     bool clearRateLimit = false,
     AckAggregate? aggregate,
     List<Map<String, dynamic>>? history,
+    bool? historyDisabled,
+    bool? historyLoaded,
   } ) {
     return BroadcastState(
       body                  : body ?? this.body,
@@ -171,6 +182,8 @@ class BroadcastState extends Equatable {
           : ( rateLimitedForSeconds ?? this.rateLimitedForSeconds ),
       aggregate             : aggregate ?? this.aggregate,
       history               : history ?? this.history,
+      historyDisabled       : historyDisabled ?? this.historyDisabled,
+      historyLoaded         : historyLoaded ?? this.historyLoaded,
     );
   }
 
@@ -195,7 +208,7 @@ class BroadcastState extends Equatable {
   List<Object?> get props => [
     body, roster, rosterLoading, rosterError, mic, micError,
     sending, sendError, rateLimitedForSeconds,
-    aggregate, history,
+    aggregate, history, historyDisabled, historyLoaded,
   ];
 }
 
@@ -407,7 +420,12 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
 
   Future<void> _onHistory( BroadcastHistoryRequested e, Emitter<BroadcastState> emit ) async {
     try {
-      emit( state.copyWith( history: await _repo.fetchHistory() ) );
+      final read = await _repo.fetchHistory();
+      emit( state.copyWith(
+        history         : read.entries,
+        historyDisabled : read.disabled,
+        historyLoaded   : true,
+      ) );
     } on BroadcastException {
       // The activity strip is decoration. A failure here must not disturb compose.
     } on DioException {
