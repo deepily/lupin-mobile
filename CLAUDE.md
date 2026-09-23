@@ -160,6 +160,7 @@ Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow 
 | Branch / PR / Merge | `/plan-branch-pr-and-merge` |
 | Workflow Audit | `/plan-workflow-audit` |
 | About | `/plan-about` |
+| Session Close | `/plan-last-call` (🔔 — two-stage close; deliverables `push` → `/plan-session-end` push step · `backup` → `/plan-backup-write` · `post-game` → `/plan-post-game`), `/plan-post-game` |
 | Install / Uninstall Wizards | `/plan-install-wizard`, `/plan-uninstall-wizard` |
 
 **Behavioral Directives** (already established globally in `~/.claude/CLAUDE.md`):
