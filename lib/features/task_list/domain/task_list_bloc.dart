@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/network/network_connectivity_service.dart';
 import '../../fleet/data/task_write_repository.dart';
+import '../../fleet_status/data/fleet_models.dart';
+import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
 import '../data/task_list_model.dart';
 import '../data/task_list_repository.dart';
@@ -34,6 +36,16 @@ class TaskListVerbPressed extends TaskListEvent {
   const TaskListVerbPressed( { required this.taskId, required this.verb } );
 }
 
+/// Read the live fleet, for the reassignment roster.
+///
+/// ⚠️ ITS OWN EVENT RATHER THAN A LIMB OF THE POLL, BECAUSE IT IS A DIFFERENT SERVICE ON
+/// A DIFFERENT CADENCE. The board polls every 60 s on Wi-Fi and 180 s on mobile data; the
+/// roster changes when a seat is spawned or reaped, which is rare and is not worth a
+/// second request on every tick of the first one.
+class TaskListRosterRequested extends TaskListEvent {
+  const TaskListRosterRequested();
+}
+
 /// An operator changed a row's priority or owner. Goes through the FIELD door.
 class TaskListFieldChanged extends TaskListEvent {
   final String taskId;
@@ -58,13 +70,22 @@ class TaskListState extends Equatable {
   /// work every sixty seconds.
   final Set<String> collapsed;
 
+  /// The personas a row may be reassigned to — the LIVE fleet, alpha-sorted.
+  ///
+  /// ⚠️ EMPTY IS A LEGITIMATE STATE, NOT A LOADING ONE. It means the phone cannot see
+  /// the fleet (pre-first-read, the arbiter unreachable, or nobody live), and the owner
+  /// control degrades to showing the row's current owner. Treating it as "not ready yet"
+  /// would hide the control forever on a handset that never reaches the arbiter.
+  final List<String> reassignTargets;
+
   const TaskListState( {
     this.model,
-    this.loading    = false,
+    this.loading         = false,
     this.error,
-    this.incomplete = false,
-    this.total      = 0,
-    this.collapsed  = const <String>{},
+    this.incomplete      = false,
+    this.total           = 0,
+    this.collapsed       = const <String>{},
+    this.reassignTargets = const <String>[],
   } );
 
   TaskListState copyWith( {
@@ -75,18 +96,21 @@ class TaskListState extends Equatable {
     bool? incomplete,
     int? total,
     Set<String>? collapsed,
+    List<String>? reassignTargets,
   } ) =>
       TaskListState(
-        model      : model ?? this.model,
-        loading    : loading ?? this.loading,
-        error      : clearError ? null : ( error ?? this.error ),
-        incomplete : incomplete ?? this.incomplete,
-        total      : total ?? this.total,
-        collapsed  : collapsed ?? this.collapsed,
+        model           : model ?? this.model,
+        loading         : loading ?? this.loading,
+        error           : clearError ? null : ( error ?? this.error ),
+        incomplete      : incomplete ?? this.incomplete,
+        total           : total ?? this.total,
+        collapsed       : collapsed ?? this.collapsed,
+        reassignTargets : reassignTargets ?? this.reassignTargets,
       );
 
   @override
-  List<Object?> get props => [ model, loading, error, incomplete, total, collapsed ];
+  List<Object?> get props =>
+      [ model, loading, error, incomplete, total, collapsed, reassignTargets ];
 }
 
 // ─── Bloc ────────────────────────────────────────────────────────────────────
@@ -104,15 +128,29 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   final TaskWriteRepository _writes;
   final NetworkConnectivityService _network;
 
+  /// The fleet read, for the reassignment roster ONLY.
+  ///
+  /// ⚠️ OPTIONAL, AND A NULL ONE IS NOT A BROKEN PANE. The Task List's job is tasks; the
+  /// roster is a courtesy the owner control degrades without. Making it required would
+  /// mean a pane that cannot render until a SECOND service answers, on a phone where the
+  /// second service is the one most likely not to.
+  final FleetRepository? _fleet;
+
   StreamSubscription<NetworkState>? _connectivitySub;
 
-  TaskListBloc( this._repo, this._writes, { NetworkConnectivityService? network } )
-      : _network = network ?? NetworkConnectivityService(),
+  TaskListBloc(
+    this._repo,
+    this._writes, {
+    NetworkConnectivityService? network,
+    FleetRepository? fleet,
+  } )  : _network = network ?? NetworkConnectivityService(),
+        _fleet   = fleet,
         super( const TaskListState() ) {
     on<TaskListRefreshRequested>( _onRefresh );
     on<TaskListGroupToggled>( _onToggle );
     on<TaskListVerbPressed>( _onVerb );
     on<TaskListFieldChanged>( _onField );
+    on<TaskListRosterRequested>( _onRoster );
   }
 
   /// 🔴 THE POLL INTERVAL READS THE CONNECTION, AND THE NUMBERS ARE MEASURED.
@@ -206,6 +244,32 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
       ) );
     } on TaskWriteException catch ( e ) {
       emit( state.copyWith( model: before, error: e.message ) );
+    }
+  }
+
+  /// Read the fleet once, for the roster.
+  ///
+  /// 🔴 EVERY FAILURE COLLAPSES TO AN EMPTY ROSTER, AND NONE OF THEM PAINTS AN ERROR.
+  /// This is a courtesy read on a pane about tasks: an arbiter that cannot be reached is
+  /// a reason the owner dropdown offers only the current owner, and it is NOT a reason to
+  /// tell the operator their task board is broken. Painting `state.error` here would put
+  /// a fleet problem's text on a board whose own read succeeded.
+  ///
+  /// ⚠️ AND IT MUST NOT THROW PAST THE HANDLER EITHER. An unhandled error inside a bloc
+  /// handler is not a silent no-op — it surfaces through `onError` and can take the bloc
+  /// down, which would turn "the arbiter is unreachable" into "the Task List stopped
+  /// polling".
+  Future<void> _onRoster( TaskListRosterRequested event, Emitter<TaskListState> emit ) async {
+    final fleet = _fleet;
+    if ( fleet == null ) return;
+
+    try {
+      final composite = await fleet.fetchState();
+      emit( state.copyWith( reassignTargets: activeReassignTargets( composite ) ) );
+    } on FleetApiException {
+      // The phone cannot see the fleet. The board is fine; the roster is empty.
+    } on DioException {
+      // Includes the cancelled case, which is the lifecycle rule working.
     }
   }
 

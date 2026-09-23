@@ -42,6 +42,11 @@ class _TaskListPaneState extends State<TaskListPane> {
       ..startConnectivityRefresh();
     // This pane is on screen the moment it is built, because it is route-scoped.
     _bloc.onPaneVisible();
+    // 🔴 ONCE ON MOUNT, NOT ON EVERY POLL. The roster changes when a seat is spawned or
+    // reaped — rare — while the board polls every 60 s on Wi-Fi. Riding the poll would
+    // double this pane's request count for a list that almost never moves, on the
+    // connection §6.5 costed in megabytes.
+    _bloc.add( const TaskListRosterRequested() );
   }
 
   @override
@@ -75,10 +80,52 @@ class _TaskListPaneState extends State<TaskListPane> {
         return Column(
           children : [
             if ( state.incomplete ) _incompleteBanner( context, state ),
+            if ( state.error != null ) _writeNotice( context, state.error! ),
             Expanded( child: _list( context, state, model ) ),
           ],
         );
       },
+    );
+  }
+
+  /// What the operator is told when a write did not land.
+  ///
+  /// 🔴 A ROLLED-BACK WRITE THAT SAYS NOTHING IS A ROW THAT SILENTLY UN-HAPPENS. The
+  /// bloc has always set `state.error` on a failed or 202'd write, and this pane rendered
+  /// it ONLY when there were no rows — so every write error on a populated board was
+  /// invisible. The row came back, the operator's typing was gone, and nothing on screen
+  /// said why.
+  ///
+  /// ⚠️ THAT WAS SURVIVABLE WHILE TWO VERBS COULD FAIL AND IS NOT NOW. Before this row
+  /// the only reachable writes were approve and un-park, neither of which asks the
+  /// operator for anything. Five of the seven now do, and each one costs a reason they
+  /// composed — a 202 on a park throws away a quoted decisive sentence and, without this,
+  /// looks exactly like a tap that missed.
+  ///
+  /// The 202 is the case that matters most: `TaskAwaitingApprovalException` is not a
+  /// failure. The request SUCCEEDED and the change did not happen, so the operator must
+  /// be told it is pending review — not that it failed, and not that it worked.
+  ///
+  /// A live region, because the notice appears in response to a press and a TalkBack user
+  /// whose focus is still on the button they pressed is told nothing otherwise.
+  /// ⚠️ THE FLAG MUST END UP ON THE NODE THAT CARRIES THE WORDS, which is why this is
+  /// `MergeSemantics` over `Semantics` over the container rather than a bare `Semantics`
+  /// around the text. A live region on a node with no label of its own fires on something
+  /// that says nothing while the sentence the user needs sits one level down. The same
+  /// trap `TaskRow._verbButton` documents, and the widget test asserts the flag on the
+  /// node the notice's own key resolves to.
+  Widget _writeNotice( BuildContext context, String message ) {
+    return MergeSemantics(
+      child : Semantics(
+        liveRegion : true,
+        child      : Container(
+          key     : const Key( TestKeys.taskListWriteNotice ),
+          width   : double.infinity,
+          color   : Theme.of( context ).colorScheme.errorContainer,
+          padding : const EdgeInsets.symmetric( vertical: 8, horizontal: 16 ),
+          child   : Text( message ),
+        ),
+      ),
     );
   }
 
@@ -138,8 +185,9 @@ class _TaskListPaneState extends State<TaskListPane> {
       key     : Key( '${TestKeys.taskListRowIndentPrefix}${item.row!.id}' ),
       padding : const EdgeInsets.fromLTRB( TaskGroupHeader.textInset, 4, 16, 4 ),
       child   : TaskRow(
-        model  : item.row!,
-        verbs  : _verbsFor( item.row! ),
+        model        : item.row!,
+        verbs        : _verbsFor( item.row! ),
+        ownerOptions : state.reassignTargets,
         // The row owns arming; the BLOC owns the write and the rollback. Routing it through
         // an event rather than calling the repository from here keeps the optimistic
         // repaint and its undo in one place — a pane that wrote directly would have to
@@ -147,17 +195,46 @@ class _TaskListPaneState extends State<TaskListPane> {
         onVerb : ( verb ) => context
             .read<TaskListBloc>()
             .add( TaskListVerbPressed( taskId: item.row!.id, verb: verb ) ),
+        // 🔴 THE OTHER DOOR, AND ITS OWN EVENT. `TaskListFieldChanged` has had a handler
+        // in the bloc since Phase 3 and NOTHING DISPATCHED IT — gap G2, a write path
+        // built, tested, and unreachable from the UI. Routing a field change through
+        // `TaskListVerbPressed` instead would post it to the TRANSITION endpoint, which
+        // is §4.2's named failure read backwards.
+        onFieldChanged : ( { String? priority, String? ownerPersona } ) => context
+            .read<TaskListBloc>()
+            .add( TaskListFieldChanged(
+              taskId       : item.row!.id,
+              priority     : priority,
+              ownerPersona : ownerPersona,
+            ) ),
       ),
     );
   }
 
   /// Which verbs a row offers. Passed as DATA — a list of verbs is not a pane
   /// discriminator, and both task panes may pass the same list.
+  ///
+  /// 🔴 THE LEGALITY LIVES IN `verbLegality`, NOT HERE, and that is the web's rule
+  /// carried verbatim: *"Two derivations of one rule agree until the day they do not, and
+  /// the day they do not the cell offers a move the server refuses — which reads to the
+  /// operator as the board being broken rather than as the move being illegal."* This
+  /// method used to BE a second derivation — two hand-written `row.status ==` tests — and
+  /// it offered two of the seven verbs.
+  ///
+  /// ⚠️ ONLY THE LEGAL VERBS ARE RENDERED, WHERE THE WEB GREYS THE ILLEGAL ONES, AND THE
+  /// DIVERGENCE IS DELIBERATE. A greyed `<option>` inside a select costs nothing: it is
+  /// not on screen until the select is opened, and it teaches the operator why the move
+  /// is unavailable when it is. A greyed BUTTON in a 360 dp `Wrap` costs a line of
+  /// vertical space on every row and puts a dead 48 dp target next to a live one — on the
+  /// surface where §7.4 says a mis-tap is likelier than a mis-click. The reason each verb
+  /// is unavailable is still computed and still tested; what changes is that a phone does
+  /// not pay row height to display four sentences about moves the operator did not ask
+  /// for.
   List<VerbNeeds> _verbsFor( TaskRowModel row ) {
-    return <VerbNeeds>[
-      if ( row.status == 'not_approved' ) verbNeeds( 'approve' )!,
-      if ( row.status == 'parked' ) verbNeeds( 'unpark' )!,
-    ];
+    return verbLegality( row.status )
+        .where( ( entry ) => entry.enabled )
+        .map( ( entry ) => entry.needs )
+        .toList( growable: false );
   }
 
   /// Flatten groups + rows into one lazy index space, honouring collapse.
