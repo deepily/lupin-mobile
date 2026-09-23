@@ -15,6 +15,8 @@
 /// widget test asserts this NEGATIVELY; see the note there for why.
 library;
 
+import '../../../core/text/persona_label.dart';
+
 /// One row of `/api/tasks/events`, per the server's `_serialize_event`.
 class FinishedTaskEvent {
   final int       id;
@@ -167,33 +169,33 @@ String relativeAge( DateTime? then, DateTime now ) {
   return "${hours ~/ 24}d";
 }
 
-/// The stored suffix: whitespace then exactly 8 hex characters, at the very end.
-///
-/// ⚠️ THE `\s+` IS LOAD-BEARING AND A BARE ID IS DELIBERATELY NOT A MATCH. A value
-/// that is only `"0e61abe3"`, with no name in front of it, renders WHOLE — visibly
-/// odd, by design, and pinned by the web client's parity corpus.
-final RegExp _trailingSessionId = RegExp( r"\s+[0-9a-f]{8}$", caseSensitive: false );
-
 /// The persona alone, from an actor field shaped `<persona> <8-hex session>`.
 ///
-/// 🔴 STRIP A TRAILING SESSION ID; NEVER KEEP A LEADING WORD. A persona can be TWO
-/// WORDS, so the obvious `split(" ").first` renders "mr radio 8353ea70" as "mr" —
-/// measured wrong on 6 of 13 live rows, and those six are exactly the ones this
-/// column is for. That naive form has already been written twice in the web client
-/// and shipped to this very column once (row 4a06ded1), which is why it is a function
-/// here rather than a comment.
+/// 🔴 THE RULE ITSELF NOW LIVES IN `core/text/persona_label.dart`, AND THE MOVE IS THE
+/// POINT RATHER THAN A TIDY-UP. Strip a TRAILING session id; never keep a leading word.
+/// A persona can be TWO WORDS, so the obvious `split(" ").first` renders
+/// "mr radio 8353ea70" as "mr" — measured wrong on 6 of 13 live rows, and those six are
+/// exactly the ones this column is for. That naive form has already been written twice
+/// in the web client and shipped to THIS VERY COLUMN once (row 4a06ded1). The Holding
+/// Area's persona grouping needed the same rule a third time, which is the moment
+/// María's 2026-09-07 ruling applies: extract it rather than re-derive it. The
+/// measurement is kept here because it is what justifies the rule; the rule is kept
+/// there because it is what a fourth caller will find.
+///
+/// ⚠️ THE EM DASH IS THIS COLUMN'S FALLBACK, NOT THE SHARED HELPER'S. `personaLabel`
+/// takes the caller's own word for "nobody" — the Holding Area's is "Unattributed" —
+/// so nothing about this column's spelling of it moved.
+///
+/// ⚠️ AND THE CASE STAYS THE STORE'S. This column reads the stored spelling; the
+/// Holding Area's group headers display-case theirs. That split is deliberate and is
+/// why `personaLabel` and `personaDisplayLabel` are two functions.
 ///
 /// Ensures:
 ///     - "mr radio 8353ea70" → "mr radio"
 ///     - "krishna 420f5ec9"  → "krishna"
 ///     - no trailing session id → the whole string, untouched
 ///     - null or empty → the em dash
-String actorPersona( String? actor ) {
-  if ( actor == null ) return kFinishedUnmeasured;
-  final trimmed = actor.trim();
-  if ( trimmed.isEmpty ) return kFinishedUnmeasured;
-  return trimmed.replaceFirst( _trailingSessionId, "" );
-}
+String actorPersona( String? actor ) => personaLabel( actor, kFinishedUnmeasured );
 
 /// The status a transition landed on — the right-hand side of "queued->done".
 ///

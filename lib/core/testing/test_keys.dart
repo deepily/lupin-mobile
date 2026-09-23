@@ -327,6 +327,7 @@ class TestKeys {
   static const holdingErrorView            = 'holding.error';
   static const holdingNotice               = 'holding.notice';
   static const holdingGroupHeaderPrefix    = 'holding.group.';           // + filer
+  static const holdingGroupTogglePrefix    = 'holding.group.toggle.';    // + filer
   static const holdingApproveAllPrefix     = 'holding.approveAll.';      // + filer
   static const holdingWontFixAllPrefix     = 'holding.wontFixAll.';      // + filer
   static const holdingReasonFieldPrefix    = 'holding.reason.';          // + filer

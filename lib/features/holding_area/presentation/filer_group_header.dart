@@ -3,20 +3,41 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../data/holding_area_models.dart';
 
-/// One filer's block header, with that group's two batch controls.
+/// One persona's group header: the disclosure control, and that group's two batch
+/// controls.
 ///
-/// 🔴 THIS IS NOT AN ACCORDION HEADER, AND THE DIFFERENCE IS NOT COSMETIC. The web says
-/// so in as many words — `notifications.js:14085`, *"IT IS NOT AN ACCORDION LISTENER"*.
-/// The Task List's group header collapses; this one does not, so it exposes no toggle,
-/// no `Semantics( expanded: )`, and no tap target on the header itself. Giving it one to
-/// match its sibling would invent a state the pane does not have and hide held rows
-/// behind a gesture — in the pane whose entire job is showing what is still held.
+/// 🔴 THIS *WAS* NOT AN ACCORDION HEADER, AND RICK OVERRULED THAT ON 2026-09-22. The old
+/// note argued from the web — `notifications.js:14085`, *"IT IS NOT AN ACCORDION
+/// LISTENER"* — and concluded that a toggle here *"would invent a state the pane does not
+/// have and hide held rows behind a gesture, in the pane whose entire job is showing what
+/// is still held."* He asked for the gesture anyway, having noted that neither existing
+/// client has it: *"I want them displayed folded by default so that we can do progressive
+/// disclosure."*
+///
+/// 🔴 SO THE OLD NOTE'S HAZARD IS REAL AND IS ANSWERED HERE RATHER THAN DISMISSED:
+/// **FOLDING MUST NOT HIDE HOW MUCH IS HELD.** A collapsed group and an empty one must
+/// not read alike, or the operator approves blind. Three things therefore stay on screen
+/// while folded — the persona, the count, and BOTH batch controls with the count inside
+/// their labels — and the count is in the semantic label too, so TalkBack hears it
+/// without unfolding.
+///
+/// ⚠️ THE REASON BOX IS THE ONE THING THAT FOLDS AWAY WITH THE ROWS, and that leaves a
+/// hole the bloc closes rather than this widget: won't-fix-all on a folded group sets a
+/// complaint about a field that is off screen, so the bloc unfolds the group at the same
+/// time it sets the complaint. See `_onWontFixAll`.
 ///
 /// ⚠️ EVERYTHING THAT DISTINGUISHES THIS PANE FROM THE TASK LIST LIVES HERE RATHER THAN
 /// IN THE ROW. `TaskRow` takes no pane discriminator (§7); batch selection is the
 /// Holding Area's alone, so it belongs to the header that owns the group.
 class FilerGroupHeader extends StatefulWidget {
   final FilerGroup group;
+
+  /// Whether this persona's rows are on screen. Folded is the default — the pane keeps
+  /// the set, so the header stays a pure function of what it is handed.
+  final bool expanded;
+
+  /// Fold or unfold this persona's rows.
+  final VoidCallback onToggle;
 
   /// The reason currently typed for this group.
   final String reason;
@@ -34,6 +55,26 @@ class FilerGroupHeader extends StatefulWidget {
 
   final VoidCallback onWontFixAll;
 
+  /// What TalkBack reads for the disclosure control.
+  ///
+  /// 🔴 THE COUNT IS IN THE LABEL, AND THAT IS THE PART THAT CARRIES THE SAFETY. A
+  /// collapsed group and an empty one announce identically without it, so a screen-reader
+  /// user is told a persona has held work only by unfolding every one of them. The
+  /// sighted reader gets the same fact from the number beside the name and from both
+  /// button labels; this is that reader's copy.
+  ///
+  /// Kept as a static so the test asserts the SAME string the widget renders rather than
+  /// a copy that can drift from it.
+  static String semanticLabel( String filer, int count ) =>
+      '$filer, $count held ${count == 1 ? 'row' : 'rows'}';
+
+  /// Where the persona label's text starts: 16 dp gutter + 20 dp chevron + 8 dp gap.
+  /// Derived from the three numbers rather than typed as 44, so it moves with them.
+  static const double _gutter      = 16;
+  static const double _chevronSize = 20;
+  static const double _chevronGap  = 8;
+  static const double textInset    = _gutter + _chevronSize + _chevronGap;
+
   const FilerGroupHeader( {
     super.key,
     required this.group,
@@ -41,6 +82,8 @@ class FilerGroupHeader extends StatefulWidget {
     required this.onReasonChanged,
     required this.onApproveAll,
     required this.onWontFixAll,
+    required this.onToggle,
+    this.expanded = false,
     this.reasonError,
     this.busy = false,
   } );
@@ -95,25 +138,70 @@ class _FilerGroupHeaderState extends State<FilerGroupHeader> {
         children : [
           _title( context ),
           const SizedBox( height: 8 ),
-          _reasonBox( context ),
-          const SizedBox( height: 8 ),
+          // 🔴 ABSENT FROM THE TREE WHILE FOLDED, NOT MERELY INVISIBLE. `Visibility`
+          // drops the child by default, which is what we want: a `TextField` hidden with
+          // `Opacity(0)` or `maintainSemantics: true` is still focusable and still
+          // typable under TalkBack, so a screen-reader user would be editing the
+          // justification for a batch whose rows are folded out of sight.
+          Visibility(
+            visible : widget.expanded,
+            child   : Column(
+              crossAxisAlignment : CrossAxisAlignment.start,
+              children : [
+                _reasonBox( context ),
+                const SizedBox( height: 8 ),
+              ],
+            ),
+          ),
           _batchControls( context ),
         ],
       ),
     );
   }
 
-  /// The filer and the count.
+  /// The persona, the count, and the fold control — one tap target.
+  ///
+  /// 🔴 THE WHOLE HEADING IS THE TARGET, NOT JUST THE CHEVRON. A 20 dp glyph is under
+  /// half the 48 dp floor, and a fold aimed at one persona that lands on the next one
+  /// HIDES ROWS rather than merely missing. `kMinInteractiveDimension` is the floor
+  /// itself, as a constraint — padding is a number someone picks and a font change moves
+  /// back under the line silently.
   ///
   /// The count also rides INSIDE both button labels. That is deliberate duplication: the
   /// web prints it once, in a span beside the name, so the operator reads the blast
   /// radius somewhere other than on the control they are about to press.
   Widget _title( BuildContext context ) {
-    return Text(
-      '${group.filer} · ${group.count}',
-      style    : Theme.of( context ).textTheme.titleSmall,
-      maxLines : 1,
-      overflow : TextOverflow.ellipsis,
+    return Semantics(
+      button   : true,
+      expanded : widget.expanded,
+      label    : FilerGroupHeader.semanticLabel( group.filer, group.count ),
+      // The child's own text would otherwise be announced again after the label above.
+      child    : ExcludeSemantics(
+        child : InkWell(
+          key   : Key( '${TestKeys.holdingGroupTogglePrefix}${group.filer}' ),
+          onTap : widget.onToggle,
+          child : ConstrainedBox(
+            constraints : const BoxConstraints( minHeight: kMinInteractiveDimension ),
+            child : Row(
+              children : [
+                Icon(
+                  widget.expanded ? Icons.expand_more : Icons.chevron_right,
+                  size : FilerGroupHeader._chevronSize,
+                ),
+                const SizedBox( width: FilerGroupHeader._chevronGap ),
+                Expanded(
+                  child : Text(
+                    '${group.filer} · ${group.count}',
+                    style    : Theme.of( context ).textTheme.titleSmall,
+                    maxLines : 1,
+                    overflow : TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

@@ -1,17 +1,41 @@
-/// Filer grouping and the batch controls' words.
+/// Persona grouping and the batch controls' words.
 ///
-/// ⚠️ THIS PANE IS DELIBERATELY NOT AN ACCORDION. The web source says so in as many
-/// words — `notifications.js:14085`, *"IT IS NOT AN ACCORDION LISTENER"*. Each filer
-/// group is its own block, not a collapsible section. Normalising it to the Task
-/// List's shape would invent a collapse the pane does not have.
+/// 🔴 THIS PANE *WAS* DELIBERATELY NOT AN ACCORDION, AND RICK OVERRULED THAT ON
+/// 2026-09-22 AFTER WALKING IT ON HARDWARE. The old note cited the web source —
+/// `notifications.js:14085`, *"IT IS NOT AN ACCORDION LISTENER"* — and concluded that
+/// each filer block renders open, always. His words, on seeing the result:
+///
+/// > *"I want to be able to toggle or collapse each individual persona's items… and I
+/// > want them displayed folded by default so that we can do progressive disclosure.
+/// > Otherwise it's just an enormous amount of text to scroll through to get to the one
+/// > persona you're interested in."*
+///
+/// ⚠️ THE OLD NOTE WAS NOT WRONG ABOUT THE WEB; IT WAS WRONG ABOUT WHOSE QUESTION IT
+/// WAS ANSWERING. "The multiplexer does not collapse here" is a fact about the
+/// multiplexer, and Rick noted himself that NEITHER existing client has this. Parity
+/// with a surface is the floor, not the ceiling.
+///
+/// ⇒ Groups collapse, and collapsed is the DEFAULT. The collapse state is the pane's,
+/// not this file's — see `HoldingAreaState.expanded`.
 library;
 
+import '../../../core/text/persona_label.dart';
 import '../../fleet/data/task_row_model.dart';
 
 /// One filer's held rows.
 class FilerGroup {
-  /// The filer, EXACTLY as the store holds it — `created_by`, which is persona plus
-  /// session hash ("mr radio 078b97cb").
+  /// The PERSONA who filed these rows, display-cased — "Mr Radio", never
+  /// "mr radio 078b97cb".
+  ///
+  /// 🔴 THE SESSION HASH IS GONE FROM THIS VALUE ENTIRELY, WHICH IS RICK'S RULING R1=B
+  /// AND NOT A TRUNCATION FOR LOOKS. *"I want you to group all sessions without any
+  /// explicit labeling under each persona… I don't give a shit about your notion of
+  /// session, it's irrelevant to me."* The session is not a user-facing concept on this
+  /// surface, so it is not in the label, not in a subtitle, and not in a count.
+  ///
+  /// ⚠️ THIS DOUBLES AS THE STATE KEY — the batch reason, the complaint and the busy
+  /// flag are all keyed on it — so it has to be stable across a poll. It is: it is a
+  /// pure function of `created_by`.
   final String filer;
 
   /// The rows this filer filed, in the order the server returned them.
@@ -23,34 +47,67 @@ class FilerGroup {
 
   /// The ids this group's batch controls would act on. The blast radius as a value, so
   /// a caller cannot press approve-all and send a different set than the label counted.
+  ///
+  /// 🔴 UNDER R1=B THIS SPANS EVERY SESSION THAT PERSONA FILED FROM, AND THAT IS WHY THE
+  /// COUNT HAS TO COME FROM HERE. Approve-all on "Mr Radio" now moves rows he filed from
+  /// three different seats. That wider number is the correct one, and the walkthrough
+  /// plan is explicit that it must be the number on the button and in the confirm:
+  /// *"A batch control whose label undercounts what it does is a defect under any
+  /// grouping scheme."* [count] and this list are the same rows by construction, so the
+  /// label cannot drift from the send.
   List<String> get ids => rows.map( ( r ) => r.id ).toList( growable: false );
 }
 
-/// Group held rows by filer.
+/// Group held rows by the PERSONA who filed them.
 ///
-/// 🔴 THE GROUPING KEY IS THE WHOLE `created_by` STRING, SESSION HASH INCLUDED, AND THAT
-/// IS THE CONSERVATIVE READING RATHER THAN THE OBVIOUS ONE. Stripping the hash to group
-/// by bare persona would merge one persona's sessions into a single group — fewer,
-/// larger groups, and an approve-all whose blast radius is WIDER than the name on the
-/// button suggests. Grouping by the stored string keeps what the batch acts on identical
-/// to what the header displays. If the fleet wants per-persona grouping it is a ruling,
-/// not a tidy-up, because it changes what one press does.
+/// 🔴 THE GROUPING KEY IS THE PERSONA, SESSION HASH STRIPPED — RICK'S RULING R1=B,
+/// 2026-09-22, AND IT REVERSES WHAT THIS FUNCTION USED TO DO. The old key was the whole
+/// `created_by` string, and the reasoning behind it is worth keeping because it names
+/// the hazard this version has to handle rather than one it gets to ignore:
+///
+/// > *"Stripping the hash to group by bare persona would merge one persona's sessions
+/// > into a single group — fewer, larger groups, and an approve-all whose blast radius
+/// > is WIDER than the name on the button suggests."*
+///
+/// ⚠️ EVERY WORD OF THAT IS STILL TRUE. What changed is that it is now the REQUESTED
+/// behaviour, not an accident to be prevented: *"I want you to group all sessions
+/// without any explicit labeling under each persona."* He also rejected the framing —
+/// *"It's a bug because it does not mirror the behavior or the layout of the
+/// multiplexer or the legacy notification client."*
+///
+/// ⇒ SO THE WIDER BLAST RADIUS IS HANDLED RATHER THAN AVOIDED, AND IT IS HANDLED
+/// SOMEWHERE THIS FUNCTION CAN GUARANTEE: [FilerGroup.ids] and [FilerGroup.count] are
+/// the same rows by construction, and every label the pane prints reads the count off
+/// the group. A caller cannot show one number and send another.
+///
+/// 🔴 DO NOT REACH FOR `created_by.split( " " ).first`. A persona can be TWO WORDS, so
+/// that renders "mr radio 8fa24215" as "mr" — measured wrong on 6 of 13 live rows in the
+/// web client, and those six are exactly the ones this pane is for. The rule lives in
+/// `core/text/persona_label.dart` precisely so it is not re-derived here.
+///
+/// ⚠️ THE KEY IS DISPLAY-CASED, AND THAT IS LOAD-BEARING RATHER THAN COSMETIC. The live
+/// board holds "Krishna" and "maria" side by side — one store, two casing conventions.
+/// Grouping on the raw persona would put "Krishna" and "krishna" in two groups, which is
+/// the exact defect R1=B exists to remove, one level down.
 ///
 /// Requires:
 ///     - nothing; an empty list yields an empty list
 ///
 /// Ensures:
-///     - groups are ordered by filer name, case-insensitively, so the pane does not
+///     - every session of one persona lands in ONE group, and no session appears in the
+///       label, a subtitle or a count
+///     - groups are ordered by persona name, case-insensitively, so the pane does not
 ///       reshuffle between repaints
 ///     - a row with no filer lands in a single trailing "Unattributed" group rather
 ///       than being dropped — a held row nobody can see is worse than an odd label
-///     - row order WITHIN a group is the server's, untouched
+///     - row order WITHIN a group is the server's, untouched. Rows from two sessions
+///       therefore interleave exactly as the server returned them, which is the only
+///       order this function is entitled to claim
 List<FilerGroup> groupByFiler( List<TaskRowModel> rows ) {
   final byFiler = <String, List<TaskRowModel>>{};
 
   for ( final row in rows ) {
-    final raw = row.createdBy;
-    final key = ( raw != null && raw.trim().isNotEmpty ) ? raw.trim() : kUnattributedFiler;
+    final key = personaDisplayLabel( row.createdBy, kUnattributedFiler );
     byFiler.putIfAbsent( key, () => [] ).add( row );
   }
 

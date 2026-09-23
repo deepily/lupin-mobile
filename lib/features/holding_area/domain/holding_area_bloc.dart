@@ -47,6 +47,17 @@ class HoldingAreaWontFixAllPressed extends HoldingAreaEvent {
   const HoldingAreaWontFixAllPressed( { required this.filer, required this.reason } );
 }
 
+/// The operator folded or unfolded one persona's group.
+///
+/// 🔴 THE EVENT CARRIES THE PERSONA, NOT AN INDEX. Group positions move under a poll —
+/// a persona whose last held row is approved away disappears and every group below it
+/// shifts up — so an index captured at build time can toggle a DIFFERENT persona by the
+/// time the tap lands. The Task List's toggle keys on its label for the same reason.
+class HoldingAreaGroupToggled extends HoldingAreaEvent {
+  final String filer;
+  const HoldingAreaGroupToggled( this.filer );
+}
+
 /// The operator typed in one group's batch reason box.
 class HoldingAreaReasonChanged extends HoldingAreaEvent {
   final String filer;
@@ -90,6 +101,25 @@ class HoldingAreaState extends Equatable {
   /// writes without doubling the count the operator read.
   final Set<String> busyFilers;
 
+  /// Personas the operator has UNFOLDED.
+  ///
+  /// 🔴 AN `expanded` SET, NOT THE TASK LIST'S `collapsed` SET, AND THE INVERSION IS THE
+  /// WHOLE FEATURE. Rick asked for *"folded by default so that we can do progressive
+  /// disclosure"*. Tracking what is collapsed makes EXPANDED the default, which is the
+  /// state he was complaining about; the empty set has to mean "everything is folded" or
+  /// the default arrives wrong and no test of the toggle would notice.
+  ///
+  /// ⚠️ NOT PERSISTED, AND NOT RESTORED ACROSS A VISIT (N2c). The bloc is route-scoped,
+  /// so leaving the pane and coming back folds everything again. That is the specified
+  /// behaviour; if Rick wants it remembered it is a ruling, because it means choosing
+  /// where to remember it.
+  ///
+  /// ⚠️ IT SURVIVES A POLL, WHICH IS NOT THE SAME THING. A refresh that re-folded the
+  /// group the operator is reading — every 60 or 180 seconds, mid-scroll — would make
+  /// the pane unusable on exactly the personas big enough to need folding. The refresh
+  /// handler replaces `groups` and leaves this alone.
+  final Set<String> expanded;
+
   const HoldingAreaState( {
     this.groups       = const <FilerGroup>[],
     this.loading      = false,
@@ -99,6 +129,7 @@ class HoldingAreaState extends Equatable {
     this.reasons      = const <String, String>{},
     this.reasonErrors = const <String, String>{},
     this.busyFilers   = const <String>{},
+    this.expanded     = const <String>{},
     this.batchNotice,
   } );
 
@@ -112,6 +143,7 @@ class HoldingAreaState extends Equatable {
     Map<String, String>? reasons,
     Map<String, String>? reasonErrors,
     Set<String>? busyFilers,
+    Set<String>? expanded,
     String? batchNotice,
     bool clearBatchNotice = false,
   } ) =>
@@ -124,16 +156,20 @@ class HoldingAreaState extends Equatable {
         reasons      : reasons ?? this.reasons,
         reasonErrors : reasonErrors ?? this.reasonErrors,
         busyFilers   : busyFilers ?? this.busyFilers,
+        expanded     : expanded ?? this.expanded,
         batchNotice  : clearBatchNotice ? null : ( batchNotice ?? this.batchNotice ),
       );
 
   /// The reason currently typed for one group, or the empty string.
   String reasonFor( String filer ) => reasons[ filer ] ?? '';
 
+  /// Whether one persona's rows are on screen. Folded unless the operator said otherwise.
+  bool isExpanded( String filer ) => expanded.contains( filer );
+
   @override
   List<Object?> get props =>
       [ groups, loading, error, incomplete, total, reasons, reasonErrors, busyFilers,
-        batchNotice ];
+        expanded, batchNotice ];
 }
 
 // ─── Bloc ────────────────────────────────────────────────────────────────────
@@ -162,6 +198,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     on<HoldingAreaApproveAllPressed>( _onApproveAll );
     on<HoldingAreaWontFixAllPressed>( _onWontFixAll );
     on<HoldingAreaReasonChanged>( _onReasonChanged );
+    on<HoldingAreaGroupToggled>( _onGroupToggled );
   }
 
   /// The poll interval reads the connection, same measurement as the Task List: a full
@@ -246,8 +283,19 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     // shortcut nobody wired to the button — would otherwise send N transitions the
     // server answers with N identical 422s.
     if ( event.reason.trim().isEmpty ) {
+      // 🔴 THE COMPLAINT UNFOLDS THE GROUP, BECAUSE THE BOX IT IS ABOUT IS HIDDEN WHILE
+      // FOLDED. Collapsing by default took the reason box off screen while leaving both
+      // batch buttons on it — deliberately, since the header must still show what the
+      // batch would act on. Without this line, pressing won't-fix-all on a folded group
+      // sets a complaint the operator cannot see, about a field they cannot reach, and
+      // the pane's only feedback is that nothing happened.
+      //
+      // ⚠️ IT UNFOLDS RATHER THAN REFUSING TO FIRE. Making the button inert while folded
+      // would be the other way to close the hole and is worse: an inert control explains
+      // nothing, and the operator's next move is to press it again.
       emit( state.copyWith(
         reasonErrors : { ...state.reasonErrors, event.filer: kHoldingWontFixReasonMissing },
+        expanded     : { ...state.expanded, event.filer },
       ) );
       return;
     }
@@ -317,6 +365,18 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     ) );
 
     add( const HoldingAreaRefreshRequested() );
+  }
+
+  /// Fold or unfold one persona's rows.
+  ///
+  /// ⚠️ ONE GROUP AT A TIME, AND OPENING ONE DOES NOT CLOSE THE OTHERS. An accordion that
+  /// allows a single open section is a different control, and it would make comparing two
+  /// personas' held work impossible without scrolling back and forth. Rick asked to
+  /// *"toggle or collapse each individual persona's items"* — each, independently.
+  void _onGroupToggled( HoldingAreaGroupToggled event, Emitter<HoldingAreaState> emit ) {
+    final next = Set<String>.from( state.expanded );
+    if ( !next.remove( event.filer ) ) next.add( event.filer );
+    emit( state.copyWith( expanded: next ) );
   }
 
   void _onReasonChanged( HoldingAreaReasonChanged event, Emitter<HoldingAreaState> emit ) {
