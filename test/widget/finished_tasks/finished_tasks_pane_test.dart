@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +27,7 @@ class _FakeRepo implements FinishedTasksRepository {
   Future<FinishedFetchResult> fetchWindow( {
     required int days,
     required DateTime now,
+    CancelToken? cancelToken,
   } ) async {
     calls += 1;
     return FinishedFetchResult(

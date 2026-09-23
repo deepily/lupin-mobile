@@ -202,11 +202,15 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   }
 
   /// The poll interval reads the connection, same measurement as the Task List: a full
-  /// page is ~2.1 MB and a terse one ~107 KB, so sixty seconds on a metered connection
-  /// is rude even terse.
+  /// page is ~2.1 MB and a terse one ~107 KB, so sixty seconds on a metered connection is
+  /// rude even terse.
+  ///
+  /// ⚠️ THE INTERVAL ITSELF IS `PanePollingMixin.pollInterval` NOW. This pane's copy was
+  /// identical to the Task List's, and the two were one edit away from disagreeing. All
+  /// that is overridden here is WHICH network service answers, because this bloc holds an
+  /// injected one its tests fake.
   @override
-  Duration get pollInterval =>
-      _network.isMobile ? const Duration( seconds: 180 ) : const Duration( seconds: 60 );
+  bool get isMeteredConnection => _network.isMobile;
 
   @override
   Future<void> pollOnce( CancelToken token ) async {

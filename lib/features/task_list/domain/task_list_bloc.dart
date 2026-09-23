@@ -153,18 +153,22 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     on<TaskListRosterRequested>( _onRoster );
   }
 
-  /// 🔴 THE POLL INTERVAL READS THE CONNECTION, AND THE NUMBERS ARE MEASURED.
+  /// 🔴 THE POLL INTERVAL READS THE CONNECTION, AND THE RULE NOW LIVES IN THE MIXIN.
   ///
   /// A full 500-row page is ~2.1 MB and a terse one ~107 KB (`tasks.py:739`). At 60 s
   /// that is ~6.4 MB per foreground hour on ONE pane even terse — fine on Wi-Fi, rude on
   /// a metered connection. Sixty seconds is the WEB's number and a phone is not a browser
   /// tab.
   ///
-  /// `isWifi` / `isMobile` already exist (`network_connectivity_service.dart:52-53`) and
-  /// nothing in the plan reached for them.
+  /// ⚠️ THE `pollInterval` OVERRIDE THAT STOOD HERE IS GONE, AND NOTHING ABOUT THIS
+  /// PANE'S BEHAVIOUR CHANGED. It was `_network.isMobile ? 180 : 60` — identical,
+  /// character for character, to the Holding Area's. Two panes needed the same line and
+  /// two more were about to, so the rule moved to `PanePollingMixin.pollInterval` and
+  /// what is overridden here is the one thing that is genuinely this bloc's: WHICH
+  /// network service to ask, because this bloc already holds an injected one for its
+  /// connectivity-restored trigger and its tests fake it.
   @override
-  Duration get pollInterval =>
-      _network.isMobile ? const Duration( seconds: 180 ) : const Duration( seconds: 60 );
+  bool get isMeteredConnection => _network.isMobile;
 
   /// The mixin's poll hook. The token is honoured all the way down to Dio, so a pane that
   /// disappears mid-request cancels the request rather than only the timer.

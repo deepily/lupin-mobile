@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,8 @@ class _FakePaneBloc extends Bloc<int, int> with PanePollingMixin<int, int> {
 }
 
 void main() {
+  group("the poll INTERVAL", _intervalTests);
+
   late StreamController<AppLifecycleState> lifecycle;
 
   setUp(() => lifecycle = StreamController<AppLifecycleState>.broadcast());
@@ -210,5 +213,119 @@ void main() {
     expect(bloc.isPolling, isFalse);
     expect(bloc.tokens.single.isCancelled, isTrue);
     bloc.hold!.complete();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// THE INTERVAL — G8 and G10 (row fa3596ec)
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+/// A pane bloc whose connection can be dictated by the test.
+///
+/// ⚠️ THE SEAM IS A BOOLEAN, NOT THE SERVICE, because `NetworkConnectivityService` is a
+/// hard singleton (`factory … => _instance`) and cannot be faked — the same reason the
+/// mixin makes the lifecycle STREAM injectable rather than `AppLifecycleService`.
+class _MeteredPaneBloc extends _FakePaneBloc {
+  final bool metered;
+
+  _MeteredPaneBloc(super.lifecycle, {required this.metered});
+
+  @override
+  bool get isMeteredConnection => metered;
+}
+
+void _intervalTests() {
+  late StreamController<AppLifecycleState> lifecycle;
+
+  setUp(() => lifecycle = StreamController<AppLifecycleState>.broadcast());
+  tearDown(() => lifecycle.close());
+
+  // 🔴 THE PERIOD IS ASSERTED BY ADVANCING A CLOCK, NOT BY READING THE GETTER.
+  //
+  // `expect( bloc.pollInterval, Duration( seconds: 180 ) )` passes while the timer is
+  // built from a hard-coded 60 — the getter and the `Timer.periodic` that consumes it are
+  // two different things, and G8 was exactly a pane whose getter nobody had written.
+  // `fakeAsync` lets the test watch the TIMER, which is the thing that costs the
+  // operator's data.
+  test("on mobile data a pane polls at 180 s, not 60 s", () {
+    fakeAsync((async) {
+      final bloc = _MeteredPaneBloc(lifecycle, metered: true)..startPolling();
+      bloc.onPaneVisible();
+      async.flushMicrotasks();
+
+      expect(bloc.polls, 1, reason: "appearing refreshes once");
+
+      async.elapse(const Duration(seconds: 179));
+      expect(bloc.polls, 1,
+          reason: "a 60 s timer would have fired twice more by now — that is G8, and it "
+                  "is ~3x the requests on the connection the operator pays for");
+
+      async.elapse(const Duration(seconds: 2));
+      expect(bloc.polls, 2, reason: "the 180 s tick lands");
+
+      bloc.close();
+      async.flushTimers();
+    });
+  });
+
+  test("on Wi-Fi a pane polls at 60 s", () {
+    fakeAsync((async) {
+      final bloc = _MeteredPaneBloc(lifecycle, metered: false)..startPolling();
+      bloc.onPaneVisible();
+      async.flushMicrotasks();
+
+      async.elapse(const Duration(seconds: 59));
+      expect(bloc.polls, 1);
+
+      async.elapse(const Duration(seconds: 2));
+      expect(bloc.polls, 2, reason: "Wi-Fi keeps the web's cadence");
+
+      bloc.close();
+      async.flushTimers();
+    });
+  });
+
+  // ⚠️ THE DEFAULT IS THE RULE NOW, and that is the half of this row that is not about
+  // any one pane. Task List and Holding Area each carried a hand-written
+  // `isMobile ? 180 : 60`; Fleet Status carried none and therefore polled every 60 s on
+  // mobile data. A pane that overrides NOTHING must still get the metered period, or the
+  // next pane to be added inherits G8 by doing nothing wrong.
+  test("a pane that overrides nothing still slows down on mobile data", () {
+    fakeAsync((async) {
+      final bloc = _MeteredPaneBloc(lifecycle, metered: true);
+      expect(bloc.pollInterval, PanePollingMixin.mobileInterval);
+      expect(PanePollingMixin.mobileInterval, const Duration(seconds: 180));
+      expect(PanePollingMixin.wifiInterval, const Duration(seconds: 60));
+      bloc.close();
+      async.flushTimers();
+    });
+  });
+
+  // 🔴 LIFECYCLE BEHAVIOUR IS UNCHANGED BY THE INTERVAL WORK, AND THIS IS THE ASSERTION
+  // THAT SAYS SO. The interval moved into the mixin; hide/show, background/foreground and
+  // cancellation did not move. Tiffany's condition on touching a mixin three panes share.
+  test("the metered period does not change when a pane hides and returns", () {
+    fakeAsync((async) {
+      final bloc = _MeteredPaneBloc(lifecycle, metered: true)..startPolling();
+      bloc.onPaneVisible();
+      async.flushMicrotasks();
+      bloc.onPaneHidden();
+
+      expect(bloc.isPolling, isFalse);
+      async.elapse(const Duration(seconds: 600));
+      expect(bloc.polls, 1, reason: "a hidden pane issues nothing, whatever the period");
+
+      bloc.onPaneVisible();
+      async.flushMicrotasks();
+      expect(bloc.polls, 2, reason: "returning refreshes once, as it always did");
+
+      async.elapse(const Duration(seconds: 179));
+      expect(bloc.polls, 2, reason: "the rebuilt timer is still the 180 s one");
+      async.elapse(const Duration(seconds: 2));
+      expect(bloc.polls, 3);
+
+      bloc.close();
+      async.flushTimers();
+    });
   });
 }

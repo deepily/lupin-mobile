@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/lifecycle/app_lifecycle_service.dart';
+import '../../../services/network/network_connectivity_service.dart';
 
 /// Lifecycle-aware, foreground-pane-only polling. ONE copy, mixed into each pane's
 /// bloc — not five copies of a timer.
@@ -40,15 +41,43 @@ mixin PanePollingMixin<E, S> on Bloc<E, S> {
   /// by handing it to the Dio call, or the cancellation buys nothing.
   Future<void> pollOnce( CancelToken token );
 
+  /// Wi-Fi, or any connection this phone does not pay by the megabyte for.
+  static const Duration wifiInterval = Duration( seconds: 60 );
+
+  /// Mobile data. Plan §6.5's number.
+  static const Duration mobileInterval = Duration( seconds: 180 );
+
+  /// Test seam, and the same shape [lifecycleStream] uses for the same reason:
+  /// `NetworkConnectivityService` is a hard singleton (`factory … => _instance`), so it
+  /// cannot be faked. What the interval needs from it is one boolean, so that is what is
+  /// injectable — not the service.
+  @protected
+  bool get isMeteredConnection => NetworkConnectivityService().isMobile;
+
   /// How often to poll while visible and foregrounded.
   ///
   /// ⚠️ SIXTY SECONDS IS THE WEB'S NUMBER AND A PHONE IS NOT A BROWSER TAB. Measured
   /// per poll: ~2.1 MB for 500 full rows, ~107 KB terse (`tasks.py:739`). At 60 s that
   /// is ~125 MB or ~6.4 MB per foreground hour on ONE pane. The panes pull terse, which
-  /// is most of the difference; a pane on a metered connection should also slow down —
-  /// `network_connectivity_service.dart:52-53` already exposes `isWifi`/`isMobile`.
-  /// Override this to read it.
-  Duration get pollInterval => const Duration( seconds: 60 );
+  /// is most of the difference; a pane on a metered connection also slows down —
+  /// `network_connectivity_service.dart:52-53` exposes `isWifi`/`isMobile`.
+  ///
+  /// 🔴 THIS DEFAULT IS NOW NETWORK-AWARE, AND IT MOVED HERE FROM THE PANES BECAUSE IT
+  /// WAS BECOMING A FOURTH COPY. Task List and Holding Area each carried a hand-written
+  /// `_network.isMobile ? 180 : 60`, character for character; Fleet Status carried none
+  /// and therefore polled every 60 s on mobile data (gap G8), and Finished Tasks did not
+  /// poll at all (G7). Adding the line to the two panes that were missing it would have
+  /// made four copies of one rule — and a rule copied four times is a rule that will
+  /// disagree with itself, exactly as the two hand-written verb lists did.
+  ///
+  /// ⚠️ THE INTERVAL IS READ WHEN THE TIMER IS CREATED, NOT ON EVERY TICK, so a phone
+  /// that moves from Wi-Fi to mobile data mid-poll keeps the faster period until the
+  /// timer is next rebuilt — which happens on every hide/show and every background/
+  /// foreground trip. That is pre-existing behaviour and is NOT changed here: reacting to
+  /// the connectivity stream would restart the timer from a third trigger, which is a
+  /// lifecycle change, and this row is not the place for one. Named rather than left for
+  /// the next reader to discover.
+  Duration get pollInterval => isMeteredConnection ? mobileInterval : wifiInterval;
 
   /// Test seam. Defaults to the app-wide lifecycle service, which is a hard singleton
   /// (`AppLifecycleService._instance`) and therefore cannot be faked — so the stream is
