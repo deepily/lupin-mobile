@@ -300,6 +300,61 @@ void main() {
     expect( field.decoration!.hintText, contains( 'Markdown' ) );
   } );
 
+  /// Rick 2026-09-23: a broadcast "carpet bombs everybody"; the `@` in the body is how
+  /// each seat knows what pertains to it. The chips TYPE mentions — they do not narrow
+  /// the audience, and nothing but the message may carry the addressing.
+  group( 'mention chips — they type @Name, they never narrow the audience', () {
+    String bodyText( WidgetTester tester ) => tester.widget<TextField>(
+      find.byKey( const Key( TestKeys.broadcastBodyField ) ),
+    ).controller!.text;
+
+    testWidgets( '@all plus one chip per live seat, and nothing overflows at 360 dp', ( tester ) async {
+      await mount( tester );
+
+      for ( final name in <String>[ 'all', 'Tiffany', 'maria', 'mr radio' ] ) {
+        expect( find.byKey( Key( '${TestKeys.broadcastMentionChipPrefix}$name' ) ), findsOneWidget,
+            reason: 'a chip for $name' );
+      }
+      expect( tester.takeException(), isNull );
+    } );
+
+    testWidgets( 'a tap inserts at the caret, spaced off the word before it', ( tester ) async {
+      await mount( tester );
+      await tester.enterText( find.byKey( const Key( TestKeys.broadcastBodyField ) ), 'standup' );
+      await tester.pump();
+
+      await tester.tap( find.byKey( const Key( '${TestKeys.broadcastMentionChipPrefix}Tiffany' ) ) );
+      await tester.pump();
+      await tester.tap( find.byKey( const Key( '${TestKeys.broadcastMentionChipPrefix}all' ) ) );
+      await tester.pump();
+
+      expect( bodyText( tester ), 'standup @Tiffany @all ' );
+    } );
+
+    testWidgets( '🔴 THE SEAM — the mention rides in the message, and no recipient field is sent',
+        ( tester ) async {
+      await mount( tester );
+      await tester.enterText( find.byKey( const Key( TestKeys.broadcastBodyField ) ), 'rotate the logs' );
+      await tester.pump();
+      // The chip is the LAST edit, so nothing typed afterwards can re-send the field's
+      // text and hide a chip that updated the field but not the bloc.
+      await tester.tap( find.byKey( const Key( '${TestKeys.broadcastMentionChipPrefix}mr radio' ) ) );
+      await tester.pump();
+
+      await tester.tap( find.byKey( const Key( TestKeys.broadcastSendButton ) ) );
+      await tester.pump();
+      await tester.tap( find.byKey( const Key( TestKeys.broadcastSendConfirmOk ) ) );
+      await settle( tester );
+
+      final body = adapter.captured.singleWhere( ( r ) => r.method == 'POST' ).data as Map<String, dynamic>;
+      expect( body[ 'message' ], contains( 'rotate the logs @mr radio' ),
+          reason: 'the bloc must receive the chip\'s text, not only the field' );
+      expect( body.keys.toSet().difference( { 'message', 'broadcast_id', 'require_ack', 'include_originator' } ),
+          isEmpty,
+          reason: 'the server drops unknown keys, so a recipient field would silently do nothing' );
+    } );
+  } );
+
   testWidgets( 'the recipient surface is a count and a refresh, NOT a picker',
       ( tester ) async {
     await mount( tester );
@@ -311,8 +366,8 @@ void main() {
       'Sending to: 3 sessions',
     );
     expect( find.byKey( const Key( TestKeys.broadcastRecipientRefresh ) ), findsOneWidget );
-    // No checkboxes, no per-session toggles: you address everyone or nobody, and a
-    // picker would imply otherwise.
+    // No checkboxes, no per-session toggles: everyone receives every broadcast. The
+    // mention chips above type `@Name`; they do not select an audience.
     expect( find.byType( Checkbox ), findsNothing );
   } );
 }

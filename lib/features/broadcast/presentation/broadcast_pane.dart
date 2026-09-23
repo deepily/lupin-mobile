@@ -9,8 +9,15 @@ import '../domain/broadcast_bloc.dart';
 /// Say something to the whole fleet at once.
 ///
 /// Compose row, one line: `[🎤] [textarea] [Send]`, with a "Sending to:" count and a ↻
-/// above it. The recipient list is a COUNT AND A REFRESH, NOT A PICKER — you address
-/// everyone or nobody, and a picker would imply otherwise.
+/// above it, and under that a row of MENTION CHIPS: `@all` plus one per live seat.
+///
+/// 🔴 A CHIP ADDRESSES NOBODY — IT TYPES. A broadcast always goes to EVERY live seat;
+/// each seat reads the `@Persona` mentions in the body to decide what applies to it
+/// (Rick, 2026-09-23: *"it carpet bombs everybody … it uses the at symbol so that all
+/// recipients know whether it pertains to them"*). So tapping a chip inserts `@Name ` at
+/// the caret, exactly as the web card does (`BroadcastCardRenderer.ts`
+/// `injectMentionAtCursor`), and no per-recipient field is ever sent — the server's
+/// request body has none, and would silently drop one.
 ///
 /// 🔴 THE MIC IS THE POINT, AND IT HAS A RULING BEHIND IT. From `notifications.html`,
 /// verbatim: *"added 2026-05-13 because Lupin is a voice-first app — typing into the
@@ -64,6 +71,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
           padding  : const EdgeInsets.all( 16 ),
           children : [
             _recipients( context, state ),
+            _mentionChips( context, state ),
             const SizedBox( height: 8 ),
             _composeRow( context, state ),
             _disabledReason( context, state ),
@@ -80,7 +88,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     );
   }
 
-  /// "Sending to: N sessions  ↻" — a count and a refresh, never a picker.
+  /// "Sending to: N sessions  ↻" — a count and a refresh. Everyone receives it.
   Widget _recipients( BuildContext context, BroadcastState state ) {
     return Row(
       children : [
@@ -102,6 +110,49 @@ class _BroadcastPaneState extends State<BroadcastPane> {
         ),
       ],
     );
+  }
+
+  /// `@all` plus one chip per live seat. Tapping one TYPES its mention — see the class
+  /// note: the broadcast still goes to everyone.
+  Widget _mentionChips( BuildContext context, BroadcastState state ) {
+    final names = <String>[ 'all', for ( final s in state.roster.sessions ) s.label ];
+    return Wrap(
+      key        : const Key( TestKeys.broadcastMentionChips ),
+      spacing    : 6,
+      runSpacing : 4,
+      children   : [
+        for ( var i = 0; i < names.length; i++ )
+          ActionChip(
+            key     : Key( '${TestKeys.broadcastMentionChipPrefix}${names[ i ]}' ),
+            avatar  : Text( i == 0 ? '📣' : ( state.roster.sessions[ i - 1 ].personaIcon ?? '👤' ) ),
+            label   : Text( names[ i ] ),
+            tooltip : 'Insert @${names[ i ]} into the message',
+            onPressed : () => _insertMention( context, names[ i ] ),
+          ),
+      ],
+    );
+  }
+
+  /// Insert `@<name> ` at the caret (or over the selection), then hand the new text to
+  /// the bloc. The controller changes FIRST, so the listener's `text != state.body`
+  /// check finds them equal and leaves the caret where this put it.
+  void _insertMention( BuildContext context, String name ) {
+    final value  = _controller.value;
+    final text   = value.text;
+    final sel    = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed( offset: text.length );
+    // One improvement on the web: a mention tapped straight after a word gets a space
+    // first, or "standup" + "@Tiffany" would run together as "standup@Tiffany".
+    final glued  = sel.start > 0 && text[ sel.start - 1 ].trim().isNotEmpty;
+    final insert = '${glued ? ' ' : ''}@$name ';
+    final next   = text.replaceRange( sel.start, sel.end, insert );
+
+    _controller.value = TextEditingValue(
+      text      : next,
+      selection : TextSelection.collapsed( offset: sel.start + insert.length ),
+    );
+    context.read<BroadcastBloc>().add( BroadcastBodyChanged( next ) );
   }
 
   Widget _composeRow( BuildContext context, BroadcastState state ) {

@@ -332,6 +332,8 @@ class TestKeys {
   static const broadcastDisabledReason  = 'broadcast.send.disabledReason';
   static const broadcastRecipientCount  = 'broadcast.recipients';
   static const broadcastRecipientRefresh = 'broadcast.recipients.refresh';
+  static const broadcastMentionChips     = 'broadcast.mentions';
+  static const broadcastMentionChipPrefix = 'broadcast.mention.';   // + persona name, or 'all'
   static const broadcastPreview         = 'broadcast.preview';
   static const broadcastSendConfirm     = 'broadcast.send.confirm';
   static const broadcastSendConfirmOk   = 'broadcast.send.confirm.ok';
