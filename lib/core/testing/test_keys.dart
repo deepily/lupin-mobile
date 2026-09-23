@@ -140,6 +140,7 @@ class TestKeys {
   static const focusChatPane        = 'focus.chatPane';
   static const focusDrawerButton    = 'focus.drawerButton';
   static const focusDrawerLogout    = 'focus.drawerLogout';
+  static const focusComposerScroll  = 'focus.composerScroll';
   static const focusPausedBanner    = 'focus.pausedBanner';
   static const focusRetryBanner     = 'focus.retryBanner';
   static const focusBatchFallbackPrefix = 'focus.batchFallback.';  // + notificationId

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -125,10 +127,32 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
               ),
             ),
           ),
-          _composer( context ),
+          // 🔴 P0 e5cc78ee, Rick 2026-09-23: with the soft keyboard up (Gboard plus
+          // its voice strip runs 420 dp and more) and a spoken reply open for editing,
+          // the composer was taller than the body left over. The outer Column then
+          // overflowed, and the Send/X row sat BELOW the body's bounds: painted, but
+          // never hit-tested, so both buttons were dead while everything above them
+          // worked. Capped here and scrolled from the bottom, so the buttons are the
+          // part that always stays on screen and the transcript is what scrolls.
+          ConstrainedBox(
+            constraints : BoxConstraints( maxHeight: _composerCap( context ) ),
+            child       : SingleChildScrollView(
+              key     : const Key( TestKeys.focusComposerScroll ),
+              reverse : true,
+              child   : _composer( context ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// The most height the composer may take: 60% of what the keyboard leaves,
+  /// but never less than one button row plus its caption.
+  double _composerCap( BuildContext context ) {
+    final mq      = MediaQuery.of( context );
+    final visible = mq.size.height - mq.viewInsets.bottom - mq.padding.top - kToolbarHeight;
+    return max( kVoiceReplyRowHeight + 32, visible * 0.6 );
   }
 
   /// S4 composer slot — UNGATED since 2026-08-21 (Rick: "send a voice

@@ -335,13 +335,17 @@ void main() {
     } );
   } );
 
-  /// Rick 2026-09-23, on the emulator: with the DM editor open in Lupin Focus,
-  /// neither the Send arrow nor the X did anything. First suspect was the soft
-  /// keyboard pushing the buttons past the Column's bounds (painted, never hit).
-  /// MEASURED, NOT CONFIRMED: both buttons work here with and without a 320 dp
-  /// keyboard, so his defect is still unexplained. What this DID find: with the
-  /// keyboard up the conversation pane overflowed by 9 px (fixed — the pane now
-  /// drops its header below a height floor). These stay as the regression guard.
+  /// 🔴 P0 e5cc78ee — Rick 2026-09-23, on the emulator: with the DM editor open in
+  /// Lupin Focus (spoken, then edited with the keyboard up), neither Send nor X did
+  /// anything while the rest of the screen still worked.
+  ///
+  /// REPRODUCED ONLY AT A REAL KEYBOARD'S HEIGHT. At 320 dp both buttons worked,
+  /// which is why the first pass found nothing. At 420 dp and up (Gboard with its
+  /// voice strip) the composer out-grew the body, the outer Column overflowed, and
+  /// flutter_test reported the taps "would not hit test": the buttons were painted
+  /// below the body's bounds. Fixed by capping the composer and scrolling it from the
+  /// bottom (focus_mode_screen.dart). Mutation-proved: before the fix, every case
+  /// from 380 dp up was RED, and the three cases at 420+ went "would not hit test".
   group( 'DM editor with the keyboard up — Send and X must still work', () {
     const long = 'line one of a long spoken reply\nline two\nline three\nline four\n'
                  'line five\nline six\nline seven\nline eight';
@@ -365,7 +369,8 @@ void main() {
       await settle( tester );
     }
 
-    for ( final keyboard in <double>[ 0, 320 ] ) {
+    // 0 and 320 passed before the fix; 380 and up are the ones Rick hit.
+    for ( final keyboard in <double>[ 0, 320, 380, 420, 460, 500 ] ) {
       testWidgets( 'Send dispatches (keyboard ${keyboard.toInt()} dp)', ( tester ) async {
         await openEditor( tester, keyboard: keyboard );
         await tester.tap( byKey( TestKeys.voiceReplySend ) );
