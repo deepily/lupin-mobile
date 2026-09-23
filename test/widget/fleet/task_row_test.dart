@@ -48,6 +48,8 @@ List<String> renderedCellKeys(WidgetTester tester) {
 }
 
 void main() {
+  group("the unsent mark", _unsentMarkTests);
+
   group("cell identity", () {
     testWidgets("an expanded row renders the schema's cells in schema order",
         (tester) async {
@@ -254,5 +256,73 @@ void main() {
       await tester.pumpAndSettle();
       expect(fired, isEmpty, reason: "a stale arm is a terminal action one tap away");
     });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// THE UNSENT MARK — G6 (row 6d25aa31)
+// ═══════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 MUTATION-PROVED. `_unsentMark` was rendered unconditionally, then not at all, then
+// with the `Semantics` wrapper stripped. Each reddened exactly the test below written
+// for it, and the row's other 10 tests stayed green throughout — the mark is additive
+// and must not disturb cell identity.
+void _unsentMarkTests() {
+  testWidgets("a row with nothing unsent wears no mark", (tester) async {
+    await _pump(tester, const TaskRow(model: _model));
+    expect(find.byKey(const Key(TestKeys.taskRowUnsentMark)), findsNothing,
+        reason: "a mark on every row is a mark that means nothing");
+  });
+
+  // 🔴 VISIBLE STATE, NOT ONLY A NOTICE — G6's acceptance says so in as many words. A
+  // notice bar says "something failed" while the operator is looking at fifty rows; the
+  // question they are actually asking is whether THEIR park landed, and only the row can
+  // answer it.
+  testWidgets("an unsent write puts a mark on the row itself", (tester) async {
+    await _pump(tester, const TaskRow(model: _model, unsentLabel: "Park"));
+    expect(find.byKey(const Key(TestKeys.taskRowUnsentMark)), findsOneWidget);
+  });
+
+  // ⚠️ THE MARK IS ON LINE 1, NOT BEHIND THE DISCLOSURE. A mark hidden inside the
+  // controls answers the question only for someone who already suspects the answer.
+  testWidgets("the mark is visible while the row is COLLAPSED", (tester) async {
+    await _pump(tester, const TaskRow(model: _model, unsentLabel: "Park"));
+
+    expect(find.byKey(const Key(TestKeys.taskRowControls)), findsNothing,
+        reason: "collapsed, so the controls are absent — the mark must not be with them");
+    expect(find.byKey(const Key(TestKeys.taskRowUnsentMark)), findsOneWidget);
+  });
+
+  // 🔴 COLOUR CARRIES NONE OF THIS. A red cloud glyph is invisible to TalkBack and to
+  // anyone who does not already know this app's palette, and "not sent" is precisely the
+  // fact a screen-reader user cannot infer from anything else on the row.
+  testWidgets("the mark announces what has not been sent", (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, const TaskRow(model: _model, unsentLabel: "Park"));
+
+    expect(find.bySemanticsLabel("Park — not sent"), findsOneWidget,
+        reason: "the label names the VERB, so the operator knows what to press again");
+    handle.dispose();
+  });
+
+  // The mark is additive: it must not disturb the ordered cell keys the two panes are
+  // compared on, or the identity guard starts failing for a reason that is not drift.
+  // ⚠️ `UniqueKey` ON EACH PUMP, for the reason "two rows built from one model" already
+  // gives: a second `pumpWidget` of the same type REUSES the State, so the row arrives
+  // already expanded and the disclosure tap COLLAPSES it. The second reading then comes
+  // back short one cell and reads as the mark having eaten `detail`.
+  testWidgets("the mark does not change the row's cells", (tester) async {
+    await _pump(tester, TaskRow(key: UniqueKey(), model: _model));
+    await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
+    await tester.pumpAndSettle();
+    final without = renderedCellKeys(tester);
+
+    await _pump(tester,
+        TaskRow(key: UniqueKey(), model: _model, unsentLabel: "Park"));
+    await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
+    await tester.pumpAndSettle();
+
+    expect(renderedCellKeys(tester), without);
+    expect(without, contains("detail"), reason: "a short list would match itself");
   });
 }

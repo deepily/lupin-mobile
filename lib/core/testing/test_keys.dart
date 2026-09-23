@@ -295,6 +295,11 @@ class TestKeys {
   static const taskRowControls      = 'taskRow.controls';
   static const taskRowVerbPrefix    = 'taskRow.verb.';      // + verb name
 
+  // The unsent mark (G6). ON the row, not in a notice bar: a bar says 'something
+  // failed' while the operator is looking at fifty rows, and the question they are
+  // asking is whether THEIR write landed.
+  static const taskRowUnsentMark    = 'taskRow.unsentMark';
+
   // ── The SHARED verb reason sheet (Phase 2 interactivity, row e10d8074) ──
   //
   // 🔴 NO PANE SEGMENT IN ANY OF THESE KEYS, AND THE ABSENCE IS DELIBERATE. The sheet

@@ -188,6 +188,10 @@ class _TaskListPaneState extends State<TaskListPane> {
         model        : item.row!,
         verbs        : _verbsFor( item.row! ),
         ownerOptions : state.reassignTargets,
+        // G6: the row wears what the operator did that has not landed. Visible state,
+        // not only a notice — the notice says "something failed" while they are looking
+        // at fifty rows, and the question they are asking is whether THEIRS landed.
+        unsentLabel  : state.unsentLabelFor( item.row!.id ),
         // The row owns arming; the BLOC owns the write and the rollback. Routing it through
         // an event rather than calling the repository from here keeps the optimistic
         // repaint and its undo in one place — a pane that wrote directly would have to
