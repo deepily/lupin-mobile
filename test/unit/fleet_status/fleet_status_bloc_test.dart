@@ -174,6 +174,49 @@ void main() {
       await bloc.close();
     } );
 
+    /// B1a, 2026-09-23 — Rick's 09-22 spinner. `composite == null && error == null`
+    /// is the screen's spinner branch. A cancelled DIAL fetch used to escape the
+    /// dial's own catch and hit the outer cancel-return, adding NEITHER state while
+    /// holding a good table. Paired with the composite-cancel test above: that one
+    /// must still add nothing, this one must now add Loaded. Mutation-proved: with
+    /// the dial's `on DioException` removed, this goes RED.
+    test( "🔴 A CANCELLED DIAL FETCH STILL LOADS THE TABLE — never neither state", () async {
+      final repo = _FakeRepo( live );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );          // a good poll first: cap 9
+      await Future<void>.delayed( Duration.zero );
+      expect( bloc.state.cap, 9, reason: "setup" );
+
+      repo
+        ..serverCap = 4
+        ..capThrows = DioException(
+          requestOptions : RequestOptions( path: "/api/arbiter/fleet-size-cap" ),
+          type           : DioExceptionType.cancel,
+        );
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.composite?.sessions.length, 10, reason: "the table was in hand" );
+      expect( bloc.state.error, isNull, reason: "a cancel is not a failure" );
+      expect( bloc.state.cap, 9, reason: "the dial keeps its last known number" );
+    } );
+
+    test( "a dial cancel on the FIRST poll still leaves the pane out of the spinner", () async {
+      final repo = _FakeRepo( live )..capThrows = DioException(
+        requestOptions : RequestOptions( path: "/api/arbiter/fleet-size-cap" ),
+        type           : DioExceptionType.cancel,
+      );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.composite == null && bloc.state.error == null, isFalse,
+          reason: "that pair IS the spinner branch in fleet_status_screen.dart" );
+      expect( bloc.state.cap, isNull, reason: "no number was ever known" );
+    } );
+
     test( "an unreachable envelope loads as DATA, not as an error", () async {
       final repo = _FakeRepo( FleetComposite.fromJson( const {
         "status": "unreachable", "fleet_arbiter": null,

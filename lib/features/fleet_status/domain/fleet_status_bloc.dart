@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../fleet/domain/pane_polling_mixin.dart';
@@ -130,8 +131,15 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
   ///
   /// Ensures:
   ///     - adds [FleetStatusLoaded] on success, [FleetStatusFailed] otherwise
-  ///     - a cancelled request adds NOTHING — the pane is gone and a state
-  ///       change would be a write to a surface nobody is looking at
+  ///     - a cancelled COMPOSITE fetch adds NOTHING — there is no table to show,
+  ///       and the pane is going away
+  ///     - 🔴 a cancelled DIAL fetch still adds [FleetStatusLoaded] with the
+  ///       composite already in hand (B1a, 2026-09-23). It used to escape to the
+  ///       outer cancel-return, adding neither state while holding a good table:
+  ///       `composite == null && error == null` is the screen's spinner branch
+  ///     - every exit path prints ONE `[FleetStatus] poll:` line (B1b). Rick's
+  ///       09-22 spinner left no console output at all, so the next one has to
+  ///       name the path it took
   ///     - never throws
   @override
   Future<void> pollOnce( CancelToken token ) async {
@@ -148,21 +156,40 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
         final rawM  = dial[ "maximum" ] ?? dial[ "cap_maximum" ];
         cap         = rawC is num ? rawC.toInt() : null;
         capMaximum  = rawM is num ? rawM.toInt() : null;
-      } on FleetApiException {
+        debugPrint( '[FleetStatus] poll: loaded, cap=$cap' );
+      } on FleetApiException catch ( e ) {
         // Leave the dial's last known numbers standing rather than zeroing a
         // control the operator may be about to use.
         cap        = state.cap;
         capMaximum = state.capMaximum;
+        debugPrint( '[FleetStatus] poll: loaded, dial failed (${e.message}) — kept cap=$cap' );
+      } on DioException catch ( e ) {
+        // 🔴 THE DOOR THE COMMENT ABOVE DID NOT COVER. Only a CANCEL is caught
+        // here — the table is in hand, so fail apart exactly as for an API error.
+        // Anything else still falls through to the outer handler, unchanged.
+        if ( e.type != DioExceptionType.cancel ) rethrow;
+        cap        = state.cap;
+        capMaximum = state.capMaximum;
+        debugPrint( '[FleetStatus] poll: loaded, dial CANCELLED — kept cap=$cap' );
       }
 
-      if ( isClosed ) return;
+      if ( isClosed ) {
+        debugPrint( '[FleetStatus] poll: bloc closed before Loaded could be added' );
+        return;
+      }
       add( FleetStatusLoaded( composite, cap: cap, capMaximum: capMaximum ) );
     } on FleetApiException catch ( e ) {
+      debugPrint( '[FleetStatus] poll: FAILED (${e.message})' );
       if ( isClosed ) return;
       add( FleetStatusFailed( e.message ) );
     } on DioException catch ( e ) {
-      // A cancelled request is the pane going away, not a failure to report.
-      if ( e.type == DioExceptionType.cancel ) return;
+      // A cancelled COMPOSITE fetch is the pane going away with nothing to show —
+      // returning is right here, and is the one path that adds no state (B1a′).
+      if ( e.type == DioExceptionType.cancel ) {
+        debugPrint( '[FleetStatus] poll: composite CANCELLED — no state added' );
+        return;
+      }
+      debugPrint( '[FleetStatus] poll: FAILED (${e.type.name}: ${e.message})' );
       if ( isClosed ) return;
       add( FleetStatusFailed( e.message ?? e.type.name ) );
     }
