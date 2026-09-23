@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/testing/test_keys.dart';
-import '../../fleet/data/task_write_repository.dart';
+import '../../fleet/data/task_verbs.dart';
 import '../../fleet/presentation/task_row.dart';
 import '../data/holding_area_models.dart';
 import '../domain/holding_area_bloc.dart';
@@ -98,17 +98,14 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
 
   /// The verbs a HELD row offers.
   ///
-  /// 🔴 PER-ROW WON'T-FIX IS DELIBERATELY ABSENT, AND ITS ABSENCE IS A GAP I AM NAMING
-  /// RATHER THAN PAPERING OVER. `wont_fix` carries a REQUIRED reason, the row widget
-  /// offers no text surface to collect one, and `TaskVerb.wontFix( reason: '' )` is a
-  /// button whose every press is a guaranteed 422. Shipping it would look like the
-  /// precise instrument the batch control's own hint points the operator at — *"use the
-  /// per-row control when the reasons differ"* — while being a control that cannot work.
-  ///
-  /// ⇒ The per-row reason surface is its own row, because it is a change to the SHARED
-  /// row widget rather than to this pane, and that widget is not mine to grow mid-phase.
-  /// Until it exists this pane's terminal verb is the batch one, which HAS its box.
-  List<TaskVerb> _heldRowVerbs() => [ TaskVerb.approve() ];
+  /// ⚠️ STILL APPROVE ONLY, AND THAT IS NOW A SCOPE LINE RATHER THAN A CAPABILITY GAP.
+  /// The reason this list was one verb long was that `wont_fix` carries a REQUIRED reason
+  /// and the row had no surface to collect one — *"`TaskVerb.wontFix( reason: '' )` is a
+  /// button whose every press is a guaranteed 422."* That surface now exists (the shared
+  /// sheet), so the blocker is gone; widening this pane's per-row verbs is G5, its own
+  /// row, and belongs to whoever holds it. Changing it here would be that row's work
+  /// landing in this one's diff.
+  List<VerbNeeds> _heldRowVerbs() => <VerbNeeds>[ verbNeeds( 'approve' )! ];
 
   Widget _incompleteBanner( BuildContext context, HoldingAreaState state ) {
     return Container(

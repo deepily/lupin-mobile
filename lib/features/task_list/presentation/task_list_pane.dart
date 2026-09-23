@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../fleet/data/task_row_model.dart';
-import '../../fleet/data/task_write_repository.dart';
+import '../../fleet/data/task_verbs.dart';
 import '../../fleet/presentation/task_row.dart';
 import '../data/task_list_model.dart';
 import '../domain/task_list_bloc.dart';
@@ -153,10 +153,10 @@ class _TaskListPaneState extends State<TaskListPane> {
 
   /// Which verbs a row offers. Passed as DATA — a list of verbs is not a pane
   /// discriminator, and both task panes may pass the same list.
-  List<TaskVerb> _verbsFor( TaskRowModel row ) {
-    return <TaskVerb>[
-      if ( row.status == 'not_approved' ) TaskVerb.approve(),
-      if ( row.status == 'parked' ) TaskVerb.unpark(),
+  List<VerbNeeds> _verbsFor( TaskRowModel row ) {
+    return <VerbNeeds>[
+      if ( row.status == 'not_approved' ) verbNeeds( 'approve' )!,
+      if ( row.status == 'parked' ) verbNeeds( 'unpark' )!,
     ];
   }
 

@@ -294,6 +294,20 @@ class TestKeys {
   static const taskRowControls      = 'taskRow.controls';
   static const taskRowVerbPrefix    = 'taskRow.verb.';      // + verb name
 
+  // ── The SHARED verb reason sheet (Phase 2 interactivity, row e10d8074) ──
+  //
+  // 🔴 NO PANE SEGMENT IN ANY OF THESE KEYS, AND THE ABSENCE IS DELIBERATE. The sheet
+  // takes no pane parameter, so a key like `reasonSheet.taskList.reason` could only come
+  // from a sheet that had grown one. A test naming a pane here would make that drift
+  // look intentional.
+  static const reasonSheet          = 'reasonSheet';
+  static const reasonSheetReason    = 'reasonSheet.reason';
+  static const reasonSheetDate      = 'reasonSheet.date';
+  static const reasonSheetDateError = 'reasonSheet.dateError';
+  static const reasonSheetSubmit    = 'reasonSheet.submit';
+  static const reasonSheetCancel    = 'reasonSheet.cancel';
+  static const reasonSheetNoReason  = 'reasonSheet.noReasonNotice';
+
   // ── Task List pane (Phase 3) ────────────────────────────────────────────
   static const taskListGroupHeaderPrefix = 'taskList.group.';   // + owner label
   static const taskListRowIndentPrefix   = 'taskList.rowIndent.'; // + task id

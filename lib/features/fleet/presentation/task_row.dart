@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../data/task_row_model.dart';
 import '../data/task_row_schema.dart';
+import '../data/task_verbs.dart';
 import '../data/task_write_repository.dart';
+import 'verb_reason_sheet.dart';
 
 /// The ONE row widget. Task List and Holding Area both render this and produce
 /// cell-for-cell identical output.
@@ -35,16 +37,27 @@ class TaskRow extends StatefulWidget {
   /// The verbs this row offers. Supplied by the pane, but as DATA — a list of verbs is
   /// not a pane discriminator: both panes may pass the same list, and neither can make
   /// the row lay itself out differently by choosing one.
-  final List<TaskVerb> verbs;
+  ///
+  /// 🔴 THESE ARE OBLIGATIONS, NOT PAYLOADS, AND THE CHANGE IS NOT COSMETIC. This was
+  /// `List<TaskVerb>` — a list of BUILT payloads — which works only for the two verbs
+  /// that need nothing. Four of the seven require a reason the operator has not typed
+  /// yet, so a pane building them eagerly would have to pass `TaskVerb.wontFix( reason:
+  /// '' )`: a button whose every press is a guaranteed 422. The Holding Area named that
+  /// exact trap and declined to ship the verb rather than fall into it.
+  ///
+  /// ⇒ The pane says WHICH verbs; the row collects what each one needs through the
+  /// shared sheet and hands the pane a payload that is already complete.
+  final List<VerbNeeds> verbs;
 
-  /// Fired when the operator confirms a verb. The row owns arming; the pane owns the
-  /// write and the optimistic rollback.
+  /// Fired when the operator confirms a verb AND has supplied everything it requires.
+  /// The row owns arming and the sheet; the pane owns the write and the optimistic
+  /// rollback.
   final void Function( TaskVerb verb )? onVerb;
 
   const TaskRow( {
     super.key,
     required this.model,
-    this.verbs = const <TaskVerb>[],
+    this.verbs = const <VerbNeeds>[],
     this.onVerb,
   } );
 
@@ -190,7 +203,7 @@ class _TaskRowState extends State<TaskRow> {
   ///
   /// ⚠️ Do not reach for `SemanticsService.announce` — it is deprecated on Android
   /// (`semantics_service.dart:40-46`), with the SDK itself pointing at `liveRegion`.
-  Widget _verbButton( TaskVerb verb ) {
+  Widget _verbButton( VerbNeeds verb ) {
     final armed = _armedVerb == verb.name;
     final label = armed ? 'Confirm ${verb.name}' : verb.name;
 
@@ -206,17 +219,49 @@ class _TaskRowState extends State<TaskRow> {
         liveRegion : armed,
         child      : TextButton(
           key       : Key( '${TestKeys.taskRowVerbPrefix}${verb.name}' ),
-          onPressed : () {
-            if ( verb.terminal && !armed ) {
-              setState( () => _armedVerb = verb.name );
-              return;
-            }
-            setState( () => _armedVerb = null );
-            widget.onVerb?.call( verb );
-          },
-          child : Text( label ),
+          onPressed : () => _pressVerb( verb, armed ),
+          child     : Text( label ),
         ),
       ),
     );
+  }
+
+  /// One press of a verb button: arm, or collect, or fire.
+  ///
+  /// 🔴 ARMING COMES FIRST AND THE SHEET COMES SECOND, NOT THE OTHER WAY ROUND. §7.4's
+  /// mechanism is that a terminal verb's FIRST tap changes nothing and says so out loud
+  /// (the live region). Opening the sheet on that first tap would put a modal in front of
+  /// the announcement, and a TalkBack user would meet the sheet instead of the warning —
+  /// which is the failure §7.4 exists to prevent, wearing a different costume.
+  ///
+  /// ⚠️ THE ROW STAYS DISARMED AFTER THE SHEET, EVEN WHEN THE OPERATOR CANCELS. Leaving
+  /// a terminal verb armed behind a dismissed sheet means the NEXT tap fires it with no
+  /// warning at all — the operator backed out, and a back-out that leaves the safety off
+  /// is worse than no safety.
+  ///
+  /// Ensures:
+  ///   - a terminal verb that is not yet armed only arms, and sends nothing
+  ///   - a verb needing nothing fires immediately with its payload
+  ///   - a verb needing a reason or a date opens the shared sheet, and fires only if the
+  ///     sheet returns a complete payload
+  Future<void> _pressVerb( VerbNeeds verb, bool armed ) async {
+    if ( verb.terminal && !armed ) {
+      setState( () => _armedVerb = verb.name );
+      return;
+    }
+    setState( () => _armedVerb = null );
+
+    if ( !verb.needsSheet ) {
+      widget.onVerb?.call( buildTaskVerb( verb.name ) );
+      return;
+    }
+
+    final built = await showVerbReasonSheet(
+      context,
+      needs    : verb,
+      rowTitle : widget.model.title,
+    );
+    if ( built == null ) return;   // cancelled — no write, and the verb is disarmed
+    widget.onVerb?.call( built );
   }
 }
