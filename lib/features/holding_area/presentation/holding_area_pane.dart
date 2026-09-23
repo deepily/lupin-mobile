@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../fleet/data/task_row_model.dart';
 import '../../fleet/data/task_verbs.dart';
 import '../../fleet/presentation/task_row.dart';
 import '../data/holding_area_models.dart';
@@ -54,6 +55,11 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
     // visible edge fires the first fetch, which is why there is no explicit refresh here
     // any more — one would be a second request for the same page.
     _bloc.onPaneVisible();
+    // The owner control's options. A courtesy read: it degrades the dropdown, never the
+    // pane, and it is NOT on the poll — the fleet roster changes far more slowly than
+    // held work, and pulling it every interval would cost the arbiter a request per
+    // pane per minute to learn the same six names.
+    _bloc.add( const HoldingAreaRosterRequested() );
   }
 
   @override
@@ -136,10 +142,21 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
             // which both panes may pass identically and neither can use to make the row
             // lay itself out differently.
             child : TaskRow(
-              model : row,
-              verbs : _heldRowVerbs(),
+              model        : row,
+              verbs        : _heldRowVerbs( row ),
+              ownerOptions : state.reassignTargets,
               onVerb : ( verb ) => bloc.add(
                 HoldingAreaRowVerbPressed( id: row.id, verb: verb ),
+              ),
+              // 🔴 THE OTHER DOOR, AND ITS OWN EVENT — gap G2. Priority and owner are a
+              // PATCH, not a transition; routing them through the verb callback would
+              // post a field change to the status endpoint.
+              onFieldChanged : ( { String? priority, String? ownerPersona } ) => bloc.add(
+                HoldingAreaFieldChanged(
+                  id           : row.id,
+                  priority     : priority,
+                  ownerPersona : ownerPersona,
+                ),
               ),
             ),
           ),
@@ -147,16 +164,33 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
     ];
   }
 
-  /// The verbs a HELD row offers.
+  /// The verbs a held row offers — gap G5, closed.
   ///
-  /// ⚠️ STILL APPROVE ONLY, AND THAT IS NOW A SCOPE LINE RATHER THAN A CAPABILITY GAP.
-  /// The reason this list was one verb long was that `wont_fix` carries a REQUIRED reason
-  /// and the row had no surface to collect one — *"`TaskVerb.wontFix( reason: '' )` is a
-  /// button whose every press is a guaranteed 422."* That surface now exists (the shared
-  /// sheet), so the blocker is gone; widening this pane's per-row verbs is G5, its own
-  /// row, and belongs to whoever holds it. Changing it here would be that row's work
-  /// landing in this one's diff.
-  List<VerbNeeds> _heldRowVerbs() => <VerbNeeds>[ verbNeeds( 'approve' )! ];
+  /// 🔴 THIS WAS `[ verbNeeds( 'approve' )! ]`, HARD-CODED, AND THE REASON IT WAS IS
+  /// WORTH KEEPING. Four of the seven verbs carry a REQUIRED reason and the row had no
+  /// surface to collect one, so offering them meant passing `TaskVerb.wontFix( reason:
+  /// '' )` — *"a button whose every press is a guaranteed 422."* This pane named that
+  /// trap and declined the verbs rather than fall into it. The shared sheet is that
+  /// surface, so the reason is gone and so is the restriction.
+  ///
+  /// 🔴 THE LEGALITY IS `verbLegality`'s, NOT THIS METHOD'S, and that is the web's rule
+  /// carried verbatim: *"Two derivations of one rule agree until the day they do not,
+  /// and the day they do not the cell offers a move the server refuses — which reads to
+  /// the operator as the board being broken rather than as the move being illegal."*
+  /// A hand-written `status == 'not_approved'` here would be a second derivation, and
+  /// this pane is single-status by definition, which is exactly the shape that makes one
+  /// look harmless.
+  ///
+  /// ⚠️ AND IT TAKES THE ROW. Every row on this pane is `not_approved` today, so a
+  /// no-argument version would give the same answer — until a row arrives mid-poll
+  /// having just been approved elsewhere, at which point the pane would offer approve on
+  /// a queued row. Asking the row is free; assuming the pane's invariant is not.
+  List<VerbNeeds> _heldRowVerbs( TaskRowModel row ) {
+    return verbLegality( row.status )
+        .where( ( entry ) => entry.enabled )
+        .map( ( entry ) => entry.needs )
+        .toList( growable: false );
+  }
 
   Widget _incompleteBanner( BuildContext context, HoldingAreaState state ) {
     return Container(

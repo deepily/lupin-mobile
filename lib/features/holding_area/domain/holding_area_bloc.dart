@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/network/network_connectivity_service.dart';
 import '../../fleet/data/task_write_repository.dart';
+import '../../fleet_status/data/fleet_models.dart';
+import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
 import '../data/holding_area_models.dart';
 import '../data/holding_area_repository.dart';
@@ -45,6 +47,34 @@ class HoldingAreaWontFixAllPressed extends HoldingAreaEvent {
   final String filer;
   final String reason;
   const HoldingAreaWontFixAllPressed( { required this.filer, required this.reason } );
+}
+
+/// An operator changed a held row's priority or owner. Goes through the FIELD door.
+///
+/// 🔴 A SEPARATE EVENT FROM [HoldingAreaRowVerbPressed], BECAUSE THEY ARE SEPARATE
+/// SERVER DOORS. Fields go to `PATCH /api/tasks/{id}`; status goes to
+/// `POST /api/tasks/{id}/transition`. Routing a priority change through the verb event
+/// would post it to the transition endpoint, which is the plan's §4.2 failure read
+/// backwards.
+class HoldingAreaFieldChanged extends HoldingAreaEvent {
+  final String  id;
+  final String? priority;
+  final String? ownerPersona;
+  const HoldingAreaFieldChanged( {
+    required this.id,
+    this.priority,
+    this.ownerPersona,
+  } );
+}
+
+/// Fetch the live persona roster the owner control offers.
+///
+/// ⚠️ A COURTESY READ ON A PANE ABOUT TASKS. Every failure collapses to an empty roster
+/// and none of them paints an error — an arbiter the phone cannot reach is a reason the
+/// owner dropdown offers less, not a reason to tell the operator the holding area is
+/// broken.
+class HoldingAreaRosterRequested extends HoldingAreaEvent {
+  const HoldingAreaRosterRequested();
 }
 
 /// The operator folded or unfolded one persona's group.
@@ -101,6 +131,14 @@ class HoldingAreaState extends Equatable {
   /// writes without doubling the count the operator read.
   final Set<String> busyFilers;
 
+  /// The personas a held row may be reassigned to — the LIVE fleet, from the arbiter.
+  ///
+  /// ⚠️ NOT THE OWNERS THE BOARD ALREADY SHOWS. That set is smaller by definition: it
+  /// carries only personas who already hold a row, so it cannot hand work to a seat that
+  /// owns none yet. Empty when the arbiter is unreachable, which degrades the control
+  /// rather than the pane.
+  final List<String> reassignTargets;
+
   /// Personas the operator has UNFOLDED.
   ///
   /// 🔴 AN `expanded` SET, NOT THE TASK LIST'S `collapsed` SET, AND THE INVERSION IS THE
@@ -130,6 +168,7 @@ class HoldingAreaState extends Equatable {
     this.reasonErrors = const <String, String>{},
     this.busyFilers   = const <String>{},
     this.expanded     = const <String>{},
+    this.reassignTargets = const <String>[],
     this.batchNotice,
   } );
 
@@ -144,6 +183,7 @@ class HoldingAreaState extends Equatable {
     Map<String, String>? reasonErrors,
     Set<String>? busyFilers,
     Set<String>? expanded,
+    List<String>? reassignTargets,
     String? batchNotice,
     bool clearBatchNotice = false,
   } ) =>
@@ -157,6 +197,7 @@ class HoldingAreaState extends Equatable {
         reasonErrors : reasonErrors ?? this.reasonErrors,
         busyFilers   : busyFilers ?? this.busyFilers,
         expanded     : expanded ?? this.expanded,
+        reassignTargets : reassignTargets ?? this.reassignTargets,
         batchNotice  : clearBatchNotice ? null : ( batchNotice ?? this.batchNotice ),
       );
 
@@ -169,7 +210,7 @@ class HoldingAreaState extends Equatable {
   @override
   List<Object?> get props =>
       [ groups, loading, error, incomplete, total, reasons, reasonErrors, busyFilers,
-        expanded, batchNotice ];
+        expanded, reassignTargets, batchNotice ];
 }
 
 // ─── Bloc ────────────────────────────────────────────────────────────────────
@@ -185,13 +226,20 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   final TaskWriteRepository   _writes;
   final NetworkConnectivityService _network;
 
+  /// ⚠️ OPTIONAL, AND THE REASSIGNMENT ROSTER IS ALL IT IS FOR. Passed rather than
+  /// required so the pane still renders — and still shows held work — when the arbiter
+  /// is unreachable or when a test does not care about the owner control.
+  final FleetRepository? _fleet;
+
   StreamSubscription<NetworkState>? _connectivitySub;
 
   HoldingAreaBloc(
     this._repo,
     this._writes, {
     NetworkConnectivityService? network,
+    FleetRepository? fleet,
   } )  : _network = network ?? NetworkConnectivityService(),
+        _fleet   = fleet,
         super( const HoldingAreaState() ) {
     on<HoldingAreaRefreshRequested>( _onRefresh );
     on<HoldingAreaRowVerbPressed>( _onRowVerb );
@@ -199,6 +247,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     on<HoldingAreaWontFixAllPressed>( _onWontFixAll );
     on<HoldingAreaReasonChanged>( _onReasonChanged );
     on<HoldingAreaGroupToggled>( _onGroupToggled );
+    on<HoldingAreaFieldChanged>( _onField );
+    on<HoldingAreaRosterRequested>( _onRoster );
   }
 
   /// The poll interval reads the connection, same measurement as the Task List: a full
@@ -369,6 +419,59 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     ) );
 
     add( const HoldingAreaRefreshRequested() );
+  }
+
+  /// The FIELD door — priority and owner only, never status. Status is [_onRowVerb].
+  ///
+  /// 🔴 REFETCH RATHER THAN REPAINT LOCALLY, for the reason [_onRowVerb] already gives:
+  /// a priority the server refused, or accepted only as a 202, would otherwise sit on
+  /// screen looking applied.
+  Future<void> _onField(
+    HoldingAreaFieldChanged event,
+    Emitter<HoldingAreaState> emit,
+  ) async {
+    try {
+      await _writes.patchFields(
+        id           : event.id,
+        priority     : event.priority,
+        ownerPersona : event.ownerPersona,
+      );
+    } on Object catch ( e ) {
+      // ⚠️ THE SAME CHANNEL A FAILED ROW VERB USES, AND DELIBERATELY NOT `error`. A
+      // fetch error is answered by the next fetch — which this handler is about to
+      // schedule — so a field failure parked there would be wiped before the operator
+      // read it. That is the bug `batchNotice` was split out for.
+      emit( state.copyWith( batchNotice: _writeError( e ) ) );
+      return;
+    }
+    add( const HoldingAreaRefreshRequested() );
+  }
+
+  /// The live persona roster for the owner control.
+  ///
+  /// 🔴 EVERY FAILURE COLLAPSES TO AN EMPTY ROSTER AND NONE OF THEM PAINTS AN ERROR.
+  /// This is a courtesy read on a pane about held work: an arbiter that cannot be
+  /// reached is a reason the owner dropdown offers only the current owner, not a reason
+  /// to tell the operator their holding area is broken.
+  ///
+  /// ⚠️ AND IT MUST NOT THROW PAST THE HANDLER EITHER. An unhandled error inside a bloc
+  /// handler surfaces through `onError` and can take the bloc down — turning "the
+  /// arbiter is unreachable" into "the Holding Area stopped polling".
+  Future<void> _onRoster(
+    HoldingAreaRosterRequested event,
+    Emitter<HoldingAreaState> emit,
+  ) async {
+    final fleet = _fleet;
+    if ( fleet == null ) return;
+
+    try {
+      final composite = await fleet.fetchState();
+      emit( state.copyWith( reassignTargets: activeReassignTargets( composite ) ) );
+    } on FleetApiException {
+      // The phone cannot see the fleet. The held set is fine; the roster is empty.
+    } on DioException {
+      // Includes the cancelled case, which is the lifecycle rule working.
+    }
   }
 
   /// Fold or unfold one persona's rows.

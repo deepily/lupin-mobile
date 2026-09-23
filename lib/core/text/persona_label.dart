@@ -98,19 +98,39 @@ String personaDisplayLabel( String? value, String fallback ) {
   return _displayCase( stripped );
 }
 
-/// Upper-case the first letter of every word, leaving the rest alone.
+/// The web's casing rule, character for character: upper-case every lower-case letter
+/// that sits at a word boundary.
 ///
-/// ⚠️ `toUpperCase()` ON THE WHOLE STRING IS NOT THIS. The web uppercases the first
-/// LOWERCASE letter of each word (`/\b[a-z]/g`), so "McCoy" survives as "McCoy" rather
-/// than becoming "MCCOY". Only the leading character of each word is touched.
+/// 🔴 A WORD BOUNDARY IS NOT A SPACE, AND THE FIRST VERSION OF THIS FUNCTION GOT THAT
+/// WRONG. It split on whitespace and cased each piece, which agrees with the web on
+/// "mr radio" and diverges the moment a name carries punctuation: `\b` also fires after
+/// a hyphen and an apostrophe, so the web renders "mary-jane" as "Mary-Jane" and
+/// "o'brien" as "O'Brien" where the whitespace split gives "Mary-jane" and "O'brien".
+/// Caught by Tiffany in review, 2026-09-23, before it shipped.
 ///
-/// ⚠️ SPLIT ON WHITESPACE RUNS AND REJOIN WITH ONE SPACE. A stored value carrying a tab
-/// or a double space would otherwise yield an empty "word" and, worse, two spellings of
-/// one persona that this function is supposed to fold together.
+/// ⚠️ THAT DIVERGENCE WOULD HAVE BEEN INVISIBLE ON TODAY'S BOARD. Every one of the six
+/// live personas is plain letters and at most one space, so no fixture and no live
+/// screen could show it — the first hyphenated persona anyone registers is what would
+/// have surfaced it, in a pane whose grouping key this is. A parity rule is worth
+/// reproducing exactly or not claiming.
+///
+/// ⚠️ `toUpperCase()` ON THE WHOLE STRING IS ALSO NOT THIS. Only lower-case letters AT a
+/// boundary are touched, so "McCoy" survives as "McCoy" rather than becoming "MCCOY".
+///
+/// Ensures:
+///     - "mr radio" → "Mr Radio"   ·   "mary-jane" → "Mary-Jane"
+///     - "o'brien"  → "O'Brien"    ·   "McCoy"     → "McCoy"
+///     - internal whitespace runs collapse to one space, so a stored value carrying a
+///       tab or a double space cannot become a second spelling of one persona
 String _displayCase( String value ) {
-  return value
-      .split( RegExp( r"\s+" ) )
-      .where( ( word ) => word.isNotEmpty )
-      .map( ( word ) => word[ 0 ].toUpperCase() + word.substring( 1 ) )
-      .join( " " );
+  // Collapse whitespace runs FIRST — that part is ours, not the web's, and it exists so
+  // "mr  radio" and "mr radio" cannot become two groups.
+  final collapsed = value.split( RegExp( r"\s+" ) ).where( ( w ) => w.isNotEmpty ).join( " " );
+
+  // Then the web's rule verbatim: `/\b[a-z]/g`. Dart's RegExp supports `\b`, so this is
+  // the same pattern rather than a reimplementation of it.
+  return collapsed.replaceAllMapped(
+    RegExp( r"\b[a-z]" ),
+    ( m ) => m[ 0 ]!.toUpperCase(),
+  );
 }
