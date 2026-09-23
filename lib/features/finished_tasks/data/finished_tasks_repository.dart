@@ -32,14 +32,22 @@ class FinishedTasksRepository {
   /// Raises:
   ///     - FinishedTasksApiException on any transport or HTTP failure, carrying the
   ///       server's own `detail` message unedited when one was supplied
+  ///     - 🔴 a CANCELLED request rethrows the DioException UNFLATTENED, so the caller
+  ///       can tell "the pane went away" from "the fetch failed". Now that this pane
+  ///       polls, that distinction is load-bearing: without it, leaving the pane
+  ///       mid-poll paints an error view on the way out, and the next visit opens on a
+  ///       failure that never happened. The same rule `FleetRepository.fetchState`
+  ///       already follows.
   Future<List<FinishedTaskEvent>> fetchStatus( {
     required String status,
     required String since,
     int limit = kFinishedPageLimit,
+    CancelToken? cancelToken,
   } ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
         endpoint,
+        cancelToken: cancelToken,
         queryParameters: {
           "to_status" : status,
           "since"     : since,
@@ -58,6 +66,9 @@ class FinishedTasksRepository {
           .map( FinishedTaskEvent.fromJson )
           .toList();
     } on DioException catch ( e ) {
+      // A CANCELLATION IS NOT A FAILURE — see the docstring. Flattening it here would
+      // make every pane exit look like a dead endpoint.
+      if ( e.type == DioExceptionType.cancel ) rethrow;
       throw FinishedTasksApiException( _detail( e, "fetching '$status' events" ) );
     }
   }
@@ -77,6 +88,7 @@ class FinishedTasksRepository {
   Future<FinishedFetchResult> fetchWindow( {
     required int days,
     required DateTime now,
+    CancelToken? cancelToken,
   } ) async {
     final since     = windowSinceIso( days, now );
     final byStatus  = <String, List<FinishedTaskEvent>>{};
@@ -84,7 +96,11 @@ class FinishedTasksRepository {
 
     for ( final status in kFinishedStatuses ) {
       try {
-        byStatus[ status ] = await fetchStatus( status: status, since: since );
+        byStatus[ status ] = await fetchStatus(
+          status      : status,
+          since       : since,
+          cancelToken : cancelToken,
+        );
       } on FinishedTasksApiException catch ( e ) {
         failures[ status ] = e.message;
       }

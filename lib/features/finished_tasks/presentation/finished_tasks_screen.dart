@@ -48,10 +48,39 @@ class _FinishedTasksScreenState extends State<FinishedTasksScreen> {
   ///
   /// Matches the idiom the other fleet panes already use (`task_list_pane.dart:38`):
   /// route-scoped, so it is on screen the moment it is built.
+  /// 🔴 HELD, NOT LOOKED UP IN `dispose()`. `context.read` walks the element tree, and by
+  /// the time `dispose` runs that element is being torn down — the lookup can throw, and a
+  /// throw there SKIPS the rest of dispose. The timer then outlives the pane that owned
+  /// it: a poll firing against a screen nobody is looking at, for the life of the process.
+  ///
+  /// ⚠️ That bug is almost unattributable in the field — it costs battery and data with no
+  /// visible symptom, on a pane the user has already left. Found by Chloé in Phase 1 and
+  /// carried by every pane that polls; this one joins them.
+  late final FinishedTasksBloc _bloc;
+
   @override
   void initState() {
     super.initState();
-    context.read<FinishedTasksBloc>().add( const FinishedTasksRequested() );
+    _bloc = context.read<FinishedTasksBloc>()..startPolling();
+    // 🔴 `onPaneVisible()` IS THE FIRST LOAD, AND THERE IS DELIBERATELY NO SECOND
+    // TRIGGER BESIDE IT. The mixin refreshes immediately when a pane appears, so a
+    // `FinishedTasksRequested` here as well would make mounting this pane issue TWO
+    // window fetches — six HTTP calls, since the window is one request per status — and
+    // `finished_tasks_first_load_test.dart` asserts exactly one.
+    //
+    // ⚠️ THE HARDWARE BUG THAT TEST GUARDS IS STILL GUARDED. Rick's symptom was a
+    // spinner forever with no request on the wire; what fixed it was the pane asking for
+    // its own data on mount, not the particular event it asked with. It still asks —
+    // `FinishedTasksInitial` renders the spinner until the answer lands, and a FAILED
+    // first load still paints the error view, because the poll path stays silent only
+    // once there are rows to keep. See `FinishedTasksBloc._onPolled`.
+    _bloc.onPaneVisible();
+  }
+
+  @override
+  void dispose() {
+    _bloc.onPaneHidden();
+    super.dispose();
   }
 
   @override
