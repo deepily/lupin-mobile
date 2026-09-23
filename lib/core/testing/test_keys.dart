@@ -294,6 +294,7 @@ class TestKeys {
 
   // ── Task List pane (Phase 3) ────────────────────────────────────────────
   static const taskListGroupHeaderPrefix = 'taskList.group.';   // + owner label
+  static const taskListRowIndentPrefix   = 'taskList.rowIndent.'; // + task id
   static const taskListView              = 'taskList.view';
   static const taskListIncompleteBanner  = 'taskList.incompleteBanner';
   static const taskListEmptyState        = 'taskList.emptyState';

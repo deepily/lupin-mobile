@@ -44,6 +44,14 @@ import '../settings/presentation/notification_audio_settings_screen.dart';
 /// It does NOT fix it, and this comment is not a substitute for the fix.
 const bool _kShowTrustDashboard = false;
 
+/// Whether the Notifications inbox is offered anywhere on the home screen.
+///
+/// 🔴 FALSE ON RICK'S ORDER, 2026-09-23: the inbox is superfluous — it has been replaced
+/// by the Lupin Focus tab. Hidden, not deleted, exactly like `_kShowTrustDashboard`:
+/// `InboxScreen` and its tests still build and pass, only the doors are closed. There are
+/// **two** doors — the grid card and the app-bar Inbox icon — and both close together.
+const bool _kShowNotificationsInbox = false;
+
 class LupinHomeScreen extends StatelessWidget {
   const LupinHomeScreen( { super.key } );
 
@@ -53,18 +61,20 @@ class LupinHomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text( 'Lupin Mobile' ),
         actions: [
-          IconButton(
-            tooltip  : 'Inbox',
-            icon     : const Icon( Icons.inbox_outlined ),
-            onPressed: () {
-              final s = context.read<AuthBloc>().state;
-              if ( s is AuthAuthenticated ) {
-                Navigator.of( context ).push( MaterialPageRoute(
-                  builder: ( _ ) => InboxScreen( userEmail: s.email ),
-                ) );
-              }
-            },
-          ),
+          // Hidden with the grid card — see `_kShowNotificationsInbox`.
+          if ( _kShowNotificationsInbox )
+            IconButton(
+              tooltip  : 'Inbox',
+              icon     : const Icon( Icons.inbox_outlined ),
+              onPressed: () {
+                final s = context.read<AuthBloc>().state;
+                if ( s is AuthAuthenticated ) {
+                  Navigator.of( context ).push( MaterialPageRoute(
+                    builder: ( _ ) => InboxScreen( userEmail: s.email ),
+                  ) );
+                }
+              },
+            ),
           // Hidden with the card below — see `_kShowTrustDashboard`. Both doors close
           // together on purpose: leaving the app-bar shield behind would have made the
           // feature "hidden" in exactly the way that still puts it one tap away.
@@ -122,20 +132,24 @@ class LupinHomeScreen extends StatelessWidget {
             ),
           ) ),
         ),
-        const SizedBox( height: 12 ),
-        _NavCard(
-          icon       : Icons.inbox_outlined,
-          title      : 'Notifications',
-          subtitle   : 'View notification inbox',
-          onTap      : () {
-            final s = context.read<AuthBloc>().state;
-            if ( s is AuthAuthenticated ) {
-              Navigator.of( context ).push( MaterialPageRoute(
-                builder: ( _ ) => InboxScreen( userEmail: s.email ),
-              ) );
-            }
-          },
-        ),
+        // Superseded by the Lupin Focus tab — see `_kShowNotificationsInbox`. Spacer
+        // inside the guard, same reason as the Trust Dashboard card below.
+        if ( _kShowNotificationsInbox ) ...[
+          const SizedBox( height: 12 ),
+          _NavCard(
+            icon       : Icons.inbox_outlined,
+            title      : 'Notifications',
+            subtitle   : 'View notification inbox',
+            onTap      : () {
+              final s = context.read<AuthBloc>().state;
+              if ( s is AuthAuthenticated ) {
+                Navigator.of( context ).push( MaterialPageRoute(
+                  builder: ( _ ) => InboxScreen( userEmail: s.email ),
+                ) );
+              }
+            },
+          ),
+        ],
         // Back-burnered and therefore hidden — see `_kShowTrustDashboard`. The spacer is
         // inside the guard too, or hiding the card would leave a 24 dp gap in the list
         // where it used to be, which reads as a rendering bug rather than an absence.

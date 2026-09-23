@@ -130,16 +130,24 @@ class _TaskListPaneState extends State<TaskListPane> {
       );
     }
 
-    return TaskRow(
-      model  : item.row!,
-      verbs  : _verbsFor( item.row! ),
-      // The row owns arming; the BLOC owns the write and the rollback. Routing it through
-      // an event rather than calling the repository from here keeps the optimistic
-      // repaint and its undo in one place — a pane that wrote directly would have to
-      // reimplement rollback, and a second rollback is a second thing to get wrong.
-      onVerb : ( verb ) => context
-          .read<TaskListBloc>()
-          .add( TaskListVerbPressed( taskId: item.row!.id, verb: verb ) ),
+    // 🔴 INDENTED UNDER ITS PERSONA, NOT FLUSH LEFT. Rick, walking it on the emulator
+    // 2026-09-23: rows *"crushed up against the left hand side … they should be indented
+    // to reflect containment by each persona."* The left inset is the header's own text
+    // start, so a row lines up under the name it belongs to rather than under the chevron.
+    return Padding(
+      key     : Key( '${TestKeys.taskListRowIndentPrefix}${item.row!.id}' ),
+      padding : const EdgeInsets.fromLTRB( TaskGroupHeader.textInset, 4, 16, 4 ),
+      child   : TaskRow(
+        model  : item.row!,
+        verbs  : _verbsFor( item.row! ),
+        // The row owns arming; the BLOC owns the write and the rollback. Routing it through
+        // an event rather than calling the repository from here keeps the optimistic
+        // repaint and its undo in one place — a pane that wrote directly would have to
+        // reimplement rollback, and a second rollback is a second thing to get wrong.
+        onVerb : ( verb ) => context
+            .read<TaskListBloc>()
+            .add( TaskListVerbPressed( taskId: item.row!.id, verb: verb ) ),
+      ),
     );
   }
 

@@ -85,12 +85,14 @@ void main() {
 
     // A guard that only asserts absences passes just as well on a blank screen. These are
     // the neighbours the edit sat between, so they are what proves the cut was surgical.
-    for ( final label in <String>[ 'Job Queue', 'Notifications', 'Agentic Jobs' ] ) {
+    // 'Notifications' left this list 2026-09-23 — hidden too, see inbox_hidden_test.dart.
+    for ( final label in <String>[ 'Job Queue', 'Claude Code', 'Agentic Jobs' ] ) {
       expect( find.text( label ), findsOneWidget, reason: '$label should be untouched' );
     }
 
-    // And the app bar keeps its other three actions — the shield was one of four.
-    for ( final tip in <String>[ 'Inbox', 'Settings', 'Logout' ] ) {
+    // And the app bar keeps its other actions. 'Inbox' left this list 2026-09-23 — it is
+    // hidden too, see inbox_hidden_test.dart.
+    for ( final tip in <String>[ 'Settings', 'Logout' ] ) {
       expect(
         find.descendant( of: find.byType( AppBar ), matching: find.byTooltip( tip ) ),
         findsOneWidget,

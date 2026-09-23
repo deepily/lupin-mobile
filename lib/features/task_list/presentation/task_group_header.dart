@@ -33,6 +33,14 @@ class TaskGroupHeader extends StatelessWidget {
     required this.onToggle,
   } );
 
+  /// Where the owner label's text starts: 16 dp gutter + 20 dp chevron + 8 dp gap. The
+  /// pane indents its rows by exactly this, so rows sit under the persona that owns them.
+  /// Derived from the three numbers below rather than typed as 44, so it moves with them.
+  static const double _gutter      = 16;
+  static const double _chevronSize = 20;
+  static const double _chevronGap  = 8;
+  static const double textInset    = _gutter + _chevronSize + _chevronGap;
+
   /// What TalkBack reads. Kept as a static so the test asserts the SAME string the
   /// widget renders rather than a copy that can drift from it.
   static String semanticLabel( String ownerLabel, int count ) =>
@@ -60,11 +68,11 @@ class TaskGroupHeader extends StatelessWidget {
           child   : ConstrainedBox(
             constraints : const BoxConstraints( minHeight: kMinInteractiveDimension ),
             child : Padding(
-            padding : const EdgeInsets.symmetric( vertical: 12, horizontal: 16 ),
+            padding : const EdgeInsets.symmetric( vertical: 12, horizontal: _gutter ),
             child   : Row(
               children : [
-                Icon( expanded ? Icons.expand_more : Icons.chevron_right, size: 20 ),
-                const SizedBox( width: 8 ),
+                Icon( expanded ? Icons.expand_more : Icons.chevron_right, size: _chevronSize ),
+                const SizedBox( width: _chevronGap ),
                 Expanded(
                   child : Text(
                     ownerLabel,
