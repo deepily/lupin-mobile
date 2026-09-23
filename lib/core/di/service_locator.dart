@@ -220,9 +220,13 @@ class ServiceLocator {
     fleet : _getIt<FleetRepository>(),
   );
 
+  // ⚠️ `fleet` IS THE REASSIGNMENT ROSTER HERE TOO, for the reason spelled out above
+  // [buildTaskListBloc]: the owner control needs the LIVE personas, which only the
+  // arbiter knows. Both task panes offer the control, so both need the read.
   static HoldingAreaBloc buildHoldingAreaBloc() => HoldingAreaBloc(
     _getIt<HoldingAreaRepository>(),
     _getIt<TaskWriteRepository>(),
+    fleet : _getIt<FleetRepository>(),
   );
 
   static FinishedTasksBloc buildFinishedTasksBloc() =>
