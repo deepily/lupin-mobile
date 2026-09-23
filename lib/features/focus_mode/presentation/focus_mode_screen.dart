@@ -8,6 +8,7 @@ import '../../../services/asr/asr_service.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../auth/domain/auth_bloc.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../auth/domain/auth_event.dart';
 import '../../decision_proxy/presentation/trust_dashboard_screen.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/doc_split_host.dart';
@@ -262,6 +263,18 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             onTap   : () => push( NotificationFilterSettingsScreen(
               stopList: ServiceLocator.get<NotificationStopList>(),
             ) ),
+          ),
+          // Rick 2026-09-23: "no explicit or easily found way of logging out" —
+          // this is the landing screen, and Logout lived only on the Home grid.
+          const Divider(),
+          ListTile(
+            key     : const Key( TestKeys.focusDrawerLogout ),
+            leading : const Icon( Icons.logout ),
+            title   : const Text( 'Log out' ),
+            onTap   : () {
+              Navigator.of( context ).pop();   // close the drawer first
+              context.read<AuthBloc>().add( const AuthLogoutRequested() );
+            },
           ),
         ],
       ),

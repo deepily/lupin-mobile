@@ -169,98 +169,109 @@ class _FocusChatPaneState extends State<FocusChatPane> {
             ) ).toList();
     final hidden  = ( state.hiddenCountBySender[ focused ] ?? 0 ) + ( stored.length - window.length );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Header: badge + sender name.
-        Padding(
-          padding: const EdgeInsets.symmetric( horizontal: 12, vertical: 8 ),
-          child: Row(
-            children: [
-              if ( persona != null )
-                PersonaBadge( persona: persona, senderId: focused, diameter: 28 ),
-              if ( persona != null ) const SizedBox( width: 8 ),
-              // Row de12b7bc: the header named the e-mail and session but not
-              // WHO — basic information. Persona name first, bold; the sender
-              // id stays, italic and quieter, so both read at a glance.
-              if ( personaLabel != null ) ...[
-                Text(
-                  personaLabel,
-                  key   : const Key( TestKeys.focusHeaderPersonaName ),
-                  style : Theme.of( context ).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold ),
-                ),
-                const SizedBox( width: 8 ),
-              ],
-              Expanded(
-                child: Text(
-                  focused,
-                  key      : const Key( TestKeys.focusHeaderSenderId ),
-                  style    : Theme.of( context ).textTheme.bodySmall?.copyWith(
-                    fontStyle : FontStyle.italic,
-                    color     : Theme.of( context ).colorScheme.outline,
+    // 🔴 THE KEYBOARD CAN LEAVE THIS PANE LESS HEIGHT THAN ITS OWN HEADER. With
+    // the DM editor open (up to 8 lines) and the soft keyboard up at 360×800, the
+    // pane got ~35 dp against a 44 dp header and overflowed (measured 2026-09-23).
+    // Below this floor the chrome steps aside and the list alone takes the space.
+    return LayoutBuilder( builder: ( context, box ) {
+      final roomy = box.maxHeight >= _kHeaderFloor;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header: badge + sender name.
+          if ( roomy ) Padding(
+            padding: const EdgeInsets.symmetric( horizontal: 12, vertical: 8 ),
+            child: Row(
+              children: [
+                if ( persona != null )
+                  PersonaBadge( persona: persona, senderId: focused, diameter: 28 ),
+                if ( persona != null ) const SizedBox( width: 8 ),
+                // Row de12b7bc: the header named the e-mail and session but not
+                // WHO — basic information. Persona name first, bold; the sender
+                // id stays, italic and quieter, so both read at a glance.
+                if ( personaLabel != null ) ...[
+                  Text(
+                    personaLabel,
+                    key   : const Key( TestKeys.focusHeaderPersonaName ),
+                    style : Theme.of( context ).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold ),
                   ),
-                  overflow : TextOverflow.ellipsis,
+                  const SizedBox( width: 8 ),
+                ],
+                Expanded(
+                  child: Text(
+                    focused,
+                    key      : const Key( TestKeys.focusHeaderSenderId ),
+                    style    : Theme.of( context ).textTheme.bodySmall?.copyWith(
+                      fontStyle : FontStyle.italic,
+                      color     : Theme.of( context ).colorScheme.outline,
+                    ),
+                    overflow : TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const Divider( height: 1 ),
-        if ( hidden > 0 )
-          Padding(
-            key     : const Key( TestKeys.focusHiddenCaption ),
-            padding : const EdgeInsets.fromLTRB( 12, 4, 12, 0 ),
-            child   : Text(
-              '$hidden hidden by your stop-list',
-              style: Theme.of( context ).textTheme.labelSmall?.copyWith(
-                color: Theme.of( context ).colorScheme.outline ),
+              ],
             ),
           ),
-        Expanded(
-          child: window.isEmpty
-              ? Center( child: Text( stored.isEmpty
-                  ? 'No messages yet in this window.'
-                  : 'Everything here is hidden by your stop-list.' ) )
-              : Builder( builder: ( context ) {
-                  // NEWEST AT THE TOP (Rick 2026-08-21): the window is stored
-                  // oldest→newest; group first (runs are contiguous either
-                  // way), then render the groups reversed. Inside an expanded
-                  // group the children are newest-first too.
-                  final groups = collapseByProgressGroup<FocusMessage>(
-                    window, _groupKey, enabled: _stopList?.collapseGroups ?? true )
-                    .reversed.toList( growable: false );
-                  return ListView.builder(
-                    padding     : const EdgeInsets.all( 8 ),
-                    itemCount   : groups.length,
-                    itemBuilder : ( context, i ) {
-                      final g = groups[ i ];
-                      if ( !g.isCollapsed ) {
-                        final m = g.items.single;
-                        return _MessageBubble(
-                          msg            : m,
-                          senderId       : focused,
-                          personaColor   : PersonaBadge.colorOf( persona ),
-                          isPendingPrompt: pending?.item.id == m.item.id,
+          if ( roomy ) const Divider( height: 1 ),
+          if ( roomy && hidden > 0 )
+            Padding(
+              key     : const Key( TestKeys.focusHiddenCaption ),
+              padding : const EdgeInsets.fromLTRB( 12, 4, 12, 0 ),
+              child   : Text(
+                '$hidden hidden by your stop-list',
+                style: Theme.of( context ).textTheme.labelSmall?.copyWith(
+                  color: Theme.of( context ).colorScheme.outline ),
+              ),
+            ),
+          Expanded(
+            child: window.isEmpty
+                ? Center( child: Text( stored.isEmpty
+                    ? 'No messages yet in this window.'
+                    : 'Everything here is hidden by your stop-list.' ) )
+                : Builder( builder: ( context ) {
+                    // NEWEST AT THE TOP (Rick 2026-08-21): the window is stored
+                    // oldest→newest; group first (runs are contiguous either
+                    // way), then render the groups reversed. Inside an expanded
+                    // group the children are newest-first too.
+                    final groups = collapseByProgressGroup<FocusMessage>(
+                      window, _groupKey, enabled: _stopList?.collapseGroups ?? true )
+                      .reversed.toList( growable: false );
+                    return ListView.builder(
+                      padding     : const EdgeInsets.all( 8 ),
+                      itemCount   : groups.length,
+                      itemBuilder : ( context, i ) {
+                        final g = groups[ i ];
+                        if ( !g.isCollapsed ) {
+                          final m = g.items.single;
+                          return _MessageBubble(
+                            msg            : m,
+                            senderId       : focused,
+                            personaColor   : PersonaBadge.colorOf( persona ),
+                            isPendingPrompt: pending?.item.id == m.item.id,
+                          );
+                        }
+                        return _CollapsedGroup(
+                          key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
+                          count    : g.count,
+                          summary  : _MessageBubble( msg: g.latest, senderId: focused,
+                              personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ),
+                          children : [ for ( final m in g.items.reversed )
+                            _MessageBubble( msg: m, senderId: focused,
+                                personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ) ],
                         );
-                      }
-                      return _CollapsedGroup(
-                        key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
-                        count    : g.count,
-                        summary  : _MessageBubble( msg: g.latest, senderId: focused,
-                            personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ),
-                        children : [ for ( final m in g.items.reversed )
-                          _MessageBubble( msg: m, senderId: focused,
-                              personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ) ],
-                      );
-                    },
-                  );
-                } ),
-        ),
-      ],
-    );
+                      },
+                    );
+                  } ),
+          ),
+        ],
+      );
+    } );
   }
 }
+
+/// Header (~44 dp) + divider + stop-list caption, rounded up: below this the
+/// pane shows its list alone. See the keyboard note in the pane's build.
+const double _kHeaderFloor = 96;
 
 class _RetryBanner extends StatelessWidget {
   final String? userEmail;

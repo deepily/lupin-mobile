@@ -109,14 +109,34 @@ class LupinHomeScreen extends StatelessWidget {
         ],
       ),
       body: ListView( padding: const EdgeInsets.all( 16 ), children: [
+        // 🔴 ORDER MIRRORS THE NOTIFICATION CLIENT AND THE MULTIPLEXER, top to bottom
+        // (Rick 2026-09-23 — those two are in sync, and this grid follows them): Submit
+        // Agentic Jobs · Claude Code · the notifications stream (Lupin Focus here) ·
+        // Broadcast · Fleet Status · Finished Tasks · Task List · Holding Area · Job
+        // Queues. Surfaces the web has no section for sit where their nearest
+        // counterpart does. Reorder here only to follow the web, never on its own.
+        //
+        // ONE deliberate exception, Rick 2026-09-23: Lupin Focus goes FIRST — "it's
+        // the one I use the most lately." The rest keep the web's order.
         _NavCard(
-          icon       : Icons.queue_outlined,
-          title      : 'Job Queue',
-          subtitle   : 'View and manage CJ Flow jobs',
+          key        : const Key( TestKeys.homeLupinFocusCard ),
+          icon       : Icons.center_focus_strong_outlined,
+          title      : 'Lupin Focus',
+          subtitle   : 'Conversations with every live session',
+          // Focus is the app's landing screen and sits UNDER this grid on the
+          // navigator stack, so the door goes back to it rather than pushing a
+          // second copy on top.
+          onTap      : () => Navigator.of( context ).popUntil( ( route ) => route.isFirst ),
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          icon       : Icons.smart_toy_outlined,
+          title      : 'Agentic Jobs',
+          subtitle   : 'Submit deep research, podcast, presentation and more',
           onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
             builder: ( _ ) => BlocProvider.value(
-              value: context.read<QueueBloc>(),
-              child: const QueueDashboardScreen(),
+              value: context.read<AgenticSubmissionBloc>(),
+              child: const AgenticHubScreen(),
             ),
           ) ),
         ),
@@ -150,34 +170,21 @@ class LupinHomeScreen extends StatelessWidget {
             },
           ),
         ],
-        // Back-burnered and therefore hidden — see `_kShowTrustDashboard`. The spacer is
-        // inside the guard too, or hiding the card would leave a 24 dp gap in the list
-        // where it used to be, which reads as a rendering bug rather than an absence.
-        if ( _kShowTrustDashboard ) ...[
-          const SizedBox( height: 12 ),
-          _NavCard(
-            icon       : Icons.shield_outlined,
-            title      : 'Trust Dashboard',
-            subtitle   : 'Manage decision proxy approvals',
-            onTap      : () {
-              final s = context.read<AuthBloc>().state;
-              if ( s is AuthAuthenticated ) {
-                Navigator.of( context ).push( MaterialPageRoute(
-                  builder: ( _ ) => TrustDashboardScreen( userEmail: s.email ),
-                ) );
-              }
-            },
-          ),
-        ],
         const SizedBox( height: 12 ),
         _NavCard(
-          icon       : Icons.smart_toy_outlined,
-          title      : 'Agentic Jobs',
-          subtitle   : 'Submit deep research, podcast, presentation and more',
+          key        : const Key( TestKeys.homeBroadcastCard ),
+          icon       : Icons.campaign_outlined,
+          title      : 'Broadcast',
+          subtitle   : 'Say something to the whole fleet at once',
           onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
-            builder: ( _ ) => BlocProvider.value(
-              value: context.read<AgenticSubmissionBloc>(),
-              child: const AgenticHubScreen(),
+            // `.value`, NOT `create:` — the bloc is app-root and must NOT be disposed
+            // when this route pops, or the ack tally dies with the screen.
+            builder: ( _ ) => Scaffold(
+              appBar : AppBar( title: const Text( 'Broadcast' ) ),
+              body   : BlocProvider<BroadcastBloc>.value(
+                value : ServiceLocator.get<BroadcastBloc>(),
+                child : const BroadcastPane(),
+              ),
             ),
           ) ),
         ),
@@ -200,8 +207,23 @@ class LupinHomeScreen extends StatelessWidget {
           ) ),
         ),
         const SizedBox( height: 12 ),
-        // 🔴 THE FOUR CARDS BELOW ARE THE DOOR THAT WAS NEVER BUILT. Phases 2-5 each
-        // shipped a pane that was tested, merged and green — and referenced only by its
+        _NavCard(
+          key        : const Key( TestKeys.homeFinishedTasksCard ),
+          icon       : Icons.task_alt_outlined,
+          title      : 'Finished Tasks',
+          subtitle   : 'What closed, and how it closed',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => BlocProvider<FinishedTasksBloc>(
+              create : ( _ ) => ServiceLocator.buildFinishedTasksBloc(),
+              // Its own Scaffold already — Phase 2 built a SCREEN, not a pane, which is
+              // why it needs no PaneHostScreen and why it was easy to miscount as one.
+              child  : const FinishedTasksScreen(),
+            ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        // 🔴 THIS CARD, FINISHED TASKS, HOLDING AREA AND BROADCAST ARE THE DOOR THAT WAS
+        // NEVER BUILT. Phases 2-5 each shipped a pane that was tested, merged and green — and referenced only by its
         // own file and its tests. Measured 2026-09-22; wired on Rick's go-ahead.
         //
         // ⚠️ Three of them build their bloc INSIDE the route, like Fleet Status above,
@@ -238,37 +260,35 @@ class LupinHomeScreen extends StatelessWidget {
         ),
         const SizedBox( height: 12 ),
         _NavCard(
-          key        : const Key( TestKeys.homeFinishedTasksCard ),
-          icon       : Icons.task_alt_outlined,
-          title      : 'Finished Tasks',
-          subtitle   : 'What closed, and how it closed',
+          icon       : Icons.queue_outlined,
+          title      : 'Job Queue',
+          subtitle   : 'View and manage CJ Flow jobs',
           onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
-            builder: ( _ ) => BlocProvider<FinishedTasksBloc>(
-              create : ( _ ) => ServiceLocator.buildFinishedTasksBloc(),
-              // Its own Scaffold already — Phase 2 built a SCREEN, not a pane, which is
-              // why it needs no PaneHostScreen and why it was easy to miscount as one.
-              child  : const FinishedTasksScreen(),
+            builder: ( _ ) => BlocProvider.value(
+              value: context.read<QueueBloc>(),
+              child: const QueueDashboardScreen(),
             ),
           ) ),
         ),
-        const SizedBox( height: 12 ),
-        _NavCard(
-          key        : const Key( TestKeys.homeBroadcastCard ),
-          icon       : Icons.campaign_outlined,
-          title      : 'Broadcast',
-          subtitle   : 'Say something to the whole fleet at once',
-          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
-            // `.value`, NOT `create:` — the bloc is app-root and must NOT be disposed
-            // when this route pops, or the ack tally dies with the screen.
-            builder: ( _ ) => Scaffold(
-              appBar : AppBar( title: const Text( 'Broadcast' ) ),
-              body   : BlocProvider<BroadcastBloc>.value(
-                value : ServiceLocator.get<BroadcastBloc>(),
-                child : const BroadcastPane(),
-              ),
-            ),
-          ) ),
-        ),
+        // Back-burnered and therefore hidden — see `_kShowTrustDashboard`. The spacer is
+        // inside the guard too, or hiding the card would leave a 24 dp gap in the list
+        // where it used to be, which reads as a rendering bug rather than an absence.
+        if ( _kShowTrustDashboard ) ...[
+          const SizedBox( height: 12 ),
+          _NavCard(
+            icon       : Icons.shield_outlined,
+            title      : 'Trust Dashboard',
+            subtitle   : 'Manage decision proxy approvals',
+            onTap      : () {
+              final s = context.read<AuthBloc>().state;
+              if ( s is AuthAuthenticated ) {
+                Navigator.of( context ).push( MaterialPageRoute(
+                  builder: ( _ ) => TrustDashboardScreen( userEmail: s.email ),
+                ) );
+              }
+            },
+          ),
+        ],
       ] ),
     );
   }

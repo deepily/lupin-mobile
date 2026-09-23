@@ -334,4 +334,53 @@ void main() {
       expect( viewer.width, closeTo( 412, 1 ) );
     } );
   } );
+
+  /// Rick 2026-09-23, on the emulator: with the DM editor open in Lupin Focus,
+  /// neither the Send arrow nor the X did anything. First suspect was the soft
+  /// keyboard pushing the buttons past the Column's bounds (painted, never hit).
+  /// MEASURED, NOT CONFIRMED: both buttons work here with and without a 320 dp
+  /// keyboard, so his defect is still unexplained. What this DID find: with the
+  /// keyboard up the conversation pane overflowed by 9 px (fixed — the pane now
+  /// drops its header below a height floor). These stay as the regression guard.
+  group( 'DM editor with the keyboard up — Send and X must still work', () {
+    const long = 'line one of a long spoken reply\nline two\nline three\nline four\n'
+                 'line five\nline six\nline seven\nline eight';
+
+    Future<void> openEditor( WidgetTester tester, { required double keyboard } ) async {
+      written( clock.subtract( const Duration( minutes: 5 ) ) );
+      when( () => repo.notify( any() ) ).thenAnswer( ( _ ) async =>
+          NotifyDispatchResponse.fromJson( { 'status': 'queued', 'target_user': 'cc', 'connection_count': 1 } ) );
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => long );
+      await pumpScreen( tester, screen: const Size( 360, 800 ) );
+
+      await tester.tap( railBadge( _written ) );
+      await settle( tester );
+      await tester.tap( byKey( TestKeys.voiceReplyMic ) );
+      await settle( tester );
+      await tester.tap( byKey( TestKeys.voiceReplyMic ) );
+      await settle( tester );
+      expect( byKey( TestKeys.voiceReplyTranscript ), findsOneWidget, reason: 'setup: editor open' );
+
+      tester.view.viewInsets = FakeViewPadding( bottom: keyboard );
+      await settle( tester );
+    }
+
+    for ( final keyboard in <double>[ 0, 320 ] ) {
+      testWidgets( 'Send dispatches (keyboard ${keyboard.toInt()} dp)', ( tester ) async {
+        await openEditor( tester, keyboard: keyboard );
+        await tester.tap( byKey( TestKeys.voiceReplySend ) );
+        await settle( tester );
+        verify( () => repo.notify( any() ) ).called( 1 );
+        expect( byKey( TestKeys.voiceReplyTranscript ), findsNothing, reason: 'editor closes after send' );
+      } );
+
+      testWidgets( 'X closes the editor (keyboard ${keyboard.toInt()} dp)', ( tester ) async {
+        await openEditor( tester, keyboard: keyboard );
+        await tester.tap( byKey( TestKeys.voiceReplyCancel ) );
+        await settle( tester );
+        expect( byKey( TestKeys.voiceReplyTranscript ), findsNothing );
+        verifyNever( () => repo.notify( any() ) );
+      } );
+    }
+  } );
 }

@@ -124,6 +124,7 @@ class TestKeys {
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';
   static const homeFleetStatusCard  = 'home.fleetStatus';
+  static const homeLupinFocusCard   = 'home.lupinFocus';
 
   // Voice persona badge (Phase 3 — voice-persona milestone)
   // Used at every wiring site (inbox tile, conversation header, by-date item).
@@ -138,6 +139,7 @@ class TestKeys {
   static const focusPauseToggle     = 'focus.pauseToggle';
   static const focusChatPane        = 'focus.chatPane';
   static const focusDrawerButton    = 'focus.drawerButton';
+  static const focusDrawerLogout    = 'focus.drawerLogout';
   static const focusPausedBanner    = 'focus.pausedBanner';
   static const focusRetryBanner     = 'focus.retryBanner';
   static const focusBatchFallbackPrefix = 'focus.batchFallback.';  // + notificationId

@@ -18,6 +18,17 @@ import 'package:lupin_mobile/features/home/home_screen.dart';
 /// ⇒ This file asserts the DOOR exists. It is deliberately dumb: it does not check that
 /// the panes render, because four other suites already do that well. It checks the one
 /// thing none of them can.
+/// Back to the top, then down to [card]. `scrollUntilVisible` only moves in one
+/// direction, so visiting cards in any order but on-screen order stranded a card
+/// ABOVE the viewport — which is what happened when the grid was reordered to
+/// match the web clients (2026-09-23). Order of visit should not matter here.
+Future<void> scrollTo( WidgetTester tester, Finder card ) async {
+  final list = find.byType( Scrollable ).first;
+  tester.state<ScrollableState>( list ).position.jumpTo( 0 );
+  await tester.pump();
+  await tester.scrollUntilVisible( card, 120, scrollable: list );
+}
+
 void main() {
   /// The home screen reads `AuthBloc` for some cards, so the ones under test here are
   /// only the four that do not — which is all of them. If that ever changes, this test
@@ -45,7 +56,7 @@ void main() {
       TestKeys.homeBroadcastCard    : 'Broadcast',
     }.entries ) {
       final card = find.byKey( Key( entry.key ) );
-      await tester.scrollUntilVisible( card, 120, scrollable: find.byType( Scrollable ).first );
+      await scrollTo( tester, card );
       expect(
         card,
         findsOneWidget,
@@ -67,7 +78,7 @@ void main() {
       TestKeys.homeBroadcastCard,
     ] ) {
       final card = find.byKey( Key( key ) );
-      await tester.scrollUntilVisible( card, 120, scrollable: find.byType( Scrollable ).first );
+      await scrollTo( tester, card );
 
       final tile = find.descendant( of: card, matching: find.byType( ListTile ) );
       expect( tile, findsOneWidget, reason: key );

@@ -40,6 +40,21 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build( BuildContext context ) {
+    // 🔴 LOGOUT MUST CLEAR THE ROUTES PUSHED ABOVE THIS GATE. The gate is the
+    // navigator's FIRST route, so on logout it swaps to LoginScreen *underneath*
+    // whatever is pushed on top — the Home grid, a pane. Rick 2026-09-23: tapping
+    // Logout on the grid visibly did nothing, because the login screen was hidden
+    // behind the grid that asked for it.
+    return BlocListener<AuthBloc, AuthState>(
+      listenWhen : ( previous, current ) =>
+        previous is AuthAuthenticated && current is! AuthAuthenticated,
+      listener   : ( context, _ ) =>
+        Navigator.of( context ).popUntil( ( route ) => route.isFirst ),
+      child      : _gate(),
+    );
+  }
+
+  Widget _gate() {
     return BlocBuilder<AuthBloc, AuthState>(
       // Rick 2026-09-17: a failed sign-in must not wipe the password. A login
       // attempt goes login → AuthLoading → AuthError; rebuilding on the

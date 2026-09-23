@@ -134,6 +134,35 @@ void main() {
       expect( find.byType( CircularProgressIndicator ), findsOneWidget );
       expect( find.byKey( const Key( TestKeys.loginPasswordField ) ), findsNothing );
     });
+
+    /// 🔴 Rick 2026-09-23: "no explicit or easily found way of logging out." The
+    /// Home grid HAD a Logout button — but the grid is pushed above this gate, so
+    /// logout swapped LoginScreen in UNDERNEATH it and the tap looked dead.
+    /// Mutation-proved: with the gate's BlocListener removed this goes RED.
+    testWidgets( "logout from a screen pushed above the gate lands on LoginScreen", ( tester ) async {
+      final states = StreamController<AuthState>();
+      addTearDown( states.close );
+      whenListen( auth, states.stream, initialState: const AuthAuthenticated(
+        userId: "uid-1", email: "a@b.com", accessToken: "acc-1",
+      ) );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      // Push a screen above the gate, as the Home grid is pushed above Focus.
+      Navigator.of( tester.element( find.byType( _SentinelChild ) ) ).push(
+        MaterialPageRoute<void>( builder: ( _ ) => const Scaffold( body: Text( "PUSHED_GRID" ) ) ),
+      );
+      await tester.pumpAndSettle();
+      expect( find.text( "PUSHED_GRID" ), findsOneWidget, reason: "setup: grid on top" );
+
+      states.add( const AuthUnauthenticated( lastEmail: "a@b.com" ) );
+      await tester.pumpAndSettle();
+
+      expect( find.text( "PUSHED_GRID" ), findsNothing,
+          reason: "the pushed screen must be cleared, or it hides the login screen" );
+      expect( find.byKey( const Key( TestKeys.loginEmailField ) ), findsOneWidget );
+    });
   });
 }
 
