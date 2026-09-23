@@ -9,6 +9,8 @@ import '../../fleet/data/task_write_repository.dart';
 import '../../fleet_status/data/fleet_models.dart';
 import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
+import '../../fleet/data/task_verbs.dart';
+import '../../fleet/domain/unsent_write.dart';
 import '../data/task_list_model.dart';
 import '../data/task_list_repository.dart';
 
@@ -34,6 +36,16 @@ class TaskListVerbPressed extends TaskListEvent {
   final String taskId;
   final TaskVerb verb;
   const TaskListVerbPressed( { required this.taskId, required this.verb } );
+}
+
+/// The connection came back — resend what the network ate.
+///
+/// ⚠️ ITS OWN EVENT RATHER THAN A LIMB OF THE REFRESH, because the two do opposite
+/// things: one sends the operator's work TO the server, the other pulls the server's
+/// state back. Folding them together would make "refresh" mean "also write", which is
+/// not a thing a pull-to-refresh should ever do.
+class TaskListUnsentRetryRequested extends TaskListEvent {
+  const TaskListUnsentRetryRequested();
 }
 
 /// Read the live fleet, for the reassignment roster.
@@ -70,6 +82,16 @@ class TaskListState extends Equatable {
   /// work every sixty seconds.
   final Set<String> collapsed;
 
+  /// Writes the operator made that never reached the server, keyed by task id.
+  ///
+  /// 🔴 THE ROW IS ROLLED BACK AND THE ACT IS REMEMBERED. Those are two different things
+  /// and G6 is what happens when only the first is done: the row snaps back, a notice
+  /// appears somewhere, and what the operator DID is gone. Keyed by task id, so a second
+  /// write on the same row replaces the first rather than queueing behind it — there is
+  /// no ordering guarantee here and pretending otherwise would be worse than not having
+  /// one.
+  final Map<String, UnsentWrite> unsent;
+
   /// The personas a row may be reassigned to — the LIVE fleet, alpha-sorted.
   ///
   /// ⚠️ EMPTY IS A LEGITIMATE STATE, NOT A LOADING ONE. It means the phone cannot see
@@ -86,7 +108,11 @@ class TaskListState extends Equatable {
     this.total           = 0,
     this.collapsed       = const <String>{},
     this.reassignTargets = const <String>[],
+    this.unsent          = const <String, UnsentWrite>{},
   } );
+
+  /// What the operator did to this row that has not landed, if anything.
+  String? unsentLabelFor( String taskId ) => unsent[ taskId ]?.label;
 
   TaskListState copyWith( {
     TaskListModel? model,
@@ -97,6 +123,7 @@ class TaskListState extends Equatable {
     int? total,
     Set<String>? collapsed,
     List<String>? reassignTargets,
+    Map<String, UnsentWrite>? unsent,
   } ) =>
       TaskListState(
         model           : model ?? this.model,
@@ -106,11 +133,12 @@ class TaskListState extends Equatable {
         total           : total ?? this.total,
         collapsed       : collapsed ?? this.collapsed,
         reassignTargets : reassignTargets ?? this.reassignTargets,
+        unsent          : unsent ?? this.unsent,
       );
 
   @override
   List<Object?> get props =>
-      [ model, loading, error, incomplete, total, collapsed, reassignTargets ];
+      [ model, loading, error, incomplete, total, collapsed, reassignTargets, unsent ];
 }
 
 // ─── Bloc ────────────────────────────────────────────────────────────────────
@@ -151,6 +179,7 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     on<TaskListVerbPressed>( _onVerb );
     on<TaskListFieldChanged>( _onField );
     on<TaskListRosterRequested>( _onRoster );
+    on<TaskListUnsentRetryRequested>( _onRetryUnsent );
   }
 
   /// 🔴 THE POLL INTERVAL READS THE CONNECTION, AND THE RULE NOW LIVES IN THE MIXIN.
@@ -186,9 +215,17 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// it, so this is wiring rather than new capability.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      // Only the RESTORED edge refreshes. Firing on every state change would refetch on
-      // the way down as well, which is a request into a connection that just failed.
-      if ( state == NetworkState.connected ) add( const TaskListRefreshRequested() );
+      // Only the RESTORED edge acts. Firing on every state change would also fire on the
+      // way DOWN, which is a request into a connection that just failed.
+      if ( state != NetworkState.connected ) return;
+
+      // 🔴 THE RETRY GOES FIRST, AND THE ORDER IS NOT COSMETIC. A refetch that lands
+      // before the retry repaints the board from the server — which still does not have
+      // the operator's write — so the row they are watching flickers back to its old
+      // value and only then changes again. Sending first means the refetch that follows
+      // reports the world including their action.
+      add( const TaskListUnsentRetryRequested() );
+      add( const TaskListRefreshRequested() );
     } );
   }
 
@@ -247,7 +284,21 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
                 '${e.ticketId == null ? '' : ' (ticket ${e.ticketId})'}',
       ) );
     } on TaskWriteException catch ( e ) {
-      emit( state.copyWith( model: before, error: e.message ) );
+      // 🔴 ROLL BACK *AND* REMEMBER — the two halves of G6. The row goes back because the
+      // change did not happen; the act is kept because the operator made it. Only a
+      // TRANSPORT failure is kept: a server that answered and refused is an error with
+      // its own words, and a mark for it would never clear however good the signal got.
+      emit( state.copyWith(
+        model  : before,
+        error  : e.message,
+        unsent : isTransportFailure( e )
+            ? _withUnsent( UnsentWrite(
+                taskId : event.taskId,
+                label  : verbLabel( event.verb.name ),
+                verb   : event.verb,
+              ) )
+            : state.unsent,
+      ) );
     }
   }
 
@@ -288,9 +339,66 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
       );
       add( const TaskListRefreshRequested() );
     } on TaskWriteException catch ( e ) {
-      emit( state.copyWith( model: before, error: e.message ) );
+      emit( state.copyWith(
+        model  : before,
+        error  : e.message,
+        unsent : isTransportFailure( e )
+            ? _withUnsent( UnsentWrite(
+                taskId       : event.taskId,
+                label        : event.priority != null ? 'Priority' : 'Owner',
+                priority     : event.priority,
+                ownerPersona : event.ownerPersona,
+              ) )
+            : state.unsent,
+      ) );
     }
   }
+
+  /// The connection came back: resend what the network ate, once each.
+  ///
+  /// 🔴 ONE ATTEMPT PER WRITE PER EDGE. Not a loop within this pass — a write that fails
+  /// on transport again is kept and left alone until the NEXT restored edge, which is a
+  /// genuine new signal rather than a guess that the second try will go better.
+  ///
+  /// ⚠️ A RETRY THAT MEETS A REFUSAL STOPS BEING UNSENT. The connection is plainly fine,
+  /// so the mark would never clear — the record is dropped and the SERVER'S OWN WORDS go
+  /// in front of the operator, which is Tiffany's ruling and the only honest answer: the
+  /// write will never succeed as written, and they are the only one who can change it.
+  Future<void> _onRetryUnsent(
+    TaskListUnsentRetryRequested event,
+    Emitter<TaskListState> emit,
+  ) async {
+    if ( state.unsent.isEmpty ) return;
+
+    final outcome = await retryUnsentWrites( state.unsent, _send );
+
+    emit( state.copyWith(
+      unsent     : outcome.remaining,
+      error      : outcome.refusals.isEmpty ? null : outcome.refusals.first,
+      clearError : outcome.refusals.isEmpty,
+    ) );
+  }
+
+  /// Send one remembered write back through the door it came from.
+  ///
+  /// ⚠️ THE DOOR IS DECIDED BY WHAT THE WRITE CHANGES, exactly as §4.2 requires of a
+  /// fresh write. A retry that guessed the other door would be the same silent failure —
+  /// a PATCH carrying a status is ignored, and a transition carrying a priority is not a
+  /// request the endpoint understands.
+  Future<void> _send( UnsentWrite write ) {
+    final verb = write.verb;
+    if ( verb != null ) {
+      return _writes.transition( id: write.taskId, verb: verb );
+    }
+    return _writes.patchFields(
+      id           : write.taskId,
+      priority     : write.priority,
+      ownerPersona : write.ownerPersona,
+    );
+  }
+
+  Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
+      <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
 
   /// Drop one row from the rendered model without refetching — the optimistic half.
   TaskListModel? _withoutRow( TaskListModel? model, String taskId ) {

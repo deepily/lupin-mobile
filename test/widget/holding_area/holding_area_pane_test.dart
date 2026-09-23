@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -72,6 +73,8 @@ Future<void> expandGroup( WidgetTester tester, String filer ) async {
 }
 
 void main() {
+  group( "the unsent mark reaches the row", _unsentMarkReachesTheRow );
+
   late StubAdapter adapter;
   late HoldingAreaBloc bloc;
 
@@ -507,5 +510,72 @@ void main() {
                   'every other one is what keeps the list short' );
       expect( find.byType( TaskRow ), findsWidgets );
     } );
+  } );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// THE UNSENT MARK REACHES THE ROW — G6 (row 6d25aa31)
+// ═══════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 THIS TEST EXISTS BECAUSE THE WIRING WAS LOST ONCE, SILENTLY, IN A REBASE. The bloc
+// recorded the marks and every bloc test passed, because a bloc test asserts STATE. The
+// pane had been edited to pass `unsentLabel` to the row; a rebase onto a peer's rewrite
+// of this same file took their version of the call site, and the argument went with it.
+// Nothing went red — the mark simply never reached a screen.
+//
+// ⇒ Same shape as every gap in this analysis: built, tested, unreachable. A state field
+// nobody renders is not a feature, and only a test that looks at the ROW can say so.
+void _unsentMarkReachesTheRow() {
+  late StubAdapter adapter;
+  late HoldingAreaBloc bloc;
+
+  setUp( () {
+    adapter = StubAdapter();
+    final dio = makeDio( adapter );
+    bloc = HoldingAreaBloc( HoldingAreaRepository( dio ), TaskWriteRepository( dio ) );
+  } );
+
+  tearDown( () async => bloc.close() );
+
+  testWidgets( "a write the network ate puts a mark on that row, and only that row",
+      ( tester ) async {
+    adapter.handlers[ 'GET ${HoldingAreaRepository.path}' ] =
+        ( _ ) => jsonBody( _page( [ _row( 'a', 'sam' ), _row( 'b', 'sam' ) ] ) );
+    adapter.handlers[ 'POST /api/tasks/a/transition' ] =
+        ( o ) => throw DioException.connectionError(
+              requestOptions : o,
+              reason         : 'the signal went away',
+            );
+
+    tester.view.physicalSize     = const Size( 360, 800 );
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown( tester.view.resetPhysicalSize );
+    addTearDown( tester.view.resetDevicePixelRatio );
+
+    await tester.pumpWidget( MaterialApp(
+      home : BlocProvider<HoldingAreaBloc>.value(
+        value : bloc,
+        child : const Scaffold( body: HoldingAreaPane() ),
+      ),
+    ) );
+    // ⚠️ REAL TIME, NOT THE FAKE CLOCK. The pane's first fetch runs on the real event
+    // loop; `pumpAndSettle` alone drives only the test clock, so the groups have not
+    // arrived when the next line looks for one.
+    await tester.runAsync(
+        () => Future<void>.delayed( const Duration( milliseconds: 40 ) ) );
+    await tester.pumpAndSettle();
+
+    // Unfold the group so the rows are on screen, then lose a write on row a.
+    // ⚠️ `expandGroup`, not a hand-rolled tap: everything arrives folded, the toggle has
+    // its own key, and the rebuild settles in REAL time rather than on the fake clock.
+    await expandGroup( tester, 'Sam' );
+
+    bloc.add( HoldingAreaRowVerbPressed( id: 'a', verb: TaskVerb.approve() ) );
+    await tester.runAsync(
+        () => Future<void>.delayed( const Duration( milliseconds: 40 ) ) );
+    await tester.pumpAndSettle();
+
+    expect( find.byKey( const Key( TestKeys.taskRowUnsentMark ) ), findsOneWidget,
+        reason: 'the bloc recorded it; a state field nobody renders is not a feature' );
   } );
 }

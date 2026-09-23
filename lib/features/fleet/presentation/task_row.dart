@@ -68,6 +68,14 @@ class TaskRow extends StatefulWidget {
   /// The personas this row may be reassigned to. Data, from the live fleet.
   final List<String> ownerOptions;
 
+  /// What the operator did to this row that has NOT reached the server, if anything.
+  ///
+  /// 🔴 VISIBLE STATE, NOT ONLY A NOTICE. Gap G6's acceptance says so in as many words,
+  /// and the reason is that a notice bar says "something failed" while the operator is
+  /// looking at fifty rows. The mark has to be ON the row, because the question they are
+  /// actually asking is "did MY park land", and only the row can answer it.
+  final String? unsentLabel;
+
   const TaskRow( {
     super.key,
     required this.model,
@@ -75,6 +83,7 @@ class TaskRow extends StatefulWidget {
     this.onVerb,
     this.onFieldChanged,
     this.ownerOptions = const <String>[],
+    this.unsentLabel,
   } );
 
   @override
@@ -124,11 +133,39 @@ class _TaskRowState extends State<TaskRow> {
   Widget _line1( BuildContext context ) {
     return Row(
       children : [
+        if ( widget.unsentLabel != null ) _unsentMark( context ),
         Expanded(
           child : _cell( 'title', widget.model.title, style: Theme.of( context ).textTheme.titleSmall ),
         ),
         _disclosureToggle( context ),
       ],
+    );
+  }
+
+  /// The mark a row wears while one of the operator's writes has not landed.
+  ///
+  /// 🔴 ON LINE 1, WHERE THE ROW IS IDENTIFIED, AND NOT BEHIND THE DISCLOSURE. A mark
+  /// hidden inside the controls answers the question only for someone who already
+  /// suspects the answer. §7.2 is emphatic that line 1 does not survive extra FIELDS at
+  /// 360 dp — this is an icon, not a field, and it is the one thing on the row that is
+  /// about the operator rather than about the task.
+  ///
+  /// ⚠️ THE LABEL NAMES THE VERB, NOT THE FAILURE. "Park not sent" tells the operator
+  /// what to press again; "write failed" tells them something is broken and leaves them
+  /// to work out what. Colour carries none of it — `Semantics` does, because a coloured
+  /// glyph is invisible to TalkBack and to anyone who does not know this app's palette.
+  Widget _unsentMark( BuildContext context ) {
+    return Padding(
+      padding : const EdgeInsets.only( right: 6 ),
+      child   : Semantics(
+        label : '${widget.unsentLabel} — not sent',
+        child : Icon(
+          Icons.cloud_off,
+          key   : const Key( TestKeys.taskRowUnsentMark ),
+          size  : 16,
+          color : Theme.of( context ).colorScheme.error,
+        ),
+      ),
     );
   }
 

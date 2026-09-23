@@ -9,6 +9,8 @@ import '../../fleet/data/task_write_repository.dart';
 import '../../fleet_status/data/fleet_models.dart';
 import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
+import '../../fleet/data/task_verbs.dart';
+import '../../fleet/domain/unsent_write.dart';
 import '../data/holding_area_models.dart';
 import '../data/holding_area_repository.dart';
 
@@ -83,6 +85,15 @@ class HoldingAreaRosterRequested extends HoldingAreaEvent {
 /// a persona whose last held row is approved away disappears and every group below it
 /// shifts up — so an index captured at build time can toggle a DIFFERENT persona by the
 /// time the tap lands. The Task List's toggle keys on its label for the same reason.
+/// The connection came back — resend what the network ate.
+///
+/// ⚠️ ITS OWN EVENT RATHER THAN A LIMB OF THE REFRESH: one sends the operator's work TO
+/// the server, the other pulls the server's state back. Folding them together would make
+/// "refresh" mean "also write", which is not a thing a pull-to-refresh should ever do.
+class HoldingAreaUnsentRetryRequested extends HoldingAreaEvent {
+  const HoldingAreaUnsentRetryRequested();
+}
+
 class HoldingAreaGroupToggled extends HoldingAreaEvent {
   final String filer;
   const HoldingAreaGroupToggled( this.filer );
@@ -158,6 +169,15 @@ class HoldingAreaState extends Equatable {
   /// handler replaces `groups` and leaves this alone.
   final Set<String> expanded;
 
+  /// Writes the operator made that never reached the server, keyed by task id.
+  ///
+  /// 🔴 PER ROW, EVEN FOR A BATCH, AND THAT IS THE HALF A GROUP-LEVEL NOTICE CANNOT DO.
+  /// Approve-all writes N rows in one press and they fail INDEPENDENTLY — the existing
+  /// `batchNotice` already reports "one did not, the rest did", which is the right
+  /// sentence and still leaves the operator scanning the group to find WHICH one. Keying
+  /// the marks by task id means the rows that did not land are the rows wearing a mark.
+  final Map<String, UnsentWrite> unsent;
+
   const HoldingAreaState( {
     this.groups       = const <FilerGroup>[],
     this.loading      = false,
@@ -169,6 +189,7 @@ class HoldingAreaState extends Equatable {
     this.busyFilers   = const <String>{},
     this.expanded     = const <String>{},
     this.reassignTargets = const <String>[],
+    this.unsent          = const <String, UnsentWrite>{},
     this.batchNotice,
   } );
 
@@ -184,6 +205,7 @@ class HoldingAreaState extends Equatable {
     Set<String>? busyFilers,
     Set<String>? expanded,
     List<String>? reassignTargets,
+    Map<String, UnsentWrite>? unsent,
     String? batchNotice,
     bool clearBatchNotice = false,
   } ) =>
@@ -198,11 +220,15 @@ class HoldingAreaState extends Equatable {
         busyFilers   : busyFilers ?? this.busyFilers,
         expanded     : expanded ?? this.expanded,
         reassignTargets : reassignTargets ?? this.reassignTargets,
+        unsent          : unsent ?? this.unsent,
         batchNotice  : clearBatchNotice ? null : ( batchNotice ?? this.batchNotice ),
       );
 
   /// The reason currently typed for one group, or the empty string.
   String reasonFor( String filer ) => reasons[ filer ] ?? '';
+
+  /// What the operator did to this row that has not landed, if anything.
+  String? unsentLabelFor( String taskId ) => unsent[ taskId ]?.label;
 
   /// Whether one persona's rows are on screen. Folded unless the operator said otherwise.
   bool isExpanded( String filer ) => expanded.contains( filer );
@@ -210,7 +236,7 @@ class HoldingAreaState extends Equatable {
   @override
   List<Object?> get props =>
       [ groups, loading, error, incomplete, total, reasons, reasonErrors, busyFilers,
-        expanded, reassignTargets, batchNotice ];
+        expanded, reassignTargets, unsent, batchNotice ];
 }
 
 // ─── Bloc ────────────────────────────────────────────────────────────────────
@@ -249,6 +275,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     on<HoldingAreaGroupToggled>( _onGroupToggled );
     on<HoldingAreaFieldChanged>( _onField );
     on<HoldingAreaRosterRequested>( _onRoster );
+    on<HoldingAreaUnsentRetryRequested>( _onRetryUnsent );
   }
 
   /// The poll interval reads the connection, same measurement as the Task List: a full
@@ -267,11 +294,58 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     add( HoldingAreaRefreshRequested( cancelToken: token ) );
   }
 
+  /// The connection came back: resend what the network ate, once each.
+  ///
+  /// 🔴 ONE ATTEMPT PER WRITE PER EDGE, and the retry goes out BEFORE the refetch — a
+  /// refetch landing first repaints the pane from a server that does not yet have the
+  /// operator's write, so the row flickers back to held and only then leaves.
+  ///
+  /// ⚠️ A RETRY THAT MEETS A REFUSAL STOPS BEING UNSENT: the connection is plainly fine,
+  /// so the mark would never clear. The record is dropped and the SERVER'S OWN WORDS go
+  /// to `batchNotice`, which is the field that survives the refetch this pane schedules.
+  Future<void> _onRetryUnsent(
+    HoldingAreaUnsentRetryRequested event,
+    Emitter<HoldingAreaState> emit,
+  ) async {
+    if ( state.unsent.isEmpty ) return;
+
+    final outcome = await retryUnsentWrites( state.unsent, _send );
+
+    emit( state.copyWith(
+      unsent           : outcome.remaining,
+      batchNotice      : outcome.refusals.isEmpty ? null : outcome.refusals.first,
+      clearBatchNotice : outcome.refusals.isEmpty,
+    ) );
+  }
+
+  /// Send one remembered write back through the door it came from.
+  ///
+  /// ⚠️ THE DOOR IS DECIDED BY WHAT THE WRITE CHANGES, exactly as §4.2 requires of a
+  /// fresh one. A retry that guessed the other door would be the same silent failure the
+  /// field door is famous for: a PATCH carrying a status is ignored without complaint.
+  Future<void> _send( UnsentWrite write ) {
+    final verb = write.verb;
+    if ( verb != null ) {
+      return _writes.transition( id: write.taskId, verb: verb );
+    }
+    return _writes.patchFields(
+      id           : write.taskId,
+      priority     : write.priority,
+      ownerPersona : write.ownerPersona,
+    );
+  }
+
+  Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
+      <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
+
   /// Refresh on the connectivity-RESTORED edge only. Firing on every state change would
   /// refetch on the way down too, which is a request into a connection that just failed.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      if ( state == NetworkState.connected ) add( const HoldingAreaRefreshRequested() );
+      if ( state != NetworkState.connected ) return;
+      // The retry goes FIRST — see [_onRetryUnsent].
+      add( const HoldingAreaUnsentRetryRequested() );
+      add( const HoldingAreaRefreshRequested() );
     } );
   }
 
@@ -307,8 +381,24 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     try {
       await _writes.transition( id: event.id, verb: event.verb );
     } on Object catch ( e ) {
-      emit( state.copyWith( batchNotice: _writeError( e ) ) );
+      // 🔴 G6: THE NOTICE SAYS IT FAILED; THE MARK SAYS WHICH ROW AND WHAT WAS DONE TO
+      // IT. Only a transport failure is kept — a server that answered and refused is an
+      // error with its own words, and a mark for it would never clear.
+      emit( state.copyWith(
+        batchNotice : _writeError( e ),
+        unsent      : isTransportFailure( e )
+            ? _withUnsent( UnsentWrite(
+                taskId : event.id,
+                label  : verbLabel( event.verb.name ),
+                verb   : event.verb,
+              ) )
+            : state.unsent,
+      ) );
       return;
+    }
+    // The write landed, so whatever this row was carrying is no longer unsent.
+    if ( state.unsent.containsKey( event.id ) ) {
+      emit( state.copyWith( unsent: { ...state.unsent }..remove( event.id ) ) );
     }
     // 🔴 REFETCH RATHER THAN DROP THE ROW LOCALLY. An approved row leaves this pane, and
     // removing it here would paint a write as applied that the server may have only
@@ -392,12 +482,25 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     var   applied  = 0;
     Object? firstFailure;
 
+    // 🔴 THE ROWS THAT DID NOT LAND ARE THE ROWS THAT WEAR A MARK. "One of fourteen did
+    // not move" is the right sentence and still leaves the operator scanning the group to
+    // find which one. A batch fails per row, so it is recorded per row.
+    final marks = <String, UnsentWrite>{ ...state.unsent };
+
     for ( final id in ids ) {
       try {
         await _writes.transition( id: id, verb: verb( id ) );
         applied++;
+        marks.remove( id );   // it landed; any older mark on this row is spent
       } on Object catch ( e ) {
         firstFailure ??= e;
+        if ( isTransportFailure( e ) ) {
+          marks[ id ] = UnsentWrite(
+            taskId : id,
+            label  : verbLabel( verb( id ).name ),
+            verb   : verb( id ),
+          );
+        }
       }
     }
 
@@ -413,6 +516,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
           : '${ids.length - applied} of ${ids.length} rows did not move '
             '(${_writeError( firstFailure! )}) — the rest did',
       clearBatchNotice : complete,
+      unsent           : marks,
       reasons          : complete
           ? ( { ...state.reasons }..remove( filer ) )
           : state.reasons,
@@ -441,8 +545,26 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
       // fetch error is answered by the next fetch — which this handler is about to
       // schedule — so a field failure parked there would be wiped before the operator
       // read it. That is the bug `batchNotice` was split out for.
-      emit( state.copyWith( batchNotice: _writeError( e ) ) );
+      //
+      // 🔴 AND THE FIELD DOOR IS REMEMBERED TOO (G6). A priority edit lost to a dropped
+      // signal is the operator's act exactly as a verb is. This handler arrived with
+      // Chloé's half of the pane while this row was in flight, so it is wired here
+      // rather than left as the one write on either task pane that forgets.
+      emit( state.copyWith(
+        batchNotice : _writeError( e ),
+        unsent      : isTransportFailure( e )
+            ? _withUnsent( UnsentWrite(
+                taskId       : event.id,
+                label        : event.priority != null ? 'Priority' : 'Owner',
+                priority     : event.priority,
+                ownerPersona : event.ownerPersona,
+              ) )
+            : state.unsent,
+      ) );
       return;
+    }
+    if ( state.unsent.containsKey( event.id ) ) {
+      emit( state.copyWith( unsent: { ...state.unsent }..remove( event.id ) ) );
     }
     add( const HoldingAreaRefreshRequested() );
   }

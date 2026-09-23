@@ -145,6 +145,11 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
               model        : row,
               verbs        : _heldRowVerbs( row ),
               ownerOptions : state.reassignTargets,
+              // G6: the row wears what the operator did that has not landed. The batch
+              // notice says how MANY rows did not move; this says WHICH.
+              unsentLabel  : state.unsentLabelFor( row.id ),
+              // G6: the row wears what the operator did that has not landed. The batch
+              // notice says how MANY rows did not move; this says WHICH.
               onVerb : ( verb ) => bloc.add(
                 HoldingAreaRowVerbPressed( id: row.id, verb: verb ),
               ),
