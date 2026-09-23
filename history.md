@@ -13,6 +13,35 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.22 | Session `f19a8996` (Tiffany 💍) — Phase 5 shipped, five accordions wired, then Rick walked them on the emulator and found ten things
+
+**RESUME HERE**: **suite 1586 → 1673 passed / 1 skipped / 0 failed.** All five fleet accordions are built, merged and **reachable**. Rick walked them on the emulator and filed ten findings; one is fixed, one he ruled on, and the rest are scoped in a peer-reviewed work plan with **nothing blocked on him but a rebuild**. Two self-respins this session (`fc9e316a`, then `a9df00ea`).
+
+**Shipped**
+- **Phase 5 Broadcast** — data layer, bloc, pane, 59 tests, mutation-proved 14/14; bloc at **app root** on Rick's ruling so the ack tally survives navigation.
+- **The orphan-pane fix** (`43342f0`) — four of five accordions had no door: no card, no route, no provider. Four phases of green work nobody could open.
+- **Finished Tasks first load** — the pane was a spinner forever because *nothing ever dispatched the load*. His log carried `/api/tasks` and **no `/api/tasks/events` at all**; the absence was the evidence.
+- **Trust Dashboard hidden** on his order — both doors, the card and the app-bar shield, behind one flag rather than a deletion.
+- **`--push-only`** on the build-and-deploy script; **`io/`** into `.gitignore`; a false docstring in `pane_polling_mixin` corrected.
+- **Three new test files, 10 cases, every one mutation-proved.**
+
+**The three defects that were all the same defect**
+`PaneHostScreen` had zero tests; the ack **dispatch** seam had none; Finished Tasks' first load had none. In each case the tests either side proved their own half — and for Finished Tasks the harness literally sent the event production never sent. **Unit tests either side of a seam cannot fail on the seam.**
+
+**Rick's rulings**
+- Skeleton crew is the **standing** weekday mode before 17:00, and in it a manager implements its own rows — I had recorded it as a one-off waiver and was corrected.
+- Broadcast bloc at **app root**; **wire the orphan panes**; Trust Dashboard **back-burnered then hidden**; `io/` ignored; **Holding Area grouping by persona with sessions unlabelled and collapsed** — overruling my recommendation, and he was right that mirroring the clients he uses is the requirement.
+- **"Leave it refreshing"** on the polling question.
+
+**What I got wrong, because it is the useful part**
+Twice I attached a true observation to the wrong mechanism — the parity-guard hang (blamed the poll timer; it was `bloc.close()`), and the Fleet Status spinner (claimed "nothing retries"; María proved a lifecycle cancel self-heals, and I withdrew the diagnosis). My first Trust Dashboard guard **could not fail** — it scrolled past the card, which disposes it. I read two killed background runs' `exit 0` as a pass. And I spent four of Rick's interruptions asking questions whose answers were written in the clients he had already told me to read: *"a question that source can answer is not a question."*
+
+**María reviewed the plan and changed it three times** — smaller fix, withdrawn causal claim, and a finding of her own (`de509b51`) that made my own document weaker. Mr. Radio's `1c7da903` shape accepted; I withdrew a reconcile proposal of mine as unsound after he showed two counts from the same source prove nothing.
+
+**Docs**: check-in briefing · emulator walk-through checklist · walk-through findings work plan, all in `src/rnd/`, all linked in the README.
+
+---
+
 ## 2026.09.20 | Session `cc9c1f1a` (Tiffany 💍) — Manager on duty: a three-seat cascade review, then five fleet-pane phases built, reviewed and merged in one evening
 
 **RESUME HERE**: **nine merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work`, union verified green, PUSHED AND BACKED UP at Rick's 22:55 ritual order.** Rick ruled everything outstanding tonight: admit both held rows (done), batch won't-fix keeps NO confirm matching web (closed), and the phone round-trip probe `c51e92da` is **PARKED to 2026-10-19** — he has no cell service and no public-IP server for at least a month, and told the fleet to stop asking. **Do not re-raise it.** Still owed by him: untracking `android/local.properties`. P0 `4b16174d` remains `blocked` on `user:rick` with a chase at 09:00Z; Rick's own P0 `72e01fb3` (four legacy accordions) was CLOSED on receipts this session.

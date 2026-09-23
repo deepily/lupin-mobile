@@ -85,8 +85,18 @@ __pycache__/
 
 # IDE workspace files
 *.code-workspace
+# Session I/O — recordings, captures, analysis plots, scratch artifacts.
+# Outputs, not sources: cite the run, don't check the run in. Measured
+# 2026-09-22 at 11 MB (wav clips, a git-delta plot, macOS .DS_Store) with
+# ZERO files ever tracked — this rule keeps it that way and takes `?? io/`
+# out of every `git status`, which is the line read before every commit.
+# Rick's call, 2026-09-22: "let's add the entire io/ to gitignore".
+io/
+
 # Claude mementos (records + pointers) — NEVER commit: a memento that
 # will be committed is written more carefully, and therefore less honestly.
+# Kept below the blanket `io/` rule above, which already covers this path:
+# it stays for the reason, and so a narrower io/ rule can never lose it.
 io/mementos/
 .claude-memento.md
 .claude-memento-*.md

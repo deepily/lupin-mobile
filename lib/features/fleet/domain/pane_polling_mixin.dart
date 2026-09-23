@@ -91,8 +91,27 @@ mixin PanePollingMixin<E, S> on Bloc<E, S> {
   /// every time the shade is pulled. `detached` went unmentioned entirely.
   ///
   /// ⇒ `resumed` is the only foreground state. Everything else stops the timer, and
-  /// `inactive` is treated as a stop WITHOUT a resume-refresh, so a shade pull costs one
-  /// paused timer rather than a fresh request on the way back.
+  /// **every** non-`resumed` state earns a refresh on the way back.
+  ///
+  /// 🔴 THAT SENTENCE USED TO CLAIM THE OPPOSITE, AND THE CODE NEVER DID IT. It read:
+  /// *"`inactive` is treated as a stop WITHOUT a resume-refresh, so a shade pull costs one
+  /// paused timer rather than a fresh request on the way back."* The code cannot tell
+  /// `inactive` from `paused`, `hidden` or `detached` — all four set `_appForeground`
+  /// false, so any of them followed by `resumed` gives `wasForeground == false` and
+  /// therefore `refreshNow: true`. Either the optimisation was lost in a refactor or it
+  /// was never written. Found by María 🌸 2026-09-22, reading the code against the comment
+  /// while reviewing a plan that had reasoned from the comment and got the conclusion
+  /// wrong. **Corrected to describe what this code actually does.**
+  ///
+  /// ⚠️ AND THE BEHAVIOUR IS PROBABLY RIGHT, WHICH IS WHY ONLY THE COMMENT CHANGED.
+  /// María's recommendation, recorded here as a recommendation and not as settled design
+  /// (row `de509b51`, open for Rick): a shade pull that returns the operator to **stale
+  /// data** is worse than one extra request, because the moment they come back is exactly
+  /// the moment they are looking at the pane. On that reading the withdrawn optimisation
+  /// was never justified — nobody ever measured a cost for the refresh it removed — so the
+  /// refresh on return is **wanted**, not merely tolerated. If someone does measure a real
+  /// battery cost, implementing it is a behaviour change across the three panes that mix
+  /// this in, and needs its own ruling.
   void _onLifecycle( AppLifecycleState state ) {
     final wasForeground = _appForeground;
     _appForeground = state == AppLifecycleState.resumed;

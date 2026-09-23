@@ -27,6 +27,23 @@ import '../queue/domain/queue_bloc.dart';
 import '../queue/presentation/queue_dashboard_screen.dart';
 import '../settings/presentation/notification_audio_settings_screen.dart';
 
+/// Whether the Trust Dashboard is offered anywhere on the home screen.
+///
+/// 🔴 FALSE ON RICK'S ORDER, 2026-09-22: *"go ahead and disable visibility of the trust
+/// Dashboard it's currently back burnered so I don't need to see it as an option."*
+///
+/// ⚠️ BACK-BURNERED IS NOT KILLED, which is why this is a flag and not a deletion. The
+/// screen, its bloc, its repository and its 3 widget tests all still build and pass —
+/// only the two doors are closed. Flip this to `true` and both come back, unchanged.
+///
+/// There is a second reason not to delete it: the dashboard has a known defect that is
+/// filed and deliberately unfixed — `decision_proxy_state.dart:45` has
+/// `props => [ trust.trustStates.length ]`, a length standing in for a value, so the
+/// screen silently stops updating when trust changes in place at a constant count.
+/// Hiding the door means nobody meets that defect by accident while it waits its turn.
+/// It does NOT fix it, and this comment is not a substitute for the fix.
+const bool _kShowTrustDashboard = false;
+
 class LupinHomeScreen extends StatelessWidget {
   const LupinHomeScreen( { super.key } );
 
@@ -48,18 +65,22 @@ class LupinHomeScreen extends StatelessWidget {
               }
             },
           ),
-          IconButton(
-            tooltip  : 'Trust',
-            icon     : const Icon( Icons.shield_outlined ),
-            onPressed: () {
-              final s = context.read<AuthBloc>().state;
-              if ( s is AuthAuthenticated ) {
-                Navigator.of( context ).push( MaterialPageRoute(
-                  builder: ( _ ) => TrustDashboardScreen( userEmail: s.email ),
-                ) );
-              }
-            },
-          ),
+          // Hidden with the card below — see `_kShowTrustDashboard`. Both doors close
+          // together on purpose: leaving the app-bar shield behind would have made the
+          // feature "hidden" in exactly the way that still puts it one tap away.
+          if ( _kShowTrustDashboard )
+            IconButton(
+              tooltip  : 'Trust',
+              icon     : const Icon( Icons.shield_outlined ),
+              onPressed: () {
+                final s = context.read<AuthBloc>().state;
+                if ( s is AuthAuthenticated ) {
+                  Navigator.of( context ).push( MaterialPageRoute(
+                    builder: ( _ ) => TrustDashboardScreen( userEmail: s.email ),
+                  ) );
+                }
+              },
+            ),
           IconButton(
             key      : const Key( TestKeys.homeSettingsButton ),
             tooltip  : 'Settings',
@@ -115,20 +136,25 @@ class LupinHomeScreen extends StatelessWidget {
             }
           },
         ),
-        const SizedBox( height: 12 ),
-        _NavCard(
-          icon       : Icons.shield_outlined,
-          title      : 'Trust Dashboard',
-          subtitle   : 'Manage decision proxy approvals',
-          onTap      : () {
-            final s = context.read<AuthBloc>().state;
-            if ( s is AuthAuthenticated ) {
-              Navigator.of( context ).push( MaterialPageRoute(
-                builder: ( _ ) => TrustDashboardScreen( userEmail: s.email ),
-              ) );
-            }
-          },
-        ),
+        // Back-burnered and therefore hidden — see `_kShowTrustDashboard`. The spacer is
+        // inside the guard too, or hiding the card would leave a 24 dp gap in the list
+        // where it used to be, which reads as a rendering bug rather than an absence.
+        if ( _kShowTrustDashboard ) ...[
+          const SizedBox( height: 12 ),
+          _NavCard(
+            icon       : Icons.shield_outlined,
+            title      : 'Trust Dashboard',
+            subtitle   : 'Manage decision proxy approvals',
+            onTap      : () {
+              final s = context.read<AuthBloc>().state;
+              if ( s is AuthAuthenticated ) {
+                Navigator.of( context ).push( MaterialPageRoute(
+                  builder: ( _ ) => TrustDashboardScreen( userEmail: s.email ),
+                ) );
+              }
+            },
+          ),
+        ],
         const SizedBox( height: 12 ),
         _NavCard(
           icon       : Icons.smart_toy_outlined,

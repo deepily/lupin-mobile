@@ -20,8 +20,39 @@ import '../domain/finished_tasks_state.dart';
 /// AREA, under a heading called "The shared row", and taken cold it reads as a
 /// mandate to unify. It is not. The widget test asserts the absence of `TaskRow`
 /// NEGATIVELY so that unifying them fails ON the refactor rather than after it.
-class FinishedTasksScreen extends StatelessWidget {
+class FinishedTasksScreen extends StatefulWidget {
   const FinishedTasksScreen( { super.key } );
+
+  @override
+  State<FinishedTasksScreen> createState() => _FinishedTasksScreenState();
+}
+
+class _FinishedTasksScreenState extends State<FinishedTasksScreen> {
+  /// 🔴 THE FIRST LOAD. Without this the pane is a spinner forever.
+  ///
+  /// Found on hardware 2026-09-22 (Rick, emulator walk-through item 7): open the pane and
+  /// it shows nothing but a `CircularProgressIndicator`, and the logcat carries **no
+  /// request to `/api/tasks/events` at all** — the absence was the evidence.
+  ///
+  /// This screen was a `StatelessWidget` whose `BlocBuilder` renders a spinner for
+  /// `FinishedTasksInitial`, and every dispatcher of `FinishedTasksRequested` was
+  /// user-initiated: the refresh button, the error view's retry, pull-to-refresh, and the
+  /// window slider. Nothing fired on mount — not the screen, not the `BlocProvider`'s
+  /// `create:`, not `ServiceLocator.buildFinishedTasksBloc()`. The bloc's own class comment
+  /// lists "first load" among the triggers it refetches on; **nobody was sending it.**
+  ///
+  /// ⚠️ And 15 widget tests passed the whole time, because each one seeds the state it
+  /// wants to render. A test that hands the bloc a `FinishedTasksLoaded` proves the table
+  /// draws; it cannot prove anyone asked for the data. Same shape as the orphan panes and
+  /// the ack dispatch — the trigger and the render are different things.
+  ///
+  /// Matches the idiom the other fleet panes already use (`task_list_pane.dart:38`):
+  /// route-scoped, so it is on screen the moment it is built.
+  @override
+  void initState() {
+    super.initState();
+    context.read<FinishedTasksBloc>().add( const FinishedTasksRequested() );
+  }
 
   @override
   Widget build( BuildContext context ) {
