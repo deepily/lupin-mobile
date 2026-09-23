@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/fleet/data/task_row_model.dart';
 import 'package:lupin_mobile/features/fleet/data/task_row_schema.dart';
-import 'package:lupin_mobile/features/fleet/data/task_write_repository.dart';
+import 'package:lupin_mobile/features/fleet/data/task_verbs.dart';
 import 'package:lupin_mobile/features/fleet/presentation/task_row.dart';
 
 const _model = TaskRowModel(
@@ -14,8 +14,16 @@ const _model = TaskRowModel(
   detail: "the detail",
 );
 
-Future<void> _pump(WidgetTester tester, Widget child) =>
-    tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
+/// 360×800 — ordinary Android portrait, never the 800×600 harness default. The row's
+/// whole design brief is that line 1 does not survive 360 dp with four fields on it, so
+/// a row test at the harness default is measuring a screen nobody has.
+Future<void> _pump(WidgetTester tester, Widget child) async {
+  tester.view.physicalSize     = const Size(360, 800);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
+}
 
 /// The ordered cell keys a rendered row actually produced.
 ///
@@ -96,7 +104,7 @@ void main() {
     testWidgets("no action node is reachable while collapsed", (tester) async {
       await _pump(tester, TaskRow(
         model: _model,
-        verbs: [TaskVerb.approve(), TaskVerb.wontFix(reason: "no")],
+        verbs: [verbNeeds('approve')!, verbNeeds('wont_fix')!],
       ));
 
       expect(find.byKey(const Key(TestKeys.taskRowControls)), findsNothing);
@@ -113,7 +121,7 @@ void main() {
     });
 
     testWidgets("expanding reveals the controls", (tester) async {
-      await _pump(tester, TaskRow(model: _model, verbs: [TaskVerb.approve()]));
+      await _pump(tester, TaskRow(model: _model, verbs: [verbNeeds('approve')!]));
       await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
       await tester.pumpAndSettle();
 
@@ -138,12 +146,17 @@ void main() {
     });
   });
 
+  // 🔴 MUTATION-PROVED, NOT ASSUMED. `_pressVerb`'s `if ( !verb.needsSheet )` was forced
+  // to `if ( true )` — the row firing every verb immediately and skipping the sheet,
+  // which is the shape a reader "simplifying" it would produce. "a terminal verb does not
+  // fire on the first press" went RED; the rest stayed green, because a verb that needs
+  // nothing behaves identically either way. That is the seam this group owns.
   group("destructive verbs arm, then confirm", () {
     testWidgets("a terminal verb does not fire on the first press", (tester) async {
       final fired = <String>[];
       await _pump(tester, TaskRow(
         model  : _model,
-        verbs  : [TaskVerb.wontFix(reason: "no")],
+        verbs  : [verbNeeds('wont_fix')!],
         onVerb : (v) => fired.add(v.name),
       ));
       await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
@@ -154,7 +167,17 @@ void main() {
       expect(fired, isEmpty, reason: "terminal:true is armsTwice — done is append-only "
                                      "and a misclick cannot be undone");
 
+      // ⚠️ THE CONFIRMING TAP NOW OPENS THE SHEET RATHER THAN FIRING, because won't-fix
+      // carries a REQUIRED reason and the row has nowhere else to collect one. Arming is
+      // unchanged: the first tap still does nothing and still announces.
       await tester.tap(find.byKey(const Key("${TestKeys.taskRowVerbPrefix}wont_fix")));
+      await tester.pumpAndSettle();
+      expect(fired, isEmpty, reason: "the confirm opens the reason sheet; the write "
+                                     "happens when the sheet is submitted");
+
+      await tester.enterText(
+          find.byKey(const Key(TestKeys.reasonSheetReason)), "superseded");
+      await tester.tap(find.byKey(const Key(TestKeys.reasonSheetSubmit)));
       await tester.pumpAndSettle();
       expect(fired, ["wont_fix"]);
     });
@@ -162,7 +185,7 @@ void main() {
     testWidgets("a non-terminal verb fires on the first press", (tester) async {
       final fired = <String>[];
       await _pump(tester, TaskRow(
-        model: _model, verbs: [TaskVerb.approve()], onVerb: (v) => fired.add(v.name),
+        model: _model, verbs: [verbNeeds('approve')!], onVerb: (v) => fired.add(v.name),
       ));
       await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
       await tester.pumpAndSettle();
@@ -185,7 +208,7 @@ void main() {
     // worse than omitting it, because the omission would at least be visible.
     testWidgets("the armed label is a live region, so it is announced", (tester) async {
       final handle = tester.ensureSemantics();
-      await _pump(tester, TaskRow(model: _model, verbs: [TaskVerb.wontFix(reason: "no")]));
+      await _pump(tester, TaskRow(model: _model, verbs: [verbNeeds('wont_fix')!]));
       await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
       await tester.pumpAndSettle();
 
@@ -213,7 +236,7 @@ void main() {
       final fired = <String>[];
       await _pump(tester, TaskRow(
         model  : _model,
-        verbs  : [TaskVerb.wontFix(reason: "no")],
+        verbs  : [verbNeeds('wont_fix')!],
         onVerb : (v) => fired.add(v.name),
       ));
       await tester.tap(find.byKey(const Key(TestKeys.taskRowDisclosure)));
