@@ -220,6 +220,8 @@ Future<void> _completeSheet(
 }
 
 void main() {
+  group( "the unsent mark reaches the row", _unsentMarkReachesTheRow );
+
   group( 'tap → wire: every verb the row offers', () {
     // 🔴 ONE CASE PER VERB, ASSERTING THE PAYLOAD THAT LEFT. Five of these seven could
     // not be pressed at all before this row: the pane offered approve and unpark, and the
@@ -621,5 +623,62 @@ void main() {
       expect( find.textContaining( 'a row on the board' ), findsWidgets,
           reason: 'the optimistic drop must be rolled back' );
     } );
+  } );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// THE UNSENT MARK REACHES THE ROW — the call-site audit (row 2d29006b)
+// ═══════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 THIS TEST CLOSES A HOLE THAT WAS PROVED, NOT SUSPECTED. Deleting
+// `unsentLabel: state.unsentLabelFor( … )` from `task_list_pane.dart` left the FULL
+// SUITE GREEN at 1902 passing — the mark could vanish from this pane entirely and
+// nothing would say so.
+//
+// ⚠️ AND THE SAME DEFECT HAD ALREADY HAPPENED ONCE, ON THE OTHER PANE. Row 6d25aa31's
+// rebase onto a peer's rewrite of `holding_area_pane.dart` silently dropped that
+// argument: no conflict, no analyzer complaint (the parameter is optional), no red test.
+// It was caught by reading a staged diff. The asymmetry was the whole finding of the
+// audit — the Holding Area got its guard when the loss was noticed there, and this pane
+// never got one.
+//
+// ⇒ THE SHAPE THAT CATCHES IT IS PANE-LEVEL, NOT WIDGET-LEVEL. `task_row_test.dart`
+// passes `unsentLabel` to the row by hand, so it proves the row RENDERS a mark it is
+// given and can never prove a pane GIVES it one. A bloc test cannot either: it asserts
+// state, and in the measured failure the state was perfectly correct while nothing on
+// screen read it. Only a test that mounts the real pane, loses a real write, and looks
+// at the row can tell the difference.
+void _unsentMarkReachesTheRow() {
+  testWidgets( 'a write the network ate puts a mark on that row', ( tester ) async {
+    final rec = await _mount(
+      tester,
+      rows    : [ _row( status: 'queued' ) ],
+      // No response at all — the one failure a restored connection could fix, and the
+      // only kind that is marked.
+      onWrite : ( o ) => throw DioException.connectionError(
+        requestOptions : o,
+        reason         : 'the signal went away',
+      ),
+    );
+
+    await _disclose( tester );
+    await _tapVerb( tester, 'park' );
+    await _completeSheet( tester );
+
+    expect( rec.posts, hasLength( 1 ), reason: 'the press did reach the wire' );
+    expect( find.byKey( const Key( TestKeys.taskRowUnsentMark ) ), findsOneWidget,
+        reason: 'the bloc records it; a state field no pane renders is not a feature' );
+  } );
+
+  testWidgets( 'and a row whose write LANDED wears no mark', ( tester ) async {
+    await _mount( tester, rows: [ _row( status: 'queued' ) ] );
+
+    await _disclose( tester );
+    await _tapVerb( tester, 'park' );
+    await _completeSheet( tester );
+
+    expect( find.byKey( const Key( TestKeys.taskRowUnsentMark ) ), findsNothing,
+        reason: 'a mark on every row is a mark that means nothing — and this is the '
+                'half that keeps the test above honest' );
   } );
 }
