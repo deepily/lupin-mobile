@@ -15,7 +15,25 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ## 2026.09.22 | Session `f19a8996` (Tiffany 💍) — Phase 5 shipped, five accordions wired, then Rick walked them on the emulator and found ten things
 
-**RESUME HERE**: **suite 1586 → 1673 passed / 1 skipped / 0 failed.** All five fleet accordions are built, merged and **reachable**. Rick walked them on the emulator and filed ten findings; one is fixed, one he ruled on, and the rest are scoped in a peer-reviewed work plan with **nothing blocked on him but a rebuild**. Two self-respins this session (`fc9e316a`, then `a9df00ea`).
+**RESUME HERE — FIRST THING IN THE MORNING, IN THIS ORDER:**
+
+1. 🔴 **REBUILD AND FINISH THE WALK-THROUGH.** Nothing else is blocked. `src/scripts/build-and-deploy-lupin-mobile.sh` (or `--push-only` if the APK is current), then **items 8-14** of `src/rnd/2026.09.22-emulator-walkthrough-five-accordions.md`. Item 7 is fixed and pushed but **not in Rick's APK**, so it has to be re-checked too. Items 10-13 are the four no test can reach: the first real broadcast ever fired from this app, the `inactive` guard measured in **both** directions, and the ack tally surviving navigation.
+   ⚠️ **A broadcast send hits every live seat.** Tell the fleet first or send something that reads as a test.
+2. **B1 Fleet Status spinner — highest-priority code work.** Order is **B1b first** (the debug line), on María's call: it is the only item that can say whether Rick's spinner is the defect we found or another one still unidentified. Then both cancel fixes — data-in-hand emits the composite, no-data keeps returning — and **two** tests so the second cannot regress into the first. ⚠️ **My causal claim is withdrawn**: a lifecycle cancel self-heals on resume, so the path I found probably does **not** explain what he saw.
+3. **R1+N2 Holding Area, one piece of work.** Ruled **B**: group by persona, **sessions unlabelled** (no hash, no count, no subtitle), **collapsed by default**. Inside B: approve-all now spans all of a persona's sessions, so **the button and confirm must report that wider count**.
+4. **Cheap and independent, no rulings needed**: **M1** the conditional headline (`Live: L` alone when parked is 0; the three-part form only when parked > 0) · **M4** the new-task stub · **B3** left padding — **measure at 360 dp, do not eyeball at 800**; the title only has ~90 dp there.
+5. **M2** the `⋯` disclosure (state in `aria-expanded` **and** `hidden`, both required) and **M3** the paste-a-hash lookup box — which is **not** a filter: it must hit `/api/tasks/<ref>`, never `/api/tasks?id_prefix=`, because the query form hid 22 of 23 held rows.
+6. **N1 Broadcast recipient picker** — the biggest item, and **still gated on one question for Rick**: does the endpoint accept a recipient list at all? Ask before building, or the picker's selection gets discarded.
+
+**Two implementers were offered and not yet staffed.** The split: seat 1 takes B1 then N1; seat 2 takes M1/M4/B3 then R1+N2.
+
+**Still Rick's, not started**: the 244 pre-existing analyzer errors in `lib/core/**` scaffolding (none new, none mine — and they mean the analyzer cannot serve as a gate). `c51e92da` phone probe stays held to 2026-10-19; **do not re-raise it.**
+
+**Where the evening ended**: commit `75f1291`, **16 commits pushed**, backup verified off the mirror, board at **0 live rows**, tree clean.
+
+---
+
+**suite 1586 → 1673 passed / 1 skipped / 0 failed.** All five fleet accordions are built, merged and **reachable**. Rick walked them on the emulator and filed ten findings; one is fixed, one he ruled on, and the rest are scoped in a peer-reviewed work plan with **nothing blocked on him but a rebuild**. Two self-respins this session (`fc9e316a`, then `a9df00ea`).
 
 **Shipped**
 - **Phase 5 Broadcast** — data layer, bloc, pane, 59 tests, mutation-proved 14/14; bloc at **app root** on Rick's ruling so the ack tally survives navigation.
