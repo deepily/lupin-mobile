@@ -44,6 +44,13 @@ DEFAULT_BASE_URL = "http://localhost:7999"
 # Keep fixtures small enough to read in a diff. The SHAPE is what matters, not the volume.
 MAX_ROWS = 8
 
+# The one capture that needs more rows than SHAPE requires, because the thing it has to
+# contain is a REPETITION rather than a field: one persona filing from two sessions. Eight
+# rows off the top of the board is not reliably wide enough to hold a second session of
+# anybody, and a fixture that only sometimes contains the case is a test that only
+# sometimes tests it.
+MAX_WIDE_ROWS = 14
+
 
 def _redact_row( row: dict[str, Any], idx: int ) -> dict[str, Any]:
     """Stabilise the identifying values of one row, preserving every null exactly."""
@@ -100,13 +107,32 @@ def main() -> int:
         # excluded from an ordinary query by default.
         ( "holding_area.json",
           f"/api/tasks?limit={MAX_ROWS}&unscoped_audit=true&status=not_approved" ),
+        # 🔴 THE SAME PANE, WIDE ENOUGH TO CONTAIN ONE PERSONA'S SECOND SESSION.
+        # Rick's R1=B ruling (09-22) merges a persona's sessions into ONE group, and the
+        # eight-row page above cannot show that: it happens to hold one session each of
+        # "mr radio" and "maya", so a grouper that merged sessions and one that did not
+        # would produce IDENTICAL output against it. The wider page carries "maria" and
+        # "mr radio" across two sessions apiece, a TWO-WORD persona, and the store's own
+        # mixed casing ("Krishna" beside "maria") — the three things the persona key has
+        # to survive. Censused live 2026-09-23: 41 held rows, six personas, two of them
+        # multi-session.
+        #
+        # ⚠️ THE ROW CAP IS THE SERVER'S, NOT THIS NUMBER. `limit=200` comes back with 14
+        # rows and `has_more: true`; asking for the cap is what makes the page WIDE rather
+        # than what makes it 14 long.
+        ( "holding_area_multi_session.json",
+          "/api/tasks?limit=200&unscoped_audit=true&status=not_approved",
+          MAX_WIDE_ROWS ),
         # An empty result that is NOT an error — the case §10 names explicitly.
         ( "holding_area_empty.json",
           "/api/tasks?limit=8&unscoped_audit=true&status=not_approved"
           "&project=a-project-that-does-not-exist" ),
     ]
 
-    for filename, path in captures:
+    for capture in captures:
+        filename, path = capture[ 0 ], capture[ 1 ]
+        max_rows       = capture[ 2 ] if len( capture ) > 2 else MAX_ROWS
+
         status, body = lib.get_json( base_url, path, headers=auth )
         if status != 200:
             print( f"ERROR: GET {path} returned {status}: {body}", file=sys.stderr )
@@ -119,7 +145,7 @@ def main() -> int:
         rows = body.get( "tasks" ) or []
         body = {
             **body,
-            "tasks": [ _redact_row( r, i ) for i, r in enumerate( rows[ :MAX_ROWS ] ) ],
+            "tasks": [ _redact_row( r, i ) for i, r in enumerate( rows[ :max_rows ] ) ],
         }
         _stabilise_warnings( body )
 

@@ -8,10 +8,16 @@ import '../data/holding_area_models.dart';
 import '../domain/holding_area_bloc.dart';
 import 'filer_group_header.dart';
 
-/// The Holding Area pane — held rows, grouped by filer, each group its own block.
+/// The Holding Area pane — held rows, grouped by the PERSONA who filed them, each
+/// group folded until the operator opens it.
 ///
-/// 🔴 NOT AN ACCORDION, AND NOT A `CustomScrollView` OF COLLAPSIBLE SECTIONS. Each
-/// filer's block renders open, always. See [FilerGroupHeader].
+/// 🔴 IT IS NOW AN ACCORDION, AND IT USED NOT TO BE. Rick's ruling of 2026-09-22, on
+/// hardware, replaced always-open blocks keyed on `created_by` with folded groups keyed
+/// on the persona. See [FilerGroupHeader] for what stays visible while folded and why.
+///
+/// ⚠️ THE ROUTE OWNS THE VISIBILITY SIGNAL. `onPaneVisible` / `onPaneHidden` are what
+/// make foreground-pane-only polling a mechanism rather than an instruction — without
+/// them this pane's timer runs whichever destination is showing.
 class HoldingAreaPane extends StatefulWidget {
   const HoldingAreaPane( { super.key } );
 
@@ -20,12 +26,40 @@ class HoldingAreaPane extends StatefulWidget {
 }
 
 class _HoldingAreaPaneState extends State<HoldingAreaPane> {
+  /// 🔴 HELD, NOT LOOKED UP IN `dispose()`. `context.read` walks the element tree, and by
+  /// the time `dispose` runs that element is being torn down — the lookup can throw, and
+  /// a throw there SKIPS the rest of dispose. The timer then survives the pane that owned
+  /// it: a poll firing against a screen nobody is looking at, for the life of the
+  /// process. Found in Phase 1 and it generalises to every pane that polls.
+  late final HoldingAreaBloc _bloc;
+
   @override
   void initState() {
     super.initState();
-    final bloc = context.read<HoldingAreaBloc>();
-    bloc.add( const HoldingAreaRefreshRequested() );
-    bloc.startConnectivityRefresh();
+    // 🔴 THIS PANE DID NOT POLL AT ALL UNTIL NOW (gap G3), AND THE REASON IS WORTH
+    // NAMING: the bloc already mixed in `PanePollingMixin` and already overrode
+    // `pollInterval` to read the connection, so every part of polling existed except the
+    // call that starts it. Nothing under `lib/features/holding_area` invoked
+    // `startPolling` or `onPaneVisible`, so held work updated only on mount, on
+    // pull-to-refresh, or on a reconnect — in the pane whose whole job is showing what is
+    // waiting on the operator.
+    //
+    // ⚠️ AND IT LOOKED FINISHED FROM EVERY ANGLE BUT THE RIGHT ONE. A reviewer reading
+    // the bloc sees a poll interval, a cancel token and a lifecycle rule; only the pane
+    // shows that nobody ever pulled the cord.
+    _bloc = context.read<HoldingAreaBloc>()
+      ..startPolling()
+      ..startConnectivityRefresh();
+    // This pane is on screen the moment it is built, because it is route-scoped. The
+    // visible edge fires the first fetch, which is why there is no explicit refresh here
+    // any more — one would be a second request for the same page.
+    _bloc.onPaneVisible();
+  }
+
+  @override
+  void dispose() {
+    _bloc.onPaneHidden();
+    super.dispose();
   }
 
   @override
@@ -59,16 +93,26 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
     );
   }
 
-  /// One filer's block: the header with its batch controls, then that filer's rows.
+  /// One persona's block: the header with its fold control and batch controls, then —
+  /// only while unfolded — that persona's rows.
+  ///
+  /// 🔴 THE ROWS ARE NOT BUILT AT ALL WHILE FOLDED, not built-and-hidden. Folding is
+  /// progressive disclosure, which is Rick's word for it, and a disclosure that still
+  /// builds every row buys none of what he asked for: *"it's just an enormous amount of
+  /// text to scroll through."* Building them and hiding them also leaves them in the
+  /// semantics tree, where a TalkBack user would walk rows that are not on screen.
   List<Widget> _block( BuildContext context, HoldingAreaState state, FilerGroup group ) {
-    final bloc = context.read<HoldingAreaBloc>();
+    final bloc     = context.read<HoldingAreaBloc>();
+    final expanded = state.isExpanded( group.filer );
 
     return [
       FilerGroupHeader(
         group           : group,
+        expanded        : expanded,
         reason          : state.reasonFor( group.filer ),
         reasonError     : state.reasonErrors[ group.filer ],
         busy            : state.busyFilers.contains( group.filer ),
+        onToggle        : () => bloc.add( HoldingAreaGroupToggled( group.filer ) ),
         onReasonChanged : ( text ) => bloc.add(
           HoldingAreaReasonChanged( filer: group.filer, reason: text ),
         ),
@@ -78,20 +122,27 @@ class _HoldingAreaPaneState extends State<HoldingAreaPane> {
           reason : state.reasonFor( group.filer ),
         ) ),
       ),
-      for ( final row in group.rows )
-        Padding(
-          padding : const EdgeInsets.symmetric( horizontal: 16, vertical: 4 ),
-          // ⚠️ THE SHARED ROW, WITH NO PANE DISCRIMINATOR. The verbs are DATA — a list,
-          // which both panes may pass identically and neither can use to make the row
-          // lay itself out differently.
-          child : TaskRow(
-            model : row,
-            verbs : _heldRowVerbs(),
-            onVerb : ( verb ) => bloc.add(
-              HoldingAreaRowVerbPressed( id: row.id, verb: verb ),
+      if ( expanded )
+        for ( final row in group.rows )
+          Padding(
+            // 🔴 INDENTED UNDER ITS PERSONA, NOT FLUSH LEFT. Rick, walking the sibling
+            // pane on the emulator 2026-09-23: rows *"crushed up against the left hand
+            // side … they should be indented to reflect containment by each persona."*
+            // The left inset is the header's own text start, so a row lines up under the
+            // name it belongs to rather than under the chevron. Same finding, same
+            // constant, and this pane now has the containment to express.
+            padding : const EdgeInsets.fromLTRB( FilerGroupHeader.textInset, 4, 16, 4 ),
+            // ⚠️ THE SHARED ROW, WITH NO PANE DISCRIMINATOR. The verbs are DATA — a list,
+            // which both panes may pass identically and neither can use to make the row
+            // lay itself out differently.
+            child : TaskRow(
+              model : row,
+              verbs : _heldRowVerbs(),
+              onVerb : ( verb ) => bloc.add(
+                HoldingAreaRowVerbPressed( id: row.id, verb: verb ),
+              ),
             ),
           ),
-        ),
       const Divider( height: 24 ),
     ];
   }

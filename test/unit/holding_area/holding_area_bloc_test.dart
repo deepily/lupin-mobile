@@ -75,13 +75,15 @@ void main() {
   tearDown( () async => bloc.close() );
 
   group( "the refresh", () {
-    test( "groups the page by filer", () async {
+    test( "groups the page by PERSONA", () async {
       servePage( [ _row( 'a', 'sam' ), _row( 'b', 'chloe' ), _row( 'c', 'sam' ) ] );
 
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      expect( bloc.state.groups.map( ( g ) => g.filer ).toList(), [ 'chloe', 'sam' ] );
+      // ⚠️ THE ROWS CARRY THE STORE'S SPELLING AND THE GROUPS CARRY THE DISPLAY ONE, so
+      // this also pins the casing fold end to end rather than only in the pure grouper.
+      expect( bloc.state.groups.map( ( g ) => g.filer ).toList(), [ 'Chloe', 'Sam' ] );
       expect( bloc.state.groups.last.ids, [ 'a', 'c' ] );
       expect( bloc.state.loading, isFalse );
     } );
@@ -119,11 +121,11 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: '   ' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: '   ' ) );
       await settle();
 
       expect( _transitions( adapter ), isEmpty, reason: 'not one write may leave' );
-      expect( bloc.state.reasonErrors[ 'sam' ], kHoldingWontFixReasonMissing );
+      expect( bloc.state.reasonErrors[ 'Sam' ], kHoldingWontFixReasonMissing );
     } );
 
     test( "typing clears the complaint", () async {
@@ -132,15 +134,15 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: '' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: '' ) );
       await settle();
-      expect( bloc.state.reasonErrors[ 'sam' ], isNotNull );
+      expect( bloc.state.reasonErrors[ 'Sam' ], isNotNull );
 
-      bloc.add( const HoldingAreaReasonChanged( filer: 'sam', reason: 'sup' ) );
+      bloc.add( const HoldingAreaReasonChanged( filer: 'Sam', reason: 'sup' ) );
       await settle();
 
-      expect( bloc.state.reasonErrors[ 'sam' ], isNull );
-      expect( bloc.state.reasonFor( 'sam' ), 'sup' );
+      expect( bloc.state.reasonErrors[ 'Sam' ], isNull );
+      expect( bloc.state.reasonFor( 'Sam' ), 'sup' );
     } );
 
     test( "the reason is per FILER — one group's box is not another's", () async {
@@ -148,11 +150,11 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaReasonChanged( filer: 'sam', reason: 'mine' ) );
+      bloc.add( const HoldingAreaReasonChanged( filer: 'Sam', reason: 'mine' ) );
       await settle();
 
-      expect( bloc.state.reasonFor( 'sam' ), 'mine' );
-      expect( bloc.state.reasonFor( 'chloe' ), '' );
+      expect( bloc.state.reasonFor( 'Sam' ), 'mine' );
+      expect( bloc.state.reasonFor( 'Chloe' ), '' );
     } );
 
     test( "a refresh does NOT blank a half-typed reason", () async {
@@ -162,12 +164,12 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaReasonChanged( filer: 'sam', reason: 'half typed' ) );
+      bloc.add( const HoldingAreaReasonChanged( filer: 'Sam', reason: 'half typed' ) );
       await settle();
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      expect( bloc.state.reasonFor( 'sam' ), 'half typed' );
+      expect( bloc.state.reasonFor( 'Sam' ), 'half typed' );
     } );
   } );
 
@@ -178,11 +180,11 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: 'superseded' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: 'superseded' ) );
       await settle();
 
       final sent = _transitions( adapter );
-      expect( sent.length, 2, reason: 'sam filed two; chloe is a different group' );
+      expect( sent.length, 2, reason: 'Sam filed two; Chloe is a different group' );
       expect( sent.map( ( t ) => t.$1 ).toList(), [ 'a', 'b' ] );
       expect( sent.every( ( t ) => t.$2[ 'to_status' ] == 'wont_fix' ), isTrue );
       expect( sent.every( ( t ) => t.$2[ 'reason' ] == 'superseded' ), isTrue );
@@ -196,7 +198,7 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: 'x' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: 'x' ) );
       await settle();
 
       expect( _transitions( adapter ).map( ( t ) => t.$1 ), isNot( contains( 'b' ) ) );
@@ -208,7 +210,7 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: '  spaced  ' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: '  spaced  ' ) );
       await settle();
 
       expect( _transitions( adapter ).single.$2[ 'reason' ], 'spaced' );
@@ -220,12 +222,12 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaReasonChanged( filer: 'sam', reason: 'done with it' ) );
+      bloc.add( const HoldingAreaReasonChanged( filer: 'Sam', reason: 'done with it' ) );
       await settle();
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: 'done with it' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: 'done with it' ) );
       await settle();
 
-      expect( bloc.state.reasonFor( 'sam' ), '' );
+      expect( bloc.state.reasonFor( 'Sam' ), '' );
       expect( bloc.state.error, isNull );
     } );
   } );
@@ -237,7 +239,7 @@ void main() {
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
 
-      bloc.add( const HoldingAreaApproveAllPressed( 'sam' ) );
+      bloc.add( const HoldingAreaApproveAllPressed( 'Sam' ) );
       await settle();
 
       final sent = _transitions( adapter );
@@ -271,7 +273,7 @@ void main() {
 
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
-      bloc.add( const HoldingAreaApproveAllPressed( 'sam' ) );
+      bloc.add( const HoldingAreaApproveAllPressed( 'Sam' ) );
       await settle();
 
       expect( _transitions( adapter ).map( ( t ) => t.$1 ).toList(), [ 'a', 'b', 'c' ],
@@ -294,12 +296,12 @@ void main() {
 
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
-      bloc.add( const HoldingAreaReasonChanged( filer: 'sam', reason: 'keep me' ) );
+      bloc.add( const HoldingAreaReasonChanged( filer: 'Sam', reason: 'keep me' ) );
       await settle();
-      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'sam', reason: 'keep me' ) );
+      bloc.add( const HoldingAreaWontFixAllPressed( filer: 'Sam', reason: 'keep me' ) );
       await settle();
 
-      expect( bloc.state.reasonFor( 'sam' ), 'keep me' );
+      expect( bloc.state.reasonFor( 'Sam' ), 'keep me' );
     } );
 
     test( "🔴 a 202 does NOT read as 'failed' — it says awaiting approval", () async {
@@ -314,7 +316,7 @@ void main() {
 
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
-      bloc.add( const HoldingAreaApproveAllPressed( 'sam' ) );
+      bloc.add( const HoldingAreaApproveAllPressed( 'Sam' ) );
       await settle();
 
       expect( bloc.state.batchNotice, contains( 'awaiting human approval' ) );
@@ -331,7 +333,7 @@ void main() {
 
       bloc.add( const HoldingAreaRefreshRequested() );
       await settle();
-      bloc.add( const HoldingAreaApproveAllPressed( 'sam' ) );
+      bloc.add( const HoldingAreaApproveAllPressed( 'Sam' ) );
       await settle();
 
       expect( bloc.state.busyFilers, isEmpty,
@@ -361,7 +363,7 @@ void main() {
   } );
 
   group( "against the captured fixture", () {
-    test( "the live page groups into the two filers it contains", () async {
+    test( "the live page groups into the two personas it contains", () async {
       adapter.handlers[ 'GET ${HoldingAreaRepository.path}' ] =
           ( _ ) => jsonBody( _fixture( 'holding_area.json' ) );
 
@@ -369,7 +371,7 @@ void main() {
       await settle();
 
       expect( bloc.state.groups.map( ( g ) => g.filer ).toList(),
-          [ 'maya 371d6d91', 'mr radio 078b97cb' ] );
+          [ 'Maya', 'Mr Radio' ] );
       expect( bloc.state.incomplete, isTrue, reason: 'the fixture carries has_more' );
     } );
   } );

@@ -42,23 +42,33 @@ extension on WidgetTester {
   }
 }
 
+/// ⚠️ `expanded` DEFAULTS TO **TRUE** HERE AND TO **FALSE** IN THE APP, AND THAT IS
+/// DELIBERATE RATHER THAN AN OVERSIGHT. Most of this file is about the batch controls,
+/// the reason box and the 360 dp layout — none of which is what folding is for — so
+/// defaulting them to folded would mean writing `expanded: true` on twenty cases that
+/// have nothing to say about it. The DEFAULT ITSELF is pinned in its own group below,
+/// and in the pane test, where the pane supplies it.
 Widget _header( {
   FilerGroup? group,
   String reason = '',
   String? reasonError,
   bool busy = false,
+  bool expanded = true,
   ValueChanged<String>? onReasonChanged,
   VoidCallback? onApproveAll,
   VoidCallback? onWontFixAll,
+  VoidCallback? onToggle,
 } ) =>
     FilerGroupHeader(
       group           : group ?? _group(),
       reason          : reason,
       reasonError     : reasonError,
       busy            : busy,
+      expanded        : expanded,
       onReasonChanged : onReasonChanged ?? ( _ ) {},
       onApproveAll    : onApproveAll ?? () {},
       onWontFixAll    : onWontFixAll ?? () {},
+      onToggle        : onToggle ?? () {},
     );
 
 void main() {
@@ -70,39 +80,134 @@ void main() {
   setUp( () => handle = SemanticsBinding.instance.ensureSemantics() );
   tearDown( () => handle.dispose() );
 
-  group( "the block is NOT an accordion", () {
-    testWidgets( "🔴 the header exposes no expand/collapse state at all", ( tester ) async {
-      // `notifications.js:14085` — *"IT IS NOT AN ACCORDION LISTENER"*. Normalising this
-      // to the Task List's collapsible header would invent a state the pane does not
-      // have and hide held rows behind a gesture, in the pane whose whole job is
-      // showing what is still held.
-      await tester.pumpPhone( _header() );
+  group( "🔴 the block IS an accordion now — Rick's ruling, 2026-09-22", () {
+    // 🔴 THESE TWO CASES ARE INVERTED, NOT DELETED, AND THE PREVIOUS VERSIONS ARE QUOTED
+    // SO THE REVERSAL IS LEGIBLE. They read "🔴 the header exposes no expand/collapse
+    // state at all" and "the filer TITLE is not a tap target", and they argued from
+    // `notifications.js:14085` — *"IT IS NOT AN ACCORDION LISTENER"* — that a toggle here
+    // *"would invent a state the pane does not have and hide held rows behind a gesture,
+    // in the pane whose whole job is showing what is still held."*
+    //
+    // ⚠️ RICK ASKED FOR THE GESTURE ANYWAY, having noted that neither existing client
+    // has it: *"I want to be able to toggle or collapse each individual persona's
+    // items… displayed folded by default so that we can do progressive disclosure."*
+    // The old cases were right about the multiplexer and wrong about whose question it
+    // was. What they were protecting — that folding must not hide how much is held — is
+    // now pinned by the "folded is safe" group further down, which is the honest way to
+    // keep a case whose premise was overruled.
 
-      final semantics = tester.getSemantics( find.byType( FilerGroupHeader ) );
-      expect(
-        semantics.hasFlag( SemanticsFlag.hasExpandedState ),
-        isFalse,
-        reason: 'an expanded state here would mean a collapse exists',
+    testWidgets( "the header exposes an expand/collapse state", ( tester ) async {
+      await tester.pumpPhone( _header( expanded: false ) );
+
+      final semantics = tester.getSemantics(
+        find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}$_filer' ) ),
       );
+      expect( semantics.hasFlag( SemanticsFlag.hasExpandedState ), isTrue );
+      expect( semantics.hasFlag( SemanticsFlag.isExpanded ), isFalse );
+      expect( semantics.hasFlag( SemanticsFlag.isButton ), isTrue,
+          reason: 'a state with no button to change it is not a disclosure' );
     } );
 
-    testWidgets( "the filer TITLE is not a tap target", ( tester ) async {
-      // ⚠️ SCOPED TO THE TITLE, NOT TO THE WHOLE BLOCK. The block contains two buttons
-      // and buttons contain ink — asserting "no InkWell anywhere under the header" fails
-      // on the controls this pane is FOR, which is the test being wrong rather than the
-      // widget. What must not be tappable is the group heading, because a tappable
-      // heading is what a collapse looks like.
-      await tester.pumpPhone( _header() );
+    testWidgets( "the state FOLLOWS the flag rather than a local toggle", ( tester ) async {
+      // ⚠️ THE EXPANSION LIVES IN THE BLOC, NOT IN THIS WIDGET. A header that kept its
+      // own `setState` bool would look identical here and lose the operator's choice on
+      // every poll, which is the defect the bloc's `expanded` set exists to prevent.
+      await tester.pumpPhone( _header( expanded: true ) );
 
-      expect(
-        find.ancestor( of: find.text( '$_filer · 3' ), matching: find.byType( InkWell ) ),
-        findsNothing,
+      final semantics = tester.getSemantics(
+        find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}$_filer' ) ),
       );
-      expect(
-        find.ancestor(
-          of: find.text( '$_filer · 3' ), matching: find.byType( GestureDetector ) ),
-        findsNothing,
+      expect( semantics.hasFlag( SemanticsFlag.isExpanded ), isTrue );
+    } );
+
+    testWidgets( "🔴 the persona TITLE is the tap target, and it fires the toggle",
+        ( tester ) async {
+      // The chevron alone is 20 dp. Tapping the heading is what a phone user does, and
+      // the whole heading is therefore the control.
+      var toggled = 0;
+      await tester.pumpPhone( _header( onToggle: () => toggled++ ) );
+
+      await tester.tap( find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}$_filer' ) ) );
+      await tester.pumpAndSettle();
+
+      expect( toggled, 1 );
+    } );
+
+    testWidgets( "🔴 the toggle clears 48 dp at 360 dp — a mis-tap here HIDES ROWS",
+        ( tester ) async {
+      // ⚠️ THE FLOOR IS THE CONSTRAINT, NOT TUNED PADDING. The Task List's header
+      // measured 44 dp from padding alone and its own test caught it. A fold aimed at
+      // one persona that lands on the next one hides that persona's held work.
+      await tester.pumpPhone( _header( group: _group( count: 14 ) ) );
+
+      final box = tester.getRect(
+        find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}$_filer' ) ),
       );
+      expect( box.height, greaterThanOrEqualTo( kMinInteractiveDimension ) );
+    } );
+  } );
+
+  group( "🔴 folded is SAFE — what the old not-an-accordion cases were protecting", () {
+    // The old design's argument was that hiding held rows behind a gesture is dangerous
+    // in the pane whose job is showing held work. Folding happened anyway, so the
+    // argument became a REQUIREMENT on the folded header rather than a reason not to
+    // fold. These are that requirement.
+
+    testWidgets( "the persona and the COUNT are on screen while folded", ( tester ) async {
+      await tester.pumpPhone( _header( expanded: false, group: _group( count: 14 ) ) );
+
+      expect( find.text( '$_filer · 14' ), findsOneWidget );
+    } );
+
+    testWidgets( "🔴 the count is in the SEMANTIC label too", ( tester ) async {
+      // Without it a folded group and an EMPTY one announce identically, and a
+      // screen-reader user learns a persona has held work only by unfolding every group.
+      await tester.pumpPhone( _header( expanded: false, group: _group( count: 14 ) ) );
+
+      final semantics = tester.getSemantics(
+        find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}$_filer' ) ),
+      );
+      expect( semantics.label, FilerGroupHeader.semanticLabel( _filer, 14 ) );
+      expect( semantics.label, contains( '14' ) );
+    } );
+
+    testWidgets( "the semantic label says 'row' not 'rows' for a group of one",
+        ( tester ) async {
+      await tester.pumpPhone( _header( expanded: false, group: _group( count: 1 ) ) );
+
+      final semantics = tester.getSemantics(
+        find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}$_filer' ) ),
+      );
+      expect( semantics.label, contains( '1 held row' ) );
+      expect( semantics.label, isNot( contains( 'rows' ) ) );
+    } );
+
+    testWidgets( "🔴 BOTH batch controls stay on screen while folded, counts and all",
+        ( tester ) async {
+      // A folded group whose batch controls vanished would make folding a way to lose
+      // the verbs; a folded group whose controls were there but UNCOUNTED would be the
+      // undercounting defect R1=B already owes an answer for.
+      await tester.pumpPhone( _header( expanded: false, group: _group( count: 14 ) ) );
+
+      expect( find.byKey( const Key( '${TestKeys.holdingApproveAllPrefix}$_filer' ) ),
+          findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.holdingWontFixAllPrefix}$_filer' ) ),
+          findsOneWidget );
+      expect( find.text( 'Approve (14)' ), findsOneWidget );
+      expect( find.text( "Won't fix all (14)" ), findsOneWidget );
+    } );
+
+    testWidgets( "🔴 the reason box is ABSENT from the tree while folded, not hidden",
+        ( tester ) async {
+      // ⚠️ NOT MERELY INVISIBLE. A `TextField` kept in the tree with `Opacity(0)` or
+      // `maintainSemantics: true` is still focusable and still typable under TalkBack,
+      // so a screen-reader user would be editing the justification for a batch whose
+      // rows are folded out of sight.
+      await tester.pumpPhone( _header( expanded: false ) );
+
+      expect( find.byKey( const Key( '${TestKeys.holdingReasonFieldPrefix}$_filer' ) ),
+          findsNothing );
+      expect( find.byType( TextField ), findsNothing );
     } );
   } );
 
@@ -208,11 +313,24 @@ void main() {
   } );
 
   group( "the reason box", () {
-    testWidgets( "🔴 is ALWAYS present, not revealed by pressing won't-fix-all", ( tester ) async {
+    testWidgets( "🔴 is ALWAYS present WHILE UNFOLDED, not revealed by pressing "
+        "won't-fix-all", ( tester ) async {
       // Revealing it on press makes the requirement discoverable only by triggering the
       // thing it guards.
+      //
+      // ⚠️ "ALWAYS" NARROWED TO "WHILE UNFOLDED" WHEN FOLDING ARRIVED, and the narrowing
+      // is not a loophole: the box is tied to the ROWS it justifies closing, which are
+      // the thing folding hides. The case it was written against — revealed by the
+      // press it guards — is still forbidden, and the test below pins that the
+      // complaint UNFOLDS the group rather than pointing at a field nobody can see.
       await tester.pumpPhone( _header() );
 
+      expect( find.byKey( const Key( '${TestKeys.holdingReasonFieldPrefix}$_filer' ) ),
+          findsOneWidget );
+
+      // Pressing won't-fix-all does not CREATE it — it was there first.
+      await tester.tap( find.byKey( const Key( '${TestKeys.holdingWontFixAllPrefix}$_filer' ) ) );
+      await tester.pumpAndSettle();
       expect( find.byKey( const Key( '${TestKeys.holdingReasonFieldPrefix}$_filer' ) ),
           findsOneWidget );
     } );

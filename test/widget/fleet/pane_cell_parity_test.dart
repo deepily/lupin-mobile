@@ -47,9 +47,14 @@ import '../../unit/_helpers/stub_dio.dart';
 ///      `startConnectivityRefresh()` too (`holding_area_pane.dart:28`) and its own test
 ///      passes twelve cases in four seconds.
 ///   3. **`PanePollingMixin`'s `Timer.periodic`** — the narrowed suspect, and WRONG. It
-///      looked guilty because `HoldingAreaPane` genuinely does not call `startPolling()`,
+///      looked guilty because `HoldingAreaPane` genuinely did not call `startPolling()`,
 ///      so the difference between the panes really was the timer — just not the
 ///      difference that mattered.
+///
+///      ⚠️ THAT ASYMMETRY IS GONE: the Holding Area now starts polling like its sibling
+///      (gap G3, closed 2026-09-23). The post-mortem is kept as written because its
+///      value is the DISPROOF — the timer was not the cause then, and both panes
+///      carrying one now is the evidence that it never was.
 ///
 /// ⇒ **THE ACTUAL CAUSE: `await bloc.close()` inside a `testWidgets` body.** Isolated by
 /// elimination, each case its own probe:
@@ -213,10 +218,33 @@ void main() {
   /// until the row is expanded, so a comparison taken collapsed silently omits the cells
   /// most likely to diverge: the detail cell and the verb surface. Both panes are
   /// disclosed the same way, by the same key.
-  Future<List<String>> keysFrom( WidgetTester tester, Widget pane ) async {
+  ///
+  /// 🔴 `unfoldGroup` IS A SECOND, OUTER DISCLOSURE AND ONLY THE HOLDING AREA HAS ONE.
+  /// Rick's N2 ruling of 2026-09-22 made that pane's persona groups arrive FOLDED, so
+  /// its rows are not in the tree at all until a group is opened; the Task List's groups
+  /// still arrive open. Without this the Holding Area contributes zero cells and the
+  /// comparison is `[] vs [ … ]`.
+  ///
+  /// ⚠️ IT DOES NOT WEAKEN THE PARITY CLAIM, AND THE DISTINCTION IS THE WHOLE POINT OF
+  /// THE PARAMETER. What this file guards is that the two panes render the same ROW,
+  /// cell for cell and in order. Which rows are on screen, and behind how many taps, is
+  /// a PANE decision the two are allowed to differ on — batch controls already differ.
+  /// The row disclosure below is still tapped identically on both, by the same key, and
+  /// the "neither pane rendered NOTHING" case is what stops this parameter being used to
+  /// paper over an empty pane. That case is what caught the fold in the first place.
+  Future<List<String>> keysFrom(
+    WidgetTester tester,
+    Widget pane, {
+    Finder? unfoldGroup,
+  } ) async {
     sizePhone( tester );
     await tester.pumpWidget( MaterialApp( home: Scaffold( body: pane ) ) );
     await settle( tester );
+
+    if ( unfoldGroup != null ) {
+      await tester.tap( unfoldGroup );
+      await settle( tester );
+    }
 
     await tester.tap( find.byKey( const Key( TestKeys.taskRowDisclosure ) ).first );
     await tester.pump();
@@ -292,6 +320,8 @@ void main() {
     return keysFrom(
       tester,
       BlocProvider<HoldingAreaBloc>.value( value: bloc, child: const HoldingAreaPane() ),
+      // The persona label, not the stored `created_by` — R1=B strips the session.
+      unfoldGroup : find.byKey( const Key( '${TestKeys.holdingGroupTogglePrefix}Mr Radio' ) ),
     );
   }
 
