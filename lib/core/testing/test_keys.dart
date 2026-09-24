@@ -330,6 +330,14 @@ class TestKeys {
   static const taskListIncompleteBanner  = 'taskList.incompleteBanner';
   static const taskListEmptyState        = 'taskList.emptyState';
   static const taskListWriteNotice       = 'taskList.writeNotice';
+  static const taskListCountHeadline     = 'taskList.countHeadline';
+  static const taskListNewTaskStub       = 'taskList.newTaskStub';
+  static const taskLookupInput           = 'taskList.lookup.input';
+  static const taskLookupGo              = 'taskList.lookup.go';
+  static const taskLookupClear           = 'taskList.lookup.clear';
+  static const taskLookupMessage         = 'taskList.lookup.message';
+  static const taskLookupResultCard      = 'taskList.lookup.resultCard';
+  static const taskLookupResultStatus    = 'taskList.lookup.resultStatus';
 
   // ── Holding Area pane (Phase 4) ─────────────────────────────────────────
   //

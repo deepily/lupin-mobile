@@ -8,6 +8,7 @@ import '../../fleet/presentation/task_row.dart';
 import '../data/task_list_model.dart';
 import '../domain/task_list_bloc.dart';
 import 'task_group_header.dart';
+import 'task_list_header.dart';
 
 /// The Task List pane.
 ///
@@ -68,17 +69,32 @@ class _TaskListPaneState extends State<TaskListPane> {
           return Center( child: Text( state.error! ) );
         }
 
+        // M1/M3/M4 sit above the list AND above the empty state: a lookup is most
+        // useful exactly when the ticket is not on the board.
+        final header = TaskListHeader(
+          countLabel : model == null ? null : taskListCountLabel( model, DateTime.now() ),
+          lookup     : context.read<TaskListBloc>().lookupTask,
+        );
+
         // An empty list renders an EMPTY STATE, not a blank screen. A blank pane and a
         // broken pane look identical, and only one of them is fine.
         if ( model == null || model.groups.isEmpty ) {
-          return const Center(
-            key   : Key( TestKeys.taskListEmptyState ),
-            child : Text( 'Nothing owed.' ),
+          return Column(
+            children : [
+              header,
+              const Expanded(
+                child : Center(
+                  key   : Key( TestKeys.taskListEmptyState ),
+                  child : Text( 'Nothing owed.' ),
+                ),
+              ),
+            ],
           );
         }
 
         return Column(
           children : [
+            header,
             if ( state.incomplete ) _incompleteBanner( context, state ),
             if ( state.error != null ) _writeNotice( context, state.error! ),
             Expanded( child: _list( context, state, model ) ),

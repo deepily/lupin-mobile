@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../fleet/data/task_row_model.dart';
+import 'task_lookup.dart';
 
 /// Reads the Task List page.
 ///
@@ -47,6 +48,32 @@ class TaskListRepository {
     }
 
     return TaskListPage.fromJson( res.data ?? const <String, dynamic>{} );
+  }
+
+  /// Fetch ONE row by a lookup path from `taskLookupPath` (walk-through item M3).
+  ///
+  /// ⚠️ THE FULL ROW, NOT TERSE. The lookup answers "what is this hash", and the status
+  /// and body are the answer; the single-row endpoint has no terse projection anyway.
+  ///
+  /// Requires:
+  ///   - [path] came from `taskLookupPath`, never assembled here
+  ///
+  /// Ensures:
+  ///   - a 200 -> the row
+  ///   - any failure -> [TaskLookupException] carrying the status (0 when nothing
+  ///     answered) and the server's `detail` when it sent one
+  Future<TaskRowModel> lookup( String path ) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>( path );
+      final data = res.data;
+      if ( data == null ) throw const TaskLookupException( 0 );
+      return TaskRowModel.fromJson( data );
+    } on DioException catch ( e ) {
+      final response = e.response;
+      final body     = response?.data;
+      final detail   = body is Map && body[ 'detail' ] is String ? body[ 'detail' ] as String : null;
+      throw TaskLookupException( response?.statusCode ?? 0, detail: detail );
+    }
   }
 }
 

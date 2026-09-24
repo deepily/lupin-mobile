@@ -102,6 +102,46 @@ class TaskListModel {
 /// ⇒ The two rules are not cosmetically different: a P0 `done` row and a P1 `blocked` row
 /// land in opposite orders under each. Raised with the manager rather than resolved
 /// silently; flipping it is one line if she rules the other way.
+/// True when a row is parked AND its park has not expired (walk-through item M1).
+///
+/// 🔴 PARKED IS A STATUS PLUS A LIVE CLOCK, NOT A FLAG — the web's `_taskIsParked`. A
+/// parked row whose chase time has passed counts as LIVE, exactly as the store counts it
+/// as owed again, so the headline can move on a poll with no row changing. That is
+/// correct, not drift. A parked row with no chase time is not park-active either.
+bool isParkActive( TaskRowModel row, DateTime now ) {
+  if ( row.status != 'parked' ) return false;
+  final chase = row.nextChaseTs;
+  return chase != null && chase.isAfter( now );
+}
+
+/// The Task List headline, e.g. `Live: 7 · Parked: 1 · Total: 8` (walk-through item M1).
+///
+/// A port of the web's `_formatTaskListCount` (`notifications.js:11177`), whose rule is
+/// conditional: *"LIVE is unconditional; the parked split is not."* The split is a
+/// disclosure that earns its space only when there is something to disclose. Parked rows
+/// are kept out of live on purpose: *"counting them alongside live work makes the
+/// remaining-work figure fiction."*
+///
+/// Requires:
+///   - [model] holds OPEN rows only, which `groupTasksByOwner` guarantees
+///
+/// Ensures:
+///   - no park-active row -> `Live: L`
+///   - otherwise          -> `Live: L · Parked: P · Total: L+P`
+String taskListCountLabel( TaskListModel model, DateTime now ) {
+  var parked = 0;
+  var total  = 0;
+  for ( final group in model.groups ) {
+    for ( final row in group.tasks ) {
+      total++;
+      if ( isParkActive( row, now ) ) parked++;
+    }
+  }
+  final live = total - parked;
+  if ( parked <= 0 ) return 'Live: $live';
+  return 'Live: $live · Parked: $parked · Total: $total';
+}
+
 int compareByUrgency( TaskRowModel a, TaskRowModel b ) {
   final pr = priorityRank( a.priority ) - priorityRank( b.priority );
   if ( pr != 0 ) return pr;
