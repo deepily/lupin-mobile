@@ -240,3 +240,72 @@ _ProjectPath? _splitProjectPath( String path ) {
   if ( slash <= 0 || slash == trimmed.length - 1 ) return null;
   return _ProjectPath( trimmed.substring( 0, slash ), trimmed.substring( slash + 1 ) );
 }
+
+/// The scope name the io root answers to in listings.
+const ioScope = "io";
+
+/// The link that fetches [relPath] inside [scope], for browsing (row 61ecfb22).
+///
+/// A listing names its entries by scope-relative path, so the browser builds
+/// its own links rather than following each entry's `view_url`.
+/// ⚠️ THAT IS DELIBERATE (Mr. Radio, 2026-09-24): in `io` the `view_url` of an
+/// .mp3 is the web audio PAGE and a .pdf's has no project segment — follow them
+/// blindly and a phone fetches a web page, or the wrong file.
+///
+/// Requires:
+///   - [scope] is a registered doc scope, or [ioScope]
+///   - [relPath] is relative to that scope; empty means the scope's root
+///
+/// Ensures:
+///   - io → `/api/io/file?path=<rel>`, with `.` standing for the io root,
+///     because that endpoint requires a non-empty path
+///   - any other scope → `/api/docs/file?path=<scope>/<rel>`, or `<scope>`
+///     alone at its root
+DocLink docLinkFor( String scope, String relPath, { String label = "" } ) {
+  final rel = relPath.startsWith( "/" ) ? relPath.substring( 1 ) : relPath;
+  if ( scope == ioScope ) {
+    final path = rel.isEmpty ? "." : rel;
+    return DocLink(
+      kind    : DocLinkKind.io,
+      rawHref : "/api/io/file?path=${Uri.encodeQueryComponent( path )}",
+      label   : label,
+      relPath : rel,
+      apiPath : "/api/io/file",
+      query   : { "path": path },
+    );
+  }
+  final path = rel.isEmpty ? scope : "$scope/$rel";
+  return DocLink(
+    kind    : DocLinkKind.docs,
+    rawHref : "/app/docs?path=${Uri.encodeQueryComponent( path )}",
+    label   : label,
+    project : scope,
+    relPath : rel,
+    apiPath : "/api/docs/file",
+    query   : { "path": path },
+  );
+}
+
+String _dirname( String rel ) {
+  final i = rel.lastIndexOf( "/" );
+  return i <= 0 ? "" : rel.substring( 0, i );
+}
+
+/// The folder holding the file [link] points at — the 📁 Folder button.
+///
+/// Ensures:
+///   - null for a link that is not a docs or io link
+///   - a file at a scope's top level → that scope's root
+DocLink? folderLinkFor( DocLink link ) {
+  final rel = link.relPath;
+  if ( rel == null ) return null;
+  switch ( link.kind ) {
+    case DocLinkKind.docs:
+      return docLinkFor( link.project!, _dirname( rel ), label: "Folder" );
+    case DocLinkKind.io:
+      return docLinkFor( ioScope, _dirname( rel ), label: "Folder" );
+    case DocLinkKind.external:
+    case DocLinkKind.unknown:
+      return null;
+  }
+}

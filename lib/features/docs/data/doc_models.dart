@@ -27,6 +27,11 @@ enum DocContentKind {
 
   /// A directory, not a file. Carries a listing instead of content.
   directory,
+
+  /// A file the viewer cannot preview: PDF, audio, video, office documents.
+  /// Rendered as a "no preview — use Download" notice, never decoded as text,
+  /// which painted their bytes as garbage before 2026-09-24.
+  binary,
 }
 
 /// One fetched document.
@@ -42,7 +47,10 @@ class DocContent {
   /// [DocContentKind.directory].
   final String? text;
 
-  /// Raw bytes. Populated only for [DocContentKind.image].
+  /// Raw bytes exactly as the server sent them. Populated for every fetched
+  /// file (2026-09-24, row 61ecfb22) because Download saves THESE, never the
+  /// rendered view — for markdown that is the source. Null for content handed
+  /// in by the caller, and for directory listings.
   final List<int>? bytes;
 
   /// Directory entries. Populated only for [DocContentKind.directory].
@@ -71,12 +79,16 @@ class DocDirectoryEntry {
     this.sizeBytes,
   } );
 
+  /// 🔴 THE SERVER SAYS `kind` AND `rel_path` (`_dir_listing.py`, confirmed by
+  /// Mr. Radio 2026-09-24). This parser read only `type` and `path` until then,
+  /// so every real entry came back as a nameless-path FILE — invisible while
+  /// nothing rendered listings. The older keys stay as fallbacks.
   factory DocDirectoryEntry.fromJson( Map<String, dynamic> json ) {
-    final type = json[ "type" ]?.toString();
+    final kind = ( json[ "kind" ] ?? json[ "type" ] )?.toString();
     return DocDirectoryEntry(
       name        : ( json[ "name" ] ?? "" ).toString(),
-      path        : ( json[ "path" ] ?? "" ).toString(),
-      isDirectory : type == "directory" || json[ "is_directory" ] == true,
+      path        : ( json[ "rel_path" ] ?? json[ "path" ] ?? "" ).toString(),
+      isDirectory : kind == "directory" || json[ "is_directory" ] == true,
       sizeBytes   : ( json[ "size" ] as num? )?.toInt(),
     );
   }
@@ -109,6 +121,24 @@ class DocDirectoryListing {
               .map( ( e ) => DocDirectoryEntry.fromJson( Map<String, dynamic>.from( e ) ) )
               .toList()
           : const [],
+    );
+  }
+}
+
+/// One browsable root: a registered doc scope and the folders it exposes, from
+/// `GET /api/docs/scopes`. The built-in `io` root is not in that list; the
+/// Roots panel adds it itself.
+class DocScope {
+  final String       name;
+  final List<String> allowedPrefixes;
+
+  const DocScope( { required this.name, required this.allowedPrefixes } );
+
+  factory DocScope.fromJson( Map<String, dynamic> json ) {
+    final raw = json[ "allowed_prefixes" ];
+    return DocScope(
+      name            : ( json[ "name" ] ?? "" ).toString(),
+      allowedPrefixes : raw is List ? raw.map( ( e ) => e.toString() ).toList() : const [],
     );
   }
 }

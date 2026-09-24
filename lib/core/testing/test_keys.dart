@@ -64,6 +64,16 @@ class TestKeys {
   static const docViewerError       = 'docs.viewer.error';
   static const docViewerShareButton = 'docs.viewer.share';
   static const docViewerCloseButton = 'docs.viewer.close';
+  static const docViewerBackButton     = 'docs.viewer.back';
+  static const docViewerDownloadButton = 'docs.viewer.download';
+  static const docViewerFolderButton   = 'docs.viewer.folder';
+  static const docViewerNoPreview      = 'docs.viewer.noPreview';
+  static const docListing              = 'docs.listing';
+  static const docListingUp            = 'docs.listing.up';
+  static const docListingEntryPrefix   = 'docs.listing.entry.';   // + entry name
+  static const docListingEmpty         = 'docs.listing.empty';
+  static const docRootsPanel           = 'docs.roots';
+  static const docRootPrefix           = 'docs.roots.root.';      // + scope/prefix
   static const docViewerPlacementToggle = 'docs.viewer.placement';   // beside ⇄ below on a wide screen
   static const docDirEntryPrefix    = 'docs.dir.entry.';   // + entry name
 
