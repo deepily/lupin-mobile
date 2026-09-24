@@ -47,6 +47,9 @@ void main() {
     addTearDown( socket.close );
   } );
 
+  /// The send fixture's broadcast id — the one the aggregate ends up holding.
+  final ackPath = 'GET ${BroadcastRepository.ackDrainPath( 'b-fixture-0001' )}';
+
   Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
 
   Future<_WatchableBloc> sentBloc() async {
@@ -112,17 +115,97 @@ void main() {
       expect( bloc.state.aggregate!.confidence, AckConfidence.interrupted );
     } );
 
-    test( 'a socket RECONNECT does not un-break it', () async {
+    test( '🔴 a socket RECONNECT whose read FAILS does not un-break it', () async {
       final bloc = await sentBloc();
 
+      // No handler is registered for the ack path in this test, so the read 404s. That
+      // is the whole point: a recovery that did not answer must leave the tally exactly
+      // as interrupted as it found it. The tempting shape — catch, carry on — paints
+      // "0 of 3 acked" in the confident voice after a read that never happened.
       socket.add( false );
       await settle();
       socket.add( true );
       await settle();
 
-      // The socket coming back says the socket is back. It says nothing about the acks
-      // pushed while it was down, and those are not recoverable.
       expect( bloc.state.aggregate!.confidence, AckConfidence.interrupted );
+      expect( bloc.state.aggregate!.summary, contains( 'could not be confirmed' ) );
+    } );
+
+    test( '🔴 a RECONNECT that reads back the saved acks DOES un-break it', () async {
+      final bloc = await sentBloc();
+      adapter.handlers[ ackPath ] = ( _ ) => jsonBody( fixture( 'broadcast_acks_saved.json' ) );
+
+      socket.add( false );
+      await settle();
+      expect( bloc.state.aggregate!.confidence, AckConfidence.interrupted );
+
+      socket.add( true );
+      await settle();
+
+      // The socket coming back is still not itself evidence about the acks pushed while
+      // it was down. Going and READING those acks is — and that read is what the
+      // reconnect now triggers (lupin row 1c7da903).
+      expect( bloc.state.aggregate!.confidence, AckConfidence.recovered );
+      expect( bloc.state.aggregate!.ackedCount, 2 );
+      expect( bloc.state.aggregate!.summary,    isNot( contains( 'could not be confirmed' ) ) );
+      expect( adapter.captured.last.path,       contains( 'broadcast-acks/b-fixture-0001' ) );
+    } );
+
+    test( '🔴 RESUMING reads them back too — the case a phone actually produces', () async {
+      final bloc = await sentBloc();
+      adapter.handlers[ ackPath ] = ( _ ) => jsonBody( fixture( 'broadcast_acks_saved.json' ) );
+
+      // The ordinary phone story end to end: backgrounded, acks pushed at a suspended
+      // socket, foregrounded again. Before this, that ended at "could not be confirmed"
+      // and stayed there for good.
+      lifecycle.add( AppLifecycleState.paused );
+      await settle();
+      expect( bloc.state.aggregate!.confidence, AckConfidence.interrupted );
+
+      lifecycle.add( AppLifecycleState.resumed );
+      await settle();
+
+      expect( bloc.state.aggregate!.confidence, AckConfidence.recovered );
+      expect( bloc.state.aggregate!.ackedCount, 2 );
+    } );
+
+    test( '🔴 a SERVER ERROR on resume is never shown as a complete tally', () async {
+      final bloc = await sentBloc();
+      adapter.handlers[ ackPath ] =
+          ( _ ) => jsonBody( { 'detail' : 'Failed to read broadcast acks' }, status: 500 );
+
+      lifecycle.add( AppLifecycleState.paused );
+      await settle();
+      lifecycle.add( AppLifecycleState.resumed );
+      await settle();
+
+      // A 500 is the endpoint refusing to pass off a failed query as "nobody acked"
+      // (notifications.py:2461). Swallowing it here would undo that on this side of the
+      // wire, and the pane would speak in the confident voice about a number it never got.
+      expect( bloc.state.aggregate!.confidence, AckConfidence.interrupted );
+      expect( bloc.state.aggregate!.summary,    contains( 'could not be confirmed' ) );
+      expect( bloc.state.aggregate!.ackedCount, 0 );
+    } );
+
+    test( 'acks for ANOTHER broadcast never reach this tally, even from the read', () async {
+      final bloc = await sentBloc();
+      adapter.handlers[ ackPath ] = ( _ ) => jsonBody( {
+        'acks' : [
+          const {
+            'broadcast_id' : 'b-SOMEONE-ELSE',
+            'session_id'   : 'sess-stranger',
+            'ack_status'   : 'completed',
+          },
+        ],
+      } );
+
+      lifecycle.add( AppLifecycleState.paused );
+      await settle();
+      lifecycle.add( AppLifecycleState.resumed );
+      await settle();
+
+      expect( bloc.state.aggregate!.ackedCount, 0 );
+      expect( bloc.state.aggregate!.confidence, AckConfidence.recovered );
     } );
 
     test( 'the watch is idempotent — starting twice does not double-fire', () async {

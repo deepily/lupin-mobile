@@ -22,6 +22,7 @@ python src/scripts/capture-broadcast-fixtures.py
 | `broadcast_send_queued.json` | ⚠️ **TRANSCRIBED** from `commons.py` | a real send messages every live seat |
 | `broadcast_send_no_sessions.json` | ⚠️ **TRANSCRIBED** from `commons.py` | same, and needs an empty fleet |
 | `broadcast_ack_frame.json` | ⚠️ **TRANSCRIBED** from `commons_ack_watcher.py` | only exists after a real send |
+| `broadcast_acks_saved.json` | ⚠️ **TRANSCRIBED** from `notifications.py` | only exists after a real send, and needs acks already in the DB |
 
 ## The captured pair
 
@@ -90,3 +91,22 @@ label and an empty string). The surrounding envelope fields here follow the shap
 ⇒ If someone later runs a real broadcast with a person's go-ahead, **replace this file
 with the capture and delete this paragraph.** Until then it is one careful reading of the
 producer, which is a weaker class of evidence than a run and is labelled that way.
+
+**`broadcast_acks_saved.json`** — `notifications.py`, `_project_broadcast_ack` (:2398)
+wrapped in the `get_broadcast_acks` response (:2441). Every key in each ack row is one
+line of that projection, in its order; the four envelope keys are the literal dict the
+endpoint returns.
+
+🔴 **THE STATUS KEY IS `ack_status` HERE AND `status` ON THE SOCKET FRAME.** The
+projection lifts the identity fields out of `payload` onto the envelope and renames
+`payload.status` on the way, because the envelope already carries a `state` of its own —
+which is the notification's DELIVERY state, not the ack's. Both appear in this fixture,
+deliberately and with different values, because a reader that grabs the wrong one still
+produces a tally of the right SIZE and is therefore not caught by counting.
+
+⚠️ **One row has `state: "delivered"` and that is the point of the endpoint.** The
+undelivered drain would skip it; this read does not filter on delivery state at all
+(`get_latest_acks_for_broadcast`, `notification_repository.py:653`). An ack that landed
+while the app was open is marked delivered instantly, so a recovery built on the
+undelivered inbox gets nothing back — the fixture carries both states so a regression
+toward that filter fails here.

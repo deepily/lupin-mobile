@@ -58,6 +58,15 @@ class BroadcastListeningInterrupted extends BroadcastEvent {
   const BroadcastListeningInterrupted();
 }
 
+/// 🔴 THE LISTENING WINDOW CLOSED AGAIN — resumed, or the socket came back.
+///
+/// The counterpart to [BroadcastListeningInterrupted], and the reason that one is no
+/// longer permanent. This DOES fetch: it reads the saved acks for the broadcast on
+/// screen (`GET /api/notifications/broadcast-acks/{id}`) and folds them in.
+class BroadcastAcksReconcileRequested extends BroadcastEvent {
+  const BroadcastAcksReconcileRequested();
+}
+
 /// Recent commons traffic for the activity strip.
 class BroadcastHistoryRequested extends BroadcastEvent {
   const BroadcastHistoryRequested();
@@ -241,6 +250,7 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     on<BroadcastSendConfirmed>( _onSend );
     on<BroadcastAckReceived>( _onAck );
     on<BroadcastListeningInterrupted>( _onInterrupted );
+    on<BroadcastAcksReconcileRequested>( _onReconcile );
     on<BroadcastHistoryRequested>( _onHistory );
   }
 
@@ -269,7 +279,14 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
   void startListeningWatch( { Stream<bool>? socketStream } ) {
     _lifecycleSub?.cancel();
     _lifecycleSub = lifecycleStream.listen( ( state ) {
-      if ( state != AppLifecycleState.resumed && state != AppLifecycleState.inactive ) {
+      if ( state == AppLifecycleState.resumed ) {
+        // Coming BACK is the other half, and for a phone it is the common half: the OS
+        // suspended the socket, acks were pushed at nobody, and this is the first moment
+        // anything can ask what was missed.
+        add( const BroadcastAcksReconcileRequested() );
+        return;
+      }
+      if ( state != AppLifecycleState.inactive ) {
         add( const BroadcastListeningInterrupted() );
       }
     } );
@@ -277,7 +294,9 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     if ( socketStream != null ) {
       _socketSub?.cancel();
       _socketSub = socketStream.listen( ( connected ) {
-        if ( !connected ) add( const BroadcastListeningInterrupted() );
+        add( connected
+            ? const BroadcastAcksReconcileRequested()
+            : const BroadcastListeningInterrupted() );
       } );
     }
   }
@@ -384,6 +403,9 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
         body      : '',
         aggregate : AckAggregate(
           broadcastId      : result.broadcastId,
+          // The clock the expired-vs-partial decision runs on. Recorded at the moment
+          // the server accepted the send, not at first paint.
+          sentAt           : DateTime.now(),
           // 🔴 THE SERVER'S COUNT, NOT THE ROSTER'S. The roster is what we could see;
           // `recipients` is what the server actually enumerated, and they differ whenever
           // a seat went quiet between the refresh and the send.
@@ -416,6 +438,38 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     final agg = state.aggregate;
     if ( agg == null ) return;
     emit( state.copyWith( aggregate: agg.interrupted() ) );
+  }
+
+  /// 🔴 THE FAILURE ARM IS THE ONE THAT MATTERS, AND IT IS WHY THIS DOES NOT SWALLOW.
+  ///
+  /// A read that fails must leave the tally EXACTLY as interrupted as it found it. The
+  /// tempting shape — catch, log nothing, carry on — produces a pane that says "2 of 5
+  /// acked" in the confident voice after a read that never answered, which is the same
+  /// false precision [AckConfidence.interrupted] exists to prevent, arrived at by a new
+  /// route. So the catch arms deliberately emit nothing: no state change IS the correct
+  /// outcome of a failed recovery.
+  ///
+  /// Ensures:
+  ///   - no aggregate on screen → does nothing (there is no broadcast to reconcile)
+  ///   - a successful read folds the saved acks in and lifts confidence
+  ///   - a server error, a transport failure or a cancellation leaves confidence alone
+  Future<void> _onReconcile( BroadcastAcksReconcileRequested e, Emitter<BroadcastState> emit ) async {
+    final agg = state.aggregate;
+    if ( agg == null || agg.broadcastId.isEmpty ) return;
+
+    try {
+      final saved = await _repo.drainMissedAcks( agg.broadcastId );
+      // Re-read from state: the fetch was awaited, and a live ack may have folded while
+      // it was in flight.
+      final current = state.aggregate;
+      if ( current == null || current.broadcastId != agg.broadcastId ) return;
+
+      emit( state.copyWith( aggregate: current.reconciled( saved ) ) );
+    } on BroadcastException {
+      // Stays interrupted. See the note above.
+    } on DioException {
+      // Same, including cancellation.
+    }
   }
 
   Future<void> _onHistory( BroadcastHistoryRequested e, Emitter<BroadcastState> emit ) async {

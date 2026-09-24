@@ -260,7 +260,7 @@ void main() {
       expect( bloc.state.aggregate?.summary,    '1 of 3 acked' );
     } );
 
-    test( '🔴 backgrounding makes the tally say so, permanently', () async {
+    test( '🔴 backgrounding makes the tally say so, until something reads the acks back', () async {
       final bloc = await sent();
 
       bloc.add( const BroadcastAckReceived(
@@ -283,8 +283,9 @@ void main() {
       await settle();
 
       // The socket coming back proves the socket is back. It says nothing about the acks
-      // pushed while it was down, and those are gone — not in the undelivered drain, and
-      // the io_tbl row an ack produces never receives `payload` at all.
+      // pushed while it was down. A FOLD still cannot clear the flag — only a successful
+      // read of the saved acks can (BroadcastAcksReconcileRequested), and that is a
+      // different event precisely so a stray late frame cannot pass itself off as one.
       expect( bloc.state.aggregate?.confidence, AckConfidence.interrupted );
       expect( bloc.state.aggregate?.ackedCount, 1 );
       expect( bloc.state.aggregate?.summary,    contains( 'At least 1' ) );
@@ -296,6 +297,59 @@ void main() {
       await settle();
 
       expect( bloc.state.aggregate, isNull );
+    } );
+
+    test( 'a reconcile before anything was sent asks the server NOTHING', () async {
+      final bloc = makeBloc();
+      final before = adapter.captured.length;
+
+      bloc.add( const BroadcastAcksReconcileRequested() );
+      await settle();
+
+      // There is no broadcast on screen, so there is no id to ask about. A request built
+      // on an empty id would hit `/broadcast-acks/?limit=500` and 404 every resume.
+      expect( bloc.state.aggregate, isNull );
+      expect( adapter.captured.length, before );
+    } );
+
+    test( '🔴 the reconcile reads the acks for THIS broadcast and folds them in', () async {
+      final bloc = await sent();
+      adapter.handlers[ 'GET ${BroadcastRepository.ackDrainPath( 'b-fixture-0001' )}' ] =
+          ( _ ) => jsonBody( fixture( 'broadcast_acks_saved.json' ) );
+
+      // One seat is already counted from the socket. The read returns it again, with a
+      // later status, plus one the app never saw — so the tally must land on two, not
+      // three, and maria's status must be the read's.
+      bloc.add( const BroadcastAckReceived( BroadcastAck(
+        broadcastId : 'b-fixture-0001',
+        sessionId   : 'sess-fixture-1',
+        status      : 'pending',
+      ) ) );
+      bloc.add( const BroadcastListeningInterrupted() );
+      bloc.add( const BroadcastAcksReconcileRequested() );
+      await until( bloc, ( s ) => s.aggregate?.ackedCount == 2, 'the saved acks to fold in' );
+
+      expect( bloc.state.aggregate?.confidence, AckConfidence.recovered );
+      expect( bloc.state.aggregate?.acksBySession[ 'sess-fixture-1' ]?.status,
+          'completed-with-withheld' );
+      expect( bloc.state.aggregate?.summary, contains( '2 of 3' ) );
+    } );
+
+    test( '🔴 a failed reconcile changes NOTHING — the tally stays interrupted', () async {
+      final bloc = await sent();
+      adapter.handlers[ 'GET ${BroadcastRepository.ackDrainPath( 'b-fixture-0001' )}' ] =
+          ( _ ) => jsonBody( { 'detail' : 'Failed to read broadcast acks' }, status: 500 );
+
+      bloc.add( const BroadcastListeningInterrupted() );
+      bloc.add( const BroadcastAcksReconcileRequested() );
+      await settle();
+
+      // No state change IS the correct outcome of a failed recovery. Emitting an
+      // "observed" tally here would re-manufacture the false precision from a new
+      // direction, and it would do it on the exact screen built to prevent it.
+      expect( bloc.state.aggregate?.confidence, AckConfidence.interrupted );
+      expect( bloc.state.aggregate?.ackedCount, 0 );
+      expect( bloc.state.aggregate?.summary,    contains( 'could not be confirmed' ) );
     } );
   } );
 
