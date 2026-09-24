@@ -84,6 +84,12 @@ class DocRepository {
       return DocContent( kind: DocContentKind.image, mediaType: mediaType, bytes: bytes );
     }
 
+    // PDF, audio, video and office files (row 61ecfb22). The server streams
+    // them as bytes since 2026-09-24; decoding them as UTF-8 painted garbage.
+    if ( _isBinary( lower ) ) {
+      return DocContent( kind: DocContentKind.binary, mediaType: mediaType, bytes: bytes );
+    }
+
     final text = _decode( bytes );
 
     // A JSON body on this endpoint means a directory listing, not a .json
@@ -99,21 +105,65 @@ class DocRepository {
         );
       }
       // A real .json document: show it as source, not as mangled markdown.
-      return DocContent( kind: DocContentKind.source, mediaType: mediaType, text: text );
+      return DocContent( kind: DocContentKind.source, mediaType: mediaType, text: text, bytes: bytes );
     }
 
     if ( lower.startsWith( "text/markdown" ) ) {
-      return DocContent( kind: DocContentKind.markdown, mediaType: mediaType, text: text );
+      return DocContent( kind: DocContentKind.markdown, mediaType: mediaType, text: text, bytes: bytes );
     }
 
     if ( lower.startsWith( "text/html" ) ) {
-      return DocContent( kind: DocContentKind.html, mediaType: mediaType, text: text );
+      return DocContent( kind: DocContentKind.html, mediaType: mediaType, text: text, bytes: bytes );
     }
 
     // Everything else the endpoint serves is source-ish text: .py, .yaml, .sh,
     // .sql, .toml, .ini, .xml, and plain .txt. Rendering these as markdown
     // would turn `# comment` into a heading, so they get the source branch.
-    return DocContent( kind: DocContentKind.source, mediaType: mediaType, text: text );
+    return DocContent( kind: DocContentKind.source, mediaType: mediaType, text: text, bytes: bytes );
+  }
+
+  /// Media types the viewer cannot preview and must not decode as text.
+  static bool _isBinary( String lower ) =>
+      lower.startsWith( "audio/" ) ||
+      lower.startsWith( "video/" ) ||
+      lower.startsWith( "application/pdf" ) ||
+      lower.startsWith( "application/octet-stream" ) ||
+      lower.startsWith( "application/vnd." ) ||
+      lower.startsWith( "application/zip" );
+
+  /// The browsable roots, from `GET /api/docs/scopes` (row 61ecfb22).
+  ///
+  /// Ensures:
+  ///   - one [DocScope] per registered scope, in the server's order
+  ///   - does NOT include `io`; the Roots panel adds that root itself
+  ///   - failures raise [DocApiException] in the server's own words
+  Future<List<DocScope>> fetchScopes() async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>(
+        "/api/docs/scopes",
+        options: Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      final data   = res.data;
+      if ( status < 200 || status >= 300 || data == null ) {
+        final detail = data?[ "detail" ]?.toString();
+        throw DocApiException(
+          detail ?? "The document server returned status $status.",
+          statusCode: status,
+        );
+      }
+      final raw = data[ "scopes" ];
+      if ( raw is! List ) return const [];
+      return raw
+          .whereType<Map>()
+          .map( ( e ) => DocScope.fromJson( Map<String, dynamic>.from( e ) ) )
+          .toList();
+    } on DioException catch ( e ) {
+      throw DocApiException(
+        e.message ?? "Could not reach the document server.",
+        statusCode: e.response?.statusCode,
+      );
+    }
   }
 
   /// Decode UTF-8, tolerating malformed bytes rather than throwing — a viewer
@@ -131,7 +181,12 @@ class DocRepository {
   static DocDirectoryListing? _tryListing( String text ) {
     try {
       final decoded = jsonDecode( text );
-      if ( decoded is Map<String, dynamic> && decoded[ "entries" ] is List ) {
+      // 🔴 `kind == "directory"` DECIDES when present (Mr. Radio, 2026-09-24):
+      // a .json FILE is also application/json and could carry an `entries` key.
+      // Bodies without `kind` keep the older shape test.
+      if ( decoded is Map<String, dynamic> &&
+           decoded[ "entries" ] is List &&
+           ( !decoded.containsKey( "kind" ) || decoded[ "kind" ] == "directory" ) ) {
         return DocDirectoryListing.fromJson( decoded );
       }
     } catch ( _ ) {

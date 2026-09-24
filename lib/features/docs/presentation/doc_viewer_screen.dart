@@ -10,6 +10,7 @@ import '../../../core/testing/test_keys.dart';
 import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
+import 'doc_directory_view.dart';
 import 'doc_link_tap.dart';
 import 'doc_panel.dart';
 import 'doc_split_host.dart';
@@ -66,10 +67,49 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
   Object?     _error;
   bool        _loading = true;
 
+  /// What is on screen now. Starts at the widget's link; the Folder button,
+  /// the Roots panel and a tap on a listing entry move it (row 61ecfb22).
+  ///
+  /// ⚠️ NAVIGATION IS IN PLACE, NOT A PUSHED ROUTE. The viewer also lives inside
+  /// the 50/50 split, where a pushed route would cover the conversation it was
+  /// opened beside. Back walks [_history] first and leaves only when it is empty.
+  DocLink?            _link;
+  final List<DocLink> _history = [];
+
   @override
   void initState() {
     super.initState();
+    _link = widget.link;
     _load();
+  }
+
+  /// Show [next] in place, remembering where we were for Back.
+  void _open( DocLink next ) {
+    final current = _link;
+    if ( current != null ) _history.add( current );
+    _link = next;
+    _load();
+  }
+
+  /// Step back one place. Returns false when there is nowhere to go back to.
+  bool _back() {
+    if ( _history.isEmpty ) return false;
+    _link = _history.removeLast();
+    _load();
+    return true;
+  }
+
+  /// The app-bar title for what is on screen.
+  String get _title {
+    final link = _link;
+    if ( link == null || ( _history.isEmpty && identical( link, widget.link ) ) ) {
+      return widget.displayTitle;
+    }
+    final listing = _content?.listing;
+    if ( listing != null ) {
+      return listing.path.isEmpty ? listing.scope : "${listing.scope}/${listing.path}";
+    }
+    return link.displayName;
   }
 
   Future<void> _load() async {
@@ -90,8 +130,10 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     } );
 
     try {
-      final content = await widget.repository!.fetch( widget.link! );
-      if ( !mounted ) return;
+      final requested = _link!;
+      final content   = await widget.repository!.fetch( requested );
+      // A slow fetch must not paint over a newer one the user has moved to.
+      if ( !mounted || !identical( requested, _link ) ) return;
       setState( () {
         _content = content;
         _loading = false;
@@ -102,6 +144,31 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
         _error   = e;
         _loading = false;
       } );
+    }
+  }
+
+  /// ⬇ Download: the ORIGINAL bytes, not the rendered view (row 61ecfb22,
+  /// parity with the web's ticket 668aa0a3). For markdown that is the source.
+  ///
+  /// A phone has no downloads bar, so the file is written under its own name
+  /// and handed to the share sheet, where "Save to Files" or Drive is one tap.
+  /// The bytes are the ones this fetch already holds — a second request would
+  /// cost data and could answer with a newer file than the one on screen.
+  Future<void> _download( DocLink link, DocContent content ) async {
+    final bytes = content.bytes;
+    if ( bytes == null ) return;
+    try {
+      final dir  = await getTemporaryDirectory();
+      final name = link.displayName.replaceAll( RegExp( r'[^A-Za-z0-9._-]+' ), '-' );
+      final file = File( "${dir.path}/${name.isEmpty ? 'download' : name}" );
+      await file.writeAsBytes( bytes );
+      await Share.shareXFiles( [ XFile( file.path ) ] );
+    } catch ( e ) {
+      if ( mounted ) {
+        ScaffoldMessenger.of( context ).showSnackBar(
+          SnackBar( content: Text( "Download failed: $e" ), backgroundColor: Colors.red ),
+        );
+      }
     }
   }
 
@@ -126,18 +193,54 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
 
   @override
   Widget build( BuildContext context ) {
-    final host = DocSplitHost.maybeOf( context );
-    return Scaffold(
+    final host    = DocSplitHost.maybeOf( context );
+    final link    = _link;
+    final content = _content;
+    // A FILE on screen, fetched from a link: never a listing, never an error,
+    // never content handed in by the caller — the web's own rule for the bar.
+    final isFile  = link != null && content != null && !_loading &&
+                    content.kind != DocContentKind.directory;
+    final folder  = isFile ? folderLinkFor( link ) : null;
+
+    return PopScope(
+      canPop                : _history.isEmpty,
+      onPopInvokedWithResult: ( didPop, _ ) {
+        if ( !didPop ) _back();
+      },
+      child: Scaffold(
       key: const Key( TestKeys.docViewerScreen ),
       appBar: AppBar(
-        leading: widget.onClose == null ? null : IconButton(
-          key      : const Key( TestKeys.docViewerCloseButton ),
-          icon     : const Icon( Icons.close ),
-          tooltip  : "Close document",
-          onPressed: widget.onClose,
-        ),
-        title: Text( widget.displayTitle, overflow: TextOverflow.ellipsis ),
+        leading: _history.isNotEmpty
+            ? IconButton(
+                key      : const Key( TestKeys.docViewerBackButton ),
+                icon     : const Icon( Icons.arrow_back ),
+                tooltip  : "Back",
+                onPressed: _back,
+              )
+            : widget.onClose == null ? null : IconButton(
+                key      : const Key( TestKeys.docViewerCloseButton ),
+                icon     : const Icon( Icons.close ),
+                tooltip  : "Close document",
+                onPressed: widget.onClose,
+              ),
+        title: Text( _title, overflow: TextOverflow.ellipsis ),
         actions: [
+          if ( isFile && content.bytes != null )
+            IconButton(
+              key      : const Key( TestKeys.docViewerDownloadButton ),
+              icon     : const Icon( Icons.download_outlined ),
+              tooltip  : "Download the original file",
+              onPressed: () => _download( link, content ),
+            ),
+          // 📁 Folder, beside Download (Rick, 2026-09-24): the listing of the
+          // folder this file lives in.
+          if ( folder != null )
+            IconButton(
+              key      : const Key( TestKeys.docViewerFolderButton ),
+              icon     : const Icon( Icons.folder_open_outlined ),
+              tooltip  : "Show this file's folder",
+              onPressed: () => _open( folder ),
+            ),
           // Rick 2026-09-18: on an open Fold, choose where the document sits —
           // beside the conversation, or below it so tables get the full width.
           // Only inside a split, and only where the choice exists.
@@ -158,13 +261,14 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
         ],
       ),
       body: _buildBody(),
+    ),
     );
   }
 
   Widget _buildBody() {
     if ( _loading )        return const Center( child: CircularProgressIndicator() );
     if ( _error != null )  return _ErrorView( error: _error!, onRetry: _load );
-    return _ContentView( content: _content!, repository: widget.repository );
+    return _ContentView( content: _content!, repository: widget.repository, onOpen: _open );
   }
 }
 
@@ -173,7 +277,10 @@ class _ContentView extends StatelessWidget {
   final DocContent     content;
   final DocRepository? repository;
 
-  const _ContentView( { required this.content, this.repository } );
+  /// Show another place in this viewer — a listing entry, a parent, a root.
+  final void Function( DocLink link ) onOpen;
+
+  const _ContentView( { required this.content, required this.onOpen, this.repository } );
 
   @override
   Widget build( BuildContext context ) {
@@ -202,10 +309,29 @@ class _ContentView extends StatelessWidget {
           ),
         );
 
-      // HTML and directory listings land here until P4 gives each its own
-      // renderer. Showing the source beats showing an error.
-      case DocContentKind.html:
       case DocContentKind.directory:
+        return DocDirectoryView(
+          listing    : content.listing!,
+          repository : repository,
+          onOpen     : onOpen,
+        );
+
+      // The web's words: say so plainly and point at the button.
+      case DocContentKind.binary:
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all( 24 ),
+            child: Text(
+              "No preview for this file type — use Download above.",
+              key      : Key( TestKeys.docViewerNoPreview ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+
+      // HTML lands here until it earns its own renderer. Showing the source
+      // beats showing an error.
+      case DocContentKind.html:
       case DocContentKind.source:
         return SingleChildScrollView(
           padding: const EdgeInsets.all( 16 ),
