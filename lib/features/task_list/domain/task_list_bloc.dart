@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/network/network_connectivity_service.dart';
+import '../../fleet/data/task_row_model.dart';
 import '../../fleet/data/task_write_repository.dart';
 import '../../fleet_status/data/fleet_models.dart';
 import '../../fleet_status/data/fleet_repository.dart';
@@ -198,6 +199,13 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// connectivity-restored trigger and its tests fake it.
   @override
   bool get isMeteredConnection => _network.isMobile;
+
+  /// Look up ONE ticket by a path from `taskLookupPath` (walk-through item M3).
+  ///
+  /// ⚠️ A PASS-THROUGH, NOT AN EVENT. The result belongs to the lookup box and never
+  /// touches the board: the hashes Rick pastes are usually for rows that are not on it,
+  /// so folding the answer into board state would make a held row look owed.
+  Future<TaskRowModel> lookupTask( String path ) => _repo.lookup( path );
 
   /// The mixin's poll hook. The token is honoured all the way down to Dio, so a pane that
   /// disappears mid-request cancels the request rather than only the timer.
