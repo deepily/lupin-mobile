@@ -2,13 +2,15 @@ import 'package:dio/dio.dart';
 
 import 'broadcast_models.dart';
 
-/// The Broadcast pane's three doors: who is listening, say it, and what came back.
+/// The Broadcast pane's four doors: who is listening, say it, what came back, and —
+/// after the app stopped listening — what came back while it was away.
 ///
-/// ⚠️ THERE IS NO POLL HERE, AND THAT IS THE DESIGN RATHER THAN AN OMISSION. Acks ride
-/// `commons_broadcast_ack` on the `notification_queue_update` socket stream this client
-/// already holds open. For this one pane socket-first is not merely available — it is how
-/// the feature works, and a poller would be a downgrade that also lies (see
-/// [drainMissedAcks]). Any doc text saying "all panes poll" is a doc defect.
+/// ⚠️ THERE IS STILL NO POLL HERE, AND THAT IS THE DESIGN RATHER THAN AN OMISSION. Acks
+/// ride `commons_broadcast_ack` on the `notification_queue_update` socket stream this
+/// client already holds open; for this one pane socket-first is how the feature works.
+/// [drainMissedAcks] is not a poller — it fires on resume and on reconnect, the two
+/// moments the socket is known to have missed something, and never on a timer. Any doc
+/// text saying "all panes poll" is a doc defect.
 class BroadcastRepository {
   final Dio _dio;
 
@@ -22,6 +24,18 @@ class BroadcastRepository {
   /// to render a handful. The number is in the path so it is visible at the call site
   /// rather than inherited from a server default that can move underneath us.
   static const historyPath = '/api/commons/broadcast-history?limit=5';
+
+  /// The server's own scan cap, named here rather than inherited (`notifications.py:2446`).
+  /// 500 is far above any plausible fleet fan-out; it is sent so a change to the server's
+  /// default cannot silently alter what this pane asks for.
+  static const ackLimit = 500;
+
+  /// 🔴 TWO SEGMENTS, AND THE ORDER OF THE SERVER'S ROUTES DEPENDS ON IT. This is
+  /// registered BEFORE `/notifications/{user_id}/next` precisely so `broadcast-acks` is
+  /// not captured as a user id (`notifications.py:2428-2430`). There is no user id in the
+  /// path at all — the caller's key IS the scope.
+  static String ackDrainPath( String broadcastId ) =>
+      '/api/notifications/broadcast-acks/$broadcastId?limit=$ackLimit';
 
   /// Who would receive a broadcast sent right now.
   ///
@@ -118,35 +132,60 @@ class BroadcastRepository {
     );
   }
 
-  /// 🔴 THERE IS NO RECOVERY READ, AND THIS METHOD EXISTS TO SAY SO IN CODE.
+  /// The recovery read: every ack this broadcast has collected, from the SAVED rows.
   ///
-  /// The plan's §6.2 specified draining `GET /api/notifications/undelivered` on resume
-  /// and on socket reconnect, filtering `type == 'commons_broadcast_ack'`, and folding
-  /// the result in. **That drain cannot return an ack.** `commons_broadcast_ack` is
-  /// pushed in-process by the ack watcher and never crosses the `notify_user` route where
-  /// `_persist_notification_sync` lives, so no row is written to the store that endpoint
-  /// queries.
+  /// 🔴 THIS METHOD SPENT A PHASE AS A DOCUMENTED REFUSAL, AND THE REFUSAL WAS RIGHT AT
+  /// THE TIME. The plan's §6.2 specified draining `/api/notifications/undelivered` and
+  /// filtering `type == 'commons_broadcast_ack'`. That drain could not return an ack:
+  /// the undelivered inbox skips anything already handed to a socket, and an ack that
+  /// landed while the app was open is marked delivered instantly. A drain built on it
+  /// would have run, folded nothing, and left every test green while recovering zero.
   ///
-  /// The ack IS persisted — to a DIFFERENT store, `io_tbl`, via `push_notification`. That
-  /// distinction matters and the earlier wording ("never persisted") was corrected on the
-  /// row because it points at the wrong fix. But it does not help here: `_log_to_io_tbl`
-  /// writes six fields and `payload` is never among them, and an ack's `message` is an
-  /// empty string by design. So the io_tbl row for a broadcast ack is a type label and an
-  /// empty string — not the broadcast, not the session, not the persona, not the status.
+  /// ⇒ The server side landed (lupin row `1c7da903`). `GET /api/notifications/broadcast-acks/{id}`
+  /// asks a different question — "which seats have acked this broadcast" — and
+  /// `get_latest_acks_for_broadcast` (`notification_repository.py:653`) deliberately does
+  /// NOT filter on delivery state. That is the whole reason the endpoint exists, and it
+  /// is why this method can be honest now when it could not be before.
   ///
-  /// ⇒ A drain implemented here would have run, returned nothing, folded nothing, and
-  /// left every test green while recovering zero acks. Writing the method as a documented
-  /// refusal is the only version of it that cannot be mistaken for working.
+  /// Requires:
+  ///   - broadcastId is the id the server returned from [send]
   ///
-  /// ⇒ WHEN THE SERVER SIDE IS FIXED (lupin row `1c7da903`, Mr. Radio's), this becomes a
-  /// real drain with an EXPLICIT limit above any plausible fan-out, and `len == limit`
-  /// treated as possibly-truncated. Until then [AckAggregate.confidence] carries the
-  /// truth instead.
-  Never drainMissedAcks() {
-    throw UnsupportedError(
-      'Broadcast acks are not recoverable after the socket drops. '
-      'See BroadcastRepository.drainMissedAcks and store row 384591dd.',
-    );
+  /// Ensures:
+  ///   - returns one ack per acking seat, the server's latest for that seat
+  ///     (`notifications.py:2441-2492`; the latest-per-session fold is server-side)
+  ///   - a 200 carrying `acks: []` returns an EMPTY LIST — nobody acked is an answer
+  ///   - any transport or server failure throws [BroadcastException], because a caller
+  ///     that cannot tell "nobody acked" from "the read failed" will paint the first
+  ///   - a cancellation propagates untranslated, same as the other three doors
+  ///
+  /// ⚠️ NO TRUNCATION GUARD, AND ITS ABSENCE IS DELIBERATE. `len == ackLimit` is not
+  /// evidence of truncation here: the limit caps the PRE-fold row scan and the
+  /// latest-per-session fold can only shrink the result, so a full scan routinely
+  /// answers with far fewer rows. A guard on that comparison would fire on a number
+  /// that means nothing (row `973e4b6b`).
+  Future<List<BroadcastAck>> drainMissedAcks(
+    String broadcastId, {
+    CancelToken? cancelToken,
+  } ) async {
+    final Response<Map<String, dynamic>> res;
+    try {
+      res = await _dio.get<Map<String, dynamic>>(
+        ackDrainPath( broadcastId ),
+        cancelToken: cancelToken,
+      );
+    } on DioException catch ( e ) {
+      if ( CancelToken.isCancel( e ) ) rethrow;
+      throw BroadcastException( 'could not read the saved acks', cause: e );
+    }
+
+    final raw = ( res.data ?? const <String, dynamic>{} )[ 'acks' ];
+    if ( raw is! List ) return const [];
+
+    return raw
+        .whereType<Map>()
+        .map( ( e ) => BroadcastAck.fromSavedAck( Map<String, dynamic>.from( e ) ) )
+        .whereType<BroadcastAck>()
+        .toList();
   }
 
   static int? _retryAfter( Response<dynamic>? res ) {
