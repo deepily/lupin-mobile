@@ -10,7 +10,10 @@ import '../../../core/testing/test_keys.dart';
 import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
+import '../../../services/auth/auth_token_provider.dart';
+import '../data/doc_upload.dart';
 import 'doc_directory_view.dart';
+import 'doc_upload_sheet.dart';
 import 'doc_link_tap.dart';
 import 'doc_panel.dart';
 import 'doc_split_host.dart';
@@ -39,6 +42,14 @@ class DocViewerScreen extends StatefulWidget {
   /// app bar needs its own close button. Null keeps the plain route behaviour.
   final VoidCallback? onClose;
 
+  /// Opens the phone's file chooser for ⬆ Upload. Null falls back to
+  /// [platformDocFilePicker]; when both are null, Upload is not offered.
+  final DocFilePicker? pickFile;
+
+  /// Whether to OFFER Upload. Defaults to reading the admin role off the
+  /// signed-in token; the server's own admin check is what actually decides.
+  final bool Function()? canUpload;
+
   const DocViewerScreen( {
     super.key,
     this.link,
@@ -46,6 +57,8 @@ class DocViewerScreen extends StatefulWidget {
     this.content,
     this.title,
     this.onClose,
+    this.pickFile,
+    this.canUpload,
   } ) : assert( content != null || ( link != null && repository != null ),
                 'give the viewer either content or a link and a repository to fetch it' );
 
@@ -172,6 +185,49 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     }
   }
 
+  /// ⬆ Upload into the folder on screen (row 61ecfb22, lupin 416d4b00).
+  ///
+  /// Asks the server to REFUSE a taken name first. On the 409 the operator
+  /// chooses Replace, Rename to the server's suggestion, or Cancel — as buttons
+  /// in a sheet, as on the web, never a silent overwrite.
+  Future<void> _upload( DocDirectoryListing listing, DocFilePicker pick ) async {
+    final messenger = ScaffoldMessenger.of( context );
+    final picked    = await pick();
+    if ( picked == null || !mounted ) return;
+
+    final dir  = uploadDirFor( listing.scope, listing.path );
+    var   mode = DocUploadConflictMode.refuse;
+    try {
+      while ( true ) {
+        try {
+          final stored = await widget.repository!.upload( dir: dir, file: picked, onConflict: mode );
+          if ( !mounted ) return;
+          messenger.showSnackBar( SnackBar(
+            key    : const Key( TestKeys.docUploadDone ),
+            content: Text( stored.replaced ? "Replaced ${stored.name}" : "Uploaded ${stored.name}" ),
+          ) );
+          _load();   // the listing now holds the new file
+          return;
+        } on DocUploadConflict catch ( clash ) {
+          if ( !mounted || mode != DocUploadConflictMode.refuse ) rethrow;
+          final choice = await showDocUploadConflictSheet( context, clash, picked.name );
+          if ( choice == null ) return;   // Cancel
+          mode = choice;
+        }
+      }
+    } on DocUploadConflict catch ( clash ) {
+      messenger.showSnackBar( SnackBar( content: Text( clash.message ), backgroundColor: Colors.red ) );
+    } on DocApiException catch ( e ) {
+      // The server's words: a read-only mount says it is not writable, a
+      // credential says it was refused, an oversized file names the cap.
+      messenger.showSnackBar( SnackBar(
+        key            : const Key( TestKeys.docUploadError ),
+        content        : Text( e.message ),
+        backgroundColor: Colors.red,
+      ) );
+    }
+  }
+
   Future<void> _share( DocContent content ) async {
     // Only text is shareable as a file today; an image share would need its own
     // extension handling and is not worth guessing at.
@@ -201,6 +257,11 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     final isFile  = link != null && content != null && !_loading &&
                     content.kind != DocContentKind.directory;
     final folder  = isFile ? folderLinkFor( link ) : null;
+    // ⬆ Upload: on a listing, for admins, when a picker exists.
+    final listing = !_loading ? content?.listing : null;
+    final picker  = widget.pickFile ?? platformDocFilePicker;
+    final offerUp = listing != null && picker != null && widget.repository != null &&
+                    ( widget.canUpload ?? () => tokenHasAdminRole( readAccessToken() ) )();
 
     return PopScope(
       canPop                : _history.isEmpty,
@@ -240,6 +301,13 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
               icon     : const Icon( Icons.folder_open_outlined ),
               tooltip  : "Show this file's folder",
               onPressed: () => _open( folder ),
+            ),
+          if ( offerUp )
+            IconButton(
+              key      : const Key( TestKeys.docViewerUploadButton ),
+              icon     : const Icon( Icons.upload_outlined ),
+              tooltip  : "Upload a file into this folder",
+              onPressed: () => _upload( listing, picker ),
             ),
           // Rick 2026-09-18: on an open Fold, choose where the document sits —
           // beside the conversation, or below it so tables get the full width.

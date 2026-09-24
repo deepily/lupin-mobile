@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import 'doc_link.dart';
 import 'doc_models.dart';
+import 'doc_upload.dart';
 
 /// Fetches doc-viewer targets over the shared Dio.
 ///
@@ -130,6 +131,57 @@ class DocRepository {
       lower.startsWith( "application/octet-stream" ) ||
       lower.startsWith( "application/vnd." ) ||
       lower.startsWith( "application/zip" );
+
+  /// ⬆ Store [file] in the folder [dir] (see `uploadDirFor`) — row 61ecfb22.
+  ///
+  /// Requires:
+  ///   - [dir] is `<scope>/<rel-dir>`, `<scope>`, or `io[/<rel-dir>]`
+  ///
+  /// Ensures:
+  ///   - 201 → the stored file, under the name the server actually used
+  ///   - 409 → [DocUploadConflict] carrying the server's `suggested_name`
+  ///   - anything else → [DocApiException] in the server's own words, so a
+  ///     read-only mount's 403 says so rather than "failed"
+  Future<DocUploadResult> upload( {
+    required String         dir,
+    required PickedDocFile  file,
+    DocUploadConflictMode   onConflict = DocUploadConflictMode.refuse,
+  } ) async {
+    final form = FormData.fromMap( {
+      "dir"         : dir,
+      "on_conflict" : onConflict.name,
+      "file"        : MultipartFile.fromBytes( file.bytes, filename: file.name ),
+    } );
+    try {
+      final res = await _dio.post<dynamic>(
+        "/api/docs/upload",
+        data   : form,
+        options: Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      final data   = res.data;
+      if ( status == 201 || status == 200 ) {
+        return DocUploadResult.fromJson( Map<String, dynamic>.from( data as Map ) );
+      }
+      final detail = data is Map ? data[ "detail" ] : null;
+      if ( status == 409 ) {
+        final d = detail is Map ? detail : const {};
+        throw DocUploadConflict(
+          ( d[ "message" ] ?? "A file with that name already exists." ).toString(),
+          suggestedName: d[ "suggested_name" ]?.toString(),
+        );
+      }
+      throw DocApiException(
+        detail is String ? detail : "The upload failed with status $status.",
+        statusCode: status,
+      );
+    } on DioException catch ( e ) {
+      throw DocApiException(
+        e.message ?? "Could not reach the document server.",
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
 
   /// The browsable roots, from `GET /api/docs/scopes` (row 61ecfb22).
   ///
