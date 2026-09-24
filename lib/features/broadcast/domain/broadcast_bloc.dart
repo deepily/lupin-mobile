@@ -464,7 +464,21 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
       final current = state.aggregate;
       if ( current == null || current.broadcastId != agg.broadcastId ) return;
 
-      emit( state.copyWith( aggregate: current.reconciled( saved ) ) );
+      // 🔴 THE SEATS THAT MOVED DURING THE READ KEEP WHAT ARRIVED, AND THIS IS THE ONE
+      // PLACE THAT CAN KNOW WHICH THOSE ARE. `agg` is the tally as it stood when the
+      // request went out; `current` is the tally now. Anything that differs between them
+      // arrived while the server was answering, so it is NEWER than the response — and
+      // the ordinary saved-wins rule would roll it backwards, turning a `completed` back
+      // into the `pending` the server was holding when it was asked. The count is the
+      // same either way, so nothing that counts acks would ever catch it.
+      final arrivedDuringRead = <String>{
+        for ( final seat in current.acksBySession.entries )
+          if ( agg.acksBySession[ seat.key ] != seat.value ) seat.key,
+      };
+
+      emit( state.copyWith(
+        aggregate: current.reconciled( saved, keepLive: arrivedDuringRead ),
+      ) );
     } on BroadcastException {
       // Stays interrupted. See the note above.
     } on DioException {

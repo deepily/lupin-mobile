@@ -188,7 +188,7 @@ class BroadcastRepository {
         .toList();
   }
 
-    static int? _retryAfter( Response<dynamic>? res ) {
+  static int? _retryAfter( Response<dynamic>? res ) {
     final raw = res?.headers.value( 'retry-after' );
     return raw == null ? null : int.tryParse( raw );
   }

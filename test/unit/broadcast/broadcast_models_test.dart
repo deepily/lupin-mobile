@@ -258,6 +258,26 @@ void main() {
       expect( live.reconciled( savedAcks() ).acksBySession.containsKey( 'sess-late' ), isTrue );
     });
 
+    test( '🔴 keepLive is the ONE exception to saved-wins — a seat that moved mid-read', () {
+      // "The saved row is the latest" holds as of the moment the server answered, and a
+      // network read is not instant. A seat that acks while the read is in flight lands
+      // a frame newer than anything the response can carry.
+      final live = seeded().fold( const BroadcastAck(
+        broadcastId : 'b-fixture-0001',
+        sessionId   : 'sess-fixture-1',
+        status      : 'completed-while-you-were-asking',
+      ) );
+
+      final merged = live.reconciled( savedAcks(), keepLive: { 'sess-fixture-1' } );
+
+      expect( merged.acksBySession[ 'sess-fixture-1' ]?.status,
+          'completed-while-you-were-asking' );
+      // Only that seat is exempt. The rest of the response still lands, or the exception
+      // would quietly become a refusal of the whole read.
+      expect( merged.acksBySession[ 'sess-fixture-2' ]?.status, 'completed' );
+      expect( merged.ackedCount, 2 );
+    });
+
     test( '🔴 a successful read RETIRES the interrupted state', () {
       final agg = seeded( confidence: AckConfidence.interrupted ).reconciled( savedAcks() );
 

@@ -403,10 +403,23 @@ class AckAggregate extends Equatable {
   ///   - confidence becomes [AckConfidence.recovered] only if it was
   ///     [AckConfidence.interrupted]; an already-[AckConfidence.observed] tally is not
   ///     demoted to a claim about a past moment
-  AckAggregate reconciled( Iterable<BroadcastAck> saved ) {
+  ///   - a seat named in [keepLive] keeps what this aggregate already holds
+  ///
+  /// 🔴 [keepLive] IS THE ONE EXCEPTION TO SAVED-WINS, AND IT EXISTS FOR A RACE.
+  /// "The saved row is the latest" is true as of the moment the server answered, and a
+  /// network read is not instant. A seat that acks WHILE the read is in flight lands a
+  /// frame newer than anything the response can contain, and saved-wins would then roll
+  /// it backwards — `completed` overwritten by the `pending` the server held when asked.
+  /// The count is identical either way, which is exactly why this needs naming rather
+  /// than counting. The caller knows which seats moved; this type does not.
+  AckAggregate reconciled(
+    Iterable<BroadcastAck> saved, {
+    Set<String> keepLive = const {},
+  } ) {
     final merged = Map<String, BroadcastAck>.from( acksBySession );
     for ( final ack in saved ) {
       if ( ack.broadcastId != broadcastId ) continue;
+      if ( keepLive.contains( ack.sessionId ) ) continue;
       merged[ ack.sessionId ] = ack;
     }
 

@@ -335,6 +335,38 @@ void main() {
       expect( bloc.state.aggregate?.summary, contains( '2 of 3' ) );
     } );
 
+    test( '🔴 an ack that lands DURING the read survives it', () async {
+      final bloc = await sent();
+      late final BroadcastBloc target;
+      target = bloc;
+
+      // The read is not instant, and "the saved row is the latest" is only true as of
+      // the moment the server answered. This handler folds a live ack for sess-fixture-1
+      // WHILE the request is in flight — a frame newer than anything the response can
+      // carry. Saved-wins would roll it back to the fixture's status, and the ackedCount
+      // would be 2 either way, so only the STATUS can catch this.
+      adapter.handlers[ 'GET ${BroadcastRepository.ackDrainPath( 'b-fixture-0001' )}' ] = ( _ ) {
+        target.add( const BroadcastAckReceived( BroadcastAck(
+          broadcastId : 'b-fixture-0001',
+          sessionId   : 'sess-fixture-1',
+          status      : 'completed-while-you-were-asking',
+        ) ) );
+        return jsonBody( fixture( 'broadcast_acks_saved.json' ) );
+      };
+
+      bloc.add( const BroadcastListeningInterrupted() );
+      bloc.add( const BroadcastAcksReconcileRequested() );
+      await until( bloc, ( s ) => s.aggregate?.ackedCount == 2, 'the saved acks to fold in' );
+
+      expect( bloc.state.aggregate?.acksBySession[ 'sess-fixture-1' ]?.status,
+          'completed-while-you-were-asking',
+          reason: 'the read must not roll a seat backwards to the row the server held' );
+      // The seat the read alone brought in is still there — keepLive is an exception for
+      // the racing seat, not a refusal of the whole response.
+      expect( bloc.state.aggregate?.acksBySession[ 'sess-fixture-2' ]?.status, 'completed' );
+      expect( bloc.state.aggregate?.confidence, AckConfidence.recovered );
+    } );
+
     test( '🔴 a failed reconcile changes NOTHING — the tally stays interrupted', () async {
       final bloc = await sent();
       adapter.handlers[ 'GET ${BroadcastRepository.ackDrainPath( 'b-fixture-0001' )}' ] =
