@@ -68,6 +68,13 @@ class TestKeys {
   static const docViewerDownloadButton = 'docs.viewer.download';
   static const docViewerFolderButton   = 'docs.viewer.folder';
   static const docViewerNoPreview      = 'docs.viewer.noPreview';
+  static const docViewerUploadButton   = 'docs.viewer.upload';
+  static const docUploadConflictSheet  = 'docs.upload.conflictSheet';
+  static const docUploadReplace        = 'docs.upload.replace';
+  static const docUploadRename         = 'docs.upload.rename';
+  static const docUploadCancel         = 'docs.upload.cancel';
+  static const docUploadDone           = 'docs.upload.done';
+  static const docUploadError          = 'docs.upload.error';
   static const docListing              = 'docs.listing';
   static const docListingUp            = 'docs.listing.up';
   static const docListingEntryPrefix   = 'docs.listing.entry.';   // + entry name
