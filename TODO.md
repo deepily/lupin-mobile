@@ -23,6 +23,22 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-23 (pane parity closed, broadcast ack recovery merged)
+
+### Decisions Log — 2026-09-23 (session `693d5366`, Tiffany managing)
+
+- **Task List hides illegal verbs** (Rick, 22:15, row 19190a5b closed). The legality reasons are still computed (`verbLegality`), so switching to greyed out later is small and reversible.
+- **The ack window runs 5 minutes from the send, not from the last ack.** The web restarts its timer on each ack, so a broadcast nobody acks never expires there; a backgrounded phone produces exactly that case. The difference is deliberate (`AckAggregate.ackWindow`).
+- **The saved ack wins for its seat unless that seat moved during the read.** The server's row is the latest only as of its answer, and a later live frame must not be rolled back (`0cdfe1a`).
+- **No truncation guard on the ack read.** `limit` caps the rows scanned BEFORE the latest-per-seat merge, so `len == limit` means nothing. The server's `Query(500)` has no maximum.
+
+### ⏳ Owed — 2026-09-23
+
+1. **Rick: admit d5bbd786** (TaskRow call-site guard). He approved it at 22:15; only his board can admit it. Then staff a worker.
+2. **On-device check** after the APK rebuild: walk-through items 7-14, and one real broadcast with the app backgrounded, then resumed, to see the ack read-back.
+
+---
+
 ## 🆕 Open from 2026-09-20 (the build night: five phases merged)
 
 ### Decisions Log — 2026-09-20 (session `cc9c1f1a`, Tiffany managing)

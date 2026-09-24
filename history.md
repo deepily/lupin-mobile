@@ -13,6 +13,20 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.23 | Session `693d5366` (Tiffany 💍) — Fleet pane parity closed, broadcast ack recovery built on the new server read, two rulings in hand
+
+**RESUME HERE:**
+
+1. 🔴 **REBUILD THE APK AND CHECK ON DEVICE**: the P0 DM editor, the B1 spinner (walk-through item 8), items 7-14 of `src/rnd/2026.09.22-emulator-walkthrough-five-accordions.md`, and now **one real broadcast** that exercises the ack read-back after backgrounding the app. ⚠️ A broadcast reaches every live seat, so warn the fleet first.
+2. **d5bbd786 TaskRow call-site guard**: Rick **approved** it (22:15), but it's still `not_approved` because only he can admit it. Once admitted, staff a worker.
+3. **c51e92da** phone probe stays parked until about 10-19. Don't raise it.
+
+**Shipped**: 73ce4cb inbox hidden + Task List indent · d80419b logout pops routes, Lupin Focus first on the grid · 7e005e8+125f37f Broadcast @mention chips · da54a06 B1 Fleet Status spinner · 67500ca P0 DM editor (composer capped at 60% above the keyboard) · aac32aa Broadcast history disabled state · crew merges a9d0d0d, e397c9c, 0952925, dd8de55, 3c1ebe7, ae75043, 39c8a14 · 5ad3fc8 post-game · **19b8c6e broadcast ack recovery** (Sam, row 973e4b6b): `drainMissedAcks()` now reads `GET /api/notifications/broadcast-acks/{id}` (lupin 1c7da903) on resume/reconnect. It merges saved acks per seat, ignores other broadcasts, lets a seat that moved during the read keep its live ack (a race caught in review, fixed in 0cdfe1a), and leaves a failed read "interrupted". Expired vs partial runs on a 5-minute window from the **send**, which differs from the web on purpose.
+
+**Rulings**: 19190a5b Task List **hides** illegal verbs (Rick, closed). Server `limit` is `Query(500)` with no maximum, so going over 500 is not an error (Sam, verified at `notifications.py:2444`).
+
+**suite 1904 → 1936 passed / 1 skipped / 0 failed** on the merge result. One self-respin (wake proof written). The Last Call bell (row 3d741e8b) never fired because `last_call.py` isn't executable (María's bug 8a838de5), so the close was run by hand.
+
 ## 2026.09.23 | Memento sweep (María 🌸, row `5b29a807`) — 50 mementos moved to the trash (3 kept for Tiffany); per Rick's ruling, only the last two days summarized
 
 - **09-22**: `await bloc.close()` inside `testWidgets` never returns for a bloc with an `on<Event>` handler. Four of five fleet panes were unreachable, referenced only by their own files and tests. Untrack `local.properties` and gitignore `google-services.json` (Rick).
