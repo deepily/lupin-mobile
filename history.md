@@ -13,6 +13,27 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.24 | Session `ecb8e6e3` (Tiffany 💍) — Task List M1/M3/M4, and doc-viewer parity with the web: Download, Folder, listing, Roots, Upload
+
+**RESUME HERE:**
+
+1. 🔴 **Rick's laptop APK build is the first real test of `file_picker` 11.0.3**, because this machine has no Android SDK. If it breaks: take it out of `pubspec.yaml` and set `platformDocFilePicker = null` in `lib/features/docs/presentation/doc_upload_sheet.dart`. Row `61ecfb22` is blocked on that build (chase 09-25 09:00 EDT).
+2. **Row `651e3956` (P1)**: investigate reviving the Android SDK here. Rick is picking it up 09-25.
+3. The device walkthrough from 09-23 is still owed (items 7-14 plus one real broadcast).
+
+**Shipped** (21 files, +2100/−28):
+- `84ebb4d` / merge `6ce802e`: Task List headline ("Live: N", split only while a park is active), paste-a-ticket-number lookup via `GET /api/tasks/<ref>` (finds held rows), and a disabled New task button. Row `323d0f9c`.
+- `8bc9b9e` / merge `312aa40`: doc viewer ⬇ Download (original bytes through the share sheet), 📁 Folder, a real folder listing, and a folded 🗂 Roots panel. Row `61ecfb22`, agreed with Mr. Radio before building.
+- `0528f11` / merge `104401b`: ⬆ Upload for admins. It sends refuse first; on a name clash, a sheet offers Replace, Rename or Cancel. It adds `file_picker`.
+
+**Bugs found on the way**:
+- The listing parser read `type`/`path` while the server sends `kind`/`rel_path`, so every entry was a pathless file. This was invisible because nothing rendered listings.
+- PDF, audio and video were decoded as text.
+
+**Coordination**: Mr. Radio's upload endpoint shipped as lupin `627ef22c8`. Only io and lupin accept uploads; the other mounts answer 403 until Rick makes them writable.
+
+**suite 1936 → 1999 passed / 1 skipped / 0 failed** on the merged tree.
+
 ## 2026.09.23 | Session `693d5366` (Tiffany 💍) — Fleet pane parity closed, broadcast ack recovery built on the new server read, two rulings in hand
 
 **RESUME HERE:**

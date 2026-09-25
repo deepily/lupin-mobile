@@ -23,6 +23,22 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-24 (Task List M1/M3/M4, doc-viewer parity with the web)
+
+### Decisions Log — 2026-09-24 (session `ecb8e6e3`, Tiffany, skeleton crew)
+
+- **Phase 2 status given to Rick**: all ten gaps from the 09-23 census are built. What stays open is the device walkthrough plus M1/M3/M4, and those three were built today.
+- **Doc viewer parity**: Rick asked me to coordinate with Mr. Radio on everything. I sent him the plan before building, and he confirmed the existing server responses would not change.
+- **Upload picker**: Rick approved the `file_picker` plugin. If it breaks the build, take it out and carry on without Upload for now, "but we will have to include this eventually".
+- **Merge gates**: Rick said yes to all three merges (`6ce802e`, `312aa40`, `104401b`).
+
+### ⏳ Owed — 2026-09-24
+
+- [ ] 🔴 **Rick's laptop APK build**, the first real test of `file_picker` 11.0.3 (this machine has no Android SDK). Then check on the device: Folder, Roots, an upload into io, and a second upload of the same name (clash sheet). Closes row `61ecfb22`.
+- [ ] **Row `651e3956` (P1)**: investigate reviving the Android SDK on this machine. Rick is picking it up 09-25.
+- [ ] **Holding-area rows only Rick can close**: `323d0f9c` (M1/M3/M4, merged), `f8f893ba` (duplicate of `61ecfb22`, drop it), `d5bbd786` (TaskRow guard, approved but not admitted).
+- [ ] **TODO.md is 613 lines**, far past the ~200-line horizon signal. Run `/plan-todo archive` next session; many 09-22 items are done (B1, N1 via mention chips, R1/N2, M1/M3/M4).
+
 ## 🆕 Open from 2026-09-23 (pane parity closed, broadcast ack recovery merged)
 
 ### Decisions Log — 2026-09-23 (session `693d5366`, Tiffany managing)
