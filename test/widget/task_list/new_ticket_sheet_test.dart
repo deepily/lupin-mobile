@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -206,6 +207,63 @@ void main() {
       await tester.pumpAndSettle();
       await _create( tester );
       expect( _sent( rec.posts.single )[ 'body' ], 'Typed first. from the phone' );
+    } );
+
+    // 🔴 A CANCELLED CAPTURE MUST LEAVE THE MICS USABLE (María, review of 30efd26). A
+    // stale result used to return before resetting the mic state, so every mic on the
+    // card stayed dead until it was closed.
+    bool micLive( WidgetTester tester, String key ) =>
+        tester.widget<IconButton>( find.byKey( Key( key ) ) ).onPressed != null;
+
+    testWidgets( 'a stop the cancel overtook frees both mics and changes no text', ( tester ) async {
+      final asr     = _MockAsr();
+      final heard   = Completer<String>();
+      when( () => asr.startRecording() ).thenAnswer( ( _ ) async {} );
+      when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
+      when( () => asr.isCapturing ).thenReturn( false );
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => heard.future );
+      final voice = VoiceCaptureSession( asr: asr, requestPermission: () async => true );
+
+      await _mount( tester, voice: voice );
+      await _open( tester );
+      await tester.enterText( find.byKey( const Key( TestKeys.newTicketDetails ) ), 'kept' );
+      await tester.tap( find.byKey( const Key( TestKeys.newTicketDetailsMic ) ) );   // start
+      await tester.pumpAndSettle();
+      await tester.tap( find.byKey( const Key( TestKeys.newTicketDetailsMic ) ) );   // stop
+      await tester.pump();
+      expect( micLive( tester, TestKeys.newTicketTitleMic ), isFalse );              // transcribing
+
+      voice.invalidate();                  // a cancel lands while the upload is in flight
+      heard.complete( 'too late' );
+      await tester.pumpAndSettle();
+
+      expect( micLive( tester, TestKeys.newTicketTitleMic ), isTrue );
+      expect( micLive( tester, TestKeys.newTicketDetailsMic ), isTrue );
+      expect( tester.widget<TextField>( find.byKey( const Key( TestKeys.newTicketDetails ) ) ).controller!.text,
+          'kept' );
+    } );
+
+    testWidgets( 'a start the cancel overtook frees both mics', ( tester ) async {
+      final asr     = _MockAsr();
+      final granted = Completer<bool>();
+      when( () => asr.startRecording() ).thenAnswer( ( _ ) async {} );
+      when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
+      when( () => asr.isCapturing ).thenReturn( false );
+      final voice = VoiceCaptureSession( asr: asr, requestPermission: () => granted.future );
+
+      await _mount( tester, voice: voice );
+      await _open( tester );
+      await tester.tap( find.byKey( const Key( TestKeys.newTicketTitleMic ) ) );     // start
+      await tester.pump();
+      expect( micLive( tester, TestKeys.newTicketDetailsMic ), isFalse );            // title is live
+
+      voice.invalidate();                  // a cancel lands while the permission prompt is open
+      granted.complete( true );
+      await tester.pumpAndSettle();
+
+      expect( micLive( tester, TestKeys.newTicketTitleMic ), isTrue );
+      expect( micLive( tester, TestKeys.newTicketDetailsMic ), isTrue );
+      verifyNever( () => asr.startRecording() );
     } );
   } );
 }
