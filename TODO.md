@@ -30,13 +30,14 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ### Decisions Log — 2026-09-26 (session `90e34e30`, Tiffany)
 
 - **Row `e1e2c545` (the two re-spin doors read different memento files) stays with Mr. Radio.** Rick said yes: it's lupin tooling, not mobile work.
+- **New Task is built now** (Rick, keypress): the phone card matches the web's `shared/task-create.js` field for field, including Project defaulting to `lupin`.
 - **Test uploads are deleted after the check.** Rick's test JPEG was removed from `lupin/io` on his yes, following his ruling earlier that day that nothing temporary should accumulate in io.
 
 ### ⏳ Owed — 2026-09-26
 
 - [ ] **Rick: close row `61ecfb22`** (doc viewer). It's parked, so only his login can close it. Evidence: `file_picker` built, installed and uploaded on his phone with no console errors.
 - [ ] **Walk-through items 11-14**: the reply tally through the notification shade, backgrounding and navigation, then landscape. Item 10 (a real broadcast) passed on 09-26.
-- [ ] **New task creation** (M4 is a disabled stub). Needs Rick's go before building.
+- [x] ✅ **New task creation** built on Rick's yes: row `b31a9ed9`, merged `30efd26` + `ce3fe8a`. Next: rebuild the APK and try it on the phone.
 
 ## 🆕 Open from 2026-09-24 (Task List M1/M3/M4, doc-viewer parity with the web)
 

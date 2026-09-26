@@ -19,17 +19,20 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 1. **Row `61ecfb22` (doc viewer) is ready to close, and only Rick can close it** because it is parked. He confirmed on the phone that `file_picker` 11.0.3 builds, installs, logs no errors, and uploads.
 2. **Device walk-through**: item 10 is done. Rick's test broadcast `f670a706` reached this seat, the first real send from the app. Items 11-13 (the reply tally through the notification shade, backgrounding and navigation) and item 14 (landscape) are still owed.
-3. **New task** on the Task List is still a disabled stub. Building creation needs Rick's go.
+3. **Rebuild the APK** to get New Task on the phone. It's merged and pushed, and never yet tapped on a device. The Project field defaults to `lupin`, as on the web.
 
 **Shipped:**
 - `1d61d2d` + `db9162c`, merged as `92a3fc0`, row `d5bbd786`: a source-scan test that fails when any `TaskRow(` call in `lib/` drops a constructor argument, unless a `// taskrow-omit: <param> <why>` comment explains it. It was mutation-tested on four breakages. María reviewed it; her two points (a `//` inside a string hid a call, and `super.x` parameters were not counted) are fixed.
 - A done-versus-remaining report on the five accordions, sent to Rick as a notification card (broadcast `7938c019`).
+- `a36ef40`, merged as `30efd26`, plus fix `e7f2bcc` merged as `ce3fe8a`, row `b31a9ed9`: **New Task**, the web's new-ticket card on the phone (M4, on Rick's keypress yes). It's ported from lupin `shared/task-create.js`: nine fields, the same defaults, validation and outcome text, and a POST to `/api/tasks`. A petition or no answer keeps the card open; a created ticket closes it and refreshes the board. Title and Details have mics. It was mutation-tested on 7 breakages. A test caught the Approval dropdown overflowing by 156 px at 360 dp. María reviewed the rules layer and the card; she found that a cancelled capture left the mics dead, which is now fixed with two tests that fail on `30efd26`.
 
 **Rulings:** row `e1e2c545` (the two re-spin doors read different memento files) stays with Mr. Radio, because it is lupin tooling. Rick's test upload was deleted from `lupin/io` on his yes.
 
 **Housekeeping:** the memento sweep trashed 6 stale records and kept 3.
 
-**Suite: 1999 → 2010 passed / 1 skipped / 0 failed.**
+**Suite: 1999 → 2035 passed / 1 skipped / 0 failed.**
+
+**Lesson:** a review DM that is condensed in transit can drop a finding. María's first accept on `a36ef40` lost the stale-mic point, and it only surfaced when she resent it after the merge. When a reviewer says there are nits, ask for the list in full before merging.
 
 ---
 
