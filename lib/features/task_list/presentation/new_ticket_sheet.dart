@@ -138,7 +138,11 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
     if ( _mic == _Mic.listening ) {
       setState( () => _mic = _Mic.transcribing );
       final capture = await voice.stopAndTranscribe();
-      if ( !mounted || capture.isStale ) return;
+      if ( !mounted ) return;
+      // 🔴 A STALE RESULT CHANGES THE TEXT NOT AT ALL, BUT IT MUST STILL FREE THE MIC.
+      // Returning early here left `_mic` at transcribing, so every mic on the card stayed
+      // dead until it was closed (María, review of 30efd26).
+      if ( capture.isStale ) { _micIdle(); return; }
       if ( capture.transcript != null ) _splice( box, capture.transcript!.trim() );
       setState( () {
         _mic      = _Mic.idle;
@@ -152,11 +156,16 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
     _micCaret = sel.isValid ? sel.baseOffset : box.text.length;
     setState( () { _micField = field; _mic = _Mic.listening; } );
     final start = await voice.start();
-    if ( !mounted || start.isStale ) return;
+    if ( !mounted ) return;
+    // Same rule on the way in: a start a cancel overtook recorded nothing, so the mic
+    // goes back to idle rather than showing "listening" over a silent recorder.
+    if ( start.isStale ) { _micIdle(); return; }
     if ( !start.started ) {
       setState( () { _mic = _Mic.idle; _micField = null; _result = start.errorMessage; } );
     }
   }
+
+  void _micIdle() => setState( () { _mic = _Mic.idle; _micField = null; } );
 
   /// Insert [heard] at the caret the box held when recording began. APPEND, NEVER
   /// REPLACE: the operator may have typed half a sentence before reaching for the mic.
