@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../fleet/data/task_row_model.dart';
+import 'new_ticket.dart';
 import 'task_lookup.dart';
 
 /// Reads the Task List page.
@@ -73,6 +74,28 @@ class TaskListRepository {
       final body     = response?.data;
       final detail   = body is Map && body[ 'detail' ] is String ? body[ 'detail' ] as String : null;
       throw TaskLookupException( response?.statusCode ?? 0, detail: detail );
+    }
+  }
+
+  /// File one ticket from the New Ticket card (row b31a9ed9).
+  ///
+  /// ⚠️ HERE AND NOT IN `TaskWriteRepository`. That one holds the verbs both task panes
+  /// press on EXISTING rows; creating is the Task List's alone.
+  ///
+  /// Requires:
+  ///   - [payload] came from `buildNewTicketPayload`
+  ///
+  /// Ensures:
+  ///   - never throws: every answer, including none at all, comes back as a
+  ///     [NewTicketResponse] for `describeNewTicketResult` to word
+  ///   - status 0 means nothing answered, which is NOT a refusal — the row may exist
+  Future<NewTicketResponse> createTicket( Map<String, String> payload ) async {
+    try {
+      final res = await _dio.post<Object>( '/api/tasks', data: payload );
+      return NewTicketResponse( res.statusCode ?? 0, res.data );
+    } on DioException catch ( e ) {
+      final response = e.response;
+      return NewTicketResponse( response?.statusCode ?? 0, response?.data );
     }
   }
 }

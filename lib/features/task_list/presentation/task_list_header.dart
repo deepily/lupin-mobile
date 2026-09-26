@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../fleet/data/task_row_model.dart';
+import '../../../services/asr/voice_capture_session.dart';
 import '../../fleet/presentation/task_row.dart';
+import '../data/new_ticket.dart';
 import '../data/task_lookup.dart';
+import 'new_ticket_sheet.dart';
 
 /// The top of the Task List: the count headline, the new-task stub and the lookup box
 /// (walk-through items M1, M4 and M3 — Rick, emulator, 2026-09-22).
@@ -18,7 +21,24 @@ class TaskListHeader extends StatefulWidget {
   /// Performs the GET for a path built by `taskLookupPath`.
   final Future<TaskRowModel> Function( String path ) lookup;
 
-  const TaskListHeader( { super.key, required this.countLabel, required this.lookup } );
+  /// Files one ticket from the New Ticket card (M4, row b31a9ed9).
+  final Future<NewTicketOutcome> Function( Map<String, String> payload ) createTicket;
+
+  /// The names the card offers under "Assigned to", read when the card OPENS so the
+  /// roster is current.
+  final List<String> Function() assignees;
+
+  /// The card's mics. Null means none are offered.
+  final VoiceCaptureSession? voice;
+
+  const TaskListHeader( {
+    super.key,
+    required this.countLabel,
+    required this.lookup,
+    required this.createTicket,
+    required this.assignees,
+    this.voice,
+  } );
 
   @override
   State<TaskListHeader> createState() => _TaskListHeaderState();
@@ -67,6 +87,18 @@ class _TaskListHeaderState extends State<TaskListHeader> {
     }
   }
 
+  Future<void> _openNewTicket() async {
+    final outcome = await showNewTicketSheet(
+      context,
+      createTicket : widget.createTicket,
+      assignees    : widget.assignees(),
+      voice        : widget.voice,
+    );
+    if ( outcome == null || !mounted ) return;
+    // The card closed itself on `created`; its sentence moves here so it is not lost.
+    ScaffoldMessenger.maybeOf( context )?.showSnackBar( SnackBar( content: Text( outcome.text ) ) );
+  }
+
   void _clear() {
     _generation++;
     _controller.clear();
@@ -93,17 +125,13 @@ class _TaskListHeaderState extends State<TaskListHeader> {
                   style : theme.textTheme.titleSmall,
                 ),
               ),
-              // M4: a STUB, on Rick's word — *"I understand the new task item creator is
-              // a next phase implementation, I expected to see these things stubbed in."*
-              // Disabled but visible, so the screen has its final shape.
-              Tooltip(
-                message : 'Creating tasks from the phone comes in a later phase',
-                child   : OutlinedButton.icon(
-                  key       : const Key( TestKeys.taskListNewTaskStub ),
-                  onPressed : null,
-                  icon      : const Icon( Icons.add, size: 18 ),
-                  label     : const Text( 'New task' ),
-                ),
+              // M4: the New Ticket card. It was a disabled stub until Rick said build it
+              // (2026-09-26); the card is the web's, field for field.
+              OutlinedButton.icon(
+                key       : const Key( TestKeys.taskListNewTask ),
+                onPressed : _openNewTicket,
+                icon      : const Icon( Icons.add, size: 18 ),
+                label     : const Text( 'New task' ),
               ),
             ],
           ),

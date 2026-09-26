@@ -72,8 +72,11 @@ class _TaskListPaneState extends State<TaskListPane> {
         // M1/M3/M4 sit above the list AND above the empty state: a lookup is most
         // useful exactly when the ticket is not on the board.
         final header = TaskListHeader(
-          countLabel : model == null ? null : taskListCountLabel( model, DateTime.now() ),
-          lookup     : context.read<TaskListBloc>().lookupTask,
+          countLabel   : model == null ? null : taskListCountLabel( model, DateTime.now() ),
+          lookup       : context.read<TaskListBloc>().lookupTask,
+          createTicket : context.read<TaskListBloc>().createTicket,
+          assignees    : context.read<TaskListBloc>().newTicketAssignees,
+          voice        : context.read<TaskListBloc>().voice,
         );
 
         // An empty list renders an EMPTY STATE, not a blank screen. A blank pane and a

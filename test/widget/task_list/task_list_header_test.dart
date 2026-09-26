@@ -98,12 +98,14 @@ void main() {
     } );
   } );
 
-  group( 'M4 — the new-task stub', () {
-    testWidgets( 'is on screen and disabled', ( tester ) async {
+  group( 'M4 — New task', () {
+    // Was "is on screen and disabled" while it was a stub; the card is built now and its
+    // behaviour is pinned in new_ticket_sheet_test.dart.
+    testWidgets( 'is on screen and enabled', ( tester ) async {
       await _mount( tester );
-      final finder = find.byKey( const Key( TestKeys.taskListNewTaskStub ) );
+      final finder = find.byKey( const Key( TestKeys.taskListNewTask ) );
       expect( finder, findsOneWidget );
-      expect( tester.widget<ButtonStyleButton>( finder ).onPressed, isNull );
+      expect( tester.widget<ButtonStyleButton>( finder ).onPressed, isNotNull );
     } );
   } );
 

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../services/asr/voice_capture_session.dart';
 import '../../../services/network/network_connectivity_service.dart';
 import '../../fleet/data/task_row_model.dart';
 import '../../fleet/data/task_write_repository.dart';
@@ -12,6 +13,7 @@ import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
 import '../../fleet/data/task_verbs.dart';
 import '../../fleet/domain/unsent_write.dart';
+import '../data/new_ticket.dart';
 import '../data/task_list_model.dart';
 import '../data/task_list_repository.dart';
 
@@ -165,6 +167,12 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// second service is the one most likely not to.
   final FleetRepository? _fleet;
 
+  /// The mic behind the New Ticket card's Title and Details (row b31a9ed9).
+  ///
+  /// ⚠️ NULL MEANS NO MICS, NOT BROKEN MICS — the web's rule, verbatim in spirit:
+  /// *"Supply this and Title and Details get mics; omit it and neither does."*
+  final VoiceCaptureSession? voice;
+
   StreamSubscription<NetworkState>? _connectivitySub;
 
   TaskListBloc(
@@ -172,6 +180,7 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     this._writes, {
     NetworkConnectivityService? network,
     FleetRepository? fleet,
+    this.voice,
   } )  : _network = network ?? NetworkConnectivityService(),
         _fleet   = fleet,
         super( const TaskListState() ) {
@@ -206,6 +215,27 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// touches the board: the hashes Rick pastes are usually for rows that are not on it,
   /// so folding the answer into board state would make a held row look owed.
   Future<TaskRowModel> lookupTask( String path ) => _repo.lookup( path );
+
+  /// File one ticket from the New Ticket card, then refresh the board.
+  ///
+  /// ⚠️ A PASS-THROUGH, LIKE [lookupTask]: the outcome sentence belongs to the card. The
+  /// board refresh is the one thing the bloc owns, and it runs only on `created` — a
+  /// petition or a held row is not on the board, so a refresh would change nothing.
+  Future<NewTicketOutcome> createTicket( Map<String, String> payload ) async {
+    final res     = await _repo.createTicket( payload );
+    final outcome = describeNewTicketResult( res.status, res.body );
+    if ( outcome.state == NewTicketState.created && !isClosed ) {
+      add( const TaskListRefreshRequested() );
+    }
+    return outcome;
+  }
+
+  /// Who the card offers under "Assigned to": the live fleet plus everyone who already
+  /// owns a row, read at the moment the card opens.
+  List<String> newTicketAssignees() => newTicketAssigneeOptions( [
+    state.reassignTargets,
+    ...( state.model?.groups ?? const <TaskGroup>[] ).map( ( g ) => [ g.ownerPersona ] ),
+  ] );
 
   /// The mixin's poll hook. The token is honoured all the way down to Dio, so a pane that
   /// disappears mid-request cancels the request rather than only the timer.
