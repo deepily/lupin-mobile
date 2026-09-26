@@ -1,6 +1,7 @@
 # TODO
 
-Last updated: 2026-09-20 (Session `cc9c1f1a` — Tiffany 💍, manager on duty): **nine merges, pushed and backed up on Rick's 22:55 ritual order.** Rick ruled every open gate: both held rows admitted, batch won't-fix keeps no confirm (matching web), and the phone probe `c51e92da` **PARKED to 2026-10-19 — he has no cell service and no public IP for at least a month and told the fleet to stop asking. Do not re-raise it.** His own P0 `72e01fb3` closed on receipts against the tree. Sam's roster addressability guard merged (`488f189`, 71/71 green). Phase 5 is blocked on a SERVER defect Chloé traced — `commons_broadcast_ack` appears never to persist, so the ack drain can never contain acks. Three of my own rows were corrected by workers before a line was written.
+Last updated: 2026-09-26 (Session `90e34e30` — Tiffany 💍, Skeleton Shift): TaskRow call-site guard merged (`92a3fc0`, row `d5bbd786` closed); `file_picker` verified on Rick's phone; first real broadcast from the app delivered. Suite 2010 / 1 skipped / 0 failed.
+Prior: 2026-09-20 (Session `cc9c1f1a` — Tiffany 💍, manager on duty): **nine merges, pushed and backed up on Rick's 22:55 ritual order.** Rick ruled every open gate: both held rows admitted, batch won't-fix keeps no confirm (matching web), and the phone probe `c51e92da` **PARKED to 2026-10-19 — he has no cell service and no public IP for at least a month and told the fleet to stop asking. Do not re-raise it.** His own P0 `72e01fb3` closed on receipts against the tree. Sam's roster addressability guard merged (`488f189`, 71/71 green). Phase 5 is blocked on a SERVER defect Chloé traced — `commons_broadcast_ack` appears never to persist, so the ack drain can never contain acks. Three of my own rows were corrected by workers before a line was written.
 Prior: 2026-09-19 (Session `cc9c1f1a` — Tiffany 💍): **no code, board cleared.** Three rows closed on receipts — `c3fc62bf` on Rick's own device tail (`POST /api/v2/transcribe` → 200), `b00e076c` on 9/9 green, P0 `cea58ee0` on `11f9f5e` + 10/10 green **after splitting its amended-on server half out to lupin `2184bebb`** so the close could not bury it. Four rows filed. A live bearer token turned up in Rick's paste, making `a7de7d69` self-demonstrating. Mr. Radio ruled option B and banned the fallback; he also caught an unverified green claim of mine and predicted a real sentinel gap — which I then measured, and which became `67c7a2e1`, merged tonight as `488f189`.
 Prior: 2026-09-18 (Session `fe56dccd` — Tiffany 💍): **nine commits.** P0 `cea58ee0` (duplicate personas) root-caused to the server and fixed on the phone; 0% TTS now means silence on every path including the background wake; abstracts became progressive disclosure; the Fold gained a beside/below toggle that no longer re-fetches; an answer tapped offline is kept, resent and never dropped. Rick ruled six questions (see Pending decisions). Suite 1211 → 1234. Backed up and pushed.
 Prior: 2026-09-14 (Session `b3e285b8` — Tiffany 💍, builder-manager): **spoken-ask door BUILT AND MERGED.** Rick's build go was given at 15:48, conditional on rev 13 being verified. Rev 13 verified 13/13 (`7a6ca84`), then revs 14–19 were folded during the build. §B phone transport (Rachel) merged as `83f19a7` and §C phone behaviour (Maya) as `16d73f8`; the §A server door merged in lupin (`993be2b6`). Same 46 already-failing tests before and after, 72 new passing. Device checks are parked for **2026-09-15 09:00** with Rick. Two P3 bugs are awaiting his admit.
@@ -23,6 +24,19 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 ## 📦 Archived TODO content
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-26 (Skeleton Shift)
+
+### Decisions Log — 2026-09-26 (session `90e34e30`, Tiffany)
+
+- **Row `e1e2c545` (the two re-spin doors read different memento files) stays with Mr. Radio.** Rick said yes: it's lupin tooling, not mobile work.
+- **Test uploads are deleted after the check.** Rick's test JPEG was removed from `lupin/io` on his yes, following his ruling earlier that day that nothing temporary should accumulate in io.
+
+### ⏳ Owed — 2026-09-26
+
+- [ ] **Rick: close row `61ecfb22`** (doc viewer). It's parked, so only his login can close it. Evidence: `file_picker` built, installed and uploaded on his phone with no console errors.
+- [ ] **Walk-through items 11-14**: the reply tally through the notification shade, backgrounding and navigation, then landscape. Item 10 (a real broadcast) passed on 09-26.
+- [ ] **New task creation** (M4 is a disabled stub). Needs Rick's go before building.
+
 ## 🆕 Open from 2026-09-24 (Task List M1/M3/M4, doc-viewer parity with the web)
 
 ### Decisions Log — 2026-09-24 (session `ecb8e6e3`, Tiffany, skeleton crew)
@@ -34,9 +48,9 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 
 ### ⏳ Owed — 2026-09-24
 
-- [ ] 🔴 **Rick's laptop APK build**, the first real test of `file_picker` 11.0.3 (this machine has no Android SDK). Then check on the device: Folder, Roots, an upload into io, and a second upload of the same name (clash sheet). Closes row `61ecfb22`.
+- [x] ✅ **2026-09-26: passed on Rick's phone.** **Rick's laptop APK build**, the first real test of `file_picker` 11.0.3 (this machine has no Android SDK). Then check on the device: Folder, Roots, an upload into io, and a second upload of the same name (clash sheet). Closes row `61ecfb22`.
 - [ ] **Row `651e3956` (P1)**: investigate reviving the Android SDK on this machine. Rick is picking it up 09-25.
-- [ ] **Holding-area rows only Rick can close**: `323d0f9c` (M1/M3/M4, merged), `f8f893ba` (duplicate of `61ecfb22`, drop it), `d5bbd786` (TaskRow guard, approved but not admitted).
+- [ ] **Holding-area rows only Rick can close**: `323d0f9c` (M1/M3/M4, merged), `f8f893ba` (duplicate of `61ecfb22`, drop it), ~~`d5bbd786`~~ ✅ admitted, built and closed 09-26 (`92a3fc0`).
 - [ ] **TODO.md is 613 lines**, far past the ~200-line horizon signal. Run `/plan-todo archive` next session; many 09-22 items are done (B1, N1 via mention chips, R1/N2, M1/M3/M4).
 
 ## 🆕 Open from 2026-09-23 (pane parity closed, broadcast ack recovery merged)
