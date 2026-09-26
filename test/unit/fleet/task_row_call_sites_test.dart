@@ -28,11 +28,43 @@ final _sharedTaskRowCall = RegExp(r"(?<![A-Za-z0-9_])TaskRow\s*\(");
 final _optOut = RegExp(r"//\s*taskrow-omit:\s*(\w+)[ \t]*([^\n]*)");
 
 /// The parameter names of `TaskRow`'s constructor, minus `key`.
+///
+/// Every form counts, not just `this.x`: `super.x` and a plain `String? x` that an
+/// initializer consumes are arguments a caller can drop just as silently (María).
 Set<String> constructorParams(String taskRowSource) {
   final ctor = RegExp(r"const\s+TaskRow\s*\(\s*\{([\s\S]*?)\}\s*\)").firstMatch(taskRowSource);
   if (ctor == null) return <String>{};
-  return RegExp(r"this\.(\w+)").allMatches(ctor.group(1)!).map((m) => m.group(1)!).toSet();
+  return _topLevelSegments(ctor.group(1)!.replaceAll(RegExp(r"//[^\n]*"), ""))
+      .map((s) => s.split("=").first.trim())
+      .where((s) => s.isNotEmpty)
+      .map((s) => RegExp(r"(\w+)$").firstMatch(s)?.group(1))
+      .whereType<String>()
+      .where((name) => name != "key")
+      .toSet();
 }
+
+/// [code] split on commas that are not inside brackets.
+List<String> _topLevelSegments(String code) {
+  final segments = <String>[];
+  var depth = 0;
+  var start = 0;
+  for (var i = 0; i < code.length; i++) {
+    final c = code[i];
+    if (c == "(" || c == "[" || c == "{" || c == "<") depth++;
+    if (c == ")" || c == "]" || c == "}" || c == ">") depth--;
+    if (c == "," && depth == 0) {
+      segments.add(code.substring(start, i));
+      start = i + 1;
+    }
+  }
+  segments.add(code.substring(start));
+  return segments;
+}
+
+/// True when [linePrefix] (the text before a match on its line) opens a `//` comment.
+/// String literals are removed first, so `"http://x"` before a real call does not hide it.
+bool _inLineComment(String linePrefix) =>
+    linePrefix.replaceAll(RegExp(r'"[^"]*"' "|" r"'[^']*'"), "").contains("//");
 
 /// One `TaskRow(` call: the arguments it passes and the opt-outs that cover it.
 class CallSite {
@@ -48,7 +80,7 @@ List<CallSite> callSites(String source, String path) {
   final sites = <CallSite>[];
   for (final m in _sharedTaskRowCall.allMatches(source)) {
     final lineStart = source.lastIndexOf("\n", m.start) + 1;
-    if (source.substring(lineStart, m.start).contains("//")) continue;
+    if (_inLineComment(source.substring(lineStart, m.start))) continue;
 
     final args = _argumentText(source, m.end);
     final line = "\n".allMatches(source.substring(0, m.start)).length + 1;
@@ -136,6 +168,17 @@ void main() {
     test("reads the constructor's parameters, and not key", () {
       const src = "const TaskRow( {\n  super.key,\n  required this.model,\n  this.verbs = const [],\n} );";
       expect(constructorParams(src), {"model", "verbs"});
+    });
+
+    test("reads super.x and plain initializer parameters too", () {
+      const src = "const TaskRow( {\n  super.key,\n  super.semanticLabel,\n  String? tint,\n"
+          "  required this.model,\n} ) : _tint = tint;";
+      expect(constructorParams(src), {"semanticLabel", "tint", "model"});
+    });
+
+    test("a // inside a string before the call does not hide it", () {
+      const src = 'final u = "http://x"; final r = TaskRow( model: m );';
+      expect(callSites(src, "f.dart"), hasLength(1));
     });
 
     test("an omitted argument with no opt-out is a complaint", () {
