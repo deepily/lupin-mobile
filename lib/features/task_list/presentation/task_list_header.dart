@@ -175,6 +175,11 @@ class _TaskListHeaderState extends State<TaskListHeader> {
             ),
             const SizedBox( height: 4 ),
             // Read-only: no verbs. Acting on a row belongs to the pane that owns it.
+            // taskrow-omit: verbs read-only lookup, acting belongs to the owning pane
+            // taskrow-omit: onVerb no verbs are offered, so nothing can fire
+            // taskrow-omit: onFieldChanged read-only lookup, no field edits
+            // taskrow-omit: ownerOptions no field edits, so no reassign targets
+            // taskrow-omit: unsentLabel nothing is written from here, so nothing is unsent
             TaskRow( model: row ),
           ],
         ),
