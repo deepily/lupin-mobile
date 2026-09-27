@@ -47,6 +47,7 @@ import 'package:lupin_mobile/features/fleet/data/task_row_model.dart';
 import 'package:lupin_mobile/features/fleet/data/task_write_repository.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
 import 'package:lupin_mobile/features/holding_area/data/holding_area_repository.dart';
 import 'package:lupin_mobile/features/holding_area/domain/holding_area_bloc.dart';
@@ -179,6 +180,14 @@ class _FakeFleetRepo implements FleetRepository {
   @override
   Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async =>
       { "cap" : 9, "maximum" : 20 };
+
+  // Added by slice 2 (Maya): `FleetRepository` gained `fetchWatchable`, and a double
+  // that `implements` the concrete class must implement every member. It answers `none`
+  // so this file's request COUNTS are unchanged — the counter above only counts
+  // `fetchState`, which is what the visibility contract is about.
+  @override
+  Future<FleetWatchableRoster> fetchWatchable( { CancelToken? cancelToken } ) async =>
+      FleetWatchableRoster.none;
 
   @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async =>

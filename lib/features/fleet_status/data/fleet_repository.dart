@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import 'fleet_models.dart';
+import 'fleet_watchable_models.dart';
 
 /// Fleet Status — the read of `/api/arbiter/fleet-state` and the ONE write this
 /// pane owns, `PUT /api/arbiter/fleet-size-cap`.
@@ -18,6 +20,21 @@ import 'fleet_models.dart';
 class FleetRepository {
   static const String fleetStateEndpoint   = "/api/arbiter/fleet-state";
   static const String fleetSizeCapEndpoint = "/api/arbiter/fleet-size-cap";
+
+  /// The watchable-roster projection — §3's admin-gated read.
+  ///
+  /// 🔴 THIS PATH IS NOT FINAL, AND IT IS A CONSTANT SO THAT CHANGING IT IS ONE EDIT.
+  /// §3's Open sub-question 6 is open on the REST naming: "transcript" already means
+  /// speech-to-text on two other surfaces in this system (`/api/v2/transcribe`,
+  /// `/upload-and-transcribe-{mp3,wav}`, and `transcript` as the name of an STT NDJSON
+  /// line), so the path may move. It is María's to carry to Rick, not this client's to
+  /// choose.
+  ///
+  /// TODO(OSQ-6): confirm against the server once phase 1 lands and the capture is taken.
+  /// A wrong path is not a crash here — [fetchWatchable] reads any failure as "nothing is
+  /// watchable" and every button hides, which is the safe direction but also a silent
+  /// one. The captured-fixture arm of C5.9 is what will actually pin it.
+  static const String watchableRosterEndpoint = "/api/arbiter/fleet-watchable";
 
   final Dio _dio;
 
@@ -58,6 +75,55 @@ class FleetRepository {
       // that the arbiter is down when it is not. Let it propagate.
       if ( e.type == DioExceptionType.cancel ) rethrow;
       throw FleetApiException( "Fleet state unavailable: ${ e.message ?? e.type.name }" );
+    }
+  }
+
+  /// Read the watchable roster — which seats THIS caller may open a console on.
+  ///
+  /// Requires:
+  ///     - nothing. An older server, a non-admin caller and a transport failure are all
+  ///       ordinary answers here, not error conditions
+  ///
+  /// Ensures:
+  ///     - 🔴 NEVER THROWS, except to rethrow a cancellation. Every other outcome is
+  ///       [FleetWatchableRoster.none] — `unavailable: true`, no rows, no button on any
+  ///       row. §5 is explicit: "a missing field, a missing row, a 403 or a failed
+  ///       projection call all read as **not watchable**, so the button hides rather than
+  ///       offering a watch the server would refuse". This method is where that promise
+  ///       is kept, which is why it does not follow [fetchState]'s raise-on-non-2xx shape
+  ///     - a 200 carrying `{status: "unreachable"}` is parsed, not raised — the
+  ///       projection inherits fleet-state's deliberate envelope, and A3.7 requires an
+  ///       unreachable arbiter be distinguishable from an empty fleet
+  ///     - a CANCELLED request rethrows the DioException unflattened, so the caller can
+  ///       tell "the pane went away" from "there is nothing to watch"
+  ///
+  /// ⚠️ A SILENT FAILURE IS THE DESIGN HERE, AND THAT IS WORTH SAYING OUT LOUD BECAUSE
+  /// IT IS THE SHAPE THIS PLAN HAS BEEN BITTEN BY THREE TIMES. The difference is that
+  /// here the silence costs a hidden button rather than a wrong answer: the alternative —
+  /// raising, and letting the pane paint an error — would break the fleet table for every
+  /// non-admin operator over a feature they cannot use anyway. The `debugPrint` is so the
+  /// next person wondering where their button went has a line to find.
+  Future<FleetWatchableRoster> fetchWatchable( { CancelToken? cancelToken } ) async {
+    try {
+      final res = await _dio.get<Object?>(
+        watchableRosterEndpoint,
+        cancelToken : cancelToken,
+        options     : Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      if ( status < 200 || status >= 300 ) {
+        debugPrint(
+          '[FleetWatchable] roster unavailable: HTTP $status '
+          '(403 = not an admin, 404 = server predates the projection)',
+        );
+        return FleetWatchableRoster.none;
+      }
+      return FleetWatchableRoster.fromJson( res.data );
+    } on DioException catch ( e ) {
+      // A cancellation is the pane going away, not an answer about watchability.
+      if ( e.type == DioExceptionType.cancel ) rethrow;
+      debugPrint( '[FleetWatchable] roster unavailable: ${ e.message ?? e.type.name }' );
+      return FleetWatchableRoster.none;
     }
   }
 

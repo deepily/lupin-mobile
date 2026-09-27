@@ -19,6 +19,21 @@ class FleetStatusPane extends StatefulWidget {
   final Future<void> Function( int cap )? onSetCap;
   final Future<void> Function()?  onRefresh;
 
+  /// The full session ids this caller may open a console on — §3's roster projection,
+  /// joined to the fleet rows by `session_id`.
+  ///
+  /// ⚠️ THE JOIN IS EXACT STRING EQUALITY AND THAT IS DELIBERATELY UNFORGIVING. §3 pins
+  /// `cc_session_id` to the seat's full `stable_session_id`, and three id widths circulate
+  /// in this fleet. A width mismatch therefore hides the button rather than offering a
+  /// watch keyed on a prefix the stream would not recognise. Phase 1's A3.6 is what
+  /// actually proves the two surfaces agree; this client cannot see the difference between
+  /// "not watchable" and "the ids disagree", which is safe for the operator and useless
+  /// for diagnosis — hence the server-side check.
+  final Set<String> watchableSessionIds;
+
+  /// Open the Live Console for one seat. Null disables the affordance everywhere.
+  final void Function( FleetSession session )? onWatch;
+
   const FleetStatusPane( {
     super.key,
     required this.composite,
@@ -26,6 +41,8 @@ class FleetStatusPane extends StatefulWidget {
     this.capMaximum,
     this.onSetCap,
     this.onRefresh,
+    this.watchableSessionIds = const <String>{},
+    this.onWatch,
   } );
 
   @override
@@ -104,9 +121,28 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
           session       : session,
           context       : composite.contextFor( session ),
           onLivenessTap : () => _showLiveness( context, session ),
+          onWatchTap    : _watchTapFor( session ),
         );
       },
     );
+  }
+
+  /// The row's watch callback, or null when this seat is not watchable.
+  ///
+  /// 🔴 EVERY "NO" COLLAPSES TO NULL HERE, IN ONE PLACE. No handler wired by the caller,
+  /// a row with no session id, or a session id absent from the roster — all three hide the
+  /// button. That covers §5's whole list without the widget or the row card each keeping
+  /// its own opinion: an unreachable arbiter produces no roster rows, a 403 produces an
+  /// empty set, and an older server that has never heard of the projection produces the
+  /// same empty set. No error, no dead button (C-3).
+  VoidCallback? _watchTapFor( FleetSession session ) {
+    final onWatch = widget.onWatch;
+    if ( onWatch == null ) return null;
+
+    final id = session.sessionId;
+    if ( id == null || !widget.watchableSessionIds.contains( id ) ) return null;
+
+    return () => onWatch( session );
   }
 
   Widget _toolbar( BuildContext context, FleetComposite composite ) {

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
 import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
 
@@ -28,6 +29,14 @@ class _CountingRepo implements FleetRepository {
   @override
   Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async =>
       { "cap": 9, "maximum": 20 };
+
+  /// The roster this caller may watch. `none` by default, so the existing tests see no
+  /// watch buttons and their expectations are unchanged.
+  FleetWatchableRoster watchableRoster = FleetWatchableRoster.none;
+
+  @override
+  Future<FleetWatchableRoster> fetchWatchable( { CancelToken? cancelToken } ) async =>
+      watchableRoster;
 
   /// What the DIAL actually posted, and what the screen got back. The answer
   /// is cap+1 and never an echo: an echoing fake cannot fail the assertion that
