@@ -6,9 +6,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/fleet/domain/pane_polling_mixin.dart';
+import 'package:lupin_mobile/features/fleet/domain/pane_visibility_mixin.dart';
 
 /// A minimal pane bloc, standing in for the five real ones.
-class _FakePaneBloc extends Bloc<int, int> with PanePollingMixin<int, int> {
+class _FakePaneBloc extends Bloc<int, int>
+    with PaneVisibilityMixin<int, int>, PanePollingMixin<int, int> {
   final StreamController<AppLifecycleState> lifecycle;
 
   int  polls = 0;
@@ -212,6 +214,101 @@ void main() {
 
     expect(bloc.isPolling, isFalse);
     expect(bloc.tokens.single.isCancelled, isTrue);
+    bloc.hold!.complete();
+  });
+
+  group("the PaneVisibilityMixin extraction changes nothing here", _extractionTests);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// THE EXTRACTION — C5.13, the three behaviours the split touches
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+/// 🔴 THE SPLIT PUT `isPolling` AND "SHOULD THIS PANE BE WORKING" IN TWO DIFFERENT
+/// MIXINS, AND THAT IS EXACTLY THE SEAM WHERE A REFACTOR COLLAPSES THEM. C-6 i names the
+/// invariant: `isPolling` stays `_timer != null` and must NOT be redefined as the
+/// visibility flag. Four panes and their tests read it, and every one of them would keep
+/// passing if it silently became `isPaneActive` — the two agree in every state a pane
+/// normally reaches.
+///
+/// ⚠️ THEY DISAGREE IN EXACTLY ONE PLACE, WHICH IS WHY THIS GROUP CAN FAIL AT ALL.
+/// `close()` stops the timer and cancels the request; it does NOT un-see the pane. So a
+/// closed bloc that was on screen has `isPolling == false` and `isPaneActive == true`, and
+/// a build that conflated them cannot produce that pair.
+void _extractionTests() {
+  late StreamController<AppLifecycleState> lifecycle;
+
+  setUp(() => lifecycle = StreamController<AppLifecycleState>.broadcast());
+  tearDown(() => lifecycle.close());
+
+  test("isPolling is the TIMER, not the visibility flag", () async {
+    final bloc = _FakePaneBloc(lifecycle)..startPolling();
+    bloc.onPaneVisible();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(bloc.isPolling, isTrue);
+    expect(bloc.isPaneActive, isTrue, reason: "on screen and foregrounded");
+
+    await bloc.close();
+
+    // The discriminator. `close()` is the one transition that stops the timer without
+    // touching `_paneVisible`, so these two now disagree — and they can only disagree if
+    // they are two different things.
+    expect(bloc.isPolling, isFalse, reason: "the timer is cancelled by close()");
+    expect(bloc.isPaneActive, isTrue,
+        reason: "close() does not un-see the pane. If this reads false, `isPolling` and "
+                "`isPaneActive` have been collapsed into one flag and C-6 i is broken");
+  });
+
+  // The existing idempotence test asserts the immediate refresh (`polls == 1`), which a
+  // SECOND timer would not change — both timers are built with the same period and the
+  // first tick is one interval away. Counting ticks is what catches it.
+  test("a second startPolling does not start a second timer", () {
+    fakeAsync((async) {
+      final bloc = _FakePaneBloc(lifecycle)
+        ..startPolling()
+        ..startPolling();
+      bloc.onPaneVisible();
+      async.flushMicrotasks();
+      expect(bloc.polls, 1, reason: "appearing refreshes once");
+
+      async.elapse(PanePollingMixin.wifiInterval + const Duration(seconds: 1));
+
+      expect(bloc.polls, 2,
+          reason: "one interval, one tick. Two timers would have fired twice — and the "
+                  "one-at-a-time guard does not hide it, because these polls complete "
+                  "immediately");
+
+      bloc.close();
+      async.flushTimers();
+    });
+  });
+
+  // close() has to reach BOTH halves: `PanePollingMixin.close()` stops the timer and then
+  // `super.close()` runs `PaneVisibilityMixin.close()`, which cancels the in-flight token
+  // AND the lifecycle subscription. The third of those is the one no existing test sees.
+  test("close cancels the timer, the in-flight token and the lifecycle subscription",
+      () async {
+    final bloc = _FakePaneBloc(lifecycle)..hold = Completer<void>();
+    bloc.startPolling();
+    bloc.onPaneVisible();
+    await Future<void>.delayed(Duration.zero);
+    expect(bloc.tokens.single.isCancelled, isFalse);
+
+    await bloc.close();
+
+    expect(bloc.isPolling, isFalse, reason: "the timer half, PanePollingMixin.close()");
+    expect(bloc.tokens.single.isCancelled, isTrue,
+        reason: "the request half, reached through super.close()");
+
+    // A lifecycle event after close must reach nothing. An uncancelled subscription would
+    // call `_reconcile` on a closed bloc — and on the `resumed` arm that is a fresh poll.
+    lifecycle.add(AppLifecycleState.paused);
+    lifecycle.add(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(bloc.polls, 1, reason: "the subscription was cancelled with the rest");
+    expect(bloc.isPolling, isFalse, reason: "a closed bloc does not restart its timer");
     bloc.hold!.complete();
   });
 }
