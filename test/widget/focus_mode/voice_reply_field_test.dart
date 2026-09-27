@@ -1,14 +1,28 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:record/record.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/focus_mode/presentation/voice_reply_field.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
+import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
+import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 
-class _MockAsr extends Mock implements AsrService {}
+class _MockAsr      extends Mock implements AsrService {}
+class _MockRecorder extends Mock implements AudioRecorder {}
+class _MockDio      extends Mock implements Dio {}
+class _MockPlayer   extends Mock implements StreamingTtsPlayer {}
+class _MockFallback extends Mock implements NotificationAudioService {}
+class _MockWs       extends Mock implements WebSocketService {}
 
 void main() {
   group( 'VoiceReplyField (S4)', () {
@@ -208,6 +222,111 @@ void main() {
           greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: 'stop button' );
       expect( tester.getSize( byKeyStr( TestKeys.voiceReplyCancel ) ).height,
           greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: 'discard button' );
+    } );
+
+    // Review LOW (2026-09-27): the edit button opens the review box with
+    // nothing ever recorded, so discarding it must not reach the recorder.
+    testWidgets( 'discarding an edit-opened review box does NOT cancel a recorder that never ran', ( tester ) async {
+      await tester.pumpWidget( host() );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyEdit ) );    // → review, no recording
+      await tester.pump();
+      expect( byKeyStr( TestKeys.voiceReplyTranscript ), findsOneWidget );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyCancel ) );
+      await tester.pump();
+
+      verifyNever( () => asr.cancelRecording() );
+      verifyNever( () => asr.startRecording() );
+      expect( byKeyStr( TestKeys.voiceReplyMic ), findsOneWidget, reason: 'back to idle' );
+      expect( submitted, isEmpty );
+    } );
+  } );
+
+  /// Review FAIL (2026-09-27), row a1c12c6e: the hold is only as good as its
+  /// release. Navigating away mid-recording used to abandon the capture, and
+  /// because `AsrService` is a singleton the hold outlived the widget — TTS
+  /// went silent for the rest of the app session, with no indicator and no
+  /// recovery. Wired end to end here (real service, real orchestrator) so the
+  /// test fails if EITHER half of the release chain breaks.
+  group( 'VoiceReplyField disposal releases the capture hold', () {
+    late _MockRecorder    recorder;
+    late AsrService       asr;
+    late TtsOrchestrator  orch;
+    late StreamController<TtsCompleteEvent> completeCtrl;
+    late StreamController<TtsErrorEvent>    errorCtrl;
+
+    setUpAll( () {
+      registerFallbackValue( const RecordConfig() );
+      registerFallbackValue( AudioEncoder.wav );
+    } );
+
+    setUp( () async {
+      SharedPreferences.setMockInitialValues( {} );
+      final prefs    = NotificationPreferences( await SharedPreferences.getInstance() );
+      final player   = _MockPlayer();
+      final fallback = _MockFallback();
+      final ws       = _MockWs();
+      completeCtrl   = StreamController<TtsCompleteEvent>.broadcast();
+      errorCtrl      = StreamController<TtsErrorEvent>   .broadcast();
+
+      when( () => player.completeStream ).thenAnswer( ( _ ) => completeCtrl.stream );
+      when( () => player.errorStream    ).thenAnswer( ( _ ) => errorCtrl   .stream );
+      when( () => player.isPlaying      ).thenReturn( false );
+      when( () => player.stop()         ).thenAnswer( ( _ ) async {} );
+      when( () => fallback.stopFallbackSpeech() ).thenAnswer( ( _ ) async {} );
+      when( () => ws.sessionId ).thenReturn( 'wise penguin' );
+
+      orch = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws );
+
+      recorder      = _MockRecorder();
+      final tempDir = await Directory.systemTemp.createTemp( 'voice-reply-dispose-' );
+      addTearDown( () async { if ( tempDir.existsSync() ) await tempDir.delete( recursive: true ); } );
+      when( () => recorder.hasPermission() ).thenAnswer( ( _ ) async => true );
+      when( () => recorder.isEncoderSupported( any() ) ).thenAnswer( ( _ ) async => true );
+      when( () => recorder.start( any(), path: any( named: 'path' ) ) ).thenAnswer( ( _ ) async {} );
+      when( () => recorder.cancel() ).thenAnswer( ( _ ) async {} );
+
+      asr = AsrService(
+        dio                : _MockDio(),
+        recorder           : recorder,
+        tempDirProvider    : () async => tempDir,
+        // The production seam, `service_locator.dart` `_dispatchCaptureHold`.
+        onCapturingChanged : ( capturing ) { orch.setCaptureHold( capturing ); },
+      );
+    } );
+
+    tearDown( () async {
+      await orch.dispose();
+      await completeCtrl.close();
+      await errorCtrl   .close();
+    } );
+
+    testWidgets( 'navigating away mid-recording releases the recorder AND the TTS hold', ( tester ) async {
+      await tester.pumpWidget( MaterialApp(
+        home: Scaffold( body: VoiceReplyField(
+          asr                  : asr,
+          onSubmit             : ( _ ) {},
+          requestMicPermission : () async => true,
+        ) ),
+      ) );
+
+      await tester.tap( find.byKey( const Key( TestKeys.voiceReplyMic ) ) );
+      await tester.pump();
+      expect( asr.isCapturing,    isTrue );
+      expect( orch.isCaptureHeld, isTrue, reason: 'the mic is open, so speech is held' );
+
+      // Navigating away: the composer's element is gone and dispose() runs.
+      await tester.pumpWidget( const MaterialApp( home: Scaffold( body: SizedBox() ) ) );
+      await tester.pump();
+
+      expect( find.byType( VoiceReplyField ), findsNothing );
+      expect( asr.isCapturing, isFalse,
+          reason: 'THE BUG: an ABANDONED capture left _activePath set on the singleton, '
+                  'so every later startRecording() threw' );
+      expect( orch.isCaptureHeld, isFalse,
+          reason: 'THE BUG: TTS stayed silent for the rest of the app session, with no indicator' );
+      verify( () => recorder.cancel() ).called( 1 );
     } );
   } );
 }

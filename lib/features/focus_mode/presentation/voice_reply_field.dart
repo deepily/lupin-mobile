@@ -122,7 +122,17 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
 
   void _onCancelPressed() {
     _elapsedTimer?.cancel();
-    _session.cancel();                // drops any in-flight transcribe result
+    // Row a1c12c6e (review LOW): the review box also opens from the edit
+    // button, with nothing ever recorded — `cancel()` would then call
+    // `cancelRecording()` on a recorder that is not running. `recording` is
+    // the only phase that still owns the recorder; everywhere else
+    // `invalidate()` bumps the SAME epoch, so an in-flight transcribe result
+    // is dropped just as before, and the recorder is left alone.
+    if ( _phase == _VoiceReplyPhase.recording ) {
+      _session.cancel();              // drops any in-flight transcribe result
+    } else {
+      _session.invalidate();
+    }
     setState( () {
       _phase = _VoiceReplyPhase.idle;
       _controller.clear();
@@ -142,6 +152,16 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   @override
   void dispose() {
     _elapsedTimer?.cancel();
+    // Row a1c12c6e (review FAIL): navigating away mid-recording used to
+    // ABANDON the capture rather than cancel it. `AsrService` is a singleton,
+    // so `_activePath` outlived this widget, TTS's capture hold stayed on for
+    // the rest of the app session with no indicator, and every later
+    // `startRecording()` threw 'A recording is already in progress'.
+    //
+    // Guarded on `recording` because that is the only phase where this widget
+    // still owns the recorder — the guard cannot cancel a Quick Ask capture
+    // running on the same shared service.
+    if ( _phase == _VoiceReplyPhase.recording ) _session.cancel();
     _controller.dispose();
     super.dispose();
   }

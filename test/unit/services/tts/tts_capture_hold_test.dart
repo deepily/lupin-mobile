@@ -141,6 +141,51 @@ void main() {
     expect( spoken, [ "held twice" ] );
   } );
 
+  /// Review MED (2026-09-27): the DI seam cannot await `setCaptureHold`, so
+  /// two transitions can overlap. Unordered, the release re-dispatches the
+  /// interrupted utterance and the hold's still-pending stop then cuts it.
+  test( "a release that overtakes a still-stopping hold does NOT cut the re-dispatched utterance", () async {
+    final o = await newOrch();
+
+    // Park the stop that taking the hold performs, and log when it resolves
+    // relative to every speak, so the ORDER is what the test asserts.
+    final events   = <String>[];
+    final stopGate = Completer<void>();
+    when( () => player.speak(
+      text      : any( named: "text"      ),
+      sessionId : any( named: "sessionId" ),
+      voiceId   : any( named: "voiceId"   ),
+    ) ).thenAnswer( ( inv ) async {
+      final text = inv.namedArguments[ #text ] as String;
+      spoken.add( text );
+      events.add( "speak:$text" );
+    } );
+    when( () => player.stop() ).thenAnswer( ( _ ) async {
+      await stopGate.future;
+      events.add( "stop" );
+    } );
+
+    o.enqueueAlways( priority: "high", message: "long answer" );
+    await pump();
+    expect( spoken, [ "long answer" ] );
+
+    final held     = o.setCaptureHold( true );    // parked inside player.stop()
+    final released = o.setCaptureHold( false );   // the mic closes first
+    await pump();
+    expect( spoken, [ "long answer" ],
+        reason: "the release must wait for the hold it undoes" );
+
+    stopGate.complete();
+    await held;
+    await released;
+    await pump();
+
+    expect( spoken, [ "long answer", "long answer" ], reason: "replayed from the start" );
+    expect( events, [ "speak:long answer", "stop", "speak:long answer" ],
+        reason: "THE BUG: the stop used to resolve AFTER the replay and cut it" );
+    verify( () => player.stop() ).called( 1 );
+  } );
+
   group( "AsrService reports each capture start and end", () {
     late _MockRecorder recorder;
     late List<bool>    events;

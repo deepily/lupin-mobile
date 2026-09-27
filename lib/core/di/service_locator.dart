@@ -555,11 +555,7 @@ class ServiceLocator {
         // Debug "Keep voice recordings" (row 9b1f7701), read per discard.
         keepRecordings : () => _getIt<NotificationPreferences>().keepVoiceRecordings,
         // Row a1c12c6e: no spoken notification while the mic records.
-        onCapturingChanged : ( capturing ) {
-          if ( _getIt.isRegistered<TtsOrchestrator>() ) {
-            _getIt<TtsOrchestrator>().setCaptureHold( capturing );
-          }
-        },
+        onCapturingChanged : _dispatchCaptureHold,
       ),
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(
@@ -577,6 +573,31 @@ class ServiceLocator {
     // Tier 4 BLoC — lazy singleton shared across all agentic submission forms.
     _getIt.registerLazySingleton<AgenticSubmissionBloc>(
       () => AgenticSubmissionBloc(_getIt<AgenticRepository>()),
+    );
+  }
+
+  /// Row a1c12c6e (review MED): hand a capture transition to the TTS
+  /// orchestrator and HANDLE its future.
+  ///
+  /// `AsrService.onCapturingChanged` is typed `void Function( bool )`, so the
+  /// future `setCaptureHold` returns used to be dropped on the floor: a throw
+  /// from the player or the `flutter_tts` fallback became an unhandled async
+  /// error with nowhere to surface. Ordering between overlapping transitions
+  /// is the orchestrator's own job (it serializes them); this seam owns the
+  /// error handling.
+  ///
+  /// Requires:
+  ///   - nothing; a missing [TtsOrchestrator] registration is a no-op
+  ///
+  /// Ensures:
+  ///   - the returned future is always observed
+  ///   - a failed transition is logged, never rethrown into the recorder
+  static void _dispatchCaptureHold( bool capturing ) {
+    if ( !_getIt.isRegistered<TtsOrchestrator>() ) return;
+    _getIt<TtsOrchestrator>().setCaptureHold( capturing ).catchError(
+      ( Object error, StackTrace stack ) {
+        debugPrint( '[tts] capture hold -> $capturing failed: $error' );
+      },
     );
   }
 

@@ -65,6 +65,9 @@ class TtsOrchestrator {
   /// releasing must never un-pause a hold the user set by hand.
   bool _captureHeld = false;
 
+  /// Tail of the serialized hold-transition chain (see [setCaptureHold]).
+  Future<void> _holdChain = Future<void>.value();
+
   /// Either hold stops anything new from starting.
   bool get _held => _paused || _captureHeld;
 
@@ -242,9 +245,30 @@ class TtsOrchestrator {
   /// (the same non-destructive move an urgent preempt makes). Releasing it
   /// drains the queue in arrival order, unless the user's own [pause] is
   /// still on. Nothing is dropped either way.
-  Future<void> setCaptureHold( bool capturing ) async {
-    if ( capturing == _captureHeld ) return;
+  /// Review MED (2026-09-27): transitions are SERIALIZED. `AsrService`
+  /// reports capture start and end synchronously and the production callback
+  /// cannot await, so a release can arrive while the hold it undoes is still
+  /// awaiting `_player.stop()` / `stopFallbackSpeech()`. Unordered, the
+  /// release's `_tryStartNext()` dispatches the requeued utterance and the
+  /// late stop then cuts the speech that has only just started. Chaining each
+  /// transition onto the previous one closes that window for EVERY caller,
+  /// not only the one that remembers to await.
+  Future<void> setCaptureHold( bool capturing ) {
+    if ( capturing == _captureHeld ) return _holdChain;
+    // The FLAG moves synchronously, exactly as before: `enqueueAlways` and
+    // `enqueueIfSpeakable` read it on the same turn as the mic transition.
+    // Only the stop/drain side-effects queue up behind their predecessor.
     _captureHeld = capturing;
+    final next   = _holdChain.then( ( _ ) => _applyCaptureHold( capturing ) );
+    // The chain itself must never carry an error forward — one failed
+    // transition would wedge every later hold. The caller still sees it on
+    // `next`, and the production call site logs it.
+    _holdChain   = next.catchError( ( Object _ ) {} );
+    return next;
+  }
+
+  /// Serialized tail of [setCaptureHold]; never call it directly.
+  Future<void> _applyCaptureHold( bool capturing ) async {
     if ( !capturing ) {
       await _tryStartNext();
       return;
