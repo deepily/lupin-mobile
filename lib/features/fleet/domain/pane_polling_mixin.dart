@@ -2,43 +2,42 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../services/lifecycle/app_lifecycle_service.dart';
 import '../../../services/network/network_connectivity_service.dart';
+import 'pane_visibility_mixin.dart';
 
 /// Lifecycle-aware, foreground-pane-only polling. ONE copy, mixed into each pane's
 /// bloc — not five copies of a timer.
 ///
-/// 🔴 "POLL ONLY THE FOREGROUND PANE" IS NOT A RULE UNTIL SOMETHING IMPLEMENTS IT, AND
-/// THIS APP'S ARCHITECTURE MAKES THE WRONG OUTCOME THE DEFAULT. `app.dart:248-278`
-/// registers seven `BlocProvider`s at the APP ROOT, each a `ServiceLocator` singleton,
-/// so a pane's bloc outlives its route. Five panes following that pattern means five
-/// timers running whichever destination is showing — and the obvious test,
-/// *"polling stops when backgrounded and refreshes once on resume"*, PASSES WITH ALL
-/// FIVE RUNNING. A test that passes without the feature is worse than no test.
+/// 🔴 THIS IS NOW THE TIMER HALF ONLY. The visibility machine — `_paneVisible`,
+/// `_appForeground`, `_started`, the lifecycle subscription, the single in-flight request
+/// slot and their teardown — lives in [PaneVisibilityMixin], because the Live Console
+/// needs all of it and needs no timer at all: a WebSocket pushes to it. What is left here
+/// is the `Timer.periodic`, the metered interval, and [pollOnce].
 ///
-/// ⇒ Two things are therefore required, and neither is optional:
-///   1. The pane blocs are **route-scoped**, not app-root singletons. That is a
-///      deliberate departure from this app's convention and Rick should see it as a
-///      decision rather than discover it as a surprise.
-///   2. The route tells the bloc when it is on screen, via [onPaneVisible] /
-///      [onPaneHidden]. The guarding test is: *with pane A on screen, pane B issues
-///      zero requests.*
+/// ⚠️ MIXIN ORDER IS LOAD-BEARING AND THE `on` CLAUSE IS WHAT ENFORCES IT:
 ///
-/// The host bloc implements [pollOnce] and calls [startPolling] once it has a route to
-/// be visible in.
-mixin PanePollingMixin<E, S> on Bloc<E, S> {
-  Timer?          _timer;
-  CancelToken?    _inFlight;
-  StreamSubscription<AppLifecycleState>? _lifecycleSub;
+/// ```dart
+/// class XBloc extends Bloc<E, S> with PaneVisibilityMixin<E, S>, PanePollingMixin<E, S>
+/// ```
+///
+/// This mixin declares `on PaneVisibilityMixin<E, S>`, so the wrong order does not
+/// compile — a rule that cannot fail is not a rule. It goes **last** so it is the
+/// most-derived: [close] stops the timer and then calls `super.close()`, which reaches
+/// the visibility teardown.
+///
+/// "Poll only the foreground pane" is not a rule until something implements it, and this
+/// app's architecture makes the wrong outcome the default — see [PaneVisibilityMixin]'s
+/// header for the two obligations that fall on the host, and why a test of this feature
+/// passes without it.
+///
+/// The host bloc implements [pollOnce] and calls [startPolling] once it has a route to be
+/// visible in.
+mixin PanePollingMixin<E, S> on PaneVisibilityMixin<E, S> {
+  Timer? _timer;
 
-  bool _paneVisible  = false;
-  bool _appForeground = true;
-  bool _started      = false;
-
-  /// One poll. The token is cancelled when the pane goes away mid-request — honour it
-  /// by handing it to the Dio call, or the cancellation buys nothing.
+  /// One poll. The token is cancelled when the pane goes away mid-request — honour it by
+  /// handing it to the Dio call, or the cancellation buys nothing.
   Future<void> pollOnce( CancelToken token );
 
   /// Wi-Fi, or any connection this phone does not pay by the megabyte for.
@@ -47,7 +46,7 @@ mixin PanePollingMixin<E, S> on Bloc<E, S> {
   /// Mobile data. Plan §6.5's number.
   static const Duration mobileInterval = Duration( seconds: 180 );
 
-  /// Test seam, and the same shape [lifecycleStream] uses for the same reason:
+  /// Test seam, and the same shape `lifecycleStream` uses for the same reason:
   /// `NetworkConnectivityService` is a hard singleton (`factory … => _instance`), so it
   /// cannot be faked. What the interval needs from it is one boolean, so that is what is
   /// injectable — not the service.
@@ -79,125 +78,56 @@ mixin PanePollingMixin<E, S> on Bloc<E, S> {
   /// the next reader to discover.
   Duration get pollInterval => isMeteredConnection ? mobileInterval : wifiInterval;
 
-  /// Test seam. Defaults to the app-wide lifecycle service, which is a hard singleton
-  /// (`AppLifecycleService._instance`) and therefore cannot be faked — so the stream is
-  /// injectable instead of the service.
-  @protected
-  Stream<AppLifecycleState> get lifecycleStream => AppLifecycleService().lifecycleStream;
-
-  /// True only when this pane is on screen AND the app is foregrounded. The poll
-  /// predicate, exposed so a test can assert the state rather than infer it from
+  /// The poll predicate, exposed so a test can assert the state rather than infer it from
   /// request counts.
+  ///
+  /// ⚠️ THIS IS THE TIMER, NOT THE VISIBILITY FLAGS. `isPolling` was `_timer != null`
+  /// before the extraction and stays `_timer != null` after it, so the four existing panes
+  /// and their tests see no change. [PaneVisibilityMixin.isPaneActive] is the other
+  /// question — *should* this pane be working — and the two are deliberately separate:
+  /// a pane can be active with no timer yet for exactly one synchronous moment.
   bool get isPolling => _timer != null;
 
   /// Begin observing. Idempotent — a rebuild must not start a second timer.
-  void startPolling() {
-    if ( _started ) return;
-    _started = true;
-    _lifecycleSub = lifecycleStream.listen( _onLifecycle );
-  }
-
-  /// The route says this pane is on screen.
-  void onPaneVisible() {
-    if ( _paneVisible ) return;
-    _paneVisible = true;
-    _reconcile( refreshNow: true );
-  }
-
-  /// The route says this pane is no longer on screen.
-  void onPaneHidden() {
-    if ( !_paneVisible ) return;
-    _paneVisible = false;
-    _reconcile();
-  }
-
-  /// 🔴 FIVE STATES, NOT ONE. `app_lifecycle_service.dart:103-116` already switches on
-  /// all five and the pre-cascade plan named only `paused`.
   ///
-  /// Flutter delivers `inactive` for transient interruptions — a notification-shade pull,
-  /// an incoming-call banner — and on Android `hidden` precedes `paused`. Stopping only
-  /// on `paused` stops TOO LATE; stopping on `inactive` to be safe THRASHES the timer
-  /// every time the shade is pulled. `detached` went unmentioned entirely.
-  ///
-  /// ⇒ `resumed` is the only foreground state. Everything else stops the timer, and
-  /// **every** non-`resumed` state earns a refresh on the way back.
-  ///
-  /// 🔴 THAT SENTENCE USED TO CLAIM THE OPPOSITE, AND THE CODE NEVER DID IT. It read:
-  /// *"`inactive` is treated as a stop WITHOUT a resume-refresh, so a shade pull costs one
-  /// paused timer rather than a fresh request on the way back."* The code cannot tell
-  /// `inactive` from `paused`, `hidden` or `detached` — all four set `_appForeground`
-  /// false, so any of them followed by `resumed` gives `wasForeground == false` and
-  /// therefore `refreshNow: true`. Either the optimisation was lost in a refactor or it
-  /// was never written. Found by María 🌸 2026-09-22, reading the code against the comment
-  /// while reviewing a plan that had reasoned from the comment and got the conclusion
-  /// wrong. **Corrected to describe what this code actually does.**
-  ///
-  /// ⚠️ AND THE BEHAVIOUR IS PROBABLY RIGHT, WHICH IS WHY ONLY THE COMMENT CHANGED.
-  /// María's recommendation, recorded here as a recommendation and not as settled design
-  /// (row `de509b51`, open for Rick): a shade pull that returns the operator to **stale
-  /// data** is worse than one extra request, because the moment they come back is exactly
-  /// the moment they are looking at the pane. On that reading the withdrawn optimisation
-  /// was never justified — nobody ever measured a cost for the refresh it removed — so the
-  /// refresh on return is **wanted**, not merely tolerated. If someone does measure a real
-  /// battery cost, implementing it is a behaviour change across the three panes that mix
-  /// this in, and needs its own ruling.
-  void _onLifecycle( AppLifecycleState state ) {
-    final wasForeground = _appForeground;
-    _appForeground = state == AppLifecycleState.resumed;
+  /// An alias for [PaneVisibilityMixin.startVisibility], kept because four panes and
+  /// their tests call it by this name, and because "start polling" is what it means here.
+  void startPolling() => startVisibility();
 
-    if ( !_appForeground ) {
-      _reconcile();
-      return;
-    }
-    // Returning to the foreground refreshes once — the data is as stale as the time
-    // spent away, and a user who just came back is looking at it.
-    _reconcile( refreshNow: !wasForeground );
-  }
-
-  void _reconcile( { bool refreshNow = false } ) {
-    final shouldPoll = _paneVisible && _appForeground;
-
-    if ( !shouldPoll ) {
-      _stopTimerAndRequest();
+  /// The timer half of the visibility reaction.
+  ///
+  /// By the time this runs with `active: false`, the in-flight request has already been
+  /// cancelled by the mixin — so all that is left is the timer, which is the thing that
+  /// would otherwise keep firing.
+  @override
+  void onActiveChanged( { required bool active, required bool refreshNow } ) {
+    if ( !active ) {
+      _timer?.cancel();
+      _timer = null;
       return;
     }
     _timer ??= Timer.periodic( pollInterval, ( _ ) => _fire() );
     if ( refreshNow ) _fire();
   }
 
+  /// One guarded poll. A tick that lands while a poll is still outstanding does nothing —
+  /// [PaneVisibilityMixin.claimRequest] is the guard, and it is the same guard whether
+  /// the wake-up was a tick or a transition.
   void _fire() {
-    // One request at a time. A poll landing on a slow predecessor would queue requests
-    // behind a connection that is already struggling.
-    if ( _inFlight != null && !_inFlight!.isCancelled ) return;
+    final token = claimRequest();
+    if ( token == null ) return;
 
-    final token = CancelToken();
-    _inFlight = token;
-    pollOnce( token ).whenComplete( () {
-      if ( identical( _inFlight, token ) ) _inFlight = null;
-    } ).ignore();
-  }
-
-  /// 🔴 CANCELLING A `Timer.periodic` DOES NOT CANCEL AN OUTSTANDING HTTP REQUEST.
-  /// The response still arrives, still parses, still wakes a backgrounded app — which is
-  /// exactly the wake-up the whole rule exists to prevent, and with a multi-hundred-KB
-  /// body behind it. The timer and the request are two separate things to stop.
-  void _stopTimerAndRequest() {
-    _timer?.cancel();
-    _timer = null;
-
-    final token = _inFlight;
-    _inFlight = null;
-    if ( token != null && !token.isCancelled ) {
-      token.cancel( 'pane hidden or app backgrounded' );
-    }
+    pollOnce( token ).whenComplete( () => releaseRequest( token ) ).ignore();
   }
 
   @override
   Future<void> close() {
-    _stopTimerAndRequest();
-    _lifecycleSub?.cancel();
-    _lifecycleSub = null;
-    _started = false;
+    _timer?.cancel();
+    _timer = null;
+    // 🔴 CANCELLING A `Timer.periodic` DOES NOT CANCEL AN OUTSTANDING HTTP REQUEST.
+    // The response still arrives, still parses, still wakes a backgrounded app. The
+    // request half is cancelled by `PaneVisibilityMixin.close()`, which `super.close()`
+    // reaches — which is why this mixin must be the most-derived one.
     return super.close();
   }
 }

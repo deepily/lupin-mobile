@@ -9,6 +9,7 @@ import '../../fleet/data/task_write_repository.dart';
 import '../../fleet_status/data/fleet_models.dart';
 import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
+import '../../fleet/domain/pane_visibility_mixin.dart';
 import '../../fleet/data/task_verbs.dart';
 import '../../fleet/domain/unsent_write.dart';
 import '../data/holding_area_models.dart';
@@ -247,7 +248,8 @@ class HoldingAreaState extends Equatable {
 /// records: a pane bloc registered at the app root outlives its route and its poll timer
 /// then runs against whichever destination is showing. See [PanePollingMixin].
 class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
-    with PanePollingMixin<HoldingAreaEvent, HoldingAreaState> {
+    with PaneVisibilityMixin<HoldingAreaEvent, HoldingAreaState>,
+        PanePollingMixin<HoldingAreaEvent, HoldingAreaState> {
   final HoldingAreaRepository _repo;
   final TaskWriteRepository   _writes;
   final NetworkConnectivityService _network;

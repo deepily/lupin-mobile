@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../fleet/domain/pane_polling_mixin.dart';
+import '../../fleet/domain/pane_visibility_mixin.dart';
 import '../data/fleet_models.dart';
 import '../data/fleet_repository.dart';
 
@@ -100,7 +101,8 @@ class FleetStatusState extends Equatable {
 /// (`FleetStatusStore.ts:14-17`) — so the dial cannot drift from the table by
 /// a poll interval.
 class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
-    with PanePollingMixin<FleetStatusEvent, FleetStatusState> {
+    with PaneVisibilityMixin<FleetStatusEvent, FleetStatusState>,
+        PanePollingMixin<FleetStatusEvent, FleetStatusState> {
   final FleetRepository _repo;
 
   FleetStatusBloc( this._repo ) : super( const FleetStatusState() ) {

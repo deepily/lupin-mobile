@@ -11,6 +11,7 @@ import '../../fleet/data/task_write_repository.dart';
 import '../../fleet_status/data/fleet_models.dart';
 import '../../fleet_status/data/fleet_repository.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
+import '../../fleet/domain/pane_visibility_mixin.dart';
 import '../../fleet/data/task_verbs.dart';
 import '../../fleet/domain/unsent_write.dart';
 import '../data/new_ticket.dart';
@@ -154,7 +155,8 @@ class TaskListState extends Equatable {
 /// timer would run whichever destination is showing. Foreground-pane-only polling has no
 /// mechanism unless the pane blocs are route-scoped — see [PanePollingMixin].
 class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
-    with PanePollingMixin<TaskListEvent, TaskListState> {
+    with PaneVisibilityMixin<TaskListEvent, TaskListState>,
+        PanePollingMixin<TaskListEvent, TaskListState> {
   final TaskListRepository _repo;
   final TaskWriteRepository _writes;
   final NetworkConnectivityService _network;
