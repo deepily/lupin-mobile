@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/network/network_connectivity_service.dart';
 import '../../fleet/domain/pane_polling_mixin.dart';
+import '../../fleet/domain/pane_visibility_mixin.dart';
 import '../data/finished_tasks_models.dart';
 import '../data/finished_tasks_repository.dart';
 import 'finished_tasks_event.dart';
@@ -26,7 +27,8 @@ import 'finished_tasks_state.dart';
 /// path deliberately does not emit `FinishedTasksLoading`, because that renders as a
 /// full-pane spinner over rows somebody is reading.
 class FinishedTasksBloc extends Bloc<FinishedTasksEvent, FinishedTasksState>
-    with PanePollingMixin<FinishedTasksEvent, FinishedTasksState> {
+    with PaneVisibilityMixin<FinishedTasksEvent, FinishedTasksState>,
+        PanePollingMixin<FinishedTasksEvent, FinishedTasksState> {
   final FinishedTasksRepository _repo;
   final DateTime Function()     _now;
   final NetworkConnectivityService _network;
