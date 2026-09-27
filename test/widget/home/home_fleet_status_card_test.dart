@@ -15,6 +15,7 @@ import 'package:get_it/get_it.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
 import 'package:lupin_mobile/features/home/home_screen.dart';
 
@@ -30,6 +31,10 @@ class _CountingRepo implements FleetRepository {
   @override
   Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async =>
       { "cap": 9, "maximum": 20 };
+
+  @override
+  Future<FleetWatchableRoster> fetchWatchable( { CancelToken? cancelToken } ) async =>
+      FleetWatchableRoster.none;
 
   @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async =>

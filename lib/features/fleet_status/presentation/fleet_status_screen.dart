@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../transcript/presentation/live_console_screen.dart';
+import '../data/fleet_models.dart';
 import '../domain/fleet_status_bloc.dart';
 import 'fleet_status_pane.dart';
 
@@ -92,6 +94,28 @@ class _FleetStatusViewState extends State<_FleetStatusView> {
     super.dispose();
   }
 
+  /// Push the Live Console for one seat.
+  ///
+  /// ⚠️ AN ORDINARY `MaterialPageRoute`, LIKE EVERY OTHER PUSH IN THIS APP, and the
+  /// console's bloc will be created INSIDE it in slice 3 — not at the app root. That is
+  /// the same route-scoping decision this screen's own docstring explains, and C5.11 is
+  /// the test that makes it mean something: pop the route, emit a frame for that seat, and
+  /// no bloc is alive to receive it. An app-root console bloc would keep its watch open
+  /// after the operator walked away, and the obvious test would pass anyway.
+  ///
+  /// The id is read off the session rather than passed down from the roster, because the
+  /// roster's only job was to say WHETHER this seat is watchable — the fleet row is where
+  /// the id lives. `_watchTapFor` has already proven it is non-null by finding it in the
+  /// roster set, so the `!` here cannot fire: a row with a null id never gets a button.
+  void _openConsole( BuildContext context, FleetSession session ) {
+    Navigator.of( context ).push( MaterialPageRoute<void>(
+      builder: ( _ ) => LiveConsoleScreen(
+        ccSessionId : session.sessionId!,
+        whoLabel    : session.whoLabel,
+      ),
+    ) );
+  }
+
   @override
   Widget build( BuildContext context ) {
     return Scaffold(
@@ -143,6 +167,8 @@ class _FleetStatusViewState extends State<_FleetStatusView> {
             onRefresh  : () async => context
                 .read<FleetStatusBloc>()
                 .add( const FleetStatusRefreshRequested() ),
+            watchableSessionIds : state.watchableSessionIds,
+            onWatch             : ( session ) => _openConsole( context, session ),
           );
         },
       ),

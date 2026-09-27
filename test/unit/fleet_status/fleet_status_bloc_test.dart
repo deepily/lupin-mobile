@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
 
 /// A repository that counts calls and can be told to fail.
@@ -40,6 +41,19 @@ class _FakeRepo implements FleetRepository {
     capCalls++;
     if ( capThrows != null ) throw capThrows!;
     return { "cap": serverCap, "maximum": serverMax };
+  }
+
+  /// The roster the projection answers with. Defaults to `none` — "nothing is
+  /// watchable" — which is what a non-admin caller genuinely gets.
+  int                  watchableCalls = 0;
+  Object?              watchableThrows;
+  FleetWatchableRoster watchableRoster = FleetWatchableRoster.none;
+
+  @override
+  Future<FleetWatchableRoster> fetchWatchable( { CancelToken? cancelToken } ) async {
+    watchableCalls++;
+    if ( watchableThrows != null ) throw watchableThrows!;
+    return watchableRoster;
   }
 
   @override
@@ -259,6 +273,134 @@ void main() {
       // Re-read rather than guess: the handle must land on what is enforced.
       expect( repo.stateCalls, 1, reason: "the refusal triggered a re-read" );
       expect( bloc.state.cap, 9 );
+      await bloc.close();
+    } );
+  } );
+
+  // ═════════════════════════════════════════════════════════════════════════════════
+  // THE WATCHABLE ROSTER — slice 2, §5 "Where it goes" / C5.9
+  // ═════════════════════════════════════════════════════════════════════════════════
+
+  group( "the watchable roster rides the same poll", () {
+    // ⚠️ THE ROSTER IS FETCHED IN THE SAME PASS AS THE COMPOSITE AND THE DIAL, not on a
+    // loop of its own — the same choice the dial already makes, so the buttons cannot drift
+    // from the table by a poll interval.
+    test( "one poll reads the composite, the dial AND the roster", () async {
+      final repo = _FakeRepo( live )..watchableRoster = FleetWatchableRoster.fromJson( {
+        "sessions": [ { "session_id": "seat-a", "transcript_watchable": true } ],
+      } );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( repo.stateCalls, 1 );
+      expect( repo.capCalls, 1 );
+      expect( repo.watchableCalls, 1 );
+      expect( bloc.state.watchableSessionIds, { "seat-a" } );
+      await bloc.close();
+    } );
+
+    test( "the default is an empty set — no roster, no buttons", () async {
+      // `_FakeRepo` answers `none` unless a test says otherwise, which is what a non-admin
+      // caller genuinely gets from the projection.
+      final bloc = FleetStatusBloc( _FakeRepo( live ) );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.watchableSessionIds, isEmpty );
+      expect( bloc.state.error, isNull,
+          reason: "an unavailable roster is not a pane error — it is the ordinary answer "
+                  "for most callers, and the table must still load" );
+      expect( bloc.state.composite?.sessions.length, 10 );
+      await bloc.close();
+    } );
+
+    // 🔴 THE SAME SHAPE AS THE DIAL'S B1a CANCEL, AND THE SAME TRAP. A cancelled roster
+    // fetch must not escape to the outer cancel-return, which adds NEITHER state while the
+    // table is in hand — `composite == null && error == null` is the screen's spinner
+    // branch. Mutation-proved: with the roster's `on DioException` arm removed, this goes
+    // red on the table assertion.
+    test( "🔴 A CANCELLED ROSTER FETCH STILL LOADS THE TABLE", () async {
+      final repo = _FakeRepo( live )..watchableThrows = DioException(
+        requestOptions : RequestOptions(
+          path: FleetRepository.watchableRosterEndpoint ),
+        type           : DioExceptionType.cancel,
+      );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.composite?.sessions.length, 10,
+          reason: "the table was in hand before the roster was asked for" );
+      expect( bloc.state.error, isNull, reason: "a cancel is not a failure" );
+      expect( bloc.state.watchableSessionIds, isEmpty, reason: "and no buttons" );
+      await bloc.close();
+    } );
+
+    test( "a NON-cancel DioException from the roster still fails the poll", () async {
+      // `fetchWatchable` swallows these itself, so a real repository cannot produce one
+      // here. This asserts the bloc does not ALSO swallow it — if the contract ever changes
+      // so the repository raises, the poll must report rather than silently show a stale
+      // table with no buttons and no explanation.
+      final repo = _FakeRepo( live )..watchableThrows = DioException(
+        requestOptions : RequestOptions(
+          path: FleetRepository.watchableRosterEndpoint ),
+        type           : DioExceptionType.connectionError,
+        message        : "no route to host",
+      );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.error, isNotNull );
+      await bloc.close();
+    } );
+
+    // 🔴 THE BUG I WROTE AND CAUGHT, ASSERTED AT THE BLOC RATHER THAN THE WIDGET. `setCap`
+    // re-emits `Loaded` to carry the server's re-read of the dial and has nothing to say
+    // about watchability. A `watchable` field that defaulted to `none` instead of null made
+    // that emit empty the set — every watch button vanishing because the cap moved.
+    test( "setCap's Loaded keeps the watchable set it did not fetch", () async {
+      final repo = _FakeRepo( live )..watchableRoster = FleetWatchableRoster.fromJson( {
+        "sessions": [ { "session_id": "seat-a", "transcript_watchable": true } ],
+      } );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+      expect( bloc.state.watchableSessionIds, { "seat-a" }, reason: "setup" );
+
+      await bloc.setCap( 12 );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.cap, 13, reason: "the fake re-reads, it does not echo" );
+      expect( bloc.state.watchableSessionIds, { "seat-a" },
+          reason: "the cap moved; watchability did not" );
+      await bloc.close();
+    } );
+
+    test( "a later poll that loses admin DOES empty the set", () async {
+      // The other direction, so "keep what you have" cannot be read as "never clear". A
+      // poll always supplies a roster, so a revoked role empties the set on the next one.
+      final repo = _FakeRepo( live )..watchableRoster = FleetWatchableRoster.fromJson( {
+        "sessions": [ { "session_id": "seat-a", "transcript_watchable": true } ],
+      } );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+      expect( bloc.state.watchableSessionIds, { "seat-a" }, reason: "setup" );
+
+      repo.watchableRoster = FleetWatchableRoster.none;
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.watchableSessionIds, isEmpty,
+          reason: "an admin role revoked between polls must take the buttons with it" );
       await bloc.close();
     } );
   } );

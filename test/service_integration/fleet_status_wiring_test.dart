@@ -27,6 +27,7 @@ import 'package:get_it/get_it.dart';
 import 'package:lupin_mobile/core/di/service_locator.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
+import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 
 /// Counts reads so "the bloc was built over THIS repository" is proven by the
 /// repository being USED, not by reading a private field.
@@ -42,6 +43,10 @@ class _CountingRepo implements FleetRepository {
   @override
   Future<Map<String, Object?>> fetchSizeCap( { CancelToken? cancelToken } ) async =>
       { "cap": 9, "maximum": 20 };
+
+  @override
+  Future<FleetWatchableRoster> fetchWatchable( { CancelToken? cancelToken } ) async =>
+      FleetWatchableRoster.none;
 
   @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async =>

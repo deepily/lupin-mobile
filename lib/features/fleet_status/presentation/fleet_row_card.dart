@@ -27,11 +27,27 @@ class FleetRowCard extends StatelessWidget {
   final FleetContextRecord context;
   final VoidCallback?      onLivenessTap;
 
+  /// Open the Live Console for this seat. Null when this caller may not watch it.
+  ///
+  /// 🔴 NULL IS THE ONLY WAY THE BUTTON HIDES, AND THAT IS ON PURPOSE. The pane decides
+  /// watchability by joining the roster projection; this widget does not re-derive the
+  /// rule, does not read `transcript_watchable` itself, and has no opinion about admin.
+  /// One field, one decision point — §3 says both watch affordances in this system read
+  /// the server's single `transcript_watchable` so that neither client invents its own
+  /// answer, and a widget that also had a say would be a third answer.
+  ///
+  /// ⚠️ AND A HIDDEN BUTTON IS NOT A SECURITY BOUNDARY. §5: "a refused watch is expected,
+  /// not exceptional… the button only hides a refusal; the server is the gate." A stale
+  /// roster, an admin role revoked between the poll and the tap, or a deep link into the
+  /// route all still produce a refusal, which the console screen handles.
+  final VoidCallback?      onWatchTap;
+
   const FleetRowCard( {
     super.key,
     required this.session,
     required this.context,
     this.onLivenessTap,
+    this.onWatchTap,
   } );
 
   @override
@@ -112,7 +128,51 @@ class FleetRowCard extends StatelessWidget {
           value : formatWindowSize( context.windowSize ),
           theme : theme,
         ),
+        // A SIBLING in this Wrap, after the Window field — see `_watchButton`'s docstring
+        // for why it cannot live inside `_livenessCell`.
+        if ( onWatchTap != null ) _watchButton( theme ),
       ],
+    );
+  }
+
+  /// Watch this seat's console. Ruling Q9's entry point, and the only one in v1.
+  ///
+  /// 🔴 IT IS A SIBLING IN BAND THREE, NOT A CHILD OF `_livenessCell`, AND AN EARLIER
+  /// DRAFT PUT IT THERE. That draft said "beside `Icons.info_outline`" — which is inside
+  /// [_livenessCell], whose wrapper is
+  /// `Semantics( button: true, label: "Liveness …", excludeSemantics: true )` around an
+  /// `InkWell` whose tap is `onLivenessTap`. Two things would have followed, both bad:
+  /// `excludeSemantics: true` **drops every descendant's semantics**, so a screen-reader
+  /// user would never have found the button at all; and it would have been inside the
+  /// liveness hit target, so tapping it could open the liveness sheet instead.
+  ///
+  /// ⇒ Its own `Semantics( button: true, label: "Watch console for <who>" )`, its own hit
+  /// target, its own key. C5.9's semantics arm asserts the node is **not** a descendant of
+  /// the liveness `Semantics` node, and names moving it back inside as the negative
+  /// control — so this is a decision with a test that fails if it is undone. (C-4.)
+  ///
+  /// The fleet row is the only entry point in v1: Focus-mode and Inbox headers are keyed
+  /// on `sender_id` (`#<8hex>`), which cannot supply the full `cc_session_id` the stream
+  /// needs, so they are out of v1 rather than half-designed (C-5).
+  Widget _watchButton( ThemeData theme ) {
+    return Semantics(
+      button : true,
+      label  : "Watch console for ${ session.whoLabel }",
+      child  : IconButton(
+        key       : Key( "${ TestKeys.fleetStatusWatchPrefix }${ session.whoLabel }" ),
+        icon      : const Icon( Icons.terminal, size: 20 ),
+        tooltip   : "Watch console",
+        onPressed : onWatchTap,
+        // The same 48 dp thumb floor the liveness cell takes: Android's minimum, and well
+        // above WCAG 2.2 SC 2.5.8's 24x24. `IconButton`'s own default is 48, stated here
+        // so a future `visualDensity` change cannot quietly shrink it.
+        constraints : const BoxConstraints(
+          minWidth  : kMinInteractiveDimension,
+          minHeight : kMinInteractiveDimension,
+        ),
+        padding   : EdgeInsets.zero,
+        color     : theme.colorScheme.primary,
+      ),
     );
   }
 

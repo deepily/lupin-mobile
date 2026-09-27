@@ -7,6 +7,7 @@ import '../../fleet/domain/pane_polling_mixin.dart';
 import '../../fleet/domain/pane_visibility_mixin.dart';
 import '../data/fleet_models.dart';
 import '../data/fleet_repository.dart';
+import '../data/fleet_watchable_models.dart';
 
 // ---------------------------------------------------------------------------
 // Events
@@ -23,9 +24,30 @@ class FleetStatusLoaded extends FleetStatusEvent {
   final FleetComposite composite;
   final int?           cap;
   final int?           capMaximum;
-  const FleetStatusLoaded( this.composite, { this.cap, this.capMaximum } );
+
+  /// Which seats this caller may watch, or **null meaning "this event says nothing about
+  /// watchability, keep what you have"**.
+  ///
+  /// 🔴 NULL AND `FleetWatchableRoster.none` ARE DIFFERENT ANSWERS, AND CONFLATING THEM
+  /// IS A BUG I WROTE AND CAUGHT. `none` means the projection was read and nothing is
+  /// watchable — every button hides. Null means this particular event is not a poll:
+  /// [FleetStatusBloc.setCap] re-emits `Loaded` to carry the server's re-read of the
+  /// dial, and with a non-nullable field defaulting to `none` that emit would have
+  /// **wiped every watch button off the pane on any cap change** — a control vanishing
+  /// because an unrelated number moved. A poll always supplies a roster, so a genuine
+  /// loss of admin still empties the set.
+  final FleetWatchableRoster? watchable;
+
+  const FleetStatusLoaded(
+    this.composite, {
+    this.cap,
+    this.capMaximum,
+    this.watchable,
+  } );
+
   @override
-  List<Object?> get props => [ composite, cap, capMaximum ];
+  List<Object?> get props =>
+      [ composite, cap, capMaximum, watchable?.watchableSessionIds ];
 }
 
 /// A fetch failed. Distinct from the composite's own "unreachable".
@@ -52,12 +74,21 @@ class FleetStatusState extends Equatable {
   final String?         error;
   final bool            loading;
 
+  /// The full session ids this caller may open a console on.
+  ///
+  /// ⚠️ EMPTY IS THE DEFAULT AND EMPTY MEANS "NO BUTTONS", which is also what a 403, a
+  /// failed projection call, an unreachable arbiter and an older server all produce. The
+  /// pane cannot tell those apart and deliberately does not try: §5 says a refused watch
+  /// shows no error and no dead button.
+  final Set<String> watchableSessionIds;
+
   const FleetStatusState( {
     this.composite,
     this.cap,
     this.capMaximum,
     this.error,
     this.loading = false,
+    this.watchableSessionIds = const <String>{},
   } );
 
   FleetStatusState copyWith( {
@@ -67,6 +98,7 @@ class FleetStatusState extends Equatable {
     String?         error,
     bool?           loading,
     bool            clearError = false,
+    Set<String>?    watchableSessionIds,
   } ) {
     return FleetStatusState(
       composite  : composite  ?? this.composite,
@@ -74,11 +106,13 @@ class FleetStatusState extends Equatable {
       capMaximum : capMaximum ?? this.capMaximum,
       error      : clearError ? null : ( error ?? this.error ),
       loading    : loading    ?? this.loading,
+      watchableSessionIds : watchableSessionIds ?? this.watchableSessionIds,
     );
   }
 
   @override
-  List<Object?> get props => [ composite, cap, capMaximum, error, loading ];
+  List<Object?> get props =>
+      [ composite, cap, capMaximum, error, loading, watchableSessionIds ];
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +146,9 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
       capMaximum : event.capMaximum,
       loading    : false,
       clearError : true,
+      // Null means "nothing to say" — keep the set the last poll established.
+      watchableSessionIds : event.watchable?.watchableSessionIds
+                            ?? state.watchableSessionIds,
     ) ) );
 
     on<FleetStatusFailed>( ( event, emit ) => emit( state.copyWith(
@@ -175,11 +212,28 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
         debugPrint( '[FleetStatus] poll: loaded, dial CANCELLED — kept cap=$cap' );
       }
 
+      // ⚠️ THE ROSTER FAILS APART FROM THE TABLE, for the same reason the dial does —
+      // and more so, because most callers are not admins and for them "unavailable" is
+      // the CORRECT answer rather than a fault. `fetchWatchable` already swallows
+      // everything but a cancellation, so this only has to handle the pane going away.
+      var watchable = FleetWatchableRoster.none;
+      try {
+        watchable = await _repo.fetchWatchable( cancelToken: token );
+      } on DioException catch ( e ) {
+        if ( e.type != DioExceptionType.cancel ) rethrow;
+        debugPrint( '[FleetStatus] poll: watchable roster CANCELLED — no buttons' );
+      }
+
       if ( isClosed ) {
         debugPrint( '[FleetStatus] poll: bloc closed before Loaded could be added' );
         return;
       }
-      add( FleetStatusLoaded( composite, cap: cap, capMaximum: capMaximum ) );
+      add( FleetStatusLoaded(
+        composite,
+        cap        : cap,
+        capMaximum : capMaximum,
+        watchable  : watchable,
+      ) );
     } on FleetApiException catch ( e ) {
       debugPrint( '[FleetStatus] poll: FAILED (${e.message})' );
       if ( isClosed ) return;

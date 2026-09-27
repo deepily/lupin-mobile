@@ -293,6 +293,19 @@ class TestKeys {
   /// The Liveness cell — a TAP target here, because a phone has no hover.
   static const fleetStatusLivenessPrefix = 'fleetStatus.liveness.';
   static const fleetStatusLivenessSheet  = 'fleetStatus.livenessSheet';
+
+  /// The watch-console button on a fleet row, suffixed with the row's Who label —
+  /// the same suffix [fleetStatusRowPrefix] and [fleetStatusLivenessPrefix] use, so a
+  /// test that has a row has its button.
+  ///
+  /// ⚠️ A SEPARATE KEY BECAUSE IT IS A SEPARATE HIT TARGET. It must not be reachable
+  /// through the liveness key: C5.9's tap arm asserts the watch button does NOT fire
+  /// `onLivenessTap`, and two widgets sharing a key would make that unprovable.
+  static const fleetStatusWatchPrefix    = 'fleetStatus.watch.';
+
+  // --- Live Console (slice 2: the placeholder route; slice 3 fills it) ---
+  static const liveConsoleScreen    = 'liveConsole.screen';
+  static const liveConsoleSessionId = 'liveConsole.sessionId';
   /// 🔴 DISTINCT FROM THE EMPTY STATE ON PURPOSE. The server answers
   /// `status: "unreachable"` with an HTTP 200, so "we cannot see the fleet" and
   /// "the fleet has no seats" must be two different things on screen.
