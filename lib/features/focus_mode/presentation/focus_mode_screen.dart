@@ -50,6 +50,10 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   late final TtsOrchestrator _tts;
   late final AsrService      _asr;
 
+  /// The app bar sits OUTSIDE the split host, so the files button reaches it
+  /// by key rather than by looking up the tree.
+  final GlobalKey<DocSplitHostState> _splitKey = GlobalKey<DocSplitHostState>();
+
   @override
   void initState() {
     super.initState();
@@ -96,6 +100,15 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
                 .read<FocusChatBloc>()
                 .add( const FocusRosterRefreshRequested() ),
           ),
+          // Row 0534b50d (parity with web row 47759aa3): a way into the file
+          // viewer — and so into Upload — without digging up an old doc link.
+          // It opens in the same split as a tapped doc link.
+          IconButton(
+            key       : const Key( TestKeys.focusFilesButton ),
+            icon      : const Icon( Icons.folder_open ),
+            tooltip   : 'Files',
+            onPressed : () => _splitKey.currentState?.openRoots(),
+          ),
           _QueueButton( tts: _tts ),
           // AC-S3.5c — the promoted shared control; behavior is asserted in
           // test/widget/shared/pause_control_test.dart, not here.
@@ -113,6 +126,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           // writes to the focused session either way.
           Expanded(
             child: DocSplitHost(
+              key       : _splitKey,
               repository: () => ServiceLocator.instance<DocRepository>(),
               prefs     : ServiceLocator.isRegistered<NotificationPreferences>()
                   ? ServiceLocator.get<NotificationPreferences>()

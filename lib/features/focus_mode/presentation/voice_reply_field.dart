@@ -108,6 +108,18 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     }
   }
 
+  /// Row 8cc964ec (Rick 2026-09-26): open the editor with nothing recorded,
+  /// so a message can be typed — or dictated with the keyboard's own mic.
+  /// It is the same review box a transcript lands in, so Send and discard
+  /// behave exactly as they do after a recording.
+  void _onEditPressed() {
+    setState( () {
+      _error = null;
+      _controller.clear();
+      _phase = _VoiceReplyPhase.review;
+    } );
+  }
+
   void _onCancelPressed() {
     _elapsedTimer?.cancel();
     _session.cancel();                // drops any in-flight transcribe result
@@ -168,10 +180,24 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
 
   Widget _buildPhaseRow( BuildContext context ) {
     switch ( _phase ) {
+      // Row 3f2a7dab (Rick 2026-09-26): the buttons sat bottom-CENTRE, on the
+      // fold of his phone. Every phase now lines up on the RIGHT, and the
+      // mic/stop button keeps the same corner spot across phases, so the
+      // right thumb never has to move to stop a recording.
       case _VoiceReplyPhase.idle:
         return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          key              : const Key( TestKeys.voiceReplyIdleRow ),
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            // Row 8cc964ec: type instead of dictate, right beside the mic.
+            IconButton(
+              key         : const Key( TestKeys.voiceReplyEdit ),
+              icon        : const Icon( Icons.edit ),
+              tooltip     : 'Type a message',
+              onPressed   : _onEditPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
+            ),
             IconButton(
               key         : const Key( TestKeys.voiceReplyMic ),
               icon        : const Icon( Icons.mic ),
@@ -184,16 +210,8 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
         );
       case _VoiceReplyPhase.recording:
         return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyMic ),
-              icon        : const Icon( Icons.stop_circle ),
-              tooltip     : 'Stop and transcribe',
-              onPressed   : _onMicPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
             Text( 'Recording… ${_elapsedSeconds}s' ),
             IconButton(
               key         : const Key( TestKeys.voiceReplyCancel ),
@@ -203,11 +221,19 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
               iconSize    : _kIconSize,
               constraints : _kButtonConstraints,
             ),
+            IconButton(
+              key         : const Key( TestKeys.voiceReplyMic ),
+              icon        : const Icon( Icons.stop_circle ),
+              tooltip     : 'Stop and transcribe',
+              onPressed   : _onMicPressed,
+              iconSize    : _kIconSize,
+              constraints : _kButtonConstraints,
+            ),
           ],
         );
       case _VoiceReplyPhase.transcribing:
         return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
             const SizedBox(
               width  : 20,
@@ -238,6 +264,9 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
             TextField(
               key        : const Key( TestKeys.voiceReplyTranscript ),
               controller : _controller,
+              // Opened by the edit button there is nothing to review, so the
+              // keyboard comes straight up.
+              autofocus  : _controller.text.isEmpty,
               minLines   : 2,
               maxLines   : 8,
               keyboardType : TextInputType.multiline,

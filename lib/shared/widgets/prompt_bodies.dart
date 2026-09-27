@@ -333,6 +333,14 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
     return opt.toString();
   }
 
+  /// Rick 2026-09-26: the pros and cons of each option live in its
+  /// `description`, and the phone never showed them.
+  Widget? _subtitle( dynamic opt ) {
+    if ( opt is! Map ) return null;
+    final d = ( opt[ "description" ] ?? "" ).toString().trim();
+    return d.isEmpty ? null : Text( d );
+  }
+
   Widget _questionBody( int i, dynamic q ) {
     final options = _optionsOf( q );
     if ( options.isEmpty ) {
@@ -357,6 +365,7 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
             return CheckboxListTile(
               dense    : true,
               title    : Text( label ),
+              subtitle : _subtitle( opt ),
               value    : _multi[ i ]!.contains( label ),
               onChanged: ( v ) => setState( () {
                 if ( v == true ) {
@@ -370,6 +379,7 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
           return RadioListTile<String>(
             dense      : true,
             title      : Text( label ),
+            subtitle   : _subtitle( opt ),
             value      : label,
             groupValue : _single[ i ],
             onChanged  : ( v ) => setState( () => _single[ i ] = v ?? '' ),

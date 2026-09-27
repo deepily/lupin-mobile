@@ -554,6 +554,12 @@ class ServiceLocator {
         recorder       : AudioRecorder(),
         // Debug "Keep voice recordings" (row 9b1f7701), read per discard.
         keepRecordings : () => _getIt<NotificationPreferences>().keepVoiceRecordings,
+        // Row a1c12c6e: no spoken notification while the mic records.
+        onCapturingChanged : ( capturing ) {
+          if ( _getIt.isRegistered<TtsOrchestrator>() ) {
+            _getIt<TtsOrchestrator>().setCaptureHold( capturing );
+          }
+        },
       ),
     );
     _getIt.registerLazySingleton<DecisionProxyBloc>(

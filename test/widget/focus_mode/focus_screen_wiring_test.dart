@@ -48,11 +48,24 @@ class _MockNotifBloc extends MockBloc<NotificationEvent, NotificationState>
 class _FakeDocRepository implements DocRepository {
   DocLink? lastRequested;
 
+  /// What `GET /api/docs/scopes` answers (row 0534b50d).
+  List<DocScope> scopes = const [];
+
   @override
   Future<DocContent> fetch( DocLink link ) async {
     lastRequested = link;
+    if ( link.kind == DocLinkKind.io ) {
+      return const DocContent(
+        kind      : DocContentKind.directory,
+        mediaType : 'application/json',
+        listing   : DocDirectoryListing( scope: 'io', path: '', parent: null, entries: [] ),
+      );
+    }
     return const DocContent( kind: DocContentKind.markdown, mediaType: 'text/markdown', text: '# How to' );
   }
+
+  @override
+  Future<List<DocScope>> fetchScopes() async => scopes;
 
   @override
   dynamic noSuchMethod( Invocation invocation ) => super.noSuchMethod( invocation );
@@ -387,5 +400,92 @@ void main() {
         verifyNever( () => repo.notify( any() ) );
       } );
     }
+  } );
+
+  /// Rows 3f2a7dab + 8cc964ec (Rick 2026-09-26): the record button sat
+  /// bottom-centre, on the fold of his phone. It now sits in the lower-right
+  /// corner, in reach of the right thumb, with a new edit button beside it
+  /// that opens the editor for typing.
+  group( 'composer: record in the lower-right corner, edit beside it', () {
+    for ( final screen in const [ Size( 360, 800 ), Size( 840, 900 ) ] ) {
+      testWidgets( 'mic in the lower-right at ${screen.width.toInt()} dp, edit just left of it', ( tester ) async {
+        written( clock.subtract( const Duration( minutes: 5 ) ) );
+        await pumpScreen( tester, screen: screen );
+        await tester.tap( railBadge( _written ) );
+        await settle( tester );
+
+        final mic  = tester.getRect( byKey( TestKeys.voiceReplyMic ) );
+        final edit = tester.getRect( byKey( TestKeys.voiceReplyEdit ) );
+        expect( mic.right, greaterThan( screen.width - 24 ),
+            reason: 'hugs the right edge, not the fold at ${screen.width / 2}' );
+        expect( mic.bottom, greaterThan( screen.height - 24 ), reason: 'on the bottom row' );
+        expect( edit.right, lessThanOrEqualTo( mic.left + 0.5 ), reason: 'edit sits LEFT of the mic' );
+        expect( edit.center.dy, closeTo( mic.center.dy, 0.5 ), reason: 'same row' );
+        expect( tester.takeException(), isNull, reason: 'no overflow' );
+      } );
+    }
+
+    testWidgets( 'while recording, STOP sits exactly where the mic was', ( tester ) async {
+      written( clock.subtract( const Duration( minutes: 5 ) ) );
+      await pumpScreen( tester, screen: const Size( 360, 800 ) );
+      await tester.tap( railBadge( _written ) );
+      await settle( tester );
+      final before = tester.getRect( byKey( TestKeys.voiceReplyMic ) );
+      await tester.tap( byKey( TestKeys.voiceReplyMic ) );
+      await settle( tester );
+      expect( find.byIcon( Icons.stop_circle ), findsOneWidget );
+      expect( tester.getRect( byKey( TestKeys.voiceReplyMic ) ).right, closeTo( before.right, 0.5 ) );
+      await tester.tap( byKey( TestKeys.voiceReplyCancel ) );
+      await settle( tester );
+    } );
+
+    for ( final keyboard in <double>[ 0, 420, 500 ] ) {
+      testWidgets( 'edit → type → Send dispatches the typed text (keyboard ${keyboard.toInt()} dp)', ( tester ) async {
+        written( clock.subtract( const Duration( minutes: 5 ) ) );
+        when( () => repo.notify( any() ) ).thenAnswer( ( _ ) async =>
+            NotifyDispatchResponse.fromJson( { 'status': 'queued', 'target_user': 'cc', 'connection_count': 1 } ) );
+        await pumpScreen( tester, screen: const Size( 360, 800 ) );
+        await tester.tap( railBadge( _written ) );
+        await settle( tester );
+
+        await tester.tap( byKey( TestKeys.voiceReplyEdit ) );
+        await settle( tester );
+        tester.view.viewInsets = FakeViewPadding( bottom: keyboard );
+        await settle( tester );
+        await tester.enterText( byKey( TestKeys.voiceReplyTranscript ), 'typed, not spoken' );
+        await tester.tap( byKey( TestKeys.voiceReplySend ) );
+        await settle( tester );
+
+        final sent = verify( () => repo.notify( captureAny() ) ).captured.single as NotifyRequest;
+        expect( sent.message, 'typed, not spoken' );
+        verifyNever( () => asr.startRecording() );
+        expect( byKey( TestKeys.voiceReplyTranscript ), findsNothing, reason: 'editor closes after send' );
+      } );
+    }
+  } );
+
+  /// Row 0534b50d (parity with web row 47759aa3): a toolbar button opens the
+  /// file viewer on every root, without digging up an old doc link.
+  group( 'Files button: the roots landing', () {
+    testWidgets( 'opens in the split, every live scope listed, roots unfolded', ( tester ) async {
+      docs.scopes = const [
+        DocScope( name: 'lupin',        allowedPrefixes: [ 'src/rnd/', 'io/' ] ),
+        DocScope( name: 'lupin-mobile', allowedPrefixes: [] ),
+        DocScope( name: 'cosa',         allowedPrefixes: [ '*' ] ),
+      ];
+      written( clock.subtract( const Duration( minutes: 5 ) ) );
+      await pumpScreen( tester, screen: const Size( 412, 915 ) );
+
+      expect( byKey( TestKeys.docPanel ), findsNothing );
+      await tester.tap( byKey( TestKeys.focusFilesButton ) );
+      await settle( tester );
+
+      expect( byKey( TestKeys.docPanel ), findsOneWidget, reason: 'opens in the split, like a doc link' );
+      expect( docs.lastRequested?.kind, DocLinkKind.io, reason: 'lands on the io listing, where Upload lives' );
+      // Every root the registry returned, plus io — no tap on the panel needed.
+      for ( final root in [ 'io', 'lupin/src/rnd', 'lupin/io', 'lupin-mobile', 'cosa' ] ) {
+        expect( byKey( '${TestKeys.docRootPrefix}$root' ), findsOneWidget, reason: 'root $root missing' );
+      }
+    } );
   } );
 }

@@ -20,11 +20,15 @@ class DocDirectoryView extends StatelessWidget {
   /// Show another place in the same viewer.
   final void Function( DocLink link ) onOpen;
 
+  /// Unfold the Roots panel on arrival (row 0534b50d's landing).
+  final bool rootsOpen;
+
   const DocDirectoryView( {
     super.key,
     required this.listing,
     required this.onOpen,
     this.repository,
+    this.rootsOpen = false,
   } );
 
   @override
@@ -35,7 +39,7 @@ class DocDirectoryView extends StatelessWidget {
     return ListView(
       key      : const Key( TestKeys.docListing ),
       children : [
-        if ( repo != null ) DocRootsPanel( repository: repo, onOpen: onOpen ),
+        if ( repo != null ) DocRootsPanel( repository: repo, onOpen: onOpen, initiallyOpen: rootsOpen ),
         // ⚠️ THE SERVER DECIDES WHETHER "UP" EXISTS: `parent` is null at a
         // scope's top and wherever the parent falls outside the whitelist. The
         // Roots panel above is the way out from there.
@@ -76,7 +80,11 @@ class DocRootsPanel extends StatefulWidget {
   final DocRepository repository;
   final void Function( DocLink link ) onOpen;
 
-  const DocRootsPanel( { super.key, required this.repository, required this.onOpen } );
+  /// Unfolded and fetching from the first frame — the global file-viewer
+  /// button's landing (row 0534b50d), where the roots ARE what the reader came for.
+  final bool initiallyOpen;
+
+  const DocRootsPanel( { super.key, required this.repository, required this.onOpen, this.initiallyOpen = false } );
 
   @override
   State<DocRootsPanel> createState() => _DocRootsPanelState();
@@ -86,9 +94,16 @@ class _DocRootsPanelState extends State<DocRootsPanel> {
   Future<List<DocScope>>? _scopes;
 
   @override
+  void initState() {
+    super.initState();
+    if ( widget.initiallyOpen ) _scopes = widget.repository.fetchScopes();
+  }
+
+  @override
   Widget build( BuildContext context ) {
     return ExpansionTile(
       key               : const Key( TestKeys.docRootsPanel ),
+      initiallyExpanded : widget.initiallyOpen,
       leading           : const Icon( Icons.account_tree_outlined ),
       title             : const Text( "Roots" ),
       onExpansionChanged: ( open ) {

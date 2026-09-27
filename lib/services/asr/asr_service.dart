@@ -113,6 +113,19 @@ class AsrService {
   /// about a reply already recording on the same recorder.
   bool get isCapturing => _activePath != null;
 
+  /// Row a1c12c6e: told when a capture starts (true) and ends (false) —
+  /// stopped, failed or cancelled. Production wires it to
+  /// `TtsOrchestrator.setCaptureHold`, so no notification is spoken over a
+  /// recording. Null ⇒ nobody listens.
+  final void Function( bool capturing )? _onCapturingChanged;
+
+  void _setActivePath( String? path ) {
+    final was   = _activePath != null;
+    _activePath = path;
+    final now   = path != null;
+    if ( was != now ) _onCapturingChanged?.call( now );
+  }
+
   AsrService( {
     required Dio           dio,
     required AudioRecorder recorder,
@@ -122,7 +135,9 @@ class AsrService {
     Future<void> Function( File source, String dest )? copyFile,
     DateTime Function()?          clock,
     Future<bool> Function()?      opusSupported,
+    void Function( bool capturing )? onCapturingChanged,
   } ) : _dio             = dio,
+        _onCapturingChanged = onCapturingChanged,
         _recorder        = recorder,
         _tempDirProvider = tempDirProvider ?? getTemporaryDirectory,
         _keepRecordings  = keepRecordings  ?? _never,
@@ -514,7 +529,7 @@ class AsrService {
       _deleteQuietly( File( path ) );
       throw AsrException( 'Recorder failed to start: $e' );
     }
-    _activePath       = path;
+    _setActivePath( path );
     _captureStartedAt = _clock();
   }
 
@@ -543,13 +558,13 @@ class AsrService {
       // F-S4-IMPL-1: recorder failure surfaces as the §4.1-promised typed
       // exception, never a raw platform error. Clean up the active capture.
       final orphan = _activePath;
-      _activePath       = null;
+      _setActivePath( null );
       _captureStartedAt = null;
       if ( orphan != null ) _deleteQuietly( File( orphan ) );
       throw AsrException( 'Recorder failed to stop: $e' );
     }
     final filePath = stopped ?? _activePath;
-    _activePath = null;
+    _setActivePath( null );
     if ( filePath == null ) {
       throw const AsrException( 'Recorder produced no file' );
     }
@@ -687,7 +702,7 @@ class AsrService {
   /// removed (the recorder's own cancel() deletes it too — this is the belt).
   Future<void> cancelRecording() async {
     final path = _activePath;
-    _activePath       = null;
+    _setActivePath( null );
     _captureStartedAt = null;
     await _recorder.cancel();
     if ( path != null ) _deleteQuietly( File( path ) );

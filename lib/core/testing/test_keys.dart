@@ -80,6 +80,7 @@ class TestKeys {
   static const docListingEntryPrefix   = 'docs.listing.entry.';   // + entry name
   static const docListingEmpty         = 'docs.listing.empty';
   static const docRootsPanel           = 'docs.roots';
+  static const focusFilesButton        = 'focus.files';   // row 0534b50d: global file viewer
   static const docRootPrefix           = 'docs.roots.root.';      // + scope/prefix
   static const docViewerPlacementToggle = 'docs.viewer.placement';   // beside ⇄ below on a wide screen
   static const docDirEntryPrefix    = 'docs.dir.entry.';   // + entry name
@@ -220,6 +221,8 @@ class TestKeys {
 
   // Focus-mode voice reply composer (S4 — focus-mode-voice-chat milestone)
   static const voiceReplyMic        = 'voiceReply.mic';
+  static const voiceReplyEdit       = 'voiceReply.edit';   // row 8cc964ec: type instead of dictate
+  static const voiceReplyIdleRow    = 'voiceReply.idleRow';
   static const voiceReplyTranscript = 'voiceReply.transcript';
   static const voiceReplySend       = 'voiceReply.send';
   static const voiceReplyCancel     = 'voiceReply.cancel';

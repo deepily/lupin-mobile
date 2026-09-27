@@ -393,21 +393,22 @@ class _MessageBubble extends StatelessWidget {
               : theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular( 10 ),
         ),
-        child: IntrinsicHeight(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Sender-colour accent bar (Claude-sent bubbles only).
-              if ( !_isUserReply ) Container( width: 3, color: accent ),
-              Flexible(
-                child: Padding(
-                  padding : const EdgeInsets.all( 10 ),
-                  child   : content,
-                ),
-              ),
-            ],
-          ),
+        // Rick 2026-09-26: this was IntrinsicHeight around a Row, and the
+        // intrinsic pass underestimated wrapped choice tiles at phone widths.
+        // The bubble then clipped its own bottom, and the Submit button of an
+        // inline multiple-choice ask was never shown. The content now sizes
+        // itself, and the accent bar is laid over its left edge.
+        child: Stack(
+          children: [
+            Padding(
+              padding : EdgeInsets.fromLTRB( _isUserReply ? 10 : 13, 10, 10, 10 ),
+              child   : content,
+            ),
+            // Sender-colour accent bar (Claude-sent bubbles only).
+            if ( !_isUserReply )
+              Positioned( left: 0, top: 0, bottom: 0,
+                  child: Container( width: 3, color: accent ) ),
+          ],
         ),
       ),
     ) );

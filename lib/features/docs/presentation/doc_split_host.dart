@@ -55,6 +55,7 @@ class DocSplitHost extends StatefulWidget {
 
 class DocSplitHostState extends State<DocSplitHost> {
   DocLink?    _link;
+  bool        _rootsOpen = false;
   DocContent? _text;
   String?     _textTitle;
   late bool   _belowWhenWide = widget.prefs?.docsBelowWhenWide ?? false;
@@ -91,9 +92,23 @@ class DocSplitHostState extends State<DocSplitHost> {
     if ( !link.isFetchable ) return;
     setState( () {
       _link      = link;
+      _rootsOpen = false;
       _text      = null;
       _textTitle = null;
       _docKey    = GlobalKey( debugLabel: 'doc-split-viewer' );   // a NEW document is a new viewer
+    } );
+  }
+
+  /// Row 0534b50d: the global file-viewer button's landing — io's listing
+  /// with every root unfolded above it, so any scope is one tap away and
+  /// Upload is right there.
+  void openRoots() {
+    setState( () {
+      _link      = docLinkFor( ioScope, "" );
+      _rootsOpen = true;
+      _text      = null;
+      _textTitle = null;
+      _docKey    = GlobalKey( debugLabel: 'doc-split-viewer' );
     } );
   }
 
@@ -138,6 +153,7 @@ class DocSplitHostState extends State<DocSplitHost> {
               link       : link,
               repository : widget.repository(),
               onClose    : close,
+              rootsOpen  : _rootsOpen,
             ),
     );
 

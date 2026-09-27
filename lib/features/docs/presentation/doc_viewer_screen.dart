@@ -50,6 +50,10 @@ class DocViewerScreen extends StatefulWidget {
   /// signed-in token; the server's own admin check is what actually decides.
   final bool Function()? canUpload;
 
+  /// Row 0534b50d: open with the Roots panel unfolded — the landing the
+  /// global file-viewer button asks for. Applies to the first place shown only.
+  final bool rootsOpen;
+
   const DocViewerScreen( {
     super.key,
     this.link,
@@ -59,6 +63,7 @@ class DocViewerScreen extends StatefulWidget {
     this.onClose,
     this.pickFile,
     this.canUpload,
+    this.rootsOpen = false,
   } ) : assert( content != null || ( link != null && repository != null ),
                 'give the viewer either content or a link and a repository to fetch it' );
 
@@ -336,7 +341,12 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
   Widget _buildBody() {
     if ( _loading )        return const Center( child: CircularProgressIndicator() );
     if ( _error != null )  return _ErrorView( error: _error!, onRetry: _load );
-    return _ContentView( content: _content!, repository: widget.repository, onOpen: _open );
+    return _ContentView(
+      content    : _content!,
+      repository : widget.repository,
+      onOpen     : _open,
+      rootsOpen  : widget.rootsOpen && _history.isEmpty && identical( _link, widget.link ),
+    );
   }
 }
 
@@ -348,7 +358,10 @@ class _ContentView extends StatelessWidget {
   /// Show another place in this viewer — a listing entry, a parent, a root.
   final void Function( DocLink link ) onOpen;
 
-  const _ContentView( { required this.content, required this.onOpen, this.repository } );
+  /// Unfold the Roots panel on a listing.
+  final bool rootsOpen;
+
+  const _ContentView( { required this.content, required this.onOpen, this.repository, this.rootsOpen = false } );
 
   @override
   Widget build( BuildContext context ) {
@@ -382,6 +395,7 @@ class _ContentView extends StatelessWidget {
           listing    : content.listing!,
           repository : repository,
           onOpen     : onOpen,
+          rootsOpen  : rootsOpen,
         );
 
       // The web's words: say so plainly and point at the button.

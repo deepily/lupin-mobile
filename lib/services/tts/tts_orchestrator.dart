@@ -60,6 +60,14 @@ class TtsOrchestrator {
 
   bool _paused = false;
 
+  /// Row a1c12c6e (Rick 2026-09-26): true while the microphone is recording.
+  /// Kept apart from [_paused] because it is not the user's toggle: the mic
+  /// releasing must never un-pause a hold the user set by hand.
+  bool _captureHeld = false;
+
+  /// Either hold stops anything new from starting.
+  bool get _held => _paused || _captureHeld;
+
   /// Utterance-epoch re-entry guard (F-S1-S3-1): incremented on every
   /// dispatch and every preempt-stop; the completion/error handlers no-op
   /// when the epoch they were armed under is stale. The real
@@ -225,6 +233,36 @@ class TtsOrchestrator {
     _pausedCtrl.add( true );
   }
 
+  /// Row a1c12c6e: hold speech while the microphone records, so an incoming
+  /// notification neither talks over the user nor lands in the recording.
+  ///
+  /// Wired from `AsrService`'s capture transitions, so every composer that
+  /// records is covered. Taking the hold stops an utterance already playing
+  /// and puts it back at the head of the queue to replay from the start
+  /// (the same non-destructive move an urgent preempt makes). Releasing it
+  /// drains the queue in arrival order, unless the user's own [pause] is
+  /// still on. Nothing is dropped either way.
+  Future<void> setCaptureHold( bool capturing ) async {
+    if ( capturing == _captureHeld ) return;
+    _captureHeld = capturing;
+    if ( !capturing ) {
+      await _tryStartNext();
+      return;
+    }
+    final interrupted = _current;
+    if ( interrupted == null ) return;
+    ++_epoch;   // stale-guard the stopped utterance's completion/error events
+    _current = null;
+    _fifo.addFirst( interrupted );
+    _emitQueueDepth();
+    _emitQueue();
+    await _player.stop();
+    await _fallback.stopFallbackSpeech();
+  }
+
+  /// True while the microphone hold ([setCaptureHold]) is on.
+  bool get isCaptureHeld => _captureHeld;
+
   /// Clear the hold and drain the accumulated queue in arrival order.
   void resume() {
     if ( !_paused ) return;
@@ -273,8 +311,11 @@ class TtsOrchestrator {
       sender   : sender ?? const TtsSender(),
     );
 
-    if ( priority == 'urgent' ) {
+    if ( priority == 'urgent' && !_captureHeld ) {
       _preemptForUrgent( utter );
+    } else if ( priority == 'urgent' ) {
+      // Recording (row a1c12c6e): queue at the front instead of speaking.
+      _insertBehindLeadingUrgents( utter );
     } else {
       _fifo.add( utter );
       _emitQueueDepth();
@@ -437,7 +478,7 @@ class TtsOrchestrator {
 
     if ( priority == 'urgent' ) {
       final current = _current;
-      if ( !_paused && current != null && current.priority != 'urgent' ) {
+      if ( !_held && current != null && current.priority != 'urgent' ) {
         _preemptNonDestructive( utter );
         return;
       }
@@ -581,7 +622,7 @@ class TtsOrchestrator {
     // Pause gate (F-S1-4): the single choke point — covers utterance
     // completion, error continuation, and the dispatch-if-idle step in
     // both enqueue entry points.
-    if ( _paused ) return;
+    if ( _held ) return;
     if ( _current != null ) return;
     if ( _fifo.isEmpty ) return;
     _current = _fifo.removeFirst();
