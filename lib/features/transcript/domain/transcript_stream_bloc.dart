@@ -230,6 +230,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
 
   StreamSubscription<TranscriptAppend>? _appendSub;
   StreamSubscription<TranscriptStateFrame>? _stateSub;
+  StreamSubscription<void>? _reconnectSub;
 
   /// Set synchronously by [close], on its FIRST line, before any controller is touched.
   ///
@@ -296,6 +297,10 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         .listen( ( f ) => add( TranscriptAppendReceived( f ) ) );
     _stateSub  ??= _router.statesFor( ccSessionId )
         .listen( ( f ) => add( TranscriptStateReceived( f ) ) );
+    // The `auth_success` seam, routed through the app-root router because the dispatcher
+    // cannot reach a route-scoped bloc (C1). [onReconnected] is still public and called
+    // directly by tests — this only gives it a producer in the running app.
+    _reconnectSub ??= _router.reconnects.listen( ( _ ) => onReconnected() );
     startVisibility();
   }
 
@@ -763,8 +768,10 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
 
     _appendSub?.cancel();
     _stateSub?.cancel();
-    _appendSub = null;
-    _stateSub  = null;
+    _reconnectSub?.cancel();
+    _appendSub    = null;
+    _stateSub     = null;
+    _reconnectSub = null;
     _router.release( ccSessionId );
 
     // `super.close()` reaches PaneVisibilityMixin, which cancels the in-flight fetch and the
