@@ -26,6 +26,8 @@ import 'features/quick_ask/domain/quick_ask_event.dart';
 import 'features/broadcast/data/broadcast_models.dart';
 import 'features/broadcast/domain/broadcast_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
+import 'features/transcript/data/transcript_models.dart';
+import 'features/transcript/domain/transcript_frame_router.dart';
 import 'services/auth/server_context_service.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/tts/streaming_tts_player.dart';
@@ -162,7 +164,31 @@ class WsBlocDispatcher {
           ) );
         }
         break;
+      case AppConstants.eventTranscriptAppend:
+        // 🔴 THE LIVE CONSOLE'S ONLY ENTRY POINT, AND IT FORWARDS TO A ROUTER RATHER THAN A
+        // BLOC ON PURPOSE. The console bloc is ROUTE-SCOPED (C1): an app-root instance would
+        // keep watching a screen nobody can see, which is the build C5.11 fails. The router
+        // is app-root, keyed by `cc_session_id`, and drops a frame for any seat with no open
+        // route — the belt to the server's braces (C6), whose receipt is `droppedFrames`.
+        //
+        // ⚠️ THE FOUR `queue_*_update` ARMS ABOVE HAVE NEVER FIRED — no emit site exists in
+        // the server. C9 exists so this does not become a fifth: it merges only after phase
+        // 1's `cc_transcript_append` emit site lands, and C5.20's live arm is what proves a
+        // real frame arrives here rather than assuming it.
+        ServiceLocator.get<TranscriptFrameRouter>()
+            .publishAppend( TranscriptAppend.fromJson( data ) );
+        break;
+      case AppConstants.eventTranscriptState:
+        // `live | ended | rotated | epoch_mismatch | refused` (§3). The bloc drops its buffer
+        // on an epoch change and treats `refused` as final (C5.21).
+        ServiceLocator.get<TranscriptFrameRouter>()
+            .publishState( TranscriptStateFrame.fromJson( data ) );
+        break;
       case AppConstants.eventAuthSuccess:
+        // An open console re-watches from its last offset and epoch (C5.8). Routed through
+        // the router for the same reason the two arms above are: the dispatcher cannot reach
+        // a route-scoped bloc. A closed console has no listener, so this costs nothing.
+        ServiceLocator.get<TranscriptFrameRouter>().publishReconnected();
         // WS (re)connect re-hydration: cold start on first connect,
         // merge-refresh on reconnect — the bloc is mode-dependent.
         final email = lastAuthenticatedEmail;

@@ -23,6 +23,7 @@ import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dar
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_event.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_state.dart';
+import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
@@ -71,10 +72,13 @@ void main() {
     late _MockQuickAsk    quickAskBloc;
     late WsBlocDispatcher dispatcher;
 
+    late TranscriptFrameRouter transcriptRouter;
+
     setUp( () {
-      repo  = _MockRepo();
-      audio = _MockAudio();
-      tts   = _MockTts();
+      repo             = _MockRepo();
+      audio            = _MockAudio();
+      tts              = _MockTts();
+      transcriptRouter = TranscriptFrameRouter();
 
       when( () => audio.handleIncoming(
         priority     : any( named: 'priority' ),
@@ -95,11 +99,19 @@ void main() {
       GetIt.instance.registerSingleton<NotificationBloc>( legacyBloc );
       GetIt.instance.registerSingleton<FocusChatBloc>( focusBloc );
       GetIt.instance.registerSingleton<QuickAskBloc>( quickAskBloc );
+      // The `auth_success` arm now also tells the Live Console's app-root router to
+      // re-watch (C5.8): the console bloc is route-scoped, so the router is the only seam
+      // the dispatcher can reach. Registered here for the same reason `QuickAskBloc` is,
+      // and for the reason this file's header already gives — a production `isRegistered`
+      // guard would make the reconnect re-watch silently optional, and nothing would
+      // notice if the router were never wired at all.
+      GetIt.instance.registerSingleton<TranscriptFrameRouter>( transcriptRouter );
 
       dispatcher = WsBlocDispatcher();
     } );
 
     tearDown( () async {
+      transcriptRouter.dispose();
       await GetIt.instance.reset();
     } );
 

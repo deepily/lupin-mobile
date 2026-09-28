@@ -37,6 +37,27 @@ class TranscriptFrameRouter {
   final Map<String, StreamController<TranscriptAppend>> _appends = {};
   final Map<String, StreamController<TranscriptStateFrame>> _states = {};
 
+  /// Fires once per `auth_success`, for every open console.
+  ///
+  /// 🔴 THE RECONNECT SIGNAL HAS TO COME THROUGH HERE BECAUSE THE BLOC IS ROUTE-SCOPED AND
+  /// THE DISPATCHER CANNOT REACH IT. `WsBlocDispatcher` resolves every other bloc from
+  /// `ServiceLocator`; the console bloc is deliberately NOT there — that is C1, and an
+  /// app-root instance is the build C5.11 fails. So the dispatcher tells the router, which
+  /// is app-root, and whichever console is open hears it. A console that is closed has no
+  /// listener and the signal costs nothing.
+  final StreamController<void> _reconnects = StreamController<void>.broadcast();
+
+  /// Subscribe on route open, cancel on close — same discipline as the frame streams.
+  Stream<void> get reconnects => _reconnects.stream;
+
+  /// Called by the dispatcher on `auth_success`, which every successful (re)connection
+  /// completes. §5/T15: if the seat cleared while the phone was away, the re-watch names a
+  /// stale epoch and the server answers `epoch_mismatch` rather than rebasing.
+  void publishReconnected() {
+    if ( _reconnects.isClosed ) return;
+    _reconnects.add( null );
+  }
+
   /// Frames that arrived for a seat nobody is watching.
   ///
   /// This is the belt's receipt. It is not diagnostics: C5.11 asserts it moves.
@@ -122,5 +143,6 @@ class TranscriptFrameRouter {
     for ( final c in _states.values ) { c.close(); }
     _appends.clear();
     _states.clear();
+    _reconnects.close();
   }
 }
