@@ -13,6 +13,7 @@ import '../claude_code/domain/claude_code_bloc.dart';
 import '../claude_code/presentation/session_list_screen.dart';
 import '../decision_proxy/presentation/trust_dashboard_screen.dart';
 import '../fleet_status/presentation/fleet_status_screen.dart';
+import '../focus_mode/presentation/focus_mode_screen.dart' show kLupinFocusTitle;
 import '../fleet/presentation/pane_host_screen.dart';
 import '../task_list/domain/task_list_bloc.dart';
 import '../task_list/presentation/task_list_pane.dart';
@@ -121,7 +122,7 @@ class LupinHomeScreen extends StatelessWidget {
         _NavCard(
           key        : const Key( TestKeys.homeLupinFocusCard ),
           icon       : Icons.center_focus_strong_outlined,
-          title      : 'Lupin Focus',
+          title      : kLupinFocusTitle,
           subtitle   : 'Conversations with every live session',
           // Focus is the app's landing screen and sits UNDER this grid on the
           // navigator stack, so the door goes back to it rather than pushing a

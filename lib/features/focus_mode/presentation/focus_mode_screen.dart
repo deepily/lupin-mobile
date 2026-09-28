@@ -46,8 +46,9 @@ import 'tts_queue_sheet.dart';
 import 'voice_reply_field.dart';
 
 /// The Home grid's destinations, in the grid's own top-to-bottom order
-/// (row c59457f0 item 2). Lupin Focus is left out — it is where the drawer
-/// lives — and Notifications / Job Queue / Trust Dashboard fall under item 1.
+/// (row c59457f0 item 2). The Focus view is not in this list: the drawer
+/// gives it a fixed entry of its own under Quick Ask (row 74a799c9), and
+/// Notifications / Job Queue / Trust Dashboard fall under item 1.
 ///
 /// 🔴 THE ROUTE WIRING MIRRORS `home_screen.dart` BLOC FOR BLOC, and the
 /// asymmetry in it is deliberate there: the four polling panes build their bloc
@@ -135,6 +136,17 @@ const bool kFocusDrawerSurfacesExperimentDefault = true;
 /// Candidates offered with row c59457f0 were "Surfaces", "Go to" and "Lupin".
 const String kFocusDrawerHeader = 'Surfaces';
 
+/// The Focus view's name, wherever it is shown: this screen's app bar, the
+/// drawer entry and the Home grid card. ONE string, for the same reason as
+/// [kFocusDrawerHeader] (Rick 2026-09-28, row 74a799c9: "Lupin AF Focus").
+const String kLupinFocusTitle = 'Lupin AF Focus';
+
+/// Whether the surfaces drawer offers a Home grid entry. Rick 2026-09-28 (row
+/// 74a799c9): redundant now that the drawer lists every grid destination, so
+/// it is HIDDEN, not deleted, like the Inbox and the two dashboards. The
+/// legacy drawer keeps its own Home grid entry either way.
+const bool kShowHomeGridInSurfacesDrawer = false;
+
 /// The app's DEFAULT post-auth surface (Q1): vertical badge rail + chat
 /// pane (Q11 Pattern A), pause/resume hold control bound to S1's streams,
 /// the S4 voice composer gated on S2's `pendingPromptFor` signal, and a
@@ -200,7 +212,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             onPressed : () => Scaffold.of( ctx ).openDrawer(),
           ),
         ),
-        title   : const Text( 'Lupin Focus' ),
+        title   : const Text( kLupinFocusTitle ),
         actions : [
           // Rick 2026-09-17: re-read the written-senders list AND the live-seat
           // roster, so a seat that has never messaged him can still be reached.
@@ -375,7 +387,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     Navigator.of( context ).push( MaterialPageRoute<void>( builder: builder ) );
   }
 
-  /// The SURFACES drawer (row c59457f0): Quick Ask and the Home grid on top,
+  /// The SURFACES drawer (row c59457f0): Quick Ask and Lupin AF Focus on top
+  /// (row 74a799c9; the Home grid entry is behind [kShowHomeGridInSurfacesDrawer]),
   /// then every Home-grid destination top to bottom, then Settings and the
   /// stop-list, then Log out. Inbox, Queue Dashboard and Trust Dashboard are
   /// ABSENT here and present in [_legacyDrawer] — hidden behind the switch,
@@ -394,14 +407,26 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             title   : const Text( 'Quick Ask' ),
             onTap   : () => _push( context, ( _ ) => const QuickAskScreen() ),
           ),
-          // Row c59457f0 item 4: the Home grid STAYS reachable. The drawer lists
-          // its destinations; it does not replace the grid.
+          // Row 74a799c9: Focus is the landing screen and this drawer opens FROM
+          // it, so the entry goes back to the first route instead of pushing a
+          // second copy — the same door the Home grid card uses. Close the drawer
+          // first: popUntil stops at the first route without closing it.
           ListTile(
-            key     : const Key( '${TestKeys.focusDrawerEntryPrefix}Home grid' ),
-            leading : const Icon( Icons.grid_view ),
-            title   : const Text( 'Home grid' ),
-            onTap   : () => _push( context, ( _ ) => const LupinHomeScreen() ),
+            key     : const Key( '${TestKeys.focusDrawerEntryPrefix}$kLupinFocusTitle' ),
+            leading : const Icon( Icons.center_focus_strong_outlined ),
+            title   : const Text( kLupinFocusTitle ),
+            onTap   : () {
+              Navigator.of( context ).pop();   // close the drawer first
+              Navigator.of( context ).popUntil( ( route ) => route.isFirst );
+            },
           ),
+          if ( kShowHomeGridInSurfacesDrawer )
+            ListTile(
+              key     : const Key( '${TestKeys.focusDrawerEntryPrefix}Home grid' ),
+              leading : const Icon( Icons.grid_view ),
+              title   : const Text( 'Home grid' ),
+              onTap   : () => _push( context, ( _ ) => const LupinHomeScreen() ),
+            ),
           const Divider(),
           for ( final s in focusDrawerSurfaces( context ) ) _entryTile( context, s ),
           const Divider(),

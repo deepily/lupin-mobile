@@ -699,16 +699,25 @@ void main() {
       'Finished Tasks', 'Task List', 'Holding Area',
     ];
 
-    testWidgets( 'the header is the one string, and Quick Ask + Home grid stay on top', ( tester ) async {
+    testWidgets( 'the header is the one string, and Quick Ask + Lupin AF Focus head the drawer', ( tester ) async {
       await openDrawer( tester );
       expect( find.byKey( const Key( TestKeys.focusDrawerHeader ) ), findsOneWidget );
       expect( find.text( kFocusDrawerHeader ), findsOneWidget );
       expect( find.text( 'Legacy surfaces' ), findsNothing );
-      // Row item 4: the Home grid is still a door, so the grid stays reachable.
+      // Row 74a799c9 (Rick 2026-09-28): Quick Ask, then the Focus view by its new
+      // name. Asserted as the literal the user reads, not via the constant, so a
+      // rename that nobody asked for fails here.
       expect( entry( 'Quick Ask' ), findsOneWidget );
-      expect( entry( 'Home grid' ), findsOneWidget );
+      expect( entry( 'Lupin AF Focus' ), findsOneWidget );
       expect( tester.getTopLeft( entry( 'Quick Ask' ) ).dy,
-              lessThan( tester.getTopLeft( entry( 'Home grid' ) ).dy ) );
+              lessThan( tester.getTopLeft( entry( 'Lupin AF Focus' ) ).dy ) );
+    } );
+
+    testWidgets( 'Home grid is hidden from the surfaces drawer (row 74a799c9)', ( tester ) async {
+      await openDrawer( tester );
+      // `find.text`, not the key: the label is what would be on screen.
+      expect( find.text( 'Home grid' ), findsNothing,
+          reason: 'redundant with the listed destinations; hidden, not deleted' );
     } );
 
     testWidgets( 'lists the Home grid surfaces TOP TO BOTTOM in the row\'s order', ( tester ) async {
@@ -723,7 +732,7 @@ void main() {
             reason: '${surfaceOrder[ i ]} must sit below ${surfaceOrder[ i - 1 ]}' );
       }
       // …and below the two entries that head the drawer.
-      expect( dys[ 'Agentic Jobs' ]!, greaterThan( tester.getTopLeft( entry( 'Home grid' ) ).dy ) );
+      expect( dys[ 'Agentic Jobs' ]!, greaterThan( tester.getTopLeft( entry( 'Lupin AF Focus' ) ).dy ) );
     } );
 
     testWidgets( 'Inbox, Queue Dashboard and Trust Dashboard are absent', ( tester ) async {
@@ -742,19 +751,21 @@ void main() {
       // A `ListTile` with a null `onTap` is indistinguishable from a live one in
       // a presence assertion and goes nowhere — the defect
       // test/widget/home/fleet_panes_reachable_test.dart exists to catch.
-      for ( final t in <String>[ 'Quick Ask', 'Home grid', ...surfaceOrder,
+      for ( final t in <String>[ 'Quick Ask', 'Lupin AF Focus', ...surfaceOrder,
                                  'Settings', 'Notification stop-list' ] ) {
         expect( tester.widget<ListTile>( entry( t ) ).onTap, isNotNull, reason: t );
       }
     } );
 
-    testWidgets( 'Home grid opens the grid, so the old layout is still reachable', ( tester ) async {
+    testWidgets( 'Lupin AF Focus closes the drawer and stays on Focus, no second copy', ( tester ) async {
       await openDrawer( tester );
-      await tester.tap( entry( 'Home grid' ) );
+      await tester.tap( entry( 'Lupin AF Focus' ) );
       await tester.pumpAndSettle();
-      expect( find.byKey( const Key( TestKeys.homeLupinFocusCard ) ), findsOneWidget,
-          reason: 'the Home grid is on screen' );
-      expect( find.byKey( const Key( TestKeys.focusRail ) ), findsNothing );
+      expect( find.text( kFocusDrawerHeader ), findsNothing, reason: 'the drawer closed' );
+      expect( find.byKey( const Key( TestKeys.focusRail ) ), findsOneWidget,
+          reason: 'still on the Focus screen' );
+      expect( find.text( 'Lupin AF Focus' ), findsOneWidget,
+          reason: 'one app bar title: no second Focus screen was pushed' );
     } );
 
     testWidgets( 'each entry opens ITS OWN screen, with home_screen.dart\'s bloc scoping', ( tester ) async {

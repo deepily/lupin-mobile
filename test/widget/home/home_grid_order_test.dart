@@ -18,7 +18,7 @@ import 'package:lupin_mobile/features/home/home_screen.dart';
 
 void main() {
   const expected = <String>[
-    'Lupin Focus', 'Agentic Jobs', 'Claude Code', 'Broadcast', 'Fleet Status',
+    'Lupin AF Focus', 'Agentic Jobs', 'Claude Code', 'Broadcast', 'Fleet Status',
     'Finished Tasks', 'Task List', 'Holding Area', 'Job Queue',
   ];
 
