@@ -217,6 +217,25 @@ void main() {
     } );
   } );
 
+  group( "the two exceptions say which they are, in a log", () {
+    // These `toString()`s are what a crash report and a `debugPrint` carry, and the whole
+    // distinction this feature rests on — refusal vs failure — is invisible in a log that
+    // prints `Instance of 'TranscriptRefused'`. One line each, and they were the last
+    // uncovered lines in the file.
+    test( "a refusal names its reason, or says it had none", () {
+      expect( const TranscriptRefused( "admin only" ).toString(),
+          "TranscriptRefused: admin only" );
+      expect( const TranscriptRefused().toString(), "TranscriptRefused" );
+    } );
+
+    test( "a failure names its status when it has one", () {
+      expect( const TranscriptApiException( "boom", statusCode: 500 ).toString(),
+          "TranscriptApiException(500): boom" );
+      expect( const TranscriptApiException( "no status" ).toString(),
+          "TranscriptApiException: no status" );
+    } );
+  } );
+
   test( "the path is one constant, and OSQ-6 moves it in one edit", () {
     expect( TranscriptRepository.pathPrefix, "/api/cc-transcript",
         reason: "§3 proposes this path and OSQ-6 is open on it. The row is here so that when "
