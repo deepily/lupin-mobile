@@ -303,9 +303,30 @@ class TestKeys {
   /// `onLivenessTap`, and two widgets sharing a key would make that unprovable.
   static const fleetStatusWatchPrefix    = 'fleetStatus.watch.';
 
-  // --- Live Console (slice 2: the placeholder route; slice 3 fills it) ---
-  static const liveConsoleScreen    = 'liveConsole.screen';
-  static const liveConsoleSessionId = 'liveConsole.sessionId';
+  // --- Live Console — the Claude Code transcript stream (ruling Q9) ---
+  static const liveConsoleScreen        = 'liveConsole.screen';
+  static const liveConsoleSessionId     = 'liveConsole.sessionId';
+  static const liveConsoleList          = 'liveConsole.list';
+  static const liveConsoleSpinner       = 'liveConsole.spinner';
+  static const liveConsoleError         = 'liveConsole.error';
+  static const liveConsoleJumpToLive    = 'liveConsole.jumpToLive';
+  static const liveConsoleLoadEarlier   = 'liveConsole.loadEarlier';
+  static const liveConsoleRefused       = 'liveConsole.refused';
+  static const liveConsoleRefusedReason = 'liveConsole.refusedReason';
+  static const liveConsoleBack          = 'liveConsole.back';
+
+  /// Assistant prose. The ONLY block key that belongs to a markdown widget — C5.14 asserts
+  /// tool output has no `Markdown` ancestor, so the two families of key must not overlap.
+  static const transcriptProse          = 'transcript.prose';
+
+  /// A collapsible block's header, suffixed with the WIRE kind
+  /// (`tool_call` · `tool_result` · `thinking` · `unknown`).
+  static const transcriptChipPrefix     = 'transcript.chip.';
+
+  /// A collapsible block's expanded monospace body, same suffixes.
+  static const transcriptPlainPrefix    = 'transcript.plain.';
+
+  static const transcriptTruncatedMarker = 'transcript.truncated';
   /// 🔴 DISTINCT FROM THE EMPTY STATE ON PURPOSE. The server answers
   /// `status: "unreachable"` with an HTTP 200, so "we cannot see the fleet" and
   /// "the fleet has no seats" must be two different things on screen.

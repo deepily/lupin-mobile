@@ -8,6 +8,10 @@ import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
 import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
+import 'package:lupin_mobile/features/transcript/data/transcript_models.dart';
+import 'package:lupin_mobile/features/transcript/data/transcript_repository.dart';
+import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.dart';
+import 'package:lupin_mobile/features/transcript/domain/transcript_stream_bloc.dart';
 import 'package:lupin_mobile/features/transcript/presentation/live_console_screen.dart';
 
 /// C5.9's tap arm, driven from the SCREEN rather than the pane — the seam where the roster
@@ -74,6 +78,15 @@ void main() {
               onPressed : () => Navigator.of( context ).push( MaterialPageRoute<void>(
                 builder: ( _ ) => FleetStatusScreen(
                   blocFactory: ( _ ) => FleetStatusBloc( repo ),
+                  // Slice 3 threaded the console's bloc factory through this screen, so a
+                  // test that taps the watch button must supply one — a real bloc over a
+                  // fake repository, since what is under test is the ROUTE, not the stream.
+                  consoleBlocFactory: ( _, id ) => TranscriptStreamBloc(
+                    ccSessionId : id,
+                    repository  : TranscriptRepository( Dio() ),
+                    router      : TranscriptFrameRouter(),
+                    send        : ( _ ) async {},
+                  ),
                 ),
               ) ),
             ),
@@ -126,17 +139,16 @@ void main() {
         reason: "the button must push the console route, not merely be tappable" );
     expect( find.byKey( const Key( TestKeys.liveConsoleScreen ) ), findsOneWidget );
 
-    // 🔴 THE FULL ID, ON SCREEN. This is the assertion that proves the console opened for
-    // the RIGHT seat at the RIGHT width — §3 pins `cc_session_id` to the seat's
-    // `stable_session_id`, and an 8-hex id here would be a watch the server cannot resolve.
-    expect(
-      find.descendant(
-        of       : find.byKey( const Key( TestKeys.liveConsoleSessionId ) ),
-        matching : find.text( fullId ),
-      ),
-      findsOneWidget,
-    );
+    // 🔴 THE CONSOLE OPENED FOR THE RIGHT SEAT, AT THE RIGHT WIDTH. §3 pins `cc_session_id`
+    // to the seat's full `stable_session_id`; an 8-hex id here would be a watch the server
+    // cannot resolve. The title carries the persona and the bloc carries the id, so both are
+    // asserted rather than just the one that is easy to see.
     expect( find.text( "Console — $who" ), findsOneWidget );
+
+    final consoleBloc = BlocProvider.of<TranscriptStreamBloc>(
+      tester.element( find.byKey( const Key( TestKeys.liveConsoleScreen ) ) ),
+    );
+    expect( consoleBloc.ccSessionId, fullId );
 
     // Back out of the console so the tear-down finds the fleet screen on top.
     Navigator.of( tester.element( find.byType( LiveConsoleScreen ) ) ).pop();

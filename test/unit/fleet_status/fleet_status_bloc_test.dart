@@ -383,6 +383,43 @@ void main() {
       await bloc.close();
     } );
 
+    // 🔴 THE SIBLING OF THE setCap BUG, AND POCHOLO FOUND IT AFTER I FIXED THE FIRST ONE.
+    // I made the event's `watchable` field nullable-means-unknown, then initialised the
+    // local in `pollOnce` to `FleetWatchableRoster.none` — a LEGAL VALUE — so a cancelled
+    // roster fetch answered "nothing is watchable" and the reducer's `??` never fired. An
+    // established roster was wiped and every watch button vanished, which is precisely the
+    // conflation the field's own docstring forbids. He caught it with a probe, not a test:
+    // good poll `{seat-alpha}`, then after a cancel `{}`.
+    //
+    // ⇒ "Nullable means unknown" has to hold at every ASSIGNMENT, not just at the
+    // declaration. This row is the one that fails if the local goes back to a default.
+    test( "🔴 A CANCELLED ROSTER FETCH KEEPS THE LAST KNOWN ROSTER", () async {
+      final repo = _FakeRepo( live )..watchableRoster = FleetWatchableRoster.fromJson( {
+        "sessions": [ { "session_id": "seat-alpha", "transcript_watchable": true } ],
+      } );
+      final bloc = FleetStatusBloc( repo );
+
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+      expect( bloc.state.watchableSessionIds, { "seat-alpha" }, reason: "setup" );
+
+      // The pane went away mid-poll: the composite and the dial landed, the roster did not.
+      repo.watchableThrows = DioException(
+        requestOptions : RequestOptions(
+          path: FleetRepository.watchableRosterEndpoint ),
+        type           : DioExceptionType.cancel,
+      );
+      await bloc.pollOnce( CancelToken() );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( bloc.state.watchableSessionIds, { "seat-alpha" },
+          reason: "a cancellation says nothing about watchability. Answering `none` for it "
+                  "makes every button vanish because the operator changed screens" );
+      expect( bloc.state.composite?.sessions.length, 10,
+          reason: "and the table still loaded — the roster fails apart from it" );
+      await bloc.close();
+    } );
+
     test( "a later poll that loses admin DOES empty the set", () async {
       // The other direction, so "keep what you have" cannot be read as "never clear". A
       // poll always supplies a roster, so a revoked role empties the set on the next one.
