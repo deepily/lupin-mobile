@@ -13,6 +13,14 @@ import 'package:lupin_mobile/services/push/fcm_bootstrap.dart';
 
 import '../../_helpers/stub_dio.dart';
 
+/// The server's REAL response shape (lupin `auth.py`, RefreshResponse): the
+/// tokens are NESTED. A flat mock is what let the first cut of this fix pass
+/// its tests and still fail on the emulator.
+Map<String, dynamic> envelope( String access, String refresh ) => {
+  'message' : 'Token refreshed',
+  'tokens'  : { 'access_token': access, 'refresh_token': refresh, 'token_type': 'bearer' },
+};
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -25,7 +33,7 @@ void main() {
 
   test( 'the rotated refresh token is saved, and the access token returned', () async {
     final adapter = StubAdapter( {
-      'POST /auth/refresh': ( _ ) => jsonBody( { 'access_token': 'new-access', 'refresh_token': 'new-refresh' } ),
+      'POST /auth/refresh': ( _ ) => jsonBody( envelope( 'new-access', 'new-refresh' ) ),
     } );
     final access = await exchangeRefreshAndPersist(
       dio: makeDio( adapter ), store: store, contextId: 'dev', refreshToken: 'old-refresh' );
@@ -43,7 +51,7 @@ void main() {
       'POST /auth/refresh': ( o ) {
         seen.add( ( o.data as Map )[ 'refresh_token' ] );
         n++;
-        return jsonBody( { 'access_token': 'a$n', 'refresh_token': 'r$n' } );
+        return jsonBody( envelope( 'a$n', 'r$n' ) );
       },
     } );
     final dio = makeDio( adapter );
@@ -52,6 +60,16 @@ void main() {
       await exchangeRefreshAndPersist( dio: dio, store: store, contextId: 'dev', refreshToken: current! );
     }
     expect( seen, [ 'old-refresh', 'r1' ] );
+  } );
+
+  test( 'a flat body (tokens NOT nested) is refused, and the stored token is left alone', () async {
+    final adapter = StubAdapter( {
+      'POST /auth/refresh': ( _ ) => jsonBody( { 'access_token': 'x', 'refresh_token': 'y' } ),
+    } );
+    await expectLater(
+      exchangeRefreshAndPersist( dio: makeDio( adapter ), store: store, contextId: 'dev', refreshToken: 'old-refresh' ),
+      throwsA( anything ) );
+    expect( await store.readRefreshToken( 'dev' ), 'old-refresh' );
   } );
 
   test( 'a failed exchange throws and leaves the stored token alone', () async {

@@ -30,6 +30,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/di/service_locator.dart';
+import '../auth/auth_repository.dart';
 import '../auth/secure_credential_store.dart';
 import '../auth/server_context_service.dart';
 import '../notification_audio/notification_preferences.dart';
@@ -132,8 +133,8 @@ Future<void> fcmBackgroundHandler( RemoteMessage message ) async {
 ///   - returns the new access token
 ///   - the rotated refresh token is written to the store BEFORE returning
 /// Raises:
-///   - DioException on a non-2xx exchange (the chain turns it into the
-///     fallback notification); nothing is written in that case
+///   - AuthException on a failed or malformed exchange (the chain turns it
+///     into the fallback notification); nothing is written in that case
 @visibleForTesting
 Future<String> exchangeRefreshAndPersist( {
   required Dio                   dio,
@@ -141,16 +142,14 @@ Future<String> exchangeRefreshAndPersist( {
   required String                contextId,
   required String                refreshToken,
 } ) async {
-  final res  = await dio.post<Map<String, dynamic>>(
-    '/auth/refresh',
-    data: { 'refresh_token': refreshToken },
-  );
-  final data    = res.data!;
-  final rotated = data[ 'refresh_token' ];
-  if ( rotated is String && rotated.isNotEmpty ) {
-    await store.writeRefreshToken( contextId, rotated );
-  }
-  return data[ 'access_token' ] as String;
+  // The SAME parser the foreground uses. The server answers
+  // `{message, user?, tokens: {access_token, refresh_token}}`, and a second,
+  // hand-rolled reader of that envelope is how this path read the tokens at the
+  // TOP level, got null, threw after the exchange had already revoked the old
+  // token, and never fetched anything (emulator logcat, 2026-09-28 16:47).
+  final tokens = await AuthRepository( dio ).refresh( refreshToken );
+  await store.writeRefreshToken( contextId, tokens.refreshToken );
+  return tokens.accessToken;
 }
 
 /// Build the chain from REAL background-isolate dependencies. Split out
