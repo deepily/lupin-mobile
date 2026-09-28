@@ -844,8 +844,12 @@ void main() {
         expect( find.text( back ), findsOneWidget, reason: '$back belongs to the old drawer' );
       }
       // …and the experiment's additions are gone with it.
+      // 🔴 `find.text`, NOT the key finder (Clayton, 2026-09-28): the legacy
+      // drawer's tiles carry NO keys, so a key-based absence check passes even
+      // when a tile with that label is sitting right there. The label is the
+      // thing the user sees, so it is the thing asserted absent.
       for ( final t in surfaceOrder ) {
-        expect( entry( t ), findsNothing, reason: '$t is an experiment entry' );
+        expect( find.text( t ), findsNothing, reason: '$t is an experiment entry' );
       }
     } );
   } );
