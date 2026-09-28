@@ -114,6 +114,45 @@ Future<void> fcmBackgroundHandler( RemoteMessage message ) async {
   debugPrint( '[FcmWake] outcome: $outcome' );
 }
 
+/// POST /auth/refresh from the background isolate, and SAVE the rotated
+/// refresh token before returning the access token.
+///
+/// 🔴 THE SERVER ROTATES REFRESH TOKENS: every exchange revokes the token it
+/// was given and returns a new one. Measured on Rick's phone 2026-09-28 (row
+/// 8ff78c69): the first wake refreshed with 200 and discarded the new token,
+/// so the second wake presented a revoked one and got 401. The foreground
+/// interceptor reads the SAME stored token, so the next foreground refresh
+/// would have failed as well, which means a silent log-out. The foreground
+/// already persists rotations (`service_locator.dart`, `onTokensRotated`);
+/// this is the background half of the same rule.
+///
+/// Requires:
+///   - refreshToken is the token currently stored for contextId
+/// Ensures:
+///   - returns the new access token
+///   - the rotated refresh token is written to the store BEFORE returning
+/// Raises:
+///   - DioException on a non-2xx exchange (the chain turns it into the
+///     fallback notification); nothing is written in that case
+@visibleForTesting
+Future<String> exchangeRefreshAndPersist( {
+  required Dio                   dio,
+  required SecureCredentialStore store,
+  required String                contextId,
+  required String                refreshToken,
+} ) async {
+  final res  = await dio.post<Map<String, dynamic>>(
+    '/auth/refresh',
+    data: { 'refresh_token': refreshToken },
+  );
+  final data    = res.data!;
+  final rotated = data[ 'refresh_token' ];
+  if ( rotated is String && rotated.isNotEmpty ) {
+    await store.writeRefreshToken( contextId, rotated );
+  }
+  return data[ 'access_token' ] as String;
+}
+
 /// Build the chain from REAL background-isolate dependencies. Split out
 /// of the handler so the Phase-0 probe can reuse it verbatim. NOTE: no
 /// ServiceLocator access anywhere below — everything is constructed
@@ -138,16 +177,12 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       if ( refresh == null || email == null ) return null;
       return FcmWakeCredentials( refreshToken: refresh, userEmail: email );
     },
-    exchangeForAccessToken: ( refreshToken ) async {
-      // POST /auth/refresh — same exchange the foreground repository uses
-      // (`auth_repository.dart:67`); the access token is memory-only and
-      // never exists in this isolate (Arnold spot-check amendment).
-      final res = await dio.post<Map<String, dynamic>>(
-        '/auth/refresh',
-        data: { 'refresh_token': refreshToken },
-      );
-      return res.data![ 'access_token' ] as String;
-    },
+    exchangeForAccessToken: ( refreshToken ) => exchangeRefreshAndPersist(
+      dio          : dio,
+      store        : store,
+      contextId    : context.activeConfig.id,
+      refreshToken : refreshToken,
+    ),
     fetchNextNotification: ( email, accessToken ) async {
       // GET /api/notifications/{user}/next (parent notifications.py:1628)
       // — the §3.2.4 content fetch; the FCM payload stays content-free.

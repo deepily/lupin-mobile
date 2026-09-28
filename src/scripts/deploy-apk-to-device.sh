@@ -138,7 +138,8 @@ deploy-apk-to-device.sh — install the dev server's debug APK to whatever adb s
                      Without it, that is refused: the dev server builds, so a newer
                      source file means this binary does not contain it. Never silent.
   --no-launch        Install without starting the app.
-  --logcat           After installing, tail filtered logcat (Ctrl+C to stop).
+  --logcat           After installing, tail filtered logcat (Ctrl+C to stop). Includes
+                     FCM delivery (FLTFireMsgReceiver) and the wake handler's [FcmWake] lines.
                      Off by default: a tail never returns, so "one command" would
                      never finish.
   --list             Show what adb sees, say which device would be chosen, install nothing.
@@ -530,8 +531,8 @@ print_success "Done — $CHOSEN_KIND $CHOSEN is running the APK built $( file_st
 
 if [ "$DO_LOGCAT" = true ]; then
     print_step "Tailing logcat (Ctrl+C to stop)"
-    print_info "Filtering for: flutter | lupin_mobile | AndroidRuntime"
+    print_info "Filtering for: flutter | lupin_mobile | AndroidRuntime | FLTFireMsg"
     "$ADB" -s "$CHOSEN" logcat -c
     sleep 1
-    "$ADB" -s "$CHOSEN" logcat | grep --line-buffered -E "flutter|lupin_mobile|AndroidRuntime"
+    "$ADB" -s "$CHOSEN" logcat | grep --line-buffered -E "flutter|lupin_mobile|AndroidRuntime|FLTFireMsg"
 fi
