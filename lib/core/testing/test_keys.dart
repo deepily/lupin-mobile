@@ -202,6 +202,11 @@ class TestKeys {
   static const settingsStopListReset         = 'settings.stopList.reset';
   static const settingsStopListRowPrefix     = 'settings.stopList.row.';      // + pattern
   static const settingsStopListTogglePrefix  = 'settings.stopList.toggle.';   // + pattern
+  // Row f27a61f4 — a visible delete with undo, and tap-to-edit
+  static const settingsStopListDeletePrefix  = 'settings.stopList.delete.';   // + pattern
+  static const settingsStopListEditField     = 'settings.stopList.edit.field';
+  static const settingsStopListEditSave      = 'settings.stopList.edit.save';
+  static const settingsStopListEditCancel    = 'settings.stopList.edit.cancel';
   // Debug: network round-trip probe (task c51e92da)
   static const settingsOpenRoundTripProbe    = 'settings.debug.openRoundTripProbe';
   // Debug: keep voice recordings as WAV (row 9b1f7701)
