@@ -203,6 +203,12 @@ class LupinHomeScreen extends StatelessWidget {
           onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
             builder: ( _ ) => FleetStatusScreen(
               blocFactory: ( _ ) => ServiceLocator.buildFleetStatusBloc(),
+              // The Live Console's bloc, for whichever seat's watch button is tapped.
+              // Route-scoped like this screen's own, and for a sharper reason: it holds a
+              // server-side watch, so an app-root instance would keep the server streaming
+              // to a phone nobody is looking at. See buildTranscriptStreamBloc.
+              consoleBlocFactory: ( _, ccSessionId ) =>
+                  ServiceLocator.buildTranscriptStreamBloc( ccSessionId ),
             ),
           ) ),
         ),

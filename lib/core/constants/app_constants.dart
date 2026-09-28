@@ -70,6 +70,35 @@ class AppConstants {
   static const String eventNotificationExpired   = 'notification_expired';
   static const String eventNotificationResponded = 'notification_responded';
   
+  // Live Console — the Claude Code transcript stream (§3's wire contract).
+  //
+  // 🔴 THE FOUR NAMES ARE RULED (Q4b) AND THEY CARRY A `cc_` PREFIX FOR A REASON.
+  // "transcript" already means speech-to-text on three other surfaces in this system
+  // (`/api/v2/transcribe`, `/upload-and-transcribe-{mp3,wav}`, and `transcript` as the
+  // name of an STT NDJSON line), so an unprefixed name would be read as audio.
+  //
+  // ⚠️ AN EVENT NAME MISSING FROM THE SERVER'S INI REGISTRY
+  // (`conf/lupin-app.ini:1729` `websocket available events`) VALIDATES AWAY SILENTLY
+  // (§3, T3). These are the client's half; the server's half is phase 1's.
+  static const String eventTranscriptAppend  = 'cc_transcript_append';
+  static const String eventTranscriptState   = 'cc_transcript_state';
+  static const String eventTranscriptWatch   = 'cc_transcript_watch';
+  static const String eventTranscriptUnwatch = 'cc_transcript_unwatch';
+
+  /// The Live Console's per-seat ring buffer, in BYTES.
+  ///
+  /// 🔴 PROVISIONAL PENDING OSQ-5, AND A CONSTANT RATHER THAN A LITERAL AT THE USE SITE
+  /// (F-Clayton-C9). §5 fixes 256 KB as the provisional default and says in as many words
+  /// that it is "read from config, never hard-coded". Open sub-question 5 — what the phone
+  /// does when a watched seat's backlog exceeds the buffer — is to be answered together
+  /// with §2's Open sub-question 3 on the SERVER's ring size, because the two have to
+  /// agree about what "exceeds" means.
+  ///
+  /// ⚠️ THE UNIT IS BYTES BECAUSE THE SIZE FUNCTION IS SHARED WITH THE SERVER (C8, paired
+  /// with A-T7): a block's size is the UTF-8 byte length of its text AFTER server
+  /// truncation. A count-of-blocks cap would mean something different on each end.
+  static const int transcriptRingBytes = 256 * 1024;
+
   // System Events
   static const String eventSysTimeUpdate = 'sys_time_update';
   static const String eventSysPing = 'sys_ping';

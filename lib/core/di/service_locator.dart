@@ -51,6 +51,13 @@ import '../../features/agentic/data/agentic_repository.dart';
 import '../../features/fleet_status/data/fleet_repository.dart';
 import '../../features/fleet_status/domain/fleet_status_bloc.dart';
 
+// Live Console (console-tee plan §5). The REPOSITORY and the FRAME ROUTER are app-root
+// singletons; the BLOC is route-scoped, like the four pane blocs and for a sharper reason —
+// see buildTranscriptStreamBloc.
+import '../../features/transcript/data/transcript_repository.dart';
+import '../../features/transcript/domain/transcript_frame_router.dart';
+import '../../features/transcript/domain/transcript_stream_bloc.dart';
+
 // Broadcast (fleet-panes plan Phase 5, row 384591dd) — repository AND bloc are both
 // app-root singletons. The bloc's scope is Rick's ruling of 2026-09-22 and is explained
 // at its registration; it is the opposite of Fleet Status above, for a stated reason.
@@ -195,6 +202,35 @@ class ServiceLocator {
   /// is PRODUCTION's construction path — the home screen's route calls it.
   static FleetStatusBloc buildFleetStatusBloc() =>
       FleetStatusBloc( _getIt<FleetRepository>() );
+
+  /// PRODUCTION construction of one seat's Live Console bloc — a NEW bloc every call.
+  ///
+  /// 🔴 ROUTE-SCOPED FOR A SHARPER REASON THAN THE POLLING PANES, and this is the one to
+  /// read if you only read one. The pane blocs are route-scoped so they stop POLLING; this
+  /// one is route-scoped so it stops WATCHING — it holds a server-side subscription, and an
+  /// app-root instance would keep the server streaming a seat's console to a phone whose
+  /// operator walked away ten minutes ago. Worse, the obvious test — *"the console stops
+  /// when you leave it"* — PASSES with the watch still open, because nothing on screen is
+  /// asking. C5.11 is the row written to fail that build: pop the route, emit a frame, and
+  /// assert the router dropped it.
+  ///
+  /// Requires:
+  ///   - TranscriptRepository, TranscriptFrameRouter and WebSocketService are registered
+  ///   - ccSessionId is the seat's FULL `stable_session_id`, never the 8-hex form
+  ///
+  /// Ensures:
+  ///   - returns a fresh bloc bound to that one seat
+  ///   - watch and unwatch go over the LIVE `WebSocketService.sendMessage` — no new
+  ///     transport, and the "enhanced" service stays untouched (§5, F6)
+  ///   - the caller owns closing it (the route's BlocProvider does), and closing is what
+  ///     sends `cc_transcript_unwatch`
+  static TranscriptStreamBloc buildTranscriptStreamBloc( String ccSessionId ) =>
+      TranscriptStreamBloc(
+        ccSessionId : ccSessionId,
+        repository  : _getIt<TranscriptRepository>(),
+        router      : _getIt<TranscriptFrameRouter>(),
+        send        : _getIt<WebSocketService>().sendMessage,
+      );
 
   /// PRODUCTION construction of the three remaining pane blocs — a NEW bloc every
   /// call, for the same reason [buildFleetStatusBloc] is.
@@ -394,6 +430,23 @@ class ServiceLocator {
     // Dio, so a singleton is right here; the BLOC is route-scoped instead.
     _getIt.registerSingleton<FleetRepository>(
       FleetRepository(_getIt<Dio>()),
+    );
+
+    // Live Console — the Claude Code transcript stream. Stateless over the shared Dio,
+    // so a singleton is right; the BLOC is route-scoped instead.
+    _getIt.registerSingleton<TranscriptRepository>(
+      TranscriptRepository(_getIt<Dio>()),
+    );
+
+    // 🔴 THE FRAME ROUTER IS APP-ROOT **BECAUSE THE BLOC IS NOT**, which is the whole
+    // point of it existing. `WsBlocDispatcher.dispatch` can only reach app-root objects
+    // through this locator, and a route-scoped console bloc is by definition not one. So
+    // the dispatcher hands frames to this router, and the bloc subscribes to it for its one
+    // seat while its route is alive. It also drops frames for seats with no open route,
+    // which is §5's first belt (C6) against the server ever fanning out more widely than
+    // its watcher set.
+    _getIt.registerSingleton<TranscriptFrameRouter>(
+      TranscriptFrameRouter(),
     );
 
     // Broadcast — the recipient roster, the fan-out door, and recent activity.

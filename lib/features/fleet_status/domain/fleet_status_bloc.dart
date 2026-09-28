@@ -216,12 +216,26 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
       // and more so, because most callers are not admins and for them "unavailable" is
       // the CORRECT answer rather than a fault. `fetchWatchable` already swallows
       // everything but a cancellation, so this only has to handle the pane going away.
-      var watchable = FleetWatchableRoster.none;
+      //
+      // 🔴 NULL, NOT `FleetWatchableRoster.none`, AND THE DIFFERENCE IS THE WHOLE BUG.
+      // `none` is an ANSWER — "the projection was read and nothing is watchable" — and the
+      // reducer's `??` cannot see past it, so a cancelled fetch wiped an established roster
+      // and every watch button vanished. Null means "this poll learned nothing about
+      // watchability", which is exactly what a cancellation is.
+      //
+      // I wrote the sibling of this bug into `setCap` and fixed it there, then left this
+      // door open: the fix was a nullable FIELD, but this local was still initialised to a
+      // legal value, so the conflation the field's own docstring forbids survived one level
+      // down. Found by Pocholo 📣 2026-09-27 with a probe, not by a test — good poll
+      // `{seat-alpha}`, then after a cancel `{}`. The lesson is that "nullable means
+      // unknown" has to hold at every assignment, not just at the declaration.
+      FleetWatchableRoster? watchable;
       try {
         watchable = await _repo.fetchWatchable( cancelToken: token );
       } on DioException catch ( e ) {
         if ( e.type != DioExceptionType.cancel ) rethrow;
-        debugPrint( '[FleetStatus] poll: watchable roster CANCELLED — no buttons' );
+        debugPrint(
+          '[FleetStatus] poll: watchable roster CANCELLED — keeping the last known roster' );
       }
 
       if ( isClosed ) {

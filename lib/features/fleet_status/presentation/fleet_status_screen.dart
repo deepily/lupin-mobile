@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../transcript/domain/transcript_stream_bloc.dart';
 import '../../transcript/presentation/live_console_screen.dart';
 import '../data/fleet_models.dart';
 import '../domain/fleet_status_bloc.dart';
@@ -32,20 +33,42 @@ class FleetStatusScreen extends StatelessWidget {
   /// a fake, and neither can forget.
   final FleetStatusBloc Function( BuildContext ) blocFactory;
 
-  const FleetStatusScreen( { super.key, required this.blocFactory } );
+  /// How the LIVE CONSOLE route builds its bloc, for the seat whose watch button was tapped.
+  ///
+  /// 🔴 NULL MEANS NO WATCH AFFORDANCE AT ALL, which is the honest default rather than a
+  /// dead button. The console's bloc is route-scoped (C1), so the route needs a factory the
+  /// way this screen does; a caller that has not supplied one cannot open a console, so the
+  /// button is not drawn. That is the same rule `_watchTapFor` already applies to every
+  /// other reason a seat is not watchable, and the widget test
+  /// "no onWatch wired ⇒ no button anywhere" is what holds it.
+  ///
+  /// ⚠️ IT IS THREADED FROM THE NAV SITE, NOT READ OFF THE LOCATOR HERE. `home_screen.dart`
+  /// passes `ServiceLocator.buildTranscriptStreamBloc`, the same shape it already uses for
+  /// this screen's own bloc — which is what keeps both routes buildable in a widget test
+  /// without a DI container.
+  final TranscriptStreamBloc Function( BuildContext, String ccSessionId )?
+      consoleBlocFactory;
+
+  const FleetStatusScreen( {
+    super.key,
+    required this.blocFactory,
+    this.consoleBlocFactory,
+  } );
 
   @override
   Widget build( BuildContext context ) {
     return BlocProvider<FleetStatusBloc>(
       // `create`, never `.value` — see the class docstring.
       create : blocFactory,
-      child  : const _FleetStatusView(),
+      child  : _FleetStatusView( consoleBlocFactory: consoleBlocFactory ),
     );
   }
 }
 
 class _FleetStatusView extends StatefulWidget {
-  const _FleetStatusView();
+  final TranscriptStreamBloc Function( BuildContext, String )? consoleBlocFactory;
+
+  const _FleetStatusView( { this.consoleBlocFactory } );
 
   @override
   State<_FleetStatusView> createState() => _FleetStatusViewState();
@@ -108,10 +131,15 @@ class _FleetStatusViewState extends State<_FleetStatusView> {
   /// the id lives. `_watchTapFor` has already proven it is non-null by finding it in the
   /// roster set, so the `!` here cannot fire: a row with a null id never gets a button.
   void _openConsole( BuildContext context, FleetSession session ) {
+    final factory = widget.consoleBlocFactory;
+    if ( factory == null ) return;
+
+    final id = session.sessionId!;
     Navigator.of( context ).push( MaterialPageRoute<void>(
       builder: ( _ ) => LiveConsoleScreen(
-        ccSessionId : session.sessionId!,
+        ccSessionId : id,
         whoLabel    : session.whoLabel,
+        blocFactory : ( routeContext ) => factory( routeContext, id ),
       ),
     ) );
   }
@@ -168,7 +196,10 @@ class _FleetStatusViewState extends State<_FleetStatusView> {
                 .read<FleetStatusBloc>()
                 .add( const FleetStatusRefreshRequested() ),
             watchableSessionIds : state.watchableSessionIds,
-            onWatch             : ( session ) => _openConsole( context, session ),
+            // Null when no console factory was threaded in: no factory, no route, no button.
+            onWatch             : widget.consoleBlocFactory == null
+                ? null
+                : ( session ) => _openConsole( context, session ),
           );
         },
       ),
