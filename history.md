@@ -13,6 +13,27 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.27 | Session `0fb2674f` (Tiffany 💍) — Transcript phase 3 slices 1–3, the Surfaces drawer, and a one-command phone deploy
+
+**RESUME HERE:**
+
+1. **Rick's two P0s:** run `src/scripts/deploy-apk-to-device.sh` once from the laptop, which closes `651e3956`, and file a ticket from the phone with New Task, which closes `5e315760`. The check list is `tmp/2026.09.28-phone-check-list.md`.
+2. **Stop-list `f27a61f4`** is re-looped for its undo defects; the fix plan is in `io/mementos/cheech.md`.
+3. **Phase 3** waits on Mr. Radio's server: slice 4, and merging `0fa608b`.
+
+**Shipped** (5-seat crew: Maya, Pocholo, Chloé, Cheech, Clayton; each merge reviewed and tested):
+- **Transcript phase 3** (row `768e852f`): slice 1 `a086a0c` (PaneVisibilityMixin extraction), slice 2 `fad452e` (fleet-row watch button), slice 3 `9962f59` (router, route-scoped bloc, Live Console). The dispatcher `0fa608b` is held back until the server emits.
+- **Surfaces drawer** `bb8c72e` (row `c59457f0`).
+- **Phone deploy script** `d15210f` + `c6db075` (row `651e3956`): installs the server-built APK over the SMB mount to whatever adb sees, phone first, and refuses a stale APK.
+- `686576b` CLAUDE.md dev commands; `610f8c9` `/coverage/` gitignored.
+- **Rick confirmed on the device:** record button `3f2a7dab`, mic hold `a1c12c6e`, Files `0534b50d`.
+
+**Suite: 2055 → 2299 passed / 1 skipped / 0 failed** at `bb8c72e` (8 pending-capture reds by design).
+
+**Lesson:** twice, a fix commit was stacked on something that must not merge (the C9 hold-back, then row A). A one-line `git merge-base --is-ancestor` check before every merge caught both.
+
+---
+
 ## 2026.09.26 | Session `90e34e30` (Tiffany 💍) — Skeleton Shift: five-accordion status report, the TaskRow call-site guard, and file_picker passing on the phone
 
 **RESUME HERE:**

@@ -25,6 +25,27 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 - **[2026-08-21-to-09-22-todo.md](todo-archive/2026-08-21-to-09-22-todo.md)**: the dated sections 09-22 back to 08-21, plus the May and June "START HERE" blocks. Archived 2026-09-26.
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-27 (transcript phase 3, drawer, phone deploy script)
+
+### Decisions Log — 2026-09-27 (session `0fb2674f`, Tiffany, 5-seat SWE crew)
+
+- **Slices merge by `merge --no-ff`, never squash, never a history rewrite.** To leave a held-back commit out, cherry-pick onto a new branch (done twice tonight: `-s3` and `focus-drawer-only`).
+- **Coverage bar (ruling 10a):** ≥90% on every NEW file and on the lines a slice ADDS to a changed file. A changed file's older uncovered lines are not a breach.
+- **Drawer header is "Surfaces"** (Rick, 20:53 EDT). The old drawer sits behind the injectable `FocusModeScreen.surfacesExperiment` switch, not a const.
+- **Stop-list:** tapping the text edits, only the Checkbox toggles, and a colliding edit is refused (R2, R4).
+- **`/coverage/` is gitignored** (Rick yes; `610f8c9`).
+- **Rick added 2 seats** (5 total) for the stop-list and drawer.
+- **The phone deploy script refuses a stale APK** unless `--allow-stale` is passed; the connect step times out at 10 s.
+
+### ⏳ Owed — 2026-09-27
+
+- [ ] **Rick: run `src/scripts/deploy-apk-to-device.sh` once from the laptop**, then close P0 `651e3956`. The APK is `f21b38c8`, built 21:55 at `bb8c72e`; the how-to is `tmp/install-apk-on-phone.md`. The script has never touched real hardware, so his run is the first real test.
+- [ ] **Rick: phone checks** (`tmp/2026.09.28-phone-check-list.md`): New Task P0 `5e315760`, the edit button `8cc964ec`, the new drawer `c59457f0`, and a yes on the Submit button `4e936916` being fully visible. Already confirmed tonight: record button, mic hold, Files.
+- [ ] **Stop-list `f27a61f4`:** fix the undo defects from Clayton's re-loop of `072fd40`. Invalidate or dismiss Undo on any other list change, make `insertAt` refuse duplicates, and add interleaved tests. Plan: `io/mementos/cheech.md`.
+- [ ] **Phase 3 `768e852f`:** slice 4 (capture script plus 6 fixtures) and merging the held-back `0fa608b` (the dispatcher and C5.20). Both wait on Mr. Radio's server sending `cc_transcript_*`.
+- [ ] **Follow-up:** the drawer's route list is copied from `home_screen.dart`, so extract a shared surface list before they drift. Also, `_load()` accepts duplicate stop patterns.
+- [ ] **Rick: admit or drop `6f9c0fe4`** (stale AC-G2 fixture, 11 ids missing). It's being held.
+
 ## 🆕 Open from 2026-09-26 (Skeleton Shift)
 
 ### Decisions Log — 2026-09-26 (session `90e34e30`, Tiffany)
