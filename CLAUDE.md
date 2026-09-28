@@ -79,7 +79,14 @@ Based on the mobile development options analysis, the following technologies are
 JAVA_HOME=$HOME/opt/jdk-21 \
 GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g\ -XX:MaxMetaspaceSize=1g\ -XX:ReservedCodeCacheSize=256m -Dkotlin.daemon.jvmargs=-Xmx1500m -Dorg.gradle.workers.max=6" \
 ./flutter.sh build apk --debug         # ~7 min cold, ~64 s warm; installing to the phone still needs the laptop or adb
+
+# The same build, wrapped (main checkout only, one at a time, memory override built in):
+src/scripts/build-apk-on-server.sh
+# From the laptop: build on the server over ssh, then install to the phone (row f681440d)
+src/scripts/deploy-apk-to-device.sh --build
 ```
+
+**Always rebuild the APK after a client change (Rick, 2026-09-28).** Whenever a client change or bug fix merges into the main checkout and the suite is green, run `src/scripts/build-apk-on-server.sh` there and say the APK is ready. Rick then only runs `deploy-apk-to-device.sh` from the laptop.
 
 ## CODE STYLE AND CONVENTIONS
 - **File Naming**: Use dashes for non-code files (e.g., `mobile-app-config.md`)

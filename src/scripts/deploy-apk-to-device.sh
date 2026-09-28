@@ -5,10 +5,12 @@
 # ONE command, no hand steps: install the debug APK the DEV SERVER already built onto
 # whatever Android device this laptop can see.
 #
-#   ./deploy-apk-to-device.sh
+#   ./deploy-apk-to-device.sh            # install the APK the server already built
+#   ./deploy-apk-to-device.sh --build    # build it on the server first, then install
 #
 # That is the whole interface. It pulls the APK over the SMB mount, picks a device,
-# installs, launches, and exits.
+# installs, launches, and exits. With --build it first runs build-apk-on-server.sh on
+# the dev server over ssh (row f681440d), so the laptop never needs a build toolchain.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────
 # WHY THIS IS A SIBLING OF build-and-deploy-lupin-mobile.sh RATHER THAN A FLAG ON IT
@@ -57,6 +59,7 @@
 #   1  no usable device, or the install itself failed
 #   2  bad arguments
 #   3  the APK is missing, unreadable over the mount, or STALE (see --allow-stale)
+#   4  --build: the server build failed, or ssh could not reach the server
 #
 set -euo pipefail
 
@@ -95,6 +98,12 @@ PACKAGE_NAME="ai.deepily.lupin_mobile"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-10}"
 LAUNCH_ACTIVITY="$PACKAGE_NAME/$PACKAGE_NAME.MainActivity"
 
+# --build: where the dev server is, and where the main checkout lives ON the server. The
+# laptop sees that checkout as the SMB mount this script runs from, but ssh needs the
+# server's own path, which the mount cannot tell us.
+BUILD_HOST="${LUPIN_BUILD_HOST:-rruiz@192.168.1.21}"
+BUILD_REPO="${LUPIN_BUILD_REPO:-/mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile}"
+
 # ADB defaults to whatever is on PATH; ANDROID_HOME's copy is the fallback so this works
 # on a laptop where platform-tools was never added to PATH.
 ADB="${ADB:-}"
@@ -113,6 +122,9 @@ usage() {
 deploy-apk-to-device.sh — install the dev server's debug APK to whatever adb sees
 
   (no arguments)     Pull the APK over the SMB mount, pick a device, install, launch, exit.
+  --build            Build on the dev server over ssh first, then install the new APK.
+                     Server: LUPIN_BUILD_HOST (default rruiz@192.168.1.21).
+                     Checkout on the server: LUPIN_BUILD_REPO.
   --device SERIAL    Install to this adb serial instead of choosing one.
   -s SERIAL          Short form of --device.
   --connect ADDR     `adb connect ADDR` first, for a wireless phone on the LAN.
@@ -154,6 +166,7 @@ PAIR_ADDR=""
 PAIR_CODE=""
 APK_OVERRIDE=""
 ALLOW_STALE=false
+DO_BUILD=false
 DO_LAUNCH=true
 DO_LOGCAT=false
 LIST_ONLY=false
@@ -176,6 +189,7 @@ while [ $# -gt 0 ]; do
             case "${2:-}" in ""|-*) print_error "--apk needs a path"; exit 2 ;; esac
             APK_OVERRIDE="$2"; shift ;;
         --allow-stale) ALLOW_STALE=true ;;
+        --build)     DO_BUILD=true ;;
         --no-launch) DO_LAUNCH=false ;;
         --logcat)    DO_LOGCAT=true ;;
         --list)      LIST_ONLY=true ;;
@@ -358,6 +372,30 @@ if [ "$LIST_ONLY" = true ]; then
 fi
 
 # ════════════════════════════════════════════════════════════════════════════════════
+# Build on the server, when asked
+# ════════════════════════════════════════════════════════════════════════════════════
+# After the device check on purpose: with no phone attached, a minute of building would
+# be wasted before the script said so.
+if [ "$DO_BUILD" = true ]; then
+    print_step "Building on the dev server ($BUILD_HOST)"
+    # -t so the build's colours and progress stream live; ConnectTimeout so a wrong
+    # address fails in seconds instead of hanging. A password prompt still works.
+    build_rc=0
+    ssh -t -o ConnectTimeout=10 "$BUILD_HOST" "$BUILD_REPO/src/scripts/build-apk-on-server.sh" \
+        || build_rc=$?
+    if [ "$build_rc" != 0 ]; then
+        print_error "Server build failed (exit $build_rc). Nothing was installed."
+        # ssh itself exits 255 when it never reached the server.
+        if [ "$build_rc" = 255 ]; then
+            print_info "ssh could not reach $BUILD_HOST. Check the address, or set"
+            print_info "LUPIN_BUILD_HOST=user@host. For no password prompt: ssh-copy-id $BUILD_HOST"
+        fi
+        exit 4
+    fi
+    print_success "Server build finished"
+fi
+
+# ════════════════════════════════════════════════════════════════════════════════════
 # Pull the APK over the mount
 # ════════════════════════════════════════════════════════════════════════════════════
 print_step "Fetching the APK"
@@ -365,9 +403,8 @@ print_step "Fetching the APK"
 if [ ! -f "$APK_SRC" ]; then
     print_error "APK not found: $APK_SRC"
     print_info "The DEV SERVER builds it. Nothing here rebuilds, on purpose."
-    print_info "On the dev server, in the MAIN checkout (not a worktree):"
-    print_info "  JAVA_HOME=\$HOME/opt/jdk-21 GRADLE_OPTS=... ./flutter.sh build apk --debug"
-    print_info "See CLAUDE.md § DEVELOPMENT COMMANDS for the full command with the override."
+    print_info "Re-run with --build to build it on the dev server first, or on the server run:"
+    print_info "  src/scripts/build-apk-on-server.sh"
     print_info "If the path itself looks wrong, the SMB mount is probably not mounted."
     exit 3
 fi
@@ -393,8 +430,8 @@ if [ -n "$newer_dart" ]; then
         print_error "STALE APK — refusing to install."
         print_info "$newer_count .dart file(s) under lib/ are newer than this build."
         print_info "  e.g. ${newer_dart#"$REPO_ROOT"/}"
-        print_info "This APK does NOT contain those changes. Rebuild on the DEV SERVER, in the"
-        print_info "MAIN checkout (see CLAUDE.md § DEVELOPMENT COMMANDS), then run this again."
+        print_info "This APK does NOT contain those changes. Re-run with --build to build it on"
+        print_info "the dev server first."
         print_info "To install this build regardless:  --allow-stale"
         exit 3
     fi
