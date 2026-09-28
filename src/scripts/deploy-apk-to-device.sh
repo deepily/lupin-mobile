@@ -89,6 +89,10 @@ REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 APK_REL="build/app/outputs/flutter-apk/app-debug.apk"
 APK_SRC="$REPO_ROOT/$APK_REL"
 PACKAGE_NAME="ai.deepily.lupin_mobile"
+
+# How long to wait for `adb connect` before calling it dead. Ten seconds is generous for a
+# LAN and far short of adb's own ~130 s silence against an unreachable address.
+CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-10}"
 LAUNCH_ACTIVITY="$PACKAGE_NAME/$PACKAGE_NAME.MainActivity"
 
 # ADB defaults to whatever is on PATH; ANDROID_HOME's copy is the fallback so this works
@@ -113,6 +117,8 @@ deploy-apk-to-device.sh — install the dev server's debug APK to whatever adb s
   -s SERIAL          Short form of --device.
   --connect ADDR     `adb connect ADDR` first, for a wireless phone on the LAN.
                      Port defaults to 5555, so --connect 192.168.1.50 is enough.
+                     Bounded by CONNECT_TIMEOUT (default 10s): adb itself sits silent
+                     for ~130s against an address that is simply not there.
   --pair ADDR CODE   `adb pair ADDR CODE` first — the ONE-TIME wireless pairing.
   --apk PATH         Install this APK instead of the one under the repo root.
   --allow-stale      Install even though lib/ has .dart files NEWER than the APK.
@@ -208,16 +214,52 @@ fi
 if [ -n "$CONNECT_ADDR" ]; then
     case "$CONNECT_ADDR" in *:*) ;; *) CONNECT_ADDR="$CONNECT_ADDR:5555" ;; esac
     print_step "Connecting to $CONNECT_ADDR"
-    # 🔴 `adb connect` EXITS 0 ON FAILURE and says so only in its output ("failed to
-    # connect", "cannot connect"), so the exit code cannot be trusted here. Grep the text.
-    connect_out="$( "$ADB" connect "$CONNECT_ADDR" 2>&1 || true )"
-    echo "$connect_out"
+    print_info "(up to ${CONNECT_TIMEOUT}s — an unreachable address answers slowly, if at all)"
+
+    # 🔴 `adb connect` EXITS 0 ON FAILURE and says so only in its output, so the exit code
+    # cannot be trusted here. MEASURED 2026-09-27 on platform-tools 37.0.1 (adb 1.0.41):
+    #     adb connect 127.0.0.1:1  ->  "failed to connect to '127.0.0.1:1': Connection
+    #                                   refused"   rc=0
+    # Note the failure text says "connect to", never "connected to", so matching on
+    # "connected to" cannot false-positive against it. Both halves of that were run, not
+    # assumed — this comment used to assert the behaviour with no evidence behind it.
+    #
+    # 🔴 AND A REFUSED ADDRESS IS THE FAST CASE. An address that is simply NOT THERE —
+    # a wrong octet, a phone asleep, wireless debugging switched off — drops the packets
+    # instead of refusing them, and adb sits silent for ~130 s before printing anything
+    # (measured by Pocholo, same toolchain). For a script whose whole pitch is "one
+    # command", two minutes of no output is indistinguishable from a hang, and the user
+    # concludes the tool is broken long before adb concludes anything. So the call is
+    # bounded and the two failures are reported DIFFERENTLY, because their fixes differ:
+    # something answered and said no, versus nothing is there at all.
+    # ⚠️ `connect_rc=0` FIRST AND `|| connect_rc=$?` ON THE ASSIGNMENT, because `set -e` is
+    # on: a bare `var=$( cmd )` whose command fails kills the script THERE, before the next
+    # line can read `$?`. Caught by the suite — the first cut of this timeout exited 124
+    # straight out of the script instead of printing the explanation it exists to print.
+    connect_rc=0
+    connect_out="$( timeout "$CONNECT_TIMEOUT" "$ADB" connect "$CONNECT_ADDR" 2>&1 )" \
+        || connect_rc=$?
+    [ -n "$connect_out" ] && echo "$connect_out"
+
+    # `timeout` reports 124 when it had to kill the command. Anything else is adb's own.
+    if [ "$connect_rc" = 124 ]; then
+        print_error "No answer from $CONNECT_ADDR after ${CONNECT_TIMEOUT}s — giving up."
+        print_info "Nothing at that address is even refusing the connection, which usually means:"
+        print_info "  - the IP is wrong (check the phone: Settings → Developer options →"
+        print_info "    Wireless debugging — it shows the current address AND port), or"
+        print_info "  - wireless debugging is switched off, or the phone is asleep, or"
+        print_info "  - the phone is on a different network from this laptop."
+        print_info "Raise the wait with CONNECT_TIMEOUT=<seconds> if the LAN is genuinely slow."
+        exit 1
+    fi
+
     case "$connect_out" in
         *"connected to"*) print_success "Connected to $CONNECT_ADDR" ;;
         *)
             print_error "Could not connect to $CONNECT_ADDR"
-            print_info "Wireless debugging must be ON on the phone, and it must be on this LAN."
-            print_info "The port changes every time wireless debugging is toggled — re-read it."
+            print_info "Something answered and refused — so the address is reachable but the"
+            print_info "port is wrong or wireless debugging has been toggled since you read it."
+            print_info "The port changes EVERY time wireless debugging is toggled — re-read it."
             print_info "If the phone was never paired with this laptop, use --pair first."
             exit 1 ;;
     esac
