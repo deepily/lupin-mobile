@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # deploy-apk-to-device.sh
 #
@@ -56,7 +56,7 @@
 #   0  installed (and launched)
 #   1  no usable device, or the install itself failed
 #   2  bad arguments
-#   3  the APK is missing or unreadable over the mount
+#   3  the APK is missing, unreadable over the mount, or STALE (see --allow-stale)
 #
 set -euo pipefail
 
@@ -115,6 +115,9 @@ deploy-apk-to-device.sh — install the dev server's debug APK to whatever adb s
                      Port defaults to 5555, so --connect 192.168.1.50 is enough.
   --pair ADDR CODE   `adb pair ADDR CODE` first — the ONE-TIME wireless pairing.
   --apk PATH         Install this APK instead of the one under the repo root.
+  --allow-stale      Install even though lib/ has .dart files NEWER than the APK.
+                     Without it, that is refused: the dev server builds, so a newer
+                     source file means this binary does not contain it. Never silent.
   --no-launch        Install without starting the app.
   --logcat           After installing, tail filtered logcat (Ctrl+C to stop).
                      Off by default: a tail never returns, so "one command" would
@@ -144,6 +147,7 @@ CONNECT_ADDR=""
 PAIR_ADDR=""
 PAIR_CODE=""
 APK_OVERRIDE=""
+ALLOW_STALE=false
 DO_LAUNCH=true
 DO_LOGCAT=false
 LIST_ONLY=false
@@ -165,6 +169,7 @@ while [ $# -gt 0 ]; do
         --apk)
             case "${2:-}" in ""|-*) print_error "--apk needs a path"; exit 2 ;; esac
             APK_OVERRIDE="$2"; shift ;;
+        --allow-stale) ALLOW_STALE=true ;;
         --no-launch) DO_LAUNCH=false ;;
         --logcat)    DO_LOGCAT=true ;;
         --list)      LIST_ONLY=true ;;
@@ -231,6 +236,14 @@ emulators=()     # serials in state `device`, emulators
 unauthorized=()
 offline=()
 
+# 🔴 COUNTED IN SCALARS, NOT WITH ${#arr[@]}, AND THAT IS NOT A STYLE CHOICE. The laptop's
+# /bin/bash is 3.2, where `set -u` makes ${#arr[@]} on an EMPTY array an unbound-variable
+# error rather than 0. Every no-device path reads at least one empty array, so the script
+# would die with "unbound variable" at precisely the moment its job is to explain why no
+# device was found. The shebang now prefers a newer bash from PATH, but `bash script.sh`
+# ignores a shebang entirely, so the counters are the belt to that brace.
+n_phones=0; n_emulators=0; n_unauthorized=0; n_offline=0
+
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     serial="$( printf '%s' "$line" | awk '{print $1}' )"
@@ -239,11 +252,11 @@ while IFS= read -r line; do
     case "$state" in
         device)
             case "$serial" in
-                emulator-*) emulators+=( "$serial" ) ;;
-                *)          phones+=( "$serial" ) ;;
+                emulator-*) emulators+=( "$serial" );    n_emulators=$(( n_emulators + 1 )) ;;
+                *)          phones+=( "$serial" );       n_phones=$(( n_phones + 1 )) ;;
             esac ;;
-        unauthorized) unauthorized+=( "$serial" ) ;;
-        *)            offline+=( "$serial" ) ;;   # offline, bootloader, recovery, …
+        unauthorized) unauthorized+=( "$serial" ); n_unauthorized=$(( n_unauthorized + 1 )) ;;
+        *)            offline+=( "$serial" );      n_offline=$(( n_offline + 1 )) ;;   # offline, bootloader, …
     esac
 done <<< "$device_lines"
 
@@ -254,19 +267,19 @@ if [ -n "$DEVICE_SERIAL" ]; then
     CHOSEN="$DEVICE_SERIAL"
     case "$CHOSEN" in emulator-*) CHOSEN_KIND="emulator" ;; *) CHOSEN_KIND="phone" ;; esac
     print_info "Using the serial you passed: $CHOSEN"
-elif [ ${#phones[@]} -gt 0 ]; then
+elif [ "$n_phones" -gt 0 ]; then
     CHOSEN="${phones[0]}"
     CHOSEN_KIND="phone"
-    if [ ${#emulators[@]} -gt 0 ]; then
+    if [ "$n_emulators" -gt 0 ]; then
         print_info "Both a phone and an emulator are attached — PREFERRING THE PHONE."
         print_info "  phone:    $CHOSEN"
         print_info "  emulator: ${emulators[*]}  (pass --device to override)"
     fi
-    if [ ${#phones[@]} -gt 1 ]; then
+    if [ "$n_phones" -gt 1 ]; then
         print_info "More than one phone attached; using the first: $CHOSEN"
         print_info "  all phones: ${phones[*]}  (pass --device to pick another)"
     fi
-elif [ ${#emulators[@]} -gt 0 ]; then
+elif [ "$n_emulators" -gt 0 ]; then
     CHOSEN="${emulators[0]}"
     CHOSEN_KIND="emulator"
     print_info "No phone attached; using the emulator: $CHOSEN"
@@ -275,18 +288,18 @@ fi
 # Nothing usable: say which of the three situations this is, because the fix differs.
 if [ -z "$CHOSEN" ]; then
     print_error "No device adb can install to."
-    if [ ${#unauthorized[@]} -gt 0 ]; then
+    if [ "$n_unauthorized" -gt 0 ]; then
         print_info "UNAUTHORIZED: ${unauthorized[*]}"
         print_info "  The phone is plugged in and visible but has not trusted this laptop."
         print_info "  Unlock it and tap \"Allow USB debugging\" (tick \"Always allow\")."
         print_info "  This is a one-time on-device tap; no script can perform it."
     fi
-    if [ ${#offline[@]} -gt 0 ]; then
+    if [ "$n_offline" -gt 0 ]; then
         print_info "OFFLINE: ${offline[*]}"
         print_info "  Usually a sleeping phone or a dropped wireless link."
         print_info "  Wake it, then re-run; for wireless, re-run with --connect."
     fi
-    if [ ${#unauthorized[@]} -eq 0 ] && [ ${#offline[@]} -eq 0 ]; then
+    if [ "$n_unauthorized" -eq 0 ] && [ "$n_offline" -eq 0 ]; then
         print_info "adb sees nothing at all. Either:"
         print_info "  - plug the phone in over USB (with USB debugging enabled), or"
         print_info "  - start it wirelessly:  --connect <phone-ip>   (--pair first, once), or"
@@ -319,6 +332,31 @@ fi
 
 print_info "Source:    $APK_SRC"
 print_info "Built:     $( file_stamp "$APK_SRC" )"
+
+# 🔴 A TIMESTAMP IS A DISCLOSURE, NOT A CONTROL, AND THIS IS THE CONTROL.
+# Printing when the APK was built puts a two-timestamp comparison in the reader's head at
+# the worst possible moment, and the line scrolls past above the ✓ the eye actually lands
+# on. So: if any .dart under lib/ is newer than the APK, REFUSE. The whole point of this
+# script is that the dev server builds and the laptop installs — which makes "the source
+# moved and nobody rebuilt" the single most likely way it hands over the wrong binary.
+# --allow-stale exists because sometimes you do mean it, and it is never silent.
+newer_dart="$( find "$REPO_ROOT/lib" -name '*.dart' -newer "$APK_SRC" -print -quit 2>/dev/null || true )"
+if [ -n "$newer_dart" ]; then
+    newer_count="$( find "$REPO_ROOT/lib" -name '*.dart' -newer "$APK_SRC" 2>/dev/null | wc -l | tr -d ' ' )"
+    if [ "$ALLOW_STALE" = true ]; then
+        print_info "STALE, and you passed --allow-stale: $newer_count .dart file(s) under lib/"
+        print_info "are newer than this APK. Installing it anyway, as asked."
+        print_info "  e.g. ${newer_dart#"$REPO_ROOT"/}"
+    else
+        print_error "STALE APK — refusing to install."
+        print_info "$newer_count .dart file(s) under lib/ are newer than this build."
+        print_info "  e.g. ${newer_dart#"$REPO_ROOT"/}"
+        print_info "This APK does NOT contain those changes. Rebuild on the DEV SERVER, in the"
+        print_info "MAIN checkout (see CLAUDE.md § DEVELOPMENT COMMANDS), then run this again."
+        print_info "To install this build regardless:  --allow-stale"
+        exit 3
+    fi
+fi
 
 # 🔴 NOTHING HERE REBUILDS, SO THAT TIMESTAMP IS THE HONEST ANSWER TO "WHAT AM I
 # INSTALLING?" A source change newer than it is NOT in this binary — the dev server has to
@@ -359,10 +397,28 @@ print_step "Installing to the $CHOSEN_KIND: $CHOSEN"
 # INSTALL_FAILED_UPDATE_INCOMPATIBLE; that needs an uninstall, which this script does NOT
 # do on its own because it would take the app's data with it. Named so the message is
 # recognisable rather than mysterious.
-if "$ADB" -s "$CHOSEN" install -r "$APK_LOCAL"; then
+# 🔴 THE EXIT CODE IS NOT THE ANSWER ON ITS OWN — THE SAME TRAP AS `adb connect` ABOVE,
+# AND THIS SCRIPT FELL INTO IT ONCE. Older platform-tools print
+# `Failure [INSTALL_FAILED_…]` and still exit 0, so a status-only check reports
+# "✓ Installed" and then "✓ Done — the phone is running the APK built <T>" over a phone
+# that is running last week's build. Pocholo demonstrated exactly that against a stub.
+# Platform-tools ≥ 28 does exit non-zero, so on a current laptop this arm may never fire —
+# which is an argument for keeping it, not for leaving it out: nothing else catches it,
+# and nobody is checking the laptop's version before every deploy.
+install_out="$( "$ADB" -s "$CHOSEN" install -r "$APK_LOCAL" 2>&1 )" && install_rc=0 || install_rc=$?
+echo "$install_out"
+
+install_failed=0
+[ "$install_rc" != 0 ] && install_failed=1
+case "$install_out" in
+    *Failure*|*"adb: failed"*|*"Error:"*) install_failed=1 ;;
+esac
+
+if [ "$install_failed" = 0 ]; then
     print_success "Installed"
 else
     print_error "adb install failed."
+    [ "$install_rc" = 0 ] && print_info "(adb exited 0 but said so in its output — that is why this is checked.)"
     print_info "If it said INSTALL_FAILED_UPDATE_INCOMPATIBLE, the signature changed:"
     print_info "  $ADB -s $CHOSEN uninstall $PACKAGE_NAME   # ⚠️ ALSO DELETES THE APP'S DATA"
     print_info "then run this again. Not done automatically — that is your data to lose."
