@@ -63,14 +63,22 @@ Based on the mobile development options analysis, the following technologies are
 
 ## DEVELOPMENT COMMANDS
 ```bash
-# Development server commands (if applicable)
-# TBD based on chosen framework
+# Always use the wrapper; bare `flutter` is not on every seat's PATH.
 
-# Build commands
-# TBD based on chosen framework
+# Testing
+./flutter.sh test                      # full suite, the merge gate (green on the exact sha)
+./flutter.sh test --coverage           # lcov at coverage/lcov.info
+./flutter.sh analyze <changed files>   # repo-wide analyze has pre-existing noise
 
-# Testing commands
-# TBD based on chosen framework
+# Android debug APK on the dev server (toolchain installed 2026-09-27, row 651e3956)
+#   JDK 21 at ~/opt/jdk-21, SDK at ~/Android/Sdk; `flutter config` already points at both.
+#   Build in the MAIN checkout: worktrees lack android/app/google-services.json (gitignored).
+#   Worker seats are capped at 8 GiB, but android/gradle.properties asks Gradle for
+#   -Xmx8G plus 4G metaspace, so an unmodified build is OOM-killed and reports only
+#   "Gradle build daemon disappeared unexpectedly". Pass the override below (session-local).
+JAVA_HOME=$HOME/opt/jdk-21 \
+GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g\ -XX:MaxMetaspaceSize=1g\ -XX:ReservedCodeCacheSize=256m -Dkotlin.daemon.jvmargs=-Xmx1500m -Dorg.gradle.workers.max=6" \
+./flutter.sh build apk --debug         # ~7 min cold, ~64 s warm; installing to the phone still needs the laptop or adb
 ```
 
 ## CODE STYLE AND CONVENTIONS
