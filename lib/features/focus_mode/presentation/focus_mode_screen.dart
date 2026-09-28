@@ -11,7 +11,21 @@ import '../../../services/tts/tts_orchestrator.dart';
 import '../../auth/domain/auth_bloc.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/auth_event.dart';
+import '../../agentic/domain/agentic_submission_bloc.dart';
+import '../../agentic/presentation/agentic_hub_screen.dart';
+import '../../broadcast/domain/broadcast_bloc.dart';
+import '../../broadcast/presentation/broadcast_pane.dart';
+import '../../claude_code/domain/claude_code_bloc.dart';
+import '../../claude_code/presentation/session_list_screen.dart';
 import '../../decision_proxy/presentation/trust_dashboard_screen.dart';
+import '../../finished_tasks/domain/finished_tasks_bloc.dart';
+import '../../finished_tasks/presentation/finished_tasks_screen.dart';
+import '../../fleet/presentation/pane_host_screen.dart';
+import '../../fleet_status/presentation/fleet_status_screen.dart';
+import '../../holding_area/domain/holding_area_bloc.dart';
+import '../../holding_area/presentation/holding_area_pane.dart';
+import '../../task_list/domain/task_list_bloc.dart';
+import '../../task_list/presentation/task_list_pane.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/doc_split_host.dart';
 import '../../home/home_screen.dart';
@@ -31,6 +45,96 @@ import 'session_rail.dart';
 import 'tts_queue_sheet.dart';
 import 'voice_reply_field.dart';
 
+/// The Home grid's destinations, in the grid's own top-to-bottom order
+/// (row c59457f0 item 2). Lupin Focus is left out — it is where the drawer
+/// lives — and Notifications / Job Queue / Trust Dashboard fall under item 1.
+///
+/// 🔴 THE ROUTE WIRING MIRRORS `home_screen.dart` BLOC FOR BLOC, and the
+/// asymmetry in it is deliberate there: the four polling panes build their bloc
+/// INSIDE the route, because an app-root bloc would keep polling behind whatever
+/// the operator is actually looking at; Broadcast takes the app-root bloc by
+/// `.value`, because its ack tally arrives on a socket frame and has to outlive
+/// the pane. Two doors to one screen must not disagree about that, so a change
+/// to either side belongs on both.
+///
+/// TOP-LEVEL, not a method on the state, so a test can call each `builder` and
+/// see WHICH screen an entry opens without mounting that screen's whole bloc
+/// graph.
+@visibleForTesting
+List<FocusDrawerSurface> focusDrawerSurfaces( BuildContext context ) {
+  return <FocusDrawerSurface>[
+    FocusDrawerSurface( Icons.smart_toy_outlined, 'Agentic Jobs', ( _ ) => BlocProvider.value(
+      value : context.read<AgenticSubmissionBloc>(),
+      child : const AgenticHubScreen(),
+    ) ),
+    FocusDrawerSurface( Icons.terminal_outlined, 'Claude Code', ( _ ) => BlocProvider.value(
+      value : context.read<ClaudeCodeBloc>(),
+      child : const SessionListScreen(),
+    ) ),
+    FocusDrawerSurface( Icons.campaign_outlined, 'Broadcast', ( _ ) => Scaffold(
+      appBar : AppBar( title: const Text( 'Broadcast' ) ),
+      body   : BlocProvider<BroadcastBloc>.value(
+        value : ServiceLocator.get<BroadcastBloc>(),
+        child : const BroadcastPane(),
+      ),
+    ) ),
+    FocusDrawerSurface( Icons.groups_outlined, 'Fleet Status', ( _ ) => FleetStatusScreen(
+      blocFactory: ( _ ) => ServiceLocator.buildFleetStatusBloc(),
+    ) ),
+    FocusDrawerSurface( Icons.task_alt_outlined, 'Finished Tasks', ( _ ) => BlocProvider<FinishedTasksBloc>(
+      create : ( _ ) => ServiceLocator.buildFinishedTasksBloc(),
+      child  : const FinishedTasksScreen(),
+    ) ),
+    FocusDrawerSurface( Icons.checklist_outlined, 'Task List', ( _ ) => PaneHostScreen<TaskListBloc>(
+      title       : 'Task List',
+      pane        : const TaskListPane(),
+      blocFactory : ( _ ) => ServiceLocator.buildTaskListBloc(),
+    ) ),
+    FocusDrawerSurface( Icons.inbox_outlined, 'Holding Area', ( _ ) => PaneHostScreen<HoldingAreaBloc>(
+      title       : 'Holding Area',
+      pane        : const HoldingAreaPane(),
+      blocFactory : ( _ ) => ServiceLocator.buildHoldingAreaBloc(),
+    ) ),
+  ];
+}
+
+/// The drawer's settings block — NOT Home-grid surfaces, and listed after them
+/// under their own divider. The stop-list entry is disabled when the service is
+/// not registered, exactly as the pre-experiment drawer had it.
+@visibleForTesting
+List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
+  return <FocusDrawerSurface>[
+    FocusDrawerSurface( Icons.settings, 'Settings', ( _ ) => NotificationAudioSettingsScreen(
+      prefs: ServiceLocator.get<NotificationPreferences>(),
+    ) ),
+    FocusDrawerSurface( Icons.filter_alt_outlined, 'Notification stop-list', ( _ ) =>
+      NotificationFilterSettingsScreen( stopList: ServiceLocator.get<NotificationStopList>() ),
+      enabled: ServiceLocator.isRegistered<NotificationStopList>(),
+    ),
+  ];
+}
+
+/// Whether the Focus drawer runs the SURFACES experiment (row c59457f0).
+///
+/// 🔴 TRUE ON RICK'S ORDER, 2026-09-26: *"a little bit of a UI layout tweak...
+/// Hide them, don't delete them for now... preserve the old layout."* With it
+/// true the drawer lists the Home grid's destinations top to bottom and leaves
+/// out Inbox, Queue Dashboard and Trust Dashboard.
+///
+/// ⚠️ NOT a `const bool` like `_kShowTrustDashboard` in `home_screen.dart`, and
+/// that difference is the whole point: a const cannot be flipped from a test,
+/// so the "the flag restores the old drawer" test would have to re-implement
+/// the drawer to say anything — which is a test of the test. This is the
+/// DEFAULT, and [FocusModeScreen.surfacesExperiment] is the one switch that
+/// overrides it. Nothing is deleted either way: `_legacyDrawer` still compiles
+/// and is still exercised at `false`.
+const bool kFocusDrawerSurfacesExperimentDefault = true;
+
+/// The surfaces drawer's header. Rick has the final word on the wording, so it
+/// is ONE string in ONE place — change it here and the drawer follows.
+/// Candidates offered with row c59457f0 were "Surfaces", "Go to" and "Lupin".
+const String kFocusDrawerHeader = 'Surfaces';
+
 /// The app's DEFAULT post-auth surface (Q1): vertical badge rail + chat
 /// pane (Q11 Pattern A), pause/resume hold control bound to S1's streams,
 /// the S4 voice composer gated on S2's `pendingPromptFor` signal, and a
@@ -40,7 +144,12 @@ class FocusModeScreen extends StatefulWidget {
   final TtsOrchestrator? tts;
   final AsrService?      asr;
 
-  const FocusModeScreen( { super.key, this.tts, this.asr } );
+  /// THE one switch for row c59457f0's drawer experiment (ruling R1, Tiffany
+  /// 2026-09-28). Null means [kFocusDrawerSurfacesExperimentDefault]; `false`
+  /// restores the pre-experiment drawer, entry for entry.
+  final bool? surfacesExperiment;
+
+  const FocusModeScreen( { super.key, this.tts, this.asr, this.surfacesExperiment } );
 
   @override
   State<FocusModeScreen> createState() => _FocusModeScreenState();
@@ -71,6 +180,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     }
   }
 
+  /// Resolved once, here, so no widget below asks the question twice.
+  bool get _surfaces => widget.surfacesExperiment ?? kFocusDrawerSurfacesExperimentDefault;
+
   String? _authedEmail() {
     final auth = context.read<AuthBloc>().state;
     return auth is AuthAuthenticated ? auth.email : null;
@@ -84,7 +196,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           builder: ( ctx ) => IconButton(
             key       : const Key( TestKeys.focusDrawerButton ),
             icon      : const Icon( Icons.menu ),
-            tooltip   : 'Legacy screens',
+            tooltip   : _surfaces ? kFocusDrawerHeader : 'Legacy screens',
             onPressed : () => Scaffold.of( ctx ).openDrawer(),
           ),
         ),
@@ -115,7 +227,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           TtsPauseToggle( tts: _tts, toggleKey: const Key( TestKeys.focusPauseToggle ) ),
         ],
       ),
-      drawer: _legacyDrawer( context ),
+      drawer: _surfaces ? _surfacesDrawer( context ) : _legacyDrawer( context ),
       body: Column(
         children: [
           TtsPausedBanner( tts: _tts, bannerKey: const Key( TestKeys.focusPausedBanner ) ),
@@ -244,6 +356,71 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     );
   }
 
+  /// One drawer row off one [FocusDrawerSurface] — so the icon, the label, the
+  /// key and the route can never be spelled differently between two entries.
+  Widget _entryTile( BuildContext context, FocusDrawerSurface s ) {
+    return ListTile(
+      key     : Key( '${TestKeys.focusDrawerEntryPrefix}${s.title}' ),
+      leading : Icon( s.icon ),
+      title   : Text( s.title ),
+      enabled : s.enabled,
+      onTap   : () => _push( context, s.builder ),
+    );
+  }
+
+  /// Close the drawer, then push [builder]'s route. Shared by both drawers so
+  /// they cannot disagree about the pop-then-push order.
+  void _push( BuildContext context, WidgetBuilder builder ) {
+    Navigator.of( context ).pop();   // close the drawer first
+    Navigator.of( context ).push( MaterialPageRoute<void>( builder: builder ) );
+  }
+
+  /// The SURFACES drawer (row c59457f0): Quick Ask and the Home grid on top,
+  /// then every Home-grid destination top to bottom, then Settings and the
+  /// stop-list, then Log out. Inbox, Queue Dashboard and Trust Dashboard are
+  /// ABSENT here and present in [_legacyDrawer] — hidden behind the switch,
+  /// not deleted (Rick 2026-09-26: "Hide them, don't delete them for now").
+  Drawer _surfacesDrawer( BuildContext context ) {
+    return Drawer(
+      child: ListView(
+        children: [
+          const DrawerHeader(
+            key   : Key( TestKeys.focusDrawerHeader ),
+            child : Text( kFocusDrawerHeader ),
+          ),
+          ListTile(
+            key     : const Key( '${TestKeys.focusDrawerEntryPrefix}Quick Ask' ),
+            leading : const Icon( Icons.mic ),
+            title   : const Text( 'Quick Ask' ),
+            onTap   : () => _push( context, ( _ ) => const QuickAskScreen() ),
+          ),
+          // Row c59457f0 item 4: the Home grid STAYS reachable. The drawer lists
+          // its destinations; it does not replace the grid.
+          ListTile(
+            key     : const Key( '${TestKeys.focusDrawerEntryPrefix}Home grid' ),
+            leading : const Icon( Icons.grid_view ),
+            title   : const Text( 'Home grid' ),
+            onTap   : () => _push( context, ( _ ) => const LupinHomeScreen() ),
+          ),
+          const Divider(),
+          for ( final s in focusDrawerSurfaces( context ) ) _entryTile( context, s ),
+          const Divider(),
+          for ( final s in focusDrawerTools( context ) ) _entryTile( context, s ),
+          const Divider(),
+          ListTile(
+            key     : const Key( TestKeys.focusDrawerLogout ),
+            leading : const Icon( Icons.logout ),
+            title   : const Text( 'Log out' ),
+            onTap   : () {
+              Navigator.of( context ).pop();   // close the drawer first
+              context.read<AuthBloc>().add( const AuthLogoutRequested() );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Drawer _legacyDrawer( BuildContext context ) {
     final email = _authedEmail() ?? '';
     void push( Widget screen ) {
@@ -349,3 +526,14 @@ class _QueueButton extends StatelessWidget {
   }
 }
 
+/// One row of the surfaces drawer: its icon and label, the route it opens, and
+/// whether it is tappable. Kept as DATA so the drawer's order is one list to
+/// read rather than nine `ListTile`s to scan — and so a test can ask an entry
+/// which screen it opens.
+class FocusDrawerSurface {
+  final IconData      icon;
+  final String        title;
+  final WidgetBuilder builder;
+  final bool          enabled;
+  const FocusDrawerSurface( this.icon, this.title, this.builder, { this.enabled = true } );
+}

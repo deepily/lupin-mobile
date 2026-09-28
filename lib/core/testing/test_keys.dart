@@ -158,6 +158,9 @@ class TestKeys {
   static const focusChatPane        = 'focus.chatPane';
   static const focusDrawerButton    = 'focus.drawerButton';
   static const focusDrawerLogout    = 'focus.drawerLogout';
+  // Focus drawer, SURFACES experiment (row c59457f0)
+  static const focusDrawerHeader      = 'focus.drawerHeader';
+  static const focusDrawerEntryPrefix = 'focus.drawerEntry.';   // + entry title
   static const focusComposerScroll  = 'focus.composerScroll';
   static const focusPausedBanner    = 'focus.pausedBanner';
   static const focusRetryBanner     = 'focus.retryBanner';

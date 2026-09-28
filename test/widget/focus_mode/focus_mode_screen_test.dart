@@ -6,7 +6,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/agentic/domain/agentic_submission_bloc.dart';
+import 'package:lupin_mobile/features/agentic/presentation/agentic_hub_screen.dart';
+import 'package:lupin_mobile/features/broadcast/domain/broadcast_bloc.dart';
+import 'package:lupin_mobile/features/claude_code/domain/claude_code_bloc.dart';
+import 'package:lupin_mobile/features/claude_code/presentation/session_list_screen.dart';
+import 'package:lupin_mobile/features/finished_tasks/domain/finished_tasks_bloc.dart';
+import 'package:lupin_mobile/features/finished_tasks/presentation/finished_tasks_screen.dart';
+import 'package:lupin_mobile/features/fleet/presentation/pane_host_screen.dart';
+import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
+import 'package:lupin_mobile/features/holding_area/domain/holding_area_bloc.dart';
+import 'package:lupin_mobile/features/settings/presentation/notification_audio_settings_screen.dart';
+import 'package:lupin_mobile/features/settings/presentation/notification_filter_settings_screen.dart';
+import 'package:lupin_mobile/features/task_list/domain/task_list_bloc.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
+import 'package:lupin_mobile/services/notification_filter/notification_stop_list.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_bloc.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_event.dart';
 import 'package:lupin_mobile/features/auth/domain/auth_state.dart';
@@ -34,6 +52,13 @@ class _MockNotifBloc extends MockBloc<NotificationEvent, NotificationState>
 class _MockTts extends Mock implements TtsOrchestrator {}
 class _MockAsr extends Mock implements AsrService {}
 class _MockServerCtx extends Mock implements ServerContextService {}
+// Never mounted, never driven — the drawer's builder-level test only needs these
+// to EXIST, so `Mock implements` is enough and a MockBloc would be ceremony.
+class _MockAgenticBloc   extends Mock implements AgenticSubmissionBloc {}
+class _MockClaudeBloc    extends Mock implements ClaudeCodeBloc {}
+class _MockBroadcastBloc extends Mock implements BroadcastBloc {}
+class _MockPrefs         extends Mock implements NotificationPreferences {}
+class _MockStopList      extends Mock implements NotificationStopList {}
 
 NotificationItem _item(
   String id,
@@ -100,6 +125,8 @@ void main() {
   late _MockAsr       asr;
   late StreamController<bool> pausedCtrl;
   late StreamController<int>  depthCtrl;
+  late _MockAgenticBloc       agenticBloc;
+  late _MockClaudeBloc        claudeBloc;
 
   setUpAll( () {
     registerFallbackValue( const FocusSenderSelected( 'fallback' ) );
@@ -113,6 +140,10 @@ void main() {
     asr        = _MockAsr();
     pausedCtrl = StreamController<bool>.broadcast();
     depthCtrl  = StreamController<int>.broadcast();
+    agenticBloc = _MockAgenticBloc();
+    claudeBloc  = _MockClaudeBloc();
+    when( () => agenticBloc.stream ).thenAnswer( ( _ ) => const Stream.empty() );
+    when( () => claudeBloc.stream  ).thenAnswer( ( _ ) => const Stream.empty() );
 
     whenListen( authBloc, const Stream<AuthState>.empty(),
         initialState: const AuthAuthenticated(
@@ -144,15 +175,22 @@ void main() {
         initialState: state );
   }
 
-  Widget host() {
+  /// [surfaces] is row c59457f0's one switch (ruling R1): null takes the
+  /// shipped default, `false` asks for the pre-experiment drawer.
+  Widget host( { bool? surfaces } ) {
     return MultiBlocProvider(
       providers: [
         BlocProvider<FocusChatBloc>.value( value: focusBloc ),
         BlocProvider<AuthBloc>.value( value: authBloc ),
         BlocProvider<NotificationBloc>.value( value: notifBloc ),
+        // The surfaces drawer reads these two the way home_screen.dart does.
+        // ⚠️ `BlocProvider.value` SUBSCRIBES on the first `read`, so a bare mock
+        // hands `null` to `stream` and the read throws — stub it, don't just make it.
+        BlocProvider<AgenticSubmissionBloc>.value( value: agenticBloc ),
+        BlocProvider<ClaudeCodeBloc>.value( value: claudeBloc ),
       ],
       child: MaterialApp(
-        home: FocusModeScreen( tts: tts, asr: asr ),
+        home: FocusModeScreen( tts: tts, asr: asr, surfacesExperiment: surfaces ),
       ),
     );
   }
@@ -437,9 +475,15 @@ void main() {
           reason: 'authenticated state lands on the focus surface (Q1 swap)' );
     } );
 
+    // 🔴 ROW c59457f0 CHANGED THIS TEST'S BODY AND DELIBERATELY KEPT ITS NAME.
+    // The default drawer no longer has a 'Legacy surfaces' header or an Inbox
+    // entry, so this smoke test now asks for the legacy drawer by the one switch
+    // (`surfaces: false`) — which makes it, as a bonus, the proof that flipping
+    // the switch really does bring the old drawer back with its navigation
+    // intact. The NAME is an AC-G2 id: renaming it would read as a lost test.
     testWidgets( 'AC-S3.7 — drawer opens and navigates to a legacy screen (smoke)', ( tester ) async {
       seed( _st( order: [ 'A' ] ) );
-      await tester.pumpWidget( host() );
+      await tester.pumpWidget( host( surfaces: false ) );
       await tester.pump();
 
       await tester.tap( find.byKey( const Key( TestKeys.focusDrawerButton ) ) );
@@ -629,6 +673,186 @@ void main() {
       await tester.pump();
       expect( find.byKey( const Key( TestKeys.focusRailEmptyHint ) ), findsNothing );
     } );
+
+  group( 'FocusModeScreen — surfaces drawer (row c59457f0)', () {
+    /// The drawer is a `ListView`, so an entry below the fold is never built and
+    /// reads as absent. A phone-TALL viewport lays all of them out, which is what
+    /// makes an absence assertion mean something here.
+    Future<void> openDrawer( WidgetTester tester, { bool? surfaces } ) async {
+      tester.view.physicalSize     = const Size( 1080, 2400 );
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown( tester.view.resetPhysicalSize );
+      addTearDown( tester.view.resetDevicePixelRatio );
+      seed( _st( order: const [ 'A' ] ) );
+      await tester.pumpWidget( host( surfaces: surfaces ) );
+      await tester.pump();
+      await tester.tap( find.byKey( const Key( TestKeys.focusDrawerButton ) ) );
+      await tester.pumpAndSettle();
+    }
+
+    Finder entry( String title ) =>
+        find.byKey( Key( '${TestKeys.focusDrawerEntryPrefix}$title' ) );
+
+    /// The row's stated sequence, item 2, verbatim.
+    const surfaceOrder = <String>[
+      'Agentic Jobs', 'Claude Code', 'Broadcast', 'Fleet Status',
+      'Finished Tasks', 'Task List', 'Holding Area',
+    ];
+
+    testWidgets( 'the header is the one string, and Quick Ask + Home grid stay on top', ( tester ) async {
+      await openDrawer( tester );
+      expect( find.byKey( const Key( TestKeys.focusDrawerHeader ) ), findsOneWidget );
+      expect( find.text( kFocusDrawerHeader ), findsOneWidget );
+      expect( find.text( 'Legacy surfaces' ), findsNothing );
+      // Row item 4: the Home grid is still a door, so the grid stays reachable.
+      expect( entry( 'Quick Ask' ), findsOneWidget );
+      expect( entry( 'Home grid' ), findsOneWidget );
+      expect( tester.getTopLeft( entry( 'Quick Ask' ) ).dy,
+              lessThan( tester.getTopLeft( entry( 'Home grid' ) ).dy ) );
+    } );
+
+    testWidgets( 'lists the Home grid surfaces TOP TO BOTTOM in the row\'s order', ( tester ) async {
+      await openDrawer( tester );
+      // Position-based, not `findsOneWidget` seven times: the row asked for an
+      // ORDER, and a set assertion passes on any permutation of the same labels.
+      final dys = <String, double>{
+        for ( final t in surfaceOrder ) t: tester.getTopLeft( entry( t ) ).dy,
+      };
+      for ( var i = 1; i < surfaceOrder.length; i++ ) {
+        expect( dys[ surfaceOrder[ i ] ]!, greaterThan( dys[ surfaceOrder[ i - 1 ] ]! ),
+            reason: '${surfaceOrder[ i ]} must sit below ${surfaceOrder[ i - 1 ]}' );
+      }
+      // …and below the two entries that head the drawer.
+      expect( dys[ 'Agentic Jobs' ]!, greaterThan( tester.getTopLeft( entry( 'Home grid' ) ).dy ) );
+    } );
+
+    testWidgets( 'Inbox, Queue Dashboard and Trust Dashboard are absent', ( tester ) async {
+      await openDrawer( tester );
+      for ( final gone in <String>[ 'Inbox', 'Queue Dashboard', 'Trust Dashboard' ] ) {
+        expect( find.text( gone ), findsNothing, reason: '$gone is hidden by row item 1' );
+      }
+      // Settings, the stop-list and Log out are NOT part of item 1 and stay.
+      expect( entry( 'Settings' ), findsOneWidget );
+      expect( entry( 'Notification stop-list' ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.focusDrawerLogout ) ), findsOneWidget );
+    } );
+
+    testWidgets( 'every entry is wired to a route, not merely rendered', ( tester ) async {
+      await openDrawer( tester );
+      // A `ListTile` with a null `onTap` is indistinguishable from a live one in
+      // a presence assertion and goes nowhere — the defect
+      // test/widget/home/fleet_panes_reachable_test.dart exists to catch.
+      for ( final t in <String>[ 'Quick Ask', 'Home grid', ...surfaceOrder,
+                                 'Settings', 'Notification stop-list' ] ) {
+        expect( tester.widget<ListTile>( entry( t ) ).onTap, isNotNull, reason: t );
+      }
+    } );
+
+    testWidgets( 'Home grid opens the grid, so the old layout is still reachable', ( tester ) async {
+      await openDrawer( tester );
+      await tester.tap( entry( 'Home grid' ) );
+      await tester.pumpAndSettle();
+      expect( find.byKey( const Key( TestKeys.homeLupinFocusCard ) ), findsOneWidget,
+          reason: 'the Home grid is on screen' );
+      expect( find.byKey( const Key( TestKeys.focusRail ) ), findsNothing );
+    } );
+
+    testWidgets( 'each entry opens ITS OWN screen, with home_screen.dart\'s bloc scoping', ( tester ) async {
+      // Registered because two builders read the locator; nothing here is mounted,
+      // so a stub instance is all the builders need.
+      GetIt.instance.registerSingleton<BroadcastBloc>( _MockBroadcastBloc() );
+      // ⚠️ Registering prefs also hands them to `FocusChatPane`'s fraction bar and
+      // to `DocSplitHost`, which read them on build — an unstubbed mock returns
+      // null into a `double` there. Found by running this, not by reading it.
+      final prefs = _MockPrefs();
+      when( () => prefs.ttsFraction        ).thenReturn( 0.5 );
+      when( () => prefs.docsBelowWhenWide  ).thenReturn( false );
+      GetIt.instance.registerSingleton<NotificationPreferences>( prefs );
+      GetIt.instance.registerSingleton<NotificationStopList>( _MockStopList() );
+      addTearDown( GetIt.instance.reset );
+
+      await openDrawer( tester );
+      final ctx = tester.element( find.byType( FocusModeScreen ) );
+
+      // 🔴 CALLING each entry's builder, not tapping it. A label test proves a
+      // string is on screen; this proves the entry is pointed at the right
+      // SCREEN — repoint one and this goes red — without dragging in the five
+      // repositories those panes' blocs would want if they were mounted.
+      final built = {
+        for ( final s in [ ...focusDrawerSurfaces( ctx ), ...focusDrawerTools( ctx ) ] )
+          s.title: s.builder( ctx ),
+      };
+      expect( built[ 'Agentic Jobs' ], isA<BlocProvider<AgenticSubmissionBloc>>() );
+      expect( ( built[ 'Agentic Jobs' ]! as BlocProvider ).child, isA<AgenticHubScreen>() );
+      expect( built[ 'Claude Code' ], isA<BlocProvider<ClaudeCodeBloc>>() );
+      expect( ( built[ 'Claude Code' ]! as BlocProvider ).child, isA<SessionListScreen>() );
+      expect( built[ 'Broadcast' ], isA<Scaffold>() );
+      expect( ( built[ 'Broadcast' ]! as Scaffold ).body, isA<BlocProvider<BroadcastBloc>>() );
+      expect( built[ 'Fleet Status' ], isA<FleetStatusScreen>() );
+      expect( built[ 'Finished Tasks' ], isA<BlocProvider<FinishedTasksBloc>>() );
+      expect( ( built[ 'Finished Tasks' ]! as BlocProvider ).child, isA<FinishedTasksScreen>() );
+      expect( built[ 'Task List' ], isA<PaneHostScreen<TaskListBloc>>() );
+      expect( built[ 'Holding Area' ], isA<PaneHostScreen<HoldingAreaBloc>>() );
+      expect( built[ 'Settings' ], isA<NotificationAudioSettingsScreen>() );
+      expect( built[ 'Notification stop-list' ], isA<NotificationFilterSettingsScreen>() );
+
+      // The bloc-scoping asymmetry home_screen.dart calls deliberate: the four
+      // polling panes take a FACTORY (a fresh bloc per route), Broadcast takes
+      // the app-root instance by `.value`. `.value` for a poller would leave a
+      // timer running behind whichever pane the operator is looking at.
+      expect( ( built[ 'Fleet Status' ]! as FleetStatusScreen ).blocFactory, isNotNull );
+      expect( ( built[ 'Task List' ]! as PaneHostScreen<TaskListBloc> ).blocFactory, isNotNull );
+      expect( ( built[ 'Holding Area' ]! as PaneHostScreen<HoldingAreaBloc> ).blocFactory, isNotNull );
+// ⚠️ WHAT THIS TEST CANNOT SEE: `BlocProvider.value` exposes neither its bloc
+      // nor a `create`, so "Broadcast takes the APP-ROOT instance while the four
+      // pollers take a factory" is only half-assertable from here. The factory half
+      // is asserted above; the `.value` half rests on the type check plus review.
+
+    } );
+
+    testWidgets( 'the stop-list entry opens the editor, and Log out asks AuthBloc to log out', ( tester ) async {
+      // A REAL stop-list, not a mock: the editor reads `patterns` on build, so a
+      // mock would throw where the real service just returns its seeds.
+      SharedPreferences.setMockInitialValues( {} );
+      GetIt.instance.registerSingleton<NotificationStopList>(
+        NotificationStopList( await SharedPreferences.getInstance() ) );
+      addTearDown( GetIt.instance.reset );
+
+      await openDrawer( tester );
+      await tester.tap( entry( 'Notification stop-list' ) );
+      await tester.pumpAndSettle();
+      expect( find.byType( NotificationFilterSettingsScreen ), findsOneWidget,
+          reason: 'the entry is a door, not a label' );
+
+      // Back to Focus, then the one entry that dispatches instead of navigating.
+      Navigator.of( tester.element( find.byType( NotificationFilterSettingsScreen ) ) ).pop();
+      await tester.pumpAndSettle();
+      await tester.tap( find.byKey( const Key( TestKeys.focusDrawerButton ) ) );
+      await tester.pumpAndSettle();
+      await tester.tap( find.byKey( const Key( TestKeys.focusDrawerLogout ) ) );
+      await tester.pumpAndSettle();
+      verify( () => authBloc.add( const AuthLogoutRequested() ) ).called( 1 );
+    } );
+
+    testWidgets( 'surfacesExperiment: false restores the old drawer, entry for entry', ( tester ) async {
+      await openDrawer( tester, surfaces: false );
+      expect( find.text( 'Legacy surfaces' ), findsOneWidget );
+      expect( find.text( kFocusDrawerHeader ), findsNothing );
+      for ( final back in <String>[ 'Quick Ask', 'Home grid', 'Inbox', 'Queue Dashboard',
+                                    'Trust Dashboard', 'Settings', 'Notification stop-list',
+                                    'Log out' ] ) {
+        expect( find.text( back ), findsOneWidget, reason: '$back belongs to the old drawer' );
+      }
+      // …and the experiment's additions are gone with it.
+      // 🔴 `find.text`, NOT the key finder (Clayton, 2026-09-28): the legacy
+      // drawer's tiles carry NO keys, so a key-based absence check passes even
+      // when a tile with that label is sitting right there. The label is the
+      // thing the user sees, so it is the thing asserted absent.
+      for ( final t in surfaceOrder ) {
+        expect( find.text( t ), findsNothing, reason: '$t is an experiment entry' );
+      }
+    } );
+  } );
 
   group( 'FocusModeScreen — stop-list caption', () {
     testWidgets( 'focused sender with hidden messages shows "N hidden by your stop-list"; none ⇒ no caption', ( tester ) async {
