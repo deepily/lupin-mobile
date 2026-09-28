@@ -231,6 +231,18 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
   StreamSubscription<TranscriptAppend>? _appendSub;
   StreamSubscription<TranscriptStateFrame>? _stateSub;
 
+  /// Set synchronously by [close], on its FIRST line, before any controller is touched.
+  ///
+  /// 🔴 THIS FLAG EXISTS BECAUSE `isClosed` GOES TRUE TOO LATE TO BE USEFUL — see
+  /// [_addUnlessGone]. `close()` is ours and runs before `super.close()`, so a flag set here
+  /// is the earliest truthful answer to "is this bloc still taking events", and it is set
+  /// with no await in front of it.
+  bool _closing = false;
+
+  /// "This bloc can no longer receive an event." The union of the flag above and the
+  /// framework's own late-arriving signal, never `isClosed` alone.
+  bool get _gone => _closing || isClosed;
+
   TranscriptStreamBloc( {
     required this.ccSessionId,
     required TranscriptRepository repository,
@@ -323,6 +335,28 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     _catchUpThenWatch();
   }
 
+  /// Add an event only if this bloc is still able to receive one.
+  ///
+  /// 🔴 `isClosed` IS NOT A SAFE GUARD FOR `add()`, AND EVERY `if ( !isClosed ) add( … )`
+  /// THIS REPLACED WAS A LIE. `isClosed` reports the STATE controller; `add()` throws on the
+  /// EVENT controller, and `Bloc.close()` closes the event controller FIRST, reaching the
+  /// state controller only after the pending handlers settle. In that window `isClosed` is
+  /// still **false** and `add()` throws anyway. Measured 2026-09-27 by C5.12: a gated fetch
+  /// that returned after the route popped threw `Bad state: Cannot add new events after
+  /// calling close` straight past the guard — with `isClosed` reading false on both sides
+  /// of the throw.
+  ///
+  /// ⇒ The token is the honest signal. `PaneVisibilityMixin.close()` cancels the in-flight
+  /// token synchronously, before any controller closes, and `_reconcile` cancels it the
+  /// moment the pane hides. A cancelled token means "the surface this answer was for is
+  /// gone" — which is the question being asked here, and `isClosed` only ever approximated
+  /// it. `isClosed` is kept as a second belt because a token is cancelled per request while
+  /// the bloc can be closed with none outstanding.
+  void _addUnlessGone( CancelToken token, TranscriptEvent event ) {
+    if ( token.isCancelled || _gone ) return;
+    add( event );
+  }
+
   /// "Load earlier" — a page backwards from the oldest block held (C-7).
   Future<void> loadEarlier() async {
     if ( state.refused || state.atEpochStart || state.loadingEarlier ) return;
@@ -333,25 +367,25 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     final token = claimRequest();
     if ( token == null ) return;
 
-    add( const TranscriptLoadingChanged( loadingEarlier: true ) );
+    _addUnlessGone( token, const TranscriptLoadingChanged( loadingEarlier: true ) );
     try {
       final page = await _repo.fetchBefore(
         ccSessionId  : ccSessionId,
         beforeOffset : from,
         cancelToken  : token,
       );
-      if ( isClosed ) return;
+      if ( token.isCancelled || _gone ) return;
       add( TranscriptEarlierLoaded( page ) );
     } on TranscriptRefused catch ( e ) {
-      if ( !isClosed ) add( TranscriptRefusalReceived( e.reason ) );
+      _addUnlessGone( token, TranscriptRefusalReceived( e.reason ) );
     } on DioException catch ( e ) {
       if ( e.type != DioExceptionType.cancel ) rethrow;
       // The route closed mid-page. Nothing to say and nobody to say it to.
     } on TranscriptApiException catch ( e ) {
-      if ( !isClosed ) add( TranscriptFailed( e.message ) );
+      _addUnlessGone( token, TranscriptFailed( e.message ) );
     } finally {
       releaseRequest( token );
-      if ( !isClosed ) add( const TranscriptLoadingChanged() );
+      _addUnlessGone( token, const TranscriptLoadingChanged() );
     }
   }
 
@@ -381,7 +415,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         blockOffset : offset,
         cancelToken : token,
       );
-      if ( isClosed ) return;
+      if ( token.isCancelled || _gone ) return;
 
       final replacement = full.blocks.isNotEmpty ? full.blocks.first : null;
       if ( replacement == null ) return;
@@ -403,9 +437,9 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     } on DioException catch ( e ) {
       if ( e.type != DioExceptionType.cancel ) rethrow;
     } on TranscriptRefused catch ( e ) {
-      if ( !isClosed ) add( TranscriptRefusalReceived( e.reason ) );
+      _addUnlessGone( token, TranscriptRefusalReceived( e.reason ) );
     } on TranscriptApiException catch ( e ) {
-      if ( !isClosed ) add( TranscriptFailed( e.message ) );
+      _addUnlessGone( token, TranscriptFailed( e.message ) );
     } finally {
       releaseRequest( token );
     }
@@ -443,7 +477,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     // means nothing in the new one. The caller knows it cleared; the state does not know yet.
     // So the caller says so, rather than this method inferring it from a value in flight.
     final resuming = !forceTail && state.lastNextOffset != null;
-    if ( !resuming ) add( const TranscriptLoadingChanged( loading: true ) );
+    if ( !resuming ) _addUnlessGone( token, const TranscriptLoadingChanged( loading: true ) );
 
     try {
       final backlog = resuming
@@ -457,7 +491,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
               cancelToken : token,
             );
 
-      if ( isClosed ) return;
+      if ( token.isCancelled || _gone ) return;
       add( TranscriptBacklogLoaded( backlog, replace: !resuming ) );
 
       await _sendWatch(
@@ -465,15 +499,15 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         fileEpoch  : backlog.fileEpoch ?? state.fileEpoch,
       );
     } on TranscriptRefused catch ( e ) {
-      if ( !isClosed ) add( TranscriptRefusalReceived( e.reason ) );
+      _addUnlessGone( token, TranscriptRefusalReceived( e.reason ) );
     } on DioException catch ( e ) {
       if ( e.type != DioExceptionType.cancel ) rethrow;
       debugPrint( '[Transcript] catch-up cancelled — the route went away' );
     } on TranscriptApiException catch ( e ) {
-      if ( !isClosed ) add( TranscriptFailed( e.message ) );
+      _addUnlessGone( token, TranscriptFailed( e.message ) );
     } finally {
       releaseRequest( token );
-      if ( !isClosed && !resuming ) add( const TranscriptLoadingChanged() );
+      if ( !resuming ) _addUnlessGone( token, const TranscriptLoadingChanged() );
     }
   }
 
@@ -491,13 +525,13 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         sinceOffset : from,
         cancelToken : token,
       );
-      if ( !isClosed ) add( TranscriptBacklogLoaded( repair ) );
+      _addUnlessGone( token, TranscriptBacklogLoaded( repair ) );
     } on DioException catch ( e ) {
       if ( e.type != DioExceptionType.cancel ) rethrow;
     } on TranscriptRefused catch ( e ) {
-      if ( !isClosed ) add( TranscriptRefusalReceived( e.reason ) );
+      _addUnlessGone( token, TranscriptRefusalReceived( e.reason ) );
     } on TranscriptApiException catch ( e ) {
-      if ( !isClosed ) add( TranscriptFailed( e.message ) );
+      _addUnlessGone( token, TranscriptFailed( e.message ) );
     } finally {
       releaseRequest( token );
     }
@@ -513,6 +547,9 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         // server answers with the epoch it chose. So a FIRST watch needs no prior REST call.
         "file_epoch"    : fileEpoch,
       } );
+      // Only a frame the socket ACCEPTED earns an unwatch: if the watch never left, there is
+      // no server-side watcher to retire.
+      _watching = true;
     } on Object catch ( e ) {
       // A disconnected socket is not a refusal and not a reason to blank the backlog we
       // just fetched. `auth_success` will bring us back through `onReconnected`.
@@ -520,7 +557,21 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     }
   }
 
+  /// True from the moment a watch frame goes out until the unwatch that retires it.
+  ///
+  /// 🔴 ONE UNWATCH PER WATCH, AND NOTHING ELSE MAKES THAT TRUE. Popping the route runs BOTH
+  /// `onActiveChanged( active: false )` and `close()`, and each sent its own unwatch — two
+  /// frames for one pop (measured 2026-09-27; C5.11 asserted 1 and read 2). A console closed
+  /// before it ever became active sent one for a seat that was never watched at all. Neither
+  /// is fatal — the server drops an unknown watcher — but the frame is a claim about this
+  /// client's state, and a client that says "stop" twice for one "start" cannot be read from
+  /// a log.
+  bool _watching = false;
+
   void _sendUnwatch() {
+    if ( !_watching ) return;
+    _watching = false;
+
     _send( {
       "type"          : AppConstants.eventTranscriptUnwatch,
       "cc_session_id" : ccSessionId,
@@ -664,7 +715,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
       // `forceTail: true`, NOT a read of `state`: see the comment in `_catchUpThenWatch`.
       // A new epoch has a new live end, so the right read is a tail read regardless of what
       // cursor the old epoch left behind.
-      if ( !isClosed ) _catchUpThenWatch( forceTail: true );
+      if ( !_gone ) _catchUpThenWatch( forceTail: true );
     } );
   }
 
@@ -703,6 +754,8 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
 
   @override
   Future<void> close() {
+    _closing = true;
+
     // 🔴 THE UNWATCH GOES OUT BEFORE THE SUBSCRIPTIONS DIE, or the server keeps streaming to
     // a client that has stopped listening. C5.11 asserts the fake socket RECORDED an
     // unwatch, which is only true if this runs.

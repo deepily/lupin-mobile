@@ -190,11 +190,20 @@ class FakeLifecycle {
   Stream<AppLifecycleState> get stream => controller.stream;
 
   /// A full background round trip: away, then back.
-  Future<void> roundTrip() async {
+  ///
+  /// 🔴 `gap` IS MANDATORY INSIDE `testWidgets`, AND OMITTING IT HANGS THE TEST FOREVER —
+  /// not a failure, a hang. The default gap is a real `Future.delayed`, which is a TIMER;
+  /// `testWidgets` runs in a fake-async zone whose clock only advances on `tester.pump`, so
+  /// nothing outside `tester.runAsync` ever completes that timer and the `await` never
+  /// returns. A plain `test()` has a real clock and the default is correct there. Measured
+  /// 2026-09-27: two `testWidgets` rows in the C5.7/C5.11 file hung on exactly this.
+  /// In a widget test pass `gap: () => tester.pump( const Duration( milliseconds: 10 ) )`.
+  Future<void> roundTrip( { Future<void> Function()? gap } ) async {
+    final settle = gap ?? () => Future<void>.delayed( Duration.zero );
     controller.add( AppLifecycleState.paused );
-    await Future<void>.delayed( Duration.zero );
+    await settle();
     controller.add( AppLifecycleState.resumed );
-    await Future<void>.delayed( Duration.zero );
+    await settle();
   }
 
   Future<void> close() => controller.close();

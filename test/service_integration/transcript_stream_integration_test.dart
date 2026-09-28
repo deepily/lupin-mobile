@@ -49,6 +49,12 @@ void main() {
     }
   }
 
+  /// A background round trip on the FAKE clock. `FakeLifecycle.roundTrip()`'s own gap is a
+  /// real `Future.delayed`, which never completes in a `testWidgets` zone — so every call
+  /// here MUST hand it a `pump`. See that method's 🔴 note.
+  Future<void> lifecycleRoundTrip( WidgetTester tester ) =>
+      lifecycle.roundTrip( gap: () => tester.pump( const Duration( milliseconds: 10 ) ) );
+
   /// A host that can push the console route and pop it — which is what C5.11 and C5.12 need.
   Future<void> pumpHost( WidgetTester tester ) async {
     tester.view.physicalSize     = const Size( 360, 800 );
@@ -200,7 +206,7 @@ void main() {
         ..since = backlog( epoch: "epoch-1", offset: 100, nextOffset: 250 );
       send.clear();
 
-      await lifecycle.roundTrip();
+      await lifecycleRoundTrip( tester );
       await settle( tester );
 
       expect( repo.reads.single.isSince, isTrue,
@@ -319,7 +325,7 @@ void main() {
 
       // A backgrounded-then-foregrounded app, after the console is gone. An app-root bloc
       // would catch up and re-watch here, against a screen nobody can see.
-      await lifecycle.roundTrip();
+      await lifecycleRoundTrip( tester );
       await settle( tester );
 
       expect( repo.reads, isEmpty,
@@ -376,7 +382,17 @@ void main() {
       expect( slowRepo.token!.isCancelled, isTrue,
           reason: "the token held as `_inFlight` in PaneVisibilityMixin is cancelled by "
                   "close(), reached through PanePollingMixin-free super.close() (C3)" );
-      expect( made.isClosed, isTrue );
+      expect( made.inFlightToken, isNull,
+          reason: "the mixin's in-flight slot is empty, so nothing can be released onto it" );
+
+      // 🔴 THIS ROW DELIBERATELY DOES NOT ASSERT `made.isClosed`, AND THE REASON IS THE BUG
+      // IT FOUND. `isClosed` reads the bloc's STATE controller, which `Bloc.close()` reaches
+      // LAST — after the event controller is already shut. Measured here: `isClosed` is
+      // **false** at this line and still false after the gated response lands, while `add()`
+      // was throwing `Bad state: Cannot add new events after calling close` the whole time.
+      // Asserting `isClosed` would have demanded the framework behave the way the production
+      // guard assumed, instead of catching that the guard was wrong. The real observables are
+      // the cancelled token above and the absent exception below.
 
       // Let the gated call complete AFTER the close. Emitting into a closed bloc would throw
       // a StateError, which `takeException` would surface.
