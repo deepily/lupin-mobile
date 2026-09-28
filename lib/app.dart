@@ -27,6 +27,7 @@ import 'features/broadcast/data/broadcast_models.dart';
 import 'features/broadcast/domain/broadcast_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
 import 'services/auth/server_context_service.dart';
+import 'services/permissions/notification_permission.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/tts/streaming_tts_player.dart';
 import 'services/websocket/websocket_service.dart';
@@ -43,12 +44,15 @@ import 'services/websocket/websocket_service.dart';
 ///   - dispatcher.lastAuthenticatedEmail == email
 ///   - ws.connect( userId: userId ) is called iff ws is not connected
 ///   - registerPush receives email, never userId
+///   - requestNotifications is called once, AFTER registerPush, so a
+///     system prompt the user has not answered yet never delays registration
 Future<void> onWsAuthenticated( {
   required WsBlocDispatcher dispatcher,
   required WebSocketService ws,
   required String           userId,
   required String           email,
   Future<void> Function( String userEmail ) registerPush = fcmOnAuthenticated,
+  NotificationPermissionRequester requestNotifications = requestNotificationPermission,
 } ) async {
   dispatcher.lastAuthenticatedEmail = email;
   if ( !ws.isConnected ) await ws.connect( userId: userId );
@@ -57,6 +61,10 @@ Future<void> onWsAuthenticated( {
   // --dart-define=ENABLE_FCM=true. POST /api/fcm/register-token's body
   // field is `user_email`.
   await registerPush( email );
+  // Row 8ff78c69: Android 13+ starts a fresh install with notifications
+  // DENIED, and nothing else asks. Without this, wake notifications and the
+  // ws_wake fallback are silently dropped by the OS.
+  await requestNotifications();
 }
 
 /// WS frame → bloc dispatch bridge. Extracted from the private app State so

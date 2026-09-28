@@ -322,11 +322,13 @@ void main() {
     late _MockWs          ws;
     late WsBlocDispatcher dispatcher;
     late List<String>     pushed;
+    late List<String>     calls;
 
     setUp( () {
       ws         = _MockWs();
       dispatcher = WsBlocDispatcher();
       pushed     = [];
+      calls      = [];
       when( () => ws.connect( userId: any( named: 'userId' ) ) ).thenAnswer( ( _ ) async {} );
     } );
 
@@ -337,7 +339,8 @@ void main() {
         ws           : ws,
         userId       : uuid,
         email        : email,
-        registerPush : ( e ) async => pushed.add( e ),
+        registerPush : ( e ) async { pushed.add( e ); calls.add( 'push' ); },
+        requestNotifications : () async { calls.add( 'permission' ); return true; },
       );
     }
 
@@ -361,6 +364,28 @@ void main() {
       verifyNever( () => ws.connect( userId: any( named: 'userId' ) ) );
       expect( dispatcher.lastAuthenticatedEmail, email );
       expect( pushed, [ email ] );
+    } );
+
+    // Row 8ff78c69: nothing requested POST_NOTIFICATIONS, so Android 13+
+    // dropped every notification the FCM wake showed.
+    test( 'login requests the notification permission once, after push registration', () async {
+      await login();
+      expect( calls, [ 'push', 'permission' ] );
+    } );
+
+    test( 'a denied notification permission does not undo the login', () async {
+      when( () => ws.isConnected ).thenReturn( false );
+      await onWsAuthenticated(
+        dispatcher           : dispatcher,
+        ws                   : ws,
+        userId               : uuid,
+        email                : email,
+        registerPush         : ( e ) async => pushed.add( e ),
+        requestNotifications : () async => false,
+      );
+      expect( dispatcher.lastAuthenticatedEmail, email );
+      expect( pushed, [ email ] );
+      verify( () => ws.connect( userId: uuid ) ).called( 1 );
     } );
   } );
 }
