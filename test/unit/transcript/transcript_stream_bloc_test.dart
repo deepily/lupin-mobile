@@ -849,6 +849,247 @@ void main() {
       await bloc.close();
     } );
   } );
+
+  // ---------------------------------------------------------------------------
+  group( "the error arms of all four fetch paths", () {
+    // 🔴 A REFUSAL AND A FAILURE MUST NOT LAND IN THE SAME PLACE, AND EVERY PATH HAS TO
+    // AGREE ABOUT IT. `refused` is TERMINAL — no retry, no further watch, no buffer — while
+    // `error` is RETRYABLE and keeps the buffer. Four methods fetch (`_catchUpThenWatch`,
+    // `loadEarlier`, `expandTruncated`, `_repairGap`) and each one catches the two
+    // exceptions separately, so "the bloc handles a refusal" can be true on the open path
+    // and false on the other three. Before this group, three of the four had no error row at
+    // all: the catch arms were 0% covered and a path that folded a 403 into `error` would
+    // have shipped a Retry button over a refusal on the load-earlier and expand paths.
+
+    /// A tail whose blocks carry offsets, so `oldestOffset` exists and "load earlier" is
+    /// allowed to run at all. Without it `loadEarlier` returns before fetching and every
+    /// assertion below would read a zero that has nothing to do with the error arm.
+    void seedPageableBacklog() {
+      repo.tail = backlog(
+        offset     : 4096,
+        nextOffset : 8192,
+        blocks     : [ block( text: "oldest", offset: 4096 ) ],
+      );
+    }
+
+    group( "loadEarlier", () {
+      test( "a 403 mid-page is TERMINAL and drops the spinner", () async {
+        seedPageableBacklog();
+        final bloc = await opened();
+        repo.throws = const TranscriptRefused( "no longer admin" );
+
+        await bloc.loadEarlier();
+        await _settle();
+
+        expect( bloc.state.refused, isTrue );
+        expect( bloc.state.refusedReason, "no longer admin" );
+        expect( bloc.state.loadingEarlier, isFalse,
+            reason: "the finally arm runs on the error path too, or the pager spins forever "
+                    "under a refusal screen" );
+
+        await bloc.close();
+      } );
+
+      test( "a 500 mid-page is RETRYABLE and keeps the buffer", () async {
+        seedPageableBacklog();
+        final bloc = await opened();
+        final held = bloc.state.blocks.length;
+        repo.throws = const TranscriptApiException( "gateway boom", statusCode: 502 );
+
+        await bloc.loadEarlier();
+        await _settle();
+
+        // 🔴 THE NEGATIVE CONTROL FOR THIS WHOLE GROUP IS THE PAIR, NOT EITHER ROW. A bloc
+        // that folded both exceptions into one arm passes whichever row it folded toward and
+        // fails the other. Asserting `refused` is FALSE here is what makes the row above
+        // mean "a 403 specifically", rather than "an exception happened".
+        expect( bloc.state.refused, isFalse,
+            reason: "a 502 is not a refusal: the server did not say no, it failed to answer" );
+        expect( bloc.state.error, "gateway boom" );
+        expect( bloc.state.blocks, hasLength( held ),
+            reason: "a retryable failure keeps what was already on screen" );
+        expect( bloc.state.loadingEarlier, isFalse );
+
+        await bloc.close();
+      } );
+    } );
+
+    group( "expandTruncated", () {
+      /// A truncated block with an offset — the only shape [expandTruncated] will fetch for.
+      Future<_TestBloc> openedWithTruncated() async {
+        repo.tail = backlog(
+          offset     : 4096,
+          nextOffset : 8192,
+          blocks     : [ block(
+            kind      : TranscriptBlockKind.toolResult,
+            text      : "the truncated prefix",
+            name      : "Bash",
+            truncated : true,
+            offset    : 4242,
+          ) ],
+        );
+        return opened();
+      }
+
+      test( "a 403 on the full-text read is TERMINAL", () async {
+        final bloc = await openedWithTruncated();
+        repo.throws = const TranscriptRefused( "revoked mid-session" );
+
+        await bloc.expandTruncated( 0 );
+        await _settle();
+
+        expect( bloc.state.refused, isTrue );
+        expect( bloc.state.refusedReason, "revoked mid-session" );
+
+        await bloc.close();
+      } );
+
+      test( "a 500 on the full-text read is RETRYABLE and the block stays truncated",
+          () async {
+        final bloc = await openedWithTruncated();
+        repo.throws = const TranscriptApiException( "read failed", statusCode: 500 );
+
+        await bloc.expandTruncated( 0 );
+        await _settle();
+
+        expect( bloc.state.refused, isFalse );
+        expect( bloc.state.error, "read failed" );
+        expect( bloc.state.blocks.single.truncated, isTrue,
+            reason: "C5.19: the marker must survive a failed fetch, or a second tap cannot "
+                    "retry and the prefix is silently presented as the whole text" );
+        expect( bloc.state.blocks.single.text, "the truncated prefix" );
+
+        await bloc.close();
+      } );
+    } );
+
+    group( "_repairGap", () {
+      /// A chunk whose `offset` is not the client's cursor, which is §3's gap rule trigger.
+      void publishGap( _TestBloc bloc ) {
+        router.publishAppend( append( offset: 99999, nextOffset: 100500 ) );
+      }
+
+      test( "a 403 while repairing a gap is TERMINAL", () async {
+        // 🔴 THE CURSOR HAS TO EXIST OR THERE IS NO GAP TO DETECT. `_onAppend` compares
+        // against `state.lastNextOffset`, and a bare `TranscriptBacklog()` leaves it null —
+        // the gap branch is skipped, the chunk is appended, and the repair under test never
+        // runs. My first version of these two rows failed for exactly that reason and it
+        // looked like a broken error arm.
+        repo.tail = backlog( offset: 0, nextOffset: 100 );
+        final bloc = await opened();
+        expect( bloc.state.lastNextOffset, 100, reason: "setup: there IS a cursor to gap" );
+        repo.throws = const TranscriptRefused( "gone" );
+
+        publishGap( bloc );
+        await _settle();
+
+        expect( bloc.state.repairFetches, 1,
+            reason: "the gap was SEEN — without this the row could pass on a bloc that never "
+                    "repaired at all" );
+        expect( bloc.state.refused, isTrue );
+        expect( bloc.state.refusedReason, "gone" );
+
+        await bloc.close();
+      } );
+
+      test( "a 500 while repairing a gap is RETRYABLE, and the gapped chunk stays dropped",
+          () async {
+        repo.tail = backlog( offset: 0, nextOffset: 100 );
+        final bloc = await opened();
+        expect( bloc.state.lastNextOffset, 100, reason: "setup: there IS a cursor to gap" );
+        final held = bloc.state.blocks.length;
+        repo.throws = const TranscriptApiException( "repair failed", statusCode: 503 );
+
+        publishGap( bloc );
+        await _settle();
+
+        expect( bloc.state.refused, isFalse );
+        expect( bloc.state.error, "repair failed" );
+        expect( bloc.state.blocks, hasLength( held ),
+            reason: "§3: the chunk with a gap in front of it is DROPPED, not appended out of "
+                    "order — a failed repair must not change that" );
+
+        await bloc.close();
+      } );
+    } );
+
+    group( "_catchUpThenWatch", () {
+      test( "a 500 on the open read is RETRYABLE, and no watch is sent", () async {
+        repo.throws = const TranscriptApiException( "server down", statusCode: 500 );
+
+        final bloc = await opened();
+
+        expect( bloc.state.refused, isFalse,
+            reason: "the pair to the 403 row in C5.21: a failure is not a refusal" );
+        expect( bloc.state.error, "server down" );
+        expect( bloc.state.loading, isFalse, reason: "the finally arm cleared the spinner" );
+        expect( send.ofType( AppConstants.eventTranscriptWatch ), isEmpty,
+            reason: "there is no next_offset to watch from — the read never answered" );
+
+        await bloc.close();
+      } );
+
+      test( "a 500 on the RESUME read keeps the buffer it already had", () async {
+        repo.tail = backlog( blocks: [ block( text: "already here" ) ] );
+        final bloc = await opened();
+        repo.throws = const TranscriptApiException( "flaky", statusCode: 504 );
+
+        await lifecycle.roundTrip();
+        await _settle();
+
+        expect( bloc.state.error, "flaky" );
+        expect( bloc.state.blocks.single.text, "already here",
+            reason: "a failed catch-up is not a reason to blank what the operator was reading" );
+
+        await bloc.close();
+      } );
+    } );
+  } );
+
+  // ---------------------------------------------------------------------------
+  group( "the events compare by value", () {
+    // These are Equatable, and the bloc's event queue is the only place that matters: two
+    // frames that carry the same payload are the same event, and a props list that forgot a
+    // field would make two different frames compare equal — which is how a state change
+    // silently stops emitting. Cheap to pin, and nothing else in the suite compares them.
+    test( "same payload equal, different payload not", () {
+      expect( const TranscriptFailed( "x" ), const TranscriptFailed( "x" ) );
+      expect( const TranscriptFailed( "x" ), isNot( const TranscriptFailed( "y" ) ) );
+
+      expect( const TranscriptRefusalReceived( "r" ), const TranscriptRefusalReceived( "r" ) );
+      expect( const TranscriptRefusalReceived( "r" ),
+          isNot( const TranscriptRefusalReceived( "q" ) ) );
+
+      expect( const TranscriptLoadingChanged( loading: true ),
+          const TranscriptLoadingChanged( loading: true ) );
+      expect( const TranscriptLoadingChanged( loading: true ),
+          isNot( const TranscriptLoadingChanged( loadingEarlier: true ) ) );
+
+      expect( const TranscriptCleared( "e1" ), const TranscriptCleared( "e1" ) );
+      expect( const TranscriptCleared( "e1" ), isNot( const TranscriptCleared( "e2" ) ) );
+
+      final one = backlog( offset: 0, nextOffset: 100 );
+      expect( TranscriptBacklogLoaded( one ), TranscriptBacklogLoaded( one ) );
+      expect( TranscriptBacklogLoaded( one, replace: true ),
+          isNot( TranscriptBacklogLoaded( one ) ) );
+      expect( TranscriptEarlierLoaded( one ), TranscriptEarlierLoaded( one ) );
+
+      final frame = append( offset: 100, nextOffset: 200 );
+      expect( TranscriptAppendReceived( frame ), TranscriptAppendReceived( frame ) );
+
+      const st = TranscriptStateFrame(
+        ccSessionId : "seat-1",
+        state       : TranscriptStreamState.live,
+        rawState    : "live",
+      );
+      expect( const TranscriptStateReceived( st ), const TranscriptStateReceived( st ) );
+
+      final b = block( text: "t" );
+      expect( TranscriptBlockFilled( 0, b ), TranscriptBlockFilled( 0, b ) );
+      expect( TranscriptBlockFilled( 1, b ), isNot( TranscriptBlockFilled( 0, b ) ) );
+    } );
+  } );
+
 }
 
 Future<void> _settle() async {
