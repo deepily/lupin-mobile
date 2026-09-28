@@ -164,12 +164,16 @@ void main() {
       expect( outcome.reason, 'reconnect-hint' );
     } );
 
-    test( 'no stored credentials (never logged in): chain ends quietly, nothing fetched', () async {
+    // ── Row 8ff78c69 slice 2: a ws_wake ALWAYS ends in a visible notification ──
+    // FCM downgrades high-priority messages that don't produce one (expert C4).
+
+    test( 'no stored credentials: nothing fetched, but a SIGN-IN fallback is shown', () async {
+      final shownBodies = <String>[];
       final quiet = FcmWakeChain(
         readCredentials        : () async => null,
         exchangeForAccessToken : ( _ ) async => fail( 'must not exchange' ),
         fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
-        showNotification       : ( _, __ ) async => fail( 'must not show' ),
+        showNotification       : ( _, body ) async => shownBodies.add( body ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
@@ -180,14 +184,73 @@ void main() {
       expect( outcome.handled, isTrue );
       expect( outcome.fetched, 0 );
       expect( outcome.detail, 'no credentials' );
+      expect( outcome.shown, isTrue );
+      expect( shownBodies, [ kFcmWakeSignedOutBody ] );
     } );
 
-    test( 'nothing undelivered (fetch returns null): no show, no speak', () async {
+    test( 'nothing undelivered (fetch returns null): the fallback is shown, nothing spoken', () async {
       nextItem = null;
       final outcome = await chain.handleWake( wakePayload() );
       expect( outcome.fetched, 0 );
-      expect( calls.any( ( c ) => c.startsWith( 'show' ) ), isFalse );
+      expect( outcome.shown, isTrue );
+      expect( calls.where( ( c ) => c.startsWith( 'show' ) ), [ 'show($kFcmWakeFallbackTitle)' ] );
       expect( spoken, isEmpty );
+    } );
+
+    test( 'a failing token exchange still shows the fallback', () async {
+      final shownBodies = <String>[];
+      final broken = FcmWakeChain(
+        readCredentials: () async => const FcmWakeCredentials(
+            refreshToken: 'r', userEmail: 'e@x.com' ),
+        exchangeForAccessToken : ( _ ) async => throw Exception( 'refresh expired' ),
+        fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
+        showNotification       : ( _, body ) async => shownBodies.add( body ),
+        shouldSpeak            : ( _ ) async => true,
+        ttsFraction            : () async => 1.0,
+        speak                  : ( _ ) async => fail( 'must not speak' ),
+        markPlayed             : ( _, __ ) async {},
+        log                    : logs.add,
+      );
+      final outcome = await broken.handleWake( wakePayload() );
+      expect( outcome.shown, isTrue );
+      expect( shownBodies, [ kFcmWakeFallbackBody ] );
+    } );
+
+    test( 'a failure AFTER the real notification does not add a fallback on top', () async {
+      final shownTitles = <String>[];
+      final loud = FcmWakeChain(
+        readCredentials: () async => const FcmWakeCredentials(
+            refreshToken: 'r', userEmail: 'e@x.com' ),
+        exchangeForAccessToken : ( _ ) async => 'a',
+        fetchNextNotification  : ( _, __ ) async => wireItem(),
+        showNotification       : ( title, _ ) async => shownTitles.add( title ),
+        shouldSpeak            : ( _ ) async => true,
+        ttsFraction            : () async => 1.0,
+        speak                  : ( _ ) async => throw Exception( 'tts engine gone' ),
+        markPlayed             : ( _, __ ) async {},
+        log                    : logs.add,
+      );
+      final outcome = await loud.handleWake( wakePayload() );
+      expect( outcome.shown, isTrue );
+      expect( outcome.fetched, 1 );
+      expect( shownTitles, [ 'Mr. Radio' ], reason: 'exactly one notification, the real one' );
+    } );
+
+    test( 'a failing notification plugin is reported as shown=false, never thrown', () async {
+      final dead = FcmWakeChain(
+        readCredentials        : () async => null,
+        exchangeForAccessToken : ( _ ) async => 'a',
+        fetchNextNotification  : ( _, __ ) async => null,
+        showNotification       : ( _, __ ) async => throw Exception( 'plugin not initialized' ),
+        shouldSpeak            : ( _ ) async => true,
+        ttsFraction            : () async => 1.0,
+        speak                  : ( _ ) async {},
+        markPlayed             : ( _, __ ) async {},
+        log                    : logs.add,
+      );
+      final outcome = await dead.handleWake( wakePayload() );
+      expect( outcome.shown, isFalse );
+      expect( logs.any( ( l ) => l.contains( 'fallback notification failed' ) ), isTrue );
     } );
 
     test( 'chain never throws: a failing fetch logs and returns an error outcome', () async {
@@ -207,6 +270,7 @@ void main() {
       expect( outcome.handled, isTrue );
       expect( outcome.detail, contains( 'error:' ) );
       expect( logs.any( ( l ) => l.contains( 'chain failed' ) ), isTrue );
+      expect( outcome.shown, isTrue, reason: 'slice 2: a failed fetch still ends in a notification' );
     } );
 
     test( 'mark-played failure is best-effort (swallowed, logged); wake still succeeds', () async {

@@ -64,6 +64,20 @@ class FcmWakeCredentials {
   } );
 }
 
+/// What a wake shows when it has nothing better (row 8ff78c69, slice 2).
+///
+/// 🔴 A `ws_wake` MUST END IN A VISIBLE NOTIFICATION, EVERY TIME. FCM watches
+/// whether high-priority messages produce one; when they don't, it quietly
+/// downgrades them to normal priority, and normal-priority messages wait out
+/// Doze (expert response C4,
+/// src/rnd/2026.09.28-background-wake-socket-problem-statement-response.md).
+/// So every path that used to end silently — no stored login, nothing
+/// undelivered, a failed fetch — now posts one of these instead. Tapping it
+/// opens the app, whose normal start reconnects the socket.
+const String kFcmWakeFallbackTitle   = 'Lupin';
+const String kFcmWakeFallbackBody    = 'New activity. Open Lupin to see it.';
+const String kFcmWakeSignedOutBody   = 'New activity. Open Lupin and sign in to see it.';
+
 class FcmWakeChain {
   /// Secure-storage seam: refresh token + last email, or null when the
   /// user has never logged in on this device/context.
@@ -139,13 +153,18 @@ class FcmWakeChain {
     }
     log( '[FcmWake] wake received, reason=$reason' );
 
+    // Set once the REAL notification is posted, so a failure after that point
+    // (speak, mark-played) never adds a fallback on top of it.
+    var shown = false;
+
     try {
       final creds = await readCredentials();
       if ( creds == null ) {
-        log( '[FcmWake] no stored credentials — never logged in; done' );
+        log( '[FcmWake] no stored credentials — never logged in' );
         return FcmWakeOutcome(
           handled : true, reason: reason, fetched: 0,
-          shown   : false, spoke: false, detail: 'no credentials',
+          shown   : await _showFallback( kFcmWakeSignedOutBody ),
+          spoke   : false, detail: 'no credentials',
         );
       }
 
@@ -157,10 +176,11 @@ class FcmWakeChain {
 
       final item = await fetchNextNotification( creds.userEmail, accessToken );
       if ( item == null ) {
-        log( '[FcmWake] fetched 0 — nothing undelivered; done' );
+        log( '[FcmWake] fetched 0 — nothing undelivered' );
         return FcmWakeOutcome(
           handled : true, reason: reason, fetched: 0,
-          shown   : false, spoke: false, detail: 'nothing undelivered',
+          shown   : await _showFallback( kFcmWakeFallbackBody ),
+          spoke   : false, detail: 'nothing undelivered',
         );
       }
 
@@ -171,6 +191,7 @@ class FcmWakeChain {
       log( '[FcmWake] fetched 1 (id=$id priority=$priority)' );
 
       await showNotification( title, message );
+      shown = true;
       log( '[FcmWake] shown' );
 
       // Message-field-ONLY, prefs-gated, exactly one utterance. Audio is
@@ -205,9 +226,23 @@ class FcmWakeChain {
     } catch ( e ) {
       log( '[FcmWake] chain failed: $e' );
       return FcmWakeOutcome(
-        handled : true, reason: reason, fetched: 0,
-        shown   : false, spoke: false, detail: 'error: $e',
+        handled : true, reason: reason, fetched: shown ? 1 : 0,
+        shown   : shown || await _showFallback( kFcmWakeFallbackBody ),
+        spoke   : false, detail: 'error: $e',
       );
+    }
+  }
+
+  /// Post the fallback notification. Never throws: returns whether it posted,
+  /// so a plugin failure here is reported as `shown=false` rather than lost.
+  Future<bool> _showFallback( String body ) async {
+    try {
+      await showNotification( kFcmWakeFallbackTitle, body );
+      log( '[FcmWake] shown (fallback)' );
+      return true;
+    } catch ( e ) {
+      log( '[FcmWake] fallback notification failed: $e' );
+      return false;
     }
   }
 }

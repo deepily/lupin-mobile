@@ -59,6 +59,8 @@ usage() {
 build-apk-on-server.sh — build the debug APK on the dev server, main checkout only
 
   (no arguments)   Build. Prints the commit it built and where the APK is.
+  --fcm            Compile in FCM push wake-ups (--dart-define=ENABLE_FCM=true). Opt-in
+                   until the wake path is proven on a device (row 8ff78c69, slice 1).
   --help, -h       This text.
 
 Environment:
@@ -69,8 +71,10 @@ From the laptop, `deploy-apk-to-device.sh --build` runs this over ssh, then inst
 EOF
 }
 
+FCM=false
 while [ $# -gt 0 ]; do
     case "$1" in
+        --fcm)     FCM=true ;;
         --help|-h) usage; exit 0 ;;
         *) print_error "Unknown argument: $1"; echo ""; usage; exit 2 ;;
     esac
@@ -126,7 +130,14 @@ branch="$( git branch --show-current )"
 dirty=""
 [ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
 
-print_step "Building debug APK on $( hostname ): $branch @ $sha$dirty"
+fcm_note=""
+build_args=( build apk --debug )
+if [ "$FCM" = true ]; then
+    build_args+=( --dart-define=ENABLE_FCM=true )
+    fcm_note=" (with FCM push wake-ups)"
+fi
+
+print_step "Building debug APK on $( hostname ): $branch @ $sha$dirty$fcm_note"
 print_info "About 1 minute warm, about 7 minutes cold."
 
 # A marker file stamped now: the APK must end up newer than this, or the build did not
@@ -135,7 +146,7 @@ marker="$( mktemp "${TMPDIR:-/tmp}/lupin-build-start.XXXXXX" )"
 trap 'rm -f "$marker"' EXIT
 
 started=$SECONDS
-if ! ./flutter.sh build apk --debug; then
+if ! ./flutter.sh "${build_args[@]}"; then
     print_error "flutter build apk failed."
     print_info "If it said \"Gradle build daemon disappeared unexpectedly\", it ran out of memory:"
     print_info "check GRADLE_OPTS was not overridden with larger values."
@@ -148,4 +159,4 @@ if [ ! -f "$APK" ] || [ ! "$APK" -nt "$marker" ]; then
 fi
 
 print_success "Built in $(( SECONDS - started ))s: $APK"
-print_success "Commit: $branch @ $sha$dirty"
+print_success "Commit: $branch @ $sha$dirty$fcm_note"

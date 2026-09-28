@@ -125,6 +125,7 @@ deploy-apk-to-device.sh — install the dev server's debug APK to whatever adb s
   --build            Build on the dev server over ssh first, then install the new APK.
                      Server: LUPIN_BUILD_HOST (default rruiz@192.168.1.21).
                      Checkout on the server: LUPIN_BUILD_REPO.
+  --fcm              With --build: compile in FCM push wake-ups (row 8ff78c69).
   --device SERIAL    Install to this adb serial instead of choosing one.
   -s SERIAL          Short form of --device.
   --connect ADDR     `adb connect ADDR` first, for a wireless phone on the LAN.
@@ -167,6 +168,7 @@ PAIR_CODE=""
 APK_OVERRIDE=""
 ALLOW_STALE=false
 DO_BUILD=false
+BUILD_FCM=false
 DO_LAUNCH=true
 DO_LOGCAT=false
 LIST_ONLY=false
@@ -190,6 +192,7 @@ while [ $# -gt 0 ]; do
             APK_OVERRIDE="$2"; shift ;;
         --allow-stale) ALLOW_STALE=true ;;
         --build)     DO_BUILD=true ;;
+        --fcm)       BUILD_FCM=true ;;
         --no-launch) DO_LAUNCH=false ;;
         --logcat)    DO_LOGCAT=true ;;
         --list)      LIST_ONLY=true ;;
@@ -203,6 +206,11 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$APK_OVERRIDE" ] && APK_SRC="$APK_OVERRIDE"
+
+if [ "$BUILD_FCM" = true ] && [ "$DO_BUILD" = false ]; then
+    print_error "--fcm only means something with --build (it changes what the server compiles)."
+    exit 2
+fi
 
 if [ -z "$ADB" ]; then
     print_error "adb not found."
@@ -380,9 +388,10 @@ if [ "$DO_BUILD" = true ]; then
     print_step "Building on the dev server ($BUILD_HOST)"
     # -t so the build's colours and progress stream live; ConnectTimeout so a wrong
     # address fails in seconds instead of hanging. A password prompt still works.
+    build_cmd="$BUILD_REPO/src/scripts/build-apk-on-server.sh"
+    [ "$BUILD_FCM" = true ] && build_cmd="$build_cmd --fcm"
     build_rc=0
-    ssh -t -o ConnectTimeout=10 "$BUILD_HOST" "$BUILD_REPO/src/scripts/build-apk-on-server.sh" \
-        || build_rc=$?
+    ssh -t -o ConnectTimeout=10 "$BUILD_HOST" "$build_cmd" || build_rc=$?
     if [ "$build_rc" != 0 ]; then
         print_error "Server build failed (exit $build_rc). Nothing was installed."
         # ssh itself exits 255 when it never reached the server.
