@@ -18,6 +18,7 @@
 /// the S5 Phase-0 probe runbook, 92-s5-phase0-fcm-probe-runbook.md).
 library;
 
+import 'dart:convert';
 import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:dio/dio.dart';
@@ -152,6 +153,53 @@ Future<String> exchangeRefreshAndPersist( {
   return tokens.accessToken;
 }
 
+/// The system user id (the JWT `sub` claim) carried by a Lupin access token.
+///
+/// Requires:
+///   - jwt is a three-part JWT whose payload has a non-empty string `sub`
+/// Ensures:
+///   - returns that `sub`; nothing is verified, since the server does that
+/// Raises:
+///   - FormatException when the token is malformed or has no `sub`
+@visibleForTesting
+String userIdFromAccessToken( String jwt ) {
+  final parts = jwt.split( '.' );
+  if ( parts.length != 3 ) throw const FormatException( 'access token is not a JWT' );
+  final payload = jsonDecode(
+      utf8.decode( base64Url.decode( base64Url.normalize( parts[ 1 ] ) ) ) );
+  final sub = payload is Map ? payload[ 'sub' ] : null;
+  if ( sub is! String || sub.isEmpty ) {
+    throw const FormatException( 'access token carries no sub claim' );
+  }
+  return sub;
+}
+
+/// GET the user's next unplayed notification, addressed by SYSTEM USER ID.
+///
+/// 🔴 NOT BY EMAIL. `GET /api/notifications/{user_id}/next` compares the path
+/// segment against each queued item's `user_id`, which is the account's UUID
+/// (lupin `notifications.py`: "The system user ID (not email)"). This path used
+/// to send the email, so every wake fetched nothing and fell back to "New
+/// activity" (emulator logcat, 2026-09-28 17:02: `fetched 0` three times while
+/// notifications were queued). The id comes from the access token just issued,
+/// so the background isolate needs nothing else stored.
+///
+/// Ensures:
+///   - returns the `notification` map, or null when there is none
+@visibleForTesting
+Future<Map<String, dynamic>?> fetchNextForAccessToken( {
+  required Dio    dio,
+  required String accessToken,
+} ) async {
+  final userId = userIdFromAccessToken( accessToken );
+  final res    = await dio.get<Map<String, dynamic>>(
+    '/api/notifications/${Uri.encodeComponent( userId )}/next',
+    options: Options( headers: { 'Authorization': 'Bearer $accessToken' } ),
+  );
+  final notif = res.data?[ 'notification' ];
+  return notif is Map<String, dynamic> ? notif : null;
+}
+
 /// Build the chain from REAL background-isolate dependencies. Split out
 /// of the handler so the Phase-0 probe can reuse it verbatim. NOTE: no
 /// ServiceLocator access anywhere below — everything is constructed
@@ -182,16 +230,8 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       contextId    : context.activeConfig.id,
       refreshToken : refreshToken,
     ),
-    fetchNextNotification: ( email, accessToken ) async {
-      // GET /api/notifications/{user}/next (parent notifications.py:1628)
-      // — the §3.2.4 content fetch; the FCM payload stays content-free.
-      final res = await dio.get<Map<String, dynamic>>(
-        '/api/notifications/${Uri.encodeComponent( email )}/next',
-        options: Options( headers: { 'Authorization': 'Bearer $accessToken' } ),
-      );
-      final notif = res.data?[ 'notification' ];
-      return notif is Map<String, dynamic> ? notif : null;
-    },
+    fetchNextNotification: ( _, accessToken ) =>
+        fetchNextForAccessToken( dio: dio, accessToken: accessToken ),
     showNotification: ( title, body ) async {
       await localNotifications.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
