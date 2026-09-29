@@ -1,0 +1,13 @@
+# pubspec.yaml declares assets/fonts/ as an asset directory (pubspec.yaml:130-134), but
+# git does not track empty directories — so every fresh checkout and every newly created
+# worktree was missing it, and every 'flutter test' there opened with:
+#
+#   Error: unable to find directory entry in pubspec.yaml: <tree>/assets/fonts/
+#
+# Harmless, and that is the problem: it is printed as an Error, it names pubspec.yaml,
+# and it is the first thing in the log. While gating a branch on 2026-09-28 it was the
+# obvious suspect for 46 genuinely broken test files whose real cause was a dependency
+# resolution (row 1bc50bf5) — a red herring at the top of the output, costing real time.
+#
+# This file exists only to give git something to track so the directory does. Delete it
+# when assets/fonts/ has real content in it.
