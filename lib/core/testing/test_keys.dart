@@ -32,6 +32,12 @@ class TestKeys {
   static const promptCommentField      = 'prompt.comment';
   /// Submit button of the promoted multi-question body (AC-S4.16).
   static const promptMultiQuestionSubmit = 'prompt.multiQuestion.submit';
+  // Row 570c2fce, second box (Rick via Tiffany, 2026-09-28): dictate into the
+  // "Your response" box on a prompt card, appending rather than replacing.
+  static const promptResponseField       = 'prompt.response';
+  static const promptResponseMic         = 'prompt.response.mic';
+  static const promptResponseMicCancel   = 'prompt.response.mic.cancel';
+  static const promptResponseMicError    = 'prompt.response.mic.error';
 
   // Sender-dates drilldown
   static const senderDatesTilePrefix          = 'senderDates.tile.';        // + date

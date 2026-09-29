@@ -40,9 +40,13 @@
 /// implementer call on the record, S3 §8.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/testing/test_keys.dart';
+import '../../services/asr/dictation_splice.dart';
+import '../../services/asr/voice_capture_session.dart';
 
 // --- yes/no -----------------------------------------------------------------
 
@@ -203,9 +207,23 @@ class _MultipleChoicePromptBodyState extends State<MultipleChoicePromptBody> {
 
 // --- open ended -------------------------------------------------------------
 
+/// The phase of the response box's dictation. Row 570c2fce, second box: the
+/// mic APPENDS a chunk to the answer, it does not replace it — the same rule and
+/// the same shared `spliceDictation` the Focus composer uses.
+enum _ResponseMic { idle, listening, transcribing }
+
 class OpenEndedPromptBody extends StatefulWidget {
   final void Function( String ) onRespond;
-  const OpenEndedPromptBody( { super.key, required this.onRespond } );
+
+  /// The recorder, or null for no microphone at all — as the web has none.
+  ///
+  /// Injected rather than reached for, because this widget is shared by four
+  /// surfaces (the legacy sheet, the focus bubbles, and Quick Ask twice) and only
+  /// some of them have a session to give. **Null renders EXACTLY the box that
+  /// shipped before**, which is what keeps this additive.
+  final VoiceCaptureSession? voice;
+
+  const OpenEndedPromptBody( { super.key, required this.onRespond, this.voice } );
 
   @override
   State<OpenEndedPromptBody> createState() => _OpenEndedPromptBodyState();
@@ -214,12 +232,105 @@ class OpenEndedPromptBody extends StatefulWidget {
 class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
   final _ctrl = TextEditingController();
 
+  _ResponseMic _mic   = _ResponseMic.idle;
+  String?      _error;
+
+  /// Where the caret was when recording began, and the text it pointed into.
+  /// An edit during the recording invalidates the offset — Chloé's M1 on the
+  /// composer, the same trap here — so the words then go to the END.
+  int    _caret       = -1;
+  String _textAtStart = "";
+
+  Timer? _timer;
+  int    _seconds = 0;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    // The recorder is a shared singleton: abandoning a capture strands the TTS
+    // hold for the rest of the app session (row a1c12c6e).
+    if ( _mic == _ResponseMic.listening ) widget.voice?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onMicPressed() async {
+    final voice = widget.voice;
+    if ( voice == null || _mic == _ResponseMic.transcribing ) return;
+
+    if ( _mic == _ResponseMic.idle ) {
+      setState( () => _error = null );
+      final sel    = _ctrl.selection;
+      _caret       = sel.isValid ? sel.baseOffset : _ctrl.text.length;
+      _textAtStart = _ctrl.text;
+
+      final start = await voice.start();
+      if ( !mounted || start.isStale ) return;
+      if ( !start.started ) {
+        setState( () => _error = start.errorMessage );
+        return;
+      }
+      setState( () { _mic = _ResponseMic.listening; _seconds = 0; } );
+      _timer?.cancel();
+      _timer = Timer.periodic( const Duration( seconds: 1 ), ( _ ) {
+        if ( mounted ) setState( () => _seconds++ );
+      } );
+      return;
+    }
+
+    _timer?.cancel();
+    setState( () => _mic = _ResponseMic.transcribing );
+    final capture = await voice.stopAndTranscribe();
+    if ( !mounted ) return;
+    // A stale result appends nothing, but must still free the mic.
+    if ( capture.isStale ) {
+      setState( () => _mic = _ResponseMic.idle );
+      return;
+    }
+    setState( () {
+      if ( capture.wasHeard ) {
+        _ctrl.value = spliceDictation(
+          value : _ctrl.value,
+          heard : capture.transcript!,
+          caret : _ctrl.text != _textAtStart ? null : _caret,
+        );
+      } else {
+        _error = capture.errorMessage;
+      }
+      _mic = _ResponseMic.idle;
+    } );
+  }
+
+  void _onCancelPressed() {
+    _timer?.cancel();
+    if ( _mic == _ResponseMic.listening ) {
+      widget.voice?.cancel();
+    } else {
+      widget.voice?.invalidate();
+    }
+    setState( () => _mic = _ResponseMic.idle );
+  }
+
   @override
   Widget build( BuildContext context ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if ( _error != null )
+          Padding(
+            padding : const EdgeInsets.only( bottom: 8 ),
+            child   : Row(
+              key      : const Key( TestKeys.promptResponseMicError ),
+              children : [
+                Icon( Icons.error_outline,
+                    size: 18, color: Theme.of( context ).colorScheme.error ),
+                const SizedBox( width: 8 ),
+                Expanded( child: Text( _error! ) ),
+              ],
+            ),
+          ),
         TextField(
+          key: const Key( TestKeys.promptResponseField ),
           controller: _ctrl,
           minLines: 3,
           maxLines: 6,
@@ -230,12 +341,75 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
           ),
         ),
         const SizedBox( height: 12 ),
-        FilledButton(
-          onPressed: () => widget.onRespond( _ctrl.text ),
-          child: const Text( "Submit" ),
-        ),
+        _buttons(),
       ],
     );
+  }
+
+  /// Submit, plus the microphone when there is a recorder. While a chunk records
+  /// or transcribes, Submit is GONE: a half-dictated answer cannot be sent by a
+  /// stray thumb, and the prompt is answered exactly once.
+  Widget _buttons() {
+    if ( widget.voice == null ) {
+      return FilledButton(
+        onPressed: () => widget.onRespond( _ctrl.text ),
+        child: const Text( "Submit" ),
+      );
+    }
+
+    switch ( _mic ) {
+      case _ResponseMic.listening:
+        return Row(
+          children: [
+            Expanded( child: Text( "Recording… ${_seconds}s" ) ),
+            IconButton(
+              key       : const Key( TestKeys.promptResponseMicCancel ),
+              icon      : const Icon( Icons.delete_outline ),
+              tooltip   : "Discard this recording",
+              onPressed : _onCancelPressed,
+            ),
+            IconButton(
+              key       : const Key( TestKeys.promptResponseMic ),
+              icon      : const Icon( Icons.stop_circle ),
+              tooltip   : "Stop and add to the answer",
+              onPressed : _onMicPressed,
+            ),
+          ],
+        );
+      case _ResponseMic.transcribing:
+        return Row(
+          children: [
+            const SizedBox(
+              width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) ),
+            const SizedBox( width: 12 ),
+            const Expanded( child: Text( "Transcribing…" ) ),
+            IconButton(
+              key       : const Key( TestKeys.promptResponseMicCancel ),
+              icon      : const Icon( Icons.close ),
+              tooltip   : "Cancel transcription",
+              onPressed : _onCancelPressed,
+            ),
+          ],
+        );
+      case _ResponseMic.idle:
+        return Row(
+          children: [
+            IconButton(
+              key       : const Key( TestKeys.promptResponseMic ),
+              icon      : const Icon( Icons.mic ),
+              tooltip   : "Answer by voice",
+              onPressed : _onMicPressed,
+            ),
+            const SizedBox( width: 8 ),
+            Expanded(
+              child: FilledButton(
+                onPressed: () => widget.onRespond( _ctrl.text ),
+                child: const Text( "Submit" ),
+              ),
+            ),
+          ],
+        );
+    }
   }
 }
 
