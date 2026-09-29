@@ -768,6 +768,36 @@ void main() {
           reason: 'one app bar title: no second Focus screen was pushed' );
     } );
 
+    testWidgets( 'F7 — DOUBLE-tapping Lupin AF Focus does not black-screen the app',
+        ( tester ) async {
+      // The entry used to call Navigator.pop() to shut the drawer, which works
+      // only because DrawerController keeps a LocalHistoryEntry while the drawer
+      // is open. The controller drops that entry as soon as the close animation
+      // reverses, but the tile stays mounted and hit-testable for the rest of the
+      // ~250ms slide, so a second tap in that window popped the ROUTE instead —
+      // and Focus is the first and only route, so the navigator emptied and the
+      // screen went black until the app was killed.
+      await openDrawer( tester );
+
+      // The handler is invoked TWICE, which is what a double tap does. Driving it
+      // through two `tester.tap`s would depend on the tile still passing a hit
+      // test at whatever millisecond the second one lands — and a guarded
+      // "tap only if still there" quietly skips itself and passes against the
+      // bug, which is how the first cut of this test was useless.
+      final tile = tester.widget<ListTile>( entry( 'Lupin AF Focus' ) );
+      tile.onTap!();
+      await tester.pump( const Duration( milliseconds: 50 ) );
+      tile.onTap!();
+      await tester.pumpAndSettle();
+
+      expect( find.byKey( const Key( TestKeys.focusRail ) ), findsOneWidget,
+          reason: 'the Focus screen survived both taps — an empty navigator is the black screen' );
+      expect( find.text( kFocusDrawerHeader ), findsNothing, reason: 'the drawer still closed' );
+      expect( find.text( 'Lupin AF Focus' ), findsOneWidget,
+          reason: 'one app bar title: no second copy, and no missing first one' );
+      expect( tester.takeException(), isNull );
+    } );
+
     testWidgets( 'each entry opens ITS OWN screen, with home_screen.dart\'s bloc scoping', ( tester ) async {
       // Registered because two builders read the locator; nothing here is mounted,
       // so a stub instance is all the builders need.

@@ -409,16 +409,39 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
           ),
           // Row 74a799c9: Focus is the landing screen and this drawer opens FROM
           // it, so the entry goes back to the first route instead of pushing a
-          // second copy — the same door the Home grid card uses. Close the drawer
-          // first: popUntil stops at the first route without closing it.
-          ListTile(
-            key     : const Key( '${TestKeys.focusDrawerEntryPrefix}$kLupinFocusTitle' ),
-            leading : const Icon( Icons.center_focus_strong_outlined ),
-            title   : const Text( kLupinFocusTitle ),
-            onTap   : () {
-              Navigator.of( context ).pop();   // close the drawer first
-              Navigator.of( context ).popUntil( ( route ) => route.isFirst );
-            },
+          // second copy — the same door the Home grid card uses.
+          //
+          // 🔴 closeDrawer(), NOT Navigator.pop() (review F7). `pop()` closes a
+          // drawer only as a side effect: DrawerController registers a
+          // LocalHistoryEntry on open and pop() removes THAT rather than a route.
+          // But the controller drops the entry the moment the close animation
+          // turns around (drawer.dart, AnimationStatus.reverse), while the tile
+          // stays mounted and hit-testable for the rest of the ~250 ms slide —
+          // it is only clipped by an Align widthFactor. So a second tap in that
+          // window found no history entry and popped the ROUTE: Focus is the
+          // first and only route under MaterialApp.home, which left an empty
+          // navigator and a black screen that only a restart cleared. An
+          // ordinary double-tap, on the branch named for thumb fixes.
+          //
+          // closeDrawer() touches no routes and is idempotent, so the second tap
+          // is harmless. popUntil stays as the belt to that braces: it is a
+          // no-op while Focus is the first route, and still correct if a future
+          // change ever opens this drawer from somewhere deeper.
+          //
+          // The Builder is load-bearing: `context` here is FocusModeScreen's own
+          // build context, which is ABOVE the Scaffold this drawer belongs to, so
+          // Scaffold.of() on it throws. The app bar's menu button already takes a
+          // Builder context for openDrawer() for the same reason.
+          Builder(
+            builder: ( drawerCtx ) => ListTile(
+              key     : const Key( '${TestKeys.focusDrawerEntryPrefix}$kLupinFocusTitle' ),
+              leading : const Icon( Icons.center_focus_strong_outlined ),
+              title   : const Text( kLupinFocusTitle ),
+              onTap   : () {
+                Scaffold.of( drawerCtx ).closeDrawer();
+                Navigator.of( drawerCtx ).popUntil( ( route ) => route.isFirst );
+              },
+            ),
           ),
           if ( kShowHomeGridInSurfacesDrawer )
             ListTile(
