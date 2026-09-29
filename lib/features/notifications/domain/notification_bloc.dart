@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:meta/meta.dart';
 
 import '../../../services/notification_audio/notification_audio_service.dart';
+import '../../../services/push/notification_sender_label.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
@@ -238,8 +239,16 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           _audio?.handleIncoming(
             priority     : n.priority,
             message      : n.message,
-            title        : n.title,
+            // 🔴 WHO, not what (Tiffany's ruling 2026-09-28, row d9bc6f6c). The
+            // SAME label the background wake path puts on its notifications, from
+            // the same function — the shade must not say "🌻 Maya" for a wake and
+            // something else for a foreground ding about the same sender.
+            title        : notificationSenderLabel( n.raw ),
             suppressDing : n.suppressDing,
+            // Row d9bc6f6c: so a tap on the foreground ding routes to the same
+            // conversation a tap on a background wake notification does.
+            notificationId : n.id,
+            senderId       : n.senderId,
           );
           _tts?.enqueueIfSpeakable(
             priority : n.priority,

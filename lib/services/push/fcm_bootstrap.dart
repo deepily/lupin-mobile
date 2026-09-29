@@ -200,6 +200,53 @@ Future<Map<String, dynamic>?> fetchNextForAccessToken( {
   return notif is Map<String, dynamic> ? notif : null;
 }
 
+/// Post one wake notification, CARRYING ITS TAP PAYLOAD (row d9bc6f6c).
+///
+/// 🔴 EXTRACTED FROM THE CHAIN'S LAMBDA SO IT CAN BE TESTED, and that is not
+/// tidiness. `fcm_wake_chain_test` exercises the `showNotification` SEAM by
+/// supplying its own lambda — so deleting `payload:` from the production call
+/// below left the entire suite green. Measured exactly that way: the mutation
+/// was made deliberately, the whole push suite passed, and `flutter analyze`
+/// reported nothing. That is the uninjected-seam shape this repo has been bitten
+/// by before (bug 9adff476), and a seam nothing covers is a seam that will be
+/// silently deleted.
+///
+/// Requires:
+///   - plugin is an initialized FlutterLocalNotificationsPlugin
+///
+/// Ensures:
+///   - the notification is posted on the `lupin_fcm_wake` channel at high
+///     importance and priority
+///   - `payload` reaches the plugin VERBATIM, including null
+@visibleForTesting
+Future<void> showWakeNotification(
+  FlutterLocalNotificationsPlugin plugin,
+  String  title,
+  String  body,
+  String? payload,
+) async {
+  await plugin.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'lupin_fcm_wake',
+        'Lupin background notifications',
+        channelDescription:
+            'Notifications fetched on FCM silent-relay wake-up',
+        importance : Importance.high,
+        priority   : Priority.high,
+      ),
+    ),
+    // Android persists this in the notification's intent — the ONLY carrier
+    // that survives this isolate being killed. The main isolate reads it back
+    // from the launch intent whenever the tap is what started the app, which is
+    // the case Rick reported.
+    payload: payload,
+  );
+}
+
 /// Build the chain from REAL background-isolate dependencies. Split out
 /// of the handler so the Phase-0 probe can reuse it verbatim. NOTE: no
 /// ServiceLocator access anywhere below — everything is constructed
@@ -232,23 +279,8 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
     ),
     fetchNextNotification: ( _, accessToken ) =>
         fetchNextForAccessToken( dio: dio, accessToken: accessToken ),
-    showNotification: ( title, body ) async {
-      await localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'lupin_fcm_wake',
-            'Lupin background notifications',
-            channelDescription:
-                'Notifications fetched on FCM silent-relay wake-up',
-            importance : Importance.high,
-            priority   : Priority.high,
-          ),
-        ),
-      );
-    },
+    showNotification: ( title, body, payload ) =>
+        showWakeNotification( localNotifications, title, body, payload ),
     shouldSpeak: ( priority ) async {
       // Persisted speak-toggles are the background path's ONLY gate
       // (foreground pause is bloc state and does not persist). Mirrors

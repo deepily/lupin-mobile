@@ -81,6 +81,8 @@ void main() {
         message      : any( named: 'message' ),
         title        : any( named: 'title' ),
         suppressDing : any( named: 'suppressDing' ),
+        notificationId : any( named: 'notificationId' ),
+        senderId       : any( named: 'senderId' ),
       ) ).thenAnswer( ( _ ) async {} );
 
       // Production-parity construction (service_locator.dart): legacy bloc
@@ -237,6 +239,8 @@ void main() {
         message      : any( named: 'message' ),
         title        : any( named: 'title' ),
         suppressDing : any( named: 'suppressDing' ),
+        notificationId : any( named: 'notificationId' ),
+        senderId       : any( named: 'senderId' ),
       ) ).called( 1 );
     } );
 

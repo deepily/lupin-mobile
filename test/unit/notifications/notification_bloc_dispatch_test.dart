@@ -135,6 +135,8 @@ void main() {
         message      : any( named: "message" ),
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
+        notificationId : any( named: "notificationId" ),
+        senderId       : any( named: "senderId" ),
       ) ).thenAnswer( ( _ ) async {} );
       when( () => tts.enqueueIfSpeakable(
         priority : any( named: "priority" ),
@@ -212,6 +214,11 @@ void main() {
             priority : "urgent",
             message  : "Prod is down.",
             title    : "CRIT",
+            senderId : "claude.code@lupin-mobile.deepily.ai#a1b2c3d4",
+            raw      : const {
+              "sender_id"     : "claude.code@lupin-mobile.deepily.ai#a1b2c3d4",
+              "voice_persona" : { "display_name": "Maya", "icon": "🌻" },
+            },
           ),
         ) );
         await Future.delayed( const Duration( milliseconds: 50 ) );
@@ -219,8 +226,18 @@ void main() {
         verify( () => audio.handleIncoming(
           priority     : "urgent",
           message      : "Prod is down.",
-          title        : "CRIT",
+          // 🔴 THE SENDER, NOT THE ITEM'S `title` (Tiffany's ruling 2026-09-28,
+          // row d9bc6f6c). The item here carries "CRIT" and that is deliberately
+          // NOT what the shade shows — the foreground ding and the background wake
+          // must name the sender the same way, from the same function.
+          title        : "🌻 Maya",
           suppressDing : false,
+          // Row d9bc6f6c — the ding is a tappable post site, so the identifiers
+          // it needs to be routable are asserted here rather than matched with
+          // any(): a widened matcher would have kept this test green if the
+          // bloc silently stopped passing them.
+          notificationId : "n-test",
+          senderId       : "claude.code@lupin-mobile.deepily.ai#a1b2c3d4",
         ) ).called( 1 );
         verify( () => tts.enqueueIfSpeakable(
           priority : "urgent",
@@ -259,6 +276,8 @@ void main() {
         message      : any( named: "message" ),
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
+        notificationId : any( named: "notificationId" ),
+        senderId       : any( named: "senderId" ),
       ) ).thenAnswer( ( _ ) async {} );
       when( () => tts.enqueueIfSpeakable(
         priority : any( named: "priority" ),
@@ -307,6 +326,8 @@ void main() {
         message      : any( named: "message" ),
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
+        notificationId : any( named: "notificationId" ),
+        senderId       : any( named: "senderId" ),
       ) );
       verifyNever( () => tts.enqueueIfSpeakable(
         priority : any( named: "priority" ),

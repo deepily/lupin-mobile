@@ -77,6 +77,47 @@ class FocusSenderSelected extends FocusChatEvent {
   List<Object?> get props => [ senderId ];
 }
 
+/// A NOTIFICATION TAP (row d9bc6f6c): select [senderId] AND mark
+/// [notificationId] as the message to bring into view.
+///
+/// WHY THIS IS NOT JUST `FocusSenderSelected` PLUS A SECOND EVENT. The two
+/// halves of one user gesture must not be able to half-apply. `on<E>` handlers
+/// of DIFFERENT event types run CONCURRENTLY under bloc's default transformer,
+/// so a pair of events could interleave with each other and with the cold-start
+/// handler, leaving a sender selected and no reveal target, or a reveal target
+/// pointing at a conversation that is no longer focused.
+///
+/// 🔴 AND IT CARRIES THE EMAIL FOR THE SAME REASON. Backfill needs the
+/// authenticated email, which the bloc normally learns from
+/// [FocusColdStartRequested] on the WS `auth_success` frame. A tap is drained at
+/// `AuthAuthenticated`, which happens EARLIER and by a different path, so a
+/// reveal that relied on cold start having run first would — on exactly the
+/// swiped-away cold start this row is about — select the sender, skip the
+/// backfill, and show "No messages yet in this window" for a conversation that
+/// has messages. Carrying the email makes the handler independent of that race;
+/// `_backfilled` keeps the two paths from fetching twice.
+class FocusMessageRevealRequested extends FocusChatEvent {
+  final String senderId;
+  final String notificationId;
+  final String userEmail;
+
+  const FocusMessageRevealRequested( {
+    required this.senderId,
+    required this.notificationId,
+    required this.userEmail,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, notificationId, userEmail ];
+}
+
+/// The reveal has been honoured (the pane scrolled to it, or it was not in the
+/// window) — clear the target so a later rebuild does not scroll again while
+/// the user is reading something else.
+class FocusRevealConsumed extends FocusChatEvent {
+  const FocusRevealConsumed();
+}
+
 /// Screen init AND WS reconnect (S2 §3.3). MODE-DEPENDENT (F-S2-S3-1):
 /// cold start (`senderOrder` empty) builds the one-time `lastActivity`
 /// DESC snapshot; reconnect-refresh MERGES per the §3.1 contract.

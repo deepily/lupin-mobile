@@ -82,6 +82,8 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 
 // Notification audio (ding + TTS on high/urgent)
 import '../../services/notification_audio/notification_audio_service.dart';
+import '../../services/push/notification_tap_binding.dart';
+import '../../services/push/notification_tap_router.dart';
 import '../../services/notification_audio/notification_preferences.dart';
 import '../../services/quick_ask/quick_ask_preferences.dart';
 import '../../services/notification_filter/notification_stop_list.dart';
@@ -177,6 +179,25 @@ class ServiceLocator {
     // AFTER this one, so the lookup must defer to call time.
     isQuickAskJob : ( jobId ) => _getIt<QuickAskBloc>().isQuickAskJob( jobId ),
   );
+
+  /// PRODUCTION construction of [NotificationAudioService] (row d9bc6f6c).
+  ///
+  /// 🔴 EXTRACTED SO A TEST CAN SEE THE TAP CALLBACK GO IN, for the same reason
+  /// [buildFocusChatBloc] was: `ServiceLocator.init()` needs `path_provider`
+  /// platform channels and cannot run under test, so an uninjected seam in here
+  /// is invisible to the suite (bug 9adff476, exactly this shape).
+  ///
+  /// And this seam MUST be watched. The plugin is a singleton whose
+  /// `initialize()` assigns the tap handler, so a service constructed without the
+  /// callback does not merely fail to add one — it CLEARS the one `main()`
+  /// installed, on its first lazy init. Taps would work until the first
+  /// notification arrived and then stop.
+  @visibleForTesting
+  static NotificationAudioService buildNotificationAudioService() =>
+      NotificationAudioService(
+        prefs             : _getIt<NotificationPreferences>(),
+        onNotificationTap : notificationTapSink( _getIt<NotificationTapRouter>() ),
+      );
 
   /// PRODUCTION construction of [FleetStatusBloc] — a NEW bloc every call, and
   /// that is the point.
@@ -493,8 +514,13 @@ class ServiceLocator {
     _getIt.registerSingleton<QuickAskPreferences>(
       QuickAskPreferences(_getIt<SharedPreferences>()),
     );
+    // Row d9bc6f6c — the notification-TAP holder. Registered BEFORE the audio
+    // service, because that service's constructor needs the tap callback built
+    // from it: whichever of the two `initialize()` calls runs last must install
+    // the SAME callback, or the plugin singleton's handler is left null.
+    _getIt.registerSingleton<NotificationTapRouter>( NotificationTapRouter() );
     _getIt.registerSingleton<NotificationAudioService>(
-      NotificationAudioService(prefs: _getIt<NotificationPreferences>()),
+      buildNotificationAudioService(),
     );
 
     // Agent-narration TTS — slim ElevenLabs streaming player built against
