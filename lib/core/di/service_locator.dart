@@ -84,6 +84,7 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 import '../../services/notification_audio/notification_audio_service.dart';
 import '../../services/push/notification_tap_binding.dart';
 import '../../services/push/notification_tap_router.dart';
+import '../../services/notification_audio/notification_delivery_policy.dart';
 import '../../services/notification_audio/notification_preferences.dart';
 import '../../services/quick_ask/quick_ask_preferences.dart';
 import '../../services/notification_filter/notification_stop_list.dart';
@@ -583,7 +584,11 @@ class ServiceLocator {
     _getIt.registerLazySingleton<NotificationBloc>(
       () => NotificationBloc(
         _getIt<NotificationRepository>(),
-        audio : _getIt<NotificationAudioService>(),
+        audio  : _getIt<NotificationAudioService>(),
+        // Row 7cac3a17's foreground gate. Same policy object the background
+        // isolate rebuilds for itself from the same SharedPreferences, so the
+        // two surfaces cannot drift apart in what they think is switched on.
+        policy : NotificationDeliveryPolicy( _getIt<NotificationPreferences>() ),
       ),
     );
 

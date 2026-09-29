@@ -70,9 +70,9 @@ void main() {
           calls.add( 'exchange($refresh)' );
           return 'access-xyz';
         },
-        fetchNextNotification: ( email, token ) async {
+        fetchUnplayed: ( email, token ) async {
           calls.add( 'fetch($email,$token)' );
-          return nextItem;
+          return [ if ( nextItem != null ) nextItem! ];
         },
         showNotification: ( title, body, payload ) async {
           calls.add( 'show($title)' );
@@ -91,7 +91,8 @@ void main() {
         markPlayed: ( id, token ) async {
           calls.add( 'played($id)' );
         },
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log: logs.add,
       );
     } );
@@ -191,13 +192,14 @@ void main() {
       final quiet = FcmWakeChain(
         readCredentials        : () async => null,
         exchangeForAccessToken : ( _ ) async => fail( 'must not exchange' ),
-        fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
+        fetchUnplayed          : ( _, __ ) async => fail( 'must not fetch' ),
         showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await quiet.handleWake( wakePayload() );
@@ -223,13 +225,14 @@ void main() {
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => throw Exception( 'refresh expired' ),
-        fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
+        fetchUnplayed          : ( _, __ ) async => fail( 'must not fetch' ),
         showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await broken.handleWake( wakePayload() );
@@ -244,13 +247,14 @@ void main() {
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
-        fetchNextNotification  : ( _, __ ) async => wireItem(),
+        fetchUnplayed          : ( _, __ ) async => [ wireItem() ],
         showNotification       : ( title, _, __ ) async => shownTitles.add( title ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => throw Exception( 'tts engine gone' ),
         markPlayed             : ( id, __ ) async => played.add( id ),
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await loud.handleWake( wakePayload() );
@@ -279,13 +283,14 @@ void main() {
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
-        fetchNextNotification  : ( _, __ ) async => wireItem(),
+        fetchUnplayed          : ( _, __ ) async => [ wireItem() ],
         showNotification       : ( _, __, ___ ) async {},
         shouldSpeak            : ( _ ) async => throw Exception( 'prefs unavailable' ),
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( id, __ ) async => played.add( id ),
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await noPrefs.handleWake( wakePayload() );
@@ -300,13 +305,14 @@ void main() {
       final dead = FcmWakeChain(
         readCredentials        : () async => null,
         exchangeForAccessToken : ( _ ) async => 'a',
-        fetchNextNotification  : ( _, __ ) async => null,
+        fetchUnplayed          : ( _, __ ) async => [],
         showNotification       : ( _, __, ___ ) async => throw Exception( 'plugin not initialized' ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await dead.handleWake( wakePayload() );
@@ -319,13 +325,14 @@ void main() {
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
-        fetchNextNotification  : ( _, __ ) async => throw Exception( 'net down' ),
+        fetchUnplayed          : ( _, __ ) async => throw Exception( 'net down' ),
         showNotification       : ( _, __, ___ ) async {},
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await flaky.handleWake( wakePayload() );
@@ -340,13 +347,14 @@ void main() {
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
-        fetchNextNotification  : ( _, __ ) async => wireItem(),
+        fetchUnplayed          : ( _, __ ) async => [ wireItem() ],
         showNotification       : ( _, __, ___ ) async {},
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( t ) async { spoken.add( t ); },
         markPlayed             : ( _, __ ) async => throw Exception( 'flaky 500' ),
-        wakeNotificationsEnabled: () async => true,
+        backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
         log                    : logs.add,
       );
       final outcome = await stubborn.handleWake( wakePayload() );
@@ -469,13 +477,14 @@ void main() {
           readCredentials        : () async => const FcmWakeCredentials(
               refreshToken: 'r', userEmail: 'rick@test.com' ),
           exchangeForAccessToken : ( _ ) async => 'access',
-          fetchNextNotification  : ( _, __ ) async => wireItem(),
+          fetchUnplayed          : ( _, __ ) async => [ wireItem() ],
           showNotification       : ( _, __, ___ ) async => dropping.add( null ),
           shouldSpeak            : ( _ ) async => false,
           ttsFraction            : () async => 1.0,
           speak                  : ( _ ) async {},
           markPlayed             : ( _, __ ) async {},
-          wakeNotificationsEnabled: () async => true,
+          backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
           log                    : logs.add,
         );
 
@@ -515,20 +524,21 @@ void main() {
     FcmWakeChain chainWith( {
       Future<FcmWakeCredentials?> Function()? readCredentials,
       Future<String> Function( String )?      exchange,
-      Future<Map<String, dynamic>?> Function( String, String )? fetch,
+      Future<List<Map<String, dynamic>>> Function( String, String )? fetch,
       Future<void> Function( String, String, String? )? show,
     } ) => FcmWakeChain(
       readCredentials: readCredentials ??
           () async => const FcmWakeCredentials(
               refreshToken: 'r', userEmail: 'e@x.com' ),
       exchangeForAccessToken : exchange ?? ( _ ) async => 'a',
-      fetchNextNotification  : fetch ?? ( _, __ ) async => wireItem(),
+      fetchUnplayed          : fetch ?? ( _, __ ) async => [ wireItem() ],
       showNotification       : show ?? ( _, body, __ ) async => shownBodies.add( body ),
       shouldSpeak            : ( _ ) async => false,
       ttsFraction            : () async => 1.0,
       speak                  : ( _ ) async {},
       markPlayed             : ( _, __ ) async {},
-      wakeNotificationsEnabled: () async => true,
+      backgroundAllowsAnyPriority: () async => true,
+        priorityAllowed: ( _ ) async => true,
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),
@@ -565,7 +575,7 @@ void main() {
         readCredentials: () => slow( const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ) ),
         exchange : ( _ ) => slow( 'a' ),
-        fetch    : ( _, __ ) => slow( wireItem() ),
+        fetch    : ( _, __ ) => slow( [ wireItem() ] ),
       ).handleWake( wakePayload() );
       expect( outcome.detail, contains( 'timeout' ),
           reason: '3 x 30ms must not fit in a 40ms budget' );
@@ -585,7 +595,7 @@ void main() {
     } );
   } );
 
-  group( 'the wake-notification switch (Rick 2026-09-28, row 1af7b3de)', () {
+  group( 'GATE A, the background switch (rows 1af7b3de then 7cac3a17)', () {
     late List<String> calls;
     late List<String> logs;
     late bool         wakeEnabled;
@@ -598,16 +608,17 @@ void main() {
         return const FcmWakeCredentials( refreshToken: 'r', userEmail: 'e@x.com' );
       },
       exchangeForAccessToken : ( _ ) async { calls.add( 'exchange' ); return 'a'; },
-      fetchNextNotification  : ( _, __ ) async {
+      fetchUnplayed          : ( _, __ ) async {
         calls.add( 'fetch' );
-        return { 'id': 'n-77', 'message': 'm', 'title': 't', 'priority': 'high' };
+        return [ { 'id': 'n-77', 'message': 'm', 'title': 't', 'priority': 'high' } ];
       },
       showNotification : ( _, __, ___ ) async => calls.add( 'show' ),
       shouldSpeak      : ( _ ) async { calls.add( 'prefs' ); return true; },
       ttsFraction      : () async => 1.0,
       speak            : ( _ ) async => calls.add( 'speak' ),
       markPlayed       : ( _, __ ) async => calls.add( 'played' ),
-      wakeNotificationsEnabled : () async => wakeEnabled,
+      backgroundAllowsAnyPriority : () async => wakeEnabled,
+      priorityAllowed             : ( _ ) async => true,
       log              : logs.add,
     );
 
@@ -625,7 +636,7 @@ void main() {
       expect( outcome.handled, isTrue, reason: 'handled, just deliberately silent' );
       expect( outcome.shown, isFalse );
       expect( outcome.spoke, isFalse );
-      expect( outcome.detail, 'wake notifications off' );
+      expect( outcome.detail, 'background notifications off' );
       expect( logs.any( ( l ) => l.contains( 'OFF in settings' ) ), isTrue );
     } );
 
@@ -654,13 +665,14 @@ void main() {
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
-        fetchNextNotification  : ( _, __ ) async => null,
+        fetchUnplayed          : ( _, __ ) async => [],
         showNotification       : ( _, __, ___ ) async {},
         shouldSpeak            : ( _ ) async => false,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
-        wakeNotificationsEnabled : () async { reads++; return true; },
+        backgroundAllowsAnyPriority : () async { reads++; return true; },
+        priorityAllowed             : ( _ ) async => true,
         log                    : logs.add,
       );
       await chain.handleWake( wakePayload() );
@@ -693,13 +705,14 @@ void main() {
       readCredentials: () async => const FcmWakeCredentials(
           refreshToken: 'r', userEmail: 'e@x.com' ),
       exchangeForAccessToken : ( _ ) async => 'a',
-      fetchNextNotification  : ( _, __ ) async => wireItem(),
+      fetchUnplayed          : ( _, __ ) async => [ wireItem() ],
       showNotification       : ( _, __, ___ ) async {},
       shouldSpeak            : shouldSpeak ?? ( _ ) async => true,
       ttsFraction            : () async => 1.0,
       speak                  : speak ?? ( _ ) async {},
       markPlayed             : markPlayed ?? ( id, __ ) async => played.add( id ),
-      wakeNotificationsEnabled : () async => true,
+      backgroundAllowsAnyPriority : () async => true,
+      priorityAllowed             : ( _ ) async => true,
       log                    : logs.add,
       speakBudget            : const Duration( milliseconds: 40 ),
       markPlayedBudget       : const Duration( milliseconds: 40 ),
@@ -778,13 +791,14 @@ void main() {
       readCredentials: () async => const FcmWakeCredentials(
           refreshToken: 'r', userEmail: 'e@x.com' ),
       exchangeForAccessToken : ( _ ) async => 'a',
-      fetchNextNotification  : ( _, __ ) async => null,
+      fetchUnplayed          : ( _, __ ) async => [],
       showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
       shouldSpeak            : ( _ ) async => false,
       ttsFraction            : () async => 1.0,
       speak                  : ( _ ) async {},
       markPlayed             : ( _, __ ) async {},
-      wakeNotificationsEnabled : gate,
+      backgroundAllowsAnyPriority : gate,
+      priorityAllowed             : ( _ ) async => true,
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),
@@ -827,7 +841,7 @@ void main() {
       final chain = chainWithGate( () async => false );
       final outcome = await chain.handleWake( wakePayload() );
 
-      expect( outcome.detail, 'wake notifications off' );
+      expect( outcome.detail, 'background notifications off' );
       expect( shownBodies, isEmpty, reason: 'off shows nothing at all' );
     } );
   } );

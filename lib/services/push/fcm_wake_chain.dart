@@ -28,6 +28,7 @@ import 'dart:async' show TimeoutException;
 
 import 'notification_sender_label.dart';
 import 'notification_tap_payload.dart';
+import 'unplayed_queue_order.dart';
 import '../tts/tts_preview_truncator.dart';
 
 /// Outcome record for the §4 debug hook — every wake logs
@@ -36,7 +37,7 @@ import '../tts/tts_preview_truncator.dart';
 class FcmWakeOutcome {
   final bool   handled;   // false ⇒ unknown type, logged + ignored
   final String reason;    // wake payload reason (or 'n/a')
-  final int    fetched;   // 0 or 1 (fetch-one shape)
+  final int    fetched;   // how many UNPLAYED items the fetch returned
   final bool   shown;
   final bool   spoke;     // false + shown=true ⇒ muted by prefs
   final String detail;
@@ -133,12 +134,20 @@ class FcmWakeChain {
   /// (`POST /auth/refresh` — `auth_repository.dart:67`).
   final Future<String> Function( String refreshToken ) exchangeForAccessToken;
 
-  /// Fetch seam: next unplayed notification for the user, or null.
-  /// Returns the raw wire map (`notification` object of the /next
-  /// response); the chain reads only `id` / `message` / `title` /
-  /// `priority` from it.
-  final Future<Map<String, dynamic>?> Function(
-      String userEmail, String accessToken ) fetchNextNotification;
+  /// Fetch seam: the user's UNPLAYED notifications, raw wire maps. The chain
+  /// reads only `id` / `message` / `priority` / `timestamp` from each, plus
+  /// whatever `notificationSenderLabel` and `NotificationTapPayload` need.
+  ///
+  /// 🔴 A LIST, NOT ONE ITEM (Tiffany's ruling, 2026-09-28, row 7cac3a17).
+  /// This used to be `/next`, which hands back the single oldest unplayed
+  /// item. With per-priority filtering that is a trap: a `low` the user has
+  /// switched off sits at the head of the queue, and because we must not
+  /// consume it — see [priorityAllowed] — every later wake re-fetches that
+  /// same item and an `urgent` behind it never reaches the phone at all.
+  /// Fetching the list lets the chain skip what it may not show and still
+  /// find what it may.
+  final Future<List<Map<String, dynamic>>> Function(
+      String userEmail, String accessToken ) fetchUnplayed;
 
   /// Local-notification seam (plugin re-initialized inside the handler).
   ///
@@ -170,17 +179,27 @@ class FcmWakeChain {
   final Future<void> Function( String notificationId, String accessToken )
       markPlayed;
 
-  /// Prefs seam: are BACKGROUND wake notifications wanted at all? (Rick
-  /// 2026-09-28, row 1af7b3de — `NotificationPreferences.wakeNotifications`.)
+  /// Prefs seam, GATE A: could a background notification be raised at ANY
+  /// priority? (Row 7cac3a17; supersedes row 1af7b3de's single wake switch,
+  /// whose gate position this keeps verbatim.)
   ///
-  /// Checked FIRST, before credentials, and not merely before `showNotification`
-  /// as the request put it. Two reasons the earlier gate is the right one:
-  /// a wake that fetches an item and marks it played WITHOUT showing anything
-  /// would silently consume it — the server's unplayed queue is what the
-  /// foreground re-hydrates from, so Rick would never see it at all, which is
-  /// deletion rather than silence. And "off" should cost no radio and no
-  /// battery, which only holds if nothing before the notification runs either.
-  final Future<bool> Function() wakeNotificationsEnabled;
+  /// Checked FIRST, before credentials, and not merely before
+  /// `showNotification`. Two reasons the earlier gate is the right one, both
+  /// Pocholo's and both still true: a wake that fetches an item and marks it
+  /// played WITHOUT showing anything would silently CONSUME it — the server's
+  /// unplayed queue is what the foreground re-hydrates from, so Rick would
+  /// never see it at all, which is deletion rather than silence. And "off"
+  /// should cost no radio and no battery, which only holds if nothing before
+  /// the notification runs either.
+  final Future<bool> Function() backgroundAllowsAnyPriority;
+
+  /// Prefs seam, GATE B: may THIS priority be raised in the background?
+  ///
+  /// 🔴 A DENIED ITEM IS SKIPPED, NEVER CONSUMED. It is not shown, not spoken
+  /// and not marked played, so it is still sitting unplayed on the server when
+  /// the app is next opened and the list re-hydrates. Silence, not deletion —
+  /// the same rule gate A enforces, one step later.
+  final Future<bool> Function( String priority ) priorityAllowed;
 
   /// Debug-hook seam (§4): one line per chain step, adb-visible.
   final void Function( String line ) log;
@@ -201,13 +220,14 @@ class FcmWakeChain {
   const FcmWakeChain( {
     required this.readCredentials,
     required this.exchangeForAccessToken,
-    required this.fetchNextNotification,
+    required this.fetchUnplayed,
     required this.showNotification,
     required this.shouldSpeak,
     required this.ttsFraction,
     required this.speak,
     required this.markPlayed,
-    required this.wakeNotificationsEnabled,
+    required this.backgroundAllowsAnyPriority,
+    required this.priorityAllowed,
     required this.log,
     this.showBudget       = kFcmWakeShowBudget,
     this.fallbackBudget   = kFcmWakeFallbackBudget,
@@ -250,9 +270,10 @@ class FcmWakeChain {
     }
 
     try {
-      // Row 1af7b3de: the user's own switch. Nothing is fetched, shown, spoken or
-      // marked played — the queue is left exactly as it was, so opening the app
-      // still surfaces everything.
+      // GATE A (rows 1af7b3de then 7cac3a17): could a background notification be
+      // raised at ANY priority? Nothing is fetched, shown, spoken or marked
+      // played — the queue is left exactly as it was, so opening the app still
+      // surfaces everything.
       //
       // 🔴 INSIDE THE TRY, AND THAT IS THE WHOLE POINT (Chloé's C2). This read sat
       // ABOVE it, so a SharedPreferences failure in a fresh isolate escaped
@@ -264,11 +285,23 @@ class FcmWakeChain {
       // In here a failure takes the ordinary path — fallback notification, error
       // outcome — which for an unreadable switch is the right answer, because
       // "cannot tell" must not silently mean "off".
-      if ( !await wakeNotificationsEnabled().timeout( remaining() ) ) {
-        log( '[FcmWake] wake notifications are OFF in settings — nothing to do' );
+      //
+      // Row 7cac3a17 widened WHAT is read and changed nothing about WHERE: it is
+      // now "is any priority still wanted", not "is the one switch on". It is
+      // still the FIRST statement in the try, ahead of credentials, so OFF still
+      // costs no radio and no battery.
+      //
+      // 🔴 AND OFF POSTS NO FALLBACK, a deliberate exception to the every-wake-
+      // ends-visible rule above. That rule exists to stop FCM downgrading our
+      // high-priority messages; it cannot outrank the user saying in plain words
+      // to be quiet, or the setting is decorative. Note the asymmetry with the
+      // paragraph above and that it is intended: an unreadable switch DOES get
+      // the fallback, because "cannot tell" is not consent to silence.
+      if ( !await backgroundAllowsAnyPriority().timeout( remaining() ) ) {
+        log( '[FcmWake] background notifications are OFF in settings — nothing to do' );
         return FcmWakeOutcome(
           handled : true, reason: reason, fetched: 0,
-          shown   : false, spoke: false, detail: 'wake notifications off',
+          shown   : false, spoke: false, detail: 'background notifications off',
         );
       }
 
@@ -289,14 +322,53 @@ class FcmWakeChain {
           await exchangeForAccessToken( creds.refreshToken ).timeout( remaining() );
       log( '[FcmWake] refresh→access exchange ok' );
 
-      final item = await fetchNextNotification( creds.userEmail, accessToken )
+      final unplayed = await fetchUnplayed( creds.userEmail, accessToken )
           .timeout( remaining() );
-      if ( item == null ) {
+      if ( unplayed.isEmpty ) {
         log( '[FcmWake] fetched 0 — nothing undelivered' );
         return FcmWakeOutcome(
           handled : true, reason: reason, fetched: 0,
           shown   : await _showFallback( kFcmWakeFallbackBody ),
           spoke   : false, detail: 'nothing undelivered',
+        );
+      }
+
+      // GATE B. Oldest first, then the first item this user still wants.
+      // Everything skipped is left exactly as it was found: unshown, unspoken
+      // and UNPLAYED, so it is all still waiting when the app is opened.
+      final ordered = oldestFirst( unplayed );
+      Map<String, dynamic>? item;
+      var skipped = 0;
+      //
+      // 🔴 THE READ IS BUDGETED TOO, for Chloé's C2 reason one loop further in.
+      // This is a prefs read in a fresh isolate exactly as gate A's is, it sits
+      // before the notification, and here it runs once PER SKIPPED ITEM — so a
+      // storage layer that has gone slow rather than broken is multiplied by the
+      // length of the denied run. Sharing the one `remaining()` deadline is what
+      // keeps that bounded; a wedged read now throws into the catch and posts
+      // the fallback instead of parking the handler until Android reclaims it.
+      for ( final candidate in ordered ) {
+        final p = candidate[ 'priority' ]?.toString() ?? 'medium';
+        if ( await priorityAllowed( p ).timeout( remaining() ) ) {
+          item = candidate;
+          break;
+        }
+        skipped++;
+      }
+      if ( skipped > 0 ) {
+        log( '[FcmWake] skipped $skipped item(s) the user has switched off '
+             '(left unplayed — they are all still there on open)' );
+      }
+      if ( item == null ) {
+        // Every waiting item is one the user asked not to hear about. Silence
+        // is the whole point, so no notification and no fallback — and nothing
+        // consumed, so opening the app still shows the lot.
+        log( '[FcmWake] all ${ordered.length} unplayed item(s) are switched off '
+             '— staying quiet, nothing consumed' );
+        return FcmWakeOutcome(
+          handled : true, reason: reason, fetched: ordered.length,
+          shown   : false, spoke: false,
+          detail  : 'all ${ordered.length} suppressed by priority',
         );
       }
 
@@ -311,7 +383,8 @@ class FcmWakeChain {
       // one step earlier. `notificationSenderLabel` is total and always returns
       // something, so the title cannot come out blank.
       final title = notificationSenderLabel( item );
-      log( '[FcmWake] fetched 1 (id=$id priority=$priority from="$title")' );
+      log( '[FcmWake] fetched ${ordered.length}, showing id=$id '
+           'priority=$priority from="$title"' );
 
       // 🔴 THE PAYLOAD IS BUILT FROM `item`, THE THING BEING SHOWN — never from
       // the wake `data`. The push is content-free, and `/next` hands back the
@@ -382,8 +455,9 @@ class FcmWakeChain {
       }
 
       return FcmWakeOutcome(
-        handled : true, reason: reason, fetched: 1,
-        shown   : true, spoke: spoke, detail: 'id=$id',
+        handled : true, reason: reason, fetched: ordered.length,
+        shown   : true, spoke: spoke,
+        detail  : skipped > 0 ? 'id=$id (skipped $skipped)' : 'id=$id',
       );
     } catch ( e ) {
       // A timeout is named separately because it is the failure that used to be

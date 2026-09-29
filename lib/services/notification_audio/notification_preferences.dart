@@ -44,6 +44,51 @@ class NotificationPreferences {
   /// is today's behaviour.
   static const keyWakeNotifications = 'notif_audio.wake_notifications';
 
+  // ── Notification management view (Rick 2026-09-28, row 7cac3a17) ─────────
+  // "I'm getting bombarded." A master switch, then one switch per SURFACE
+  // (is the app closed or open?), then one checkbox per PRIORITY under each.
+  //
+  // These govern whether a notification is RAISED AT ALL. The ding/speak
+  // toggles above stay what they were — how a raised notification sounds.
+  // Nothing here ever hides an item from a list or consumes it server-side.
+  //
+  // 🔴 EVERY DEFAULT REPRODUCES TODAY'S BEHAVIOUR, which is why they are not
+  // symmetric. An install that never opens this view must behave exactly as it
+  // did before the view existed.
+
+  /// The master switch. OFF silences both surfaces at every priority.
+  static const keyEnabled = 'notif.enabled';
+
+  /// Raise notifications while the app is CLOSED (the FCM wake path).
+  /// Supersedes [keyWakeNotifications], which seeds it once — see
+  /// [backgroundEnabled].
+  static const keyBackgroundEnabled = 'notif.background.enabled';
+
+  /// Raise notifications while the app is OPEN (the WebSocket path: the
+  /// in-app ding and the spoken summary).
+  static const keyForegroundEnabled = 'notif.foreground.enabled';
+
+  /// The four server-side priorities, in ascending order of insistence.
+  /// Confirmed against the parent repo: `notifications.py:954`,
+  /// `valid_priorities = ["low", "medium", "high", "urgent"]`.
+  static const List<String> priorities = [ 'low', 'medium', 'high', 'urgent' ];
+
+  /// `notif.background.priority.<p>` / `notif.foreground.priority.<p>`.
+  static String priorityKey( String surface, String priority ) =>
+      'notif.$surface.priority.$priority';
+
+  /// Background defaults to ON at every priority: the wake path shows every
+  /// item it fetches today — `showNotification` is unconditional — so ON is
+  /// what "unchanged" means here.
+  static const bool defaultBackgroundPriority = true;
+
+  /// Foreground defaults to ON except `low`, which is already silent today:
+  /// `NotificationAudioService.handleIncoming` returns early for it and the
+  /// TTS orchestrator's `_isSpeakable` excludes it. Defaulting low to ON would
+  /// start raising notifications that have never been raised before — the
+  /// opposite of what row 7cac3a17 asks for.
+  static bool defaultForegroundPriority( String priority ) => priority != 'low';
+
   final SharedPreferences _prefs;
   const NotificationPreferences( this._prefs );
 
@@ -57,6 +102,27 @@ class NotificationPreferences {
   bool get keepVoiceRecordings => _prefs.getBool( keyKeepVoiceRecordings ) ?? false;
   bool get docsBelowWhenWide   => _prefs.getBool( keyDocsBelowWhenWide ) ?? false;
   bool get wakeNotifications   => _prefs.getBool( keyWakeNotifications ) ?? true;
+
+  bool get enabled           => _prefs.getBool( keyEnabled ) ?? true;
+  bool get foregroundEnabled => _prefs.getBool( keyForegroundEnabled ) ?? true;
+
+  /// Whether the background wake path may raise notifications.
+  ///
+  /// MIGRATION (row 7cac3a17 supersedes row 1af7b3de): when this view's own key
+  /// has never been written, Pocholo's single wake switch answers instead, so a
+  /// user who already turned wake notifications off does not find them back on
+  /// after updating. The old key is READ, never deleted — a rollback to his
+  /// branch has to still find the user's choice where it left it.
+  bool get backgroundEnabled =>
+      _prefs.getBool( keyBackgroundEnabled ) ??
+      _prefs.getBool( keyWakeNotifications ) ??
+      true;
+
+  bool priorityEnabled( String surface, String priority ) =>
+      _prefs.getBool( priorityKey( surface, priority ) ) ??
+      ( surface == 'background'
+          ? defaultBackgroundPriority
+          : defaultForegroundPriority( priority ) );
 
   /// Spoken fraction of each message, snapped to 10% steps in [0.0, 1.0].
   double get ttsFraction {
@@ -77,5 +143,10 @@ class NotificationPreferences {
   Future<void> setKeepVoiceRecordings( bool v ) => _prefs.setBool( keyKeepVoiceRecordings, v );
   Future<void> setDocsBelowWhenWide( bool v ) => _prefs.setBool( keyDocsBelowWhenWide, v );
   Future<void> setWakeNotifications( bool v ) => _prefs.setBool( keyWakeNotifications, v );
+  Future<void> setEnabled( bool v ) => _prefs.setBool( keyEnabled, v );
+  Future<void> setForegroundEnabled( bool v ) => _prefs.setBool( keyForegroundEnabled, v );
+  Future<void> setBackgroundEnabled( bool v ) => _prefs.setBool( keyBackgroundEnabled, v );
+  Future<void> setPriorityEnabled( String surface, String priority, bool v ) =>
+      _prefs.setBool( priorityKey( surface, priority ), v );
   Future<void> setTtsFraction( double v ) => _prefs.setDouble( keyTtsFraction, snapTtsFraction( v ) );
 }

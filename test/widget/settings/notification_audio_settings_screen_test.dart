@@ -24,30 +24,31 @@ void main() {
       );
     }
 
-    testWidgets( "the wake-notification switch defaults ON and persists OFF (row 1af7b3de)",
+    testWidgets( "the wake switch has MOVED to the management screen, and this "
+                 "screen links to it (row 7cac3a17 supersedes row 1af7b3de)",
         ( tester ) async {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
       // Below the fold in the 800x600 test viewport, and the ListView is lazy,
       // so it has to be scrolled in before it exists to be found at all.
-      final finder = find.byKey( const Key( TestKeys.settingsWakeNotifications ) );
-      await tester.scrollUntilVisible( finder, 120 );
+      final link = find.byKey( const Key( TestKeys.settingsOpenNotificationManagement ) );
+      await tester.scrollUntilVisible( link, 120 );
       await tester.pump();
 
-      expect( finder, findsOneWidget, reason: "Rick's switch has to be on this screen" );
-      expect( tester.widget<SwitchListTile>( finder ).value, isTrue,
-          reason: "default ON = today's behaviour; the switch is opt-OUT" );
+      expect( link, findsOneWidget,
+          reason: "the switch moved, so this screen has to say where it went — "
+                  "a control that simply vanished reads as a regression" );
 
-      await tester.tap( finder );
-      await tester.pump();
+      // And there is no longer a SECOND copy of it here: two controls over one
+      // setting is how they drift apart.
+      expect( find.byKey( const Key( TestKeys.settingsWakeNotifications ) ), findsNothing );
 
-      expect( tester.widget<SwitchListTile>( finder ).value, isFalse );
-      // The point of the switch is that it OUTLIVES the screen: the background
-      // isolate reads it from storage long after this widget is gone.
-      final reread = NotificationPreferences( await SharedPreferences.getInstance() );
-      expect( reread.wakeNotifications, isFalse,
-          reason: 'a switch the background isolate cannot read is not a setting' );
+      await tester.tap( link );
+      await tester.pumpAndSettle();
+
+      expect( find.byKey( const Key( TestKeys.notifMgmtBackground ) ), findsOneWidget,
+          reason: "the link opens the management screen's background switch" );
     } );
 
     testWidgets( "renders all six toggles with default values", ( tester ) async {

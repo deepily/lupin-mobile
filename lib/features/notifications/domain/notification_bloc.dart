@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:meta/meta.dart';
 
 import '../../../services/notification_audio/notification_audio_service.dart';
+import '../../../services/notification_audio/notification_delivery_policy.dart';
 import '../../../services/push/notification_sender_label.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../data/notification_models.dart';
@@ -34,6 +35,12 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final NotificationRepository        _repo;
   final NotificationAudioService?     _audio;
   final TtsOrchestrator?              _tts;
+
+  /// The FOREGROUND half of row 7cac3a17's gate. Null means "no policy wired",
+  /// which allows everything — the behaviour every caller had before this
+  /// existed, so a test that does not care about filtering need not know it is
+  /// there.
+  final NotificationDeliveryPolicy?   _policy;
 
   // Track context so external updates can refresh the right view.
   String? _activeUserEmail;
@@ -87,10 +94,12 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
 
   NotificationBloc(
     this._repo, {
-    NotificationAudioService? audio,
-    TtsOrchestrator?          tts,
-  } ) : _audio = audio,
-        _tts   = tts,
+    NotificationAudioService?   audio,
+    TtsOrchestrator?            tts,
+    NotificationDeliveryPolicy? policy,
+  } ) : _audio  = audio,
+        _tts    = tts,
+        _policy = policy,
         super( const NotificationsInitial() ) {
     on<NotificationsLoadInbox>( _onLoadInbox );
     on<NotificationsLoadConversation>( _onLoadConversation );
@@ -235,28 +244,48 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         case "session_topic":
           // Ordinary user-facing notification. Ding via NotificationAudioService
           // (OS channel); speech via TtsOrchestrator (ElevenLabs → flutter_tts).
-          // Both filter by priority + preferences internally; bloc doesn't gate.
-          _audio?.handleIncoming(
-            priority     : n.priority,
-            message      : n.message,
-            // 🔴 WHO, not what (Tiffany's ruling 2026-09-28, row d9bc6f6c). The
-            // SAME label the background wake path puts on its notifications, from
-            // the same function — the shade must not say "🌻 Maya" for a wake and
-            // something else for a foreground ding about the same sender.
-            title        : notificationSenderLabel( n.raw ),
-            suppressDing : n.suppressDing,
-            // Row d9bc6f6c: so a tap on the foreground ding routes to the same
-            // conversation a tap on a background wake notification does.
-            notificationId : n.id,
-            senderId       : n.senderId,
-          );
-          _tts?.enqueueIfSpeakable(
-            priority : n.priority,
-            message  : n.message,
-            title    : n.title,
-            voiceId  : n.voicePersona?.voiceId,
-            sender   : TtsSender( senderId: n.senderId, name: n.voicePersona?.displayName ?? n.voicePersona?.name, icon: n.voicePersona?.icon ),
-          );
+          // Both filter by priority + preferences internally too; the gate
+          // below is the coarser one sitting in front of them.
+          //
+          // 🔴 THE FOREGROUND GATE (Rick 2026-09-28, row 7cac3a17). When this
+          // priority is switched off for the foreground the phone stays quiet:
+          // no ding, no speech. What it does NOT do is drop the item —
+          // `_refreshCurrent` below still runs, so the notification lands in
+          // the list exactly as it always did and nothing is marked played.
+          // Same rule as the background path: suppression is silence, never
+          // deletion. Rick asked to stop being bombarded, not to stop being
+          // told.
+          final mayRaise = _policy?.allows(
+                surface  : NotificationSurface.foreground,
+                priority : n.priority,
+              ) ?? true;
+          if ( mayRaise ) {
+            _audio?.handleIncoming(
+              priority     : n.priority,
+              message      : n.message,
+              // 🔴 WHO, not what (Tiffany's ruling 2026-09-28, row d9bc6f6c). The
+              // SAME label the background wake path puts on its notifications, from
+              // the same function — the shade must not say "🌻 Maya" for a wake and
+              // something else for a foreground ding about the same sender.
+              title        : notificationSenderLabel( n.raw ),
+              suppressDing : n.suppressDing,
+              // Row d9bc6f6c: so a tap on the foreground ding routes to the same
+              // conversation a tap on a background wake notification does.
+              notificationId : n.id,
+              senderId       : n.senderId,
+            );
+            _tts?.enqueueIfSpeakable(
+              priority : n.priority,
+              message  : n.message,
+              title    : n.title,
+              voiceId  : n.voicePersona?.voiceId,
+              sender   : TtsSender( senderId: n.senderId, name: n.voicePersona?.displayName ?? n.voicePersona?.name, icon: n.voicePersona?.icon ),
+            );
+          } else {
+            // ignore: avoid_print
+            print( "[NotificationBloc] foreground ${n.priority} is switched off "
+                   "— staying quiet; the item still lands in the list (id=${n.id})" );
+          }
           break;
         case "voice_persona_assigned":
           // Server allocated a voice persona for this senderId. Mutate the

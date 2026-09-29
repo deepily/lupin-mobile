@@ -34,6 +34,7 @@ import '../../core/di/service_locator.dart';
 import '../auth/auth_repository.dart';
 import '../auth/secure_credential_store.dart';
 import '../auth/server_context_service.dart';
+import '../notification_audio/notification_delivery_policy.dart';
 import '../notification_audio/notification_preferences.dart';
 import '../websocket/websocket_service.dart';
 import 'fcm_wake_chain.dart';
@@ -45,7 +46,7 @@ const bool kEnableFcm = bool.fromEnvironment( 'ENABLE_FCM', defaultValue: false 
 /// Network budgets for the BACKGROUND wake isolate (review F2, row 8ff78c69).
 ///
 /// The Android background-message handler gets roughly 30 s. Three calls share
-/// it — refresh, `/next`, mark-played — and an utterance follows, so each one
+/// it — refresh, the unplayed list, mark-played — and an utterance follows, so each one
 /// is capped well inside that. They are deliberately TIGHTER than the
 /// foreground's (`http_service.dart:46-48`): out here a slow answer is worth
 /// less than a prompt fallback notification, because the fallback is what keeps
@@ -271,30 +272,65 @@ String userIdFromAccessToken( String jwt ) {
   return sub;
 }
 
-/// GET the user's next unplayed notification, addressed by SYSTEM USER ID.
+/// How many unplayed items one wake will consider. The chain shows at most one
+/// of them; the rest only have to be enough to find a priority the user still
+/// wants behind a run of ones they don't.
 ///
-/// 🔴 NOT BY EMAIL. `GET /api/notifications/{user_id}/next` compares the path
-/// segment against each queued item's `user_id`, which is the account's UUID
-/// (lupin `notifications.py`: "The system user ID (not email)"). This path used
-/// to send the email, so every wake fetched nothing and fell back to "New
-/// activity" (emulator logcat, 2026-09-28 17:02: `fetched 0` three times while
-/// notifications were queued). The id comes from the access token just issued,
-/// so the background isolate needs nothing else stored.
+/// 🔴 500, NOT 50, AND THE SMALL NUMBER REINTRODUCED THE EXACT BUG THE LIST
+/// FETCH EXISTS TO KILL (Pocholo's F3). The server applies the limit by slicing
+/// the HEAD of the queue — `notifications[:limit]` — so a limit is not "the
+/// most recent 50", it is "the oldest 50 and nothing after them". Sixty denied
+/// items at the head therefore hide every allowed item behind them just as
+/// completely as `/next`'s single item did: the fetch never sees the one we
+/// would have shown, and because denied items are correctly never consumed, the
+/// run in front of it never shrinks. Head-of-line blocking, back again, one
+/// layer down and invisible to every test that used a short list.
+///
+/// 500 is chosen to be larger than any plausible unplayed backlog rather than
+/// to be tight. The cost of a high limit is one bigger JSON body on a wake; the
+/// cost of a low one is silence that looks like the feature working.
+const int kFcmWakeUnplayedLimit = 500;
+
+/// GET the user's UNPLAYED notifications, addressed by SYSTEM USER ID.
+///
+/// 🔴 NOT BY EMAIL. The endpoint compares the path segment against each queued
+/// item's `user_id`, which is the account's UUID (lupin `notifications.py`:
+/// "The system user ID (not email)"). This path used to send the email, so
+/// every wake fetched nothing and fell back to "New activity" (emulator
+/// logcat, 2026-09-28 17:02: `fetched 0` three times while notifications were
+/// queued). The id comes from the access token just issued, so the background
+/// isolate needs nothing else stored.
+///
+/// 🔴 THE LIST, NOT `/next` (row 7cac3a17). `/next` hands back only the single
+/// oldest unplayed item, which per-priority filtering cannot work with: a
+/// switched-off `low` at the head of the queue must not be consumed, so it
+/// would block every `urgent` behind it forever. Same auth, same path
+/// parameter, and `include_played=false` is a PURE READ — serving it marks
+/// nothing played (lupin `notifications.py:2495`), so the items this wake
+/// skips stay exactly where they were.
 ///
 /// Ensures:
-///   - returns the `notification` map, or null when there is none
+///   - returns the unplayed items as raw wire maps, possibly empty
+///   - order is NOT trusted; `oldestFirst` sorts them (the endpoint's docstring
+///     claims newest-first and its handler does no sorting at all)
+///   - never returns null
 @visibleForTesting
-Future<Map<String, dynamic>?> fetchNextForAccessToken( {
+Future<List<Map<String, dynamic>>> fetchUnplayedForAccessToken( {
   required Dio    dio,
   required String accessToken,
 } ) async {
   final userId = userIdFromAccessToken( accessToken );
   final res    = await dio.get<Map<String, dynamic>>(
-    '/api/notifications/${Uri.encodeComponent( userId )}/next',
+    '/api/notifications/${Uri.encodeComponent( userId )}',
+    queryParameters: {
+      'include_played' : false,
+      'limit'          : kFcmWakeUnplayedLimit,
+    },
     options: Options( headers: { 'Authorization': 'Bearer $accessToken' } ),
   );
-  final notif = res.data?[ 'notification' ];
-  return notif is Map<String, dynamic> ? notif : null;
+  final list = res.data?[ 'notifications' ];
+  if ( list is! List ) return const [];
+  return [ for ( final e in list ) if ( e is Map<String, dynamic> ) e ];
 }
 
 /// The notification channel wake notifications are posted on.
@@ -407,7 +443,7 @@ Future<void> showWakeNotification(
 /// 🔴 THE REFRESH TOKEN IS THE ONLY CREDENTIAL THIS PATH NEEDS (review F9). The
 /// stored email used to be required here as well, from when the fetch was
 /// addressed by email. Since the fetch moved to the JWT `sub` claim the seam
-/// discards it outright (`fetchNextNotification: ( _, accessToken )`), so
+/// discards it outright (`fetchUnplayed: ( _, accessToken )`), so
 /// demanding it could only ever produce a FALSE "Open Lupin and sign in" for a
 /// user who is signed in perfectly well — silently, and with no fetch attempted.
 ///
@@ -443,11 +479,12 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
   final context = await ServerContextService.load( prefs );
   final store   = SecureCredentialStore();
   final audio   = NotificationPreferences( prefs );
+  final policy  = NotificationDeliveryPolicy( audio );
   final dio     = Dio( BaseOptions(
     baseUrl        : context.baseUrl,
     // 🔴 A WAKE THAT HANGS POSTS NOTHING, AND THAT IS THE ONE OUTCOME THIS
     // WHOLE PATH EXISTS TO PREVENT. This Dio carries all three calls of the
-    // wake (refresh, /next, mark-played) and used to set no timeouts at all,
+    // wake (refresh, unplayed list, mark-played) and used to set no timeouts at all,
     // which for Dio means none. A half-open socket — captive-portal Wi-Fi, a
     // dying LTE cell — parks `handleWake` forever: the fallback notification
     // lives in the chain's CATCH arm, so a call that never returns and never
@@ -492,8 +529,8 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       // adb stream anyone debugging a wake is already watching.
       logSink      : debugPrint,
     ),
-    fetchNextNotification: ( _, accessToken ) =>
-        fetchNextForAccessToken( dio: dio, accessToken: accessToken ),
+    fetchUnplayed: ( _, accessToken ) =>
+        fetchUnplayedForAccessToken( dio: dio, accessToken: accessToken ),
     showNotification: ( title, body, payload ) =>
         showWakeNotification( localNotifications, title, body, payload ),
     shouldSpeak: ( priority ) async {
@@ -517,7 +554,12 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       await tts.awaitSpeakCompletion( true );
       await tts.speak( text );
     },
-    wakeNotificationsEnabled: () async => audio.wakeNotifications,
+    // Row 7cac3a17's two gates, both answered from SharedPreferences — the
+    // only store this isolate can read.
+    backgroundAllowsAnyPriority: () async =>
+        policy.anyAllowedOn( NotificationSurface.background ),
+    priorityAllowed: ( priority ) async => policy.allows(
+        surface: NotificationSurface.background, priority: priority ),
     markPlayed: ( id, accessToken ) async {
       await dio.post<Map<String, dynamic>>(
         '/api/notifications/$id/played',

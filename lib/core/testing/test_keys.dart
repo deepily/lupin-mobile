@@ -203,6 +203,18 @@ class TestKeys {
   static const settingsStopListReset         = 'settings.stopList.reset';
   static const settingsStopListRowPrefix     = 'settings.stopList.row.';      // + pattern
   static const settingsStopListTogglePrefix  = 'settings.stopList.toggle.';   // + pattern
+  // Notification management view (Rick 2026-09-28, row 7cac3a17)
+  static const settingsOpenNotificationManagement = 'settings.openNotificationManagement';
+  static const notifMgmtMaster               = 'notifMgmt.master';
+  static const notifMgmtBackground           = 'notifMgmt.background';
+  static const notifMgmtForeground           = 'notifMgmt.foreground';
+  /// + '<surface>.<priority>', e.g. 'notifMgmt.priority.background.urgent'.
+  static const notifMgmtPriorityPrefix       = 'notifMgmt.priority.';
+  static const notifMgmtOpenSound            = 'notifMgmt.openSound';
+  static const notifMgmtOpenStopList         = 'notifMgmt.openStopList';
+  static String notifMgmtPriority( String surface, String priority ) =>
+      '$notifMgmtPriorityPrefix$surface.$priority';
+
   // Debug: network round-trip probe (task c51e92da)
   static const settingsOpenRoundTripProbe    = 'settings.debug.openRoundTripProbe';
   // Debug: keep voice recordings as WAV (row 9b1f7701)

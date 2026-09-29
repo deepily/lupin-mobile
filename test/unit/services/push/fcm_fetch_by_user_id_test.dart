@@ -1,4 +1,6 @@
 /// Row 8ff78c69: the wake fetch must address the user by SYSTEM ID, not email.
+/// Row 7cac3a17: and it fetches the unplayed LIST, not `/next`'s single item,
+/// so a switched-off priority at the head of the queue cannot block the rest.
 ///
 /// Emulator logcat 2026-09-28 17:02: `fetched 0 — nothing undelivered` on three
 /// wakes in a row while notifications were queued, because the server's /next
@@ -33,21 +35,44 @@ void main() {
 
   test( 'the fetch is addressed by user id, never by email', () async {
     final adapter = StubAdapter( {
-      'GET /api/notifications/$uid/next': ( _ ) => jsonBody( {
-        'status': 'success', 'notification': { 'id': 'n-1', 'message': 'hello' } } ),
+      'GET /api/notifications/$uid': ( _ ) => jsonBody( {
+        'status': 'success',
+        'notifications': [
+          { 'id': 'n-1', 'message': 'hello' },
+          { 'id': 'n-2', 'message': 'also hello' },
+        ],
+      } ),
     } );
-    final item = await fetchNextForAccessToken( dio: makeDio( adapter ), accessToken: token );
+    final items = await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token );
 
-    expect( item?[ 'id' ], 'n-1' );
-    expect( adapter.captured.single.path, '/api/notifications/$uid/next' );
+    expect( [ for ( final i in items ) i[ 'id' ] ], [ 'n-1', 'n-2' ] );
+    expect( adapter.captured.single.path, '/api/notifications/$uid' );
     expect( adapter.captured.single.path, isNot( contains( '%40' ) ), reason: 'no email in the path' );
     expect( adapter.captured.single.headers[ 'Authorization' ], 'Bearer $token' );
   } );
 
-  test( 'no notification ⇒ null', () async {
+  test( 'it asks for UNPLAYED items only — a played item must never be re-shown', () async {
     final adapter = StubAdapter( {
-      'GET /api/notifications/$uid/next': ( _ ) => jsonBody( { 'status': 'success', 'notification': null } ),
+      'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success', 'notifications': [] } ),
     } );
-    expect( await fetchNextForAccessToken( dio: makeDio( adapter ), accessToken: token ), isNull );
+    await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token );
+
+    final q = adapter.captured.single.queryParameters;
+    expect( q[ 'include_played' ], false );
+    expect( q[ 'limit' ], kFcmWakeUnplayedLimit );
+  } );
+
+  test( 'nothing unplayed ⇒ an EMPTY list, never null', () async {
+    final adapter = StubAdapter( {
+      'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success', 'notifications': [] } ),
+    } );
+    expect( await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token ), isEmpty );
+  } );
+
+  test( 'a malformed body is an empty list, not a crash in a background isolate', () async {
+    final adapter = StubAdapter( {
+      'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success' } ),
+    } );
+    expect( await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token ), isEmpty );
   } );
 }
