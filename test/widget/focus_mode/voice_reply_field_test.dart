@@ -243,6 +243,286 @@ void main() {
     } );
   } );
 
+  /// Row 570c2fce (Rick, P0): "it needs to actually be able to record new
+  /// chunks and append them to the end of what's already in the editor box."
+  ///
+  /// The editor box had no microphone once it was open, so a second thought had
+  /// to be TYPED. These pin the append: the words land at the caret, what was
+  /// there already survives every outcome — refusal, cancel, error, silence —
+  /// and nothing ever replaces the box's contents.
+  group( 'VoiceReplyField append mic (row 570c2fce)', () {
+    late _MockAsr     asr;
+    late List<String> submitted;
+
+    setUp( () {
+      asr       = _MockAsr();
+      submitted = [];
+      when( () => asr.startRecording()  ).thenAnswer( ( _ ) async {} );
+      when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
+    } );
+
+    Widget host( { Future<bool> Function()? permission } ) => MaterialApp(
+      home: Scaffold(
+        body: VoiceReplyField(
+          asr                  : asr,
+          onSubmit             : submitted.add,
+          requestMicPermission : permission ?? () async => true,
+        ),
+      ),
+    );
+
+    Finder byKeyStr( String k ) => find.byKey( Key( k ) );
+
+    TextEditingController boxOf( WidgetTester tester ) =>
+        tester.widget<TextField>( byKeyStr( TestKeys.voiceReplyTranscript ) ).controller!;
+
+    /// Opens the review box holding [text]: the edit button, then typing, so the
+    /// starting state is the operator's own text and not a transcript.
+    Future<void> openWith( WidgetTester tester, String text ) async {
+      await tester.pumpWidget( host() );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyEdit ) );
+      await tester.pump();
+      if ( text.isNotEmpty ) {
+        await tester.enterText( byKeyStr( TestKeys.voiceReplyTranscript ), text );
+        await tester.pump();
+      }
+    }
+
+    /// One full append: tap the mic, tap it again to stop and transcribe.
+    Future<void> dictate( WidgetTester tester ) async {
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );
+      await tester.pump();
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+    }
+
+    testWidgets( 'APPENDS to what the box already holds — the existing text is never replaced', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'and one more thing' );
+
+      await openWith( tester, 'what I typed first' );
+      await dictate( tester );
+
+      expect( boxOf( tester ).text, 'what I typed first and one more thing' );
+      expect( byKeyStr( TestKeys.voiceReplyTranscript ), findsOneWidget,
+          reason: 'still in the editor box, ready to send or dictate again' );
+      expect( submitted, isEmpty, reason: 'an append is not a send' );
+    } );
+
+    testWidgets( 'a SECOND chunk appends after the first — new chunks, plural', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'chunk' );
+
+      await openWith( tester, 'seed' );
+      await dictate( tester );
+      await dictate( tester );
+
+      expect( boxOf( tester ).text, 'seed chunk chunk' );
+    } );
+
+    testWidgets( 'into an EMPTY box the transcript stands alone, with no leading space', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'the only words' );
+
+      await openWith( tester, '' );
+      await dictate( tester );
+
+      expect( boxOf( tester ).text, 'the only words' );
+    } );
+
+    testWidgets( 'the caret ends up after the words just added, so the next chunk continues there', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'spoken' );
+
+      await openWith( tester, 'typed' );
+      await dictate( tester );
+
+      final box = boxOf( tester );
+      expect( box.text, 'typed spoken' );
+      expect( box.selection, const TextSelection.collapsed( offset: 12 ) );
+    } );
+
+    testWidgets( 'the words land at the caret the box held when recording began, not blindly at the end', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'middle' );
+
+      await openWith( tester, 'head tail' );
+      // Caret between 'head ' and 'tail', then recording begins.
+      boxOf( tester ).selection = const TextSelection.collapsed( offset: 5 );
+      await tester.pump();
+      await dictate( tester );
+
+      final box = boxOf( tester );
+      expect( box.text, 'head middle tail' );
+      expect( box.selection, const TextSelection.collapsed( offset: 11 ) );
+    } );
+
+    testWidgets( 'PERMISSION DENIED: inline guidance, the box and its text untouched, recorder never started', ( tester ) async {
+      await tester.pumpWidget( host( permission: () async => false ) );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyEdit ) );
+      await tester.pump();
+      await tester.enterText( byKeyStr( TestKeys.voiceReplyTranscript ), 'my draft' );
+      await tester.pump();
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );
+      await tester.pump();
+
+      expect( byKeyStr( TestKeys.voiceReplyError ), findsOneWidget );
+      expect( find.textContaining( 'permission' ), findsOneWidget );
+      expect( boxOf( tester ).text, 'my draft', reason: 'a refusal must not cost the draft' );
+      expect( byKeyStr( TestKeys.voiceReplyAppendMic ), findsOneWidget, reason: 'mic back to idle' );
+      verifyNever( () => asr.startRecording() );
+    } );
+
+    testWidgets( 'CANCELLED: discarding the recording leaves the text exactly as it was, and never transcribes', ( tester ) async {
+      await openWith( tester, 'keep me' );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // recording
+      await tester.pump();
+      expect( find.textContaining( 'Recording…' ), findsOneWidget );
+      expect( byKeyStr( TestKeys.voiceReplySend ), findsNothing,
+          reason: 'no send button to fat-finger while a chunk is being recorded' );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendCancel ) );
+      await tester.pump();
+
+      verify( () => asr.cancelRecording() ).called( 1 );
+      verifyNever( () => asr.stopAndTranscribe() );
+      expect( boxOf( tester ).text, 'keep me' );
+      expect( byKeyStr( TestKeys.voiceReplySend ), findsOneWidget, reason: 'back to the editor box' );
+    } );
+
+    testWidgets( 'a cancel that overtakes an in-flight transcribe drops the words and frees the mic', ( tester ) async {
+      final gate = Completer<String>();
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
+
+      await openWith( tester, 'draft' );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // recording
+      await tester.pump();
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // transcribing, parked
+      await tester.pump();
+      expect( find.byType( CircularProgressIndicator ), findsOneWidget );
+
+      // Chloé's M1(b): Send stays gone for the WHOLE transcribing window, not
+      // just while the recorder runs — the window is the longer of the two.
+      expect( byKeyStr( TestKeys.voiceReplySend ), findsNothing,
+          reason: 'nothing to fat-finger while a chunk is still being transcribed' );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendCancel ) );
+      await tester.pump();
+
+      gate.complete( 'too late' );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( boxOf( tester ).text, 'draft', reason: 'a stale transcript appends nothing' );
+      expect( find.byType( CircularProgressIndicator ), findsNothing, reason: 'the mic is free again' );
+      expect( byKeyStr( TestKeys.voiceReplyAppendMic ), findsOneWidget );
+    } );
+
+    testWidgets( 'ASR ERROR leaves the text untouched and says what went wrong', ( tester ) async {
+      when( () => asr.stopAndTranscribe() )
+          .thenThrow( const AsrException( 'Transcription upload failed: timeout' ) );
+
+      await openWith( tester, 'half a sentence' );
+      await dictate( tester );
+
+      expect( boxOf( tester ).text, 'half a sentence' );
+      expect( byKeyStr( TestKeys.voiceReplyError ), findsOneWidget );
+      expect( find.textContaining( 'upload failed' ), findsOneWidget );
+      expect( find.byType( CircularProgressIndicator ), findsNothing, reason: 'no stuck spinner' );
+      expect( byKeyStr( TestKeys.voiceReplyAppendMic ), findsOneWidget );
+      expect( submitted, isEmpty );
+    } );
+
+    testWidgets( 'NEGATIVE CONTROL — a capture that heard nothing appends nothing and says so', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => '   ' );
+
+      await openWith( tester, 'untouched' );
+      await dictate( tester );
+
+      expect( boxOf( tester ).text, 'untouched',
+          reason: 'silence must not append, and must not blank the box either' );
+      expect( find.textContaining( 'Did not catch anything' ), findsOneWidget );
+      expect( byKeyStr( TestKeys.voiceReplyAppendMic ), findsOneWidget );
+    } );
+
+    testWidgets( 'the append mic belongs to the OPEN editor box — the idle row keeps its own two buttons', ( tester ) async {
+      await tester.pumpWidget( host() );
+      expect( byKeyStr( TestKeys.voiceReplyAppendMic ), findsNothing, reason: 'nothing to append to yet' );
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyEdit ) );
+      await tester.pump();
+      expect( byKeyStr( TestKeys.voiceReplyAppendMic ), findsOneWidget );
+      expect( tester.getSize( byKeyStr( TestKeys.voiceReplyAppendMic ) ).height,
+          greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: "Rick's thumb — same 60 dp target" );
+    } );
+
+    // Tiffany's guard (2026-09-28): an append must never OVERWRITE what was
+    // edited while the chunk was recording. The caret is read at the start of
+    // the recording but the text is read when the words arrive, so a draft
+    // rewritten mid-recording keeps every character of the rewrite.
+    testWidgets( 'text typed WHILE the chunk records survives the append — nothing is overwritten', ( tester ) async {
+      final gate = Completer<String>();
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
+
+      await openWith( tester, 'first' );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // recording
+      await tester.pump();
+
+      // He keeps typing while he talks; the box is live throughout.
+      await tester.enterText( byKeyStr( TestKeys.voiceReplyTranscript ), 'first, then typed more' );
+      await tester.pump();
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // stop → transcribing
+      await tester.pump();
+      gate.complete( 'and spoken' );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( boxOf( tester ).text, 'first, then typed more and spoken',
+          reason: 'every typed character survives, and the words land after them' );
+    } );
+    // Chloé's M1 (review of d1823a1): the typo-fix case, which the first caret
+    // rule regressed. `enterText` always leaves the caret at the END, so it
+    // cannot express this at all — the value is set directly, caret mid-text,
+    // exactly as a phone leaves it after fixing one letter.
+    testWidgets( 'a typo fixed WHILE talking does not drag the new sentence into the middle', ( tester ) async {
+      final gate = Completer<String>();
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
+
+      await openWith( tester, 'the quikc brown fox' );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // recording
+      await tester.pump();
+
+      // He fixes the typo while still talking, and the caret stays where he
+      // fixed it — six characters in, nowhere near the end.
+      boxOf( tester ).value = const TextEditingValue(
+        text      : 'the quick brown fox',
+        selection : TextSelection.collapsed( offset: 9 ),
+      );
+      await tester.pump();
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // stop → transcribing
+      await tester.pump();
+      gate.complete( 'jumps over the lazy dog' );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( boxOf( tester ).text, 'the quick brown fox jumps over the lazy dog',
+          reason: 'THE REGRESSION: following the live caret gave '
+                  '"the quick jumps over the lazy dog brown fox"' );
+      expect( boxOf( tester ).selection,
+          const TextSelection.collapsed( offset: 43 ) );
+    } );
+    testWidgets( 'leaving the screen mid-append cancels the recording rather than abandoning it', ( tester ) async {
+      await openWith( tester, 'draft' );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );
+      await tester.pump();
+
+      await tester.pumpWidget( const MaterialApp( home: Scaffold( body: SizedBox() ) ) );
+      await tester.pump();
+
+      verify( () => asr.cancelRecording() ).called( 1 );
+    } );
+  } );
+
   /// Review FAIL (2026-09-27), row a1c12c6e: the hold is only as good as its
   /// release. Navigating away mid-recording used to abandon the capture, and
   /// because `AsrService` is a singleton the hold outlived the widget — TTS
