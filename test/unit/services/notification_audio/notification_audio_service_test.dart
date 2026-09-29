@@ -39,10 +39,13 @@ void main() {
       prefs = NotificationPreferences( sp );
       fln   = _MockFln();
       tts   = _MockTts();
-      when( () => fln.initialize( any() ) ).thenAnswer( ( _ ) async => true );
+      when( () => fln.initialize( any(),
+          onDidReceiveNotificationResponse:
+              any( named: 'onDidReceiveNotificationResponse' ) ) )
+          .thenAnswer( ( _ ) async => true );
       when( () => fln.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>() ).thenReturn( null );
-      when( () => fln.show( any(), any(), any(), any() ) ).thenAnswer( ( _ ) async {} );
+      when( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).thenAnswer( ( _ ) async {} );
       when( () => tts.stop() ).thenAnswer( ( _ ) async => 1 );
       when( () => tts.speak( any() ) ).thenAnswer( ( _ ) async => 1 );
     } );
@@ -57,35 +60,35 @@ void main() {
       await newService().handleIncoming(
         priority: "low", message: "x", suppressDing: false,
       );
-      verifyNever( () => fln.show( any(), any(), any(), any() ) );
+      verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
     } );
 
     test( "medium: dings", () async {
       await newService().handleIncoming(
         priority: "medium", message: "Routine update", suppressDing: false,
       );
-      verify( () => fln.show( any(), any(), any(), any() ) ).called( 1 );
+      verify( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).called( 1 );
     } );
 
     test( "high: dings", () async {
       await newService().handleIncoming(
         priority: "high", message: "Needs attention", suppressDing: false,
       );
-      verify( () => fln.show( any(), any(), any(), any() ) ).called( 1 );
+      verify( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).called( 1 );
     } );
 
     test( "urgent: dings", () async {
       await newService().handleIncoming(
         priority: "urgent", message: "Prod down", suppressDing: false,
       );
-      verify( () => fln.show( any(), any(), any(), any() ) ).called( 1 );
+      verify( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).called( 1 );
     } );
 
     test( "suppress_ding silences the ding", () async {
       await newService().handleIncoming(
         priority: "urgent", message: "silent emergency", suppressDing: true,
       );
-      verifyNever( () => fln.show( any(), any(), any(), any() ) );
+      verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
     } );
 
     test( "master mute silences ding regardless of priority", () async {
@@ -93,7 +96,7 @@ void main() {
       await newService().handleIncoming(
         priority: "urgent", message: "quiet", suppressDing: false,
       );
-      verifyNever( () => fln.show( any(), any(), any(), any() ) );
+      verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
     } );
 
     test( "dingOnHigh=false → high does not ding", () async {
@@ -101,7 +104,7 @@ void main() {
       await newService().handleIncoming(
         priority: "high", message: "silent high", suppressDing: false,
       );
-      verifyNever( () => fln.show( any(), any(), any(), any() ) );
+      verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
     } );
 
     test( "handleIncoming never calls tts.speak() directly anymore", () async {

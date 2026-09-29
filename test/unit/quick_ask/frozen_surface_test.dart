@@ -51,8 +51,27 @@ const frozenFiles = <String>[
 ///   composer's message to a session goes through the browsers' `POST
 ///   /api/notify` user_initiated_message, not `/api/dm/send`. The three DM
 ///   tests and AC-S2.9(iii) now assert the new door; nothing else changed.
+///
+/// - notification_bloc_test.dart — Rick 2026-09-28 by voice, Tiffany's title
+///   ruling the same day (row d9bc6f6c). TWO retirements, both deliberate:
+///     (a) `NotificationAudioService.handleIncoming` now also takes
+///         `notificationId` and `senderId`, because the notification it posts has
+///         to be TAPPABLE — a tap previously just opened the app. mocktail
+///         matches named arguments, so a stub that does not name the new ones
+///         matches nothing; the three `any()` stubs were widened and nothing else
+///         about them changed.
+///     (b) the notification TITLE is now WHO sent it, not the item's own `title`.
+///         The one literal `verify` asserted `title: "CRIT"`; it now asserts the
+///         sender label. That assertion was not wrong — the behaviour it pinned
+///         was retired on purpose, because a notification arriving with the phone
+///         face down said what happened and not who said it.
+///   🔴 THIS IS A CONTROL BEING WEAKENED, so it is written down rather than
+///   quietly re-pinned: a reviewer should confirm the edit is (a) and (b) and
+///   nothing else. `git diff 026ffd3 -- test/unit/notifications/notification_bloc_test.dart`
+///   is the whole story, and it is small.
 const repinnedFrozenFiles = <String, String>{
-  'test/unit/focus_mode/focus_chat_bloc_test.dart' : 'bb5dd7b82371234675421ce5d129b6cde3500797',
+  'test/unit/focus_mode/focus_chat_bloc_test.dart'       : 'bb5dd7b82371234675421ce5d129b6cde3500797',
+  'test/unit/notifications/notification_bloc_test.dart'  : '215b782ac8d49767735ad8edcf6d9daa76162993',
 };
 
 /// A file S4 unambiguously DID change. Diffing it is how this test proves the

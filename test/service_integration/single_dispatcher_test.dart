@@ -80,6 +80,8 @@ void main() {
         message      : any( named: 'message' ),
         title        : any( named: 'title' ),
         suppressDing : any( named: 'suppressDing' ),
+        notificationId : any( named: 'notificationId' ),
+        senderId       : any( named: 'senderId' ),
       ) ).thenAnswer( ( _ ) async {} );
       when( () => ws.sessionId ).thenReturn( 'wise penguin' );
       // AC-S1.8: the bloc subscribes at construction, so the stream must exist.

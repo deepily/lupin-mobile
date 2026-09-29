@@ -162,6 +162,8 @@ void main() {
         message      : any( named: 'message' ),
         title        : any( named: 'title' ),
         suppressDing : any( named: 'suppressDing' ),
+        notificationId : any( named: 'notificationId' ),
+        senderId       : any( named: 'senderId' ),
       ) ).thenAnswer( ( _ ) async {} );
       when( () => ws.sessionId ).thenReturn( 'wise penguin' );
       when( () => ws.connectionStream ).thenAnswer( ( _ ) => const Stream<bool>.empty() );

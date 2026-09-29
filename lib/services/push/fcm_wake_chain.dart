@@ -24,6 +24,8 @@
 ///     environment note) — no connection-state inference here.
 library;
 
+import 'notification_sender_label.dart';
+import 'notification_tap_payload.dart';
 import '../tts/tts_preview_truncator.dart';
 
 /// Outcome record for the §4 debug hook — every wake logs
@@ -95,7 +97,14 @@ class FcmWakeChain {
       String userEmail, String accessToken ) fetchNextNotification;
 
   /// Local-notification seam (plugin re-initialized inside the handler).
-  final Future<void> Function( String title, String body ) showNotification;
+  ///
+  /// The third argument is the TAP PAYLOAD (row d9bc6f6c) — the encoded
+  /// `{notification_id, sender_id}` of the item being shown, or null when there
+  /// is no item behind the notification (every fallback path). Android stores
+  /// it in the notification's intent, which is the ONLY channel that survives
+  /// this isolate dying, the phone locking, and the user tapping an hour later.
+  final Future<void> Function( String title, String body, String? payload )
+      showNotification;
 
   /// Prefs seam: may this priority speak? (Persisted speak-toggles read
   /// from local storage — mirrors the legacy policy: low/medium never,
@@ -186,11 +195,26 @@ class FcmWakeChain {
 
       final id       = item[ 'id' ]?.toString() ?? '';
       final message  = item[ 'message' ]?.toString() ?? '';
-      final title    = item[ 'title' ]?.toString() ?? 'Lupin';
       final priority = item[ 'priority' ]?.toString() ?? 'medium';
-      log( '[FcmWake] fetched 1 (id=$id priority=$priority)' );
 
-      await showNotification( title, message );
+      // 🔴 THE TITLE IS WHO SENT IT, NOT THE ITEM'S OWN `title` (Tiffany's ruling,
+      // 2026-09-28). A notification arriving with the phone face down said WHAT
+      // happened and not WHO said it, so the only way to find out was to open the
+      // app and tab through personas — the same complaint the tap routing fixes,
+      // one step earlier. `notificationSenderLabel` is total and always returns
+      // something, so the title cannot come out blank.
+      final title = notificationSenderLabel( item );
+      log( '[FcmWake] fetched 1 (id=$id priority=$priority from="$title")' );
+
+      // 🔴 THE PAYLOAD IS BUILT FROM `item`, THE THING BEING SHOWN — never from
+      // the wake `data`. The push is content-free, and `/next` hands back the
+      // OLDEST unplayed item rather than whatever triggered this wake, so the
+      // notification on the lock screen and the conversation a tap opens agree
+      // only if both come from the same map.
+      await showNotification(
+        title, message,
+        NotificationTapPayload.fromNotification( item )?.encode(),
+      );
       shown = true;
       log( '[FcmWake] shown' );
 
@@ -237,7 +261,11 @@ class FcmWakeChain {
   /// so a plugin failure here is reported as `shown=false` rather than lost.
   Future<bool> _showFallback( String body ) async {
     try {
-      await showNotification( kFcmWakeFallbackTitle, body );
+      // No payload: a fallback stands for "something happened" with no item
+      // behind it, so a tap has no conversation to open and lands on Focus mode
+      // as it does today. Passing an id-less payload would be worse than none —
+      // it would occupy the tap router's single slot for nothing.
+      await showNotification( kFcmWakeFallbackTitle, body, null );
       log( '[FcmWake] shown (fallback)' );
       return true;
     } catch ( e ) {

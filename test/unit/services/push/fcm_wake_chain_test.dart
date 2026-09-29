@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 
 import 'package:lupin_mobile/services/push/fcm_wake_chain.dart';
+import 'package:lupin_mobile/services/push/notification_tap_payload.dart';
 import 'package:lupin_mobile/services/tts/tts_preview_truncator.dart';
 
 void main() {
@@ -17,6 +18,8 @@ void main() {
     late List<String> calls;     // ordered seam-call journal
     late List<String> logs;
     late List<String> spoken;
+    late List<String?> shownPayloads;   // row d9bc6f6c — tap payloads, in order
+    late List<String>  shownTitles2;    // row d9bc6f6c — titles, in order
     late bool         speakAllowed;
     late double       sliderFraction;
     late Map<String, dynamic>? nextItem;
@@ -25,19 +28,30 @@ void main() {
         { 'type': 'ws_wake', 'reason': reason, 'ts': '2026-06-12T09:00:00Z' };
 
     Map<String, dynamic> wireItem() => {
-      'id'       : 'n-77',
-      'message'  : 'Build finished green.',
-      'abstract' : 'A LONG abstract body that must NEVER be spoken.',
-      'title'    : 'Mr. Radio',
-      'priority' : 'high',
+      'id'        : 'n-77',
+      'message'   : 'Build finished green.',
+      'abstract'  : 'A LONG abstract body that must NEVER be spoken.',
+      // The item's own `title` — no longer what the notification shows (row
+      // d9bc6f6c). It stays in the fixture on purpose: the title must come from
+      // the SENDER fields, and a test whose item had no competing title could not
+      // tell the difference.
+      'title'     : 'Build status',
+      'priority'  : 'high',
+      'voice_persona' : { 'name': 'radio', 'display_name': 'Mr. Radio', 'icon': '📻' },
+      // Row d9bc6f6c: the server sends this on every item (confirmed against
+      // test/fixtures/notifications/notification-with-persona.json), and the tap
+      // payload is built from it.
+      'sender_id' : 'claude.code@lupin.deepily.ai#a1b2c3d4',
     };
 
     late FcmWakeChain chain;
 
     setUp( () {
-      calls        = [];
-      logs         = [];
-      spoken       = [];
+      calls         = [];
+      logs          = [];
+      spoken        = [];
+      shownPayloads = [];
+      shownTitles2  = [];
       speakAllowed   = true;
       sliderFraction = 1.0;
       nextItem       = wireItem();
@@ -58,8 +72,10 @@ void main() {
           calls.add( 'fetch($email,$token)' );
           return nextItem;
         },
-        showNotification: ( title, body ) async {
+        showNotification: ( title, body, payload ) async {
           calls.add( 'show($title)' );
+          shownPayloads.add( payload );
+          shownTitles2.add( title );
         },
         shouldSpeak: ( priority ) async {
           calls.add( 'prefs($priority)' );
@@ -89,7 +105,7 @@ void main() {
         'creds',
         'exchange(refresh-abc)',
         'fetch(rick@test.com,access-xyz)',
-        'show(Mr. Radio)',
+        'show(📻 Mr. Radio)',
         'prefs(high)',
         'speak',
         'played(n-77)',
@@ -173,7 +189,7 @@ void main() {
         readCredentials        : () async => null,
         exchangeForAccessToken : ( _ ) async => fail( 'must not exchange' ),
         fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
-        showNotification       : ( _, body ) async => shownBodies.add( body ),
+        showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
@@ -204,7 +220,7 @@ void main() {
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => throw Exception( 'refresh expired' ),
         fetchNextNotification  : ( _, __ ) async => fail( 'must not fetch' ),
-        showNotification       : ( _, body ) async => shownBodies.add( body ),
+        showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
@@ -223,7 +239,7 @@ void main() {
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
         fetchNextNotification  : ( _, __ ) async => wireItem(),
-        showNotification       : ( title, _ ) async => shownTitles.add( title ),
+        showNotification       : ( title, _, __ ) async => shownTitles.add( title ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => throw Exception( 'tts engine gone' ),
@@ -233,7 +249,7 @@ void main() {
       final outcome = await loud.handleWake( wakePayload() );
       expect( outcome.shown, isTrue );
       expect( outcome.fetched, 1 );
-      expect( shownTitles, [ 'Mr. Radio' ], reason: 'exactly one notification, the real one' );
+      expect( shownTitles, [ '📻 Mr. Radio' ], reason: 'exactly one notification, the real one' );
     } );
 
     test( 'a failing notification plugin is reported as shown=false, never thrown', () async {
@@ -241,7 +257,7 @@ void main() {
         readCredentials        : () async => null,
         exchangeForAccessToken : ( _ ) async => 'a',
         fetchNextNotification  : ( _, __ ) async => null,
-        showNotification       : ( _, __ ) async => throw Exception( 'plugin not initialized' ),
+        showNotification       : ( _, __, ___ ) async => throw Exception( 'plugin not initialized' ),
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
@@ -259,7 +275,7 @@ void main() {
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
         fetchNextNotification  : ( _, __ ) async => throw Exception( 'net down' ),
-        showNotification       : ( _, __ ) async {},
+        showNotification       : ( _, __, ___ ) async {},
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
@@ -279,7 +295,7 @@ void main() {
             refreshToken: 'r', userEmail: 'e@x.com' ),
         exchangeForAccessToken : ( _ ) async => 'a',
         fetchNextNotification  : ( _, __ ) async => wireItem(),
-        showNotification       : ( _, __ ) async {},
+        showNotification       : ( _, __, ___ ) async {},
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( t ) async { spoken.add( t ); },
@@ -299,6 +315,128 @@ void main() {
       expect( logs.any( ( l ) => l.contains( 'fetched 1' ) ), isTrue );
       expect( logs.any( ( l ) => l.contains( 'shown' ) ), isTrue );
       expect( logs.any( ( l ) => l.contains( 'spoke' ) ), isTrue );
+    } );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Row d9bc6f6c — the tap payload. Without it a tap is only an app launch,
+    // which is the bug Rick reported from the phone.
+    group( 'tap payload (row d9bc6f6c)', () {
+      test( 'a shown item carries its OWN id and sender_id', () async {
+        await chain.handleWake( wakePayload() );
+
+        expect( shownPayloads, hasLength( 1 ) );
+        final decoded = NotificationTapPayload.decode( shownPayloads.single );
+        expect( decoded, isNotNull,
+            reason: 'the payload must be decodable by the main isolate that reads '
+                    'it back off the launch intent' );
+        expect( decoded!.notificationId, 'n-77' );
+        expect( decoded.senderId, 'claude.code@lupin.deepily.ai#a1b2c3d4' );
+        expect( decoded.isRoutable, isTrue );
+      } );
+
+      test( 'the payload comes from the ITEM SHOWN, not from the wake frame', () async {
+        // 🔴 `/next` returns the OLDEST unplayed item, which need not be the one
+        // that triggered this push (Tiffany, 2026-09-28). So the notification on
+        // the lock screen and the conversation its tap opens agree only if both
+        // are read off the same map. Here the wake frame names a DIFFERENT seat;
+        // the payload must ignore it.
+        nextItem = {
+          ...wireItem(),
+          'id'        : 'n-oldest',
+          'sender_id' : 'claude.code@lupin.deepily.ai#01d35747',
+        };
+
+        await chain.handleWake( {
+          'type'      : 'ws_wake',
+          'reason'    : 'undelivered',
+          'sender_id' : 'claude.code@lupin.deepily.ai#deadbeef',
+          'id'        : 'n-trigger',
+        } );
+
+        final decoded = NotificationTapPayload.decode( shownPayloads.single );
+        expect( decoded!.notificationId, 'n-oldest' );
+        expect( decoded.senderId, 'claude.code@lupin.deepily.ai#01d35747' );
+      } );
+
+      test( 'an item with no sender_id shows, but is not routable', () async {
+        nextItem = { ...wireItem() }..remove( 'sender_id' );
+
+        final outcome = await chain.handleWake( wakePayload() );
+
+        expect( outcome.shown, isTrue, reason: 'the notification still posts' );
+        final decoded = NotificationTapPayload.decode( shownPayloads.single );
+        expect( decoded!.isRoutable, isFalse );
+      } );
+
+      test( 'the NOTHING-UNDELIVERED fallback carries NO payload', () async {
+        nextItem = null;
+
+        final outcome = await chain.handleWake( wakePayload() );
+
+        expect( outcome.shown, isTrue );
+        expect( shownPayloads.single, isNull,
+            reason: 'a fallback stands for "something happened" with no item '
+                    'behind it — there is no conversation for a tap to open, and '
+                    'an id-less payload would occupy the tap router\'s one slot '
+                    'for nothing' );
+      } );
+
+      test( 'the TITLE is the sender, not the item\'s own title', () async {
+        // 🔴 Tiffany's ruling, 2026-09-28. A notification arriving with the phone
+        // face down said WHAT happened and not WHO said it, so finding out meant
+        // opening the app and tabbing through personas. The item here carries a
+        // perfectly good `title` of its own ('Build status') and it is NOT what
+        // shows — which is the whole change.
+        await chain.handleWake( wakePayload() );
+
+        expect( shownTitles2, [ '📻 Mr. Radio' ] );
+      } );
+
+      test( 'no persona ⇒ the PROJECT, with no hash', () async {
+        nextItem = { ...wireItem() }..remove( 'voice_persona' );
+
+        await chain.handleWake( wakePayload() );
+
+        expect( shownTitles2, [ 'lupin' ],
+            reason: 'the sender id is claude.code@lupin.deepily.ai#a1b2c3d4, and '
+                    'the hash is dropped because nobody reads eight hex '
+                    'characters off a lock screen' );
+      } );
+
+      test( 'the FALLBACK notification keeps its generic title', () async {
+        nextItem = null;
+
+        await chain.handleWake( wakePayload() );
+
+        expect( shownTitles2, [ kFcmWakeFallbackTitle ],
+            reason: 'there is no item, so there is no sender to name' );
+      } );
+
+      test( 'NEGATIVE CONTROL: a chain whose seam drops the payload loses the tap',
+          () async {
+        // Proof the assertions above test the PLUMBING and not the codec. This is
+        // the pre-fix production wiring, reproduced exactly: a show() that
+        // ignores its third argument.
+        final dropping = <String?>[];
+        final blind = FcmWakeChain(
+          readCredentials        : () async => const FcmWakeCredentials(
+              refreshToken: 'r', userEmail: 'rick@test.com' ),
+          exchangeForAccessToken : ( _ ) async => 'access',
+          fetchNextNotification  : ( _, __ ) async => wireItem(),
+          showNotification       : ( _, __, ___ ) async => dropping.add( null ),
+          shouldSpeak            : ( _ ) async => false,
+          ttsFraction            : () async => 1.0,
+          speak                  : ( _ ) async {},
+          markPlayed             : ( _, __ ) async {},
+          log                    : logs.add,
+        );
+
+        await blind.handleWake( wakePayload() );
+
+        expect( NotificationTapPayload.decode( dropping.single ), isNull,
+            reason: 'and a tap on that notification can route nowhere, which is '
+                    'exactly the reported symptom' );
+      } );
     } );
   } );
 }

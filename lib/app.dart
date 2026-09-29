@@ -29,6 +29,8 @@ import 'features/queue/domain/queue_event.dart';
 import 'services/auth/server_context_service.dart';
 import 'services/permissions/notification_permission.dart';
 import 'services/push/fcm_bootstrap.dart';
+import 'services/push/notification_tap_payload.dart';
+import 'services/push/notification_tap_router.dart';
 import 'services/tts/streaming_tts_player.dart';
 import 'services/websocket/websocket_service.dart';
 
@@ -46,6 +48,8 @@ import 'services/websocket/websocket_service.dart';
 ///   - registerPush receives email, never userId
 ///   - requestNotifications is called once, AFTER registerPush, so a
 ///     system prompt the user has not answered yet never delays registration
+///   - a notification tap held by [tapRouter] is routed to FocusChatBloc, ONCE,
+///     with the email this login just supplied (row d9bc6f6c)
 Future<void> onWsAuthenticated( {
   required WsBlocDispatcher dispatcher,
   required WebSocketService ws,
@@ -53,8 +57,18 @@ Future<void> onWsAuthenticated( {
   required String           email,
   Future<void> Function( String userEmail ) registerPush = fcmOnAuthenticated,
   NotificationPermissionRequester requestNotifications = requestNotificationPermission,
+  NotificationTapRouter? tapRouter,
 } ) async {
   dispatcher.lastAuthenticatedEmail = email;
+  // 🔴 DRAINED HERE, NOT ON `auth_success`, AND THE ORDER IS THE REASON. This is
+  // the first moment the authenticated EMAIL exists, and the backfill that
+  // populates the tapped conversation needs it. The WS `auth_success` frame
+  // (which triggers cold start) arrives later and on a different path, and
+  // bloc's default transformer runs handlers of different event types
+  // CONCURRENTLY — so sequencing the reveal behind cold start would be a race,
+  // not an ordering. The event carries the email instead, which removes the
+  // dependency altogether.
+  _routePendingTap( tapRouter, email );
   if ( !ws.isConnected ) await ws.connect( userId: userId );
   // S5 token-lifecycle writer 1 (login hook — the auth-state AUTHENTICATED
   // transition, Arnold residual #1). No-op unless built with
@@ -65,6 +79,27 @@ Future<void> onWsAuthenticated( {
   // DENIED, and nothing else asks. Without this, wake notifications and the
   // ws_wake fallback are silently dropped by the OS.
   await requestNotifications();
+}
+
+/// Route one held notification tap into the focus surface.
+///
+/// Requires:
+///   - email is the just-authenticated account email
+///
+/// Ensures:
+///   - nothing happens when router is null or holds no tap
+///   - a routable tap is dispatched as ONE [FocusMessageRevealRequested] and
+///     marked handled, so a later drain cannot repeat it
+void _routePendingTap( NotificationTapRouter? router, String email ) {
+  final tap = router?.takePending();
+  if ( tap == null ) return;
+  final sender = tap.senderId;
+  if ( sender == null ) return;   // a fallback notification: Focus mode, no target
+  ServiceLocator.get<FocusChatBloc>().add( FocusMessageRevealRequested(
+    senderId       : sender,
+    notificationId : tap.notificationId,
+    userEmail      : email,
+  ) );
 }
 
 /// WS frame → bloc dispatch bridge. Extracted from the private app State so
@@ -239,12 +274,42 @@ class LupinMobileApp extends StatefulWidget {
 
 class _LupinMobileAppState extends State<LupinMobileApp> {
   StreamSubscription<dynamic>? _wsSubscription;
+  StreamSubscription<NotificationTapPayload>? _tapSubscription;
   final WsBlocDispatcher _dispatcher = WsBlocDispatcher();
 
   @override
   void initState() {
     super.initState();
     _connectWsToBlocs();
+    _listenForTaps();
+  }
+
+  /// The WARM half of row d9bc6f6c: a tap while this process is ALREADY running
+  /// and already signed in.
+  ///
+  /// `onWsAuthenticated` drains the router once, at login, which covers the cold
+  /// start and the tap that arrives while the user is still at the lock screen.
+  /// It does NOT fire again — so a tap on a notification received an hour into a
+  /// session would sit in the router's slot forever without this. The two paths
+  /// share the router's handle-once dedupe, so a tap cannot be routed twice.
+  void _listenForTaps() {
+    if ( !ServiceLocator.isRegistered<NotificationTapRouter>() ) return;
+    final router = ServiceLocator.get<NotificationTapRouter>();
+    _tapSubscription = router.taps.listen( ( tap ) {
+      final email = _dispatcher.lastAuthenticatedEmail;
+      // Not signed in yet: leave it in the slot for the login drain to pick up.
+      // Dropping it here is the one thing that must not happen — that is the
+      // exact case Rick hit, where the tap is what WOKE the app.
+      if ( email == null ) return;
+      final sender = tap.senderId;
+      if ( sender == null ) return;
+      router.markHandled( tap );
+      ServiceLocator.get<FocusChatBloc>().add( FocusMessageRevealRequested(
+        senderId       : sender,
+        notificationId : tap.notificationId,
+        userEmail      : email,
+      ) );
+    } );
   }
 
   void _connectWsToBlocs() {
@@ -263,6 +328,7 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
   @override
   void dispose() {
     _wsSubscription?.cancel();
+    _tapSubscription?.cancel();
     super.dispose();
   }
 
@@ -322,6 +388,9 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
           ws         : ServiceLocator.get<WebSocketService>(),
           userId     : userId,
           email      : email,
+          tapRouter  : ServiceLocator.isRegistered<NotificationTapRouter>()
+              ? ServiceLocator.get<NotificationTapRouter>()
+              : null,
         ),
         onSignedOut: () async {
           final ws = ServiceLocator.get<WebSocketService>();

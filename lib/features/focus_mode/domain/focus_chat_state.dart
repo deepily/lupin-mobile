@@ -157,6 +157,16 @@ class FocusChatState extends Equatable {
   /// never counted unread; surfaced only as a "N hidden" caption.
   final Map<String, int>                 hiddenCountBySender;
 
+  /// The notification id a NOTIFICATION TAP asked to bring into view (row
+  /// d9bc6f6c), or null. Set with [focusedSender] by one event so the two
+  /// cannot disagree; cleared once the pane has acted on it.
+  ///
+  /// ⚠️ A ONE-SHOT INSTRUCTION, NOT A SELECTION. It does not mean "this message
+  /// is highlighted" — it means "scroll to this message, once". Leaving it set
+  /// would re-scroll on every unrelated rebuild, yanking the list out from under
+  /// a user who has since scrolled somewhere else themselves.
+  final String?                          revealMessageId;
+
   const FocusChatState( {
     required this.senderOrder,
     required this.personasBySender,
@@ -170,6 +180,7 @@ class FocusChatState extends Equatable {
     this.senderScope          = FocusSenderScope.personas,
     this.asOf,
     this.hiddenCountBySender  = const {},
+    this.revealMessageId,
   } );
 
   const FocusChatState.initial()
@@ -184,7 +195,8 @@ class FocusChatState extends Equatable {
         filter               = FocusFilter.live,
         senderScope          = FocusSenderScope.personas,
         asOf                 = null,
-        hiddenCountBySender  = const {};
+        hiddenCountBySender  = const {},
+        revealMessageId      = null;
 
   /// Recency band of [senderId] evaluated at [asOf]. Unknown activity or a
   /// null clock ⇒ `live` (pre-hydration: never blank the rail on a guess).
@@ -306,6 +318,8 @@ class FocusChatState extends Equatable {
     FocusSenderScope?                senderScope,
     DateTime?                        asOf,
     Map<String, int>?                hiddenCountBySender,
+    String?                          revealMessageId,
+    bool                             clearRevealMessageId = false,
   } ) {
     return FocusChatState(
       senderOrder          : senderOrder          ?? this.senderOrder,
@@ -320,6 +334,12 @@ class FocusChatState extends Equatable {
       senderScope          : senderScope          ?? this.senderScope,
       asOf                 : asOf                 ?? this.asOf,
       hiddenCountBySender  : hiddenCountBySender  ?? this.hiddenCountBySender,
+      // Explicit clear, like `clearFocusedSender`: a null-coalescing copyWith
+      // cannot express "set this back to null", and the reveal target MUST be
+      // clearable or it fires forever.
+      revealMessageId      : clearRevealMessageId
+          ? null
+          : ( revealMessageId ?? this.revealMessageId ),
     );
   }
 
@@ -337,5 +357,6 @@ class FocusChatState extends Equatable {
     senderScope,
     asOf,
     hiddenCountBySender,
+    revealMessageId,
   ];
 }

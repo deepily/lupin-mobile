@@ -121,6 +121,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     on<FocusActivityTick>( _onActivityTick );
     on<FocusSenderExited>( _onSenderExited );
     on<FocusRosterRefreshRequested>( _onRosterRefresh );
+    on<FocusMessageRevealRequested>( _onRevealRequested );
+    on<FocusRevealConsumed>( _onRevealConsumed );
 
     final interval = _tickInterval;
     if ( interval != null ) {
@@ -302,13 +304,57 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     FocusSenderSelected event,
     Emitter<FocusChatState> emit,
   ) async {
-    final sid    = event.senderId;
+    // A rail tap is a plain selection with no message to reveal. Clearing any
+    // stale target here matters: without it, tapping away from a tap-routed
+    // conversation and back would scroll to the old message again.
+    await _selectSender( event.senderId, emit, clearReveal: true );
+  }
+
+  /// A NOTIFICATION TAP (row d9bc6f6c): the same selection the rail performs,
+  /// plus the message to bring into view, applied as ONE state change.
+  ///
+  /// Ensures:
+  ///   - focusedSender is the tap's sender and revealMessageId its notification,
+  ///     both set before the first await, so a UI rebuild can never observe one
+  ///     without the other
+  ///   - the conversation is backfilled even when cold start has not run yet —
+  ///     the event carries the email for exactly that case
+  Future<void> _onRevealRequested(
+    FocusMessageRevealRequested event,
+    Emitter<FocusChatState> emit,
+  ) async {
+    // Seed the email the backfill needs. `??=` and not `=`: cold start may
+    // already have set it, and this event's copy is the fallback, not the
+    // authority.
+    _userEmail ??= event.userEmail;
+    await _selectSender( event.senderId, emit, reveal: event.notificationId );
+  }
+
+  void _onRevealConsumed( FocusRevealConsumed event, Emitter<FocusChatState> emit ) {
+    if ( state.revealMessageId == null ) return;
+    emit( state.copyWith( clearRevealMessageId: true ) );
+  }
+
+  /// The ONE selection path — rail tap and notification tap both land here, so
+  /// unread-zeroing and backfill cannot drift between them.
+  ///
+  /// [reveal] is the notification id to scroll to (notification tap);
+  /// [clearReveal] drops any target already set (rail tap). Passing neither
+  /// leaves the existing target alone.
+  Future<void> _selectSender(
+    String sid,
+    Emitter<FocusChatState> emit, {
+    String? reveal,
+    bool    clearReveal = false,
+  } ) async {
     final unread = Map<String, int>.from( state.unreadBySender );
     unread[ sid ] = 0;
 
     emit( state.copyWith(
-      focusedSender  : sid,
-      unreadBySender : unread,
+      focusedSender        : sid,
+      unreadBySender       : unread,
+      revealMessageId      : reveal,
+      clearRevealMessageId : clearReveal,
     ) );
 
     if ( _backfilled.contains( sid ) ) return;

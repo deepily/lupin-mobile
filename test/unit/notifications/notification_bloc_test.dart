@@ -224,6 +224,8 @@ void main() {
         message      : any( named: "message" ),
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
+        notificationId : any( named: "notificationId" ),
+        senderId       : any( named: "senderId" ),
       ) ).thenAnswer( ( _ ) async {} );
 
       final bloc = NotificationBloc( repo, audio: audio );
@@ -248,8 +250,14 @@ void main() {
       verify( () => audio.handleIncoming(
         priority     : "urgent",
         message      : "Prod is down.",
-        title        : "CRIT",
+        // 🔴 WHO, not the item's own `title` (Tiffany's ruling 2026-09-28, row
+        // d9bc6f6c). This item carries "CRIT" and deliberately does NOT show it:
+        // the shade names the sender, and with no sender_id and no persona the
+        // label falls all the way through to the generic one.
+        title        : "Lupin",
         suppressDing : false,
+        notificationId : "n-1",
+        senderId       : null,
       ) ).called( 1 );
 
       await bloc.close();
@@ -267,6 +275,8 @@ void main() {
         message      : any( named: "message" ),
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
+        notificationId : any( named: "notificationId" ),
+        senderId       : any( named: "senderId" ),
       ) );
 
       await bloc.close();
@@ -280,6 +290,8 @@ void main() {
         message      : any( named: "message" ),
         title        : any( named: "title" ),
         suppressDing : any( named: "suppressDing" ),
+        notificationId : any( named: "notificationId" ),
+        senderId       : any( named: "senderId" ),
       ) ).thenAnswer( ( _ ) async {} );
       when( () => tts.enqueueIfSpeakable(
         priority : any( named: "priority" ),

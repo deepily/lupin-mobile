@@ -59,6 +59,31 @@ class _FocusChatPaneState extends State<FocusChatPane> {
   NotificationPreferences? _prefs;
   String? get userEmail => widget.userEmail;
 
+  /// Attached to the message list so a notification tap can bring its message
+  /// into view (row d9bc6f6c). One controller for the pane, re-used across
+  /// sender switches — the list is rebuilt, the controller is not.
+  final ScrollController _listScroll = ScrollController();
+
+  /// The scroll anchor for the message a notification tap asked to reveal.
+  ///
+  /// 🔴 ONE LONG-LIVED `GlobalKey`, NOT A `GlobalObjectKey` BUILT FROM THE ID.
+  /// `GlobalObjectKey` compares its value with `identical()`, not `==` — and two
+  /// separately interpolated strings with the same characters are equal but not
+  /// identical, because Dart canonicalises compile-time constants and not runtime
+  /// interpolations. So `GlobalObjectKey( 'focus.reveal.$id' )` built in the
+  /// build method and an equal-looking one built in the callback are DIFFERENT
+  /// keys, `currentContext` is null, and the scroll silently never happens.
+  /// Measured exactly that way on this file's first run.
+  ///
+  /// One key is enough because there is at most one reveal target at a time.
+  final GlobalKey _revealAnchor = GlobalKey();
+
+  /// The reveal target this pane has already acted on, so the scroll fires ONCE
+  /// per tap. Without it every unrelated rebuild — a new message, a persona
+  /// badge, the TTS slider moving — would scroll the list back again under a
+  /// user who has since scrolled somewhere else themselves.
+  String? _revealedId;
+
   @override
   void initState() {
     super.initState();
@@ -76,8 +101,39 @@ class _FocusChatPaneState extends State<FocusChatPane> {
   @override
   void dispose() {
     _stopList?.removeListener( _onPrefsChanged );
+    _listScroll.dispose();
     super.dispose();
   }
+
+  /// Bring the bubble keyed for [notificationId] into view, then tell the bloc
+  /// the reveal is spent.
+  ///
+  /// 🔴 THE TARGET MUST BE BUILT FOR THIS TO MEAN ANYTHING, AND IN A LAZY LIST
+  /// IT MIGHT NOT BE. `Scrollable.ensureVisible` needs an element, so it can
+  /// only ever reach a bubble the viewport (plus its cache extent) has already
+  /// built. The window is capped at 7 messages and the list renders newest-first,
+  /// so in practice the message a user just tapped is at or near the top and is
+  /// built — but "in practice" is not "always", which is why the miss is handled
+  /// explicitly rather than assumed away: an unbuilt or aged-out target consumes
+  /// the reveal and leaves the list where it is. The sender is still selected,
+  /// which is the half that fixes the reported complaint.
+  void _revealAfterFrame( String notificationId ) {
+    WidgetsBinding.instance.addPostFrameCallback( ( _ ) async {
+      if ( !mounted ) return;
+      final ctx = _revealAnchor.currentContext;
+      if ( ctx != null ) {
+        await Scrollable.ensureVisible(
+          ctx,
+          alignment : 0.1,                              // just below the top edge
+          duration  : const Duration( milliseconds: 250 ),
+          curve     : Curves.easeOut,
+        );
+      }
+      if ( !mounted ) return;
+      context.read<FocusChatBloc>().add( const FocusRevealConsumed() );
+    } );
+  }
+
 
   void _onPrefsChanged() {
     if ( mounted ) setState( () {} );
@@ -236,30 +292,104 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                     final groups = collapseByProgressGroup<FocusMessage>(
                       window, _groupKey, enabled: _stopList?.collapseGroups ?? true )
                       .reversed.toList( growable: false );
-                    return ListView.builder(
+
+                    // A notification tap asked for one message (row d9bc6f6c).
+                    // Only honour it while the target is actually IN this
+                    // sender's window: a reveal pointing at a message that has
+                    // been evicted (cap 7) or filtered out by the stop-list has
+                    // nothing to scroll to, and must still be consumed so the
+                    // pane does not retry it on every rebuild.
+                    final reveal = state.revealMessageId;
+                    final inWindow = reveal != null &&
+                        window.any( ( m ) => m.item.id == reveal );
+                    // Do not consume a reveal while the backfill is in flight:
+                    // on the cold start this row is about, the tap is routed
+                    // BEFORE the conversation fetch returns, and consuming on a
+                    // window that does not hold the target yet would throw the
+                    // reveal away one frame before its message arrives.
+                    //
+                    // [_body]'s loading branch already returns a spinner instead
+                    // of this list, so today that makes this a second line of
+                    // defence rather than the only one. It is kept because the
+                    // two guards protect different things — that one is about
+                    // what the user sees during a fetch, this one is about not
+                    // spending a one-shot instruction on an incomplete window —
+                    // and a later change to the loading branch should not
+                    // silently reintroduce the bug.
+                    final settled = state.hydration != FocusHydration.loading;
+                    if ( reveal != null && settled && reveal != _revealedId ) {
+                      _revealedId = reveal;
+                      _revealAfterFrame( reveal );
+                    }
+                    if ( reveal == null ) _revealedId = null;
+
+                    // 🔴 A SCROLL VIEW OVER A COLUMN, NOT A `ListView`, AND THE
+                    // REVEAL IS WHY (row d9bc6f6c). `Scrollable.ensureVisible` can
+                    // only reach an element that EXISTS, and BOTH `ListView` forms
+                    // are lazy — `ListView.builder` through
+                    // `SliverChildBuilderDelegate` and `ListView( children: )`
+                    // through `SliverChildListDelegate`, which still only creates
+                    // elements for the visible range plus the cache.
+                    //
+                    // Measured, 7-message window in a 320 dp viewport: exactly 5
+                    // bubbles ever entered the tree. Raising `cacheExtent` to 4000
+                    // changed nothing, and neither did handing the list its children
+                    // pre-built. The two that were missing were precisely the two
+                    // the scroll existed to reach, so the reveal resolved to no
+                    // element and silently did nothing — green tests, dead feature.
+                    //
+                    // This is cheap because the window is BOUNDED: the bloc caps it
+                    // at 7 messages per sender (Q8), so this lays out at most seven
+                    // bubbles rather than an unbounded conversation. That cap is the
+                    // entire justification, which is why it is named here rather
+                    // than assumed — if it rises materially, this needs revisiting.
+                    return SingleChildScrollView(
+                      controller  : _listScroll,
                       padding     : const EdgeInsets.all( 8 ),
-                      itemCount   : groups.length,
-                      itemBuilder : ( context, i ) {
+                      child       : Column(
+                        crossAxisAlignment : CrossAxisAlignment.stretch,
+                        children           : [ for ( var i = 0; i < groups.length; i++ )
+                        ( ( ) {
                         final g = groups[ i ];
+                        final holdsTarget = inWindow &&
+                            g.items.any( ( m ) => m.item.id == reveal );
                         if ( !g.isCollapsed ) {
                           final m = g.items.single;
-                          return _MessageBubble(
+                          final bubble = _MessageBubble(
                             msg            : m,
                             senderId       : focused,
                             personaColor   : PersonaBadge.colorOf( persona ),
                             isPendingPrompt: pending?.item.id == m.item.id,
                           );
+                          // The scroll anchor rides a wrapper, not the bubble
+                          // itself: _MessageBubble already carries a Key of its
+                          // own (focus.bubble.<id>, which tests match on) and a
+                          // widget cannot hold two.
+                          return holdsTarget
+                              ? KeyedSubtree(
+                                  key   : _revealAnchor,
+                                  child : bubble )
+                              : bubble;
                         }
-                        return _CollapsedGroup(
+                        final group = _CollapsedGroup(
                           key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
                           count    : g.count,
+                          // A buried target is un-buried, or ensureVisible has
+                          // no element to find.
+                          initiallyExpanded : holdsTarget,
                           summary  : _MessageBubble( msg: g.latest, senderId: focused,
                               personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ),
                           children : [ for ( final m in g.items.reversed )
                             _MessageBubble( msg: m, senderId: focused,
                                 personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ) ],
                         );
-                      },
+                        return holdsTarget
+                            ? KeyedSubtree(
+                                key   : _revealAnchor,
+                                child : group )
+                            : group;
+                        } )() ],
+                      ),
                     );
                   } ),
           ),
@@ -578,14 +708,22 @@ class _CollapsedGroup extends StatefulWidget {
   final int          count;
   final Widget       summary;
   final List<Widget> children;
-  const _CollapsedGroup( { super.key, required this.count, required this.summary, required this.children } );
+
+  /// Start open because a NOTIFICATION TAP is pointing at a message inside this
+  /// group (row d9bc6f6c). Scrolling to a bubble that is not built resolves to
+  /// nothing, so a buried target has to be un-buried before it can be revealed;
+  /// the user keeps the toggle and can fold it again.
+  final bool         initiallyExpanded;
+
+  const _CollapsedGroup( { super.key, required this.count, required this.summary,
+      required this.children, this.initiallyExpanded = false } );
 
   @override
   State<_CollapsedGroup> createState() => _CollapsedGroupState();
 }
 
 class _CollapsedGroupState extends State<_CollapsedGroup> {
-  bool _expanded = false;
+  late bool _expanded = widget.initiallyExpanded;
 
   @override
   Widget build( BuildContext context ) {
