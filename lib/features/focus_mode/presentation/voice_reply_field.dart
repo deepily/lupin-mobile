@@ -5,15 +5,9 @@ import '../../../services/asr/voice_capture_session.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../../services/asr/asr_service.dart';
-import '../../../services/asr/dictation_splice.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 enum _VoiceReplyPhase { idle, recording, transcribing, review }
-
-/// The microphone ON the open editor box (row 570c2fce), which records ANOTHER
-/// chunk and appends it. Its own little state machine, nested inside
-/// [_VoiceReplyPhase.review] so the text stays visible and editable throughout:
-/// the operator watches the draft he is adding to while he speaks.
-enum _AppendMic { idle, listening, transcribing }
 
 /// Rick 2026-09-17: the composer row was too thin to hit reliably with a
 /// thumb. Every phase row is 25% taller than a stock 48 dp IconButton row,
@@ -71,17 +65,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   Timer? _elapsedTimer;
   int    _elapsedSeconds = 0;
 
-  /// Row 570c2fce: the append microphone's own phase, and the caret the box held
-  /// when that recording began — so the words land where the operator left off
-  /// rather than always at the very end.
-  _AppendMic _appendMic   = _AppendMic.idle;
-  int        _appendCaret = -1;
-
-  /// The draft as it stood when that recording began. A caret offset only means
-  /// what it meant if the text around it has not moved (Tiffany's guard,
-  /// 2026-09-28): the box is live while a chunk records, so an offset taken at
-  /// the start can point into the middle of a sentence typed since.
-  String     _appendTextAtStart = '';
+  /// Where the review box's append mic stands (row c67f9781). The mic itself is a
+  /// [DictationTextField], which owns its recorder session and its dispose-cancel;
+  /// this widget only needs the phase, to hide Send while a chunk records.
+  DictationPhase _dictation = DictationPhase.idle;
 
   /// Row 0b40272e: permission, the cancel epoch, the error strings and the
   /// blank-transcript guard are no longer this widget's own — they live in the
@@ -134,92 +121,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   void _onEditPressed() {
     setState( () {
       _error     = null;
-      _appendMic = _AppendMic.idle;
+      _dictation = DictationPhase.idle;
       _controller.clear();
       _phase     = _VoiceReplyPhase.review;
     } );
-  }
-
-  /// Record one MORE chunk into the open editor box, and append it (row
-  /// 570c2fce). The toggle is the same shape as the idle mic's — tap to record,
-  /// tap to stop and transcribe — but it never touches [_phase]: the box, its
-  /// text and the caret survive every outcome, including a refusal, a cancel, a
-  /// transcription failure and a capture that heard nothing.
-  Future<void> _onAppendMicPressed() async {
-    if ( _appendMic == _AppendMic.transcribing ) return;
-
-    if ( _appendMic == _AppendMic.idle ) {
-      setState( () => _error = null );
-      final sel    = _controller.selection;
-      _appendCaret = sel.isValid ? sel.baseOffset : _controller.text.length;
-      _appendTextAtStart = _controller.text;
-      final start  = await _session.start();
-      if ( !mounted || start.isStale ) return;
-      if ( !start.started ) {
-        setState( () => _error = start.errorMessage );
-        return;
-      }
-      setState( () {
-        _appendMic      = _AppendMic.listening;
-        _elapsedSeconds = 0;
-      } );
-      _elapsedTimer?.cancel();
-      _elapsedTimer = Timer.periodic( const Duration( seconds: 1 ), ( _ ) {
-        if ( mounted ) setState( () => _elapsedSeconds++ );
-      } );
-      return;
-    }
-
-    _elapsedTimer?.cancel();
-    setState( () => _appendMic = _AppendMic.transcribing );
-    final capture = await _session.stopAndTranscribe();
-    if ( !mounted ) return;
-    // A stale result appends NOTHING — but it must still free the mic, or every
-    // later tap is dead (the New Ticket card's own lesson, review of 30efd26).
-    if ( capture.isStale ) {
-      setState( () => _appendMic = _AppendMic.idle );
-      return;
-    }
-    setState( () {
-      if ( capture.wasHeard ) {
-        // The remembered caret holds ONLY while the draft is the one it was
-        // taken from. Edited mid-recording it means nothing, and the words go to
-        // the END.
-        //
-        // 🔴 NOT to the live caret, which is Chloé's M1 (review of d1823a1): a
-        // typo fixed while talking leaves the caret sitting AT the typo, so
-        // following it dumps the new sentence into the middle of the draft. The
-        // two edits look identical from here — typing more at the end and going
-        // back to fix a letter both just change the text — and the end is right
-        // for both, because the mic on an open box is an APPEND affordance.
-        // Nothing is overwritten under either rule; this is about where the
-        // chunk reads as belonging.
-        final edited = _controller.text != _appendTextAtStart;
-        _controller.value = spliceDictation(
-          value : _controller.value,
-          heard : capture.transcript!,
-          // null ⇒ the end of the text, which is the helper's own rule.
-          caret : edited ? null : _appendCaret,
-        );
-      } else {
-        // Including silence: the draft is left exactly as it was, and the
-        // operator is told why nothing arrived.
-        _error = capture.errorMessage;
-      }
-      _appendMic = _AppendMic.idle;
-    } );
-  }
-
-  /// Discard the chunk being recorded — NOT the draft. The editor box and its
-  /// text come back untouched.
-  void _onAppendCancelPressed() {
-    _elapsedTimer?.cancel();
-    if ( _appendMic == _AppendMic.listening ) {
-      _session.cancel();            // the recorder is running; stop and discard it
-    } else {
-      _session.invalidate();        // transcribing: drop the result, nothing to stop
-    }
-    setState( () => _appendMic = _AppendMic.idle );
   }
 
   void _onCancelPressed() {
@@ -237,7 +142,7 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     }
     setState( () {
       _phase     = _VoiceReplyPhase.idle;
-      _appendMic = _AppendMic.idle;
+      _dictation = DictationPhase.idle;
       _controller.clear();
     } );
   }
@@ -248,7 +153,7 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     widget.onSubmit( text );          // exactly once — phase resets below
     setState( () {
       _phase     = _VoiceReplyPhase.idle;
-      _appendMic = _AppendMic.idle;
+      _dictation = DictationPhase.idle;
       _controller.clear();
     } );
   }
@@ -268,7 +173,7 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     // this widget owns it: the append mic on the open editor box, which records
     // while `_phase` says `review`. Leaving mid-append has to release the hold
     // for exactly the same reason.
-    if ( _phase == _VoiceReplyPhase.recording || _appendMic == _AppendMic.listening ) {
+    if ( _phase == _VoiceReplyPhase.recording ) {
       _session.cancel();
     }
     _controller.dispose();
@@ -390,8 +295,16 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
           crossAxisAlignment : CrossAxisAlignment.stretch,
           mainAxisSize       : MainAxisSize.min,
           children: [
-            TextField(
-              key        : const Key( TestKeys.voiceReplyTranscript ),
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.voiceReplyTranscript ),
+              micKey     : const Key( TestKeys.voiceReplyAppendMic ),
+              cancelKey  : const Key( TestKeys.voiceReplyAppendCancel ),
+              errorKey   : const Key( TestKeys.voiceReplyError ),
+              asr                  : widget.asr,
+              requestMicPermission : widget.requestMicPermission,
+              micIconSize          : _kIconSize,
+              micConstraints       : _kButtonConstraints,
+              onPhaseChanged       : ( p ) => setState( () => _dictation = p ),
               controller : _controller,
               // Opened by the edit button there is nothing to review, so the
               // keyboard comes straight up.
@@ -413,85 +326,30 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     }
   }
 
-  /// The row under the editor box. Row 570c2fce put a microphone on it, so the
-  /// row now has three faces — and while a chunk is recording or transcribing,
-  /// Send is NOT one of them: a thumb cannot send half a thought by accident.
+  /// The row under the editor box. While a chunk is recording or transcribing it
+  /// is GONE: a thumb cannot send half a thought by accident.
   Widget _buildReviewButtons() {
-    switch ( _appendMic ) {
-      case _AppendMic.listening:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text( 'Recording… ${_elapsedSeconds}s' ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyAppendCancel ),
-              icon        : const Icon( Icons.delete_outline ),
-              tooltip     : 'Discard this recording',
-              onPressed   : _onAppendCancelPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyAppendMic ),
-              icon        : const Icon( Icons.stop_circle ),
-              tooltip     : 'Stop and add to the reply',
-              onPressed   : _onAppendMicPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-          ],
-        );
-      case _AppendMic.transcribing:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            const SizedBox(
-              width  : 20,
-              height : 20,
-              child  : CircularProgressIndicator( strokeWidth: 2 ),
-            ),
-            const SizedBox( width: 12 ),
-            const Text( 'Transcribing…' ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyAppendCancel ),
-              icon        : const Icon( Icons.close ),
-              tooltip     : 'Cancel transcription',
-              onPressed   : _onAppendCancelPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-          ],
-        );
-      case _AppendMic.idle:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyAppendMic ),
-              icon        : const Icon( Icons.mic ),
-              tooltip     : 'Add more by voice',
-              onPressed   : _onAppendMicPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplyCancel ),
-              icon        : const Icon( Icons.close ),
-              tooltip     : 'Discard reply',
-              onPressed   : _onCancelPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-            IconButton(
-              key         : const Key( TestKeys.voiceReplySend ),
-              icon        : const Icon( Icons.send ),
-              tooltip     : 'Send reply',
-              onPressed   : _onSendPressed,
-              iconSize    : _kIconSize,
-              constraints : _kButtonConstraints,
-            ),
-          ],
-        );
-    }
+    if ( _dictation != DictationPhase.idle ) return const SizedBox.shrink();
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        IconButton(
+          key         : const Key( TestKeys.voiceReplyCancel ),
+          icon        : const Icon( Icons.close ),
+          tooltip     : 'Discard reply',
+          onPressed   : _onCancelPressed,
+          iconSize    : _kIconSize,
+          constraints : _kButtonConstraints,
+        ),
+        IconButton(
+          key         : const Key( TestKeys.voiceReplySend ),
+          icon        : const Icon( Icons.send ),
+          tooltip     : 'Send reply',
+          onPressed   : _onSendPressed,
+          iconSize    : _kIconSize,
+          constraints : _kButtonConstraints,
+        ),
+      ],
+    );
   }
 }

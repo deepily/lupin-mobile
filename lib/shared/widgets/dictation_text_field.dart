@@ -134,6 +134,11 @@ class DictationTextField extends StatefulWidget {
   /// chunk records).
   final ValueChanged<DictationPhase>? onPhaseChanged;
 
+  /// Sizing for the mic buttons, for a surface with a bigger touch target than
+  /// the stock 48 dp (the voice reply's 60 dp thumb rule).
+  final double?          micIconSize;
+  final BoxConstraints?  micConstraints;
+
   const DictationTextField( {
     super.key,
     required this.controller,
@@ -154,6 +159,8 @@ class DictationTextField extends StatefulWidget {
     this.cancelKey,
     this.errorKey,
     this.onPhaseChanged,
+    this.micIconSize,
+    this.micConstraints,
   } );
 
   @override
@@ -323,12 +330,16 @@ class _DictationTextFieldState extends State<DictationTextField> {
             icon      : const Icon( Icons.delete_outline ),
             tooltip   : 'Discard this recording',
             onPressed : _onCancelPressed,
+            iconSize  : widget.micIconSize,
+            constraints: widget.micConstraints,
           ),
           IconButton(
             key       : widget.micKey,
             icon      : const Icon( Icons.stop_circle ),
             tooltip   : 'Stop and add to the box',
             onPressed : _onMicPressed,
+            iconSize  : widget.micIconSize,
+            constraints: widget.micConstraints,
           ),
         ] );
       case DictationPhase.transcribing:
@@ -338,11 +349,15 @@ class _DictationTextFieldState extends State<DictationTextField> {
             icon      : const Icon( Icons.close ),
             tooltip   : 'Cancel transcription',
             onPressed : _onCancelPressed,
+            iconSize  : widget.micIconSize,
+            constraints: widget.micConstraints,
           ),
           IconButton(
             key       : widget.micKey,
             icon      : const Icon( Icons.mic ),
             onPressed : null,
+            iconSize  : widget.micIconSize,
+            constraints: widget.micConstraints,
           ),
         ] );
       case DictationPhase.idle:
@@ -351,6 +366,8 @@ class _DictationTextFieldState extends State<DictationTextField> {
           icon      : const Icon( Icons.mic ),
           tooltip   : 'Dictate',
           onPressed : ( widget.enabled && !_blockedByOther ) ? _onMicPressed : null,
+          iconSize  : widget.micIconSize,
+          constraints: widget.micConstraints,
         );
     }
   }

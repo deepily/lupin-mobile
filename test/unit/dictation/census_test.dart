@@ -29,7 +29,7 @@ const Map<String, Map<String, int>> _census = {
   'features/broadcast/presentation/broadcast_pane.dart'             : { 'exception': 1 },
   'features/claude_code/presentation/dispatch_sheet.dart'           : { 'no': 1, 'pending': 1 },
   'features/fleet/presentation/verb_reason_sheet.dart'              : { 'pending': 1 },
-  'features/focus_mode/presentation/voice_reply_field.dart'         : { 'pending': 1 },
+  'features/focus_mode/presentation/voice_reply_field.dart'         : { 'yes': 1 },
   'features/holding_area/presentation/filer_group_header.dart'      : { 'pending': 1 },
   'features/queue/presentation/job_detail_screen.dart'              : { 'pending': 1 },
   'features/queue/presentation/submit_job_sheet.dart'               : { 'pending': 1 },
