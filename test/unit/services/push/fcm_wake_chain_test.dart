@@ -668,4 +668,167 @@ void main() {
       expect( reads, 2 );
     } );
   } );
+
+  group( 'C1 — a HUNG speak must not strand the ledger (Chloé, row 8ff78c69)', () {
+    // F1 fixed the THROWING engine. A try/catch cannot see a HANG: speak awaits
+    // awaitSpeakCompletion, so a wedged engine parked the handler until Android
+    // reclaimed the isolate, and mark-played never ran — F1's permanent
+    // head-of-line block arriving through a different door.
+    late List<String> logs;
+    late List<String> played;
+
+    Map<String, dynamic> wakePayload() => { 'type': 'ws_wake', 'reason': 'undelivered' };
+    Map<String, dynamic> wireItem() => {
+      'id': 'n-77', 'message': 'Build finished green.', 'title': 't', 'priority': 'high',
+    };
+    Future<T> never<T>() => Completer<T>().future;
+
+    setUp( () { logs = []; played = []; } );
+
+    FcmWakeChain chainWith( {
+      Future<void> Function( String )? speak,
+      Future<bool> Function( String )? shouldSpeak,
+      Future<void> Function( String, String )? markPlayed,
+    } ) => FcmWakeChain(
+      readCredentials: () async => const FcmWakeCredentials(
+          refreshToken: 'r', userEmail: 'e@x.com' ),
+      exchangeForAccessToken : ( _ ) async => 'a',
+      fetchNextNotification  : ( _, __ ) async => wireItem(),
+      showNotification       : ( _, __, ___ ) async {},
+      shouldSpeak            : shouldSpeak ?? ( _ ) async => true,
+      ttsFraction            : () async => 1.0,
+      speak                  : speak ?? ( _ ) async {},
+      markPlayed             : markPlayed ?? ( id, __ ) async => played.add( id ),
+      wakeNotificationsEnabled : () async => true,
+      log                    : logs.add,
+      speakBudget            : const Duration( milliseconds: 40 ),
+      markPlayedBudget       : const Duration( milliseconds: 40 ),
+    );
+
+    test( 'a WEDGED TTS engine is abandoned, and the item is STILL marked played',
+        () async {
+      final outcome = await chainWith( speak: ( _ ) => never() )
+          .handleWake( wakePayload() )
+          .timeout( const Duration( seconds: 2 ),
+              onTimeout: () => fail( 'handleWake hung on a wedged TTS engine' ) );
+
+      expect( played, [ 'n-77' ],
+          reason: 'the ledger write is what keeps the queue moving — a hang must not skip it' );
+      expect( outcome.shown, isTrue );
+      expect( outcome.spoke, isFalse, reason: 'it never finished speaking' );
+      expect( logs.any( ( l ) => l.contains( 'exceeded its' ) && l.contains( 'budget' ) ), isTrue,
+          reason: 'a hang used to raise nothing, so nothing was logged' );
+    } );
+
+    test( 'a WEDGED prefs read is abandoned too, and the item is still marked played',
+        () async {
+      // It would park the handler BEFORE anything was spoken, so the budget has
+      // to cover the reads and not just the utterance.
+      final outcome = await chainWith( shouldSpeak: ( _ ) => never() )
+          .handleWake( wakePayload() )
+          .timeout( const Duration( seconds: 2 ),
+              onTimeout: () => fail( 'handleWake hung on a wedged prefs read' ) );
+
+      expect( played, [ 'n-77' ] );
+      expect( outcome.spoke, isFalse );
+    } );
+
+    test( 'a WEDGED mark-played does not hang the handler either', () async {
+      // Last step, and the one whose whole point is being best-effort: it may
+      // fail, it may not hold the isolate open.
+      final outcome = await chainWith( markPlayed: ( _, __ ) => never() )
+          .handleWake( wakePayload() )
+          .timeout( const Duration( seconds: 2 ),
+              onTimeout: () => fail( 'handleWake hung on a wedged mark-played' ) );
+
+      expect( outcome.shown, isTrue );
+      expect( outcome.fetched, 1 );
+      expect( logs.any( ( l ) => l.contains( 'mark-played failed (best-effort)' ) ), isTrue );
+    } );
+
+    test( 'the speak budget does NOT cut a normal utterance short', () async {
+      // A budget that fires on healthy speech would silently truncate every
+      // notification, which is worse than the bug it prevents.
+      final spoken = <String>[];
+      final chain = chainWith(
+        speak: ( t ) async {
+          await Future<void>.delayed( const Duration( milliseconds: 5 ) );
+          spoken.add( t );
+        },
+      );
+      final outcome = await chain.handleWake( wakePayload() );
+      expect( spoken, [ 'Build finished green.' ] );
+      expect( outcome.spoke, isTrue );
+      expect( played, [ 'n-77' ] );
+    } );
+  } );
+
+  group( 'C2 — an unreadable wake switch must not kill the handler (Chloé)', () {
+    // The gate sat ABOVE the try, so a SharedPreferences failure in a fresh
+    // isolate escaped handleWake — whose contract says it never throws, and whose
+    // only caller (fcmBackgroundHandler) awaits it with no try of its own.
+    late List<String> logs;
+    late List<String> shownBodies;
+
+    Map<String, dynamic> wakePayload() => { 'type': 'ws_wake', 'reason': 'undelivered' };
+
+    setUp( () { logs = []; shownBodies = []; } );
+
+    FcmWakeChain chainWithGate( Future<bool> Function() gate ) => FcmWakeChain(
+      readCredentials: () async => const FcmWakeCredentials(
+          refreshToken: 'r', userEmail: 'e@x.com' ),
+      exchangeForAccessToken : ( _ ) async => 'a',
+      fetchNextNotification  : ( _, __ ) async => null,
+      showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
+      shouldSpeak            : ( _ ) async => false,
+      ttsFraction            : () async => 1.0,
+      speak                  : ( _ ) async {},
+      markPlayed             : ( _, __ ) async {},
+      wakeNotificationsEnabled : gate,
+      log                    : logs.add,
+      showBudget             : const Duration( milliseconds: 40 ),
+      fallbackBudget         : const Duration( milliseconds: 40 ),
+    );
+
+    test( 'a THROWING switch read does not escape handleWake', () async {
+      final chain = chainWithGate( () async => throw Exception( 'prefs unavailable' ) );
+
+      // The assertion is that this completes at all. Before the fix it threw, and
+      // the throw went straight out through the background handler.
+      final outcome = await chain.handleWake( wakePayload() );
+
+      expect( outcome.handled, isTrue );
+      expect( outcome.detail, contains( 'error:' ) );
+      expect( logs.any( ( l ) => l.contains( 'chain failed' ) ), isTrue );
+    } );
+
+    test( 'an unreadable switch still ends in a VISIBLE notification', () async {
+      // "Cannot tell" must not silently mean "off" — that would be a wake
+      // swallowed by a storage hiccup, which is the whole failure slice 2 exists
+      // to prevent.
+      final chain = chainWithGate( () async => throw Exception( 'prefs unavailable' ) );
+      final outcome = await chain.handleWake( wakePayload() );
+
+      expect( outcome.shown, isTrue );
+      expect( shownBodies, [ kFcmWakeFallbackBody ] );
+    } );
+
+    test( 'a HUNG switch read does not park the handler either', () async {
+      final chain = chainWithGate( () => Completer<bool>().future );
+      final outcome = await chain.handleWake( wakePayload() )
+          .timeout( const Duration( seconds: 2 ),
+              onTimeout: () => fail( 'handleWake hung on the switch read' ) );
+
+      expect( outcome.shown, isTrue, reason: 'a hang still reaches the shade' );
+      expect( outcome.detail, contains( 'timeout' ) );
+    } );
+
+    test( 'and OFF still means off: the switch working is not regressed', () async {
+      final chain = chainWithGate( () async => false );
+      final outcome = await chain.handleWake( wakePayload() );
+
+      expect( outcome.detail, 'wake notifications off' );
+      expect( shownBodies, isEmpty, reason: 'off shows nothing at all' );
+    } );
+  } );
 }
