@@ -222,16 +222,32 @@ class FcmWakeChain {
       // best-effort: if the OS reclaims the isolate mid-utterance it
       // truncates and NOTHING is lost (server-side durable store +
       // foreground re-hydration; NO auto re-speak — badges carry it).
-      final maySpeak = await shouldSpeak( priority );
-      final fraction = maySpeak ? await ttsFraction() : 0.0;
-      final spoke    = maySpeak && !TtsPreviewTruncator.silences( fraction );
-      if ( !maySpeak ) {
-        log( '[FcmWake] muted by speak-toggle prefs' );
-      } else if ( TtsPreviewTruncator.silences( fraction ) ) {
-        log( '[FcmWake] muted by the TTS slider at 0%' );
-      } else {
-        await speak( TtsPreviewTruncator.previewFor( message, fraction ) );
-        log( '[FcmWake] spoke (message field only)' );
+      //
+      // 🔴 BEST-EFFORT MEANS THE MARK-PLAYED BELOW STILL RUNS. This block used
+      // to sit bare in the outer try, so a throwing TTS engine jumped straight
+      // to the catch and skipped the dedupe — and /next keeps returning the
+      // oldest UNPLAYED item, so the next wake re-fetched and re-showed this
+      // same notification, failed to speak it again, and the queue head never
+      // moved. One dead TTS engine made every later notification invisible,
+      // permanently (Pocholo's review F1, row 8ff78c69). Speech is allowed to
+      // fail; the ledger write is what keeps the queue moving.
+      var spoke = false;
+      try {
+        final maySpeak = await shouldSpeak( priority );
+        final fraction = maySpeak ? await ttsFraction() : 0.0;
+        if ( !maySpeak ) {
+          log( '[FcmWake] muted by speak-toggle prefs' );
+        } else if ( TtsPreviewTruncator.silences( fraction ) ) {
+          log( '[FcmWake] muted by the TTS slider at 0%' );
+        } else {
+          await speak( TtsPreviewTruncator.previewFor( message, fraction ) );
+          spoke = true;
+          log( '[FcmWake] spoke (message field only)' );
+        }
+      } catch ( e ) {
+        // Covers the prefs reads too: a failed SharedPreferences lookup is no
+        // more entitled to strand the queue than a failed utterance is.
+        log( '[FcmWake] speak failed (best-effort): $e' );
       }
 
       if ( id.isNotEmpty ) {

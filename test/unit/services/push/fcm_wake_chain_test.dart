@@ -234,6 +234,7 @@ void main() {
 
     test( 'a failure AFTER the real notification does not add a fallback on top', () async {
       final shownTitles = <String>[];
+      final played      = <String>[];
       final loud = FcmWakeChain(
         readCredentials: () async => const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ),
@@ -243,13 +244,49 @@ void main() {
         shouldSpeak            : ( _ ) async => true,
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => throw Exception( 'tts engine gone' ),
-        markPlayed             : ( _, __ ) async {},
+        markPlayed             : ( id, __ ) async => played.add( id ),
         log                    : logs.add,
       );
       final outcome = await loud.handleWake( wakePayload() );
       expect( outcome.shown, isTrue );
       expect( outcome.fetched, 1 );
       expect( shownTitles, [ '📻 Mr. Radio' ], reason: 'exactly one notification, the real one' );
+      // 🔴 THE ASSERTION THIS TEST WAS MISSING (review F1, row 8ff78c69). The
+      // speak throw above used to escape to the outer catch and skip the
+      // dedupe, and nothing here noticed because markPlayed was a stub that
+      // recorded nothing. Journal it: the item MUST still be marked played, or
+      // /next keeps handing back this same id and no later notification is ever
+      // seen.
+      expect( played, [ 'n-77' ],
+          reason: 'a dead TTS engine must not strand the queue head' );
+      expect( outcome.spoke, isFalse, reason: 'it did not speak — it threw' );
+      expect( logs.any( ( l ) => l.contains( 'speak failed (best-effort)' ) ), isTrue );
+    } );
+
+    test( 'F1 — a throwing PREFS read is just as best-effort: the item is still marked played',
+        () async {
+      // The prefs lookups sit in the same block as the utterance, and a failed
+      // SharedPreferences read in a fresh isolate is no more entitled to strand
+      // the queue than a failed utterance is.
+      final played = <String>[];
+      final noPrefs = FcmWakeChain(
+        readCredentials: () async => const FcmWakeCredentials(
+            refreshToken: 'r', userEmail: 'e@x.com' ),
+        exchangeForAccessToken : ( _ ) async => 'a',
+        fetchNextNotification  : ( _, __ ) async => wireItem(),
+        showNotification       : ( _, __, ___ ) async {},
+        shouldSpeak            : ( _ ) async => throw Exception( 'prefs unavailable' ),
+        ttsFraction            : () async => 1.0,
+        speak                  : ( _ ) async {},
+        markPlayed             : ( id, __ ) async => played.add( id ),
+        log                    : logs.add,
+      );
+      final outcome = await noPrefs.handleWake( wakePayload() );
+      expect( played, [ 'n-77' ] );
+      expect( outcome.shown, isTrue );
+      expect( outcome.spoke, isFalse );
+      expect( outcome.detail, 'id=n-77',
+          reason: 'a best-effort speak failure is not a chain error' );
     } );
 
     test( 'a failing notification plugin is reported as shown=false, never thrown', () async {
