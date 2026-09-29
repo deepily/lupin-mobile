@@ -49,8 +49,21 @@ read_apk_stamp_field() {
 # `unknown` is its own answer and NOT folded into `off`: an APK built before the stamp
 # existed, or by the other build script, genuinely might have FCM either way, and
 # reporting a guess as a fact is the thing this whole mechanism is against.
+#
+# 🔴 A STAMP OLDER THAN ITS APK DESCRIBES A DIFFERENT BINARY (Chloé's C3). The stamp is
+# only written by build-apk-on-server.sh. Anything else that produces an APK in that
+# tree — a bare `flutter build apk`, build-and-deploy-lupin-mobile.sh, an IDE run —
+# leaves the PREVIOUS stamp sitting next to the NEW binary. Reading it then is worse
+# than having no stamp at all: it reports a confident on/off about a build it never
+# saw, which is precisely the false-confidence failure this file exists to prevent,
+# one level up from where F3 found it. So compare mtimes and answer `unknown`.
 apk_fcm_state() {
-    case "$( read_apk_stamp_field "$1" fcm )" in
+    local apk="$1" stamp
+    stamp="$( apk_stamp_path "$apk" )"
+    if [ -f "$apk" ] && [ -f "$stamp" ] && [ "$apk" -nt "$stamp" ]; then
+        echo "unknown"; return 0
+    fi
+    case "$( read_apk_stamp_field "$apk" fcm )" in
         true)  echo "on" ;;
         false) echo "off" ;;
         *)     echo "unknown" ;;

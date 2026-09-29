@@ -57,6 +57,21 @@ rm -f "$( apk_stamp_path "$APK" )"
 check "a missing stamp reports unknown"      "unknown"                 "$( apk_fcm_state "$APK" )"
 check "a missing stamp yields no sha"        ""                        "$( read_apk_stamp_field "$APK" sha )"
 
+# ── C3: A STAMP OLDER THAN ITS APK DESCRIBES A DIFFERENT BINARY ─────────────────────
+# Only build-apk-on-server.sh writes a stamp. A bare `flutter build apk`, the sibling
+# deploy script, or an IDE run leaves the PREVIOUS stamp beside the NEW binary — and
+# reading it then is worse than having none, because it reports a confident on/off about
+# a build it never saw.
+write_apk_stamp "$APK" "aaa1111" "main" "true" "false"
+sleep 0.01
+touch "$APK"                                   # a rebuild that wrote no stamp
+check "an APK newer than its stamp is unknown" "unknown" "$( apk_fcm_state "$APK" )"
+
+# The reverse must NOT trip it: re-stamping without touching the APK is the normal
+# order build-apk-on-server.sh writes in, and has to keep reading as the truth.
+write_apk_stamp "$APK" "bbb2222" "main" "true" "false"
+check "a stamp newer than its APK is trusted"  "on"      "$( apk_fcm_state "$APK" )"
+
 # ── a corrupt stamp is unknown too, not off ─────────────────────────────────────────
 printf 'sha=x\nfcm=banana\n' > "$( apk_stamp_path "$APK" )"
 check "an unparseable fcm reports unknown"   "unknown"                 "$( apk_fcm_state "$APK" )"

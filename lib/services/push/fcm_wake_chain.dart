@@ -106,6 +106,24 @@ const Duration kFcmWakeShowBudget = Duration( seconds: 20 );
 /// main budget is already spent.
 const Duration kFcmWakeFallbackBudget = Duration( seconds: 5 );
 
+/// How long the UTTERANCE may take, and how long the ledger write after it may
+/// take (Chloé's C1).
+///
+/// 🔴 A try/catch AROUND speak() CATCHES A THROW AND DOES NOTHING ABOUT A HANG,
+/// and those are different failures. The F2 budget was scoped to the
+/// pre-notification phase on the argument that "past that the contract is met" —
+/// true for the SHADE, false for everything after it. `speak` awaits
+/// `awaitSpeakCompletion`, so a wedged TTS engine parks the handler until Android
+/// reclaims the isolate, and mark-played never runs. That is F1's permanent
+/// head-of-line block arriving through a different door: the queue head stays
+/// unplayed and every later notification is invisible.
+///
+/// So speech gets a budget of its own, and the ledger write gets one too. Both
+/// are generous enough for real work — a long utterance, a round trip — and short
+/// enough that the handler ends rather than being killed.
+const Duration kFcmWakeSpeakBudget      = Duration( seconds: 12 );
+const Duration kFcmWakeMarkPlayedBudget = Duration( seconds: 5 );
+
 class FcmWakeChain {
   /// Secure-storage seam: refresh token + last email, or null when the
   /// user has never logged in on this device/context.
@@ -174,6 +192,12 @@ class FcmWakeChain {
   /// Deadline for the fallback notification itself ([kFcmWakeFallbackBudget]).
   final Duration fallbackBudget;
 
+  /// Deadline for the utterance ([kFcmWakeSpeakBudget]) and for the mark-played
+  /// write after it ([kFcmWakeMarkPlayedBudget]). Injectable so a test can prove a
+  /// HUNG speak in milliseconds.
+  final Duration speakBudget;
+  final Duration markPlayedBudget;
+
   const FcmWakeChain( {
     required this.readCredentials,
     required this.exchangeForAccessToken,
@@ -185,8 +209,10 @@ class FcmWakeChain {
     required this.markPlayed,
     required this.wakeNotificationsEnabled,
     required this.log,
-    this.showBudget     = kFcmWakeShowBudget,
-    this.fallbackBudget = kFcmWakeFallbackBudget,
+    this.showBudget       = kFcmWakeShowBudget,
+    this.fallbackBudget   = kFcmWakeFallbackBudget,
+    this.speakBudget      = kFcmWakeSpeakBudget,
+    this.markPlayedBudget = kFcmWakeMarkPlayedBudget,
   } );
 
   /// Handle one wake payload. Never throws — the FCM handler budget
@@ -210,17 +236,6 @@ class FcmWakeChain {
     }
     log( '[FcmWake] wake received, reason=$reason' );
 
-    // Row 1af7b3de: the user's own switch. Nothing is fetched, shown, spoken or
-    // marked played — the queue is left exactly as it was, so opening the app
-    // still surfaces everything.
-    if ( !await wakeNotificationsEnabled() ) {
-      log( '[FcmWake] wake notifications are OFF in settings — nothing to do' );
-      return FcmWakeOutcome(
-        handled : true, reason: reason, fetched: 0,
-        shown   : false, spoke: false, detail: 'wake notifications off',
-      );
-    }
-
     // Set once the REAL notification is posted, so a failure after that point
     // (speak, mark-played) never adds a fallback on top of it.
     var shown = false;
@@ -235,6 +250,28 @@ class FcmWakeChain {
     }
 
     try {
+      // Row 1af7b3de: the user's own switch. Nothing is fetched, shown, spoken or
+      // marked played — the queue is left exactly as it was, so opening the app
+      // still surfaces everything.
+      //
+      // 🔴 INSIDE THE TRY, AND THAT IS THE WHOLE POINT (Chloé's C2). This read sat
+      // ABOVE it, so a SharedPreferences failure in a fresh isolate escaped
+      // handleWake entirely — and the contract above says it never throws, while
+      // `fcmBackgroundHandler` awaits it with no try of its own. The wake would
+      // have died with nothing shown and nothing logged. Worth naming plainly: F1
+      // added a test proving a throwing prefs read is survivable for
+      // `shouldSpeak`, and then this second prefs read was added where it was not.
+      // In here a failure takes the ordinary path — fallback notification, error
+      // outcome — which for an unreadable switch is the right answer, because
+      // "cannot tell" must not silently mean "off".
+      if ( !await wakeNotificationsEnabled().timeout( remaining() ) ) {
+        log( '[FcmWake] wake notifications are OFF in settings — nothing to do' );
+        return FcmWakeOutcome(
+          handled : true, reason: reason, fetched: 0,
+          shown   : false, spoke: false, detail: 'wake notifications off',
+        );
+      }
+
       final creds = await readCredentials().timeout( remaining() );
       if ( creds == null ) {
         log( '[FcmWake] no stored credentials — never logged in' );
@@ -306,17 +343,29 @@ class FcmWakeChain {
       // fail; the ledger write is what keeps the queue moving.
       var spoke = false;
       try {
-        final maySpeak = await shouldSpeak( priority );
-        final fraction = maySpeak ? await ttsFraction() : 0.0;
+        // The prefs reads are budgeted too: in a fresh isolate a wedged
+        // SharedPreferences is as capable of parking the handler as a wedged
+        // engine is, and it would park it BEFORE anything was spoken.
+        final maySpeak = await shouldSpeak( priority ).timeout( speakBudget );
+        final fraction = maySpeak
+            ? await ttsFraction().timeout( speakBudget )
+            : 0.0;
         if ( !maySpeak ) {
           log( '[FcmWake] muted by speak-toggle prefs' );
         } else if ( TtsPreviewTruncator.silences( fraction ) ) {
           log( '[FcmWake] muted by the TTS slider at 0%' );
         } else {
-          await speak( TtsPreviewTruncator.previewFor( message, fraction ) );
+          await speak( TtsPreviewTruncator.previewFor( message, fraction ) )
+              .timeout( speakBudget );
           spoke = true;
           log( '[FcmWake] spoke (message field only)' );
         }
+      } on TimeoutException catch ( _ ) {
+        // Named apart from a throw because it is the failure that used to have no
+        // floor at all: nothing raised, so nothing was caught, and the handler
+        // simply stopped here with the ledger un-written.
+        log( '[FcmWake] speech exceeded its ${speakBudget.inSeconds}s budget — '
+             'abandoned, and the wake continues to mark-played' );
       } catch ( e ) {
         // Covers the prefs reads too: a failed SharedPreferences lookup is no
         // more entitled to strand the queue than a failed utterance is.
@@ -325,7 +374,7 @@ class FcmWakeChain {
 
       if ( id.isNotEmpty ) {
         try {
-          await markPlayed( id, accessToken );
+          await markPlayed( id, accessToken ).timeout( markPlayedBudget );
           log( '[FcmWake] marked played (dedupe)' );
         } catch ( e ) {
           log( '[FcmWake] mark-played failed (best-effort): $e' );
