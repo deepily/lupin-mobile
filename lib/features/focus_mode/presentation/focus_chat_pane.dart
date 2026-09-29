@@ -15,8 +15,10 @@ import '../../../shared/widgets/prompt_bodies.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/abstract_body.dart';
 import '../../notifications/data/ask_resolution.dart';
+import '../../notifications/data/voice_persona.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
 import '../../notifications/presentation/message_stamp.dart';
+import '../../notifications/presentation/mute_sender_action.dart';
 import '../../notifications/presentation/persona_badge.dart';
 import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
@@ -375,6 +377,8 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                             personaColor   : PersonaBadge.colorOf( persona ),
                             isPendingPrompt: pending?.item.id == m.item.id,
                             voice          : _voice,
+                            persona        : persona,
+                            prefs          : _prefs,
                           );
                           // The scroll anchor rides a wrapper, not the bubble
                           // itself: _MessageBubble already carries a Key of its
@@ -393,10 +397,12 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                           // no element to find.
                           initiallyExpanded : holdsTarget,
                           summary  : _MessageBubble( msg: g.latest, senderId: focused,
-                              personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ),
+                              personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false,
+                              persona: persona, prefs: _prefs ),
                           children : [ for ( final m in g.items.reversed )
                             _MessageBubble( msg: m, senderId: focused,
-                                personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false ) ],
+                                personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false,
+                                persona: persona, prefs: _prefs ) ],
                         );
                         return holdsTarget
                             ? KeyedSubtree(
@@ -457,6 +463,11 @@ class _MessageBubble extends StatelessWidget {
   final Color?       personaColor;
   final bool         isPendingPrompt;
 
+  /// Who sent it, for the long-press "Mute <sender>" shortcut (row f1e80e67),
+  /// and the prefs that shortcut writes to. Null prefs fall back to the locator.
+  final VoicePersona?            persona;
+  final NotificationPreferences? prefs;
+
   /// The recorder behind the response box's microphone, passed down from the
   /// pane so ONE session outlives every rebuild of this bubble. Only the live
   /// bubble can hold a pending prompt, so the collapsed-group bubbles pass none.
@@ -476,6 +487,8 @@ class _MessageBubble extends StatelessWidget {
     required this.isPendingPrompt,
     this.personaColor,
     this.voice,
+    this.persona,
+    this.prefs,
   } );
 
   /// The SENDER's own colour (row de12b7bc). Rick: with Tiffany, María and Mr.
@@ -531,7 +544,14 @@ class _MessageBubble extends StatelessWidget {
 
     return LayoutBuilder( builder: ( context, box ) => Align(
       alignment: _isUserReply ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
+      child: GestureDetector(
+       // Your own replies have no sender to mute.
+       onLongPress: _isUserReply ? null : () => showMuteSenderMenu(
+         context,
+         item  : senderItemFor( senderId, persona ),
+         prefs : prefs,
+       ),
+       child: Container(
         key        : Key( '${TestKeys.focusBubblePrefix}${msg.item.id}' ),
         margin     : const EdgeInsets.symmetric( vertical: 4 ),
         constraints: BoxConstraints(
@@ -561,6 +581,7 @@ class _MessageBubble extends StatelessWidget {
                   child: Container( width: 3, color: accent ) ),
           ],
         ),
+       ),
       ),
     ) );
   }

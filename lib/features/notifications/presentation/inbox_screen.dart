@@ -7,6 +7,7 @@ import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'conversation_screen.dart';
+import 'mute_sender_action.dart';
 import 'persona_badge.dart';
 
 class InboxScreen extends StatefulWidget {
@@ -183,6 +184,10 @@ class _SenderTile extends StatelessWidget {
             userEmail : userEmail,
           ),
         ) ),
+        onLongPress: () => showMuteSenderMenu(
+          context,
+          item: senderItemFor( sender.senderId, persona ),
+        ),
       ),
     );
   }
