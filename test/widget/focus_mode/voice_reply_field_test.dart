@@ -449,6 +449,31 @@ void main() {
           greaterThanOrEqualTo( kVoiceReplyRowHeight ), reason: "Rick's thumb — same 60 dp target" );
     } );
 
+    // Tiffany's guard (2026-09-28): an append must never OVERWRITE what was
+    // edited while the chunk was recording. The caret is read at the start of
+    // the recording but the text is read when the words arrive, so a draft
+    // rewritten mid-recording keeps every character of the rewrite.
+    testWidgets( 'text typed WHILE the chunk records survives the append — nothing is overwritten', ( tester ) async {
+      final gate = Completer<String>();
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
+
+      await openWith( tester, 'first' );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // recording
+      await tester.pump();
+
+      // He keeps typing while he talks; the box is live throughout.
+      await tester.enterText( byKeyStr( TestKeys.voiceReplyTranscript ), 'first, then typed more' );
+      await tester.pump();
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // stop → transcribing
+      await tester.pump();
+      gate.complete( 'and spoken' );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( boxOf( tester ).text, 'first, then typed more and spoken',
+          reason: 'every typed character survives, and the words land after them' );
+    } );
     testWidgets( 'leaving the screen mid-append cancels the recording rather than abandoning it', ( tester ) async {
       await openWith( tester, 'draft' );
       await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );

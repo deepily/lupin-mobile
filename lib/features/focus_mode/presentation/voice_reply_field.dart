@@ -77,6 +77,12 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   _AppendMic _appendMic   = _AppendMic.idle;
   int        _appendCaret = -1;
 
+  /// The draft as it stood when that recording began. A caret offset only means
+  /// what it meant if the text around it has not moved (Tiffany's guard,
+  /// 2026-09-28): the box is live while a chunk records, so an offset taken at
+  /// the start can point into the middle of a sentence typed since.
+  String     _appendTextAtStart = '';
+
   /// Row 0b40272e: permission, the cancel epoch, the error strings and the
   /// blank-transcript guard are no longer this widget's own — they live in the
   /// shared session, so Quick Ask and this composer cannot drift again.
@@ -146,6 +152,7 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
       setState( () => _error = null );
       final sel    = _controller.selection;
       _appendCaret = sel.isValid ? sel.baseOffset : _controller.text.length;
+      _appendTextAtStart = _controller.text;
       final start  = await _session.start();
       if ( !mounted || start.isStale ) return;
       if ( !start.started ) {
@@ -175,10 +182,19 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     }
     setState( () {
       if ( capture.wasHeard ) {
+        // The remembered caret holds ONLY while the draft is the one it was
+        // taken from. Edited mid-recording, the words follow the caret he is
+        // actually at — the end of what he just typed — rather than splitting
+        // that sentence at a stale offset. Nothing is ever overwritten either
+        // way; this is about where the chunk READS as belonging.
+        final edited = _controller.text != _appendTextAtStart;
+        final live   = _controller.selection;
         _controller.value = spliceDictation(
           value : _controller.value,
           heard : capture.transcript!,
-          caret : _appendCaret,
+          caret : edited
+              ? ( live.isValid ? live.baseOffset : _controller.text.length )
+              : _appendCaret,
         );
       } else {
         // Including silence: the draft is left exactly as it was, and the
