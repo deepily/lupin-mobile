@@ -297,6 +297,72 @@ Future<Map<String, dynamic>?> fetchNextForAccessToken( {
   return notif is Map<String, dynamic> ? notif : null;
 }
 
+/// The notification channel wake notifications are posted on.
+///
+/// 🔴 THE `_v2` IS LOAD-BEARING, AND THAT IS THE WHOLE POINT OF IT. Android fixes
+/// a channel's importance when the channel is CREATED and ignores every later
+/// change, so lowering `importance` in the code below reached nobody who already
+/// had the app: the original `lupin_fcm_wake` kept the high importance it was
+/// first registered with, and a heads-up banner at 3am kept happening. A new id
+/// is the only way the new importance actually applies to an existing install
+/// (Tiffany's ruling, 2026-09-28, row 1af7b3de).
+///
+/// The cost of a new id is an orphan: the old channel stays in the system
+/// notification settings forever, as a second "Lupin background notifications"
+/// row the user can see and toggle to no effect. Hence
+/// [kFcmWakeChannelIdLegacy] and the delete below.
+const String kFcmWakeChannelId       = 'lupin_fcm_wake_v2';
+
+/// The pre-v2 channel. Deleted on init so the bump does not leave a dead row in
+/// the user's notification settings. Keep this list growing if the id is ever
+/// bumped again — a deleted channel that no longer exists deletes harmlessly, so
+/// the call is idempotent and safe to repeat on every wake.
+const String kFcmWakeChannelIdLegacy = 'lupin_fcm_wake';
+
+/// The details every wake notification is posted with.
+///
+/// Extracted so a test can assert the channel id and the importance. Inline in
+/// the `showNotification` closure they were unreachable: that closure only runs
+/// with a live platform channel behind it.
+@visibleForTesting
+NotificationDetails wakeNotificationDetails() => const NotificationDetails(
+  android: AndroidNotificationDetails(
+    kFcmWakeChannelId,
+    'Lupin background notifications',
+    channelDescription: 'Notifications fetched on FCM silent-relay wake-up',
+    // Rick 2026-09-28 (row 1af7b3de): default, not high — a wake that arrives
+    // overnight should land in the shade, not take over the screen with a
+    // heads-up banner. This does NOT weaken the slice-2 contract: FCM watches
+    // whether a high-priority MESSAGE produces a notification at all, not what
+    // importance that notification carries, so wakes stay high-priority end to
+    // end.
+    importance : Importance.defaultImportance,
+    priority   : Priority.defaultPriority,
+  ),
+);
+
+/// Remove the pre-v2 channel, so bumping the id does not leave the user staring
+/// at two identically-named rows in their notification settings, one of which
+/// does nothing.
+///
+/// Requires:
+///   - deleteChannel deletes an Android notification channel by id
+/// Ensures:
+///   - [kFcmWakeChannelIdLegacy] is deleted, and the CURRENT id never is
+///   - never throws: an orphan row is cosmetic, and losing the wake over it
+///     would not be
+@visibleForTesting
+Future<void> deleteLegacyWakeChannel(
+  Future<void> Function( String channelId ) deleteChannel,
+) async {
+  try {
+    await deleteChannel( kFcmWakeChannelIdLegacy );
+  } catch ( e ) {
+    debugPrint( '[FcmWake] could not delete the legacy notification channel '
+        '"$kFcmWakeChannelIdLegacy" (cosmetic, ignored): $e' );
+  }
+}
+
 /// Post one wake notification, CARRYING ITS TAP PAYLOAD (row d9bc6f6c).
 ///
 /// 🔴 EXTRACTED FROM THE CHAIN'S LAMBDA SO IT CAN BE TESTED, and that is not
@@ -312,8 +378,9 @@ Future<Map<String, dynamic>?> fetchNextForAccessToken( {
 ///   - plugin is an initialized FlutterLocalNotificationsPlugin
 ///
 /// Ensures:
-///   - the notification is posted on the `lupin_fcm_wake` channel at DEFAULT
-///     importance and priority (row 1af7b3de)
+///   - the notification is posted on [kFcmWakeChannelId] (the v2 channel) at
+///     DEFAULT importance and priority, via [wakeNotificationDetails]
+///     (row 1af7b3de)
 ///   - `payload` reaches the plugin VERBATIM, including null
 @visibleForTesting
 Future<void> showWakeNotification(
@@ -326,22 +393,7 @@ Future<void> showWakeNotification(
     DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title,
     body,
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'lupin_fcm_wake',
-        'Lupin background notifications',
-        channelDescription:
-            'Notifications fetched on FCM silent-relay wake-up',
-        // Rick 2026-09-28 (row 1af7b3de): default, not high — a wake that
-        // arrives overnight should land in the shade, not take over the screen
-        // with a heads-up banner. This does NOT weaken the slice-2 contract:
-        // FCM watches whether a high-priority MESSAGE produces a notification
-        // at all, not what importance that notification carries, so wakes stay
-        // high-priority end to end.
-        importance : Importance.defaultImportance,
-        priority   : Priority.defaultPriority,
-      ),
-    ),
+    wakeNotificationDetails(),
     // Android persists this in the notification's intent — the ONLY carrier
     // that survives this isolate being killed. The main isolate reads it back
     // from the launch intent whenever the tap is what started the app, which is
@@ -415,6 +467,16 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
   await localNotifications.initialize( const InitializationSettings(
     android: AndroidInitializationSettings( '@mipmap/ic_launcher' ),
   ) );
+
+  // The v2 channel bump's other half: drop the pre-v2 channel so the user is not
+  // left with two identically-named rows in their notification settings, one of
+  // them dead. Idempotent — deleting a channel that is already gone is a no-op —
+  // so running it on every wake is fine and needs no "have I done this" flag.
+  final android = localNotifications.resolvePlatformSpecificImplementation
+      <AndroidFlutterLocalNotificationsPlugin>();
+  if ( android != null ) {
+    await deleteLegacyWakeChannel( android.deleteNotificationChannel );
+  }
 
   return FcmWakeChain(
     readCredentials: () => readWakeCredentials(
