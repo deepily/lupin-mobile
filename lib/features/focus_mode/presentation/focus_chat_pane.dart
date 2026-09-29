@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../services/asr/asr_service.dart';
+import '../../../services/asr/voice_capture_session.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_filter/progress_group_collapse.dart';
@@ -43,7 +45,12 @@ class FocusChatPane extends StatefulWidget {
   /// resolves from the locator; null => no slider rendered.
   final NotificationPreferences? prefs;
 
-  const FocusChatPane( { super.key, this.userEmail, this.stopList, this.prefs } );
+  /// The recorder behind the response box's microphone (row 570c2fce, second
+  /// box). Null — including when no `AsrService` is registered — renders the box
+  /// exactly as it shipped, with no microphone.
+  final VoiceCaptureSession? voice;
+
+  const FocusChatPane( { super.key, this.userEmail, this.stopList, this.prefs, this.voice } );
 
   /// Share of the pane's width a bubble may use (row 3681bd9e). A fixed
   /// 320 px cap left bubbles at about half the width of an unfolded Pixel
@@ -57,6 +64,7 @@ class FocusChatPane extends StatefulWidget {
 class _FocusChatPaneState extends State<FocusChatPane> {
   NotificationStopList?    _stopList;
   NotificationPreferences? _prefs;
+  VoiceCaptureSession?     _voice;
   String? get userEmail => widget.userEmail;
 
   /// Attached to the message list so a notification tap can bring its message
@@ -96,6 +104,12 @@ class _FocusChatPaneState extends State<FocusChatPane> {
             ? ServiceLocator.get<NotificationStopList>()
             : null );
     _stopList?.addListener( _onPrefsChanged );
+    // ONE session for the life of the pane, not one per build: a session rebuilt
+    // under a running recorder would lose the cancel epoch mid-recording.
+    _voice = widget.voice ??
+        ( ServiceLocator.isRegistered<AsrService>()
+            ? VoiceCaptureSession( asr: ServiceLocator.get<AsrService>() )
+            : null );
   }
 
   @override
@@ -360,6 +374,7 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                             senderId       : focused,
                             personaColor   : PersonaBadge.colorOf( persona ),
                             isPendingPrompt: pending?.item.id == m.item.id,
+                            voice          : _voice,
                           );
                           // The scroll anchor rides a wrapper, not the bubble
                           // itself: _MessageBubble already carries a Key of its
@@ -442,6 +457,11 @@ class _MessageBubble extends StatelessWidget {
   final Color?       personaColor;
   final bool         isPendingPrompt;
 
+  /// The recorder behind the response box's microphone, passed down from the
+  /// pane so ONE session outlives every rebuild of this bubble. Only the live
+  /// bubble can hold a pending prompt, so the collapsed-group bubbles pass none.
+  final VoiceCaptureSession? voice;
+
   /// AC-S4.14's speak-anyway hook. Reaching the orchestrator's
   /// `speakAnyway( TtsSuppression )` needs the ORIGINAL suppression object,
   /// which is emitted at INGEST — long before this widget mounts — and is not
@@ -455,6 +475,7 @@ class _MessageBubble extends StatelessWidget {
     required this.senderId,
     required this.isPendingPrompt,
     this.personaColor,
+    this.voice,
   } );
 
   /// The SENDER's own colour (row de12b7bc). Rick: with Tiffany, María and Mr.
@@ -692,7 +713,7 @@ class _MessageBubble extends StatelessWidget {
         break;
       case 'open_ended':
       default:
-        body = OpenEndedPromptBody( onRespond: respond );
+        body = OpenEndedPromptBody( onRespond: respond, voice: voice );
     }
     return Padding(
       padding : const EdgeInsets.only( top: 8 ),
