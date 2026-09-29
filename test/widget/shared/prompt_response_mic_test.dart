@@ -222,4 +222,69 @@ void main() {
 
     verify( () => asr.cancelRecording() ).called( 1 );
   } );
+
+  // ── Row 928c5808: the widget builds and OWNS its session from the service ──
+  group( 'given the SERVICE, the box owns its own session', () {
+    Widget owned( { bool granted = true } ) => MaterialApp(
+      home: Scaffold(
+        body: OpenEndedPromptBody(
+          onRespond            : responded.add,
+          asr                  : asr,
+          requestMicPermission : () async => granted,
+        ),
+      ),
+    );
+
+    testWidgets( 'the mic appears and a dictated chunk is appended', ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'said aloud' );
+
+      await tester.pumpWidget( owned() );
+      await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'typed' );
+      await tester.pump();
+      await dictate( tester );
+
+      expect( boxOf( tester ).text, 'typed said aloud' );
+    } );
+
+    testWidgets( 'closing the box mid-recording cancels the recorder ITSELF — no ancestor involved',
+        ( tester ) async {
+      await tester.pumpWidget( owned() );
+      await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
+      await tester.pump();
+      verify( () => asr.startRecording() ).called( 1 );
+
+      // The sheet goes away: nothing above the box holds a session to cancel.
+      await tester.pumpWidget( const MaterialApp( home: Scaffold() ) );
+
+      verify( () => asr.cancelRecording() ).called( 1 );
+    } );
+
+    testWidgets( 'a rebuild of the parent keeps the SAME session, so a recording survives it',
+        ( tester ) async {
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'kept' );
+
+      await tester.pumpWidget( owned() );
+      await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
+      await tester.pump();
+      await tester.pumpWidget( owned() );   // parent rebuilds with a fresh widget
+      await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( boxOf( tester ).text, 'kept' );
+      verifyNever( () => asr.cancelRecording() );
+    } );
+
+    testWidgets( 'permission refused: nothing records and the draft is untouched', ( tester ) async {
+      await tester.pumpWidget( owned( granted: false ) );
+      await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'my draft' );
+      await tester.pump();
+      await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
+      await tester.pump();
+
+      verifyNever( () => asr.startRecording() );
+      expect( boxOf( tester ).text, 'my draft' );
+      expect( byKeyStr( TestKeys.promptResponseMicError ), findsOneWidget );
+    } );
+  } );
 }

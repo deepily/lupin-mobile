@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/presentation/interactive_prompt_sheet.dart';
+import 'package:lupin_mobile/services/asr/asr_service.dart';
 
 import '../../_harness/test_app.dart';
 
@@ -119,4 +121,40 @@ void main() {
       expect( event.responseValue, "neither [comment: ambiguous which backups]" );
     });
   });
+
+  // Row 928c5808 ("Both", Rick 2026-09-28): the notification sheet's
+  // "Your response" box gets the append mic when a recorder is registered.
+  group( "InteractivePromptSheet (open_ended) — the append mic", () {
+    late MockNotificationBloc bloc;
+
+    setUp( () => bloc = MockNotificationBloc() );
+    tearDown( () async => GetIt.instance.reset() );
+
+    Widget underTest() => MaterialApp(
+      home: BlocProvider<NotificationBloc>.value(
+        value : bloc,
+        child : const Scaffold(
+          body: InteractivePromptSheet(
+            notificationId : "msg-oe",
+            responseType   : "open_ended",
+          ),
+        ),
+      ),
+    );
+
+    testWidgets( "a registered recorder puts the mic next to Submit", ( tester ) async {
+      GetIt.instance.registerSingleton<AsrService>( _MockAsrService() );
+      await tester.pumpWidget( underTest() );
+      expect( find.byKey( const Key( TestKeys.promptResponseMic ) ), findsOneWidget );
+      expect( find.text( "Submit" ), findsOneWidget );
+    } );
+
+    testWidgets( "no recorder registered: the box is exactly the one that shipped", ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      expect( find.byKey( const Key( TestKeys.promptResponseMic ) ), findsNothing );
+      expect( find.text( "Submit" ), findsOneWidget );
+    } );
+  } );
 }
+
+class _MockAsrService extends Mock implements AsrService {}

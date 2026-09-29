@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/service_locator.dart';
+import '../../../services/asr/asr_service.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
@@ -114,7 +116,16 @@ class InteractivePromptSheet extends StatelessWidget {
         break;
       case "open_ended":
       default:
-        body = OpenEndedPromptBody( onRespond: ( v ) => _submit( context, v ) );
+        // Row 928c5808 ("Both" boxes, Rick 2026-09-28): the append mic. The
+        // SERVICE goes in, not a session — this sheet is stateless, so the body
+        // builds and owns its own session and cancels it on dispose. No
+        // registered recorder ⇒ no mic, exactly the box that shipped before.
+        body = OpenEndedPromptBody(
+          onRespond : ( v ) => _submit( context, v ),
+          asr       : ServiceLocator.isRegistered<AsrService>()
+              ? ServiceLocator.get<AsrService>()
+              : null,
+        );
     }
     return Padding(
       padding: const EdgeInsets.all( 16 ),

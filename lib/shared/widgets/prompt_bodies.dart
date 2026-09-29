@@ -45,8 +45,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/testing/test_keys.dart';
+import '../../services/asr/asr_service.dart';
 import '../../services/asr/dictation_splice.dart';
 import '../../services/asr/voice_capture_session.dart';
+import '../../services/permissions/mic_permission.dart';
 
 // --- yes/no -----------------------------------------------------------------
 
@@ -223,7 +225,32 @@ class OpenEndedPromptBody extends StatefulWidget {
   /// shipped before**, which is what keeps this additive.
   final VoiceCaptureSession? voice;
 
-  const OpenEndedPromptBody( { super.key, required this.onRespond, this.voice } );
+  /// The OTHER way to get a microphone (row 928c5808): hand over the recorder
+  /// SERVICE and this widget builds, owns and cleans up its own session.
+  ///
+  /// This is the form a surface with no stateful owner must use — the
+  /// notification sheet is a StatelessWidget, and a session built in its
+  /// build() would be recreated on every rebuild and abandoned by the last one.
+  /// Owning the session here makes the dispose-cancel structural: no ancestor
+  /// has to remember it, which is the defect Chloé found in the Focus pane
+  /// (correct today only because Flutter disposes children first).
+  ///
+  /// Give [voice] OR [asr], never both.
+  final AsrService? asr;
+
+  /// Test seam for the permission prompt, passed to the session this widget
+  /// builds from [asr]. Ignored when [voice] is given — that session already
+  /// carries its own.
+  final MicPermissionRequester? requestMicPermission;
+
+  const OpenEndedPromptBody( {
+    super.key,
+    required this.onRespond,
+    this.voice,
+    this.asr,
+    this.requestMicPermission,
+  } ) : assert( voice == null || asr == null,
+                "give OpenEndedPromptBody a session OR a service, not both" );
 
   @override
   State<OpenEndedPromptBody> createState() => _OpenEndedPromptBodyState();
@@ -244,18 +271,39 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
   Timer? _timer;
   int    _seconds = 0;
 
+  /// The session this widget built from [OpenEndedPromptBody.asr], built ONCE
+  /// here rather than in build(), and cancelled by this widget's own dispose.
+  VoiceCaptureSession? _owned;
+
+  /// Whichever recorder this box has: the caller's, or its own.
+  VoiceCaptureSession? get _session => widget.voice ?? _owned;
+
+  @override
+  void initState() {
+    super.initState();
+    final asr = widget.asr;
+    if ( widget.voice == null && asr != null ) {
+      _owned = VoiceCaptureSession( asr: asr, requestPermission: widget.requestMicPermission );
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
     // The recorder is a shared singleton: abandoning a capture strands the TTS
-    // hold for the rest of the app session (row a1c12c6e).
-    if ( _mic == _ResponseMic.listening ) widget.voice?.cancel();
+    // hold for the rest of the app session (row a1c12c6e). A transcription in
+    // flight is invalidated too, so its result cannot land on a dead widget.
+    if ( _mic == _ResponseMic.listening ) {
+      _session?.cancel();
+    } else if ( _mic == _ResponseMic.transcribing ) {
+      _session?.invalidate();
+    }
     _ctrl.dispose();
     super.dispose();
   }
 
   Future<void> _onMicPressed() async {
-    final voice = widget.voice;
+    final voice = _session;
     if ( voice == null || _mic == _ResponseMic.transcribing ) return;
 
     if ( _mic == _ResponseMic.idle ) {
@@ -304,9 +352,9 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
   void _onCancelPressed() {
     _timer?.cancel();
     if ( _mic == _ResponseMic.listening ) {
-      widget.voice?.cancel();
+      _session?.cancel();
     } else {
-      widget.voice?.invalidate();
+      _session?.invalidate();
     }
     setState( () => _mic = _ResponseMic.idle );
   }
@@ -350,7 +398,7 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
   /// or transcribes, Submit is GONE: a half-dictated answer cannot be sent by a
   /// stray thumb, and the prompt is answered exactly once.
   Widget _buttons() {
-    if ( widget.voice == null ) {
+    if ( _session == null ) {
       return FilledButton(
         onPressed: () => widget.onRespond( _ctrl.text ),
         child: const Text( "Submit" ),
