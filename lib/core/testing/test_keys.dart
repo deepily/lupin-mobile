@@ -221,6 +221,11 @@ class TestKeys {
   static String notifMgmtPriority( String surface, String priority ) =>
       '$notifMgmtPriorityPrefix$surface.$priority';
 
+  // Row f27a61f4 — a visible delete with undo, and tap-to-edit
+  static const settingsStopListDeletePrefix  = 'settings.stopList.delete.';   // + pattern
+  static const settingsStopListEditField     = 'settings.stopList.edit.field';
+  static const settingsStopListEditSave      = 'settings.stopList.edit.save';
+  static const settingsStopListEditCancel    = 'settings.stopList.edit.cancel';
   // Debug: network round-trip probe (task c51e92da)
   static const settingsOpenRoundTripProbe    = 'settings.debug.openRoundTripProbe';
   // Debug: keep voice recordings as WAV (row 9b1f7701)

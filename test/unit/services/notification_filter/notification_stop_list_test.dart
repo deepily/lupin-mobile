@@ -96,6 +96,65 @@ void main() {
       expect( () => sl.patterns.add( const StopPattern( pattern: 'nope' ) ), throwsUnsupportedError );
     } );
 
+    test( 'editAt keeps the checked state and the POSITION, and persists', () async {
+      final sl = await make();
+      await sl.setEnabled( 2, false );                       // 'Done: ToolSearch' off
+      final before = sl.patterns.map( ( p ) => p.pattern ).toList();
+      expect( await sl.editAt( 2, '  Done: ToolSerch  ' ), isTrue, reason: 'trimmed and accepted' );
+      expect( sl.patterns[ 2 ].pattern, 'Done: ToolSerch' );
+      expect( sl.patterns[ 2 ].enabled, isFalse, reason: 'checked state survives the edit' );
+      expect( sl.patterns.length, before.length );
+      expect( sl.patterns[ 1 ].pattern, before[ 1 ] );
+      expect( sl.patterns[ 3 ].pattern, before[ 3 ] );
+      final again = NotificationStopList( await SharedPreferences.getInstance() );
+      expect( again.patterns[ 2 ], sl.patterns[ 2 ], reason: 'persisted, not just in memory' );
+    } );
+
+    test( 'editAt REFUSES a blank, a collision and a bad index, leaving the list untouched', () async {
+      final sl = await make();
+      final before = sl.patterns.toList();
+      var n = 0; sl.addListener( () => n++ );
+      expect( await sl.editAt( 0, '   ' ), isFalse, reason: 'blank' );
+      expect( await sl.editAt( 0, 'DONE: bash' ), isFalse, reason: 'another row already has it' );
+      expect( await sl.editAt( -1, 'x' ), isFalse );
+      expect( await sl.editAt( 99, 'x' ), isFalse );
+      expect( sl.patterns, before );
+      expect( n, 0, reason: 'a refusal notifies nobody' );
+      // …and a row re-saved with its OWN text is a no-op that succeeds.
+      expect( await sl.editAt( 0, 'Done: mcp' ), isTrue );
+      expect( sl.patterns, before );
+    } );
+
+    test( 'insertAt is the undo of a delete: same index, same checked state', () async {
+      final sl = await make();
+      await sl.setEnabled( 3, false );
+      final lost = sl.patterns[ 3 ];
+      await sl.removeAt( 3 );
+      expect( sl.patterns.map( ( p ) => p.pattern ), isNot( contains( lost.pattern ) ) );
+      await sl.insertAt( 3, lost );
+      expect( sl.patterns[ 3 ], lost, reason: 'position AND enabled restored' );
+      expect( sl.patterns.map( ( p ) => p.pattern ), NotificationStopList.defaultPatterns );
+      // 🔴 THE NEGATIVE CONTROL for routing undo through add(): it would append
+      // an ENABLED copy at the end, which is neither the index nor the state.
+      await sl.removeAt( 3 );
+      await sl.add( lost.pattern );
+      expect( sl.patterns.last.pattern, lost.pattern );
+      expect( sl.patterns.last.enabled, isTrue, reason: 'add() forces enabled — why undo needs insertAt' );
+      expect( sl.patterns[ 3 ], isNot( lost ) );
+    } );
+
+    test( 'insertAt ignores an out-of-range index and a blank entry', () async {
+      final sl = await make();
+      final before = sl.patterns.toList();
+      await sl.insertAt( -1, const StopPattern( pattern: 'x' ) );
+      await sl.insertAt( 99, const StopPattern( pattern: 'x' ) );
+      await sl.insertAt( 0, const StopPattern( pattern: '  ' ) );
+      expect( sl.patterns, before );
+      // The boundary that IS legal: one past the end appends.
+      await sl.insertAt( before.length, const StopPattern( pattern: 'Done: Tail' ) );
+      expect( sl.patterns.last.pattern, 'Done: Tail' );
+    } );
+
     test( 'StopPattern value semantics + json round trip', () {
       const p = StopPattern( pattern: 'Done: X' );
       expect( p, const StopPattern( pattern: 'Done: X', enabled: true ) );

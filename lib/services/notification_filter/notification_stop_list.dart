@@ -144,6 +144,43 @@ class NotificationStopList extends ChangeNotifier {
     return true;
   }
 
+  /// Replace the pattern TEXT at [index], keeping its checked state AND its
+  /// position (row f27a61f4: "fix the misspelling in place"). Returns false and
+  /// leaves the list UNCHANGED when the new text is blank, or when another row
+  /// already has it, case-insensitively (ruling R4, Tiffany 2026-09-28) —
+  /// re-saving a row's own current text succeeds as a no-op.
+  ///
+  /// ⚠️ NOT "duplicates cannot exist": [_load] still reads whatever is on the
+  /// phone, including a pair saved by an older build. This refuses to MINT one.
+  Future<bool> editAt( int index, String pattern ) async {
+    if ( index < 0 || index >= _patterns.length ) return false;
+    final p = pattern.trim();
+    if ( p.isEmpty ) return false;
+    final lower = p.toLowerCase();
+    for ( var i = 0; i < _patterns.length; i++ ) {
+      if ( i != index && _patterns[ i ].pattern.toLowerCase() == lower ) return false;
+    }
+    _patterns = List.of( _patterns )..[ index ] = _patterns[ index ].copyWith( pattern: p );
+    notifyListeners();
+    await _persist();
+    return true;
+  }
+
+  /// Put [entry] back at [index] — the undo half of a delete.
+  ///
+  /// 🔴 IT TAKES A WHOLE [StopPattern], NOT A STRING, AND THAT IS THE POINT: an
+  /// undo routed through [add] would append the row at the END and force
+  /// `enabled: true`, losing both the position and the checked state the user
+  /// had. An out-of-range index is ignored rather than clamped, so a stale undo
+  /// cannot silently land somewhere else.
+  Future<void> insertAt( int index, StopPattern entry ) async {
+    if ( index < 0 || index > _patterns.length ) return;
+    if ( entry.pattern.trim().isEmpty ) return;
+    _patterns = List.of( _patterns )..insert( index, entry );
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> removeAt( int index ) async {
     if ( index < 0 || index >= _patterns.length ) return;
     _patterns = List.of( _patterns )..removeAt( index );
