@@ -6,7 +6,6 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
-import 'package:lupin_mobile/services/asr/voice_capture_session.dart';
 import 'package:lupin_mobile/shared/widgets/prompt_bodies.dart';
 
 class _MockAsr extends Mock implements AsrService {}
@@ -28,14 +27,15 @@ void main() {
     when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
   } );
 
-  VoiceCaptureSession session( { bool granted = true } ) => VoiceCaptureSession(
-    asr               : asr,
-    requestPermission : () async => granted,
-  );
-
-  Widget host( { VoiceCaptureSession? voice } ) => MaterialApp(
+  // The `voice:` form is gone (row c67f9781, step 1): the box takes the service
+  // and builds its own session. `mic: false` is the box with no recorder at all.
+  Widget host( { bool granted = true, bool mic = true } ) => MaterialApp(
     home: Scaffold(
-      body: OpenEndedPromptBody( onRespond: responded.add, voice: voice ),
+      body: OpenEndedPromptBody(
+        onRespond            : responded.add,
+        asr                  : mic ? asr : null,
+        requestMicPermission : () async => granted,
+      ),
     ),
   );
 
@@ -53,7 +53,7 @@ void main() {
   }
 
   testWidgets( 'NO recorder, NO microphone — the box is exactly the one that shipped', ( tester ) async {
-    await tester.pumpWidget( host() );
+    await tester.pumpWidget( host( mic: false ) );
 
     expect( byKeyStr( TestKeys.promptResponseMic ), findsNothing );
     expect( find.text( 'Submit' ), findsOneWidget );
@@ -67,7 +67,7 @@ void main() {
   testWidgets( 'the dictated chunk is APPENDED to what was already typed', ( tester ) async {
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'and the rest out loud' );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'half typed' );
     await tester.pump();
     await dictate( tester );
@@ -79,7 +79,7 @@ void main() {
   testWidgets( 'into an empty box the answer stands alone, and a SECOND chunk follows the first', ( tester ) async {
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'chunk' );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await dictate( tester );
     expect( boxOf( tester ).text, 'chunk' );
 
@@ -90,7 +90,7 @@ void main() {
   testWidgets( 'the answer is submitted with the dictated text, once', ( tester ) async {
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'spoken answer' );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await dictate( tester );
     await tester.tap( find.text( 'Submit' ) );
     await tester.pump();
@@ -99,7 +99,7 @@ void main() {
   } );
 
   testWidgets( 'PERMISSION DENIED: guidance inline, the typed answer untouched, recorder never started', ( tester ) async {
-    await tester.pumpWidget( host( voice: session( granted: false ) ) );
+    await tester.pumpWidget( host( granted: false ) );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'my answer' );
     await tester.pump();
 
@@ -113,7 +113,7 @@ void main() {
   } );
 
   testWidgets( 'CANCELLED: the recording is discarded, the answer is not, and Submit comes back', ( tester ) async {
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'keep me' );
     await tester.pump();
 
@@ -136,7 +136,7 @@ void main() {
     when( () => asr.stopAndTranscribe() )
         .thenThrow( const AsrException( 'Transcription upload failed: timeout' ) );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'half an answer' );
     await tester.pump();
     await dictate( tester );
@@ -150,7 +150,7 @@ void main() {
   testWidgets( 'NEGATIVE CONTROL — a capture that heard nothing appends nothing and does not blank the box', ( tester ) async {
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => '   ' );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'untouched' );
     await tester.pump();
     await dictate( tester );
@@ -163,7 +163,7 @@ void main() {
     final gate = Completer<String>();
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'the quikc brown fox' );
     await tester.pump();
     await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
@@ -191,7 +191,7 @@ void main() {
     final gate = Completer<String>();
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
 
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.enterText( byKeyStr( TestKeys.promptResponseField ), 'answer' );
     await tester.pump();
     await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
@@ -213,7 +213,7 @@ void main() {
   } );
 
   testWidgets( 'leaving the card mid-recording cancels the capture rather than stranding the hold', ( tester ) async {
-    await tester.pumpWidget( host( voice: session() ) );
+    await tester.pumpWidget( host() );
     await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
     await tester.pump();
 

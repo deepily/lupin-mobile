@@ -37,7 +37,7 @@ const Map<String, Map<String, int>> _census = {
   'features/task_list/presentation/new_ticket_sheet.dart'           : { 'no': 3, 'pending': 2 },
   'features/task_list/presentation/task_list_header.dart'           : { 'no': 1 },
   'shared/widgets/dictation_text_field.dart'                        : { 'exception': 1 },
-  'shared/widgets/prompt_bodies.dart'                               : { 'pending': 4 },
+  'shared/widgets/prompt_bodies.dart'                               : { 'yes': 1, 'pending': 3 },
   'ui/debug/websocket_debug_dashboard.dart'                         : { 'no': 1 },
 };
 

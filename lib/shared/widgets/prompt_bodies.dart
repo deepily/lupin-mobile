@@ -40,15 +40,12 @@
 /// implementer call on the record, S3 §8.
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../core/testing/test_keys.dart';
 import '../../services/asr/asr_service.dart';
-import '../../services/asr/dictation_splice.dart';
-import '../../services/asr/voice_capture_session.dart';
 import '../../services/permissions/mic_permission.dart';
+import 'dictation_text_field.dart';
 
 // --- yes/no -----------------------------------------------------------------
 
@@ -209,48 +206,33 @@ class _MultipleChoicePromptBodyState extends State<MultipleChoicePromptBody> {
 
 // --- open ended -------------------------------------------------------------
 
-/// The phase of the response box's dictation. Row 570c2fce, second box: the
-/// mic APPENDS a chunk to the answer, it does not replace it — the same rule and
-/// the same shared `spliceDictation` the Focus composer uses.
-enum _ResponseMic { idle, listening, transcribing }
-
 class OpenEndedPromptBody extends StatefulWidget {
   final void Function( String ) onRespond;
 
-  /// The recorder, or null for no microphone at all — as the web has none.
+  /// The recorder SERVICE, or null to take it from the app's [DictationScope].
+  /// With neither there is no microphone at all, exactly the box that shipped
+  /// before (as on the web).
   ///
-  /// Injected rather than reached for, because this widget is shared by four
-  /// surfaces (the legacy sheet, the focus bubbles, and Quick Ask twice) and only
-  /// some of them have a session to give. **Null renders EXACTLY the box that
-  /// shipped before**, which is what keeps this additive.
-  final VoiceCaptureSession? voice;
-
-  /// The OTHER way to get a microphone (row 928c5808): hand over the recorder
-  /// SERVICE and this widget builds, owns and cleans up its own session.
-  ///
-  /// This is the form a surface with no stateful owner must use — the
-  /// notification sheet is a StatelessWidget, and a session built in its
-  /// build() would be recreated on every rebuild and abandoned by the last one.
-  /// Owning the session here makes the dispose-cancel structural: no ancestor
-  /// has to remember it, which is the defect Chloé found in the Focus pane
-  /// (correct today only because Flutter disposes children first).
-  ///
-  /// Give [voice] OR [asr], never both.
+  /// The service goes in, never a session: the box builds and owns its own and
+  /// cancels it on dispose, so no ancestor has to remember to (the Focus pane
+  /// used to own one, correct only because Flutter disposes children first).
   final AsrService? asr;
 
-  /// Test seam for the permission prompt, passed to the session this widget
-  /// builds from [asr]. Ignored when [voice] is given — that session already
-  /// carries its own.
+  /// Test seam for the permission prompt.
   final MicPermissionRequester? requestMicPermission;
+
+  /// False for a plain box even inside the app's scope. Quick Ask's interview
+  /// answer passes false: its bloc owns a recorder of its own on the same screen
+  /// (plan §3, until that bloc registers with the recorder guard).
+  final bool dictate;
 
   const OpenEndedPromptBody( {
     super.key,
     required this.onRespond,
-    this.voice,
     this.asr,
     this.requestMicPermission,
-  } ) : assert( voice == null || asr == null,
-                "give OpenEndedPromptBody a session OR a service, not both" );
+    this.dictate = true,
+  } );
 
   @override
   State<OpenEndedPromptBody> createState() => _OpenEndedPromptBodyState();
@@ -259,104 +241,12 @@ class OpenEndedPromptBody extends StatefulWidget {
 class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
   final _ctrl = TextEditingController();
 
-  _ResponseMic _mic   = _ResponseMic.idle;
-  String?      _error;
-
-  /// Where the caret was when recording began, and the text it pointed into.
-  /// An edit during the recording invalidates the offset — Chloé's M1 on the
-  /// composer, the same trap here — so the words then go to the END.
-  int    _caret       = -1;
-  String _textAtStart = "";
-
-  Timer? _timer;
-  int    _seconds = 0;
-
-  /// The session this widget built from [OpenEndedPromptBody.asr], built ONCE
-  /// here rather than in build(), and cancelled by this widget's own dispose.
-  VoiceCaptureSession? _owned;
-
-  /// Whichever recorder this box has: the caller's, or its own.
-  VoiceCaptureSession? get _session => widget.voice ?? _owned;
-
-  @override
-  void initState() {
-    super.initState();
-    final asr = widget.asr;
-    if ( widget.voice == null && asr != null ) {
-      _owned = VoiceCaptureSession( asr: asr, requestPermission: widget.requestMicPermission );
-    }
-  }
+  DictationPhase _phase = DictationPhase.idle;
 
   @override
   void dispose() {
-    _timer?.cancel();
-    // The recorder is a shared singleton: abandoning a capture strands the TTS
-    // hold for the rest of the app session (row a1c12c6e). A transcription in
-    // flight is invalidated too, so its result cannot land on a dead widget.
-    if ( _mic == _ResponseMic.listening ) {
-      _session?.cancel();
-    } else if ( _mic == _ResponseMic.transcribing ) {
-      _session?.invalidate();
-    }
     _ctrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _onMicPressed() async {
-    final voice = _session;
-    if ( voice == null || _mic == _ResponseMic.transcribing ) return;
-
-    if ( _mic == _ResponseMic.idle ) {
-      setState( () => _error = null );
-      final sel    = _ctrl.selection;
-      _caret       = sel.isValid ? sel.baseOffset : _ctrl.text.length;
-      _textAtStart = _ctrl.text;
-
-      final start = await voice.start();
-      if ( !mounted || start.isStale ) return;
-      if ( !start.started ) {
-        setState( () => _error = start.errorMessage );
-        return;
-      }
-      setState( () { _mic = _ResponseMic.listening; _seconds = 0; } );
-      _timer?.cancel();
-      _timer = Timer.periodic( const Duration( seconds: 1 ), ( _ ) {
-        if ( mounted ) setState( () => _seconds++ );
-      } );
-      return;
-    }
-
-    _timer?.cancel();
-    setState( () => _mic = _ResponseMic.transcribing );
-    final capture = await voice.stopAndTranscribe();
-    if ( !mounted ) return;
-    // A stale result appends nothing, but must still free the mic.
-    if ( capture.isStale ) {
-      setState( () => _mic = _ResponseMic.idle );
-      return;
-    }
-    setState( () {
-      if ( capture.wasHeard ) {
-        _ctrl.value = spliceDictation(
-          value : _ctrl.value,
-          heard : capture.transcript!,
-          caret : _ctrl.text != _textAtStart ? null : _caret,
-        );
-      } else {
-        _error = capture.errorMessage;
-      }
-      _mic = _ResponseMic.idle;
-    } );
-  }
-
-  void _onCancelPressed() {
-    _timer?.cancel();
-    if ( _mic == _ResponseMic.listening ) {
-      _session?.cancel();
-    } else {
-      _session?.invalidate();
-    }
-    setState( () => _mic = _ResponseMic.idle );
   }
 
   @override
@@ -364,100 +254,35 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if ( _error != null )
-          Padding(
-            padding : const EdgeInsets.only( bottom: 8 ),
-            child   : Row(
-              key      : const Key( TestKeys.promptResponseMicError ),
-              children : [
-                Icon( Icons.error_outline,
-                    size: 18, color: Theme.of( context ).colorScheme.error ),
-                const SizedBox( width: 8 ),
-                Expanded( child: Text( _error! ) ),
-              ],
-            ),
-          ),
-        TextField(
-          key: const Key( TestKeys.promptResponseField ),
-          controller: _ctrl,
-          minLines: 3,
-          maxLines: 6,
-          autofocus: true,
-          decoration: const InputDecoration(
+        DictationTextField(
+          fieldKey             : const Key( TestKeys.promptResponseField ),
+          micKey               : const Key( TestKeys.promptResponseMic ),
+          cancelKey            : const Key( TestKeys.promptResponseMicCancel ),
+          errorKey             : const Key( TestKeys.promptResponseMicError ),
+          controller           : _ctrl,
+          asr                  : widget.asr,
+          requestMicPermission : widget.requestMicPermission,
+          dictate              : widget.dictate,
+          minLines             : 3,
+          maxLines             : 6,
+          autofocus            : true,
+          onPhaseChanged       : ( p ) => setState( () => _phase = p ),
+          decoration           : const InputDecoration(
             labelText: "Your response",
             border   : OutlineInputBorder(),
           ),
         ),
         const SizedBox( height: 12 ),
-        _buttons(),
+        // While a chunk records or transcribes, Submit is GONE: a half-dictated
+        // answer cannot be sent by a stray thumb, and the prompt is answered
+        // exactly once.
+        if ( _phase == DictationPhase.idle )
+          FilledButton(
+            onPressed: () => widget.onRespond( _ctrl.text ),
+            child: const Text( "Submit" ),
+          ),
       ],
     );
-  }
-
-  /// Submit, plus the microphone when there is a recorder. While a chunk records
-  /// or transcribes, Submit is GONE: a half-dictated answer cannot be sent by a
-  /// stray thumb, and the prompt is answered exactly once.
-  Widget _buttons() {
-    if ( _session == null ) {
-      return FilledButton(
-        onPressed: () => widget.onRespond( _ctrl.text ),
-        child: const Text( "Submit" ),
-      );
-    }
-
-    switch ( _mic ) {
-      case _ResponseMic.listening:
-        return Row(
-          children: [
-            Expanded( child: Text( "Recording… ${_seconds}s" ) ),
-            IconButton(
-              key       : const Key( TestKeys.promptResponseMicCancel ),
-              icon      : const Icon( Icons.delete_outline ),
-              tooltip   : "Discard this recording",
-              onPressed : _onCancelPressed,
-            ),
-            IconButton(
-              key       : const Key( TestKeys.promptResponseMic ),
-              icon      : const Icon( Icons.stop_circle ),
-              tooltip   : "Stop and add to the answer",
-              onPressed : _onMicPressed,
-            ),
-          ],
-        );
-      case _ResponseMic.transcribing:
-        return Row(
-          children: [
-            const SizedBox(
-              width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) ),
-            const SizedBox( width: 12 ),
-            const Expanded( child: Text( "Transcribing…" ) ),
-            IconButton(
-              key       : const Key( TestKeys.promptResponseMicCancel ),
-              icon      : const Icon( Icons.close ),
-              tooltip   : "Cancel transcription",
-              onPressed : _onCancelPressed,
-            ),
-          ],
-        );
-      case _ResponseMic.idle:
-        return Row(
-          children: [
-            IconButton(
-              key       : const Key( TestKeys.promptResponseMic ),
-              icon      : const Icon( Icons.mic ),
-              tooltip   : "Answer by voice",
-              onPressed : _onMicPressed,
-            ),
-            const SizedBox( width: 8 ),
-            Expanded(
-              child: FilledButton(
-                onPressed: () => widget.onRespond( _ctrl.text ),
-                child: const Text( "Submit" ),
-              ),
-            ),
-          ],
-        );
-    }
   }
 }
 

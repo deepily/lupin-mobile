@@ -398,7 +398,7 @@ class _PendingPrompt extends StatelessWidget {
           if ( prompt.isYesNo )
             YesNoPromptBody( onRespond: respond )
           else
-            OpenEndedPromptBody( onRespond: respond ),
+            OpenEndedPromptBody( onRespond: respond, dictate: false ),
         ],
       ),
     );
@@ -457,6 +457,7 @@ class _InterviewPrompt extends StatelessWidget {
           // one Submit away from being posted as the day.
           OpenEndedPromptBody(
             key       : ValueKey( '${interview.pendingId}:${interview.turn}' ),
+            dictate   : false,   // the bloc owns Quick Ask's recorder (plan §3)
             onRespond : ( text ) => context.read<QuickAskBloc>()
                 .add( QuickAskInterviewAnswered( text ) ),
           ),

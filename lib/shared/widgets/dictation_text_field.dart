@@ -95,6 +95,11 @@ class DictationTextField extends StatefulWidget {
   /// Test seam for the permission prompt.
   final MicPermissionRequester? requestMicPermission;
 
+  /// False forces a plain box even inside a [DictationScope]. For a surface
+  /// that shares a screen with a bloc-owned recorder (Quick Ask), until that
+  /// recorder registers with [DictationRecorderGuard].
+  final bool dictate;
+
   /// The caller's decoration. The mic is added as `suffixIcon`; if the caller
   /// already set one, the mic goes before it.
   final InputDecoration decoration;
@@ -123,6 +128,7 @@ class DictationTextField extends StatefulWidget {
     required this.controller,
     this.asr,
     this.requestMicPermission,
+    this.dictate = true,
     this.decoration = const InputDecoration(),
     this.maxLines = 1,
     this.minLines,
@@ -160,13 +166,16 @@ class _DictationTextFieldState extends State<DictationTextField> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _bind( widget.asr ?? DictationScope.maybeOf( context ) );
+    _bind( _service() );
   }
+
+  AsrService? _service() =>
+      widget.dictate ? ( widget.asr ?? DictationScope.maybeOf( context ) ) : null;
 
   @override
   void didUpdateWidget( DictationTextField old ) {
     super.didUpdateWidget( old );
-    if ( widget.asr != old.asr ) _bind( widget.asr ?? DictationScope.maybeOf( context ) );
+    if ( widget.asr != old.asr || widget.dictate != old.dictate ) _bind( _service() );
   }
 
   /// Build the session ONCE per service; a parent rebuild keeps it, so a
