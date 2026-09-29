@@ -152,6 +152,18 @@ class FcmWakeChain {
   final Future<void> Function( String notificationId, String accessToken )
       markPlayed;
 
+  /// Prefs seam: are BACKGROUND wake notifications wanted at all? (Rick
+  /// 2026-09-28, row 1af7b3de — `NotificationPreferences.wakeNotifications`.)
+  ///
+  /// Checked FIRST, before credentials, and not merely before `showNotification`
+  /// as the request put it. Two reasons the earlier gate is the right one:
+  /// a wake that fetches an item and marks it played WITHOUT showing anything
+  /// would silently consume it — the server's unplayed queue is what the
+  /// foreground re-hydrates from, so Rick would never see it at all, which is
+  /// deletion rather than silence. And "off" should cost no radio and no
+  /// battery, which only holds if nothing before the notification runs either.
+  final Future<bool> Function() wakeNotificationsEnabled;
+
   /// Debug-hook seam (§4): one line per chain step, adb-visible.
   final void Function( String line ) log;
 
@@ -171,6 +183,7 @@ class FcmWakeChain {
     required this.ttsFraction,
     required this.speak,
     required this.markPlayed,
+    required this.wakeNotificationsEnabled,
     required this.log,
     this.showBudget     = kFcmWakeShowBudget,
     this.fallbackBudget = kFcmWakeFallbackBudget,
@@ -196,6 +209,17 @@ class FcmWakeChain {
       );
     }
     log( '[FcmWake] wake received, reason=$reason' );
+
+    // Row 1af7b3de: the user's own switch. Nothing is fetched, shown, spoken or
+    // marked played — the queue is left exactly as it was, so opening the app
+    // still surfaces everything.
+    if ( !await wakeNotificationsEnabled() ) {
+      log( '[FcmWake] wake notifications are OFF in settings — nothing to do' );
+      return FcmWakeOutcome(
+        handled : true, reason: reason, fetched: 0,
+        shown   : false, spoke: false, detail: 'wake notifications off',
+      );
+    }
 
     // Set once the REAL notification is posted, so a failure after that point
     // (speak, mark-played) never adds a fallback on top of it.

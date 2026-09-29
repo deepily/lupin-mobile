@@ -227,8 +227,8 @@ Future<Map<String, dynamic>?> fetchNextForAccessToken( {
 ///   - plugin is an initialized FlutterLocalNotificationsPlugin
 ///
 /// Ensures:
-///   - the notification is posted on the `lupin_fcm_wake` channel at high
-///     importance and priority
+///   - the notification is posted on the `lupin_fcm_wake` channel at DEFAULT
+///     importance and priority (row 1af7b3de)
 ///   - `payload` reaches the plugin VERBATIM, including null
 @visibleForTesting
 Future<void> showWakeNotification(
@@ -247,8 +247,14 @@ Future<void> showWakeNotification(
         'Lupin background notifications',
         channelDescription:
             'Notifications fetched on FCM silent-relay wake-up',
-        importance : Importance.high,
-        priority   : Priority.high,
+        // Rick 2026-09-28 (row 1af7b3de): default, not high — a wake that
+        // arrives overnight should land in the shade, not take over the screen
+        // with a heads-up banner. This does NOT weaken the slice-2 contract:
+        // FCM watches whether a high-priority MESSAGE produces a notification
+        // at all, not what importance that notification carries, so wakes stay
+        // high-priority end to end.
+        importance : Importance.defaultImportance,
+        priority   : Priority.defaultPriority,
       ),
     ),
     // Android persists this in the notification's intent — the ONLY carrier
@@ -332,6 +338,7 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       await tts.awaitSpeakCompletion( true );
       await tts.speak( text );
     },
+    wakeNotificationsEnabled: () async => audio.wakeNotifications,
     markPlayed: ( id, accessToken ) async {
       await dio.post<Map<String, dynamic>>(
         '/api/notifications/$id/played',

@@ -71,4 +71,19 @@ void main() {
       expect( NotificationPreferences.snapTtsFraction( 0.25 ), 0.3 );
     } );
   } );
+
+  test( 'wakeNotifications defaults ON, and round-trips through storage (row 1af7b3de)', () async {
+    SharedPreferences.setMockInitialValues( {} );
+    final prefs = NotificationPreferences( await SharedPreferences.getInstance() );
+    expect( prefs.wakeNotifications, isTrue,
+        reason: "opt-OUT: an install that has never seen the switch behaves as before" );
+
+    await prefs.setWakeNotifications( false );
+    expect( prefs.wakeNotifications, isFalse );
+
+    // The background isolate builds its OWN NotificationPreferences from its own
+    // SharedPreferences handle, so the value has to survive the instance.
+    final fresh = NotificationPreferences( await SharedPreferences.getInstance() );
+    expect( fresh.wakeNotifications, isFalse );
+  } );
 }

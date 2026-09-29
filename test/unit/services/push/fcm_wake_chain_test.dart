@@ -91,6 +91,7 @@ void main() {
         markPlayed: ( id, token ) async {
           calls.add( 'played($id)' );
         },
+        wakeNotificationsEnabled: () async => true,
         log: logs.add,
       );
     } );
@@ -196,6 +197,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await quiet.handleWake( wakePayload() );
@@ -227,6 +229,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await broken.handleWake( wakePayload() );
@@ -247,6 +250,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async => throw Exception( 'tts engine gone' ),
         markPlayed             : ( id, __ ) async => played.add( id ),
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await loud.handleWake( wakePayload() );
@@ -281,6 +285,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( id, __ ) async => played.add( id ),
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await noPrefs.handleWake( wakePayload() );
@@ -301,6 +306,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await dead.handleWake( wakePayload() );
@@ -319,6 +325,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await flaky.handleWake( wakePayload() );
@@ -339,6 +346,7 @@ void main() {
         ttsFraction            : () async => 1.0,
         speak                  : ( t ) async { spoken.add( t ); },
         markPlayed             : ( _, __ ) async => throw Exception( 'flaky 500' ),
+        wakeNotificationsEnabled: () async => true,
         log                    : logs.add,
       );
       final outcome = await stubborn.handleWake( wakePayload() );
@@ -467,6 +475,7 @@ void main() {
           ttsFraction            : () async => 1.0,
           speak                  : ( _ ) async {},
           markPlayed             : ( _, __ ) async {},
+          wakeNotificationsEnabled: () async => true,
           log                    : logs.add,
         );
 
@@ -519,6 +528,7 @@ void main() {
       ttsFraction            : () async => 1.0,
       speak                  : ( _ ) async {},
       markPlayed             : ( _, __ ) async {},
+      wakeNotificationsEnabled: () async => true,
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),
@@ -572,6 +582,90 @@ void main() {
               onTimeout: () => fail( 'handleWake hung on a wedged plugin' ) );
       expect( outcome.shown, isFalse, reason: 'honest: nothing reached the shade' );
       expect( logs.any( ( l ) => l.contains( 'fallback notification failed' ) ), isTrue );
+    } );
+  } );
+
+  group( 'the wake-notification switch (Rick 2026-09-28, row 1af7b3de)', () {
+    late List<String> calls;
+    late List<String> logs;
+    late bool         wakeEnabled;
+
+    Map<String, dynamic> wakePayload() => { 'type': 'ws_wake', 'reason': 'undelivered' };
+
+    FcmWakeChain switchedChain() => FcmWakeChain(
+      readCredentials: () async {
+        calls.add( 'creds' );
+        return const FcmWakeCredentials( refreshToken: 'r', userEmail: 'e@x.com' );
+      },
+      exchangeForAccessToken : ( _ ) async { calls.add( 'exchange' ); return 'a'; },
+      fetchNextNotification  : ( _, __ ) async {
+        calls.add( 'fetch' );
+        return { 'id': 'n-77', 'message': 'm', 'title': 't', 'priority': 'high' };
+      },
+      showNotification : ( _, __, ___ ) async => calls.add( 'show' ),
+      shouldSpeak      : ( _ ) async { calls.add( 'prefs' ); return true; },
+      ttsFraction      : () async => 1.0,
+      speak            : ( _ ) async => calls.add( 'speak' ),
+      markPlayed       : ( _, __ ) async => calls.add( 'played' ),
+      wakeNotificationsEnabled : () async => wakeEnabled,
+      log              : logs.add,
+    );
+
+    setUp( () {
+      calls       = [];
+      logs        = [];
+      wakeEnabled = true;
+    } );
+
+    test( 'OFF: the wake is a complete no-op — no fetch, no show, no speak', () async {
+      wakeEnabled = false;
+      final outcome = await switchedChain().handleWake( wakePayload() );
+      expect( calls, isEmpty,
+          reason: 'not one seam may run: off must cost no radio and no battery' );
+      expect( outcome.handled, isTrue, reason: 'handled, just deliberately silent' );
+      expect( outcome.shown, isFalse );
+      expect( outcome.spoke, isFalse );
+      expect( outcome.detail, 'wake notifications off' );
+      expect( logs.any( ( l ) => l.contains( 'OFF in settings' ) ), isTrue );
+    } );
+
+    test( 'OFF: NOTHING is marked played, so the queue survives for the foreground',
+        () async {
+      // The distinction that makes this a mute and not a delete. The server's
+      // unplayed queue is what the app re-hydrates from on open; marking items
+      // played with nothing shown would lose them permanently.
+      wakeEnabled = false;
+      await switchedChain().handleWake( wakePayload() );
+      expect( calls, isNot( contains( 'played' ) ) );
+      expect( calls, isNot( contains( 'fetch' ) ) );
+    } );
+
+    test( 'ON (the default): the chain runs exactly as before the switch existed',
+        () async {
+      await switchedChain().handleWake( wakePayload() );
+      expect( calls, [ 'creds', 'exchange', 'fetch', 'show', 'prefs', 'speak', 'played' ] );
+    } );
+
+    test( 'the switch is read on EVERY wake, never cached across them', () async {
+      // It is flipped in a foreground screen while the background isolate is
+      // long dead, so a value read once and held would be the stale one.
+      var reads = 0;
+      final chain = FcmWakeChain(
+        readCredentials: () async => const FcmWakeCredentials(
+            refreshToken: 'r', userEmail: 'e@x.com' ),
+        exchangeForAccessToken : ( _ ) async => 'a',
+        fetchNextNotification  : ( _, __ ) async => null,
+        showNotification       : ( _, __, ___ ) async {},
+        shouldSpeak            : ( _ ) async => false,
+        ttsFraction            : () async => 1.0,
+        speak                  : ( _ ) async {},
+        markPlayed             : ( _, __ ) async {},
+        wakeNotificationsEnabled : () async { reads++; return true; },
+        log                    : logs.add,
+      );
+      await chain.handleWake( wakePayload() );
+      await chain.handleWake( wakePayload() );
+      expect( reads, 2 );
     } );
   } );
 }

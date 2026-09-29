@@ -138,6 +138,7 @@ class TestKeys {
   static const settingsSpeakUrgent  = 'settings.audio.speakUrgent';
   static const settingsMasterMute   = 'settings.audio.masterMute';
   static const settingsSpeakSystem  = 'settings.audio.speakSystemSenders';
+  static const settingsWakeNotifications = 'settings.audio.wakeNotifications';
 
   // Home screen AppBar
   static const homeSettingsButton   = 'home.settings';

@@ -24,6 +24,32 @@ void main() {
       );
     }
 
+    testWidgets( "the wake-notification switch defaults ON and persists OFF (row 1af7b3de)",
+        ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      // Below the fold in the 800x600 test viewport, and the ListView is lazy,
+      // so it has to be scrolled in before it exists to be found at all.
+      final finder = find.byKey( const Key( TestKeys.settingsWakeNotifications ) );
+      await tester.scrollUntilVisible( finder, 120 );
+      await tester.pump();
+
+      expect( finder, findsOneWidget, reason: "Rick's switch has to be on this screen" );
+      expect( tester.widget<SwitchListTile>( finder ).value, isTrue,
+          reason: "default ON = today's behaviour; the switch is opt-OUT" );
+
+      await tester.tap( finder );
+      await tester.pump();
+
+      expect( tester.widget<SwitchListTile>( finder ).value, isFalse );
+      // The point of the switch is that it OUTLIVES the screen: the background
+      // isolate reads it from storage long after this widget is gone.
+      final reread = NotificationPreferences( await SharedPreferences.getInstance() );
+      expect( reread.wakeNotifications, isFalse,
+          reason: 'a switch the background isolate cannot read is not a setting' );
+    } );
+
     testWidgets( "renders all six toggles with default values", ( tester ) async {
       await tester.pumpWidget( underTest() );
       await tester.pump();

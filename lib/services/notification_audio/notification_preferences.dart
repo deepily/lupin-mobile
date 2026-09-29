@@ -36,6 +36,13 @@ class NotificationPreferences {
   /// below it so tables get the full width (Rick 2026-09-18). Flipped from
   /// the viewer's own title bar and remembered. Default OFF (beside).
   static const keyDocsBelowWhenWide = 'docs.below_when_wide';
+  /// Wake notifications from the BACKGROUND FCM path (Rick 2026-09-28, row
+  /// 1af7b3de): one switch to stop the phone lighting up while the app is
+  /// closed. OFF makes the wake handler a no-op — it does not fetch, show,
+  /// speak or mark anything played, so nothing is consumed: every notification
+  /// is still there, unplayed, the next time the app opens. Default ON, which
+  /// is today's behaviour.
+  static const keyWakeNotifications = 'notif_audio.wake_notifications';
 
   final SharedPreferences _prefs;
   const NotificationPreferences( this._prefs );
@@ -49,6 +56,7 @@ class NotificationPreferences {
   bool get speakSystemSenders => _prefs.getBool( keySpeakSystemSenders ) ?? true;
   bool get keepVoiceRecordings => _prefs.getBool( keyKeepVoiceRecordings ) ?? false;
   bool get docsBelowWhenWide   => _prefs.getBool( keyDocsBelowWhenWide ) ?? false;
+  bool get wakeNotifications   => _prefs.getBool( keyWakeNotifications ) ?? true;
 
   /// Spoken fraction of each message, snapped to 10% steps in [0.0, 1.0].
   double get ttsFraction {
@@ -68,5 +76,6 @@ class NotificationPreferences {
   Future<void> setSpeakSystemSenders( bool v ) => _prefs.setBool( keySpeakSystemSenders, v );
   Future<void> setKeepVoiceRecordings( bool v ) => _prefs.setBool( keyKeepVoiceRecordings, v );
   Future<void> setDocsBelowWhenWide( bool v ) => _prefs.setBool( keyDocsBelowWhenWide, v );
+  Future<void> setWakeNotifications( bool v ) => _prefs.setBool( keyWakeNotifications, v );
   Future<void> setTtsFraction( double v ) => _prefs.setDouble( keyTtsFraction, snapTtsFraction( v ) );
 }

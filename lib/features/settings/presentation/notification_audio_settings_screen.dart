@@ -40,6 +40,7 @@ class _NotificationAudioSettingsScreenState
   late bool _speakOnHigh;
   late bool _speakSystem;
   late bool _speakOnUrgent;
+  late bool _wakeNotifications;
   late bool _keepRecordings;
   String?   _keptDirPath;
 
@@ -54,6 +55,7 @@ class _NotificationAudioSettingsScreenState
     _speakOnHigh   = p.speakOnHigh;
     _speakSystem   = p.speakSystemSenders;
     _speakOnUrgent = p.speakOnUrgent;
+    _wakeNotifications = p.wakeNotifications;
     _keepRecordings = p.keepVoiceRecordings;
     _resolveKeptDir();
   }
@@ -79,6 +81,7 @@ class _NotificationAudioSettingsScreenState
   void _toggleSpeakHigh(     bool v ) { setState( () => _speakOnHigh   = v ); widget.prefs.setSpeakOnHigh(   v ); }
   void _toggleSpeakUrgent(   bool v ) { setState( () => _speakOnUrgent = v ); widget.prefs.setSpeakOnUrgent( v ); }
   void _toggleSpeakSystem(   bool v ) { setState( () => _speakSystem   = v ); widget.prefs.setSpeakSystemSenders( v ); }
+  void _toggleWakeNotifications( bool v ) { setState( () => _wakeNotifications = v ); widget.prefs.setWakeNotifications( v ); }
   void _toggleKeepRecordings( bool v ) { setState( () => _keepRecordings = v ); widget.prefs.setKeepVoiceRecordings( v ); }
 
   @override
@@ -142,6 +145,20 @@ class _NotificationAudioSettingsScreenState
             onChanged  : _toggleSpeakSystem,
           ),
           const SizedBox( height: 24 ),
+          const Divider(),
+          const _SectionHeader( 'While the app is closed' ),
+          SwitchListTile(
+            key        : const Key( TestKeys.settingsWakeNotifications ),
+            secondary  : const Icon( Icons.notifications_active_outlined ),
+            title      : const Text( 'Wake notifications' ),
+            subtitle   : const Text(
+                'Let Lupin wake up in the background and post notifications while '
+                'the app is closed. Off = nothing is missed, it just waits: you '
+                'see everything when you next open the app.' ),
+            isThreeLine : true,
+            value      : _wakeNotifications,
+            onChanged  : _toggleWakeNotifications,
+          ),
           const Divider(),
           const _SectionHeader( 'Filtering' ),
           ListTile(
