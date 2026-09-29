@@ -45,6 +45,37 @@ void main() {
     );
   }
 
+  /// The NotificationDetails the plugin was actually handed — Maya's `captured()`
+  /// passes `any()` there, so nothing pinned it.
+  NotificationDetails capturedDetails() {
+    final call = verify( () => plugin.show(
+      any(), any(), any(), captureAny(),
+      payload: any( named: 'payload' ) ) ).captured;
+    return call.single as NotificationDetails;
+  }
+
+  test( 'C4 — the production post lands on the v2 channel at DEFAULT importance',
+      () async {
+    // 🔴 ASSERTED ON WHAT THE PLUGIN RECEIVES, NOT ON THE GETTER (Chloé's C4).
+    // fcm_wake_channel_test checks that wakeNotificationDetails() returns the v2
+    // id at default importance — true, and not the same claim. Nothing there
+    // required the SHIPPED post to use that getter, so pointing
+    // showWakeNotification at any other NotificationDetails would have left both
+    // files green while Rick's phone went back to a 3am heads-up banner on the old
+    // channel. This is the same uninjected-seam shape the header of this file
+    // describes, one argument to the right of the payload it was written for.
+    await showWakeNotification( plugin, '🌻 Maya', 'Build finished green.', null );
+
+    final android = capturedDetails().android!;
+    expect( android.channelId, 'lupin_fcm_wake_v2',
+        reason: 'the v2 bump is what carries the importance change to existing installs' );
+    expect( android.importance, Importance.defaultImportance,
+        reason: 'shade, not a banner over whatever is on screen' );
+    expect( android.priority, Priority.defaultPriority );
+    expect( android.channelName, 'Lupin background notifications',
+        reason: 'the name the user looks for after the id changes underneath them' );
+  } );
+
   test( 'the production post forwards its payload to the plugin VERBATIM', () async {
     final payload = const NotificationTapPayload(
       notificationId : 'n-77',
