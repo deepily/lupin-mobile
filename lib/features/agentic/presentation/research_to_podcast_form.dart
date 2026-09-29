@@ -9,6 +9,7 @@ import '../data/chained_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class ResearchToPodcastForm extends StatefulWidget {
   const ResearchToPodcastForm( { super.key } );
@@ -72,8 +73,8 @@ class _ResearchToPodcastFormState extends State<ResearchToPodcastForm> {
         builder: ( context, state ) {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
-            TextField(
-              key        : const Key( TestKeys.rpQueryField ),
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.rpQueryField ),
               controller : _queryCtrl,
               minLines   : 3,
               maxLines   : 8,

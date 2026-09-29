@@ -9,6 +9,7 @@ import '../data/swe_team_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class SweTeamForm extends StatefulWidget {
   const SweTeamForm( { super.key } );
@@ -74,8 +75,8 @@ class _SweTeamFormState extends State<SweTeamForm> {
         builder: ( context, state ) {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
-            TextField(
-              key        : const Key( TestKeys.swTaskField ),
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.swTaskField ),
               controller : _taskCtrl,
               minLines   : 4,
               maxLines   : 10,

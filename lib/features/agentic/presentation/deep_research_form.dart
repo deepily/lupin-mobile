@@ -9,6 +9,7 @@ import '../data/deep_research_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class DeepResearchForm extends StatefulWidget {
   const DeepResearchForm( { super.key } );
@@ -80,8 +81,8 @@ class _DeepResearchFormState extends State<DeepResearchForm> {
         builder: ( context, state ) {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
-            TextField(
-              key        : const Key( TestKeys.drQueryField ),
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.drQueryField ),
               controller : _queryCtrl,
               minLines   : 4,
               maxLines   : 8,

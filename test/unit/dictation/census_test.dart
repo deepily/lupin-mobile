@@ -17,14 +17,14 @@ import 'package:flutter_test/flutter_test.dart';
 ///   pending   a mic-yes box still a plain TextField, waiting for its migration
 ///             commit. Every commit lowers this; the last one deletes the column.
 const Map<String, Map<String, int>> _census = {
-  'features/agentic/presentation/bug_fix_expediter_form.dart'       : { 'no': 1, 'pending': 1 },
-  'features/agentic/presentation/deep_research_form.dart'           : { 'no': 1, 'pending': 1 },
-  'features/agentic/presentation/podcast_generator_form.dart'       : { 'pending': 1 },   // S1
+  'features/agentic/presentation/bug_fix_expediter_form.dart'       : { 'no': 1, 'yes': 1 },
+  'features/agentic/presentation/deep_research_form.dart'           : { 'no': 1, 'yes': 1 },
+  'features/agentic/presentation/podcast_generator_form.dart'       : { 'yes': 1 },   // S1
   'features/agentic/presentation/presentation_generator_form.dart'  : { 'no': 2 },
-  'features/agentic/presentation/research_to_podcast_form.dart'     : { 'no': 1, 'pending': 1 },
-  'features/agentic/presentation/research_to_presentation_form.dart': { 'no': 2, 'pending': 1 },
-  'features/agentic/presentation/swe_team_form.dart'                : { 'no': 1, 'pending': 1 },
-  'features/agentic/presentation/test_fix_expediter_form.dart'      : { 'pending': 1 },   // S2
+  'features/agentic/presentation/research_to_podcast_form.dart'     : { 'no': 1, 'yes': 1 },
+  'features/agentic/presentation/research_to_presentation_form.dart': { 'no': 2, 'yes': 1 },
+  'features/agentic/presentation/swe_team_form.dart'                : { 'no': 1, 'yes': 1 },
+  'features/agentic/presentation/test_fix_expediter_form.dart'      : { 'yes': 1 },   // S2
   'features/auth/presentation/login_screen.dart'                    : { 'no': 2 },
   'features/broadcast/presentation/broadcast_pane.dart'             : { 'exception': 1 },
   'features/claude_code/presentation/dispatch_sheet.dart'           : { 'no': 1, 'yes': 1 },

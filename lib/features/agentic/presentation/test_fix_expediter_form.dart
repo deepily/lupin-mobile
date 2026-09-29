@@ -9,6 +9,7 @@ import '../data/test_fix_expediter_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class TestFixExpediterForm extends StatefulWidget {
   const TestFixExpediterForm( { super.key } );
@@ -68,8 +69,8 @@ class _TestFixExpediterFormState extends State<TestFixExpediterForm> {
         builder: ( context, state ) {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
-            TextField(
-              key        : const Key( TestKeys.tfeResumeFromField ),
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.tfeResumeFromField ),
               controller : _resumeCtrl,
               decoration : const InputDecoration(
                 labelText : 'Job ID, plan path, or description *',

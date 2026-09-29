@@ -9,6 +9,7 @@ import '../data/podcast_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class PodcastGeneratorForm extends StatefulWidget {
   const PodcastGeneratorForm( { super.key } );
@@ -68,8 +69,8 @@ class _PodcastGeneratorFormState extends State<PodcastGeneratorForm> {
         builder: ( context, state ) {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
-            TextField(
-              key        : const Key( TestKeys.pgSourceField ),
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.pgSourceField ),
               controller : _sourceCtrl,
               minLines   : 3,
               maxLines   : 6,

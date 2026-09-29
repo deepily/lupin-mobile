@@ -9,6 +9,7 @@ import '../data/bug_fix_expediter_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 /// Bug Fix Expediter submission form.
 ///
@@ -89,7 +90,7 @@ class _BugFixExpediterFormState extends State<BugFixExpediterForm> {
               ),
             ),
             const SizedBox( height: 16 ),
-            TextField(
+            DictationTextField(
               controller : _contextCtrl,
               minLines   : 3,
               maxLines   : 6,
