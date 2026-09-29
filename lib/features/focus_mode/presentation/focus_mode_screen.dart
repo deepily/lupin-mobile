@@ -33,6 +33,7 @@ import '../../notifications/presentation/inbox_screen.dart';
 import '../../queue/presentation/queue_dashboard_screen.dart';
 import '../../quick_ask/presentation/quick_ask_screen.dart';
 import '../../settings/presentation/notification_audio_settings_screen.dart';
+import '../../settings/presentation/notification_management_screen.dart';
 import '../../settings/presentation/notification_filter_settings_screen.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
@@ -105,6 +106,17 @@ List<FocusDrawerSurface> focusDrawerSurfaces( BuildContext context ) {
 @visibleForTesting
 List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
   return <FocusDrawerSurface>[
+    // Row 7cac3a17's deliverable gets its own entry rather than living two
+    // taps inside 'Settings' — Rick asked for a dedicated view because the
+    // bombardment is the thing he is trying to reach.
+    FocusDrawerSurface( Icons.notifications_outlined, 'Notifications', ( _ ) =>
+      NotificationManagementScreen(
+        prefs    : ServiceLocator.get<NotificationPreferences>(),
+        stopList : ServiceLocator.isRegistered<NotificationStopList>()
+            ? ServiceLocator.get<NotificationStopList>()
+            : null,
+      ),
+    ),
     FocusDrawerSurface( Icons.settings, 'Settings', ( _ ) => NotificationAudioSettingsScreen(
       prefs: ServiceLocator.get<NotificationPreferences>(),
     ) ),
@@ -511,6 +523,16 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             leading : const Icon( Icons.verified_user ),
             title   : const Text( 'Trust Dashboard' ),
             onTap   : () => push( TrustDashboardScreen( userEmail: email ) ),
+          ),
+          ListTile(
+            leading : const Icon( Icons.notifications_outlined ),
+            title   : const Text( 'Notifications' ),
+            onTap   : () => push( NotificationManagementScreen(
+              prefs    : ServiceLocator.get<NotificationPreferences>(),
+              stopList : ServiceLocator.isRegistered<NotificationStopList>()
+                  ? ServiceLocator.get<NotificationStopList>()
+                  : null,
+            ) ),
           ),
           ListTile(
             leading : const Icon( Icons.settings ),

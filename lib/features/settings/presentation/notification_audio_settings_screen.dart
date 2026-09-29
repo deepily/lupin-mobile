@@ -9,6 +9,7 @@ import '../../../services/asr/asr_service.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import 'notification_filter_settings_screen.dart';
+import 'notification_management_screen.dart';
 import 'round_trip_probe_screen.dart';
 
 /// User-facing toggles for notification ding + TTS speech behavior. Mirrors
@@ -40,7 +41,6 @@ class _NotificationAudioSettingsScreenState
   late bool _speakOnHigh;
   late bool _speakSystem;
   late bool _speakOnUrgent;
-  late bool _wakeNotifications;
   late bool _keepRecordings;
   String?   _keptDirPath;
 
@@ -55,7 +55,6 @@ class _NotificationAudioSettingsScreenState
     _speakOnHigh   = p.speakOnHigh;
     _speakSystem   = p.speakSystemSenders;
     _speakOnUrgent = p.speakOnUrgent;
-    _wakeNotifications = p.wakeNotifications;
     _keepRecordings = p.keepVoiceRecordings;
     _resolveKeptDir();
   }
@@ -81,7 +80,6 @@ class _NotificationAudioSettingsScreenState
   void _toggleSpeakHigh(     bool v ) { setState( () => _speakOnHigh   = v ); widget.prefs.setSpeakOnHigh(   v ); }
   void _toggleSpeakUrgent(   bool v ) { setState( () => _speakOnUrgent = v ); widget.prefs.setSpeakOnUrgent( v ); }
   void _toggleSpeakSystem(   bool v ) { setState( () => _speakSystem   = v ); widget.prefs.setSpeakSystemSenders( v ); }
-  void _toggleWakeNotifications( bool v ) { setState( () => _wakeNotifications = v ); widget.prefs.setWakeNotifications( v ); }
   void _toggleKeepRecordings( bool v ) { setState( () => _keepRecordings = v ); widget.prefs.setKeepVoiceRecordings( v ); }
 
   @override
@@ -146,18 +144,25 @@ class _NotificationAudioSettingsScreenState
           ),
           const SizedBox( height: 24 ),
           const Divider(),
+          // 🔴 THE WAKE SWITCH MOVED, IT DID NOT GO AWAY (row 7cac3a17 supersedes
+          // row 1af7b3de). It is now the "while the app is closed" switch on the
+          // notification management screen, which offers the same thing plus a
+          // checkbox per priority. Leaving a second copy here would give the
+          // user two controls over one setting, and this screen is about how a
+          // notification SOUNDS, not whether it is raised.
           const _SectionHeader( 'While the app is closed' ),
-          SwitchListTile(
-            key        : const Key( TestKeys.settingsWakeNotifications ),
-            secondary  : const Icon( Icons.notifications_active_outlined ),
-            title      : const Text( 'Wake notifications' ),
-            subtitle   : const Text(
-                'Let Lupin wake up in the background and post notifications while '
-                'the app is closed. Off = nothing is missed, it just waits: you '
-                'see everything when you next open the app.' ),
+          ListTile(
+            key      : const Key( TestKeys.settingsOpenNotificationManagement ),
+            leading  : const Icon( Icons.notifications_active_outlined ),
+            title    : const Text( 'Which notifications to raise' ),
+            subtitle : const Text(
+                'Background and foreground, and which priorities each one may '
+                'interrupt you for.' ),
+            trailing : const Icon( Icons.chevron_right ),
             isThreeLine : true,
-            value      : _wakeNotifications,
-            onChanged  : _toggleWakeNotifications,
+            onTap    : () => Navigator.of( context ).push( MaterialPageRoute(
+              builder: ( _ ) => NotificationManagementScreen( prefs: widget.prefs ),
+            ) ),
           ),
           const Divider(),
           const _SectionHeader( 'Filtering' ),
