@@ -50,6 +50,8 @@ import 'services/websocket/websocket_service.dart';
 ///     system prompt the user has not answered yet never delays registration
 ///   - a notification tap held by [tapRouter] is routed to FocusChatBloc, ONCE,
 ///     with the email this login just supplied (row d9bc6f6c)
+///   - a DENIED notification permission is logged via [logSink], because
+///     nothing else on the device reports it (review F8)
 Future<void> onWsAuthenticated( {
   required WsBlocDispatcher dispatcher,
   required WebSocketService ws,
@@ -58,6 +60,7 @@ Future<void> onWsAuthenticated( {
   Future<void> Function( String userEmail ) registerPush = fcmOnAuthenticated,
   NotificationPermissionRequester requestNotifications = requestNotificationPermission,
   NotificationTapRouter? tapRouter,
+  void Function( String )? logSink,
 } ) async {
   dispatcher.lastAuthenticatedEmail = email;
   // 🔴 DRAINED HERE, NOT ON `auth_success`, AND THE ORDER IS THE REASON. This is
@@ -78,7 +81,17 @@ Future<void> onWsAuthenticated( {
   // Row 8ff78c69: Android 13+ starts a fresh install with notifications
   // DENIED, and nothing else asks. Without this, wake notifications and the
   // ws_wake fallback are silently dropped by the OS.
-  await requestNotifications();
+  //
+  // 🔴 AND THE ANSWER IS WORTH KEEPING, NOT DISCARDING (review F8). If the user
+  // taps "Don't allow", the wake chain still runs end to end and still logs
+  // "[FcmWake] shown" while the shade stays empty — the original bug's exact
+  // symptom, with the fix installed. Logged here rather than inside
+  // requestNotificationPermission() so it sits behind the injectable seam and a
+  // test can prove it.
+  if ( !await requestNotifications() ) {
+    ( logSink ?? debugPrint )( '$kNotificationPermissionDeniedMarker — notifications will be '
+        'dropped by the OS, silently, until it is granted in system settings' );
+  }
 }
 
 /// Route one held notification tap into the focus surface.

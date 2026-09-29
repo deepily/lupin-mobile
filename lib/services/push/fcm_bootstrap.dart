@@ -350,6 +350,37 @@ Future<void> showWakeNotification(
   );
 }
 
+/// What the background isolate can know about who is logged in.
+///
+/// 🔴 THE REFRESH TOKEN IS THE ONLY CREDENTIAL THIS PATH NEEDS (review F9). The
+/// stored email used to be required here as well, from when the fetch was
+/// addressed by email. Since the fetch moved to the JWT `sub` claim the seam
+/// discards it outright (`fetchNextNotification: ( _, accessToken )`), so
+/// demanding it could only ever produce a FALSE "Open Lupin and sign in" for a
+/// user who is signed in perfectly well — silently, and with no fetch attempted.
+///
+/// Unreachable on today's code, because every path that stores a refresh token
+/// has an email by then (`auth_bloc.dart` writes both at login). Changed anyway,
+/// and pulled out of the chain builder so it can be tested: the coupling was
+/// undocumented, and the day anything stores a token without an email — an
+/// import, a context migration, a token-only sign-in — the failure is invisible.
+///
+/// Requires:
+///   - contextId is the active server context
+/// Ensures:
+///   - null iff there is no stored refresh token (never logged in here)
+///   - otherwise credentials, with an EMPTY email when none is stored
+@visibleForTesting
+Future<FcmWakeCredentials?> readWakeCredentials( {
+  required SecureCredentialStore store,
+  required String                contextId,
+} ) async {
+  final refresh = await store.readRefreshToken( contextId );
+  if ( refresh == null ) return null;
+  final email = await store.readLastEmail( contextId );
+  return FcmWakeCredentials( refreshToken: refresh, userEmail: email ?? '' );
+}
+
 /// Build the chain from REAL background-isolate dependencies. Split out
 /// of the handler so the Phase-0 probe can reuse it verbatim. NOTE: no
 /// ServiceLocator access anywhere below — everything is constructed
@@ -386,12 +417,10 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
   ) );
 
   return FcmWakeChain(
-    readCredentials: () async {
-      final refresh = await store.readRefreshToken( context.activeConfig.id );
-      final email   = await store.readLastEmail( context.activeConfig.id );
-      if ( refresh == null || email == null ) return null;
-      return FcmWakeCredentials( refreshToken: refresh, userEmail: email );
-    },
+    readCredentials: () => readWakeCredentials(
+      store     : store,
+      contextId : context.activeConfig.id,
+    ),
     exchangeForAccessToken: ( refreshToken ) => exchangeRefreshAndPersist(
       dio          : dio,
       store        : store,
