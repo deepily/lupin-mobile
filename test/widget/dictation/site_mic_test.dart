@@ -19,6 +19,7 @@ import 'package:lupin_mobile/features/queue/domain/queue_state.dart';
 import 'package:lupin_mobile/features/queue/presentation/job_detail_screen.dart';
 import 'package:lupin_mobile/features/queue/presentation/submit_job_sheet.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
+import 'package:lupin_mobile/shared/widgets/prompt_bodies.dart';
 import 'package:lupin_mobile/shared/widgets/dictation_text_field.dart';
 
 class _MockAsr extends Mock implements AsrService {}
@@ -148,5 +149,46 @@ void main() {
     await dictate( t );
 
     expect( textOf( t, 0 ), 'from the phone' );
+  } );
+
+  testWidgets( 'prompt_bodies: the Yes/No comment box', ( t ) async {
+    await t.pumpWidget( app( YesNoPromptBody( onRespond: ( _ ) {} ) ) );
+    await dictate( t );
+    expect( textOf( t, 0 ), 'from the phone' );
+  } );
+
+  testWidgets( 'prompt_bodies: the Yes/No comment box with dictate:false has no mic (Quick Ask)', ( t ) async {
+    await t.pumpWidget( app( YesNoPromptBody( onRespond: ( _ ) {}, dictate: false ) ) );
+    expect( find.byIcon( Icons.mic ), findsNothing );
+  } );
+
+  testWidgets( 'prompt_bodies: the multiple-choice Other box', ( t ) async {
+    await t.pumpWidget( app( MultipleChoicePromptBody(
+      options: const [ 'a', 'b' ], multi: false, onRespond: ( _ ) {} ) ) );
+    await dictate( t );
+    expect( textOf( t, 0 ), 'from the phone' );
+  } );
+
+  testWidgets( 'prompt_bodies: N answer boxes, ONE recorder (row 13)', ( t ) async {
+    bigScreen( t );
+    await t.pumpWidget( app( MultiQuestionPromptBody(
+      questions : const [ { 'question': 'One?', 'header': 'a' }, { 'question': 'Two?', 'header': 'b' } ],
+      onRespond : ( _ ) {},
+    ) ) );
+    expect( find.byIcon( Icons.mic ), findsNWidgets( 2 ) );
+
+    await t.tap( find.byIcon( Icons.mic ).at( 0 ) );
+    await t.pump();
+    // The first box records, so the second box's mic is dead.
+    final other = t.widgetList<IconButton>( find.widgetWithIcon( IconButton, Icons.mic ) ).single;
+    expect( other.onPressed, isNull );
+
+    await t.tap( find.byIcon( Icons.stop_circle ) );
+    await t.pump();
+    await t.pump( const Duration( milliseconds: 20 ) );
+    expect( textOf( t, 0 ), 'from the phone' );
+    expect( textOf( t, 1 ), '' );
+    expect( t.widgetList<IconButton>( find.widgetWithIcon( IconButton, Icons.mic ) ).every( ( b ) => b.onPressed != null ), isTrue,
+        reason: 'the recorder is free again' );
   } );
 }

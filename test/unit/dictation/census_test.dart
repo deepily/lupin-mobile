@@ -14,8 +14,6 @@ import 'package:flutter_test/flutter_test.dart';
 ///   exception plain TextField on purpose for another reason (Broadcast keeps
 ///             its bloc-owned session; `dictation_text_field.dart` is the widget)
 ///   yes       DictationTextField( already migrated
-///   pending   a mic-yes box still a plain TextField, waiting for its migration
-///             commit. Every commit lowers this; the last one deletes the column.
 const Map<String, Map<String, int>> _census = {
   'features/agentic/presentation/bug_fix_expediter_form.dart'       : { 'no': 1, 'yes': 1 },
   'features/agentic/presentation/deep_research_form.dart'           : { 'no': 1, 'yes': 1 },
@@ -37,7 +35,7 @@ const Map<String, Map<String, int>> _census = {
   'features/task_list/presentation/new_ticket_sheet.dart'           : { 'no': 3, 'yes': 2 },
   'features/task_list/presentation/task_list_header.dart'           : { 'no': 1 },
   'shared/widgets/dictation_text_field.dart'                        : { 'exception': 1 },
-  'shared/widgets/prompt_bodies.dart'                               : { 'yes': 1, 'pending': 3 },
+  'shared/widgets/prompt_bodies.dart'                               : { 'yes': 4 },
   'ui/debug/websocket_debug_dashboard.dart'                         : { 'no': 1 },
 };
 
@@ -73,7 +71,7 @@ void main() {
         problems.add( '$rel: unclassified text box (add it to the census as yes / no / exception)' );
         continue;
       }
-      final wantPlain = ( c[ 'no' ] ?? 0 ) + ( c[ 'exception' ] ?? 0 ) + ( c[ 'pending' ] ?? 0 );
+      final wantPlain = ( c[ 'no' ] ?? 0 ) + ( c[ 'exception' ] ?? 0 );
       final wantDict  = c[ 'yes' ] ?? 0;
       if ( ( plain[ rel ] ?? 0 ) != wantPlain ) {
         problems.add( '$rel: ${plain[ rel ] ?? 0} plain TextField( found, census says $wantPlain' );

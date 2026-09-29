@@ -396,7 +396,7 @@ class _PendingPrompt extends StatelessWidget {
           // free-text box rather than a dead end — a string is a valid
           // `response_value` on the notification door for every type.
           if ( prompt.isYesNo )
-            YesNoPromptBody( onRespond: respond )
+            YesNoPromptBody( onRespond: respond, dictate: false )
           else
             OpenEndedPromptBody( onRespond: respond, dictate: false ),
         ],

@@ -51,7 +51,12 @@ import 'dictation_text_field.dart';
 
 class YesNoPromptBody extends StatefulWidget {
   final void Function( String ) onRespond;
-  const YesNoPromptBody( { super.key, required this.onRespond } );
+
+  /// False for a plain comment box even inside the app's scope (Quick Ask, whose
+  /// bloc owns a recorder on the same screen; plan §3).
+  final bool dictate;
+
+  const YesNoPromptBody( { super.key, required this.onRespond, this.dictate = true } );
 
   @override
   State<YesNoPromptBody> createState() => _YesNoPromptBodyState();
@@ -70,9 +75,10 @@ class _YesNoPromptBodyState extends State<YesNoPromptBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
-          key       : const Key( TestKeys.promptCommentField ),
+        DictationTextField(
+          fieldKey  : const Key( TestKeys.promptCommentField ),
           controller: _comment,
+          dictate   : widget.dictate,
           decoration: const InputDecoration(
             labelText: "Optional comment",
             border   : OutlineInputBorder(),
@@ -178,7 +184,7 @@ class _MultipleChoicePromptBodyState extends State<MultipleChoicePromptBody> {
           );
         } ),
         const Divider(),
-        TextField(
+        DictationTextField(
           controller: _other,
           decoration: const InputDecoration(
             labelText: "Other (optional)",
@@ -391,8 +397,10 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
   Widget _questionBody( int i, dynamic q ) {
     final options = _optionsOf( q );
     if ( options.isEmpty ) {
-      return TextField(
-        controller: _text[ i ],
+      // One recorder across N boxes: the recorder guard disables every other
+      // box's mic while one records.
+      return DictationTextField(
+        controller: _text[ i ]!,
         decoration: InputDecoration(
           labelText: _question( q ),
           border   : const OutlineInputBorder(),
