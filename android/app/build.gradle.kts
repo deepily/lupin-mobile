@@ -11,7 +11,20 @@ plugins {
 
 android {
     namespace = "ai.deepily.lupin_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned ABOVE Flutter's default of 35 (FlutterExtension.kt:23), because
+    // flutter_tts asks for 36 and the build says so on every run (row 5cbd2e42,
+    // seen on Rick's first deploy --build). The platform is already installed
+    // at ~/Android/Sdk/platforms/android-36.
+    //
+    // ⚠️ AGP HERE IS 8.7.3 (settings.gradle.kts:21), WHICH WAS TESTED UP TO
+    // compileSdk 35. AGP warns when compileSdk exceeds what it was tested
+    // against, so this may TRADE the flutter_tts warning for an AGP one rather
+    // than removing a line from the build log. Whether it does cannot be
+    // established from a worktree — the google-services plugin is applied
+    // (build.gradle.kts:9) and needs the gitignored google-services.json, so no
+    // Gradle configuration runs here at all. Verified by a main-checkout build,
+    // not by this commit.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
