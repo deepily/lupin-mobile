@@ -40,6 +40,7 @@ import '../websocket/websocket_service.dart';
 import 'fcm_wake_chain.dart';
 import 'fcm_wakeup_service.dart';
 import 'notification_sender_label.dart';
+import 'notification_tap_payload.dart';
 
 /// Grep-able flag pin (AC-S5.4): `--dart-define=ENABLE_FCM`.
 const bool kEnableFcm = bool.fromEnvironment( 'ENABLE_FCM', defaultValue: false );
@@ -425,6 +426,36 @@ Future<void> deleteLegacyWakeChannel(
   }
 }
 
+/// The Android notification id for one wake notification (row 8e91d937).
+///
+/// 🔴 PER ITEM, NOT PER SECOND. The id used to be `millisecondsSinceEpoch ~/ 1000`,
+/// which is fine for one notification per wake and wrong for a drain: five posts
+/// inside the same second share an id, and Android REPLACES a notification that
+/// has the id of a live one, so the user would see only the last of five.
+///
+/// Derived from the item id carried in [payload] with FNV-1a (not `hashCode`,
+/// whose value the language does not promise across isolates or releases), masked
+/// to 31 bits so it is a positive int32. Stable, so a re-shown item replaces its
+/// own earlier notification instead of stacking a duplicate. A fallback has no
+/// payload and no item id, so it keeps the old per-second id.
+///
+/// Ensures:
+///   - same item id ⇒ same result; different item ids ⇒ different results
+///     (barring a 1-in-2^31 collision)
+///   - result is in [0, 2^31)
+@visibleForTesting
+int wakeNotificationId( String? payload, { DateTime? now } ) {
+  final itemId = NotificationTapPayload.decode( payload )?.notificationId ?? '';
+  if ( itemId.isEmpty ) {
+    return ( ( now ?? DateTime.now() ).millisecondsSinceEpoch ~/ 1000 ) & 0x7fffffff;
+  }
+  var h = 0x811c9dc5;
+  for ( final unit in itemId.codeUnits ) {
+    h = ( ( h ^ unit ) * 0x01000193 ) & 0xffffffff;
+  }
+  return h & 0x7fffffff;
+}
+
 /// Post one wake notification, CARRYING ITS TAP PAYLOAD (row d9bc6f6c).
 ///
 /// 🔴 EXTRACTED FROM THE CHAIN'S LAMBDA SO IT CAN BE TESTED, and that is not
@@ -452,7 +483,7 @@ Future<void> showWakeNotification(
   String? payload,
 ) async {
   await plugin.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    wakeNotificationId( payload ),
     title,
     body,
     wakeNotificationDetails(),

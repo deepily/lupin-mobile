@@ -121,4 +121,39 @@ void main() {
     expect( captured().payload, 'p' );
     verifyNever( () => plugin.show( any(), any(), any(), any() ) );
   } );
+
+  group( 'the Android notification id (row 8e91d937)', () {
+    String payloadFor( String id ) => NotificationTapPayload(
+        notificationId: id, senderId: 'claude.code@lupin.deepily.ai#a1b2c3d4' ).encode();
+
+    int postedId() => verify( () => plugin.show(
+        captureAny(), any(), any(), any(),
+        payload: any( named: 'payload' ) ) ).captured.single as int;
+
+    test( 'items shown in one drain get DIFFERENT ids, so none replaces another', () async {
+      final ids = <int>[];
+      for ( final n in [ 'n-1', 'n-2', 'n-3', 'n-4', 'n-5' ] ) {
+        ids.add( wakeNotificationId( payloadFor( n ) ) );
+      }
+      expect( ids.toSet().length, 5 );
+    } );
+
+    test( 'the id is stable per item, and a positive int32', () {
+      expect( wakeNotificationId( payloadFor( 'n-77' ) ), wakeNotificationId( payloadFor( 'n-77' ) ) );
+      final id = wakeNotificationId( payloadFor( 'a-long-uuid-0cf47e2d-d5a1-4cd4-addf-79810fd32b15' ) );
+      expect( id, inInclusiveRange( 0, 0x7fffffff ) );
+    } );
+
+    test( 'no payload, or no item id: falls back to the per-second id', () {
+      final at = DateTime.fromMillisecondsSinceEpoch( 1790000000000 );
+      expect( wakeNotificationId( null, now: at ), 1790000000 );
+      expect( wakeNotificationId( '', now: at ), 1790000000 );
+      expect( wakeNotificationId( payloadFor( '' ), now: at ), 1790000000 );
+    } );
+
+    test( 'the production post hands the plugin the per-item id', () async {
+      await showWakeNotification( plugin, 'x', 'y', payloadFor( 'n-9' ) );
+      expect( postedId(), wakeNotificationId( payloadFor( 'n-9' ) ) );
+    } );
+  } );
 }
