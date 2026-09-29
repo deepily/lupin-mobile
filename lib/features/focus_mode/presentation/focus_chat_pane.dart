@@ -545,43 +545,43 @@ class _MessageBubble extends StatelessWidget {
     return LayoutBuilder( builder: ( context, box ) => Align(
       alignment: _isUserReply ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-       // Your own replies have no sender to mute.
-       onLongPress: _isUserReply ? null : () => showMuteSenderMenu(
-         context,
-         item  : senderItemFor( senderId, persona ),
-         prefs : prefs,
-       ),
-       child: Container(
-        key        : Key( '${TestKeys.focusBubblePrefix}${msg.item.id}' ),
-        margin     : const EdgeInsets.symmetric( vertical: 4 ),
-        constraints: BoxConstraints(
-          maxWidth: box.maxWidth * FocusChatPane.bubbleWidthFraction,
+        // Your own replies have no sender to mute.
+        onLongPress: _isUserReply ? null : () => showMuteSenderMenu(
+          context,
+          item  : senderItemFor( senderId, persona ),
+          prefs : prefs,
         ),
-        clipBehavior: Clip.antiAlias,
-        decoration : BoxDecoration(
-          color: _isUserReply
-              ? theme.colorScheme.primaryContainer
-              : theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular( 10 ),
+        child: Container(
+          key        : Key( '${TestKeys.focusBubblePrefix}${msg.item.id}' ),
+          margin     : const EdgeInsets.symmetric( vertical: 4 ),
+          constraints: BoxConstraints(
+            maxWidth: box.maxWidth * FocusChatPane.bubbleWidthFraction,
+          ),
+          clipBehavior: Clip.antiAlias,
+          decoration : BoxDecoration(
+            color: _isUserReply
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular( 10 ),
+          ),
+          // Rick 2026-09-26: this was IntrinsicHeight around a Row, and the
+          // intrinsic pass underestimated wrapped choice tiles at phone widths.
+          // The bubble then clipped its own bottom, and the Submit button of an
+          // inline multiple-choice ask was never shown. The content now sizes
+          // itself, and the accent bar is laid over its left edge.
+          child: Stack(
+            children: [
+              Padding(
+                padding : EdgeInsets.fromLTRB( _isUserReply ? 10 : 13, 10, 10, 10 ),
+                child   : content,
+              ),
+              // Sender-colour accent bar (Claude-sent bubbles only).
+              if ( !_isUserReply )
+                Positioned( left: 0, top: 0, bottom: 0,
+                    child: Container( width: 3, color: accent ) ),
+            ],
+          ),
         ),
-        // Rick 2026-09-26: this was IntrinsicHeight around a Row, and the
-        // intrinsic pass underestimated wrapped choice tiles at phone widths.
-        // The bubble then clipped its own bottom, and the Submit button of an
-        // inline multiple-choice ask was never shown. The content now sizes
-        // itself, and the accent bar is laid over its left edge.
-        child: Stack(
-          children: [
-            Padding(
-              padding : EdgeInsets.fromLTRB( _isUserReply ? 10 : 13, 10, 10, 10 ),
-              child   : content,
-            ),
-            // Sender-colour accent bar (Claude-sent bubbles only).
-            if ( !_isUserReply )
-              Positioned( left: 0, top: 0, bottom: 0,
-                  child: Container( width: 3, color: accent ) ),
-          ],
-        ),
-       ),
       ),
     ) );
   }
