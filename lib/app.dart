@@ -228,6 +228,18 @@ class WsBlocDispatcher {
           );
         }
         break;
+      case AppConstants.eventResumeComplete:
+        // Row 281a10d6: gap == true is the server saying it cannot prove the
+        // replay was continuous, so re-fetch everything rather than assume we
+        // are current. Same two paths a reconnect already uses.
+        if ( data[ 'gap' ] == true ) {
+          final gapEmail = lastAuthenticatedEmail;
+          if ( gapEmail != null ) {
+            ServiceLocator.get<FocusChatBloc>().add( FocusColdStartRequested( userEmail: gapEmail ) );
+          }
+          ServiceLocator.get<NotificationBloc>().add( const NotificationsExternalUpdate() );
+        }
+        break;
       case AppConstants.eventAudioStreamingStatus:
       case AppConstants.eventAudioStreamingChunk:
       case AppConstants.eventAudioStreamingComplete:

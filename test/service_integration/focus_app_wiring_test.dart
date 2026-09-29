@@ -262,6 +262,25 @@ void main() {
       verifyNever( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) );
     } );
 
+    test( 'row 281a10d6 — resume_complete with gap:true triggers the full refetch', () async {
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )
+          .thenAnswer( ( _ ) async => [] );
+
+      dispatcher.lastAuthenticatedEmail = 'rick@test.com';
+      dispatcher.dispatch( 'resume_complete', { 'type': 'resume_complete', 'replayed': 0, 'gap': true, 'seq': 9 } );
+      await pump();
+
+      verify( () => repo.sendersVisible( 'rick@test.com', hours: any( named: 'hours' ) ) ).called( 1 );
+    } );
+
+    test( 'row 281a10d6 — resume_complete with gap:false does NOT refetch', () async {
+      dispatcher.lastAuthenticatedEmail = 'rick@test.com';
+      dispatcher.dispatch( 'resume_complete', { 'type': 'resume_complete', 'replayed': 3, 'gap': false, 'seq': 9 } );
+      await pump();
+
+      verifyNever( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) );
+    } );
+
     test( 'persona frames route to FocusPersonaUpdated, not the inbound path (no TTS enqueue)', () async {
       dispatcher.dispatch( 'notification_queue_update', {
         'type'         : 'notification_queue_update',

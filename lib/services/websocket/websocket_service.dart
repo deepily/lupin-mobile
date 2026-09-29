@@ -5,6 +5,7 @@ import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 import '../auth/auth_token_provider.dart';
+import 'ws_resume_store.dart';
 
 /// WebSocket service for real-time communication with Lupin backend.
 /// 
@@ -30,6 +31,24 @@ class WebSocketService {
   static const int maxReconnectAttempts = 5;
   static const Duration reconnectDelay = Duration(seconds: 5);
   static const Duration pingInterval = Duration(seconds: 30);
+
+  /// Close code the server sends when a NEWER socket claimed this device's
+  /// slot (row dc446601). Permanent: reconnecting would bump the newer socket
+  /// and start a loop between two sockets of one install.
+  static const int closeCodeSuperseded = 4004;
+
+  final WsResumeStore?                _injectedStore;
+  final WebSocketChannel Function( Uri ) _channelFactory;
+  final Duration                      _reconnectBaseDelay;
+  WsResumeStore?                      _lazyStore;
+
+  /// The highest frame `seq` processed on this install (row 281a10d6). Loaded
+  /// from the store on every auth, set from `resume_complete.seq` and from
+  /// each live frame.
+  int _lastSeq = 0;
+
+  /// Lazily built so a service that never authenticates never touches prefs.
+  WsResumeStore get _store => _injectedStore ?? ( _lazyStore ??= WsResumeStore() );
 
   String? _sessionId;
   String? _userId;
@@ -79,7 +98,15 @@ class WebSocketService {
   String? get sessionId => _sessionId;
   Stream<dynamic> get stream => _messageController?.stream ?? const Stream.empty();
 
-  WebSocketService(this._dio) {
+  /// Requires: [dio] is the shared client. The named parameters exist for tests.
+  WebSocketService(
+    this._dio, {
+    WsResumeStore?                store,
+    WebSocketChannel Function( Uri )? channelFactory,
+    Duration?                     reconnectBaseDelay,
+  })  : _injectedStore      = store,
+        _channelFactory     = channelFactory ?? WebSocketChannel.connect,
+        _reconnectBaseDelay = reconnectBaseDelay ?? reconnectDelay {
     _messageController = StreamController<dynamic>.broadcast();
   }
 
@@ -159,7 +186,7 @@ class WebSocketService {
       // Step 2: Connect to WebSocket with session ID in URL  
       final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
       
-      _channel = WebSocketChannel.connect(uri);
+      _channel = _channelFactory( uri );
       
       // Wait for connection to be established
       await _channel!.ready;
@@ -202,6 +229,8 @@ class WebSocketService {
   static Map<String, dynamic> buildAuthRequestMessage({
     required String bearerToken,
     required String? sessionId,
+    String? deviceId,
+    int?    lastSeq,
   }) {
     return {
       'type': 'auth_request',
@@ -209,6 +238,10 @@ class WebSocketService {
       'session_id': sessionId,
       'subscribed_events': [], // Empty array = receive all events
       'client_type': 'mobile', // F-S6-1 marker (S6 §3.0 / S5 §3.1)
+      // Row dc446601: the per-install slot key, and the resume cursor. Absent
+      // last_seq (or 0) tells the server this is a fresh client.
+      if ( deviceId != null ) 'device_id': deviceId,
+      if ( lastSeq != null && lastSeq > 0 ) 'last_seq': lastSeq,
     };
   }
 
@@ -235,9 +268,14 @@ class WebSocketService {
       }
       final authToken = 'Bearer $accessToken';
 
+      // 🔴 Read through the async store on EVERY auth: the FCM isolate may have
+      // advanced last_seq since this isolate last looked.
+      _lastSeq = await _store.lastSeq();
       final authMessage = buildAuthRequestMessage(
-        bearerToken: authToken,
-        sessionId: _sessionId,
+        bearerToken : authToken,
+        sessionId   : _sessionId,
+        deviceId    : await _store.deviceId(),
+        lastSeq     : _lastSeq,
       );
 
       await sendMessage(authMessage);
@@ -287,6 +325,19 @@ class WebSocketService {
         print('[WebSocket] Authentication failed: ${decoded['message'] ?? 'Unknown error'}');
       }
       
+      // Row 281a10d6: backlog is over. seq here is the SERVER's current seq —
+      // adopt it, never echo ours. gap is acted on by the app-level dispatcher,
+      // so the frame is forwarded below.
+      if ( decoded['type'] == AppConstants.eventResumeComplete ) {
+        final serverSeq = decoded['seq'];
+        if ( serverSeq is int && serverSeq >= 0 ) {
+          _lastSeq = serverSeq;
+          _persistAndAck( serverSeq );
+        }
+        _messageController?.add( decoded );
+        return;
+      }
+
       // Handle ping/pong
       if (decoded['type'] == AppConstants.eventSysPing) {
         sendMessage({'type': AppConstants.eventSysPong});
@@ -304,6 +355,14 @@ class WebSocketService {
       
       // Forward message to listeners
       _messageController?.add(decoded);
+
+      // Row 281a10d6: a slot holder's frames carry seq. Advance the cursor and
+      // ack only AFTER the frame is handed on, so "processed" is true.
+      final seq = decoded['seq'];
+      if ( seq is int && seq > 0 ) {
+        _lastSeq = seq;
+        _persistAndAck( seq );
+      }
       
     } catch (e) {
       print('[WebSocket] Message parsing error: $e');
@@ -335,9 +394,20 @@ class WebSocketService {
   ///   - Reconnection is scheduled if shouldReconnect is true
   ///   - Resources are cleaned up properly
   void _handleDisconnection() {
-    print('[WebSocket] Connection closed');
+    final code = _channel?.closeCode;
+    print('[WebSocket] Connection closed (code: $code)');
     _setConnected( false );
     _pingTimer?.cancel();
+
+    // Row dc446601: a newer socket owns this device's slot. Do NOT reconnect
+    // this one. Every other code (incl. 4001, whose refresh/sign-out is
+    // handled by the auth layer, and 4003) reconnects as before.
+    if ( code == closeCodeSuperseded ) {
+      print('[WebSocket] Superseded by a newer socket (4004) — not reconnecting');
+      _shouldReconnect = false;
+      _reconnectTimer?.cancel();
+      return;
+    }
     
     if (_shouldReconnect) {
       _scheduleReconnect();
@@ -351,9 +421,9 @@ class WebSocketService {
     }
     
     _reconnectAttempts++;
-    final delay = Duration(seconds: reconnectDelay.inSeconds * _reconnectAttempts);
+    final delay = _reconnectBaseDelay * _reconnectAttempts;
     
-    print('[WebSocket] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s');
+    print('[WebSocket] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inMilliseconds}ms');
     
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () {
@@ -384,6 +454,15 @@ class WebSocketService {
       print('[WebSocket] Failed to send message: $e');
       throw e;
     }
+  }
+
+  /// Persists the cursor and tells the server it may drop frames through [seq].
+  ///
+  /// Ensures: a failed write or a dead socket is logged, never thrown into the
+  /// message handler.
+  void _persistAndAck( int seq ) {
+    _store.setLastSeq( seq ).catchError( ( Object e ) => print('[WebSocket] last_seq persist failed: $e') );
+    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => print('[WebSocket] ack failed: $e') );
   }
 
   Future<void> sendBinary(List<int> data) async {

@@ -107,6 +107,7 @@ class AppConstants {
   // Authentication Events
   static const String eventAuthRequest = 'auth_request';
   static const String eventAuthSuccess = 'auth_success';
+  static const String eventResumeComplete = 'resume_complete';
   static const String eventAuthError = 'auth_error';
   static const String eventConnect = 'connect';
   
