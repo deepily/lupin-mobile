@@ -192,3 +192,19 @@ def test_when_every_qualifying_frame_looks_like_a_jwt_the_fixture_is_blocked_not
     assert "append_thinking.json" in script.blocked
     assert "JWT" in script.blocked[ "append_thinking.json" ]
     assert "append_thinking.json" not in script.captured
+
+
+def test_from_offset_reaches_the_watch( script, monkeypatch ):
+    import _ws_capture as wsc
+
+    seen: dict[ str, Any ] = {}
+
+    def record( url, token, cc_session_id, **kwargs ):
+        seen.update( kwargs )
+        return _ready( wsc.TranscriptFrameCollector() )
+
+    monkeypatch.setattr( wsc, "capture_frames", record )
+    script.capture_ws_frames( "http://localhost:7999", "admin-jwt", "seat-1", 5.0, 1234 )
+
+    assert seen[ "from_offset" ] == 1234
+    assert seen[ "append_wait_s" ] == 5.0

@@ -327,6 +327,7 @@ def _verify_join( roster: dict, fleet: dict ) -> None:
 
 def capture_ws_frames(
     base: str, admin_access: Optional[ str ], seat: Optional[ str ], append_wait_s: float = 60.0,
+    from_offset: int = 0,
 ) -> None:
     """`append_mixed_kinds` · `append_thinking` · `state_refused`.
 
@@ -378,7 +379,7 @@ def capture_ws_frames(
     print( f"  watching {seat} over {ws_url}; waiting up to {append_wait_s:.0f}s for appends" )
     try:
         collector = asyncio.run( wsc.capture_frames(
-            ws_url, admin_access, seat, append_wait_s=append_wait_s,
+            ws_url, admin_access, seat, append_wait_s=append_wait_s, from_offset=from_offset,
             wants=[ wsc.mixed_kinds_reasons, wsc.thinking_reasons ] ) )
     except wsc.WsCaptureError as failed:
         for name in names:
@@ -455,6 +456,11 @@ def main() -> int:
                          help="how long to wait for cc_transcript_append frames after the "
                               "watch's state frame (default 60). The seat must be printing "
                               "tool calls and thinking meanwhile." )
+    parser.add_argument( "--from-offset", type=int, default=0,
+                         help="byte offset to start the watch from. The server replays "
+                              "everything from there in ONE append frame, so a late offset "
+                              "yields a compact frame that carries a whole tool round trip "
+                              "(live frames split a tool_call from its tool_result)." )
     args = parser.parse_args()
 
     base = os.environ.get( "LUPIN_API_BASE_URL", DEFAULT_BASE_URL )
@@ -501,7 +507,7 @@ def main() -> int:
         capture_backlog_403( base, user_headers, seat )
 
     # ── WebSocket ───────────────────────────────────────────────────────────
-    capture_ws_frames( base, admin_access, seat, args.append_wait_s )
+    capture_ws_frames( base, admin_access, seat, args.append_wait_s, args.from_offset )
 
     # ── the report ──────────────────────────────────────────────────────────
     print( "\n" + "=" * 72 )

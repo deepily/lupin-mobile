@@ -1,0 +1,81 @@
+{
+  "blocks": [
+    {
+      "kind": "tool_result",
+      "role": "user",
+      "text": "[slow] 1.00s src/tests/test_ws_capture.py::TestAgainstFakeServer::test_CRITICAL_append_wait_is_bounded_and_never_stitches_halves\n51 passed in 3.85s\n1232485",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:16.592Z"
+    },
+    {
+      "kind": "thinking",
+      "role": "assistant",
+      "text": "",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:18.270Z"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Checking the working directory name.",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:18.272Z"
+    },
+    {
+      "kind": "tool_call",
+      "role": "assistant",
+      "text": "Bash( command=pwd | tr '/' ' ' | wc -w )",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:18.571Z"
+    },
+    {
+      "kind": "tool_result",
+      "role": "user",
+      "text": "9",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:20.109Z"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Counting fixture files next.",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:21.318Z"
+    },
+    {
+      "kind": "tool_call",
+      "role": "assistant",
+      "text": "Bash( command=ls /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/.claude/worktrees/seat-cc-author-tiffany-1/test/fixtures/transcript | wc -l )",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:21.757Z"
+    },
+    {
+      "kind": "tool_result",
+      "role": "user",
+      "text": "3",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:23.269Z"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Now capturing from that offset.",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:24.318Z"
+    },
+    {
+      "kind": "tool_call",
+      "role": "assistant",
+      "text": "Bash( command=cd /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/.claude/worktrees/seat-cc-author-tiffany-1; git checkout test/fixtures/transcript 2>&1 | tail -1; bash -ic 'export LUPIN_ADMIN_EMAIL=\"$LUPIN_TEST_ADMIN_EMAIL\" LUPIN_ADMIN_PASSWORD=\"$LUPIN_TEST_ADMIN_PASSWORD\"; python3 src/scripts/capture-transcript-fixtures.py --seat 0aa2d6ad-6557-4f89-8367-1534ad97e1c5 --append-wait-s 8 --from-offset 1232485' 2>&1 | grep -E \"wrote|CAPTURED|ok  |BLOCKED|collected|frame [0-9]\" | cut -c1-220 | head -24; git status --short, timeout=60000 )",
+      "truncated": false,
+      "ts": "2026-09-29T20:01:26.263Z"
+    }
+  ],
+  "cc_session_id": "00000000-0000-4000-8000-000000000001",
+  "file_epoch": "0aa2d6ad-6557-4f89-8367-1534ad97e1c5",
+  "next_offset": 1232485,
+  "offset": 1232485,
+  "timestamp": "2025-01-01T00:00:00+00:00",
+  "ts": "2025-01-01T00:00:00+00:00",
+  "type": "cc_transcript_append"
+}
