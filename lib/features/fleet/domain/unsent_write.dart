@@ -88,14 +88,36 @@ bool isTransportFailure( Object error ) {
     case DioExceptionType.sendTimeout:
     case DioExceptionType.receiveTimeout:
       return true;
-    case DioExceptionType.cancel:
+    // `badResponse` IS the 4xx case — the server answered and refused, which is Tiffany's
+    // ruling in one line. `cancel` is somebody DELIBERATELY abandoning the request. Both
+    // are named here rather than left to the default because both carry a decision
+    // somebody made on purpose, and a reader should find it in the code.
     case DioExceptionType.badResponse:
-    case DioExceptionType.badCertificate:
-    case DioExceptionType.unknown:
-      // `badResponse` IS the 4xx case — the server answered and refused, which is
-      // Tiffany's ruling in one line. `badCertificate` and `unknown` are not ours to
-      // guess about, and the cost of guessing wrong here is a message the operator reads
-      // rather than a request nobody watched.
+    case DioExceptionType.cancel:
+      return false;
+
+    // 🔴 EVERYTHING ELSE FALLS HERE, AND THAT IS WHY A DIO UPGRADE IS NO LONGER A COMPILE
+    // BREAK. This switch used to enumerate all eight members and stop, which made it
+    // exhaustive — so dio adding ONE enum value stopped this file compiling, and
+    // `unsent_write.dart` sits on the app's startup path, so that is not a local failure.
+    // Measured 2026-09-28 in a fresh worktree that resolved dio 5.11.1 (it appends
+    // `transformTimeout`): 46 test files failed to load on this one switch and not one of
+    // the messages named it.
+    //
+    // `badCertificate` and `unknown` land here, which is where they always belonged: they
+    // are not ours to guess about. So does any member a future dio adds. The answer is
+    // false either way, matching the contract documented above — "anything unrecognised →
+    // false" — and it is the conservative direction, because a new type read as transport
+    // would silently retry a request whose failure nobody has understood, while reading it
+    // as a refusal only puts a message in front of the operator.
+    //
+    // What this COSTS is the exhaustiveness check that forced a human to classify each new
+    // member. `unsent_write_test.dart` buys it back with two tests: a guard on
+    // `DioExceptionType.values.length`, and a table naming every member and its answer.
+    // When dio grows a member those go red with instructions instead of the build falling
+    // over. Do not bump the number to make an upgrade pass — classify the member here
+    // first, and name it explicitly above if the decision is an interesting one.
+    default:
       return false;
   }
 }
