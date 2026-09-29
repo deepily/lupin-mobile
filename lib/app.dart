@@ -28,6 +28,8 @@ import 'features/broadcast/domain/broadcast_bloc.dart';
 import 'features/queue/domain/queue_event.dart';
 import 'features/transcript/data/transcript_models.dart';
 import 'features/transcript/domain/transcript_frame_router.dart';
+import 'shared/widgets/dictation_text_field.dart';
+import 'services/asr/asr_service.dart';
 import 'services/auth/server_context_service.dart';
 import 'services/permissions/notification_permission.dart';
 import 'services/push/fcm_bootstrap.dart';
@@ -453,6 +455,14 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
           title    : AppConstants.appName,
           theme    : AppThemes.lightTheme,
           darkTheme: AppThemes.darkTheme,
+          // Above the Navigator, so sheets and dialogs see it too. No registered
+          // recorder means no scope service, and every text box stays plain.
+          builder  : ( context, child ) => DictationScope(
+            asr   : ServiceLocator.isRegistered<AsrService>()
+                ? ServiceLocator.get<AsrService>()
+                : null,
+            child : child!,
+          ),
           home     : AuthGate(
             serverContext     : ServiceLocator.get<ServerContextService>(),
             // Q1 default-route swap (F-S3-3 seam): the focus surface is the
