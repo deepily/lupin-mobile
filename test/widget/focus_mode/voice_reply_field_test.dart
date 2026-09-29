@@ -399,6 +399,11 @@ void main() {
       await tester.pump();
       expect( find.byType( CircularProgressIndicator ), findsOneWidget );
 
+      // Chloé's M1(b): Send stays gone for the WHOLE transcribing window, not
+      // just while the recorder runs — the window is the longer of the two.
+      expect( byKeyStr( TestKeys.voiceReplySend ), findsNothing,
+          reason: 'nothing to fat-finger while a chunk is still being transcribed' );
+
       await tester.tap( byKeyStr( TestKeys.voiceReplyAppendCancel ) );
       await tester.pump();
 
@@ -473,6 +478,38 @@ void main() {
 
       expect( boxOf( tester ).text, 'first, then typed more and spoken',
           reason: 'every typed character survives, and the words land after them' );
+    } );
+    // Chloé's M1 (review of d1823a1): the typo-fix case, which the first caret
+    // rule regressed. `enterText` always leaves the caret at the END, so it
+    // cannot express this at all — the value is set directly, caret mid-text,
+    // exactly as a phone leaves it after fixing one letter.
+    testWidgets( 'a typo fixed WHILE talking does not drag the new sentence into the middle', ( tester ) async {
+      final gate = Completer<String>();
+      when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );
+
+      await openWith( tester, 'the quikc brown fox' );
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // recording
+      await tester.pump();
+
+      // He fixes the typo while still talking, and the caret stays where he
+      // fixed it — six characters in, nowhere near the end.
+      boxOf( tester ).value = const TextEditingValue(
+        text      : 'the quick brown fox',
+        selection : TextSelection.collapsed( offset: 9 ),
+      );
+      await tester.pump();
+
+      await tester.tap( byKeyStr( TestKeys.voiceReplyAppendMic ) );      // stop → transcribing
+      await tester.pump();
+      gate.complete( 'jumps over the lazy dog' );
+      await tester.pump();
+      await tester.pump( const Duration( milliseconds: 20 ) );
+
+      expect( boxOf( tester ).text, 'the quick brown fox jumps over the lazy dog',
+          reason: 'THE REGRESSION: following the live caret gave '
+                  '"the quick jumps over the lazy dog brown fox"' );
+      expect( boxOf( tester ).selection,
+          const TextSelection.collapsed( offset: 43 ) );
     } );
     testWidgets( 'leaving the screen mid-append cancels the recording rather than abandoning it', ( tester ) async {
       await openWith( tester, 'draft' );

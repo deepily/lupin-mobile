@@ -183,18 +183,23 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     setState( () {
       if ( capture.wasHeard ) {
         // The remembered caret holds ONLY while the draft is the one it was
-        // taken from. Edited mid-recording, the words follow the caret he is
-        // actually at — the end of what he just typed — rather than splitting
-        // that sentence at a stale offset. Nothing is ever overwritten either
-        // way; this is about where the chunk READS as belonging.
+        // taken from. Edited mid-recording it means nothing, and the words go to
+        // the END.
+        //
+        // 🔴 NOT to the live caret, which is Chloé's M1 (review of d1823a1): a
+        // typo fixed while talking leaves the caret sitting AT the typo, so
+        // following it dumps the new sentence into the middle of the draft. The
+        // two edits look identical from here — typing more at the end and going
+        // back to fix a letter both just change the text — and the end is right
+        // for both, because the mic on an open box is an APPEND affordance.
+        // Nothing is overwritten under either rule; this is about where the
+        // chunk reads as belonging.
         final edited = _controller.text != _appendTextAtStart;
-        final live   = _controller.selection;
         _controller.value = spliceDictation(
           value : _controller.value,
           heard : capture.transcript!,
-          caret : edited
-              ? ( live.isValid ? live.baseOffset : _controller.text.length )
-              : _appendCaret,
+          // null ⇒ the end of the text, which is the helper's own rule.
+          caret : edited ? null : _appendCaret,
         );
       } else {
         // Including silence: the draft is left exactly as it was, and the
