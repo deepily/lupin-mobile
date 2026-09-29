@@ -65,12 +65,18 @@ const frozenFiles = <String>[
 ///         sender label. That assertion was not wrong — the behaviour it pinned
 ///         was retired on purpose, because a notification arriving with the phone
 ///         face down said what happened and not who said it.
+/// - focus_chat_bloc_test.dart, again — Rick 2026-09-29 (row ea716d77, "off
+///   means off"): `enqueueAlways` now takes `senderKey`, and mocktail matches
+///   named arguments, so the stubs and verifies that name the other
+///   arguments were widened with `senderKey: any( named: 'senderKey' )`.
+///   Nothing else in that file changed.
+///
 ///   🔴 THIS IS A CONTROL BEING WEAKENED, so it is written down rather than
 ///   quietly re-pinned: a reviewer should confirm the edit is (a) and (b) and
 ///   nothing else. `git diff 026ffd3 -- test/unit/notifications/notification_bloc_test.dart`
 ///   is the whole story, and it is small.
 const repinnedFrozenFiles = <String, String>{
-  'test/unit/focus_mode/focus_chat_bloc_test.dart'       : 'bb5dd7b82371234675421ce5d129b6cde3500797',
+  'test/unit/focus_mode/focus_chat_bloc_test.dart'       : 'f78738fe8e969779c578262ac5318ac40ba7657f',
   'test/unit/notifications/notification_bloc_test.dart'  : '215b782ac8d49767735ad8edcf6d9daa76162993',
 };
 

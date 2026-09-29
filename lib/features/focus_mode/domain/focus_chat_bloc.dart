@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/notification_filter/notification_stop_list.dart';
+import '../../../services/push/notification_sender_label.dart';
 import '../../../services/tts/speech_intent.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../notifications/data/notification_models.dart';
@@ -257,6 +258,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       title    : item.title,
       voiceId  : item.voicePersona?.voiceId,
       sender   : TtsSender( senderId: sid, name: persona?.displayName ?? persona?.name, icon: persona?.icon ),
+      // Row ea716d77: sender mute needs the same key the mute was stored under.
+      senderKey: notificationSenderKey( {
+        if ( persona?.name != null ) 'voice_persona': { 'name': persona!.name },
+        'sender_id': item.senderId,
+      } ),
       // Ruling 4 + AC-S3.6/S3.6b: an answer the user asked for, or a
       // question something is blocked on, speaks in full and is not muted.
       verbatim : shouldSpeakVerbatim(

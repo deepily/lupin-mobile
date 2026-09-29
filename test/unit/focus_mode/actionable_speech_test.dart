@@ -78,6 +78,7 @@ void main() {
       title    : any( named: 'title'    ),
       voiceId  : any( named: 'voiceId'  ),
       sender   : any( named: 'sender'   ),
+      senderKey: any( named: 'senderKey' ),
       verbatim : any( named: 'verbatim' ),
     ) ).thenReturn( null );
   } );
@@ -136,6 +137,7 @@ void main() {
     title    : any( named: 'title'    ),
     voiceId  : any( named: 'voiceId'  ),
     sender   : any( named: 'sender'   ),
+    senderKey: any( named: 'senderKey' ),
     verbatim : captureAny( named: 'verbatim' ),
   ) ).captured.single as bool;
 
@@ -323,6 +325,7 @@ void main() {
         title    : any( named: 'title'    ),
         voiceId  : any( named: 'voiceId'  ),
         sender   : any( named: 'sender'   ),
+        senderKey: any( named: 'senderKey' ),
         verbatim : any( named: 'verbatim' ),
       ) );
       await b.close();

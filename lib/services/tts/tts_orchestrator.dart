@@ -391,7 +391,13 @@ class TtsOrchestrator {
     String?         voiceId,
     TtsSender?      sender,
     bool            verbatim = false,
+    String?         senderKey,
   } ) {
+    // Gate M — the master switches (Rick 2026-09-29, row ea716d77: "off
+    // means off"). Outranks `verbatim` and the stop-list, like gate 0: an item
+    // the switches silence is neither spoken nor offered as speak-anyway.
+    if ( _masterSilenced( priority: priority, senderKey: senderKey ) ) return null;
+
     // Gate 0 — the slider at 0% (Rick 2026-09-18: "0% playback. That is
     // nothing."). It outranks `verbatim` and runs before the stop-list, so a
     // silenced item is neither spoken nor offered back as speak-anyway.
@@ -412,8 +418,9 @@ class TtsOrchestrator {
         title    : title,
         voiceId  : voiceId,
         sender   : sender ?? const TtsSender(),
-        rule     : rule.pattern,
-        verbatim : verbatim,
+        rule      : rule.pattern,
+        verbatim  : verbatim,
+        senderKey : senderKey,
       );
       _emitSuppression( suppression );
       return suppression;
@@ -443,6 +450,7 @@ class TtsOrchestrator {
   /// user chose to unmute.
   void speakAnyway( TtsSuppression s ) {
     if ( _sliderAtZero ) return;   // 0% is silence, even on a tap (Rick 2026-09-18)
+    if ( _masterSilenced( priority: s.priority, senderKey: s.senderKey ) ) return;   // off means off, even on a tap
     _enqueueUngated(
       priority : s.priority,
       text     : _formatSpeech( title: s.title, message: s.message, verbatim: s.verbatim ),
@@ -569,6 +577,22 @@ class TtsOrchestrator {
   /// it always has, because it was never the truncated part.
   /// The TTS slider is at 0%: nothing is spoken on any path.
   bool get _sliderAtZero => TtsPreviewTruncator.silences( _prefs.ttsFraction );
+
+  /// The Focus path's master switches, same rules and urgent bypasses as
+  /// `NotificationDeliveryPolicy.allows` minus the surface and per-priority
+  /// checkboxes (Focus stays ungated by priority, F-S1-1).
+  ///
+  /// Ensures:
+  ///     - true when Notifications is off, Master mute is on, the sender is
+  ///       muted (unless urgent and the mute bypass is on), or now is inside
+  ///       quiet hours (unless urgent and the quiet bypass is on)
+  bool _masterSilenced( { required String priority, String? senderKey } ) {
+    if ( !_prefs.enabled || _prefs.masterMute ) return true;
+    final urgent = priority == 'urgent';
+    if ( _prefs.isSenderMuted( senderKey ) && !( urgent && _prefs.muteUrgentBypass ) ) return true;
+    if ( _prefs.inQuietHours( DateTime.now() ) && !( urgent && _prefs.quietUrgentBypass ) ) return true;
+    return false;
+  }
 
   String _formatSpeech( { required String message, String? title, bool verbatim = false } ) {
     final spoken = verbatim
@@ -790,6 +814,10 @@ class TtsSuppression {
   /// original intent rather than guessing.
   final bool      verbatim;
 
+  /// `notificationSenderKey` of the suppressed item, so speak-anyway can
+  /// re-check sender mute.
+  final String?   senderKey;
+
   const TtsSuppression( {
     required this.priority,
     required this.message,
@@ -798,6 +826,7 @@ class TtsSuppression {
     this.voiceId,
     this.sender   = const TtsSender(),
     this.verbatim = false,
+    this.senderKey,
   } );
 }
 

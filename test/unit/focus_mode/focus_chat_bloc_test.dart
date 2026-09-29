@@ -231,6 +231,7 @@ void main() {
         title    : any( named: 'title' ),
         voiceId  : 'vx-1',
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) ).called( 1 );
       verify( () => tts.enqueueAlways(
         priority : 'urgent',
@@ -238,6 +239,7 @@ void main() {
         title    : any( named: 'title' ),
         voiceId  : 'vx-1',
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) ).called( 1 );
       verifyNever( () => tts.enqueueIfSpeakable(
         priority : any( named: 'priority' ),
@@ -279,6 +281,7 @@ void main() {
         priority: any( named: 'priority' ), message: any( named: 'message' ),
         title: any( named: 'title' ), voiceId: any( named: 'voiceId' ),
         sender: captureAny( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) ).captured.cast<TtsSender>();
       expect( senders.map( ( x ) => x.label ).toList(), [ 'P-v-t', 'Sam', 'sys' ] );
       expect( senders.map( ( x ) => x.isPersona ).toList(), [ true, true, false ] );
@@ -607,6 +610,7 @@ void main() {
         title    : any( named: 'title'    ),
         voiceId  : any( named: 'voiceId'  ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) ).thenReturn( null );
     } );
 
@@ -972,6 +976,7 @@ void main() {
         priority : any( named: 'priority' ), message: any( named: 'message' ),
         title    : any( named: 'title' ),    voiceId: any( named: 'voiceId' ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) ).thenReturn( null );
       registerFallbackValue( const NotificationResponsePayload( notificationId: 'f', responseValue: 'f' ) );
     } );
@@ -998,10 +1003,12 @@ void main() {
       verify( () => tts.enqueueAlways(
         priority: any( named: 'priority' ), message: 'Suite green 30/30',
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
         title: any( named: 'title' ), voiceId: any( named: 'voiceId' ) ) ).called( 1 );
       verifyNever( () => tts.enqueueAlways(
         priority: any( named: 'priority' ), message: any( named: 'message', that: startsWith( 'Done:' ) ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
         title: any( named: 'title' ), voiceId: any( named: 'voiceId' ) ) );
     } );
 

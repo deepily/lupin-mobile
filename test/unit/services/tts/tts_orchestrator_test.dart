@@ -715,9 +715,11 @@ void main() {
       expect( spoken, [ "U1", "U2" ] );
     } );
 
-    test( "AC-S1.8 — enqueueAlways bypasses masterMute AND priority gates: low speaks while everything is muted", () async {
+    test( "AC-S1.8 — enqueueAlways bypasses the priority gates: low speaks while the speak-on-high/urgent boxes are off", () async {
+      // Row ea716d77 (Rick 2026-09-29, "off means off"): the masterMute half
+      // of this pin was retired on purpose; see
+      // tts_orchestrator_master_switches_test.dart for the master switches.
       await setUpMocks();
-      await prefs.setMasterMute( true );
       await prefs.setSpeakOnHigh( false );
       await prefs.setSpeakOnUrgent( false );
       final o = newOrch();

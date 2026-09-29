@@ -120,6 +120,7 @@ void main() {
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
         verbatim : any( named: 'verbatim' ),
       ) ).called( 1 );
     } );
@@ -145,6 +146,7 @@ void main() {
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
         verbatim : any( named: 'verbatim' ),
       ) );
       verifyNever( () => tts.replay(

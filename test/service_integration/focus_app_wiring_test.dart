@@ -236,6 +236,7 @@ void main() {
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) ).called( 1 );
       // ...and the legacy gated path stayed SILENT (tts not injected).
       verifyNever( () => tts.enqueueIfSpeakable(
@@ -314,6 +315,7 @@ void main() {
         title    : any( named: 'title' ),
         voiceId  : any( named: 'voiceId' ),
         sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
       ) );
       expect( focusBloc.state.personasBySender[ 'sender-1' ], isNotNull );
       expect( focusBloc.state.senderOrder, isEmpty,
