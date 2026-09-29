@@ -96,6 +96,63 @@ void main() {
       expect( isTransportFailure( const TaskWriteException( 'no cause' ) ), isFalse );
     } );
 
+    // ════════════════════════════════════════════════════════════════════════════════
+    // 🔴 THIS TEST IS THE EXHAUSTIVENESS CHECK, BECAUSE THE SWITCH NO LONGER IS ONE.
+    //
+    // `isTransportFailure` used to enumerate every DioExceptionType and stop, which made
+    // the switch exhaustive — so dio adding ONE enum value stopped `unsent_write.dart`
+    // compiling, and that file sits on the app's startup path. Measured 2026-09-28 in a
+    // fresh worktree that resolved dio 5.11.1 (it appends `transformTimeout`): 46 test
+    // files failed to load, and not one message named this switch.
+    //
+    // The switch now ends in `default: return false`, which is the documented contract and
+    // the safe direction. The cost is that a NEW member is classified as "not transport"
+    // by silence rather than by a human. These two tests are what buy that back: the
+    // length guard fails loudly the moment dio grows a member, and the round-trip proves
+    // every member we DO know about is still classified deliberately.
+    //
+    // WHEN THE LENGTH GUARD GOES RED, the fix is NOT to bump the number. Read the new
+    // member, decide whether "nobody answered" is true of it, add it to the right arm of
+    // the switch, then bump the number and add it to the table below.
+    //
+    // For the record, the member that caused this: `transformTimeout` (dio ≥5.9) fires
+    // when OUR OWN response transformer overruns its budget. The bytes arrived and the
+    // server answered, so it is NOT transport — coming back online fixes nothing. The
+    // default already gets it right, which is the one piece of luck here.
+    test( 'GUARD — dio has not grown a DioExceptionType nobody has classified', () {
+      expect( DioExceptionType.values.length, 8,
+          reason: 'dio added or removed an exception type. Do NOT just bump this number: '
+                  'classify the new member in isTransportFailure first — is it "nobody '
+                  'answered" (true) or "the server answered / we cannot tell" (false)? — '
+                  'then add it to the round-trip table below. The switch ends in a '
+                  'default, so an unclassified member is silently treated as not-transport '
+                  'and this guard is the only thing that will tell you.' );
+    } );
+
+    test( 'every KNOWN DioExceptionType is classified deliberately, not by default', () {
+      // The whole enum, spelled out, with the answer beside each one. A member missing
+      // from this map is a member nobody decided about.
+      const expected = <DioExceptionType, bool>{
+        DioExceptionType.connectionTimeout : true,   // nobody answered
+        DioExceptionType.sendTimeout       : true,   // nobody answered
+        DioExceptionType.receiveTimeout    : true,   // nobody answered
+        DioExceptionType.connectionError   : true,   // nobody answered
+        DioExceptionType.badResponse       : false,  // the server answered and refused
+        DioExceptionType.badCertificate    : false,  // not ours to guess about
+        DioExceptionType.cancel            : false,  // deliberately abandoned
+        DioExceptionType.unknown           : false,  // not ours to guess about
+      };
+
+      expect( expected.keys.toSet(), DioExceptionType.values.toSet(),
+          reason: 'this table must name every member of the enum, or a member is going '
+                  'through the switch default without anyone having decided' );
+
+      expected.forEach( ( type, isTransport ) {
+        expect( isTransportFailure( _transport( type ) ), isTransport,
+            reason: '$type must be classified ${isTransport ? "transport" : "not transport"}' );
+      } );
+    } );
+
     // 🔴 A 202 IS NOT A FAILED WRITE AT ALL. The request succeeded and the change did
     // not happen; retrying files a SECOND ticket.
     test( 'a 202 is not a transport failure', () {

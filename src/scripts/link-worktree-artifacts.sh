@@ -45,15 +45,27 @@
 #    throwaway tree writes into the SHARED checkout.
 #
 # ─────────────────────────────────────────────────────────────────────────────────
-# ⚠️ ONE MEMBER IS COPIED, NOT LINKED, AND THE DISTINCTION IS THE POINT. `pubspec.lock` is
-# gitignored in this repo, so a worktree has none. Two wrong answers:
-#   · LINK it — then `flutter pub get` in the worktree rewrites the MAIN tree's lock file.
-#     A throwaway tree silently re-pins the shared checkout's dependency versions.
-#   · LEAVE it — then the worktree resolves fresh and may pin DIFFERENT versions than the
-#     main tree. A suite that passes there and fails here, or worse passes both while
-#     testing different code, is a false green with no visible cause.
-# ⇒ COPY it. The worktree gets the same pinned versions and owns its own file, so its
-#   `pub get` writes stay inside it.
+# ✅ `pubspec.lock` USED TO BE COPIED HERE AND MUST NOT BE ANY MORE (row 1bc50bf5).
+#
+# The copy existed for one reason, stated in the note this replaces: "pubspec.lock is
+# gitignored in this repo, so a worktree has none." That premise is gone — the lock is
+# TRACKED as of 2026-09-28, so `git worktree add` lays down the committed resolution
+# before this script runs, and git keeps it consistent with the sha the seat checked out.
+#
+# Copying is now actively wrong, not merely redundant. It would overwrite a TRACKED file
+# with the main checkout's WORKING COPY, so any uncommitted lock change in the main tree —
+# someone part-way through a `pub upgrade` — is stamped onto every seat provisioned while
+# it sits there. Each of those seats then opens with a dirty `pubspec.lock` in
+# `git status`, which under the parallel-session rules is a file a seat must reason about
+# at commit time and did not touch. It would also reintroduce exactly what tracking the
+# lock was meant to end: a seat's dependency versions decided by the state of somebody
+# else's working tree instead of by the commit.
+#
+# The old note's reasoning about LINKING still holds and still forbids it: a symlink would
+# let `pub get` in a throwaway tree rewrite the shared checkout's lock.
+#
+# So the lock now needs nothing from this script. If COPY_LIST ever gains a member again,
+# the test above it is the place to say why that member cannot simply be committed.
 #
 # ⚠️ THIS SCRIPT RUNS NO TOOLCHAIN. The spawn path allows 30 SECONDS
 # (`worktree_artifacts.py:51`); a 208-package resolve does not fit and a timeout is
@@ -102,9 +114,10 @@ LINK_LIST=(
 # ── THE COPY LIST ─────────────────────────────────────────────────────────────────
 #
 # Small files the worktree must OWN rather than share, because the toolchain writes them.
-COPY_LIST=(
-    "pubspec.lock"
-)
+#
+# EMPTY ON PURPOSE. `pubspec.lock` was the only member and it is tracked now — see the
+# note above before putting anything back here. The loop below handles an empty list.
+COPY_LIST=()
 
 TARGET="${1:-$PWD}"
 CHECK_ONLY=0
