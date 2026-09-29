@@ -405,9 +405,12 @@ class _DictationTextFieldState extends State<DictationTextField> {
       deco = deco.copyWith(
         suffixIcon : suffix,
         helper     : helper,
-        error      : _error == null
-            ? deco.error
-            : KeyedSubtree( key: widget.errorKey, child: Text( _error! ) ),
+        // errorText when the caller keyed nothing (a site's own errorText then
+        // yields to the newer dictation message); a keyed widget otherwise.
+        errorText  : _error != null && widget.errorKey == null ? _error : deco.errorText,
+        error      : _error != null && widget.errorKey != null
+            ? KeyedSubtree( key: widget.errorKey, child: Text( _error! ) )
+            : deco.error,
       );
     }
 

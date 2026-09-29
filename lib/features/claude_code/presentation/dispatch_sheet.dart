@@ -5,6 +5,7 @@ import '../data/claude_code_models.dart';
 import '../domain/claude_code_bloc.dart';
 import '../domain/claude_code_event.dart';
 import '../domain/claude_code_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 const _kRetiredBannerYellow  = Color( 0xFFFFF3CD );
 const _kRetiredBannerAccent  = Color( 0xFFFF9800 );
@@ -90,7 +91,7 @@ class _DispatchSheetState extends State<DispatchSheet> {
             const SizedBox( height: 16 ),
             Text( "New Claude Code Job (BOUNDED)", style: Theme.of( context ).textTheme.titleLarge ),
             const SizedBox( height: 16 ),
-            TextField(
+            DictationTextField(
               controller : _promptCtrl,
               decoration : const InputDecoration(
                 labelText : "Prompt",

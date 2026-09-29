@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../data/task_verbs.dart';
 import '../data/task_write_repository.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 /// The ONE reason surface for per-row verbs. Task List and Holding Area both open this
 /// and get the same sheet.
@@ -131,8 +132,8 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
   /// semantics, so TalkBack reads the complaint as part of the box instead of as a stray
   /// sentence the user has to go find.
   Widget _reasonBox( BuildContext context ) {
-    return TextField(
-      key        : const Key( TestKeys.reasonSheetReason ),
+    return DictationTextField(
+      fieldKey   : const Key( TestKeys.reasonSheetReason ),
       controller : _reason,
       autofocus  : true,
       minLines   : 2,

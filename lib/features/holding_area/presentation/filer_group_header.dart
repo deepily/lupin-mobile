@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../data/holding_area_models.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 /// One persona's group header: the disclosure control, and that group's two batch
 /// controls.
@@ -216,8 +217,8 @@ class _FilerGroupHeaderState extends State<FilerGroupHeader> {
   /// press turns one deliberate act into two taps and a surprise, and — worse — makes the
   /// requirement discoverable only by triggering the thing it is guarding.
   Widget _reasonBox( BuildContext context ) {
-    return TextField(
-      key        : Key( '${TestKeys.holdingReasonFieldPrefix}${group.filer}' ),
+    return DictationTextField(
+      fieldKey   : Key( '${TestKeys.holdingReasonFieldPrefix}${group.filer}' ),
       enabled    : !widget.busy,
       controller : _reason,
       onChanged  : widget.onReasonChanged,

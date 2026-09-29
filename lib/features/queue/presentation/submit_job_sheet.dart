@@ -5,6 +5,7 @@ import '../data/queue_models.dart';
 import '../domain/queue_bloc.dart';
 import '../domain/queue_event.dart';
 import '../domain/queue_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class SubmitJobSheet extends StatefulWidget {
   const SubmitJobSheet( { super.key } );
@@ -66,7 +67,7 @@ class _SubmitJobSheetState extends State<SubmitJobSheet> {
           children: [
             Text( 'Submit Job', style: Theme.of( context ).textTheme.titleLarge ),
             const SizedBox( height: 16 ),
-            TextField(
+            DictationTextField(
               controller : _questionCtrl,
               decoration : const InputDecoration(
                 labelText: 'Question / Command',
