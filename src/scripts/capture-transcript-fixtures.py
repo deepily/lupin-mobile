@@ -57,6 +57,7 @@ See test/fixtures/README.md for the redaction contract.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -327,44 +328,86 @@ def _verify_join( roster: dict, fleet: dict ) -> None:
 def capture_ws_frames( base: str, admin_access: Optional[ str ], seat: Optional[ str ] ) -> None:
     """`append_mixed_kinds` · `append_thinking` · `state_refused`.
 
-    🔴 NOT IMPLEMENTED YET, AND DELIBERATELY NOT FAKED. Two things are missing and
-    the first blocks the second:
+    The client now exists (`_ws_capture.py`), unit-tested against an in-process
+    fake server that fragments a frame inside the ~300 ms coalesce window
+    (Tiffany's instruction, 2026-09-28): the collect-one-whole-frame logic is
+    proven BEFORE the credential arrives, rather than written blind on the day it
+    does. What is still missing is only the credential itself.
 
-      1. AN ADMIN WS SESSION. The verbs are gated by
-         `websocket_manager.session_is_admin[ session_id ]`, a DIFFERENT mechanism
-         from the REST `require_admin`. Without an admin login there is nothing to
-         capture, so writing the client first would be writing code nobody can run.
+    🔴 AN ADMIN WS SESSION IS STILL REQUIRED, and nothing here fakes its absence.
+    The verbs are gated by `websocket_manager.session_is_admin[ session_id ]`, a
+    DIFFERENT mechanism from the REST `require_admin` — being let through one
+    proves nothing about the other, so this runs the WS half even when the REST
+    half was refused, and reports what the gate actually said.
 
-      2. A WEBSOCKET CLIENT IN THIS REPO'S CAPTURE TOOLING. `_fixture_lib` is
-         urllib-only — every existing capture script is REST — so `cc_transcript_watch`
-         needs a WS client added, plus the ~300 ms coalesce window honoured
-         (`cc transcript coalesce window ms`, Rick's Q7 ruling) so one append frame
-         is collected rather than a fragment.
+    What each frame must carry is no longer prose in this docstring: it is three
+    predicates in `_ws_capture.py` (`mixed_kinds_reasons`, `thinking_reasons`,
+    `state_refused_reasons`), each with its own tests. A frame that does not
+    satisfy one is BLOCKED with the reasons listed, never adjusted to fit.
 
-    What the frames must carry, from the consuming test's header, so whoever
-    finishes this does not have to re-derive it:
-      - append_mixed_kinds: ONE frame whose `blocks` hold a prose block, a
-        `tool_call`, and a `tool_result` that is NOT truncated (a truncated one
-        answers over REST, which is C5.19's row, and conflating them would make
-        C5.18 pass for the wrong reason)
-      - append_thinking: ONE frame with a `kind: thinking` block carrying
-        non-trivial text (at least one line of 8+ characters, or the test cannot
-        assert either "hidden" or "shown" about it)
-      - state_refused: ONE `cc_transcript_state` frame with `state: "refused"`
-        carrying the server's own `reason`
-      - 🔴 EVERY frame must carry its own `cc_session_id` AND `offset`. The test
-        uses them rather than substituting its own, and seeds the backlog read so
-        the append's offset is continuous. An append with no offset is a phase-1
-        finding, not a test bug.
+    🔴 AND NO FRAME IS EVER ASSEMBLED FROM PARTS. If the server split the blocks
+    `append_mixed_kinds` needs across several frames, this reports that and
+    writes nothing. Merging them would invent a frame the server never sent and
+    turn C5.18 green while proving nothing.
     """
-    why = ( "not implemented: needs (a) an ADMIN WebSocket session — the verbs are gated by "
-            "websocket_manager.session_is_admin, a different mechanism from the REST "
-            "require_admin — and (b) a WS client in the capture tooling, which is urllib-only "
-            "today. The required frame contents are documented in this function's docstring." )
+    names = ( "append_mixed_kinds.json", "append_thinking.json", "state_refused.json" )
+
     if admin_access is None:
-        why = "no admin login available, and the WS verbs are admin-gated. " + why
-    for name in ( "append_mixed_kinds.json", "append_thinking.json", "state_refused.json" ):
-        _block( name, why )
+        why = ( "no admin login available (LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD), and the "
+                "WS transcript verbs are gated by websocket_manager.session_is_admin — a "
+                "different mechanism from the REST require_admin. Row 700a48f9." )
+        for name in names:
+            _block( name, why )
+        return
+
+    if seat is None:
+        for name in names:
+            _block( name, "no seat to watch: fleet-state gave none and --seat was not passed." )
+        return
+
+    import _ws_capture as wsc
+
+    ws_url = base.replace( "https://", "wss://" ).replace( "http://", "ws://" )
+    ws_url = f"{ws_url}/ws/queue/{_capture_session_id()}"
+
+    print( f"  watching {seat} over {ws_url} for {wsc.COALESCE_WINDOW_MS} ms after the first frame" )
+    try:
+        collector = asyncio.run( wsc.capture_frames( ws_url, admin_access, seat ) )
+    except wsc.WsCaptureError as failed:
+        for name in names:
+            _block( name, str( failed ) )
+        return
+
+    print( f"  collected {len( collector.frames )} transcript frame(s)" )
+
+    for name, reasons_for in (
+        ( "append_mixed_kinds.json", wsc.mixed_kinds_reasons ),
+        ( "append_thinking.json",    wsc.thinking_reasons ),
+        ( "state_refused.json",      wsc.state_refused_reasons ),
+    ):
+        try:
+            frame = collector.select( name, reasons_for )
+        except wsc.NoQualifyingFrame as none_fit:
+            _block( name, str( none_fit ) )
+            continue
+
+        aliases  = _build_seat_alias_map( frame )
+        redacted = _apply_aliases( frame, aliases )
+        lib.redact_timestamp_fields( redacted, ( "ts", "timestamp", "generated_at" ) )
+        lib.assert_no_jwt_residue( redacted, name )
+        lib.write_fixture( DOMAIN, name, redacted )
+        _ok( name )
+
+
+def _capture_session_id() -> str:
+    """The session id this capture connects AS — its own, not the seat it watches.
+
+    The endpoint is `/ws/queue/{session_id}`: that path segment identifies the
+    CLIENT's queue, while the seat being tailed travels in the
+    `cc_transcript_watch` payload. Confusing the two subscribes to the wrong
+    queue and waits forever.
+    """
+    return os.environ.get( "LUPIN_CAPTURE_SESSION_ID" ) or f"capture-{os.getpid()}"
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
