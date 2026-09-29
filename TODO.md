@@ -25,6 +25,31 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 - **[2026-08-21-to-09-22-todo.md](todo-archive/2026-08-21-to-09-22-todo.md)**: the dated sections 09-22 back to 08-21, plus the May and June "START HERE" blocks. Archived 2026-09-26.
 - **[2026-04-15-to-06-12-todo.md](todo-archive/2026-04-15-to-06-12-todo.md)** — postgame decisions (2026-06-12), ✅ COMPLETED blocks (05-23, 06-12), 2026-05-07 breadcrumb, superseded voice-persona HUMAN-gate runbook, 2026-05-21 parked conditionals, all completed `[x]` items through 2026-08-21. Archived 2026-08-21.
 
+## 🆕 Open from 2026-09-28 (FCM wake live, tap-to-sender, notification controls, append mic)
+
+### Decisions Log — 2026-09-28 (session `1b9a6410`, Tiffany)
+
+- **Every APK build uses `--fcm`**; plain `deploy-apk-to-device.sh` installs the stamped server APK (CLAUDE.md, `5c62999`).
+- **Keep the fingerprint lock** at cold start (Rick). The app now hosts in FlutterFragmentActivity so it actually works.
+- **The wake notification title is WHO sent it**: "🌻 Maya", else the project, else "Lupin". The item's own title is no longer shown.
+- **Background notifications OFF consume nothing**: no refresh, fetch or mark-played (gate-first). Denied priorities are never marked played.
+- **The wake shows the oldest ALLOWED unplayed item** (list-based; client-side oldest-first sort; limit 500 until the server filter `e25f8868` exists).
+- **WS supersede close code is 4004** "superseded" (4001 auth, 4003 subscription denied; with Mr. Radio).
+- **The append mic is the default on every text box** (Rick). The rollout plan is `cc4e73ed`; the prompt card gets it in BOTH the Focus bubble and the notification sheet.
+- **Rick chose a dev-only test admin account** for fixture capture (`f2f30810`, his to create); `768e852f` is blocked on him.
+- **Pocholo's NDK install was allowed by Rick but refused by the permission layer**, so Rick runs it himself.
+
+### ⏳ Owed — 2026-09-28
+
+- [ ] **Rick:** create the dev test admin account `f2f30810`. It must pass both REST require_admin and the WS session_is_admin.
+- [ ] **Rick:** `~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973" "platforms;android-36"`, then verify `fix/compile-sdk-36-ndk-27` (22426f8).
+- [ ] **Rick:** decide the wake backlog `6624dbc1` (show each vs one summary). The flood argues for a summary.
+- [ ] **Merge if its gate passes:** Cheech's notification view `9cdd7b2` (P0 `7cac3a17`); Maya's prompt-card mic `c5c48e3`. Then the notification sheet's mic.
+- [ ] **Unstaffed:** `281a10d6`, the mobile device_id plus not reconnecting on close 4004 (the mobile half of Mr. Radio's dc446601).
+- [ ] **Unmerged:** `feat/transcript-dispatcher` (the 0fa608b rebase) and `feat/transcript-mobile-s4` `c310763` (the WS capture client).
+- [ ] **Device repro for Mr. Radio's `ed76b897`**: app backgrounded, 2 sends 37 s apart, the trailing wake logs "submitted" and the second item plays.
+- [ ] **Rick: drop the duplicate `1bc50bf5`** (folded into `0705bcce`).
+
 ## 🆕 Open from 2026-09-27 (transcript phase 3, drawer, phone deploy script)
 
 ### Decisions Log — 2026-09-27 (session `0fb2674f`, Tiffany, 5-seat SWE crew)

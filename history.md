@@ -13,6 +13,24 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.28 | Session `1b9a6410` (Tiffany 💍) — FCM wake-ups live on the phone, tap-to-sender, notification controls, the append mic
+
+**RESUME HERE:**
+
+1. **Rick owes:** the dev test admin account (`f2f30810`, which unblocks `768e852f` slice 4) and the NDK 27 install (`sdkmanager "ndk;27.0.12077973" "platforms;android-36"`, for P3 `5cbd2e42`).
+2. **Merged late:** Cheech's notification management view `370e491` (P0 `7cac3a17`, awaiting Rick's device check) and Maya's prompt-bubble mic `286e02c` (Focus half of `928c5808`). Next for Maya: the mic in the notification sheet (Rick: "both"). Tip `286e02c`, suite 2558/1/8, `--fcm` APK built from it.
+3. **Unmerged:** `feat/transcript-dispatcher` (the 0fa608b rebase), `feat/transcript-mobile-s4` (`c310763`), and 281a10d6 (device_id / close 4004), which isn't staffed yet.
+
+**Shipped** (crew: Maya, Pocholo, Chloé, Cheech; every merge independently reviewed; suite 2484/1/8 at `ea0d2f3`, the 8 being the known pending-capture reds):
+- **FCM background wake proven on the emulator and the phone** (row `8ff78c69`, closed): live bugs fixed along the way: `ba07dc8` notification permission never requested, `f827e7a` fingerprint unlock never worked (FlutterFragmentActivity).
+- **Tap a notification → that sender's conversation**, sender emoji and name in the title: `265947d` (Maya; `d9bc6f6c`, `1ae4c68c`; Rick confirmed on the phone).
+- **Review F1–F9 + C1–C4** (Pocholo, reviewed by Chloé): `62a319d`, `e004517`: speech/network budgets, the token-rotation race, the wake switch, the v2 channel at default importance, APK build stamp.
+- **Append mic in the Focus reply draft**: `ea0d2f3` (Maya; `570c2fce`; Rick confirmed).
+- **pubspec.lock tracked**, dio switch made total, seat provisioning fixed: Chloé (`0705bcce`); stale AC-G2 fixture `f113473` (`6f9c0fe4`).
+- CLAUDE.md: always build with `--fcm` (`5c62999`).
+
+---
+
 ## 2026.09.27 | Session `0fb2674f` (Tiffany 💍) — Transcript phase 3 slices 1–3, the Surfaces drawer, and a one-command phone deploy
 
 **RESUME HERE:**
