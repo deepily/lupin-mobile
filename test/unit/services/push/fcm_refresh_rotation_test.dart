@@ -8,6 +8,7 @@ library;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lupin_mobile/services/auth/auth_repository.dart';
 import 'package:lupin_mobile/services/auth/secure_credential_store.dart';
 import 'package:lupin_mobile/services/push/fcm_bootstrap.dart';
 
@@ -80,5 +81,83 @@ void main() {
       exchangeRefreshAndPersist( dio: makeDio( adapter ), store: store, contextId: 'dev', refreshToken: 'old-refresh' ),
       throwsA( anything ) );
     expect( await store.readRefreshToken( 'dev' ), 'old-refresh' );
+  } );
+
+  group( 'F4 — losing the rotation race is not a logout (row 8ff78c69)', () {
+    // The stored refresh token has TWO writers: this background isolate and the
+    // foreground AuthInterceptor. The server revokes on every exchange, so when
+    // a wake lands while the app is backgrounded-but-alive, both can present the
+    // same token and the loser gets a 401 on a token that was valid when it read
+    // it. That used to read as a dead session.
+
+    test( 'a 401 on a token the foreground already rotated: re-read, retry once, succeed',
+        () async {
+      final presented = <Object?>[];
+      final adapter = StubAdapter( {
+        'POST /auth/refresh': ( o ) {
+          final tok = ( o.data as Map )[ 'refresh_token' ];
+          presented.add( tok );
+          // 'old-refresh' is the copy this isolate read before the foreground
+          // won the race and wrote 'foreground-wrote-this'.
+          if ( tok == 'old-refresh' ) return jsonBody( { 'detail': 'revoked' }, status: 401 );
+          return jsonBody( envelope( 'access-2', 'refresh-2' ) );
+        },
+      } );
+      // The winner's write lands in the store while we hold the stale copy.
+      await store.writeRefreshToken( 'dev', 'foreground-wrote-this' );
+
+      final access = await exchangeRefreshAndPersist(
+        dio: makeDio( adapter ), store: store, contextId: 'dev',
+        refreshToken: 'old-refresh' );
+
+      expect( access, 'access-2', reason: 'the wake still completes' );
+      expect( presented, [ 'old-refresh', 'foreground-wrote-this' ],
+          reason: 'exactly one retry, with the token the winner left behind' );
+      expect( await store.readRefreshToken( 'dev' ), 'refresh-2' );
+    } );
+
+    test( 'a 401 on a token the store STILL agrees with is a real dead session', () async {
+      // Nothing rotated underneath us, so there is nothing to retry with and a
+      // retry loop would just be a log-out with extra steps.
+      var calls = 0;
+      final adapter = StubAdapter( {
+        'POST /auth/refresh': ( _ ) { calls++; return jsonBody( { 'detail': 'revoked' }, status: 401 ); },
+      } );
+      await expectLater(
+        exchangeRefreshAndPersist(
+          dio: makeDio( adapter ), store: store, contextId: 'dev',
+          refreshToken: 'old-refresh' ),
+        throwsA( isA<AuthException>() ) );
+      expect( calls, 1, reason: 'no retry when the store has nothing newer' );
+      expect( await store.readRefreshToken( 'dev' ), 'old-refresh' );
+    } );
+
+    test( 'a NON-401 failure is never retried', () async {
+      var calls = 0;
+      final adapter = StubAdapter( {
+        'POST /auth/refresh': ( _ ) { calls++; return jsonBody( { 'detail': 'boom' }, status: 500 ); },
+      } );
+      await store.writeRefreshToken( 'dev', 'something-else' );
+      await expectLater(
+        exchangeRefreshAndPersist(
+          dio: makeDio( adapter ), store: store, contextId: 'dev',
+          refreshToken: 'old-refresh' ),
+        throwsA( isA<AuthException>() ) );
+      expect( calls, 1, reason: 'a 500 is not a rotation race' );
+    } );
+
+    test( 'the retry is at most ONE: a 401 on the fresh token too still throws', () async {
+      var calls = 0;
+      final adapter = StubAdapter( {
+        'POST /auth/refresh': ( _ ) { calls++; return jsonBody( { 'detail': 'revoked' }, status: 401 ); },
+      } );
+      await store.writeRefreshToken( 'dev', 'also-revoked' );
+      await expectLater(
+        exchangeRefreshAndPersist(
+          dio: makeDio( adapter ), store: store, contextId: 'dev',
+          refreshToken: 'old-refresh' ),
+        throwsA( isA<AuthException>() ) );
+      expect( calls, 2, reason: 'one attempt, one retry, then give up' );
+    } );
   } );
 }

@@ -174,5 +174,79 @@ void main() {
       // 3 fetches total: original + refresh + retry. No 4th.
       expect(adapter.captured.length, 3);
     });
+    group("F4 — the background wake rotated the token underneath us (row 8ff78c69)", () {
+      // The FCM wake handler runs in its own isolate and refreshes there, and the
+      // server revokes on every exchange. So a 401 from OUR refresh usually means
+      // that isolate won the race, not that the session is dead — and the store
+      // already holds the token it wrote.
+
+      ResponseBody envelope(String access, String refresh) => _json({
+        "message": "Token refreshed",
+        "tokens" : {
+          "access_token" : access,
+          "refresh_token": refresh,
+          "token_type"   : "bearer",
+        },
+      });
+
+      test("a revoked refresh + a newer token in the store: retry once, user never notices",
+          () async {
+        setAccessToken("stale");
+        final refreshBodies = <Object?>[];
+        adapter = _SequenceAdapter([
+          // 1) original /api/me -> 401
+          (_) => _json({"detail": "expired"}, status: 401),
+          // 2) our /auth/refresh with the token we read -> 401, already revoked
+          //    by the wake isolate's exchange.
+          (o) { refreshBodies.add((o.data as Map)["refresh_token"]); return _json({"detail": "revoked"}, status: 401); },
+          // 3) retry /auth/refresh with what the store holds NOW -> 200
+          (o) { refreshBodies.add((o.data as Map)["refresh_token"]); return envelope("acc-2", "ref-2"); },
+          // 4) the original request, replayed
+          (o) { expect(o.headers["Authorization"], "Bearer acc-2"); return _json({"ok": true}); },
+        ]);
+        dio.httpClientAdapter = adapter;
+        repo = AuthRepository(dio);
+
+        // First read hands out the stale copy; by the retry the wake isolate's
+        // write has landed.
+        var reads = 0;
+        dio.interceptors.add(AuthInterceptor(
+          dio              : dio,
+          repo             : repo,
+          readRefreshToken : () async => ++reads == 1 ? "stale-refresh" : "wake-wrote-this",
+          onTokensRotated  : (t) async => rotated.add(t),
+          onRefreshFailed  : () async => refreshFailedCount++,
+        ));
+
+        final res = await dio.get("/api/me");
+        expect(res.statusCode, 200);
+        expect(refreshBodies, ["stale-refresh", "wake-wrote-this"]);
+        expect(refreshFailedCount, 0,
+            reason: "losing a race is not a failed session — this is the logout that used to happen");
+        expect(rotated.single.accessToken, "acc-2");
+      });
+
+      test("a revoked refresh and NOTHING newer in the store: still a real logout", () async {
+        setAccessToken("stale");
+        var refreshCalls = 0;
+        adapter = _SequenceAdapter([
+          (_) => _json({"detail": "expired"}, status: 401),
+          (_) { refreshCalls++; return _json({"detail": "revoked"}, status: 401); },
+        ]);
+        dio.httpClientAdapter = adapter;
+        repo = AuthRepository(dio);
+        dio.interceptors.add(AuthInterceptor(
+          dio              : dio,
+          repo             : repo,
+          readRefreshToken : () async => "same-refresh",   // unchanged on re-read
+          onTokensRotated  : (t) async => rotated.add(t),
+          onRefreshFailed  : () async => refreshFailedCount++,
+        ));
+
+        await expectLater(dio.get("/api/me"), throwsA(isA<DioException>()));
+        expect(refreshCalls, 1, reason: "no retry when the store agrees with us");
+        expect(refreshFailedCount, 1, reason: "a genuinely dead session must still sign out");
+      });
+    });
   });
 }

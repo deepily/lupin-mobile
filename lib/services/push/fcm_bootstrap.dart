@@ -160,7 +160,30 @@ Future<String> exchangeRefreshAndPersist( {
   // hand-rolled reader of that envelope is how this path read the tokens at the
   // TOP level, got null, threw after the exchange had already revoked the old
   // token, and never fetched anything (emulator logcat, 2026-09-28 16:47).
-  final tokens = await AuthRepository( dio ).refresh( refreshToken );
+  final repo = AuthRepository( dio );
+
+  AuthTokens tokens;
+  try {
+    tokens = await repo.refresh( refreshToken );
+  } on AuthException catch ( e ) {
+    // 🔴 A 401 HERE USUALLY MEANS WE LOST A RACE, NOT THAT THE USER IS SIGNED
+    // OUT. This isolate and the foreground's AuthInterceptor share ONE stored
+    // refresh token and the server revokes on every exchange, so when a wake
+    // lands while the app is backgrounded-but-alive, both can present the same
+    // token; the loser's copy is already revoked. Treating that as a dead
+    // session is what turned an ordinary collision into a forced re-login.
+    //
+    // So: re-read the store. If the winner has already written a NEW token,
+    // that token is valid and this attempt simply arrived second — use it.
+    // Exactly one retry, and only when the stored value actually CHANGED: a
+    // 401 on the same token we just read is a genuinely dead session, and
+    // retrying it in a loop would be a log-out with extra steps.
+    if ( e.statusCode != 401 ) rethrow;
+    final current = await store.readRefreshToken( contextId );
+    if ( current == null || current == refreshToken ) rethrow;
+    tokens = await repo.refresh( current );
+  }
+
   await store.writeRefreshToken( contextId, tokens.refreshToken );
   return tokens.accessToken;
 }
