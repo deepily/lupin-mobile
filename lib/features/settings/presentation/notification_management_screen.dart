@@ -5,7 +5,9 @@ import '../../../services/push/notification_sender_label.dart';
 import '../../notifications/data/notification_models.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
+import '../data/push_pause_repository.dart';
 import 'notification_audio_settings_screen.dart';
+import 'push_pause_section.dart';
 import 'notification_filter_settings_screen.dart';
 
 /// The notification management view (Rick 2026-09-28, row 7cac3a17 — "now that
@@ -38,11 +40,15 @@ class NotificationManagementScreen extends StatefulWidget {
   /// removing them, still work without it.
   final Future<List<MutableSender>> Function()? loadSenders;
 
+  /// Server push pause (row 67ee93b0). Null hides the section.
+  final PushPauseRepository? pushPause;
+
   const NotificationManagementScreen( {
     super.key,
     required this.prefs,
     this.stopList,
     this.loadSenders,
+    this.pushPause,
   } );
 
   @override
@@ -60,6 +66,8 @@ class _NotificationManagementScreenState
       appBar : AppBar( title: const Text( 'Notifications' ) ),
       body   : ListView(
         children: [
+          if ( widget.pushPause != null )
+            PushPauseSection( repository: widget.pushPause! ),
           SwitchListTile(
             key       : const Key( TestKeys.notifMgmtMaster ),
             secondary : const Icon( Icons.notifications_outlined ),

@@ -235,6 +235,13 @@ class TestKeys {
   static const notifMgmtQuietEnd             = 'notifMgmt.quiet.end';
   static const notifMgmtQuietUrgentBypass    = 'notifMgmt.quiet.urgentBypass';
 
+  static const pushPauseStatus               = 'pushPause.status';
+  static const pushPauseAdminOnly            = 'pushPause.adminOnly';
+  static const pushPauseError                = 'pushPause.error';
+  static const pushPauseResume               = 'pushPause.resume';
+  /// null minutes is the "until I resume" chip.
+  static String pushPauseDuration( int? minutes ) => 'pushPause.duration.${minutes ?? 'open'}';
+
   // Row f27a61f4 — a visible delete with undo, and tap-to-edit
   static const settingsStopListDeletePrefix  = 'settings.stopList.delete.';   // + pattern
   static const settingsStopListEditField     = 'settings.stopList.edit.field';

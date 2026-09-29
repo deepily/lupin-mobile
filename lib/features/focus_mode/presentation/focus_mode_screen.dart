@@ -35,6 +35,7 @@ import '../../quick_ask/presentation/quick_ask_screen.dart';
 import '../../settings/presentation/notification_audio_settings_screen.dart';
 import '../../settings/presentation/notification_management_screen.dart';
 import '../../notifications/data/notification_repository.dart';
+import '../../settings/data/push_pause_repository.dart';
 import '../../settings/presentation/notification_filter_settings_screen.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
@@ -116,6 +117,12 @@ Future<List<MutableSender>> Function()? muteRosterLoader( BuildContext context )
       await ServiceLocator.get<NotificationRepository>().sendersVisible( email ) );
 }
 
+/// The server push-pause client, or null when none is registered (hides the section).
+PushPauseRepository? pushPauseRepository() =>
+    ServiceLocator.isRegistered<PushPauseRepository>()
+        ? ServiceLocator.get<PushPauseRepository>()
+        : null;
+
 /// The drawer's settings block — NOT Home-grid surfaces, and listed after them
 /// under their own divider. The stop-list entry is disabled when the service is
 /// not registered, exactly as the pre-experiment drawer had it.
@@ -132,6 +139,7 @@ List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
             ? ServiceLocator.get<NotificationStopList>()
             : null,
         loadSenders : muteRosterLoader( context ),
+        pushPause   : pushPauseRepository(),
       ),
     ),
     FocusDrawerSurface( Icons.settings, 'Settings', ( _ ) => NotificationAudioSettingsScreen(
@@ -550,6 +558,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
                   ? ServiceLocator.get<NotificationStopList>()
                   : null,
               loadSenders : muteRosterLoader( context ),
+              pushPause   : pushPauseRepository(),
             ) ),
           ),
           ListTile(
