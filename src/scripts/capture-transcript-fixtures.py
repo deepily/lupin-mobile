@@ -325,7 +325,9 @@ def _verify_join( roster: dict, fleet: dict ) -> None:
 
 # ── the WebSocket half ───────────────────────────────────────────────────────
 
-def capture_ws_frames( base: str, admin_access: Optional[ str ], seat: Optional[ str ] ) -> None:
+def capture_ws_frames(
+    base: str, admin_access: Optional[ str ], seat: Optional[ str ], append_wait_s: float = 60.0,
+) -> None:
     """`append_mixed_kinds` · `append_thinking` · `state_refused`.
 
     The client now exists (`_ws_capture.py`), unit-tested against an in-process
@@ -370,9 +372,14 @@ def capture_ws_frames( base: str, admin_access: Optional[ str ], seat: Optional[
     ws_url = base.replace( "https://", "wss://" ).replace( "http://", "ws://" )
     ws_url = f"{ws_url}/ws/queue/{_capture_session_id()}"
 
-    print( f"  watching {seat} over {ws_url} for {wsc.COALESCE_WINDOW_MS} ms after the first frame" )
+    # The watch's first frame is always `cc_transcript_state`, so a window that
+    # starts there closes before any append exists. Wait (bounded) for appends,
+    # and stop early once both append fixtures each have one whole frame.
+    print( f"  watching {seat} over {ws_url}; waiting up to {append_wait_s:.0f}s for appends" )
     try:
-        collector = asyncio.run( wsc.capture_frames( ws_url, admin_access, seat ) )
+        collector = asyncio.run( wsc.capture_frames(
+            ws_url, admin_access, seat, append_wait_s=append_wait_s,
+            wants=[ wsc.mixed_kinds_reasons, wsc.thinking_reasons ] ) )
     except wsc.WsCaptureError as failed:
         for name in names:
             _block( name, str( failed ) )
@@ -417,6 +424,10 @@ def main() -> int:
     parser.add_argument( "--seat", default=None,
                          help="cc_session_id to read a backlog for. Defaults to a live seat "
                               "from fleet-state, else this process's own session." )
+    parser.add_argument( "--append-wait-s", type=float, default=60.0,
+                         help="how long to wait for cc_transcript_append frames after the "
+                              "watch's state frame (default 60). The seat must be printing "
+                              "tool calls and thinking meanwhile." )
     args = parser.parse_args()
 
     base = os.environ.get( "LUPIN_API_BASE_URL", DEFAULT_BASE_URL )
@@ -463,7 +474,7 @@ def main() -> int:
         capture_backlog_403( base, user_headers, seat )
 
     # ── WebSocket ───────────────────────────────────────────────────────────
-    capture_ws_frames( base, admin_access, seat )
+    capture_ws_frames( base, admin_access, seat, args.append_wait_s )
 
     # ── the report ──────────────────────────────────────────────────────────
     print( "\n" + "=" * 72 )

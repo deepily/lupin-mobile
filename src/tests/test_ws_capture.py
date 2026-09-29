@@ -213,6 +213,69 @@ class TestCoalesceWindow:
         assert wsc.COALESCE_WINDOW_MS == 300
 
 
+STATE_LIVE = { "type": wsc.STATE_EVENT, "state": "live" }
+
+
+class TestWaitingForAppends:
+    """The watch's FIRST frame is always `cc_transcript_state`, so a window
+    measured from it closes 300 ms in, before any append exists. With
+    `append_wait_s` the collector keeps waiting — but every frame it ends up
+    holding is still one whole frame the server sent."""
+
+    def test_a_state_frame_alone_does_not_close_the_window_while_waiting_for_appends( self ):
+        clock     = FakeClock()
+        collector = wsc.TranscriptFrameCollector( settle_ms=300, clock=clock, append_wait_s=60 )
+        collector.offer( dict( STATE_LIVE ) )
+        clock.advance_ms( 5000 )
+        assert collector.open, "the state frame is not an append; keep waiting"
+
+    def test_the_wait_is_bounded_it_closes_when_no_append_ever_comes( self ):
+        clock     = FakeClock()
+        collector = wsc.TranscriptFrameCollector( settle_ms=300, clock=clock, append_wait_s=60 )
+        collector.offer( dict( STATE_LIVE ) )
+        clock.advance_ms( 60001 )
+        assert not collector.open
+        assert collector.remaining_s() == 0.0
+
+    def test_the_settle_period_counts_from_the_first_APPEND_not_the_state_frame( self ):
+        clock     = FakeClock()
+        collector = wsc.TranscriptFrameCollector( settle_ms=300, clock=clock, append_wait_s=60 )
+        collector.offer( dict( STATE_LIVE ) )
+        clock.advance_ms( 10000 )
+        collector.offer( append_frame( [ PROSE ] ) )
+        clock.advance_ms( 299 )
+        assert collector.open, "a coalesced batch may still be arriving"
+        clock.advance_ms( 2 )
+        assert not collector.open
+
+    def test_with_wants_the_window_closes_the_moment_every_want_is_met( self ):
+        clock     = FakeClock()
+        collector = wsc.TranscriptFrameCollector(
+            settle_ms=300, clock=clock, append_wait_s=60,
+            wants=[ wsc.mixed_kinds_reasons, wsc.thinking_reasons ] )
+        collector.offer( dict( STATE_LIVE ) )
+        collector.offer( append_frame( [ THINKING ], offset=8 ) )
+        assert collector.open, "thinking is met, mixed is not"
+        collector.offer( append_frame( [ PROSE, TOOL_CALL, TOOL_RESULT ], offset=9 ) )
+        assert not collector.open, "both wants met by whole frames; nothing left to wait for"
+
+    def test_CRITICAL_wants_met_only_JOINTLY_by_two_frames_are_not_met( self ):
+        clock     = FakeClock()
+        collector = wsc.TranscriptFrameCollector(
+            settle_ms=300, clock=clock, append_wait_s=60, wants=[ wsc.mixed_kinds_reasons ] )
+        collector.offer( append_frame( [ PROSE, TOOL_CALL ] ) )
+        collector.offer( append_frame( [ TOOL_RESULT ], offset=8 ) )
+        clock.advance_ms( 5000 )
+        assert collector.open, "the halves together are not a frame the server sent"
+
+    def test_without_append_wait_the_old_window_is_unchanged( self ):
+        clock     = FakeClock()
+        collector = wsc.TranscriptFrameCollector( settle_ms=300, clock=clock )
+        collector.offer( dict( STATE_LIVE ) )
+        clock.advance_ms( 301 )
+        assert not collector.open, "default behaviour must not change for other callers"
+
+
 # ── the wrapper, against a real in-process server ────────────────────────────
 
 class FakeTranscriptServer:
@@ -262,6 +325,9 @@ class FakeTranscriptServer:
                         } ) )
                         continue
                     for item in self.script:
+                        if isinstance( item, float ):       # a pause, in seconds
+                            await asyncio.sleep( item )
+                            continue
                         # A LIST payload is one FRAGMENTED message: `websockets`
                         # sends it as several frames and the peer reassembles it.
                         await ws.send( item if isinstance( item, list ) else json.dumps( item ) )
@@ -396,6 +462,57 @@ class TestAgainstFakeServer:
                 await wsc.capture_frames(
                     server.url, "jwt", "seat-1", settle_ms=60,
                     first_frame_timeout_s=0.3, connect=connect )
+
+    async def test_BUG_default_window_misses_an_append_that_follows_the_state_frame( self ):
+        """The measured failure: state first, append 0.5 s later, 100 ms window."""
+        script = [ dict( STATE_LIVE ), 0.5, append_frame( [ THINKING ] ) ]
+        async with FakeTranscriptServer( script=script ) as server:
+            from websockets.asyncio.client import connect
+            collector = await wsc.capture_frames(
+                server.url, "jwt", "seat-1", settle_ms=100, connect=connect )
+
+        assert [ f[ "type" ] for f in collector.frames ] == [ wsc.STATE_EVENT ]
+
+    async def test_append_wait_collects_an_append_that_follows_the_state_frame( self ):
+        script = [ dict( STATE_LIVE ), 0.5, append_frame( [ THINKING ], offset=8 ) ]
+        async with FakeTranscriptServer( script=script ) as server:
+            from websockets.asyncio.client import connect
+            collector = await wsc.capture_frames(
+                server.url, "jwt", "seat-1", settle_ms=100, append_wait_s=5.0, connect=connect )
+
+        assert [ f[ "type" ] for f in collector.frames ] == [ wsc.STATE_EVENT, wsc.APPEND_EVENT ]
+        assert collector.select( "thinking", wsc.thinking_reasons )[ "offset" ] == 8
+
+    async def test_wants_stop_the_wait_as_soon_as_both_fixtures_have_a_whole_frame( self ):
+        script = [
+            dict( STATE_LIVE ), 0.2, append_frame( [ THINKING ], offset=8 ),
+            0.2, append_frame( [ PROSE, TOOL_CALL, TOOL_RESULT ], offset=9 ),
+            0.2, append_frame( [ PROSE ], offset=10 ),
+        ]
+        async with FakeTranscriptServer( script=script ) as server:
+            from websockets.asyncio.client import connect
+            collector = await wsc.capture_frames(
+                server.url, "jwt", "seat-1", settle_ms=100, append_wait_s=5.0,
+                wants=[ wsc.mixed_kinds_reasons, wsc.thinking_reasons ], connect=connect )
+
+        assert collector.select( "thinking", wsc.thinking_reasons )[ "offset" ] == 8
+        assert collector.select( "mixed", wsc.mixed_kinds_reasons )[ "offset" ] == 9
+        assert len( collector.frames ) == 3, "stopped once satisfied, before the offset-10 frame"
+
+    async def test_CRITICAL_append_wait_is_bounded_and_never_stitches_halves( self ):
+        script = [
+            dict( STATE_LIVE ), 0.1, append_frame( [ PROSE, TOOL_CALL ] ),
+            0.1, append_frame( [ TOOL_RESULT ], offset=8 ),
+        ]
+        async with FakeTranscriptServer( script=script ) as server:
+            from websockets.asyncio.client import connect
+            collector = await wsc.capture_frames(
+                server.url, "jwt", "seat-1", settle_ms=100, append_wait_s=1.0,
+                wants=[ wsc.mixed_kinds_reasons ], connect=connect )
+
+        assert len( collector.frames ) == 3
+        with pytest.raises( wsc.NoQualifyingFrame ):
+            collector.select( "append_mixed_kinds", wsc.mixed_kinds_reasons )
 
     async def test_a_file_epoch_is_sent_only_when_given( self ):
         async with FakeTranscriptServer( script=[ append_frame( [ THINKING ] ) ] ) as server:

@@ -46,7 +46,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 # `cosa/rest/cc_transcript_tailer.py` owns these names; they are repeated rather
 # than imported because this repo cannot import the server's package.
@@ -194,11 +194,16 @@ class TranscriptFrameCollector:
         *,
         settle_ms: int = COALESCE_WINDOW_MS,
         clock: Callable[ [], float ] = time.monotonic,
+        append_wait_s: float = 0.0,
+        wants: Sequence[ Callable[ [ dict ], list[ str ] ] ] = (),
     ) -> None:
-        self._settle  = settle_ms / 1000.0
-        self._clock   = clock
+        self._settle       = settle_ms / 1000.0
+        self._clock        = clock
+        self._append_wait  = append_wait_s
+        self._wants        = list( wants )
         self._frames: list[ dict ] = []
         self._first_at: Optional[ float ] = None
+        self._first_append_at: Optional[ float ] = None
 
     @property
     def frames( self ) -> list[ dict ]:
@@ -207,22 +212,42 @@ class TranscriptFrameCollector:
 
     def offer( self, frame: dict ) -> None:
         """Take one decoded frame. The first one starts the settle clock."""
+        now = self._clock()
         if self._first_at is None:
-            self._first_at = self._clock()
+            self._first_at = now
+        if self._first_append_at is None and frame.get( "type" ) == APPEND_EVENT:
+            self._first_append_at = now
         self._frames.append( frame )
+
+    def _wants_met( self ) -> bool:
+        """True when EACH want is satisfied by some single collected frame."""
+        return all( any( not want( f ) for f in self._frames ) for want in self._wants )
 
     @property
     def open( self ) -> bool:
-        """True while more of a coalesced batch may still arrive."""
-        if self._first_at is None:
-            return True                         # nothing yet; the caller's own timeout governs
-        return ( self._clock() - self._first_at ) < self._settle
+        """True while more frames may still be worth waiting for."""
+        remaining = self.remaining_s()
+        return remaining is None or remaining > 0
 
     def remaining_s( self ) -> Optional[ float ]:
-        """Seconds left in the settle period, or None before the first frame."""
+        """Seconds left before the collector closes, or None before the first frame.
+
+        Without [append_wait_s] the settle period runs from the first frame. With
+        it, the watch's leading `cc_transcript_state` frame no longer starts the
+        clock: the collector waits up to [append_wait_s] for an append, then
+        settles from the first append — or, given [wants], closes as soon as
+        every want is met by one whole frame.
+        """
         if self._first_at is None:
             return None
-        return max( 0.0, self._settle - ( self._clock() - self._first_at ) )
+        now = self._clock()
+        if self._append_wait <= 0:
+            return max( 0.0, self._settle - ( now - self._first_at ) )
+        if self._wants and self._wants_met():
+            return 0.0
+        if self._wants or self._first_append_at is None:
+            return max( 0.0, max( self._settle, self._append_wait ) - ( now - self._first_at ) )
+        return max( 0.0, self._settle - ( now - self._first_append_at ) )
 
     def select( self, name: str, reasons_for: Callable[ [ dict ], list[ str ] ] ) -> dict:
         """The first collected frame that satisfies [reasons_for], or raise.
@@ -277,6 +302,8 @@ async def capture_frames(
     file_epoch: Optional[ str ] = None,
     settle_ms: int = COALESCE_WINDOW_MS,
     first_frame_timeout_s: float = 30.0,
+    append_wait_s: float = 0.0,
+    wants: Sequence[ Callable[ [ dict ], list[ str ] ] ] = (),
     connect: Optional[ Callable[ ..., Any ] ] = None,
     clock: Callable[ [], float ] = time.monotonic,
 ) -> TranscriptFrameCollector:
@@ -291,14 +318,17 @@ async def capture_frames(
         - the FIRST message sent is `auth_request`, or the server closes 4001
         - `cc_transcript_unwatch` is sent on the way out, including after a
           failure, so the server is not left tailing a file for a dead client
-        - returns as soon as the settle period after the first frame elapses
+        - returns as soon as the settle period after the first frame elapses;
+          with [append_wait_s] > 0 it instead waits (bounded) for appends, and
+          with [wants] stops once each is met by one whole frame
         - raises [AdminRefused] carrying the server's own message when the gate
           refuses, and [WsCaptureError] for a failed handshake or a silent watch
     """
     if connect is None:                                     # pragma: no cover - real I/O
         from websockets.asyncio.client import connect as connect  # noqa: PLC0415
 
-    collector = TranscriptFrameCollector( settle_ms=settle_ms, clock=clock )
+    collector = TranscriptFrameCollector(
+        settle_ms=settle_ms, clock=clock, append_wait_s=append_wait_s, wants=wants )
 
     async with connect( url ) as ws:
         await ws.send( json.dumps( { "type": "auth_request", "token": token } ) )
