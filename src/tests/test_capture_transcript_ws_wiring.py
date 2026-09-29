@@ -147,3 +147,48 @@ def test_an_https_base_becomes_wss_not_ws( script, monkeypatch ):
     script.capture_ws_frames( "https://lupin.example", "admin-jwt", "seat-1" )
 
     assert seen[ "url" ].startswith( "wss://" )
+
+
+def _thinking_frame( text: str, offset: int ) -> dict:
+    return {
+        "type"          : "cc_transcript_append",
+        "cc_session_id" : "00000000-0000-4000-8000-000000000001",
+        "offset"        : offset,
+        "blocks"        : [ { "kind": "thinking", "text": text } ],
+    }
+
+
+def test_a_frame_that_LOOKS_like_a_jwt_is_skipped_for_the_next_qualifying_frame( script, monkeypatch ):
+    """A live seat's frames carry whatever it printed — source code with three
+    long dotted segments trips the naive JWT guard, which exits the whole run.
+    That frame is unsuitable, not the run: take the next whole frame instead."""
+    import _ws_capture as wsc
+
+    written: dict[ str, Any ] = {}
+    monkeypatch.setattr( script.lib, "write_fixture",
+                         lambda domain, name, body: written.update( { name: body } ) )
+
+    dotted    = "a" * 25 + "." + "b" * 25 + "." + "c" * 25
+    collector = wsc.TranscriptFrameCollector()
+    collector.offer( _thinking_frame( f"the offsets stay continuous {dotted}", 4 ) )
+    collector.offer( _thinking_frame( "the offsets must stay continuous", 5 ) )
+    monkeypatch.setattr( wsc, "capture_frames", lambda *a, **k: _ready( collector ) )
+
+    script.capture_ws_frames( "http://localhost:7999", "admin-jwt", "seat-1" )
+
+    assert written[ "append_thinking.json" ][ "offset" ] == 5, "the clean frame, whole"
+
+
+def test_when_every_qualifying_frame_looks_like_a_jwt_the_fixture_is_blocked_not_written( script, monkeypatch ):
+    import _ws_capture as wsc
+
+    dotted    = "a" * 25 + "." + "b" * 25 + "." + "c" * 25
+    collector = wsc.TranscriptFrameCollector()
+    collector.offer( _thinking_frame( f"the offsets stay continuous {dotted}", 4 ) )
+    monkeypatch.setattr( wsc, "capture_frames", lambda *a, **k: _ready( collector ) )
+
+    script.capture_ws_frames( "http://localhost:7999", "admin-jwt", "seat-1" )
+
+    assert "append_thinking.json" in script.blocked
+    assert "JWT" in script.blocked[ "append_thinking.json" ]
+    assert "append_thinking.json" not in script.captured

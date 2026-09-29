@@ -61,7 +61,7 @@ import asyncio
 import json
 import os
 import sys
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import _fixture_lib as lib
 
@@ -393,7 +393,7 @@ def capture_ws_frames(
         ( "state_refused.json",      wsc.state_refused_reasons ),
     ):
         try:
-            frame = collector.select( name, reasons_for )
+            frame = collector.select( name, _without_jwt_lookalikes( reasons_for ) )
         except wsc.NoQualifyingFrame as none_fit:
             _block( name, str( none_fit ) )
             continue
@@ -404,6 +404,33 @@ def capture_ws_frames(
         lib.assert_no_jwt_residue( redacted, name )
         lib.write_fixture( DOMAIN, name, redacted )
         _ok( name )
+
+
+def _looks_like_jwt( body: Any ) -> bool:
+    """The same three-dot test as `lib.assert_no_jwt_residue`, without its exit.
+
+    A live seat's frames carry whatever it printed, and source code with three
+    long dotted segments trips the guard, which would abort the whole run.
+    """
+    for chunk in json.dumps( body ).split( '"' ):
+        parts = chunk.split( "." )
+        if len( parts ) == 3 and all( len( p ) >= 20 for p in parts ):
+            return True
+    return False
+
+
+def _without_jwt_lookalikes( reasons_for: Callable[ [ dict ], list[ str ] ] ) -> Callable[ [ dict ], list[ str ] ]:
+    """Wrap a fixture predicate so a JWT-looking frame is unsuitable, not fatal.
+
+    Selection then takes the next whole frame. `lib.assert_no_jwt_residue` still
+    runs on whatever is written, so this only widens what may be skipped.
+    """
+    def reasons( frame: dict ) -> list[ str ]:
+        found = list( reasons_for( frame ) )
+        if _looks_like_jwt( frame ):
+            found.append( "a string in the frame looks like a JWT; skipped rather than written" )
+        return found
+    return reasons
 
 
 def _capture_session_id() -> str:
