@@ -72,6 +72,19 @@ void main() {
     verify( () => asr.cancelRecording() ).called( 1 );
   } );
 
+  testWidgets( 'dispose while the permission prompt is open: the start never reaches the recorder', ( t ) async {
+    final prompt = Completer<bool>();
+    final c = TextEditingController();
+    await t.pumpWidget( host( DictationTextField(
+      controller: c, asr: asr, requestMicPermission: () => prompt.future, micKey: micKey ) ) );
+    await tapMic( t );
+    await t.pumpWidget( host( const SizedBox() ) );
+    prompt.complete( true );
+    await settle( t );
+
+    verifyNever( () => asr.startRecording() );
+  } );
+
   testWidgets( 'dispose while transcribing drops the result, nothing lands', ( t ) async {
     final gate = Completer<String>();
     when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => gate.future );

@@ -76,7 +76,6 @@ class _TaskListPaneState extends State<TaskListPane> {
           lookup       : context.read<TaskListBloc>().lookupTask,
           createTicket : context.read<TaskListBloc>().createTicket,
           assignees    : context.read<TaskListBloc>().newTicketAssignees,
-          voice        : context.read<TaskListBloc>().voice,
         );
 
         // An empty list renders an EMPTY STATE, not a blank screen. A blank pane and a

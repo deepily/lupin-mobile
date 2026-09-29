@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../services/asr/voice_capture_session.dart';
 import '../../../services/network/network_connectivity_service.dart';
 import '../../fleet/data/task_row_model.dart';
 import '../../fleet/data/task_write_repository.dart';
@@ -169,12 +168,6 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// second service is the one most likely not to.
   final FleetRepository? _fleet;
 
-  /// The mic behind the New Ticket card's Title and Details (row b31a9ed9).
-  ///
-  /// ⚠️ NULL MEANS NO MICS, NOT BROKEN MICS — the web's rule, verbatim in spirit:
-  /// *"Supply this and Title and Details get mics; omit it and neither does."*
-  final VoiceCaptureSession? voice;
-
   StreamSubscription<NetworkState>? _connectivitySub;
 
   TaskListBloc(
@@ -182,7 +175,6 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     this._writes, {
     NetworkConnectivityService? network,
     FleetRepository? fleet,
-    this.voice,
   } )  : _network = network ?? NetworkConnectivityService(),
         _fleet   = fleet,
         super( const TaskListState() ) {

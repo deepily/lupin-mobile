@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 import '../../fleet/data/task_row_model.dart';
-import '../../../services/asr/voice_capture_session.dart';
 import '../../fleet/presentation/task_row.dart';
 import '../data/new_ticket.dart';
 import '../data/task_lookup.dart';
@@ -28,16 +27,12 @@ class TaskListHeader extends StatefulWidget {
   /// roster is current.
   final List<String> Function() assignees;
 
-  /// The card's mics. Null means none are offered.
-  final VoiceCaptureSession? voice;
-
   const TaskListHeader( {
     super.key,
     required this.countLabel,
     required this.lookup,
     required this.createTicket,
     required this.assignees,
-    this.voice,
   } );
 
   @override
@@ -92,7 +87,6 @@ class _TaskListHeaderState extends State<TaskListHeader> {
       context,
       createTicket : widget.createTicket,
       assignees    : widget.assignees(),
-      voice        : widget.voice,
     );
     if ( outcome == null || !mounted ) return;
     // The card closed itself on `created`; its sentence moves here so it is not lost.

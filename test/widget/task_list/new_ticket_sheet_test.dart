@@ -11,7 +11,7 @@ import 'package:lupin_mobile/features/task_list/data/task_list_repository.dart';
 import 'package:lupin_mobile/features/task_list/domain/task_list_bloc.dart';
 import 'package:lupin_mobile/features/task_list/presentation/task_list_pane.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
-import 'package:lupin_mobile/services/asr/voice_capture_session.dart';
+import 'package:lupin_mobile/shared/widgets/dictation_text_field.dart';
 import 'package:mocktail/mocktail.dart';
 
 /// M4, the New Ticket card, driven through the REAL pane and asserting what reaches the
@@ -52,7 +52,8 @@ Response<dynamic> _created( RequestOptions o ) => Response<dynamic>(
 
 Future<_Recorder> _mount( WidgetTester tester, {
   Response<dynamic> Function( RequestOptions )? onPost,
-  VoiceCaptureSession? voice,
+  AsrService? asr,
+  Future<bool> Function()? permission,
 } ) async {
   tester.view.physicalSize     = const Size( 1080, 2400 );
   tester.view.devicePixelRatio = 3.0;
@@ -61,12 +62,17 @@ Future<_Recorder> _mount( WidgetTester tester, {
   final rec = _Recorder( onPost ?? _created );
   final dio = Dio( BaseOptions( baseUrl: 'http://test' ) )..interceptors.add( rec );
   await tester.pumpWidget( MaterialApp(
+    // The app's own scope; no service means no mics, as on the web.
+    builder : ( context, child ) => DictationScope(
+      asr                  : asr,
+      requestMicPermission : permission ?? () async => true,
+      child                : child!,
+    ),
     home : Scaffold(
       body : BlocProvider<TaskListBloc>(
         create : ( _ ) => TaskListBloc(
           TaskListRepository( dio ),
           TaskWriteRepository( dio, actorEmail: () => 'rick@example.com' ),
-          voice : voice,
         ),
         child : const TaskListPane(),
       ),
@@ -182,7 +188,7 @@ void main() {
   } );
 
   group( 'mics', () {
-    testWidgets( 'no voice session, no mics — as on the web', ( tester ) async {
+    testWidgets( 'no recorder service, no mics — as on the web', ( tester ) async {
       await _mount( tester );
       await _open( tester );
       expect( find.byKey( const Key( TestKeys.newTicketTitleMic ) ), findsNothing );
@@ -195,9 +201,8 @@ void main() {
       when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
       when( () => asr.isCapturing ).thenReturn( false );
       when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) async => 'from the phone' );
-      final voice = VoiceCaptureSession( asr: asr, requestPermission: () async => true );
 
-      final rec = await _mount( tester, voice: voice );
+      final rec = await _mount( tester, asr: asr );
       await _open( tester );
       await tester.enterText( find.byKey( const Key( TestKeys.newTicketTitle ) ), 't' );
       await tester.enterText( find.byKey( const Key( TestKeys.newTicketDetails ) ), 'Typed first.' );
@@ -222,9 +227,8 @@ void main() {
       when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
       when( () => asr.isCapturing ).thenReturn( false );
       when( () => asr.stopAndTranscribe() ).thenAnswer( ( _ ) => heard.future );
-      final voice = VoiceCaptureSession( asr: asr, requestPermission: () async => true );
 
-      await _mount( tester, voice: voice );
+      await _mount( tester, asr: asr );
       await _open( tester );
       await tester.enterText( find.byKey( const Key( TestKeys.newTicketDetails ) ), 'kept' );
       await tester.tap( find.byKey( const Key( TestKeys.newTicketDetailsMic ) ) );   // start
@@ -233,7 +237,7 @@ void main() {
       await tester.pump();
       expect( micLive( tester, TestKeys.newTicketTitleMic ), isFalse );              // transcribing
 
-      voice.invalidate();                  // a cancel lands while the upload is in flight
+      await tester.tap( find.byTooltip( 'Cancel transcription' ) );   // a cancel lands while the upload is in flight
       heard.complete( 'too late' );
       await tester.pumpAndSettle();
 
@@ -241,29 +245,6 @@ void main() {
       expect( micLive( tester, TestKeys.newTicketDetailsMic ), isTrue );
       expect( tester.widget<TextField>( find.byKey( const Key( TestKeys.newTicketDetails ) ) ).controller!.text,
           'kept' );
-    } );
-
-    testWidgets( 'a start the cancel overtook frees both mics', ( tester ) async {
-      final asr     = _MockAsr();
-      final granted = Completer<bool>();
-      when( () => asr.startRecording() ).thenAnswer( ( _ ) async {} );
-      when( () => asr.cancelRecording() ).thenAnswer( ( _ ) async {} );
-      when( () => asr.isCapturing ).thenReturn( false );
-      final voice = VoiceCaptureSession( asr: asr, requestPermission: () => granted.future );
-
-      await _mount( tester, voice: voice );
-      await _open( tester );
-      await tester.tap( find.byKey( const Key( TestKeys.newTicketTitleMic ) ) );     // start
-      await tester.pump();
-      expect( micLive( tester, TestKeys.newTicketDetailsMic ), isFalse );            // title is live
-
-      voice.invalidate();                  // a cancel lands while the permission prompt is open
-      granted.complete( true );
-      await tester.pumpAndSettle();
-
-      expect( micLive( tester, TestKeys.newTicketTitleMic ), isTrue );
-      expect( micLive( tester, TestKeys.newTicketDetailsMic ), isTrue );
-      verifyNever( () => asr.startRecording() );
     } );
   } );
 }

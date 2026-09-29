@@ -76,10 +76,21 @@ class DictationRecorderGuard extends ChangeNotifier {
 class DictationScope extends InheritedWidget {
   final AsrService? asr;
 
-  const DictationScope( { super.key, required this.asr, required super.child } );
+  /// Test seam for the permission prompt, for every field below.
+  final MicPermissionRequester? requestMicPermission;
+
+  const DictationScope( {
+    super.key,
+    required this.asr,
+    this.requestMicPermission,
+    required super.child,
+  } );
 
   static AsrService? maybeOf( BuildContext context ) =>
       context.dependOnInheritedWidgetOfExactType<DictationScope>()?.asr;
+
+  static MicPermissionRequester? permissionOf( BuildContext context ) =>
+      context.dependOnInheritedWidgetOfExactType<DictationScope>()?.requestMicPermission;
 
   @override
   bool updateShouldNotify( DictationScope old ) => asr != old.asr;
@@ -159,6 +170,11 @@ class _DictationTextFieldState extends State<DictationTextField> {
   Timer? _timer;
   int    _seconds = 0;
 
+  /// True from the mic press until the recorder is running, refused or stale:
+  /// the permission prompt is open. Leaving then must still cancel, or the start
+  /// completes on a dead widget and strands the recorder.
+  bool _starting = false;
+
   AsrService?            _asr;
   VoiceCaptureSession?   _session;
   DictationRecorderGuard? _guard;
@@ -187,7 +203,10 @@ class _DictationTextFieldState extends State<DictationTextField> {
     _asr     = asr;
     _session = asr == null
         ? null
-        : VoiceCaptureSession( asr: asr, requestPermission: widget.requestMicPermission );
+        : VoiceCaptureSession(
+            asr               : asr,
+            requestPermission : widget.requestMicPermission ?? DictationScope.permissionOf( context ),
+          );
     _guard   = asr == null ? null : DictationRecorderGuard.of( asr );
     _guard?.addListener( _onGuardChanged );
   }
@@ -202,7 +221,7 @@ class _DictationTextFieldState extends State<DictationTextField> {
     // hold for the rest of the app session (row a1c12c6e). Running OR
     // transcribing, and an in-flight transcription is invalidated so its
     // result cannot land on a dead widget.
-    if ( _phase == DictationPhase.listening ) {
+    if ( _phase == DictationPhase.listening || _starting ) {
       s.cancel();
     } else if ( _phase == DictationPhase.transcribing ) {
       s.invalidate();
@@ -239,7 +258,9 @@ class _DictationTextFieldState extends State<DictationTextField> {
       _caret       = sel.isValid ? sel.baseOffset : widget.controller.text.length;
       _textAtStart = widget.controller.text;
 
+      _starting = true;
       final start = await session.start();
+      _starting = false;
       if ( !mounted ) return;
       if ( start.isStale ) { _guard!.release( this ); return; }
       if ( !start.started ) {

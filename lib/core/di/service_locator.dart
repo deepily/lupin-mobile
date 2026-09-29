@@ -276,8 +276,6 @@ class ServiceLocator {
     _getIt<TaskListRepository>(),
     _getIt<TaskWriteRepository>(),
     fleet : _getIt<FleetRepository>(),
-    // The New Ticket card's two mics. Omit it and the card offers none, as on the web.
-    voice : VoiceCaptureSession( asr: _getIt<AsrService>() ),
   );
 
   // ⚠️ `fleet` IS THE REASSIGNMENT ROSTER HERE TOO, for the reason spelled out above

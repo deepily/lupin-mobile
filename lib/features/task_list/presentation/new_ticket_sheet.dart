@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
-import '../../../services/asr/dictation_splice.dart';
-import '../../../services/asr/voice_capture_session.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 import '../data/new_ticket.dart';
 
 /// Open the New Ticket card over the Task List (row b31a9ed9, walk-through item M4).
@@ -16,7 +15,6 @@ Future<NewTicketOutcome?> showNewTicketSheet(
   BuildContext context, {
   required Future<NewTicketOutcome> Function( Map<String, String> payload ) createTicket,
   required List<String> assignees,
-  VoiceCaptureSession? voice,
 } ) {
   return showModalBottomSheet<NewTicketOutcome>(
     context            : context,
@@ -25,12 +23,9 @@ Future<NewTicketOutcome?> showNewTicketSheet(
     builder            : ( _ ) => NewTicketSheet(
       createTicket : createTicket,
       assignees    : assignees,
-      voice        : voice,
     ),
   );
 }
-
-enum _Mic { idle, listening, transcribing }
 
 /// The card. Its fields are the web's `NEW_TICKET_FIELDS`, in the web's order:
 /// title, details, assigned to, accountable manager, priority, approval, type, epic key,
@@ -39,13 +34,10 @@ enum _Mic { idle, listening, transcribing }
 class NewTicketSheet extends StatefulWidget {
   final Future<NewTicketOutcome> Function( Map<String, String> payload ) createTicket;
   final List<String> assignees;
-  final VoiceCaptureSession? voice;
-
   const NewTicketSheet( {
     super.key,
     required this.createTicket,
     required this.assignees,
-    this.voice,
   } );
 
   @override
@@ -70,18 +62,8 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
   String? _result;
   bool _inFlight = false;
 
-  /// Which field's mic is live, if any. One at a time: two recordings cannot share the
-  /// one recorder.
-  String? _micField;
-  _Mic _mic = _Mic.idle;
-
-  /// Where the caret was when recording began, so the words land where the operator was
-  /// typing rather than at the end (the web splices at the same point).
-  int _micCaret = -1;
-
   @override
   void dispose() {
-    if ( _mic == _Mic.listening ) widget.voice?.cancel();
     for ( final c in [ _title, _details, _owner, _manager, _epic, _project ] ) {
       c.dispose();
     }
@@ -129,67 +111,6 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
     // already exists, and the sentence says so; closing would hide the one warning that
     // stops an honest retry from filing it twice.
     setState( () { _inFlight = false; _result = outcome.text; } );
-  }
-
-  Future<void> _toggleMic( String field, TextEditingController box ) async {
-    final voice = widget.voice;
-    if ( voice == null || _mic == _Mic.transcribing ) return;
-    if ( _mic == _Mic.listening && _micField != field ) return;
-
-    if ( _mic == _Mic.listening ) {
-      setState( () => _mic = _Mic.transcribing );
-      final capture = await voice.stopAndTranscribe();
-      if ( !mounted ) return;
-      // 🔴 A STALE RESULT CHANGES THE TEXT NOT AT ALL, BUT IT MUST STILL FREE THE MIC.
-      // Returning early here left `_mic` at transcribing, so every mic on the card stayed
-      // dead until it was closed (María, review of 30efd26).
-      if ( capture.isStale ) { _micIdle(); return; }
-      if ( capture.transcript != null ) _splice( box, capture.transcript!.trim() );
-      setState( () {
-        _mic      = _Mic.idle;
-        _micField = null;
-        if ( capture.transcript == null ) _result = capture.errorMessage;
-      } );
-      return;
-    }
-
-    final sel = box.selection;
-    _micCaret = sel.isValid ? sel.baseOffset : box.text.length;
-    setState( () { _micField = field; _mic = _Mic.listening; } );
-    final start = await voice.start();
-    if ( !mounted ) return;
-    // Same rule on the way in: a start a cancel overtook recorded nothing, so the mic
-    // goes back to idle rather than showing "listening" over a silent recorder.
-    if ( start.isStale ) { _micIdle(); return; }
-    if ( !start.started ) {
-      setState( () { _mic = _Mic.idle; _micField = null; _result = start.errorMessage; } );
-    }
-  }
-
-  void _micIdle() => setState( () { _mic = _Mic.idle; _micField = null; } );
-
-  /// Insert [heard] at the caret the box held when recording began. APPEND, NEVER
-  /// REPLACE: the operator may have typed half a sentence before reaching for the mic.
-  ///
-  /// The rule itself now lives in `dictation_splice.dart` (row 570c2fce), because the
-  /// TTS editor box needed the same one and a second copy is how two boxes drift.
-  void _splice( TextEditingController box, String heard ) {
-    box.value = spliceDictation( value: box.value, heard: heard, caret: _micCaret );
-  }
-
-  Widget? _micButton( String field, String label, TextEditingController box, String key ) {
-    if ( widget.voice == null ) return null;
-    final live = _micField == field;
-    return IconButton(
-      key       : Key( key ),
-      tooltip   : live && _mic == _Mic.listening ? 'Stop and transcribe' : 'Dictate $label',
-      onPressed : ( _mic == _Mic.idle || live ) && _mic != _Mic.transcribing
-          ? () => _toggleMic( field, box )
-          : null,
-      icon      : live && _mic == _Mic.transcribing
-          ? const SizedBox( width: 18, height: 18, child: CircularProgressIndicator( strokeWidth: 2 ) )
-          : Icon( live && _mic == _Mic.listening ? Icons.stop_circle_outlined : Icons.mic_none ),
-    );
   }
 
   /// A free-text box with the roster as suggestions — the web's `<input list=…>`. The
@@ -275,30 +196,30 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
                     child  : Text( 'New ticket', style: Theme.of( context ).textTheme.titleLarge ),
                   ),
                   gap,
-                  TextField(
-                    key         : const Key( TestKeys.newTicketTitle ),
+                  DictationTextField(
+                    fieldKey    : const Key( TestKeys.newTicketTitle ),
+                    micKey      : const Key( TestKeys.newTicketTitleMic ),
                     controller  : _title,
                     focusNode   : _titleFocus,
                     autofocus   : true,
-                    decoration  : InputDecoration(
+                    decoration  : const InputDecoration(
                       labelText  : 'Title',
                       hintText   : 'What needs doing',
-                      border     : const OutlineInputBorder(),
-                      suffixIcon : _micButton( 'title', 'Title', _title, TestKeys.newTicketTitleMic ),
+                      border     : OutlineInputBorder(),
                     ),
                   ),
                   gap,
-                  TextField(
-                    key        : const Key( TestKeys.newTicketDetails ),
+                  DictationTextField(
+                    fieldKey   : const Key( TestKeys.newTicketDetails ),
+                    micKey     : const Key( TestKeys.newTicketDetailsMic ),
                     controller : _details,
                     minLines   : 4,
                     maxLines   : 8,
-                    decoration : InputDecoration(
+                    decoration : const InputDecoration(
                       labelText  : 'Details',
                       hintText   : 'Background material — context, links, what you already know. '
                                    'Whoever picks this up starts here.',
-                      border     : const OutlineInputBorder(),
-                      suffixIcon : _micButton( 'details', 'Details', _details, TestKeys.newTicketDetailsMic ),
+                      border     : OutlineInputBorder(),
                     ),
                   ),
                   gap,
