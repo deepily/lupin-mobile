@@ -60,6 +60,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from typing import Any, Callable, Optional
 
@@ -402,20 +403,33 @@ def capture_ws_frames(
         aliases  = _build_seat_alias_map( frame )
         redacted = _apply_aliases( frame, aliases )
         lib.redact_timestamp_fields( redacted, ( "ts", "timestamp", "generated_at" ) )
-        lib.assert_no_jwt_residue( redacted, name )
+        if _looks_like_jwt( redacted ):
+            _block( name, "a JWT survived redaction; nothing written" )
+            continue
         lib.write_fixture( DOMAIN, name, redacted )
         _ok( name )
 
 
-def _looks_like_jwt( body: Any ) -> bool:
-    """The same three-dot test as `lib.assert_no_jwt_residue`, without its exit.
+_B64URL = re.compile( r"[A-Za-z0-9_-]+" )
 
-    A live seat's frames carry whatever it printed, and source code with three
-    long dotted segments trips the guard, which would abort the whole run.
+
+def _looks_like_jwt( body: Any ) -> bool:
+    """True when a string in [body] is shaped like a JWT: three dot-separated
+    base64url segments of 20+ characters, the first starting `eyJ`.
+
+    Stricter than `lib.assert_no_jwt_residue`, on purpose and only for the WS
+    frames: a live seat prints free prose and source, and the shared guard's bare
+    "three long dotted parts" test fires on any sentence with two dots (measured:
+    a `<local-command-caveat>` boilerplate line). A real JWT header is base64 of
+    `{"`, so it always starts `eyJ`, and its segments never contain spaces.
+
+    Requires:
+        - [body] is JSON-serialisable
     """
     for chunk in json.dumps( body ).split( '"' ):
         parts = chunk.split( "." )
-        if len( parts ) == 3 and all( len( p ) >= 20 for p in parts ):
+        if ( len( parts ) == 3 and parts[ 0 ].startswith( "eyJ" )
+             and all( len( p ) >= 20 and _B64URL.fullmatch( p ) for p in parts ) ):
             return True
     return False
 
