@@ -46,6 +46,8 @@ print_info()    { echo -e "${YELLOW}ℹ $1${NC}"; }
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+# shellcheck source=src/scripts/lib/apk-build-stamp.sh
+source "$SCRIPT_DIR/lib/apk-build-stamp.sh"
 APK="$REPO_ROOT/build/app/outputs/flutter-apk/app-debug.apk"
 
 # Same values as CLAUDE.md § DEVELOPMENT COMMANDS. Overridable, but the defaults are the
@@ -158,5 +160,12 @@ if [ ! -f "$APK" ] || [ ! "$APK" -nt "$marker" ]; then
     exit 1
 fi
 
+# Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
+# and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
+# compile-time flag needs writing down at all (row 8ff78c69, F3).
+write_apk_stamp "$APK" "$sha" "$branch" "$FCM" \
+    "$( [ -n "$dirty" ] && echo true || echo false )"
+
 print_success "Built in $(( SECONDS - started ))s: $APK"
 print_success "Commit: $branch @ $sha$dirty$fcm_note"
+print_info    "Stamped: $( basename "$( apk_stamp_path "$APK" )" ) (fcm=$FCM)"

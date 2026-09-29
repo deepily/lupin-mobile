@@ -89,6 +89,8 @@ file_stamp() {
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+# shellcheck source=src/scripts/lib/apk-build-stamp.sh
+source "$SCRIPT_DIR/lib/apk-build-stamp.sh"
 APK_REL="build/app/outputs/flutter-apk/app-debug.apk"
 APK_SRC="$REPO_ROOT/$APK_REL"
 PACKAGE_NAME="ai.deepily.lupin_mobile"
@@ -422,6 +424,27 @@ fi
 print_info "Source:    $APK_SRC"
 print_info "Built:     $( file_stamp "$APK_SRC" )"
 
+# ════════════════════════════════════════════════════════════════════════════════════
+# What FLAGS is this APK carrying?
+# ════════════════════════════════════════════════════════════════════════════════════
+# The staleness gate below compares mtimes, so it catches "the source moved and nobody
+# rebuilt". It cannot catch "somebody rebuilt without --fcm", because a compile-time define
+# leaves no trace in the binary — and background wake is exactly the feature that goes
+# missing silently when it happens. build-apk-on-server.sh stamps a .build-info beside the
+# APK; read it and say so plainly, because nothing on the phone will.
+APK_FCM="$( apk_fcm_state "$APK_SRC" )"
+case "$APK_FCM" in
+    on)  print_info "Commit:    $( read_apk_stamp_field "$APK_SRC" branch ) @ $( read_apk_stamp_field "$APK_SRC" sha )"
+         print_info "FCM:       ON — background wake-ups are compiled in" ;;
+    off) print_info "Commit:    $( read_apk_stamp_field "$APK_SRC" branch ) @ $( read_apk_stamp_field "$APK_SRC" sha )"
+         print_info "FCM:       OFF — NO background wake-ups in this build."
+         print_info "           Rebuild with --build --fcm if you are testing wake-ups." ;;
+    *)   # An APK from before the stamp existed, or from the other build script. Reported
+         # as unknown rather than guessed: a guess presented as a fact is the defect.
+         print_info "FCM:       unknown — no readable build stamp beside this APK."
+         print_info "           Rebuild with --build (optionally --fcm) to get one." ;;
+esac
+
 # 🔴 A TIMESTAMP IS A DISCLOSURE, NOT A CONTROL, AND THIS IS THE CONTROL.
 # Printing when the APK was built puts a two-timestamp comparison in the reader's head at
 # the worst possible moment, and the line scrolls past above the ✓ the eye actually lands
@@ -528,6 +551,14 @@ fi
 
 echo ""
 print_success "Done — $CHOSEN_KIND $CHOSEN is running the APK built $( file_stamp "$APK_SRC" )"
+# Repeated on the LAST line on purpose: the "Source/Built/FCM" block above has scrolled
+# past by now, and this is the line the eye lands on. If wake-ups are not compiled in, this
+# is where that gets noticed instead of during an hour of debugging why nothing arrives.
+case "$APK_FCM" in
+    on)  print_success "FCM background wake-ups: ON" ;;
+    off) print_error   "FCM background wake-ups: OFF in this build — wake-ups will NOT arrive" ;;
+    *)   print_info    "FCM background wake-ups: unknown (no build stamp)" ;;
+esac
 
 if [ "$DO_LOGCAT" = true ]; then
     print_step "Tailing logcat (Ctrl+C to stop)"
