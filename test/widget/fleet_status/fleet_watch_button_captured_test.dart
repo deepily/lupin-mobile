@@ -1,4 +1,4 @@
-@Tags( [ "pending-capture" ] )
+// pending-capture tag REMOVED 2026-09-29: watchable_roster.json was captured, so C5.9 runs in the gate.
 library;
 
 import 'package:flutter/material.dart';

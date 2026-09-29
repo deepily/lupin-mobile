@@ -152,12 +152,16 @@ class FleetWatchableRoster {
 
     final status = json[ "status" ];
 
-    // TODO(slice-3, OSQ-6): the projection's body shape is not final — §3's Open
-    // sub-question 6 is still open on the path, and the body was swept in with it. Both
-    // spellings are read rather than one guessed, and whichever the server lands on, the
-    // captured fixture will pin it (C5.9's field arm).
+    // 🔴 PINNED BY THE CAPTURE (2026-09-29): the live server answers
+    // `{ status, seats[], session_count }` (lupin cc_transcript.py:81). The two
+    // spellings this used to guess — `sessions` and `rows` — are BOTH wrong for
+    // the real body, so on a real phone every watch button stayed hidden while
+    // every hand-written test passed. The first captured watchable_roster.json
+    // turned C5.9's field arm red on exactly that. `seats` is read first; the old
+    // spellings stay only as fallbacks for the hand-built fixtures still using them.
     final nested = json[ "fleet_arbiter" ];
-    final raw    = json[ "sessions" ]
+    final raw    = json[ "seats" ]
+        ?? json[ "sessions" ]
         ?? json[ "rows" ]
         ?? ( nested is Map ? nested[ "sessions" ] : null );
 

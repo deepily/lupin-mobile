@@ -251,4 +251,19 @@ void main() {
                   "distinction A3.7 exists to preserve" );
     } );
   } );
+
+  // The live server's key, pinned by the first capture (2026-09-29): `seats`.
+  // Guessing `sessions`/`rows` alone left every watch button hidden in production.
+  test( "the REAL body's `seats` key is read — the shape the live server sends", () {
+    final roster = FleetWatchableRoster.fromJson( {
+      "status"        : "ok",
+      "session_count" : 2,
+      "seats"         : [
+        { "session_id": "aaaaaaaa-0000-4000-8000-000000000001", "transcript_watchable": true  },
+        { "session_id": "aaaaaaaa-0000-4000-8000-000000000002", "transcript_watchable": false },
+      ],
+    } );
+    expect( roster.rows, hasLength( 2 ) );
+    expect( roster.watchableSessionIds, { "aaaaaaaa-0000-4000-8000-000000000001" } );
+  } );
 }
