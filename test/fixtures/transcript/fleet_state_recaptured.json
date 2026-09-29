@@ -1,0 +1,405 @@
+{
+  "app_timezone": "America/New_York",
+  "context_pressure": {
+    "generated_at": "2026-09-29T00:51:41.002920+00:00",
+    "personas": {
+      "Krishna": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 15.7,
+        "headroom_pct_points": 34.3,
+        "headroom_tokens_current": 342905,
+        "headroom_tokens_forward": 341753,
+        "last_turn_age_s": 25.2,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 158247,
+        "occupancy_tokens": 157095,
+        "pending_input_estimate": 730,
+        "pressure_pct": 15.8,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000007",
+        "status": "within_budget",
+        "tmux_session": "cc-author-mr-radio-2",
+        "window_size": 1000000
+      },
+      "Rio": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 17.7,
+        "headroom_pct_points": 32.3,
+        "headroom_tokens_current": 322891,
+        "headroom_tokens_forward": 322236,
+        "last_turn_age_s": 3.9,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 177764,
+        "occupancy_tokens": 177109,
+        "pending_input_estimate": 444,
+        "pressure_pct": 17.8,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000006",
+        "status": "within_budget",
+        "tmux_session": "cc-author-mr-radio-1",
+        "window_size": 1000000
+      },
+      "Tiberius": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 16.8,
+        "headroom_pct_points": 33.2,
+        "headroom_tokens_current": 331825,
+        "headroom_tokens_forward": 331712,
+        "last_turn_age_s": 1.2,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 168288,
+        "occupancy_tokens": 168175,
+        "pending_input_estimate": 35,
+        "pressure_pct": 16.8,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000002",
+        "status": "within_budget",
+        "tmux_session": "cc-reviewer-mr-radio-1",
+        "window_size": 1000000
+      },
+      "Tiffany": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 25.8,
+        "headroom_pct_points": 24.2,
+        "headroom_tokens_current": 242442,
+        "headroom_tokens_forward": 242354,
+        "last_turn_age_s": 37.7,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 257646,
+        "occupancy_tokens": 257558,
+        "pending_input_estimate": 0,
+        "pressure_pct": 25.8,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000001",
+        "status": "within_budget",
+        "tmux_session": "cc-tmux-session-145ad56d",
+        "window_size": 1000000
+      },
+      "maria": {
+        "budget_ceiling_tokens": null,
+        "budget_fraction": null,
+        "consumption_pct_of_window": null,
+        "headroom_pct_points": null,
+        "headroom_tokens_current": null,
+        "headroom_tokens_forward": null,
+        "last_turn_age_s": 3077.6,
+        "liveness": "IDLE",
+        "next_prompt_estimate": null,
+        "occupancy_tokens": null,
+        "pending_input_estimate": null,
+        "pressure_pct": null,
+        "pressure_state": null,
+        "recommendation": "idle \u2014 skip (stale transcript)",
+        "session_id": "00000000-0000-4000-8000-000000000004",
+        "status": "idle",
+        "tmux_session": "cc-tmux-session-c925f927",
+        "window_size": null
+      },
+      "maya": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 43.7,
+        "headroom_pct_points": 6.3,
+        "headroom_tokens_current": 63112,
+        "headroom_tokens_forward": 62006,
+        "last_turn_age_s": 23.5,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 437994,
+        "occupancy_tokens": 436888,
+        "pending_input_estimate": 424,
+        "pressure_pct": 43.8,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000005",
+        "status": "within_budget",
+        "tmux_session": "cc-author-tiffany-1",
+        "window_size": 1000000
+      },
+      "mr radio": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 47.5,
+        "headroom_pct_points": 2.5,
+        "headroom_tokens_current": 24751,
+        "headroom_tokens_forward": 23613,
+        "last_turn_age_s": 2.3,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 476387,
+        "occupancy_tokens": 475249,
+        "pending_input_estimate": 925,
+        "pressure_pct": 47.6,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000008",
+        "status": "within_budget",
+        "tmux_session": "cc-tmux-session-7467312f",
+        "window_size": 1000000
+      },
+      "pocholo": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 32.8,
+        "headroom_pct_points": 17.2,
+        "headroom_tokens_current": 171833,
+        "headroom_tokens_forward": 171280,
+        "last_turn_age_s": 1.0,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 328720,
+        "occupancy_tokens": 328167,
+        "pending_input_estimate": 109,
+        "pressure_pct": 32.9,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000003",
+        "status": "within_budget",
+        "tmux_session": "cc-reviewer-tiffany-1",
+        "window_size": 1000000
+      }
+    },
+    "policy": {
+      "1000000": 0.5,
+      "200000": 0.75,
+      "default": 0.5
+    },
+    "summary": {
+      "idle_or_unknown": 1,
+      "over_budget": 0,
+      "personas": 8,
+      "unnamed_live_seats": 0,
+      "within_budget": 7
+    },
+    "unnamed_seats": []
+  },
+  "fleet_arbiter": {
+    "generated_at": "2025-01-01T00:00:00+00:00",
+    "session_count": 8,
+    "sessions": [
+      {
+        "holding_on": "user:rick",
+        "liveness": {
+          "bridge_age_s": 41,
+          "commons_age_s": 3775,
+          "dm_age_s": 213,
+          "event_age_s": 42,
+          "freshest_age_s": 40,
+          "hold_age_s": 44,
+          "idle_prompt_age_s": 2024,
+          "transcript_age_s": 40,
+          "verdict": "LIVE"
+        },
+        "manager": null,
+        "persona": "Tiffany",
+        "role": "manager",
+        "session_id": "00000000-0000-4000-8000-000000000001",
+        "state": "holding",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 5,
+          "commons_age_s": null,
+          "dm_age_s": 7,
+          "event_age_s": null,
+          "freshest_age_s": 4,
+          "hold_age_s": null,
+          "idle_prompt_age_s": null,
+          "transcript_age_s": 4,
+          "verdict": "LIVE"
+        },
+        "manager": "mr radio",
+        "persona": "Tiberius",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000002",
+        "state": "unknown",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 5,
+          "commons_age_s": 3111,
+          "dm_age_s": 2103,
+          "event_age_s": null,
+          "freshest_age_s": 4,
+          "hold_age_s": null,
+          "idle_prompt_age_s": 2986,
+          "transcript_age_s": 4,
+          "verdict": "LIVE"
+        },
+        "manager": "Tiffany",
+        "persona": "pocholo",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000003",
+        "state": "unknown",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 3081,
+          "commons_age_s": 3785,
+          "dm_age_s": 3086,
+          "event_age_s": 39861,
+          "freshest_age_s": 274,
+          "hold_age_s": null,
+          "idle_prompt_age_s": 3022,
+          "transcript_age_s": 274,
+          "verdict": "quiet 4m"
+        },
+        "manager": null,
+        "persona": "maria",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000004",
+        "state": "idle",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 27,
+          "commons_age_s": 522,
+          "dm_age_s": 366,
+          "event_age_s": 339,
+          "freshest_age_s": 27,
+          "hold_age_s": null,
+          "idle_prompt_age_s": 256,
+          "transcript_age_s": 27,
+          "verdict": "LIVE"
+        },
+        "manager": "Tiffany",
+        "persona": "maya",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000005",
+        "state": "idle",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 7,
+          "commons_age_s": null,
+          "dm_age_s": 278,
+          "event_age_s": null,
+          "freshest_age_s": 3,
+          "hold_age_s": null,
+          "idle_prompt_age_s": null,
+          "transcript_age_s": 3,
+          "verdict": "LIVE"
+        },
+        "manager": "mr radio",
+        "persona": "Rio",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000006",
+        "state": "unknown",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 29,
+          "commons_age_s": null,
+          "dm_age_s": null,
+          "event_age_s": null,
+          "freshest_age_s": 18,
+          "hold_age_s": null,
+          "idle_prompt_age_s": null,
+          "transcript_age_s": 18,
+          "verdict": "LIVE"
+        },
+        "manager": "mr radio",
+        "persona": "Krishna",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000007",
+        "state": "unknown",
+        "stuck": false
+      },
+      {
+        "holding_on": "peer:rio",
+        "liveness": {
+          "bridge_age_s": 1,
+          "commons_age_s": 3785,
+          "dm_age_s": 233,
+          "event_age_s": 173,
+          "freshest_age_s": 1,
+          "hold_age_s": 182,
+          "idle_prompt_age_s": 112,
+          "transcript_age_s": 1,
+          "verdict": "LIVE"
+        },
+        "manager": null,
+        "persona": "mr radio",
+        "role": "manager",
+        "session_id": "00000000-0000-4000-8000-000000000008",
+        "state": "holding",
+        "stuck": false
+      }
+    ]
+  },
+  "generated_at": "2025-01-01T00:00:00+00:00",
+  "health_watcher": {
+    "blind": false,
+    "containers": {
+      "lupin-model-server": {
+        "flap_excluded": false,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      },
+      "lupin-postgres": {
+        "flap_excluded": false,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      },
+      "lupin-rest-dev": {
+        "flap_excluded": true,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      },
+      "lupin-rest-test": {
+        "flap_excluded": false,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 2
+      }
+    },
+    "restart_watch": {
+      "lupin-model-server": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      },
+      "lupin-postgres": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      },
+      "lupin-rest-dev": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      },
+      "lupin-rest-test": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      }
+    },
+    "updated_at": "2026-09-29T00:52:26.326052+00:00"
+  },
+  "loops": {
+    "context_pressure_writer": "alive",
+    "fleet_arbiter": "alive",
+    "health_watcher": "alive",
+    "turn_age_watchdog": "alive"
+  },
+  "service": "lupin-arbiter-app",
+  "status": "ok",
+  "version": "0.1.0"
+}
