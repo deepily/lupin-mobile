@@ -50,7 +50,21 @@ out/
 # Dependencies (to be updated based on chosen framework)
 node_modules/
 .packages
-pubspec.lock
+
+# 🔴 pubspec.lock IS TRACKED, AND IT IS TRACKED BECAUSE THIS IS AN APPLICATION.
+# The Dart team's own rule: libraries leave the lock out, apps commit it. Lupin Mobile is
+# an app, and the line that used to sit here ignored it (row 1bc50bf5).
+#
+# What the ignore cost, measured 2026-09-28: a freshly created worktree has no lock, so
+# `pub get` re-resolves EVERY dependency from scratch and picks whatever is newest inside
+# the pubspec ranges. That seat drew dio 5.11.1 against the fleet's 5.8.0+1, and dio 5.11.1
+# did not compile against this tree — 46 test files failed to load. The merge gate was not
+# reproducible on a clean checkout of the exact sha it was gating, which is the one thing a
+# gate has to be.
+#
+# Do not add it back to make a resolution problem go away. If the lock needs to move, move
+# it deliberately with `flutter pub upgrade`, run the suite, and commit the new lock as its
+# own reviewable change.
 
 # Environment files
 .env
