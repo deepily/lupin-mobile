@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../../services/asr/dictation_splice.dart';
 import '../../../services/asr/voice_capture_session.dart';
 import '../data/new_ticket.dart';
 
@@ -169,18 +170,11 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
 
   /// Insert [heard] at the caret the box held when recording began. APPEND, NEVER
   /// REPLACE: the operator may have typed half a sentence before reaching for the mic.
+  ///
+  /// The rule itself now lives in `dictation_splice.dart` (row 570c2fce), because the
+  /// TTS editor box needed the same one and a second copy is how two boxes drift.
   void _splice( TextEditingController box, String heard ) {
-    if ( heard.isEmpty ) return;
-    final text  = box.text;
-    final at    = ( _micCaret < 0 || _micCaret > text.length ) ? text.length : _micCaret;
-    final left  = text.substring( 0, at );
-    final right = text.substring( at );
-    final pad   = left.isEmpty || left.endsWith( ' ' ) || left.endsWith( '\n' ) ? '' : ' ';
-    final next  = '$left$pad$heard$right';
-    box.value = TextEditingValue(
-      text      : next,
-      selection : TextSelection.collapsed( offset: ( left + pad + heard ).length ),
-    );
+    box.value = spliceDictation( value: box.value, heard: heard, caret: _micCaret );
   }
 
   Widget? _micButton( String field, String label, TextEditingController box, String key ) {

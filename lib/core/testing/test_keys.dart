@@ -230,6 +230,10 @@ class TestKeys {
   static const voiceReplySend       = 'voiceReply.send';
   static const voiceReplyCancel     = 'voiceReply.cancel';
   static const voiceReplyError      = 'voiceReply.error';   // F-S4-S2-1a affordance (AC-S4.8)
+  // Row 570c2fce (Rick, P0): dictate ANOTHER chunk into the open editor box; the
+  // words are appended at the caret, never replacing what is already there.
+  static const voiceReplyAppendMic    = 'voiceReply.appendMic';
+  static const voiceReplyAppendCancel = 'voiceReply.appendCancel';
 
   // Audio artifact player (Phase 4a — in-app playback for pg-* / rp- jobs)
   static const audioPlayerDownloadButton = 'audio.download';
