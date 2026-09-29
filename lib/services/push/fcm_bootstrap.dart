@@ -140,11 +140,22 @@ Future<void> fcmBackgroundHandler( RemoteMessage message ) async {
 /// already persists rotations (`service_locator.dart`, `onTokensRotated`);
 /// this is the background half of the same rule.
 ///
+/// 🔴 AND THE WRITE IS THE FRAGILE HALF, NOT THE EXCHANGE (review F5). Between
+/// the exchange returning and the store accepting, the only copy of a usable
+/// refresh token is a local variable: the old one is already revoked. A write
+/// that fails there loses the account outright — and the likeliest cause is
+/// exactly the state a Doze wake runs in, a device booted but never unlocked,
+/// where the Android keystore is not yet available. So the write is RETRIED, and
+/// if it still will not land we keep the wake (the user sees their notification)
+/// and say so unmistakably in the log, because the next foreground refresh is
+/// going to fail and somebody will need to know why.
+///
 /// Requires:
 ///   - refreshToken is the token currently stored for contextId
 /// Ensures:
 ///   - returns the new access token
-///   - the rotated refresh token is written to the store BEFORE returning
+///   - the rotated refresh token is written to the store before returning, or
+///     [kFcmRefreshWriteLostMarker] is logged and the wake still completes
 /// Raises:
 ///   - AuthException on a failed or malformed exchange (the chain turns it
 ///     into the fallback notification); nothing is written in that case
@@ -154,6 +165,7 @@ Future<String> exchangeRefreshAndPersist( {
   required SecureCredentialStore store,
   required String                contextId,
   required String                refreshToken,
+  void Function( String )?       logSink,
 } ) async {
   // The SAME parser the foreground uses. The server answers
   // `{message, user?, tokens: {access_token, refresh_token}}`, and a second,
@@ -184,9 +196,59 @@ Future<String> exchangeRefreshAndPersist( {
     tokens = await repo.refresh( current );
   }
 
-  await store.writeRefreshToken( contextId, tokens.refreshToken );
+  await _persistRotatedRefreshToken(
+    store     : store,
+    contextId : contextId,
+    token     : tokens.refreshToken,
+    log       : logSink ?? debugPrint,
+  );
   return tokens.accessToken;
 }
+
+/// The one log line that says "this account is about to need a re-login, and
+/// here is why". Grep-able on purpose: it is the only warning anyone gets.
+const String kFcmRefreshWriteLostMarker = '[FcmWake] ROTATED REFRESH TOKEN LOST';
+
+/// How many times the rotated-token write is attempted before giving up.
+const int kFcmRefreshWriteAttempts = 3;
+
+/// Write the rotated refresh token, retrying a transient storage failure.
+///
+/// The retry is worth having because the failure this guards against is
+/// overwhelmingly transient: a wake that fires on a booted-but-never-unlocked
+/// device finds the keystore unavailable for a moment, not forever.
+///
+/// Ensures:
+///   - the token is stored, or [kFcmRefreshWriteLostMarker] is logged
+///   - never throws: by this point the old token is already revoked, so failing
+///     the wake as well would cost the notification and save nothing
+Future<void> _persistRotatedRefreshToken( {
+  required SecureCredentialStore store,
+  required String                contextId,
+  required String                token,
+  required void Function( String ) log,
+} ) async {
+  for ( var attempt = 1; attempt <= kFcmRefreshWriteAttempts; attempt++ ) {
+    try {
+      await store.writeRefreshToken( contextId, token );
+      if ( attempt > 1 ) log( '[FcmWake] rotated refresh token saved on attempt $attempt' );
+      return;
+    } catch ( e ) {
+      if ( attempt == kFcmRefreshWriteAttempts ) {
+        log( '$kFcmRefreshWriteLostMarker after $attempt attempts: $e — the old '
+             'token is revoked and the new one could not be stored, so the next '
+             'refresh will 401 and force a password re-login' );
+        return;
+      }
+      log( '[FcmWake] refresh-token write failed (attempt $attempt), retrying: $e' );
+      await Future<void>.delayed( kFcmRefreshWriteRetryDelay );
+    }
+  }
+}
+
+/// Gap between write attempts — long enough for a keystore that is coming up,
+/// short enough to stay inside the handler budget three times over.
+const Duration kFcmRefreshWriteRetryDelay = Duration( milliseconds: 250 );
 
 /// The system user id (the JWT `sub` claim) carried by a Lupin access token.
 ///
@@ -335,6 +397,9 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       store        : store,
       contextId    : context.activeConfig.id,
       refreshToken : refreshToken,
+      // Same sink as the chain's own, so a lost rotation shows up in the one
+      // adb stream anyone debugging a wake is already watching.
+      logSink      : debugPrint,
     ),
     fetchNextNotification: ( _, accessToken ) =>
         fetchNextForAccessToken( dio: dio, accessToken: accessToken ),

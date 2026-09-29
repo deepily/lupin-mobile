@@ -160,4 +160,72 @@ void main() {
       expect( calls, 2, reason: 'one attempt, one retry, then give up' );
     } );
   } );
+
+  group( 'F5 — a failed store write must not silently cost the account (row 8ff78c69)', () {
+    // The exchange has already revoked the old token by the time the write runs,
+    // so between those two lines the only usable refresh token is a local
+    // variable. The likeliest cause of a failure there is the very state a Doze
+    // wake runs in: a device booted but never unlocked, keystore not yet up.
+
+    test( 'a TRANSIENT write failure is retried, and the token does land', () async {
+      var attempts = 0;
+      final store = _FlakyStore( failures: 2, onWrite: () => attempts++ );
+      final adapter = StubAdapter( {
+        'POST /auth/refresh': ( _ ) => jsonBody( envelope( 'acc', 'rotated' ) ),
+      } );
+      final logs = <String>[];
+
+      final access = await exchangeRefreshAndPersist(
+        dio: makeDio( adapter ), store: store, contextId: 'dev',
+        refreshToken: 'old-refresh', logSink: logs.add );
+
+      expect( access, 'acc' );
+      expect( attempts, 3, reason: 'two failures, then the write that sticks' );
+      expect( store.stored, 'rotated' );
+      expect( logs.any( ( l ) => l.contains( 'saved on attempt 3' ) ), isTrue );
+      expect( logs.any( ( l ) => l.contains( kFcmRefreshWriteLostMarker ) ), isFalse );
+    } );
+
+    test( 'a PERMANENT write failure keeps the wake and says so unmistakably', () async {
+      final store = _FlakyStore( failures: 99, onWrite: () {} );
+      final adapter = StubAdapter( {
+        'POST /auth/refresh': ( _ ) => jsonBody( envelope( 'acc', 'rotated' ) ),
+      } );
+      final logs = <String>[];
+
+      // It must NOT throw: the old token is already revoked, so failing the wake
+      // as well would cost the notification and save nothing.
+      final access = await exchangeRefreshAndPersist(
+        dio: makeDio( adapter ), store: store, contextId: 'dev',
+        refreshToken: 'old-refresh', logSink: logs.add );
+
+      expect( access, 'acc', reason: 'the user still gets this notification' );
+      expect( logs.any( ( l ) => l.contains( kFcmRefreshWriteLostMarker ) ), isTrue,
+          reason: 'the only warning anyone gets before the forced re-login' );
+      expect( logs.where( ( l ) => l.contains( 'retrying' ) ).length,
+          kFcmRefreshWriteAttempts - 1 );
+    } );
+  } );
+}
+
+/// A store whose writes fail the first [failures] times. Reads come from
+/// whatever a successful write last accepted.
+class _FlakyStore extends SecureCredentialStore {
+  final int failures;
+  final void Function() onWrite;
+  int  _seen = 0;
+  String? stored;
+
+  _FlakyStore( { required this.failures, required this.onWrite } );
+
+  @override
+  Future<void> writeRefreshToken( String contextId, String token ) async {
+    onWrite();
+    _seen++;
+    if ( _seen <= failures ) throw Exception( 'keystore unavailable (device not unlocked)' );
+    stored = token;
+  }
+
+  @override
+  Future<String?> readRefreshToken( String contextId ) async => stored;
 }
