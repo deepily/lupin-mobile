@@ -169,7 +169,8 @@ void main() {
     await tester.tap( byKeyStr( TestKeys.promptResponseMic ) );
     await tester.pump();
 
-    // The caret stays where the typo was fixed, nowhere near the end.
+    // The caret stays where the typo was fixed — offset 9, just after the
+    // corrected word, nowhere near the end.
     boxOf( tester ).value = const TextEditingValue(
       text      : 'the quick brown fox',
       selection : TextSelection.collapsed( offset: 9 ),

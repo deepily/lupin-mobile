@@ -492,7 +492,7 @@ void main() {
       await tester.pump();
 
       // He fixes the typo while still talking, and the caret stays where he
-      // fixed it — six characters in, nowhere near the end.
+      // fixed it — offset 9, just after the word he corrected, nowhere near the end.
       boxOf( tester ).value = const TextEditingValue(
         text      : 'the quick brown fox',
         selection : TextSelection.collapsed( offset: 9 ),
