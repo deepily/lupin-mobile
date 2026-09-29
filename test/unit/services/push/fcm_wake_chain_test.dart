@@ -6,6 +6,8 @@
 /// unknown types logged and ignored.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 
@@ -474,6 +476,102 @@ void main() {
             reason: 'and a tap on that notification can route nowhere, which is '
                     'exactly the reported symptom' );
       } );
+    } );
+  } );
+
+  group( 'F2 — a wake that HANGS still ends in a visible notification (row 8ff78c69)', () {
+    // The failure these cover is the one that used to be invisible: a call that
+    // never returns and never throws never reaches the catch arm where the
+    // fallback lives, so the shade stayed empty and Android reclaimed the
+    // isolate in silence. Transport timeouts cannot cover it on their own —
+    // secure storage, prefs and the notification plugin are all on this path and
+    // none of them is Dio. `showBudget` is injected in milliseconds so the proof
+    // costs no wall clock.
+    late List<String> logs;
+    late List<String> shownBodies;
+
+    Map<String, dynamic> wakePayload() => { 'type': 'ws_wake', 'reason': 'undelivered' };
+    Map<String, dynamic> wireItem() => {
+      'id': 'n-77', 'message': 'Build finished green.', 'title': 'Mr. Radio', 'priority': 'high',
+    };
+
+    /// A future that never completes — the half-open socket, the wedged plugin.
+    Future<T> never<T>() => Completer<T>().future;
+
+    setUp( () {
+      logs        = [];
+      shownBodies = [];
+    } );
+
+    FcmWakeChain chainWith( {
+      Future<FcmWakeCredentials?> Function()? readCredentials,
+      Future<String> Function( String )?      exchange,
+      Future<Map<String, dynamic>?> Function( String, String )? fetch,
+      Future<void> Function( String, String, String? )? show,
+    } ) => FcmWakeChain(
+      readCredentials: readCredentials ??
+          () async => const FcmWakeCredentials(
+              refreshToken: 'r', userEmail: 'e@x.com' ),
+      exchangeForAccessToken : exchange ?? ( _ ) async => 'a',
+      fetchNextNotification  : fetch ?? ( _, __ ) async => wireItem(),
+      showNotification       : show ?? ( _, body, __ ) async => shownBodies.add( body ),
+      shouldSpeak            : ( _ ) async => false,
+      ttsFraction            : () async => 1.0,
+      speak                  : ( _ ) async {},
+      markPlayed             : ( _, __ ) async {},
+      log                    : logs.add,
+      showBudget             : const Duration( milliseconds: 40 ),
+      fallbackBudget         : const Duration( milliseconds: 40 ),
+    );
+
+    test( 'a credential read that never returns: the fallback goes out anyway', () async {
+      final outcome = await chainWith( readCredentials: never ).handleWake( wakePayload() );
+      expect( outcome.shown, isTrue, reason: 'a hang must still reach the shade' );
+      expect( shownBodies, [ kFcmWakeFallbackBody ] );
+      expect( outcome.detail, contains( 'timeout' ) );
+      expect( logs.any( ( l ) => l.contains( 'gave up after' ) ), isTrue,
+          reason: 'the hang is named in the log, not silent' );
+    } );
+
+    test( 'a token exchange that never returns: the fallback goes out anyway', () async {
+      final outcome = await chainWith( exchange: ( _ ) => never() ).handleWake( wakePayload() );
+      expect( outcome.shown, isTrue );
+      expect( shownBodies, [ kFcmWakeFallbackBody ] );
+      expect( outcome.fetched, 0 );
+    } );
+
+    test( 'a fetch that never returns: the fallback goes out anyway', () async {
+      final outcome = await chainWith( fetch: ( _, __ ) => never() ).handleWake( wakePayload() );
+      expect( outcome.shown, isTrue );
+      expect( shownBodies, [ kFcmWakeFallbackBody ] );
+    } );
+
+    test( 'the budget is shared across steps, not granted per call', () async {
+      // Three slow-but-not-hung steps that together exceed the budget: a
+      // per-call timeout would let this run 3x the window and still be
+      // reclaimed by Android. One deadline stops it.
+      Future<T> slow<T>( T v ) => Future.delayed( const Duration( milliseconds: 30 ), () => v );
+      final outcome = await chainWith(
+        readCredentials: () => slow( const FcmWakeCredentials(
+            refreshToken: 'r', userEmail: 'e@x.com' ) ),
+        exchange : ( _ ) => slow( 'a' ),
+        fetch    : ( _, __ ) => slow( wireItem() ),
+      ).handleWake( wakePayload() );
+      expect( outcome.detail, contains( 'timeout' ),
+          reason: '3 x 30ms must not fit in a 40ms budget' );
+      expect( outcome.shown, isTrue );
+    } );
+
+    test( 'a WEDGED notification plugin is reported shown=false, and does not hang the handler',
+        () async {
+      // The fallback goes out through the same seam, so without its own budget
+      // the catch arm would hang on exactly what it is there to recover from.
+      final outcome = await chainWith( show: ( _, __, ___ ) => never() )
+          .handleWake( wakePayload() )
+          .timeout( const Duration( seconds: 2 ),
+              onTimeout: () => fail( 'handleWake hung on a wedged plugin' ) );
+      expect( outcome.shown, isFalse, reason: 'honest: nothing reached the shade' );
+      expect( logs.any( ( l ) => l.contains( 'fallback notification failed' ) ), isTrue );
     } );
   } );
 }

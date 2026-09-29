@@ -24,6 +24,8 @@
 ///     environment note) — no connection-state inference here.
 library;
 
+import 'dart:async' show TimeoutException;
+
 import 'notification_sender_label.dart';
 import 'notification_tap_payload.dart';
 import '../tts/tts_preview_truncator.dart';
@@ -80,6 +82,30 @@ const String kFcmWakeFallbackTitle   = 'Lupin';
 const String kFcmWakeFallbackBody    = 'New activity. Open Lupin to see it.';
 const String kFcmWakeSignedOutBody   = 'New activity. Open Lupin and sign in to see it.';
 
+/// How long the chain may spend getting to a VISIBLE notification before it
+/// gives up and posts the fallback instead (review F2, row 8ff78c69).
+///
+/// 🔴 A HANG IS WORSE THAN AN ERROR, BECAUSE THE FALLBACK LIVES IN THE CATCH
+/// ARM. An exception reaches it; a call that never returns and never throws does
+/// not, so the wake ends with an empty shade and Android eventually reclaims the
+/// isolate — after which FCM starts downgrading our high-priority messages (see
+/// the note on [kFcmWakeFallbackBody]). Transport timeouts alone cannot close
+/// this: secure storage, SharedPreferences and the notification plugin are all
+/// on the path to the notification and none of them is Dio.
+///
+/// The budget covers the PRE-NOTIFICATION phase only — credentials, exchange,
+/// fetch, show. Past that the contract is already met, the utterance has its own
+/// best-effort catch, and mark-played must not be skipped (that is F1).
+/// ~20 s of the Android handler's ~30 s, leaving room for speech and the ledger.
+const Duration kFcmWakeShowBudget = Duration( seconds: 20 );
+
+/// How long the FALLBACK notification itself may take. It needs a budget of its
+/// own: the fallback goes out through the SAME `showNotification` seam, so if
+/// that seam is what hung, the catch arm would hang on it too and the timeout
+/// above would have bought nothing. Short, because by the time this runs the
+/// main budget is already spent.
+const Duration kFcmWakeFallbackBudget = Duration( seconds: 5 );
+
 class FcmWakeChain {
   /// Secure-storage seam: refresh token + last email, or null when the
   /// user has never logged in on this device/context.
@@ -129,6 +155,13 @@ class FcmWakeChain {
   /// Debug-hook seam (§4): one line per chain step, adb-visible.
   final void Function( String line ) log;
 
+  /// Deadline for reaching a visible notification ([kFcmWakeShowBudget]).
+  /// Injectable so tests can prove the hang path in milliseconds.
+  final Duration showBudget;
+
+  /// Deadline for the fallback notification itself ([kFcmWakeFallbackBudget]).
+  final Duration fallbackBudget;
+
   const FcmWakeChain( {
     required this.readCredentials,
     required this.exchangeForAccessToken,
@@ -139,6 +172,8 @@ class FcmWakeChain {
     required this.speak,
     required this.markPlayed,
     required this.log,
+    this.showBudget     = kFcmWakeShowBudget,
+    this.fallbackBudget = kFcmWakeFallbackBudget,
   } );
 
   /// Handle one wake payload. Never throws — the FCM handler budget
@@ -166,8 +201,17 @@ class FcmWakeChain {
     // (speak, mark-played) never adds a fallback on top of it.
     var shown = false;
 
+    // ONE deadline shared by every step on the way to the notification, rather
+    // than a per-call timeout: four calls each allowed the full budget would let
+    // the handler run four times over its window and be reclaimed anyway.
+    final deadline = DateTime.now().add( showBudget );
+    Duration remaining() {
+      final left = deadline.difference( DateTime.now() );
+      return left.isNegative ? Duration.zero : left;
+    }
+
     try {
-      final creds = await readCredentials();
+      final creds = await readCredentials().timeout( remaining() );
       if ( creds == null ) {
         log( '[FcmWake] no stored credentials — never logged in' );
         return FcmWakeOutcome(
@@ -180,10 +224,12 @@ class FcmWakeChain {
       // The exchange is structurally unavoidable: the access token is
       // memory-only and this isolate is fresh (Arnold spot-check
       // amendment) — the Phase-0 probe asserts this log line.
-      final accessToken = await exchangeForAccessToken( creds.refreshToken );
+      final accessToken =
+          await exchangeForAccessToken( creds.refreshToken ).timeout( remaining() );
       log( '[FcmWake] refresh→access exchange ok' );
 
-      final item = await fetchNextNotification( creds.userEmail, accessToken );
+      final item = await fetchNextNotification( creds.userEmail, accessToken )
+          .timeout( remaining() );
       if ( item == null ) {
         log( '[FcmWake] fetched 0 — nothing undelivered' );
         return FcmWakeOutcome(
@@ -211,10 +257,13 @@ class FcmWakeChain {
       // OLDEST unplayed item rather than whatever triggered this wake, so the
       // notification on the lock screen and the conversation a tap opens agree
       // only if both come from the same map.
+      //
+      // The deadline covers the post itself: a wedged plugin here is the last
+      // thing between a wake and an empty shade (F2).
       await showNotification(
         title, message,
         NotificationTapPayload.fromNotification( item )?.encode(),
-      );
+      ).timeout( remaining() );
       shown = true;
       log( '[FcmWake] shown' );
 
@@ -264,11 +313,22 @@ class FcmWakeChain {
         shown   : true, spoke: spoke, detail: 'id=$id',
       );
     } catch ( e ) {
-      log( '[FcmWake] chain failed: $e' );
+      // A timeout is named separately because it is the failure that used to be
+      // invisible: nothing threw, so nothing was logged and nothing was shown.
+      // The abandoned call keeps running — Dart cannot cancel it — so in the
+      // rare case it completes after the deadline it may post its own
+      // notification too. Two notifications is the acceptable trade for never
+      // posting zero.
+      final timedOut = e is TimeoutException;
+      log( timedOut
+          ? '[FcmWake] gave up after ${showBudget.inSeconds}s '
+              'without reaching a notification — posting the fallback'
+          : '[FcmWake] chain failed: $e' );
       return FcmWakeOutcome(
         handled : true, reason: reason, fetched: shown ? 1 : 0,
         shown   : shown || await _showFallback( kFcmWakeFallbackBody ),
-        spoke   : false, detail: 'error: $e',
+        spoke   : false,
+        detail  : timedOut ? 'timeout after ${showBudget.inSeconds}s' : 'error: $e',
       );
     }
   }
@@ -281,7 +341,8 @@ class FcmWakeChain {
       // behind it, so a tap has no conversation to open and lands on Focus mode
       // as it does today. Passing an id-less payload would be worse than none —
       // it would occupy the tap router's single slot for nothing.
-      await showNotification( kFcmWakeFallbackTitle, body, null );
+      await showNotification( kFcmWakeFallbackTitle, body, null )
+          .timeout( fallbackBudget );
       log( '[FcmWake] shown (fallback)' );
       return true;
     } catch ( e ) {

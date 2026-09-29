@@ -42,6 +42,18 @@ import 'fcm_wakeup_service.dart';
 /// Grep-able flag pin (AC-S5.4): `--dart-define=ENABLE_FCM`.
 const bool kEnableFcm = bool.fromEnvironment( 'ENABLE_FCM', defaultValue: false );
 
+/// Network budgets for the BACKGROUND wake isolate (review F2, row 8ff78c69).
+///
+/// The Android background-message handler gets roughly 30 s. Three calls share
+/// it — refresh, `/next`, mark-played — and an utterance follows, so each one
+/// is capped well inside that. They are deliberately TIGHTER than the
+/// foreground's (`http_service.dart:46-48`): out here a slow answer is worth
+/// less than a prompt fallback notification, because the fallback is what keeps
+/// FCM treating our wakes as high priority.
+const Duration kFcmBackgroundConnectTimeout = Duration( seconds: 6 );
+const Duration kFcmBackgroundSendTimeout    = Duration( seconds: 6 );
+const Duration kFcmBackgroundReceiveTimeout = Duration( seconds: 8 );
+
 /// Real [FcmTokenSource] over FirebaseMessaging (main isolate only).
 class FirebaseTokenSource implements FcmTokenSource {
   final FirebaseMessaging _messaging;
@@ -257,7 +269,25 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
   final context = await ServerContextService.load( prefs );
   final store   = SecureCredentialStore();
   final audio   = NotificationPreferences( prefs );
-  final dio     = Dio( BaseOptions( baseUrl: context.baseUrl ) );
+  final dio     = Dio( BaseOptions(
+    baseUrl        : context.baseUrl,
+    // 🔴 A WAKE THAT HANGS POSTS NOTHING, AND THAT IS THE ONE OUTCOME THIS
+    // WHOLE PATH EXISTS TO PREVENT. This Dio carries all three calls of the
+    // wake (refresh, /next, mark-played) and used to set no timeouts at all,
+    // which for Dio means none. A half-open socket — captive-portal Wi-Fi, a
+    // dying LTE cell — parks `handleWake` forever: the fallback notification
+    // lives in the chain's CATCH arm, so a call that never returns and never
+    // throws never reaches it, and Android eventually kills the isolate in
+    // silence. FCM watches whether high-priority messages produce a
+    // notification and downgrades them to normal when they don't (see
+    // kFcmWakeFallbackBody), so one bad network event degrades every LATER
+    // wake too. Budgets chosen to leave room under the ~30 s handler window
+    // for all three calls plus the utterance; `http_service.dart:46-48` is the
+    // foreground precedent (Pocholo's review F2, row 8ff78c69).
+    connectTimeout : kFcmBackgroundConnectTimeout,
+    sendTimeout    : kFcmBackgroundSendTimeout,
+    receiveTimeout : kFcmBackgroundReceiveTimeout,
+  ) );
 
   final localNotifications = FlutterLocalNotificationsPlugin();
   await localNotifications.initialize( const InitializationSettings(
