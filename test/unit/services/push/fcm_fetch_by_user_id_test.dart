@@ -10,7 +10,9 @@ library;
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 import 'package:lupin_mobile/services/push/fcm_bootstrap.dart';
 
 import '../../_helpers/stub_dio.dart';
@@ -23,6 +25,7 @@ String fakeJwt( Map<String, dynamic> claims ) {
 void main() {
   const uid   = '0cf47e2d-d5a1-4cd4-addf-79810fd32b15';
   final token = fakeJwt( { 'sub': uid, 'email': 'rick@x.y', 'roles': [ 'user' ] } );
+  const allFour = [ 'low', 'medium', 'high', 'urgent' ];
 
   test( 'the user id is the token\'s sub claim', () {
     expect( userIdFromAccessToken( token ), uid );
@@ -43,7 +46,7 @@ void main() {
         ],
       } ),
     } );
-    final items = await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token );
+    final items = await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token, priorities: allFour );
 
     expect( [ for ( final i in items ) i[ 'id' ] ], [ 'n-1', 'n-2' ] );
     expect( adapter.captured.single.path, '/api/notifications/$uid' );
@@ -55,24 +58,66 @@ void main() {
     final adapter = StubAdapter( {
       'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success', 'notifications': [] } ),
     } );
-    await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token );
+    await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token, priorities: allFour );
 
     final q = adapter.captured.single.queryParameters;
     expect( q[ 'include_played' ], false );
     expect( q[ 'limit' ], kFcmWakeUnplayedLimit );
   } );
 
+  test( 'the query carries exactly the allowed priorities, and asks oldest first', () async {
+    final adapter = StubAdapter( {
+      'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success', 'notifications': [] } ),
+    } );
+    await fetchUnplayedForAccessToken(
+        dio: makeDio( adapter ), accessToken: token, priorities: const [ 'high', 'urgent' ] );
+
+    final q = adapter.captured.single.queryParameters;
+    expect( q[ 'priorities' ], 'high,urgent' );
+    expect( q[ 'sort' ], 'oldest' );
+  } );
+
+  test( 'no allowed priority ⇒ no request at all, never an unfiltered one', () async {
+    final adapter = StubAdapter( {} );
+    final items = await fetchUnplayedForAccessToken(
+        dio: makeDio( adapter ), accessToken: token, priorities: const [] );
+    expect( items, isEmpty );
+    expect( adapter.captured, isEmpty );
+  } );
+
+  group( 'backgroundAllowedPriorities', () {
+    Future<NotificationPreferences> prefsWith( Map<String, Object> v ) async {
+      SharedPreferences.setMockInitialValues( v );
+      return NotificationPreferences( await SharedPreferences.getInstance() );
+    }
+
+    test( 'defaults to all four known values, so an unknown one (a 400) cannot be sent', () async {
+      final got = backgroundAllowedPriorities( await prefsWith( {} ) );
+      expect( got, allFour );
+      expect( NotificationPreferences.priorities.toSet(), allFour.toSet() );
+    } );
+
+    test( 'a priority switched off for background is left out; foreground is irrelevant', () async {
+      final got = backgroundAllowedPriorities( await prefsWith( {
+        NotificationPreferences.priorityKey( 'background', 'low' )    : false,
+        NotificationPreferences.priorityKey( 'background', 'medium' ) : false,
+        NotificationPreferences.priorityKey( 'foreground', 'urgent' ) : false,
+      } ) );
+      expect( got, [ 'high', 'urgent' ] );
+    } );
+  } );
+
   test( 'nothing unplayed ⇒ an EMPTY list, never null', () async {
     final adapter = StubAdapter( {
       'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success', 'notifications': [] } ),
     } );
-    expect( await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token ), isEmpty );
+    expect( await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token, priorities: allFour ), isEmpty );
   } );
 
   test( 'a malformed body is an empty list, not a crash in a background isolate', () async {
     final adapter = StubAdapter( {
       'GET /api/notifications/$uid': ( _ ) => jsonBody( { 'status': 'success' } ),
     } );
-    expect( await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token ), isEmpty );
+    expect( await fetchUnplayedForAccessToken( dio: makeDio( adapter ), accessToken: token, priorities: allFour ), isEmpty );
   } );
 }

@@ -292,6 +292,15 @@ String userIdFromAccessToken( String jwt ) {
 /// cost of a low one is silence that looks like the feature working.
 const int kFcmWakeUnplayedLimit = 500;
 
+/// The priorities the user has left switched on for the background surface, in
+/// [NotificationPreferences.priorities] order. Feeds the wake fetch's server-side
+/// `priorities` filter (row 1a7678ff).
+@visibleForTesting
+List<String> backgroundAllowedPriorities( NotificationPreferences audio ) => [
+  for ( final p in NotificationPreferences.priorities )
+    if ( audio.priorityEnabled( 'background', p ) ) p,
+];
+
 /// GET the user's UNPLAYED notifications, addressed by SYSTEM USER ID.
 ///
 /// 🔴 NOT BY EMAIL. The endpoint compares the path segment against each queued
@@ -315,17 +324,33 @@ const int kFcmWakeUnplayedLimit = 500;
 ///   - order is NOT trusted; `oldestFirst` sorts them (the endpoint's docstring
 ///     claims newest-first and its handler does no sorting at all)
 ///   - never returns null
+///
+/// 🔴 THE SERVER FILTERS AND SORTS, NOT THE PHONE (row 1a7678ff, using Mr.
+/// Radio's e25f8868). `priorities` is the set the background policy allows and
+/// `sort=oldest` puts the queue head first. The filter runs BEFORE the limit,
+/// so a run of switched-off items can no longer push an allowed urgent past
+/// [kFcmWakeUnplayedLimit]. Mute and quiet hours stay client-side (the server
+/// does not know them), and `oldestFirst` still runs as a belt-and-braces check.
+///
+/// Requires:
+///   - [priorities] is drawn from [NotificationPreferences.priorities] (an
+///     unknown value is a 400); an empty set fetches nothing, since "no
+///     priority allowed" must never be sent as "no filter"
 @visibleForTesting
 Future<List<Map<String, dynamic>>> fetchUnplayedForAccessToken( {
-  required Dio    dio,
-  required String accessToken,
+  required Dio          dio,
+  required String       accessToken,
+  required List<String> priorities,
 } ) async {
+  if ( priorities.isEmpty ) return const [];
   final userId = userIdFromAccessToken( accessToken );
   final res    = await dio.get<Map<String, dynamic>>(
     '/api/notifications/${Uri.encodeComponent( userId )}',
     queryParameters: {
       'include_played' : false,
       'limit'          : kFcmWakeUnplayedLimit,
+      'priorities'     : priorities.join( ',' ),
+      'sort'           : 'oldest',
     },
     options: Options( headers: { 'Authorization': 'Bearer $accessToken' } ),
   );
@@ -530,8 +555,10 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       // adb stream anyone debugging a wake is already watching.
       logSink      : debugPrint,
     ),
-    fetchUnplayed: ( _, accessToken ) =>
-        fetchUnplayedForAccessToken( dio: dio, accessToken: accessToken ),
+    fetchUnplayed: ( _, accessToken ) => fetchUnplayedForAccessToken(
+        dio         : dio,
+        accessToken : accessToken,
+        priorities  : backgroundAllowedPriorities( audio ) ),
     showNotification: ( title, body, payload ) =>
         showWakeNotification( localNotifications, title, body, payload ),
     shouldSpeak: ( priority ) async {
