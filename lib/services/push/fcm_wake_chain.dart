@@ -125,6 +125,12 @@ const Duration kFcmWakeFallbackBudget = Duration( seconds: 5 );
 const Duration kFcmWakeSpeakBudget      = Duration( seconds: 12 );
 const Duration kFcmWakeMarkPlayedBudget = Duration( seconds: 5 );
 
+/// The most unplayed items one wake shows (row 8e91d937). The server wakes only
+/// for a NEW notification, so a backlog would otherwise sit unseen behind the
+/// first item until the app opened. Capped so a long backlog cannot flood the
+/// shade or outrun the handler window; whatever is past the cap stays unplayed.
+const int kFcmWakeDrainMax = 5;
+
 class FcmWakeChain {
   /// Secure-storage seam: refresh token + last email, or null when the
   /// user has never logged in on this device/context.
@@ -337,12 +343,16 @@ class FcmWakeChain {
         );
       }
 
-      // GATE B. Oldest first, then the first item this user still wants.
-      // Everything skipped is left exactly as it was found: unshown, unspoken
-      // and UNPLAYED, so it is all still waiting when the app is opened.
-      final ordered = oldestFirst( unplayed );
-      Map<String, dynamic>? item;
-      var skipped = 0;
+      // GATE B + DRAIN (row 8e91d937, Rick "Show each", 2026-09-29). Oldest
+      // first, up to [kFcmWakeDrainMax] items this user still wants, each its own
+      // notification. The server wakes only for a NEW notification, so an item
+      // behind the first would otherwise stay invisible until the app opened.
+      // Everything skipped, or left over past the cap or the budget, is left
+      // exactly as it was found: unshown, unspoken and UNPLAYED.
+      final ordered    = oldestFirst( unplayed );
+      final shownIds   = <String>[];
+      var   skipped    = 0;
+      var   spoke      = false;
       //
       // 🔴 THE READ IS BUDGETED TOO, for Chloé's C2 reason one loop further in.
       // This is a prefs read in a fresh isolate exactly as gate A's is, it sits
@@ -352,18 +362,125 @@ class FcmWakeChain {
       // keeps that bounded; a wedged read now throws into the catch and posts
       // the fallback instead of parking the handler until Android reclaims it.
       for ( final candidate in ordered ) {
-        final p = candidate[ 'priority' ]?.toString() ?? 'medium';
-        if ( await itemAllowed( p, candidate ).timeout( remaining() ) ) {
-          item = candidate;
+        if ( shownIds.length >= kFcmWakeDrainMax ) break;
+        try {
+          // Out of time: stop draining. Nothing is consumed that was not shown.
+          // (Never before the FIRST item: that one takes the ordinary path, where
+          // a spent budget throws into the catch arm and posts the fallback.)
+          if ( shownIds.isNotEmpty && remaining() == Duration.zero ) {
+            log( '[FcmWake] handler budget spent after ${shownIds.length} — '
+                 'the rest stays unplayed' );
+            break;
+          }
+
+          final priority = candidate[ 'priority' ]?.toString() ?? 'medium';
+          if ( !await itemAllowed( priority, candidate ).timeout( remaining() ) ) {
+            skipped++;
+            continue;
+          }
+
+          final id      = candidate[ 'id' ]?.toString() ?? '';
+          final message = candidate[ 'message' ]?.toString() ?? '';
+
+          // 🔴 THE TITLE IS WHO SENT IT, NOT THE ITEM'S OWN `title` (Tiffany's
+          // ruling, 2026-09-28). A notification arriving with the phone face down
+          // said WHAT happened and not WHO said it, so the only way to find out
+          // was to open the app and tab through personas — the same complaint the
+          // tap routing fixes, one step earlier. `notificationSenderLabel` is
+          // total and always returns something, so the title cannot come out blank.
+          final title = notificationSenderLabel( candidate );
+          log( '[FcmWake] fetched ${ordered.length}, showing id=$id '
+               'priority=$priority from="$title"' );
+
+          // 🔴 THE PAYLOAD IS BUILT FROM `candidate`, THE THING BEING SHOWN — never
+          // from the wake `data`. The push is content-free, and the queue head is
+          // not necessarily whatever triggered this wake, so the notification on
+          // the lock screen and the conversation a tap opens agree only if both
+          // come from the same map.
+          //
+          // The deadline covers the post itself: a wedged plugin here is the last
+          // thing between a wake and an empty shade (F2).
+          await showNotification(
+            title, message,
+            NotificationTapPayload.fromNotification( candidate )?.encode(),
+          ).timeout( remaining() );
+          shown = true;
+          shownIds.add( id );
+          log( '[FcmWake] shown' );
+
+          // At most the FIRST shown item is spoken: strict one-utterance
+          // (`flutter_tts#260`), and five messages read aloud back to back is a
+          // pile-up, not a summary. The rest are visible and marked below.
+          //
+          // Message-field-ONLY, prefs-gated. Audio is best-effort: if the OS
+          // reclaims the isolate mid-utterance it truncates and NOTHING is lost
+          // (server-side durable store + foreground re-hydration; NO auto
+          // re-speak — badges carry it).
+          //
+          // 🔴 BEST-EFFORT MEANS THE MARK-PLAYED BELOW STILL RUNS. This block used
+          // to sit bare in the outer try, so a throwing TTS engine jumped straight
+          // to the catch and skipped the dedupe — and the queue head kept coming
+          // back, so the next wake re-fetched and re-showed this same notification,
+          // failed to speak it again, and the head never moved. One dead TTS engine
+          // made every later notification invisible, permanently (Pocholo's review
+          // F1, row 8ff78c69). Speech is allowed to fail; the ledger write is what
+          // keeps the queue moving.
+          if ( shownIds.length == 1 ) {
+            try {
+              // The prefs reads are budgeted too: in a fresh isolate a wedged
+              // SharedPreferences is as capable of parking the handler as a wedged
+              // engine is, and it would park it BEFORE anything was spoken.
+              final maySpeak = await shouldSpeak( priority ).timeout( speakBudget );
+              final fraction = maySpeak
+                  ? await ttsFraction().timeout( speakBudget )
+                  : 0.0;
+              if ( !maySpeak ) {
+                log( '[FcmWake] muted by speak-toggle prefs' );
+              } else if ( TtsPreviewTruncator.silences( fraction ) ) {
+                log( '[FcmWake] muted by the TTS slider at 0%' );
+              } else {
+                await speak( TtsPreviewTruncator.previewFor( message, fraction ) )
+                    .timeout( speakBudget );
+                spoke = true;
+                log( '[FcmWake] spoke (message field only)' );
+              }
+            } on TimeoutException catch ( _ ) {
+              // Named apart from a throw because it is the failure that used to
+              // have no floor at all: nothing raised, so nothing was caught, and
+              // the handler simply stopped here with the ledger un-written.
+              log( '[FcmWake] speech exceeded its ${speakBudget.inSeconds}s budget — '
+                   'abandoned, and the wake continues to mark-played' );
+            } catch ( e ) {
+              // Covers the prefs reads too: a failed SharedPreferences lookup is no
+              // more entitled to strand the queue than a failed utterance is.
+              log( '[FcmWake] speak failed (best-effort): $e' );
+            }
+          }
+
+          // Marked only now that THIS item is shown, so an item the budget or the
+          // cap cut off is never consumed.
+          if ( id.isNotEmpty ) {
+            try {
+              await markPlayed( id, accessToken ).timeout( markPlayedBudget );
+              log( '[FcmWake] marked played (dedupe)' );
+            } catch ( e ) {
+              log( '[FcmWake] mark-played failed (best-effort): $e' );
+            }
+          }
+        } catch ( e ) {
+          // The first item keeps the ordinary failure path (fallback, error
+          // outcome). Once something is visible, a later item failing just ends
+          // the drain: what is left stays unplayed for the next wake or the app.
+          if ( shownIds.isEmpty ) rethrow;
+          log( '[FcmWake] drain stopped after ${shownIds.length} shown: $e' );
           break;
         }
-        skipped++;
       }
       if ( skipped > 0 ) {
         log( '[FcmWake] skipped $skipped item(s) the user has switched off '
              '(left unplayed — they are all still there on open)' );
       }
-      if ( item == null ) {
+      if ( shownIds.isEmpty ) {
         // Every waiting item is one the user asked not to hear about. Silence
         // is the whole point, so no notification and no fallback — and nothing
         // consumed, so opening the app still shows the lot.
@@ -376,92 +493,13 @@ class FcmWakeChain {
         );
       }
 
-      final id       = item[ 'id' ]?.toString() ?? '';
-      final message  = item[ 'message' ]?.toString() ?? '';
-      final priority = item[ 'priority' ]?.toString() ?? 'medium';
-
-      // 🔴 THE TITLE IS WHO SENT IT, NOT THE ITEM'S OWN `title` (Tiffany's ruling,
-      // 2026-09-28). A notification arriving with the phone face down said WHAT
-      // happened and not WHO said it, so the only way to find out was to open the
-      // app and tab through personas — the same complaint the tap routing fixes,
-      // one step earlier. `notificationSenderLabel` is total and always returns
-      // something, so the title cannot come out blank.
-      final title = notificationSenderLabel( item );
-      log( '[FcmWake] fetched ${ordered.length}, showing id=$id '
-           'priority=$priority from="$title"' );
-
-      // 🔴 THE PAYLOAD IS BUILT FROM `item`, THE THING BEING SHOWN — never from
-      // the wake `data`. The push is content-free, and `/next` hands back the
-      // OLDEST unplayed item rather than whatever triggered this wake, so the
-      // notification on the lock screen and the conversation a tap opens agree
-      // only if both come from the same map.
-      //
-      // The deadline covers the post itself: a wedged plugin here is the last
-      // thing between a wake and an empty shade (F2).
-      await showNotification(
-        title, message,
-        NotificationTapPayload.fromNotification( item )?.encode(),
-      ).timeout( remaining() );
-      shown = true;
-      log( '[FcmWake] shown' );
-
-      // Message-field-ONLY, prefs-gated, exactly one utterance. Audio is
-      // best-effort: if the OS reclaims the isolate mid-utterance it
-      // truncates and NOTHING is lost (server-side durable store +
-      // foreground re-hydration; NO auto re-speak — badges carry it).
-      //
-      // 🔴 BEST-EFFORT MEANS THE MARK-PLAYED BELOW STILL RUNS. This block used
-      // to sit bare in the outer try, so a throwing TTS engine jumped straight
-      // to the catch and skipped the dedupe — and /next keeps returning the
-      // oldest UNPLAYED item, so the next wake re-fetched and re-showed this
-      // same notification, failed to speak it again, and the queue head never
-      // moved. One dead TTS engine made every later notification invisible,
-      // permanently (Pocholo's review F1, row 8ff78c69). Speech is allowed to
-      // fail; the ledger write is what keeps the queue moving.
-      var spoke = false;
-      try {
-        // The prefs reads are budgeted too: in a fresh isolate a wedged
-        // SharedPreferences is as capable of parking the handler as a wedged
-        // engine is, and it would park it BEFORE anything was spoken.
-        final maySpeak = await shouldSpeak( priority ).timeout( speakBudget );
-        final fraction = maySpeak
-            ? await ttsFraction().timeout( speakBudget )
-            : 0.0;
-        if ( !maySpeak ) {
-          log( '[FcmWake] muted by speak-toggle prefs' );
-        } else if ( TtsPreviewTruncator.silences( fraction ) ) {
-          log( '[FcmWake] muted by the TTS slider at 0%' );
-        } else {
-          await speak( TtsPreviewTruncator.previewFor( message, fraction ) )
-              .timeout( speakBudget );
-          spoke = true;
-          log( '[FcmWake] spoke (message field only)' );
-        }
-      } on TimeoutException catch ( _ ) {
-        // Named apart from a throw because it is the failure that used to have no
-        // floor at all: nothing raised, so nothing was caught, and the handler
-        // simply stopped here with the ledger un-written.
-        log( '[FcmWake] speech exceeded its ${speakBudget.inSeconds}s budget — '
-             'abandoned, and the wake continues to mark-played' );
-      } catch ( e ) {
-        // Covers the prefs reads too: a failed SharedPreferences lookup is no
-        // more entitled to strand the queue than a failed utterance is.
-        log( '[FcmWake] speak failed (best-effort): $e' );
-      }
-
-      if ( id.isNotEmpty ) {
-        try {
-          await markPlayed( id, accessToken ).timeout( markPlayedBudget );
-          log( '[FcmWake] marked played (dedupe)' );
-        } catch ( e ) {
-          log( '[FcmWake] mark-played failed (best-effort): $e' );
-        }
-      }
-
+      final ids = shownIds.length == 1
+          ? 'id=${shownIds.first}'
+          : 'ids=${shownIds.join( "," )} (shown ${shownIds.length})';
       return FcmWakeOutcome(
         handled : true, reason: reason, fetched: ordered.length,
         shown   : true, spoke: spoke,
-        detail  : skipped > 0 ? 'id=$id (skipped $skipped)' : 'id=$id',
+        detail  : skipped > 0 ? '$ids (skipped $skipped)' : ids,
       );
     } catch ( e ) {
       // A timeout is named separately because it is the failure that used to be

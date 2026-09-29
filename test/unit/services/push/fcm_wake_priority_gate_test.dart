@@ -105,8 +105,9 @@ void main() {
 
       final outcome = await buildChain().handleWake( wakePayload() );
 
-      expect( shownBodies, [ 'body-high-1' ], reason: 'the OLDEST allowed one' );
-      expect( markedPlayed, [ 'high-1' ] );
+      expect( shownBodies, [ 'body-high-1', 'body-high-2' ],
+              reason: 'the allowed ones, oldest first (row 8e91d937 shows each)' );
+      expect( markedPlayed, [ 'high-1', 'high-2' ] );
       expect( outcome.fetched, 5 );
       expect( outcome.detail, contains( 'skipped 3' ) );
     } );
@@ -139,8 +140,8 @@ void main() {
 
       await buildChain().handleWake( wakePayload() );
 
-      expect( shownBodies, [ 'body-n-1' ], reason: 'plain oldest-first' );
-      expect( markedPlayed, [ 'n-1' ] );
+      expect( shownBodies, [ 'body-n-1', 'body-n-2' ], reason: 'plain oldest-first' );
+      expect( markedPlayed, [ 'n-1', 'n-2' ] );
     } );
   } );
 
@@ -187,8 +188,8 @@ void main() {
 
       await buildChain().handleWake( wakePayload() );
 
-      expect( shownBodies, [ 'body-oldest' ] );
-      expect( markedPlayed, [ 'oldest' ] );
+      expect( shownBodies, [ 'body-oldest', 'body-middle', 'body-newest' ] );
+      expect( markedPlayed, [ 'oldest', 'middle', 'newest' ] );
     } );
 
     test( 'oldest-allowed, not oldest-overall: the age ordering is applied BEFORE the filter', () async {
@@ -202,10 +203,10 @@ void main() {
 
       await buildChain().handleWake( wakePayload() );
 
-      expect( shownBodies, [ 'body-mid-high' ],
-              reason: 'sort first, then take the first survivor — sorting after '
-                      'filtering would have shown new-high' );
-      expect( markedPlayed, [ 'mid-high' ] );
+      expect( shownBodies, [ 'body-mid-high', 'body-new-high' ],
+              reason: 'sort first, then filter — sorting after filtering would '
+                      'have shown new-high first' );
+      expect( markedPlayed, [ 'mid-high', 'new-high' ] );
     } );
   } );
 
