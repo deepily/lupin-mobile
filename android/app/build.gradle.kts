@@ -25,7 +25,25 @@ android {
     // Gradle configuration runs here at all. Verified by a main-checkout build,
     // not by this commit.
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // Pinned ABOVE Flutter's default of 26.3.11579264 (FlutterExtension.kt:41),
+    // because 19 plugins ask for 27.0.12077973 and the build says so every run
+    // (row 5cbd2e42).
+    //
+    // 🔴 DO NOT MERGE THIS COMMIT UNTIL THE NDK IS ACTUALLY INSTALLED. Unlike
+    // compileSdk 36, whose platform is already on the server, NDK 27.0.12077973
+    // is NOT present — ~/Android/Sdk/ndk holds only 26.3.11579264. Pinning a
+    // version that is not there does not degrade to a warning; it fails the
+    // build, for every seat, since all of them share that one SDK
+    // (~/.config/flutter/settings, android/local.properties). Merged ahead of the
+    // install, this line stops the APK the operator is waiting on.
+    //
+    // The install, which needs an operator/manager word because the SDK is
+    // shared and peer Gradle daemons are live:
+    //   ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973"
+    // Additive — 26.3 stays, so nothing already building breaks by installing.
+    // Order matters: install FIRST, then merge this, or there is a window where
+    // the pin points at a missing NDK.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         // Required by `flutter_local_notifications` ^17.2.3 (resolves 17.2.4) —
