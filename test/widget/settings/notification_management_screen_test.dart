@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
+import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/settings/presentation/notification_management_screen.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 
@@ -243,6 +244,132 @@ void main() {
       await tester.drag( find.byType( ListView ), const Offset( 0, -2000 ) );
       await tester.pump();
       expect( find.byKey( const Key( TestKeys.notifMgmtOpenStopList ) ), findsNothing );
+    } );
+  } );
+
+  // ── Row f1e80e67, plan §7.5: muted senders and quiet hours ────────────────
+  group( 'muted senders', () {
+    const maya  = MutableSender( key: 'persona:maya',  label: '🌻 Maya' );
+    const maria = MutableSender( key: 'persona:maria', label: '🗼 María' );
+
+    Widget withRoster( List<MutableSender> roster ) => MaterialApp(
+      home: NotificationManagementScreen( prefs: prefs, loadSenders: () async => roster ),
+    );
+
+    Finder addFinder = find.byKey( const Key( TestKeys.notifMgmtMuteAdd ) );
+    Finder pick( String key )   => find.byKey( Key( '${TestKeys.notifMgmtMutePickPrefix}$key' ) );
+    Finder row( String key )    => find.byKey( Key( '${TestKeys.notifMgmtMuteRowPrefix}$key' ) );
+    Finder remove( String key ) => find.byKey( Key( '${TestKeys.notifMgmtMuteRemovePrefix}$key' ) );
+
+    testWidgets( 'Add offers the roster, and picking one mutes it and lists it', ( tester ) async {
+      await tester.pumpWidget( withRoster( [ maya, maria ] ) );
+      await bring( tester, addFinder );
+      await tester.tap( addFinder );
+      await tester.pumpAndSettle();
+
+      expect( pick( maya.key ), findsOneWidget );
+      await tester.tap( pick( maya.key ) );
+      await tester.pumpAndSettle();
+
+      expect( prefs.isSenderMuted( maya.key ), isTrue );
+      expect( prefs.mutedSenders[ maya.key ], '🌻 Maya', reason: 'the label is what a person reads' );
+      await bring( tester, row( maya.key ) );
+      expect( find.text( '🌻 Maya' ), findsOneWidget );
+    } );
+
+    testWidgets( 'a sender already muted is not offered again', ( tester ) async {
+      await prefs.muteSender( maya.key, maya.label );
+      await tester.pumpWidget( withRoster( [ maya, maria ] ) );
+      await bring( tester, addFinder );
+      await tester.tap( addFinder );
+      await tester.pumpAndSettle();
+
+      expect( pick( maya.key ), findsNothing );
+      expect( pick( maria.key ), findsOneWidget );
+    } );
+
+    testWidgets( '✕ unmutes', ( tester ) async {
+      await prefs.muteSender( maya.key, maya.label );
+      await tester.pumpWidget( withRoster( const [] ) );
+      await bring( tester, remove( maya.key ) );
+      await tester.tap( remove( maya.key ) );
+      await tester.pumpAndSettle();
+
+      expect( prefs.isSenderMuted( maya.key ), isFalse );
+      expect( row( maya.key ), findsNothing );
+    } );
+
+    testWidgets( 'no roster loader: no Add button, but muted senders can still be removed', ( tester ) async {
+      await prefs.muteSender( maya.key, maya.label );
+      await tester.pumpWidget( underTest() );
+      await bring( tester, remove( maya.key ) );
+      expect( addFinder, findsNothing );
+      expect( remove( maya.key ), findsOneWidget );
+    } );
+
+    testWidgets( 'the urgent bypass is on by default and persists when unticked', ( tester ) async {
+      final bypass = find.byKey( const Key( TestKeys.notifMgmtMuteUrgentBypass ) );
+      await tester.pumpWidget( underTest() );
+      await bring( tester, bypass );
+      expect( tester.widget<CheckboxListTile>( bypass ).value, isTrue );
+      await tester.tap( bypass );
+      await tester.pumpAndSettle();
+      expect( prefs.muteUrgentBypass, isFalse );
+    } );
+  } );
+
+  group( 'MutableSender.fromRoster', () {
+    test( 'two seats of one persona are ONE thing to mute; order is kept', () {
+      const mayaJson = { 'name': 'Maya', 'icon': '🌻' };
+      final roster = [
+        SenderSummary.fromJson( { 'sender_id': 'claude.code@lupin.deepily.ai#aaaa', 'count': 1,
+                                  'voice_persona': mayaJson } ),
+        SenderSummary.fromJson( { 'sender_id': 'claude.code@lookml.deepily.ai#cccc', 'count': 1 } ),
+        SenderSummary.fromJson( { 'sender_id': 'claude.code@lupin.deepily.ai#bbbb', 'count': 1,
+                                  'voice_persona': mayaJson } ),
+      ];
+      final out = MutableSender.fromRoster( roster );
+      expect( out.map( ( s ) => s.key ), [ 'persona:maya', 'project:lookml' ] );
+      expect( out.first.label, '🌻 Maya' );
+      expect( out.last.label, 'lookml' );
+    } );
+  } );
+
+  group( 'quiet hours', () {
+    Finder quietFinder = find.byKey( const Key( TestKeys.notifMgmtQuiet ) );
+    Finder startFinder = find.byKey( const Key( TestKeys.notifMgmtQuietStart ) );
+
+    testWidgets( 'off by default, showing 22:00 → 07:00 greyed out', ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await bring( tester, startFinder );
+      expect( tester.widget<SwitchListTile>( quietFinder ).value, isFalse );
+      expect( find.text( '22:00' ), findsOneWidget );
+      expect( find.text( '07:00' ), findsOneWidget );
+      expect( tester.widget<TextButton>( startFinder ).onPressed, isNull,
+              reason: 'the times cannot be edited while quiet hours are off' );
+    } );
+
+    testWidgets( 'turning it on persists and enables the times', ( tester ) async {
+      await tester.pumpWidget( underTest() );
+      await bring( tester, quietFinder );
+      await tester.tap( quietFinder );
+      await tester.pumpAndSettle();
+      expect( prefs.quietEnabled, isTrue );
+      await bring( tester, startFinder );
+      expect( tester.widget<TextButton>( startFinder ).onPressed, isNotNull );
+    } );
+
+    testWidgets( 'the master switch greys quiet hours too', ( tester ) async {
+      await seed( { NotificationPreferences.keyEnabled: false } );
+      await tester.pumpWidget( underTest() );
+      await bring( tester, quietFinder );
+      expect( tester.widget<SwitchListTile>( quietFinder ).onChanged, isNull );
+    } );
+
+    test( 'formatMinutes is 24-hour and zero-padded', () {
+      expect( formatMinutes( 22 * 60 ), '22:00' );
+      expect( formatMinutes( 7 * 60 + 5 ), '07:05' );
+      expect( formatMinutes( 0 ), '00:00' );
     } );
   } );
 }

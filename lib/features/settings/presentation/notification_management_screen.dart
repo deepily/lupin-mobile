@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../../../services/push/notification_sender_label.dart';
+import '../../notifications/data/notification_models.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import 'notification_audio_settings_screen.dart';
@@ -31,10 +33,16 @@ class NotificationManagementScreen extends StatefulWidget {
   /// registered should not render a row that would crash on tap.
   final NotificationStopList? stopList;
 
+  /// Who can be muted: the senders the server knows about (row f1e80e67).
+  /// Null hides the Add button — the list of already-muted senders, and
+  /// removing them, still work without it.
+  final Future<List<MutableSender>> Function()? loadSenders;
+
   const NotificationManagementScreen( {
     super.key,
     required this.prefs,
     this.stopList,
+    this.loadSenders,
   } );
 
   @override
@@ -93,6 +101,21 @@ class _NotificationManagementScreenState
             onSurface    : ( v ) => _write( () => p.setForegroundEnabled( v ) ),
             onPriority   : ( priority, v ) =>
                 _write( () => p.setPriorityEnabled( 'foreground', priority, v ) ),
+          ),
+          const Divider(),
+
+          _MutedSendersSection(
+            prefs       : p,
+            masterOn    : p.enabled,
+            loadSenders : widget.loadSenders,
+            onChanged   : () => setState( () {} ),
+          ),
+          const Divider(),
+
+          _QuietHoursSection(
+            prefs     : p,
+            masterOn  : p.enabled,
+            onChanged : () => setState( () {} ),
           ),
           const Divider(),
 
@@ -219,4 +242,249 @@ class _SectionHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Mute by sender + quiet hours (Rick 2026-09-29, row f1e80e67, plan §7.5) ──
+
+/// One sender that can be muted: the key the mute is stored under and the
+/// label a person reads. Built with the SAME two functions the notification
+/// shade uses, so the list says "🌻 Maya" exactly as the notification did.
+class MutableSender {
+  final String key;
+  final String label;
+  const MutableSender( { required this.key, required this.label } );
+
+  /// Collapse a server sender roster to one row per mute key.
+  ///
+  /// Requires:
+  ///     - senders is the `senders-visible` roster, in the server's order
+  ///
+  /// Ensures:
+  ///     - one entry per distinct `notificationSenderKey` — two seats of one
+  ///       persona, or two sessions of one project, are ONE thing to mute,
+  ///       because that is what the mute will actually silence
+  ///     - the first occurrence wins, so the server's order is preserved
+  ///     - a sender that yields no key is left out (there is nothing to mute)
+  static List<MutableSender> fromRoster( List<SenderSummary> senders ) {
+    final seen = <String>{};
+    final out  = <MutableSender>[];
+    for ( final s in senders ) {
+      final item = <String, dynamic>{
+        'sender_id'     : s.senderId,
+        if ( s.voicePersona != null ) 'voice_persona': s.voicePersona!.toJson(),
+      };
+      final key = notificationSenderKey( item );
+      if ( key == null || !seen.add( key ) ) continue;
+      out.add( MutableSender( key: key, label: notificationSenderLabel( item ) ) );
+    }
+    return out;
+  }
+}
+
+class _MutedSendersSection extends StatelessWidget {
+  final NotificationPreferences                 prefs;
+  final bool                                    masterOn;
+  final Future<List<MutableSender>> Function()? loadSenders;
+  final VoidCallback                            onChanged;
+
+  const _MutedSendersSection( {
+    required this.prefs,
+    required this.masterOn,
+    required this.loadSenders,
+    required this.onChanged,
+  } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final muted = prefs.mutedSenders;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          leading  : const Icon( Icons.volume_off_outlined ),
+          title    : const Text( 'Muted senders' ),
+          subtitle : Text( muted.isEmpty
+              ? 'Nobody is muted.'
+              : 'Their messages still arrive in the app, silently.' ),
+          trailing : loadSenders == null
+              ? null
+              : TextButton.icon(
+                  key       : const Key( TestKeys.notifMgmtMuteAdd ),
+                  icon      : const Icon( Icons.add ),
+                  label     : const Text( 'Add' ),
+                  onPressed : masterOn ? () => _pick( context ) : null,
+                ),
+        ),
+        for ( final e in muted.entries )
+          ListTile(
+            key            : Key( '${TestKeys.notifMgmtMuteRowPrefix}${e.key}' ),
+            dense          : true,
+            contentPadding : const EdgeInsets.only( left: 56, right: 8 ),
+            title          : Text( e.value ),
+            trailing       : IconButton(
+              key       : Key( '${TestKeys.notifMgmtMuteRemovePrefix}${e.key}' ),
+              icon      : const Icon( Icons.close ),
+              tooltip   : 'Unmute',
+              onPressed : () async {
+                await prefs.unmuteSender( e.key );
+                onChanged();
+              },
+            ),
+          ),
+        CheckboxListTile(
+          key            : const Key( TestKeys.notifMgmtMuteUrgentBypass ),
+          dense          : true,
+          contentPadding : const EdgeInsets.only( left: 56, right: 16 ),
+          controlAffinity: ListTileControlAffinity.leading,
+          title          : const Text( 'Let urgent through from muted senders' ),
+          value          : prefs.muteUrgentBypass,
+          onChanged      : masterOn
+              ? ( v ) async {
+                  await prefs.setMuteUrgentBypass( v ?? true );
+                  onChanged();
+                }
+              : null,
+        ),
+      ],
+    );
+  }
+
+  /// Offer every sender the server knows about that is not muted yet.
+  Future<void> _pick( BuildContext context ) async {
+    final picked = await showModalBottomSheet<MutableSender>(
+      context : context,
+      builder : ( sheetContext ) => FutureBuilder<List<MutableSender>>(
+        future  : loadSenders!(),
+        builder : ( _, snap ) {
+          if ( snap.connectionState != ConnectionState.done ) {
+            return const SizedBox(
+              height : 160,
+              child  : Center( child: CircularProgressIndicator() ),
+            );
+          }
+          final muted     = prefs.mutedSenders;
+          final available = ( snap.data ?? const <MutableSender>[] )
+              .where( ( s ) => !muted.containsKey( s.key ) )
+              .toList();
+          if ( available.isEmpty ) {
+            return SizedBox(
+              height : 160,
+              child  : Center( child: Text( snap.hasError
+                  ? 'Could not load senders.'
+                  : 'No one else to mute.' ) ),
+            );
+          }
+          return SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const _SectionHeader( 'Mute which sender?' ),
+                for ( final s in available )
+                  ListTile(
+                    key   : Key( '${TestKeys.notifMgmtMutePickPrefix}${s.key}' ),
+                    title : Text( s.label ),
+                    onTap : () => Navigator.of( sheetContext ).pop( s ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if ( picked == null ) return;
+    await prefs.muteSender( picked.key, picked.label );
+    onChanged();
+  }
+}
+
+class _QuietHoursSection extends StatelessWidget {
+  final NotificationPreferences prefs;
+  final bool                    masterOn;
+  final VoidCallback            onChanged;
+
+  const _QuietHoursSection( {
+    required this.prefs,
+    required this.masterOn,
+    required this.onChanged,
+  } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final on = masterOn && prefs.quietEnabled;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          key       : const Key( TestKeys.notifMgmtQuiet ),
+          secondary : const Icon( Icons.bedtime_outlined ),
+          title     : const Text( 'Quiet hours' ),
+          subtitle  : const Text( 'Stay silent between these times, every day.' ),
+          value     : prefs.quietEnabled,
+          onChanged : masterOn
+              ? ( v ) async {
+                  await prefs.setQuietEnabled( v );
+                  onChanged();
+                }
+              : null,
+        ),
+        Padding(
+          padding : const EdgeInsets.only( left: 56, right: 16 ),
+          child   : Row(
+            children: [
+              TextButton(
+                key       : const Key( TestKeys.notifMgmtQuietStart ),
+                onPressed : on ? () => _edit( context, start: true ) : null,
+                child     : Text( formatMinutes( prefs.quietStartMinutes ) ),
+              ),
+              const Text( '→' ),
+              TextButton(
+                key       : const Key( TestKeys.notifMgmtQuietEnd ),
+                onPressed : on ? () => _edit( context, start: false ) : null,
+                child     : Text( formatMinutes( prefs.quietEndMinutes ) ),
+              ),
+            ],
+          ),
+        ),
+        CheckboxListTile(
+          key            : const Key( TestKeys.notifMgmtQuietUrgentBypass ),
+          dense          : true,
+          contentPadding : const EdgeInsets.only( left: 56, right: 16 ),
+          controlAffinity: ListTileControlAffinity.leading,
+          title          : const Text( 'Let urgent through during quiet hours' ),
+          value          : prefs.quietUrgentBypass,
+          onChanged      : on
+              ? ( v ) async {
+                  await prefs.setQuietUrgentBypass( v ?? true );
+                  onChanged();
+                }
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _edit( BuildContext context, { required bool start } ) async {
+    final current = start ? prefs.quietStartMinutes : prefs.quietEndMinutes;
+    final picked  = await showTimePicker(
+      context     : context,
+      initialTime : TimeOfDay( hour: current ~/ 60, minute: current % 60 ),
+    );
+    if ( picked == null ) return;
+    final minutes = picked.hour * 60 + picked.minute;
+    if ( start ) {
+      await prefs.setQuietStartMinutes( minutes );
+    } else {
+      await prefs.setQuietEndMinutes( minutes );
+    }
+    onChanged();
+  }
+}
+
+/// `1320` → `22:00`. Twenty-four-hour, because a quiet window is read at a
+/// glance and "10:00 PM → 7:00 AM" is twice the width for the same fact.
+@visibleForTesting
+String formatMinutes( int minutes ) {
+  final h = ( minutes ~/ 60 ) % 24;
+  final m = minutes % 60;
+  return '${h.toString().padLeft( 2, '0' )}:${m.toString().padLeft( 2, '0' )}';
 }

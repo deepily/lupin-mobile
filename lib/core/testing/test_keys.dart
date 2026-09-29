@@ -220,6 +220,16 @@ class TestKeys {
   static const notifMgmtOpenStopList         = 'notifMgmt.openStopList';
   static String notifMgmtPriority( String surface, String priority ) =>
       '$notifMgmtPriorityPrefix$surface.$priority';
+  // Mute by sender + quiet hours (Rick 2026-09-29, row f1e80e67)
+  static const notifMgmtMuteAdd              = 'notifMgmt.mute.add';
+  static const notifMgmtMuteRowPrefix        = 'notifMgmt.mute.row.';          // + sender key
+  static const notifMgmtMuteRemovePrefix     = 'notifMgmt.mute.remove.';       // + sender key
+  static const notifMgmtMutePickPrefix       = 'notifMgmt.mute.pick.';         // + sender key
+  static const notifMgmtMuteUrgentBypass     = 'notifMgmt.mute.urgentBypass';
+  static const notifMgmtQuiet                = 'notifMgmt.quiet';
+  static const notifMgmtQuietStart           = 'notifMgmt.quiet.start';
+  static const notifMgmtQuietEnd             = 'notifMgmt.quiet.end';
+  static const notifMgmtQuietUrgentBypass    = 'notifMgmt.quiet.urgentBypass';
 
   // Row f27a61f4 — a visible delete with undo, and tap-to-edit
   static const settingsStopListDeletePrefix  = 'settings.stopList.delete.';   // + pattern

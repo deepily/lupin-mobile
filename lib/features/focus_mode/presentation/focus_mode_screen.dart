@@ -34,6 +34,7 @@ import '../../queue/presentation/queue_dashboard_screen.dart';
 import '../../quick_ask/presentation/quick_ask_screen.dart';
 import '../../settings/presentation/notification_audio_settings_screen.dart';
 import '../../settings/presentation/notification_management_screen.dart';
+import '../../notifications/data/notification_repository.dart';
 import '../../settings/presentation/notification_filter_settings_screen.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
@@ -100,6 +101,21 @@ List<FocusDrawerSurface> focusDrawerSurfaces( BuildContext context ) {
   ];
 }
 
+/// The roster the notification view offers for muting (row f1e80e67): every
+/// sender the server has seen for this user, one row per mute key.
+///
+/// Ensures:
+///   - null when nobody is signed in or no repository is registered, which
+///     hides the view's Add button instead of offering a list that cannot load
+Future<List<MutableSender>> Function()? muteRosterLoader( BuildContext context ) {
+  final auth = context.read<AuthBloc>().state;
+  if ( auth is! AuthAuthenticated ) return null;
+  if ( !ServiceLocator.isRegistered<NotificationRepository>() ) return null;
+  final email = auth.email;
+  return () async => MutableSender.fromRoster(
+      await ServiceLocator.get<NotificationRepository>().sendersVisible( email ) );
+}
+
 /// The drawer's settings block — NOT Home-grid surfaces, and listed after them
 /// under their own divider. The stop-list entry is disabled when the service is
 /// not registered, exactly as the pre-experiment drawer had it.
@@ -111,10 +127,11 @@ List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
     // bombardment is the thing he is trying to reach.
     FocusDrawerSurface( Icons.notifications_outlined, 'Notifications', ( _ ) =>
       NotificationManagementScreen(
-        prefs    : ServiceLocator.get<NotificationPreferences>(),
-        stopList : ServiceLocator.isRegistered<NotificationStopList>()
+        prefs       : ServiceLocator.get<NotificationPreferences>(),
+        stopList    : ServiceLocator.isRegistered<NotificationStopList>()
             ? ServiceLocator.get<NotificationStopList>()
             : null,
+        loadSenders : muteRosterLoader( context ),
       ),
     ),
     FocusDrawerSurface( Icons.settings, 'Settings', ( _ ) => NotificationAudioSettingsScreen(
@@ -528,10 +545,11 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             leading : const Icon( Icons.notifications_outlined ),
             title   : const Text( 'Notifications' ),
             onTap   : () => push( NotificationManagementScreen(
-              prefs    : ServiceLocator.get<NotificationPreferences>(),
-              stopList : ServiceLocator.isRegistered<NotificationStopList>()
+              prefs       : ServiceLocator.get<NotificationPreferences>(),
+              stopList    : ServiceLocator.isRegistered<NotificationStopList>()
                   ? ServiceLocator.get<NotificationStopList>()
                   : null,
+              loadSenders : muteRosterLoader( context ),
             ) ),
           ),
           ListTile(
