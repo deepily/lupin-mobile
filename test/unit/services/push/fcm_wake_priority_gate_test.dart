@@ -11,9 +11,13 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/services/push/fcm_bootstrap.dart';
 import 'package:lupin_mobile/services/push/fcm_wake_chain.dart';
+import 'package:lupin_mobile/services/push/notification_sender_label.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_delivery_policy.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 
 void main() {
   late List<String> shownBodies;
@@ -45,7 +49,7 @@ void main() {
     speak                  : ( text ) async => spoken.add( text ),
     markPlayed             : ( id, __ ) async => markedPlayed.add( id ),
     backgroundAllowsAnyPriority : () async => allowedPriorities.isNotEmpty,
-    priorityAllowed             : ( p ) async => allowedPriorities.contains( p ),
+    itemAllowed                 : ( p, _ ) async => allowedPriorities.contains( p ),
     log                    : logs.add,
   );
 
@@ -234,7 +238,7 @@ void main() {
         speak                  : ( _ ) async {},
         markPlayed             : ( id, __ ) async => markedPlayed.add( id ),
         backgroundAllowsAnyPriority : () async => true,
-        priorityAllowed             : ( p ) async {
+        itemAllowed                 : ( p, _ ) async {
           asked.add( p );
           return allowedPriorities.contains( p );
         },
@@ -262,7 +266,7 @@ void main() {
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
         backgroundAllowsAnyPriority : () async => true,
-        priorityAllowed             : ( _ ) async { reads++; return true; },
+        itemAllowed                 : ( _, __ ) async { reads++; return true; },
         log                    : logs.add,
       );
 
@@ -286,7 +290,7 @@ void main() {
       speak                  : ( _ ) async {},
       markPlayed             : ( _, __ ) async => fail( 'must not consume' ),
       backgroundAllowsAnyPriority : () async => allowedPriorities.isNotEmpty,
-      priorityAllowed             : ( p ) async => allowedPriorities.contains( p ),
+      itemAllowed                 : ( p, _ ) async => allowedPriorities.contains( p ),
       log                    : logs.add,
     );
 
@@ -295,5 +299,60 @@ void main() {
     expect( fetched, isFalse );
     expect( outcome.shown, isFalse );
     expect( outcome.detail, 'background notifications off' );
+  } );
+
+  // Row f1e80e67, plan §7.6. The REAL policy behind the seam, wired exactly as
+  // fcm_bootstrap wires it, so a regression in either the key or the gate shows.
+  group( 'GATE B — a muted sender is skipped, never consumed', () {
+    Map<String, dynamic> from( String id, String priority, String persona, String at ) => {
+      ...item( id, priority, at: at ),
+      'voice_persona': { 'name': persona },
+    };
+
+    Future<FcmWakeChain> chainWithMuted( String key ) async {
+      SharedPreferences.setMockInitialValues( {} );
+      final prefs  = NotificationPreferences( await SharedPreferences.getInstance() );
+      await prefs.muteSender( key, key );
+      final policy = NotificationDeliveryPolicy( prefs );
+      return FcmWakeChain(
+        readCredentials        : () async => const FcmWakeCredentials(
+            refreshToken: 'r', userEmail: 'e@x.com' ),
+        exchangeForAccessToken : ( _ ) async => 'a',
+        fetchUnplayed          : ( _, __ ) async => unplayed,
+        showNotification       : ( _, body, __ ) async => shownBodies.add( body ),
+        shouldSpeak            : ( _ ) async => false,
+        ttsFraction            : () async => 1.0,
+        speak                  : ( _ ) async {},
+        markPlayed             : ( id, __ ) async => markedPlayed.add( id ),
+        backgroundAllowsAnyPriority : () async => policy.anyAllowedOn( NotificationSurface.background ),
+        itemAllowed                 : ( p, it ) async => policy.allows(
+            surface   : NotificationSurface.background,
+            priority  : p,
+            senderKey : notificationSenderKey( it ) ),
+        log                    : logs.add,
+      );
+    }
+
+    test( 'a muted Maya at the head does not hide Maria behind her, and is left unplayed', () async {
+      unplayed = [
+        from( 'maya-1',  'high', 'Maya',  '2026-09-28T08:00:00-04:00' ),
+        from( 'maria-1', 'high', 'María', '2026-09-28T09:00:00-04:00' ),
+      ];
+
+      final outcome = await ( await chainWithMuted( 'persona:maya' ) ).handleWake( wakePayload() );
+
+      expect( shownBodies, [ 'body-maria-1' ] );
+      expect( markedPlayed, [ 'maria-1' ],
+              reason: 'the muted item stays unplayed on the server — silence, never deletion' );
+      expect( outcome.shown, isTrue );
+    } );
+
+    test( 'an urgent from the muted sender still gets through (bypass on by default)', () async {
+      unplayed = [ from( 'maya-urgent', 'urgent', 'Maya', '2026-09-28T08:00:00-04:00' ) ];
+
+      await ( await chainWithMuted( 'persona:maya' ) ).handleWake( wakePayload() );
+
+      expect( shownBodies, [ 'body-maya-urgent' ] );
+    } );
   } );
 }

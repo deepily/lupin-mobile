@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// User-tunable audio preferences for incoming notifications.
@@ -89,8 +91,86 @@ class NotificationPreferences {
   /// opposite of what row 7cac3a17 asks for.
   static bool defaultForegroundPriority( String priority ) => priority != 'low';
 
+  // ── Mute by sender + quiet hours (Rick 2026-09-29, row f1e80e67, plan §7) ──
+  // Same rule as the block above: they decide whether a notification is
+  // RAISED, never whether it exists, and every default leaves behaviour as it was.
+
+  /// Muted senders, as a JSON object of `notificationSenderKey` → the label
+  /// shown for it ("🌻 Maya"). The label is kept beside the key because the
+  /// key (`persona:maya`) is not what a person should have to read.
+  static const keyMutedSenders = 'notif.muted.senders';
+
+  /// An URGENT from a muted sender still gets through. Default ON: a mute is
+  /// "stop the chatter", not "never tell me the house is on fire".
+  static const keyMuteUrgentBypass = 'notif.muted.urgent_bypass';
+
+  static const keyQuietEnabled      = 'notif.quiet.enabled';
+  /// Minutes after local midnight. The window may cross midnight.
+  static const keyQuietStart        = 'notif.quiet.start_minutes';
+  static const keyQuietEnd          = 'notif.quiet.end_minutes';
+  static const keyQuietUrgentBypass = 'notif.quiet.urgent_bypass';
+
+  static const int defaultQuietStart = 22 * 60;  // 22:00
+  static const int defaultQuietEnd   = 7 * 60;   // 07:00
+
   final SharedPreferences _prefs;
   const NotificationPreferences( this._prefs );
+
+  /// Muted sender key → label. Empty when nothing is muted, and ALSO when the
+  /// stored value is unreadable: a corrupt blob must not mute anyone.
+  Map<String, String> get mutedSenders {
+    final raw = _prefs.getString( keyMutedSenders );
+    if ( raw == null || raw.isEmpty ) return const {};
+    try {
+      final decoded = jsonDecode( raw );
+      if ( decoded is! Map ) return const {};
+      return {
+        for ( final e in decoded.entries ) e.key.toString(): e.value.toString(),
+      };
+    } on FormatException {
+      return const {};
+    }
+  }
+
+  bool isSenderMuted( String? key ) => key != null && mutedSenders.containsKey( key );
+
+  Future<void> muteSender( String key, String label ) =>
+      _writeMuted( { ...mutedSenders, key: label } );
+
+  Future<void> unmuteSender( String key ) =>
+      _writeMuted( Map.of( mutedSenders )..remove( key ) );
+
+  Future<void> _writeMuted( Map<String, String> m ) =>
+      _prefs.setString( keyMutedSenders, jsonEncode( m ) );
+
+  bool get muteUrgentBypass  => _prefs.getBool( keyMuteUrgentBypass ) ?? true;
+  bool get quietEnabled      => _prefs.getBool( keyQuietEnabled ) ?? false;
+  int  get quietStartMinutes => _prefs.getInt( keyQuietStart ) ?? defaultQuietStart;
+  int  get quietEndMinutes   => _prefs.getInt( keyQuietEnd ) ?? defaultQuietEnd;
+  bool get quietUrgentBypass => _prefs.getBool( keyQuietUrgentBypass ) ?? true;
+
+  Future<void> setMuteUrgentBypass( bool v ) => _prefs.setBool( keyMuteUrgentBypass, v );
+  Future<void> setQuietEnabled( bool v )     => _prefs.setBool( keyQuietEnabled, v );
+  Future<void> setQuietStartMinutes( int m ) => _prefs.setInt( keyQuietStart, m % ( 24 * 60 ) );
+  Future<void> setQuietEndMinutes( int m )   => _prefs.setInt( keyQuietEnd, m % ( 24 * 60 ) );
+  Future<void> setQuietUrgentBypass( bool v ) => _prefs.setBool( keyQuietUrgentBypass, v );
+
+  /// Is [now] (local time) inside the quiet window?
+  ///
+  /// Ensures:
+  ///   - false whenever quiet hours are off
+  ///   - start inclusive, end exclusive: 22:00–07:00 is quiet at 22:00, not at 07:00
+  ///   - a window whose start is later than its end crosses midnight
+  ///   - start == end is an EMPTY window, never a 24-hour one — "22:00 to 22:00"
+  ///     is far likelier a half-finished edit than a request for permanent silence
+  bool inQuietHours( DateTime now ) {
+    if ( !quietEnabled ) return false;
+    final s = quietStartMinutes;
+    final e = quietEndMinutes;
+    final m = now.hour * 60 + now.minute;
+    if ( s == e ) return false;
+    return s < e ? ( m >= s && m < e ) : ( m >= s || m < e );
+  }
 
   bool get dingOnMedium  => _prefs.getBool( _keyDingOnMedium  ) ?? true;
   bool get dingOnHigh    => _prefs.getBool( _keyDingOnHigh    ) ?? true;

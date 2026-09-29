@@ -86,3 +86,61 @@ String? projectOfSenderId( String? senderId ) {
   final project = host.split( '.' ).first.trim();
   return project.isEmpty ? null : project;
 }
+
+/// The key a MUTE is stored under for [item]'s sender (row f1e80e67, plan §7.3).
+///
+/// Not the label and not the session: `sender_id` carries a `#hash` that changes
+/// every time a persona re-spins, so a mute keyed on it would quietly lapse the
+/// moment the seat it silenced was replaced. "Mute Maya" has to still mean Maya
+/// an hour later. So, in order:
+///   1. a voice persona  → `persona:maya`  (allocation `name`, lower-cased, accents folded)
+///   2. a sender id      → `project:lupin-mobile`  (the same project [projectOfSenderId] titles)
+///   3. anything else    → `sender:<raw sender_id>`, or null when there is none
+///
+/// Requires:
+///   - item is a server `notification` map, or null
+///
+/// Ensures:
+///   - the same sender always yields the same key, across sessions and re-spins
+///   - null only when the item identifies no sender at all (nothing to mute)
+///   - never throws
+String? notificationSenderKey( Map<String, dynamic>? item ) {
+  if ( item == null ) return null;
+
+  final raw = item[ 'voice_persona' ];
+  if ( raw is Map ) {
+    // `name` here, NOT `display_name`: the allocation key is the stable one, and
+    // a display name is free to gain a flourish without un-muting anybody.
+    final name = foldSenderName( ( raw[ 'name' ] ?? raw[ 'display_name' ] )?.toString() ?? '' );
+    if ( name.isNotEmpty ) return 'persona:$name';
+  }
+
+  final senderId = item[ 'sender_id' ]?.toString().trim() ?? '';
+  final project  = projectOfSenderId( senderId );
+  if ( project != null ) return 'project:$project';
+
+  return senderId.isEmpty ? null : 'sender:$senderId';
+}
+
+/// Lower-case [name] and fold the accents persona names actually carry, so
+/// "María" and "maria" are one sender. Same fold the server uses for DM recipients.
+///
+/// Ensures:
+///   - trimmed, lower-cased, with á é í ó ú ü ñ (and their grave/circumflex kin) folded
+///   - never throws
+String foldSenderName( String name ) {
+  const folds = {
+    'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a',
+    'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+    'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
+    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+    'ñ': 'n', 'ç': 'c',
+  };
+  final lower = name.trim().toLowerCase();
+  final out   = StringBuffer();
+  for ( final ch in lower.split( '' ) ) {
+    out.write( folds[ ch ] ?? ch );
+  }
+  return out.toString();
+}

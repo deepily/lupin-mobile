@@ -39,6 +39,7 @@ import '../notification_audio/notification_preferences.dart';
 import '../websocket/websocket_service.dart';
 import 'fcm_wake_chain.dart';
 import 'fcm_wakeup_service.dart';
+import 'notification_sender_label.dart';
 
 /// Grep-able flag pin (AC-S5.4): `--dart-define=ENABLE_FCM`.
 const bool kEnableFcm = bool.fromEnvironment( 'ENABLE_FCM', defaultValue: false );
@@ -558,8 +559,12 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
     // only store this isolate can read.
     backgroundAllowsAnyPriority: () async =>
         policy.anyAllowedOn( NotificationSurface.background ),
-    priorityAllowed: ( priority ) async => policy.allows(
-        surface: NotificationSurface.background, priority: priority ),
+    // Row f1e80e67: the item goes in too, so a muted sender and quiet hours
+    // are answered here from the same SharedPreferences as the priority is.
+    itemAllowed: ( priority, item ) async => policy.allows(
+        surface   : NotificationSurface.background,
+        priority  : priority,
+        senderKey : notificationSenderKey( item ) ),
     markPlayed: ( id, accessToken ) async {
       await dio.post<Map<String, dynamic>>(
         '/api/notifications/$id/played',

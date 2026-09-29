@@ -256,8 +256,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           // deletion. Rick asked to stop being bombarded, not to stop being
           // told.
           final mayRaise = _policy?.allows(
-                surface  : NotificationSurface.foreground,
-                priority : n.priority,
+                surface   : NotificationSurface.foreground,
+                priority  : n.priority,
+                senderKey : notificationSenderKey( n.raw ),   // row f1e80e67
               ) ?? true;
           if ( mayRaise ) {
             _audio?.handleIncoming(

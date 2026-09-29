@@ -142,4 +142,43 @@ void main() {
       expect( projectOfSenderId( "claude.code@." ), isNull );
     } );
   } );
+
+  // Row f1e80e67, plan §7.3 — the key a mute is stored under.
+  group( "notificationSenderKey", () {
+    Map<String, dynamic> item( { Map<String, dynamic>? persona, String? senderId } ) => {
+      if ( persona != null ) "voice_persona": persona,
+      if ( senderId != null ) "sender_id": senderId,
+    };
+
+    test( "a persona is keyed by its allocation name, so a re-spin keeps the mute", () {
+      final before = item( persona: { "name": "Maya", "icon": "🌻" },
+                           senderId: "claude.code@lupin.deepily.ai#aaaa1111" );
+      final after  = item( persona: { "name": "Maya", "icon": "🌻" },
+                           senderId: "claude.code@lupin.deepily.ai#bbbb2222" );
+      expect( notificationSenderKey( before ), "persona:maya" );
+      expect( notificationSenderKey( after ), notificationSenderKey( before ) );
+    } );
+
+    test( "accents and case fold, so María and maria are one sender", () {
+      expect( notificationSenderKey( item( persona: { "name": "María" } ) ), "persona:maria" );
+      expect( notificationSenderKey( item( persona: { "display_name": "MARÍA" } ) ), "persona:maria" );
+    } );
+
+    test( "no persona: the project, with the session hash dropped", () {
+      expect( notificationSenderKey( item( senderId: "claude.code@lookml.deepily.ai#1234abcd" ) ),
+              "project:lookml" );
+    } );
+
+    test( "a sender id with no project falls back to the raw id; nothing at all is null", () {
+      expect( notificationSenderKey( item( senderId: "test-runner" ) ), "sender:test-runner" );
+      expect( notificationSenderKey( item() ), isNull );
+      expect( notificationSenderKey( null ), isNull );
+    } );
+
+    test( "a persona with a blank name falls through to the project", () {
+      expect( notificationSenderKey( item( persona: { "name": "  " },
+                                           senderId: "claude.code@lupin.deepily.ai#x" ) ),
+              "project:lupin" );
+    } );
+  } );
 }

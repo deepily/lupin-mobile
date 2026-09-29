@@ -92,7 +92,7 @@ void main() {
           calls.add( 'played($id)' );
         },
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log: logs.add,
       );
     } );
@@ -199,7 +199,7 @@ void main() {
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await quiet.handleWake( wakePayload() );
@@ -232,7 +232,7 @@ void main() {
         speak                  : ( _ ) async => fail( 'must not speak' ),
         markPlayed             : ( _, __ ) async {},
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await broken.handleWake( wakePayload() );
@@ -254,7 +254,7 @@ void main() {
         speak                  : ( _ ) async => throw Exception( 'tts engine gone' ),
         markPlayed             : ( id, __ ) async => played.add( id ),
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await loud.handleWake( wakePayload() );
@@ -290,7 +290,7 @@ void main() {
         speak                  : ( _ ) async {},
         markPlayed             : ( id, __ ) async => played.add( id ),
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await noPrefs.handleWake( wakePayload() );
@@ -312,7 +312,7 @@ void main() {
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await dead.handleWake( wakePayload() );
@@ -332,7 +332,7 @@ void main() {
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await flaky.handleWake( wakePayload() );
@@ -354,7 +354,7 @@ void main() {
         speak                  : ( t ) async { spoken.add( t ); },
         markPlayed             : ( _, __ ) async => throw Exception( 'flaky 500' ),
         backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
         log                    : logs.add,
       );
       final outcome = await stubborn.handleWake( wakePayload() );
@@ -484,7 +484,7 @@ void main() {
           speak                  : ( _ ) async {},
           markPlayed             : ( _, __ ) async {},
           backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
           log                    : logs.add,
         );
 
@@ -538,7 +538,7 @@ void main() {
       speak                  : ( _ ) async {},
       markPlayed             : ( _, __ ) async {},
       backgroundAllowsAnyPriority: () async => true,
-        priorityAllowed: ( _ ) async => true,
+        itemAllowed    : ( _, __ ) async => true,
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),
@@ -618,7 +618,7 @@ void main() {
       speak            : ( _ ) async => calls.add( 'speak' ),
       markPlayed       : ( _, __ ) async => calls.add( 'played' ),
       backgroundAllowsAnyPriority : () async => wakeEnabled,
-      priorityAllowed             : ( _ ) async => true,
+      itemAllowed                 : ( _, __ ) async => true,
       log              : logs.add,
     );
 
@@ -672,7 +672,7 @@ void main() {
         speak                  : ( _ ) async {},
         markPlayed             : ( _, __ ) async {},
         backgroundAllowsAnyPriority : () async { reads++; return true; },
-        priorityAllowed             : ( _ ) async => true,
+        itemAllowed                 : ( _, __ ) async => true,
         log                    : logs.add,
       );
       await chain.handleWake( wakePayload() );
@@ -712,7 +712,7 @@ void main() {
       speak                  : speak ?? ( _ ) async {},
       markPlayed             : markPlayed ?? ( id, __ ) async => played.add( id ),
       backgroundAllowsAnyPriority : () async => true,
-      priorityAllowed             : ( _ ) async => true,
+      itemAllowed                 : ( _, __ ) async => true,
       log                    : logs.add,
       speakBudget            : const Duration( milliseconds: 40 ),
       markPlayedBudget       : const Duration( milliseconds: 40 ),
@@ -798,7 +798,7 @@ void main() {
       speak                  : ( _ ) async {},
       markPlayed             : ( _, __ ) async {},
       backgroundAllowsAnyPriority : gate,
-      priorityAllowed             : ( _ ) async => true,
+      itemAllowed                 : ( _, __ ) async => true,
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),

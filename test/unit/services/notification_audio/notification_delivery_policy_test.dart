@@ -118,6 +118,131 @@ void main() {
     } );
   } );
 
+  // ── Row f1e80e67, plan §7: mute by sender and quiet hours ────────────────
+  group( "NotificationDeliveryPolicy — mute by sender", () {
+    final noon = DateTime( 2026, 9, 29, 12, 0 );
+    const maya = 'persona:maya';
+
+    Future<NotificationDeliveryPolicy> muted( { bool? bypass } ) async {
+      SharedPreferences.setMockInitialValues( {
+        if ( bypass != null ) NotificationPreferences.keyMuteUrgentBypass: bypass,
+      } );
+      final prefs = NotificationPreferences( await SharedPreferences.getInstance() );
+      await prefs.muteSender( maya, '🌻 Maya' );
+      return NotificationDeliveryPolicy( prefs );
+    }
+
+    test( "a muted sender is denied at every priority below urgent, on both surfaces", () async {
+      final p = await muted();
+      for ( final surface in NotificationSurface.values ) {
+        for ( final priority in [ 'medium', 'high' ] ) {
+          expect( p.allows( surface: surface, priority: priority, senderKey: maya, now: noon ), false,
+                  reason: "muted Maya must be silent at ${surface.key}/$priority" );
+        }
+      }
+    } );
+
+    test( "an urgent from a muted sender gets through by default, and not once the bypass is off", () async {
+      expect( ( await muted() ).allows(
+          surface: NotificationSurface.background, priority: 'urgent', senderKey: maya, now: noon ), true );
+      expect( ( await muted( bypass: false ) ).allows(
+          surface: NotificationSurface.background, priority: 'urgent', senderKey: maya, now: noon ), false );
+    } );
+
+    test( "muting one sender leaves every other sender alone, and a null sender is never muted", () async {
+      final p = await muted();
+      expect( p.allows( surface: NotificationSurface.background, priority: 'high',
+                        senderKey: 'persona:maria', now: noon ), true );
+      expect( p.allows( surface: NotificationSurface.background, priority: 'high', now: noon ), true );
+    } );
+
+    test( "the bypass never resurrects an urgent the user switched off", () async {
+      SharedPreferences.setMockInitialValues( {
+        NotificationPreferences.priorityKey( 'background', 'urgent' ): false,
+      } );
+      final prefs = NotificationPreferences( await SharedPreferences.getInstance() );
+      await prefs.muteSender( maya, 'Maya' );
+      expect( NotificationDeliveryPolicy( prefs ).allows(
+          surface: NotificationSurface.background, priority: 'urgent', senderKey: maya, now: noon ), false );
+    } );
+
+    test( "unmuting restores the sender", () async {
+      SharedPreferences.setMockInitialValues( {} );
+      final prefs = NotificationPreferences( await SharedPreferences.getInstance() );
+      await prefs.muteSender( maya, 'Maya' );
+      await prefs.unmuteSender( maya );
+      expect( NotificationDeliveryPolicy( prefs ).allows(
+          surface: NotificationSurface.background, priority: 'high', senderKey: maya, now: noon ), true );
+    } );
+
+    test( "a corrupt stored mute list mutes nobody", () async {
+      final p = await policyWith( { NotificationPreferences.keyMutedSenders: '{not json' } );
+      expect( p.allows( surface: NotificationSurface.background, priority: 'high',
+                        senderKey: maya, now: noon ), true );
+    } );
+  } );
+
+  group( "NotificationDeliveryPolicy — quiet hours", () {
+    DateTime at( int h, int m ) => DateTime( 2026, 9, 29, h, m );
+
+    Future<NotificationDeliveryPolicy> quiet( int start, int end, { bool bypass = true } ) =>
+        policyWith( {
+          NotificationPreferences.keyQuietEnabled      : true,
+          NotificationPreferences.keyQuietStart        : start,
+          NotificationPreferences.keyQuietEnd          : end,
+          NotificationPreferences.keyQuietUrgentBypass : bypass,
+        } );
+
+    bool high( NotificationDeliveryPolicy p, DateTime t ) =>
+        p.allows( surface: NotificationSurface.background, priority: 'high', now: t );
+
+    test( "off by default: a fresh install is never quiet", () async {
+      final p = await policyWith( {} );
+      expect( high( p, at( 23, 30 ) ), true );
+    } );
+
+    test( "a window across midnight: quiet at 22:00, 23:30 and 06:59; loud at 07:00 and 21:59", () async {
+      final p = await quiet( 22 * 60, 7 * 60 );
+      expect( high( p, at( 22, 0 ) ), false, reason: "start is inclusive" );
+      expect( high( p, at( 23, 30 ) ), false, reason: "before midnight" );
+      expect( high( p, at( 0, 15 ) ), false, reason: "after midnight" );
+      expect( high( p, at( 6, 59 ) ), false );
+      expect( high( p, at( 7, 0 ) ), true, reason: "end is exclusive" );
+      expect( high( p, at( 21, 59 ) ), true );
+    } );
+
+    test( "a same-day window: quiet 13:00-14:00 only", () async {
+      final p = await quiet( 13 * 60, 14 * 60 );
+      expect( high( p, at( 12, 59 ) ), true );
+      expect( high( p, at( 13, 30 ) ), false );
+      expect( high( p, at( 14, 0 ) ), true );
+    } );
+
+    test( "start == end is an empty window, never 24 hours of silence", () async {
+      final p = await quiet( 22 * 60, 22 * 60 );
+      expect( high( p, at( 22, 0 ) ), true );
+      expect( high( p, at( 3, 0 ) ), true );
+    } );
+
+    test( "urgent gets through quiet hours by default, and not once the bypass is off", () async {
+      final t = at( 23, 30 );
+      expect( ( await quiet( 22 * 60, 7 * 60 ) ).allows(
+          surface: NotificationSurface.background, priority: 'urgent', now: t ), true );
+      expect( ( await quiet( 22 * 60, 7 * 60, bypass: false ) ).allows(
+          surface: NotificationSurface.background, priority: 'urgent', now: t ), false );
+    } );
+
+    test( "with no urgent bypass, quiet hours deny every priority", () async {
+      // This is what lets the background pre-flight (anyAllowedOn, which asks
+      // with the real clock) skip the fetch entirely during quiet hours.
+      final p = await quiet( 0, 23 * 60 + 59, bypass: false );
+      for ( final priority in NotificationPreferences.priorities ) {
+        expect( p.allows( surface: NotificationSurface.background, priority: priority,
+                          now: at( 12, 0 ) ), false );
+      }
+    } );
+  } );
+
   test( "an unrecognised priority is DENIED, not guessed at", () async {
     final p = await policyWith( {} );
     // A new server tier is something the user has never been shown a checkbox

@@ -42,9 +42,23 @@ class NotificationDeliveryPolicy {
   ///     - returns true only when the master switch, the surface switch AND
   ///       that priority's own checkbox are all on
   ///     - never throws, never writes
+  ///
+  /// MUTE AND QUIET HOURS (row f1e80e67, plan §7.4). Two more denials, applied
+  /// only after the three switches above have said yes — so an urgent the user
+  /// switched off is never resurrected by a bypass:
+  ///   - [senderKey] is muted            ⇒ denied, unless urgent and the mute bypass is on
+  ///   - [now] falls inside quiet hours  ⇒ denied, unless urgent and the quiet bypass is on
+  ///
+  /// Requires:
+  ///     - senderKey is `notificationSenderKey( item )`, or null when the
+  ///       caller has no item (a null sender is never muted)
+  ///     - now is local wall-clock time; it is a parameter so this stays pure,
+  ///       and it defaults to DateTime.now() for callers that have no clock seam
   bool allows( {
     required NotificationSurface surface,
     required String              priority,
+    String?                      senderKey,
+    DateTime?                    now,
   } ) {
     if ( !_prefs.enabled ) return false;
     if ( !_surfaceEnabled( surface ) ) return false;
@@ -52,7 +66,12 @@ class NotificationDeliveryPolicy {
     // tier arriving in a payload is a thing the user has never been offered a
     // checkbox for, so consent for it does not exist yet.
     if ( !NotificationPreferences.priorities.contains( priority ) ) return false;
-    return _prefs.priorityEnabled( surface.key, priority );
+    if ( !_prefs.priorityEnabled( surface.key, priority ) ) return false;
+
+    final urgent = priority == 'urgent';
+    if ( _prefs.isSenderMuted( senderKey ) && !( urgent && _prefs.muteUrgentBypass ) ) return false;
+    if ( _prefs.inQuietHours( now ?? DateTime.now() ) && !( urgent && _prefs.quietUrgentBypass ) ) return false;
+    return true;
   }
 
   /// Could ANY priority be raised on [surface]?

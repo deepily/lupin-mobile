@@ -142,7 +142,7 @@ class FcmWakeChain {
   /// This used to be `/next`, which hands back the single oldest unplayed
   /// item. With per-priority filtering that is a trap: a `low` the user has
   /// switched off sits at the head of the queue, and because we must not
-  /// consume it — see [priorityAllowed] — every later wake re-fetches that
+  /// consume it — see [itemAllowed] — every later wake re-fetches that
   /// same item and an `urgent` behind it never reaches the phone at all.
   /// Fetching the list lets the chain skip what it may not show and still
   /// find what it may.
@@ -193,13 +193,17 @@ class FcmWakeChain {
   /// the notification runs either.
   final Future<bool> Function() backgroundAllowsAnyPriority;
 
-  /// Prefs seam, GATE B: may THIS priority be raised in the background?
+  /// Prefs seam, GATE B: may THIS item be raised in the background?
+  ///
+  /// It gets the priority (already defaulted to `medium` when absent) AND the
+  /// whole item, because mute-by-sender and quiet hours (row f1e80e67) need to
+  /// know who sent it, not just how loudly.
   ///
   /// 🔴 A DENIED ITEM IS SKIPPED, NEVER CONSUMED. It is not shown, not spoken
   /// and not marked played, so it is still sitting unplayed on the server when
   /// the app is next opened and the list re-hydrates. Silence, not deletion —
   /// the same rule gate A enforces, one step later.
-  final Future<bool> Function( String priority ) priorityAllowed;
+  final Future<bool> Function( String priority, Map<String, dynamic> item ) itemAllowed;
 
   /// Debug-hook seam (§4): one line per chain step, adb-visible.
   final void Function( String line ) log;
@@ -227,7 +231,7 @@ class FcmWakeChain {
     required this.speak,
     required this.markPlayed,
     required this.backgroundAllowsAnyPriority,
-    required this.priorityAllowed,
+    required this.itemAllowed,
     required this.log,
     this.showBudget       = kFcmWakeShowBudget,
     this.fallbackBudget   = kFcmWakeFallbackBudget,
@@ -349,7 +353,7 @@ class FcmWakeChain {
       // the fallback instead of parking the handler until Android reclaims it.
       for ( final candidate in ordered ) {
         final p = candidate[ 'priority' ]?.toString() ?? 'medium';
-        if ( await priorityAllowed( p ).timeout( remaining() ) ) {
+        if ( await itemAllowed( p, candidate ).timeout( remaining() ) ) {
           item = candidate;
           break;
         }
