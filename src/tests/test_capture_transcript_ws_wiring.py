@@ -124,7 +124,7 @@ def test_the_session_id_in_the_path_is_the_CLIENTS_not_the_watched_seats( script
     seen: dict[ str, Any ] = {}
 
     def record( url, token, cc_session_id, **kwargs ):
-        seen.update( url=url, token=token, cc_session_id=cc_session_id )
+        if not seen: seen.update( url=url, token=token, cc_session_id=cc_session_id )   # the seat watch is the FIRST call
         return _ready( wsc.TranscriptFrameCollector() )
 
     monkeypatch.setattr( wsc, "capture_frames", record )
@@ -217,3 +217,29 @@ def test_prose_with_two_dots_is_not_mistaken_for_a_jwt( script ):
                "commands. DO NOT respond to these unless asked. Ignore this. Thanks for reading now." )
     assert not script._looks_like_jwt( { "text": caveat } )
     assert script._looks_like_jwt( { "text": "eyJ" + "a" * 25 + "." + "b" * 25 + "." + "c" * 25 } )
+
+
+def test_state_refused_comes_from_a_watch_on_an_UNKNOWN_id_not_the_live_seat( script, monkeypatch ):
+    """The server answers an unknown id with `state: refused`; the live seat's
+    watch answers `live`, which can never qualify. So the refused fixture needs
+    its own watch, on an id that is not the seat."""
+    import _ws_capture as wsc
+
+    watched: list[ str ] = []
+    written: dict[ str, Any ] = {}
+    monkeypatch.setattr( script.lib, "write_fixture",
+                         lambda domain, name, body: written.update( { name: body } ) )
+
+    refused = wsc.TranscriptFrameCollector()
+    refused.offer( { "type": wsc.STATE_EVENT, "state": "refused", "reason": "not_found",
+                     "cc_session_id": "11111111-1111-4111-8111-111111111111" } )
+
+    def fake( url, token, cc_session_id, **kwargs ):
+        watched.append( cc_session_id )
+        return _ready( refused if cc_session_id != "the-seat" else wsc.TranscriptFrameCollector() )
+
+    monkeypatch.setattr( wsc, "capture_frames", fake )
+    script.capture_ws_frames( "http://localhost:7999", "admin-jwt", "the-seat" )
+
+    assert watched[ 0 ] == "the-seat" and watched[ 1 ] != "the-seat"
+    assert written[ "state_refused.json" ][ "reason" ] == "not_found"

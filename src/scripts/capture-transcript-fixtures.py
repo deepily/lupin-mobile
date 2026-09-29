@@ -62,6 +62,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from typing import Any, Callable, Optional
 
 import _fixture_lib as lib
@@ -383,31 +384,51 @@ def capture_ws_frames(
             ws_url, admin_access, seat, append_wait_s=append_wait_s, from_offset=from_offset,
             wants=[ wsc.mixed_kinds_reasons, wsc.thinking_reasons ] ) )
     except wsc.WsCaptureError as failed:
-        for name in names:
+        for name in names[ :2 ]:
             _block( name, str( failed ) )
+    else:
+        print( f"  collected {len( collector.frames )} transcript frame(s)" )
+        for name, reasons_for in (
+            ( "append_mixed_kinds.json", wsc.mixed_kinds_reasons ),
+            ( "append_thinking.json",    wsc.thinking_reasons ),
+        ):
+            _write_selected( wsc, collector, name, reasons_for )
+
+    # `state_refused` needs no live seat: a watch on an id the server has never
+    # seen is answered with `state: refused` (reason `not_found`) and no appends,
+    # so the default settle window is enough.
+    unknown = str( uuid.uuid4() )
+    print( f"  watching unknown id {unknown} for the refused state frame" )
+    try:
+        refused = asyncio.run( wsc.capture_frames( ws_url, admin_access, unknown ) )
+    except wsc.WsCaptureError as failed:
+        _block( "state_refused.json", str( failed ) )
+        return
+    _write_selected( wsc, refused, "state_refused.json", wsc.state_refused_reasons )
+
+
+def _write_selected( wsc: Any, collector: Any, name: str, reasons_for: Callable[ [ dict ], list[ str ] ] ) -> None:
+    """Select ONE whole frame for [name] from [collector], redact it, write it.
+
+    Ensures:
+        - a fixture that finds no qualifying frame is BLOCKED with the reasons and
+          nothing is written
+        - the frame is the server's, never assembled from parts
+    """
+    try:
+        frame = collector.select( name, _without_jwt_lookalikes( reasons_for ) )
+    except wsc.NoQualifyingFrame as none_fit:
+        _block( name, str( none_fit ) )
         return
 
-    print( f"  collected {len( collector.frames )} transcript frame(s)" )
-
-    for name, reasons_for in (
-        ( "append_mixed_kinds.json", wsc.mixed_kinds_reasons ),
-        ( "append_thinking.json",    wsc.thinking_reasons ),
-        ( "state_refused.json",      wsc.state_refused_reasons ),
-    ):
-        try:
-            frame = collector.select( name, _without_jwt_lookalikes( reasons_for ) )
-        except wsc.NoQualifyingFrame as none_fit:
-            _block( name, str( none_fit ) )
-            continue
-
-        aliases  = _build_seat_alias_map( frame )
-        redacted = _apply_aliases( frame, aliases )
-        lib.redact_timestamp_fields( redacted, ( "ts", "timestamp", "generated_at" ) )
-        if _looks_like_jwt( redacted ):
-            _block( name, "a JWT survived redaction; nothing written" )
-            continue
-        lib.write_fixture( DOMAIN, name, redacted )
-        _ok( name )
+    aliases  = _build_seat_alias_map( frame )
+    redacted = _apply_aliases( frame, aliases )
+    lib.redact_timestamp_fields( redacted, ( "ts", "timestamp", "generated_at" ) )
+    if _looks_like_jwt( redacted ):
+        _block( name, "a JWT survived redaction; nothing written" )
+        return
+    lib.write_fixture( DOMAIN, name, redacted )
+    _ok( name )
 
 
 _B64URL = re.compile( r"[A-Za-z0-9_-]+" )
