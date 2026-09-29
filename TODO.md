@@ -38,6 +38,7 @@ Prior: 2026-06-12 SESSION-END (Session `dabf7fbb` — Mr. Radio 🦉): focus-mod
 - **The append mic is the default on every text box** (Rick). The rollout plan is `cc4e73ed`; the prompt card gets it in BOTH the Focus bubble and the notification sheet.
 - **Rick chose a dev-only test admin account** for fixture capture (`f2f30810`, his to create); `768e852f` is blocked on him.
 - **Pocholo's NDK install was allowed by Rick but refused by the permission layer**, so Rick runs it himself.
+- **Owed work goes in tickets, not mementos** (Rick). Post-game: `src/rnd/2026.09.28-fcm-live-test-bug-chain-post-game.md`. Its proposed rule (mock network shapes from captured fixtures, not from memory) waits on Rick's word.
 
 ### ⏳ Owed — 2026-09-28
 
