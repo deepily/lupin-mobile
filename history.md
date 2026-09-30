@@ -13,6 +13,26 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.29 | Session `3ecf2f22` (Tiffany 💍) — Wake backlog, dictation field, push pause, "off means off", transcript fixtures
+
+**RESUME HERE:**
+
+1. **Only live row: `768e852f`** (transcript console). C5.18 needs a recapture of `append_mixed_kinds` now that the server puts `name` on tool_result (Mr. Radio `687310b7`, live). The capture needs the admin test account: the script now reads `LUPIN_TEST_ADMIN_EMAIL` / `_PASSWORD` (Rick's `.bashrc`), and seats get them at the 09-30 fleet restart. C5.22 (thinking) stays pending-capture: no seat records thinking text.
+2. **The ask-audio contract fixture drifts** whenever lupin touches the ask response, and the guard blocks worker syncs, so Rick ran it twice today. A permission rule for `test/fixtures/asr/ask_audio_ndjson_contract.json` would stop the recurrence.
+3. Branches: only `main` + wip remain (Rick deleted 8 merged/stale ones). No worktrees.
+
+**Shipped** (crew: Pocholo, Tiberius, Chloé, Cheech, Maya, Clayton; every commit reviewed and cherry-picked; suite 2728/2/0 at `bded008`, `--fcm` APK built there):
+- **Wake fetch** asks the server for only the allowed priorities, oldest first: `95b7095` (`1a7678ff`). Also closes `33ee7329`.
+- **Wake backlog, show each**: up to 5 items per wake, each with its own notification id (review caught a same-second id collision): `8aebb59` (`8e91d937`). One whole-handler 27 s deadline: `416450b` (`5365750f`).
+- **DictationTextField**: all 15 mic-yes sites, census-guarded, plus a fix for a start completing on a dead widget: `c4e60ea` (`c67f9781`).
+- **Pause push from server** (P0 `67ee93b0`): admin toggle on the Notifications screen, 30 min to 24 h or until resumed: `29579af`.
+- **Off means off** (Rick's ruling): Focus speech honors Notifications off, Master mute, muted senders, and quiet hours: `bb12bd1` (`ea716d77`).
+- **A push-registration throw at login no longer skips the permission prompt**: `ab4f895` (`dfea49e7`, from Maya's review `20df4428`).
+- **Transcript fixtures**: `state_refused` captured (C5.21 green), `append_mixed_kinds` recaptured, the JWT-shape guard: `fed43e7`, `aab5824`; the capture script reads `LUPIN_TEST_ADMIN_*`: `e789f07`.
+- Fixture syncs to lupin: `d596526`, `bded008`.
+
+---
+
 ## 2026.09.28 | Session `1b9a6410` (Tiffany 💍) — FCM wake-ups live on the phone, tap-to-sender, notification controls, the append mic
 
 **RESUME HERE:**
