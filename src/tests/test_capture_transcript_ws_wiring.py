@@ -243,3 +243,49 @@ def test_state_refused_comes_from_a_watch_on_an_UNKNOWN_id_not_the_live_seat( sc
 
     assert watched[ 0 ] == "the-seat" and watched[ 1 ] != "the-seat"
     assert written[ "state_refused.json" ][ "reason" ] == "not_found"
+
+
+# ── the admin login's env var names ─────────────────────────────────────────
+_ADMIN_VARS = ( "LUPIN_TEST_ADMIN_EMAIL", "LUPIN_TEST_ADMIN_PASSWORD",
+                "LUPIN_ADMIN_EMAIL", "LUPIN_ADMIN_PASSWORD" )
+
+
+@pytest.fixture
+def clean_admin_env( monkeypatch ):
+    for var in _ADMIN_VARS: monkeypatch.delenv( var, raising=False )
+    return monkeypatch
+
+
+def test_the_TEST_admin_names_are_read( script, clean_admin_env ):
+    clean_admin_env.setenv( "LUPIN_TEST_ADMIN_EMAIL", "e-new" )
+    clean_admin_env.setenv( "LUPIN_TEST_ADMIN_PASSWORD", "p-new" )
+    assert script.read_admin_login() == ( "e-new", "p-new" )
+
+
+def test_the_TEST_admin_names_win_over_the_old_ones( script, clean_admin_env ):
+    for var, val in zip( _ADMIN_VARS, ( "e-new", "p-new", "e-old", "p-old" ) ):
+        clean_admin_env.setenv( var, val )
+    assert script.read_admin_login() == ( "e-new", "p-new" )
+
+
+def test_the_old_admin_names_still_work_as_a_fallback( script, clean_admin_env ):
+    clean_admin_env.setenv( "LUPIN_ADMIN_EMAIL", "e-old" )
+    clean_admin_env.setenv( "LUPIN_ADMIN_PASSWORD", "p-old" )
+    assert script.read_admin_login() == ( "e-old", "p-old" )
+
+
+def test_a_half_set_new_pair_falls_back_whole_not_mixed( script, clean_admin_env ):
+    clean_admin_env.setenv( "LUPIN_TEST_ADMIN_EMAIL", "e-new" )
+    clean_admin_env.setenv( "LUPIN_ADMIN_EMAIL", "e-old" )
+    clean_admin_env.setenv( "LUPIN_ADMIN_PASSWORD", "p-old" )
+    assert script.read_admin_login() == ( "e-old", "p-old" )
+
+
+def test_no_admin_login_is_none_none( script, clean_admin_env ):
+    assert script.read_admin_login() == ( None, None )
+
+
+def test_the_not_set_messages_name_both_pairs( script ):
+    src = open( os.path.join( SCRIPTS, "capture-transcript-fixtures.py" ) ).read()
+    for var in _ADMIN_VARS:
+        assert src.count( var ) >= 3, f"{var} should appear in usage and both not-set messages"

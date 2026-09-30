@@ -36,8 +36,9 @@ Usage:
     export LUPIN_TEST_INTERACTIVE_MOCK_JOBS_EMAIL="..."
     export LUPIN_TEST_INTERACTIVE_MOCK_JOBS_PASSWORD="..."
     # An ADMIN login, for the four admin-gated fixtures:
-    export LUPIN_ADMIN_EMAIL="..."
-    export LUPIN_ADMIN_PASSWORD="..."
+    # (LUPIN_TEST_ADMIN_* is read first; the older LUPIN_ADMIN_* still works)
+    export LUPIN_TEST_ADMIN_EMAIL="..."
+    export LUPIN_TEST_ADMIN_PASSWORD="..."
     # Optional, defaults to http://localhost:7999
     # export LUPIN_API_BASE_URL="http://localhost:7999"
     python src/scripts/capture-transcript-fixtures.py [--seat <cc_session_id>]
@@ -358,7 +359,8 @@ def capture_ws_frames(
     names = ( "append_mixed_kinds.json", "append_thinking.json", "state_refused.json" )
 
     if admin_access is None:
-        why = ( "no admin login available (LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD), and the "
+        why = ( "no admin login available (LUPIN_TEST_ADMIN_EMAIL / LUPIN_TEST_ADMIN_PASSWORD, or the older "
+                "LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD), and the "
                 "WS transcript verbs are gated by websocket_manager.session_is_admin — a "
                 "different mechanism from the REST require_admin. Row 700a48f9." )
         for name in names:
@@ -514,8 +516,7 @@ def main() -> int:
     print( f"non-admin login ok ({email})" )
 
     # ── the admin login, if the fleet has one ───────────────────────────────
-    admin_email = os.environ.get( "LUPIN_ADMIN_EMAIL" )
-    admin_pw    = os.environ.get( "LUPIN_ADMIN_PASSWORD" )
+    admin_email, admin_pw = read_admin_login()
     admin_access: Optional[ str ] = None
     admin_headers: Optional[ dict[ str, str ] ] = None
     if admin_email and admin_pw:
@@ -523,7 +524,8 @@ def main() -> int:
         admin_headers = { "Authorization": f"Bearer {admin_access}" }
         print( f"admin login ok ({admin_email})" )
     else:
-        print( "no LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD — the four admin-gated "
+        print( "no LUPIN_TEST_ADMIN_EMAIL / LUPIN_TEST_ADMIN_PASSWORD (nor the older "
+               "LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD) — the four admin-gated "
                "fixtures will be reported as blocked" )
 
     print()
@@ -563,9 +565,28 @@ def main() -> int:
     return 0
 
 
+def read_admin_login() -> tuple[ Optional[ str ], Optional[ str ] ]:
+    """
+    Read the admin login from the environment.
+
+    Ensures:
+        - LUPIN_TEST_ADMIN_EMAIL / LUPIN_TEST_ADMIN_PASSWORD win when both are set
+        - otherwise the older LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD pair is used
+        - a half-set new pair does not borrow half of the old one
+        - returns ( None, None ) when neither pair is complete
+    """
+    for email_var, pw_var in ( ( "LUPIN_TEST_ADMIN_EMAIL", "LUPIN_TEST_ADMIN_PASSWORD" ),
+                               ( "LUPIN_ADMIN_EMAIL", "LUPIN_ADMIN_PASSWORD" ) ):
+        email = os.environ.get( email_var )
+        pw    = os.environ.get( pw_var )
+        if email and pw: return email, pw
+    return None, None
+
+
 def _blocked_roster_no_admin() -> None:
     _block( "watchable_roster.json",
-            "no admin login supplied (LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD), and "
+            "no admin login supplied (LUPIN_TEST_ADMIN_EMAIL / LUPIN_TEST_ADMIN_PASSWORD, "
+            "or the older LUPIN_ADMIN_EMAIL / LUPIN_ADMIN_PASSWORD), and "
             "/api/cc-transcript-roster is require_admin." )
     return None
 
