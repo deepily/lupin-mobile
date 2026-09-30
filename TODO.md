@@ -1,5 +1,27 @@
 # TODO
 
+## ▶ START HERE — v0.2.2 branch handoff (2026-09-30, Tiffany 💍, Rick's broadcast `0375db54`)
+
+**Where we are.** `wip-v0.1.6-2026.04.16-tracking-lupin-work` is 445 commits ahead of `main`, all pushed; Rick merges it on the repo server. Last green suite: 2728 / 2 skipped / 0 failed at `bded008`; the `--fcm` APK was built there. No worktrees, no live crew.
+
+**After the merge:** `git checkout main && git pull`, then `git checkout -b wip-v0.2.2-2026.09.30-tracking-lupin` (the name Rick gave). Wait for Rick's marching orders before starting new work.
+
+| Thread | State | Next step |
+|---|---|---|
+| Transcript console `768e852f` (P1, only live store row) | Blocked on Rick | C5.18 recapture of `append_mixed_kinds` (needs the test admin env vars at seat start); C5.22 thinking stays pending-capture |
+| FCM wake / WebSocket after wake | Wake-ups live; research answered | Read `src/rnd/2026.09.28-background-wake-socket-problem-statement-response.md` — it recommends (a) always notify + reconnect on tap, plus (c) an opt-in "live mode" foreground service. Needs Rick's go before any build |
+| Mobile device_id + no reconnect on close 4004 `281a10d6` | Unstaffed | Mobile half of Mr. Radio's `dc446601` |
+| Append mic rollout `cc4e73ed` | Most sites done (`c4e60ea`) | Notification sheet's mic |
+| Stop-list undo defects `f27a61f4` | Open | Fixes listed under 09-27 below |
+| Ask-audio contract fixture drift | Recurring | A permission rule for `test/fixtures/asr/ask_audio_ndjson_contract.json` would stop Rick running syncs by hand |
+| Drawer route list duplicated from `home_screen.dart` | Follow-up | Extract a shared surface list |
+
+**Stale remote branches** (safe to delete after the merge, Rick's call): `origin/feat/transcript-mobile` (its two commits were rebased into wip as `3cdbe32` and `bec7b4e`), `origin/feat/focus-p1-drawer-stoplist` (fully contained in wip).
+
+**Rick's items** are unchanged from the dated sections below: the NDK 27 install, phone checks, and admit/drop rows `6f9c0fe4`, `1bc50bf5`, `61ecfb22`.
+
+---
+
 Last updated: 2026-09-26 (Session `90e34e30` — Tiffany 💍, Skeleton Shift): TaskRow call-site guard merged (`92a3fc0`, row `d5bbd786` closed); `file_picker` verified on Rick's phone; first real broadcast from the app delivered. Suite 2010 / 1 skipped / 0 failed.
 Prior: 2026-09-20 (Session `cc9c1f1a` — Tiffany 💍, manager on duty): **nine merges, pushed and backed up on Rick's 22:55 ritual order.** Rick ruled every open gate: both held rows admitted, batch won't-fix keeps no confirm (matching web), and the phone probe `c51e92da` **PARKED to 2026-10-19 — he has no cell service and no public IP for at least a month and told the fleet to stop asking. Do not re-raise it.** His own P0 `72e01fb3` closed on receipts against the tree. Sam's roster addressability guard merged (`488f189`, 71/71 green). Phase 5 is blocked on a SERVER defect Chloé traced — `commons_broadcast_ack` appears never to persist, so the ack drain can never contain acks. Three of my own rows were corrected by workers before a line was written.
 Prior: 2026-09-19 (Session `cc9c1f1a` — Tiffany 💍): **no code, board cleared.** Three rows closed on receipts — `c3fc62bf` on Rick's own device tail (`POST /api/v2/transcribe` → 200), `b00e076c` on 9/9 green, P0 `cea58ee0` on `11f9f5e` + 10/10 green **after splitting its amended-on server half out to lupin `2184bebb`** so the close could not bury it. Four rows filed. A live bearer token turned up in Rick's paste, making `a7de7d69` self-demonstrating. Mr. Radio ruled option B and banned the fallback; he also caught an unverified green claim of mine and predicted a real sentinel gap — which I then measured, and which became `67c7a2e1`, merged tonight as `488f189`.

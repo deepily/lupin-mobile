@@ -13,6 +13,14 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.09.30 | Session `43b31a9d` (Tiffany 💍) — PR prep for the v0.2.2 branch
+
+- Rick's broadcast `0375db54`: wip is being PR'd to `main`; next branch is `wip-v0.2.2-2026.09.30-tracking-lupin`.
+- TODO.md gained a START HERE handoff table (open threads, stale remote branches, post-merge steps).
+- Committed the deep-research response to the wake-socket problem statement, with frontmatter; removed an empty stray file `workers.`.
+
+---
+
 ## 2026.09.29 | Session `3ecf2f22` (Tiffany 💍) — Wake backlog, dictation field, push pause, "off means off", transcript fixtures
 
 **RESUME HERE:**
