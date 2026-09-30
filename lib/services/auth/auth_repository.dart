@@ -58,7 +58,7 @@ class AuthRepository {
         "/auth/login",
         data: { "email": email, "password": password },
       );
-      return AuthTokens.fromJson( res.data! );
+      return _parseTokensEnvelope( res.data!, context: "Login" );
     } on DioException catch ( e ) {
       throw _mapError( e, "Login failed" );
     }
@@ -70,12 +70,37 @@ class AuthRepository {
         "/auth/refresh",
         data: { "refresh_token": refreshToken },
       );
-      final json = Map<String, dynamic>.from( res.data! );
-      // Some backends only rotate access; keep old refresh if omitted.
-      json.putIfAbsent( "refresh_token", () => refreshToken );
-      return AuthTokens.fromJson( json );
+      return _parseTokensEnvelope(
+        res.data!,
+        context: "Token refresh",
+        fallbackRefreshToken: refreshToken,
+      );
     } on DioException catch ( e ) {
       throw _mapError( e, "Token refresh failed" );
+    }
+  }
+
+  /// Lupin backend returns `{message, user?, tokens}`; extract `tokens` sub-map
+  /// and surface malformed responses as [AuthException] (never raw TypeError).
+  AuthTokens _parseTokensEnvelope(
+    Map<String, dynamic> body, {
+    required String context,
+    String? fallbackRefreshToken,
+  } ) {
+    final raw = body[ "tokens" ];
+    if ( raw is! Map ) {
+      throw AuthException(
+        "$context response missing 'tokens' object (got: ${body.keys.toList()})",
+      );
+    }
+    final tokensJson = Map<String, dynamic>.from( raw );
+    if ( fallbackRefreshToken != null ) {
+      tokensJson.putIfAbsent( "refresh_token", () => fallbackRefreshToken );
+    }
+    try {
+      return AuthTokens.fromJson( tokensJson );
+    } catch ( e ) {
+      throw AuthException( "$context response has malformed tokens: $e" );
     }
   }
 

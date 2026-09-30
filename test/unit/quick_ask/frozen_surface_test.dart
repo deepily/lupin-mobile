@@ -1,0 +1,146 @@
+/// AC-S4.10a — the blast-radius pin on the shared focus-mode surface, AS A
+/// TEST rather than a command somebody remembers to run.
+///
+/// The rule: S4 changes `prompt_bodies.dart` and `focus_chat_pane.dart`, which
+/// focus mode has been using all along. The existing focus-mode prompt and
+/// notification tests must therefore run against the changed surface and stay
+/// green WITHOUT being edited, re-baselined or quarantined. An S4 commit that
+/// edits one of them to make it pass has moved the goalposts, and this goes
+/// red instead of passing quietly.
+///
+/// 🔴 THE EXISTENCE GATE RUNS FIRST, AND IT IS NOT DECORATION.
+/// `git diff --exit-code <sha> -- <a path that does not exist>` returns **0**.
+/// Measured at `9a9c10c`: two of the five originally-frozen files were not in
+/// the tree, so half this pin held nothing on the widest-blast-radius surface
+/// in the plan — and reported green. A vacuous pass is worse than no pin,
+/// because it is indistinguishable from a real one.
+///
+/// 🔴 AND THE INSTRUMENT IS CHECKED TOO. A `git diff` that cannot fail — wrong
+/// working directory, unresolvable sha, `git` not on PATH — returns green for
+/// every possible tree. So this file also diffs a path S4 is KNOWN to have
+/// changed and requires that to come back dirty. If the control cannot show a
+/// red it is not a control.
+library;
+
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+/// The revision S4 started from. The pin is a diff against THIS, not against
+/// HEAD — otherwise re-baselining a frozen file inside S4 would pass.
+const preS4Sha = '026ffd3';
+
+/// 🔴 A CLOSED LIST, and every entry must exist.
+///
+/// `interactive_prompt_sheet_test.dart` was REMOVED from this list on
+/// 2026-08-29: it is a pinned DELTA under AC-S4.10b now, not a frozen file.
+/// `focus_chat_pane_test.dart` and `focus_chat_state_test.dart` were also once
+/// named here and are not in the tree at all — that is the defect above.
+const frozenFiles = <String>[
+  'test/widget/focus_mode/focus_chat_pane_collapse_test.dart',
+  'test/unit/focus_mode/focus_chat_bloc_test.dart',
+  'test/unit/notifications/notification_bloc_test.dart',
+];
+
+/// Frozen files a later BEHAVIOUR change ordered by Rick had to edit, each
+/// pinned to the exact contents that change left (`git hash-object`), so any
+/// further edit still goes red. This is not a re-baseline to hide a
+/// regression: the behaviour the old tests asserted was retired on purpose.
+///
+/// - focus_chat_bloc_test.dart — Rick 2026-09-17 (lupin bug 80f10bdd): the
+///   composer's message to a session goes through the browsers' `POST
+///   /api/notify` user_initiated_message, not `/api/dm/send`. The three DM
+///   tests and AC-S2.9(iii) now assert the new door; nothing else changed.
+///
+/// - notification_bloc_test.dart — Rick 2026-09-28 by voice, Tiffany's title
+///   ruling the same day (row d9bc6f6c). TWO retirements, both deliberate:
+///     (a) `NotificationAudioService.handleIncoming` now also takes
+///         `notificationId` and `senderId`, because the notification it posts has
+///         to be TAPPABLE — a tap previously just opened the app. mocktail
+///         matches named arguments, so a stub that does not name the new ones
+///         matches nothing; the three `any()` stubs were widened and nothing else
+///         about them changed.
+///     (b) the notification TITLE is now WHO sent it, not the item's own `title`.
+///         The one literal `verify` asserted `title: "CRIT"`; it now asserts the
+///         sender label. That assertion was not wrong — the behaviour it pinned
+///         was retired on purpose, because a notification arriving with the phone
+///         face down said what happened and not who said it.
+/// - focus_chat_bloc_test.dart, again — Rick 2026-09-29 (row ea716d77, "off
+///   means off"): `enqueueAlways` now takes `senderKey`, and mocktail matches
+///   named arguments, so the stubs and verifies that name the other
+///   arguments were widened with `senderKey: any( named: 'senderKey' )`.
+///   Nothing else in that file changed.
+///
+///   🔴 THIS IS A CONTROL BEING WEAKENED, so it is written down rather than
+///   quietly re-pinned: a reviewer should confirm the edit is (a) and (b) and
+///   nothing else. `git diff 026ffd3 -- test/unit/notifications/notification_bloc_test.dart`
+///   is the whole story, and it is small.
+const repinnedFrozenFiles = <String, String>{
+  'test/unit/focus_mode/focus_chat_bloc_test.dart'       : 'f78738fe8e969779c578262ac5318ac40ba7657f',
+  'test/unit/notifications/notification_bloc_test.dart'  : '215b782ac8d49767735ad8edcf6d9daa76162993',
+};
+
+/// A file S4 unambiguously DID change. Diffing it is how this test proves the
+/// diff can come back dirty at all.
+const knownChangedFile = 'lib/features/quick_ask/domain/quick_ask_bloc.dart';
+
+ProcessResult _git( List<String> args ) => Process.runSync( 'git', args );
+
+void main() {
+  group( 'AC-S4.10a — the frozen focus-mode surface', () {
+
+    test( 'the git working directory and the pre-S4 revision both RESOLVE', () {
+      // Without this, every assertion below degrades to "git errored, so
+      // nothing differed" — a green earned by the check being broken.
+      final root = _git( [ 'rev-parse', '--show-toplevel' ] );
+      expect( root.exitCode, 0,
+          reason: 'not inside a git work tree — the pin cannot run: ${root.stderr}' );
+
+      final sha = _git( [ 'rev-parse', '--verify', '$preS4Sha^{commit}' ] );
+      expect( sha.exitCode, 0,
+          reason: 'pre-S4 revision $preS4Sha does not resolve; the diff would '
+                  'compare against nothing: ${sha.stderr}' );
+    } );
+
+    test( 'EVERY frozen path EXISTS — checked BEFORE any diff', () {
+      // First, because `git diff --exit-code` on an absent path returns 0 and
+      // the whole pin evaporates without a word.
+      for ( final f in frozenFiles ) {
+        expect( File( f ).existsSync(), isTrue,
+            reason: 'FROZEN PATH ABSENT: $f — this pin is vacuous. Either the '
+                    'file moved and the list is stale, or the name is a typo. '
+                    'Fix the list; do NOT delete the entry.' );
+      }
+      expect( frozenFiles, isNotEmpty,
+          reason: 'an empty frozen list passes every check ever written' );
+    } );
+
+    test( 'the diff can actually come back DIRTY — the instrument works', () {
+      expect( File( knownChangedFile ).existsSync(), isTrue );
+      final r = _git( [ 'diff', '--exit-code', preS4Sha, '--', knownChangedFile ] );
+      expect( r.exitCode, isNot( 0 ),
+          reason: '$knownChangedFile shows NO change since $preS4Sha. S4 '
+                  'certainly changed it, so this diff is inert — wrong '
+                  'directory, wrong sha, or the wrong file — and every green '
+                  'below is meaningless.' );
+    } );
+
+    test( 'no frozen file has been edited since the pre-S4 revision', () {
+      for ( final f in frozenFiles ) {
+        final pinned = repinnedFrozenFiles[ f ];
+        if ( pinned != null ) {
+          final h = _git( [ 'hash-object', f ] );
+          expect( ( h.stdout as String ).trim(), pinned,
+              reason: 'AC-S4.10a VIOLATED — $f was re-pinned to blob $pinned '
+                      'and has changed again since.' );
+          continue;
+        }
+        final r = _git( [ 'diff', '--exit-code', preS4Sha, '--', f ] );
+        expect( r.exitCode, 0,
+            reason: 'AC-S4.10a VIOLATED — $f changed since $preS4Sha.\n'
+                    'A frozen test that had to be edited to stay green is a '
+                    'regression wearing a re-baseline.\n${r.stdout}' );
+      }
+    } );
+  } );
+}

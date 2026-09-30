@@ -4,6 +4,8 @@
 /// shape; only TFE resume-from has extra fields and warrants its own class.
 library;
 
+import '../../queue/data/queue_models.dart';
+
 T? _as<T>( dynamic v ) => v is T ? v : null;
 
 // ─────────────────────────────────────────────
@@ -40,6 +42,29 @@ class AgenticSubmitResponse {
     required this.queuePosition,
     this.message,
   } );
+
+  /// v2 wave 2: build from the synchronous `/api/v2/submit` body. A long job comes
+  /// back `status == 'waiting'` with a `job_id` — that is a SUCCESS (the work was
+  /// accepted and is running behind the queue), not a degrade. Anything that did
+  /// not produce a job is surfaced as an [AgenticApiException] so the form shows a
+  /// Failure with the server's own words instead of a blank success.
+  factory AgenticSubmitResponse.fromAsk( AskResponse ask ) {
+    final jobId = ask.jobId;
+    if ( jobId != null && jobId.isNotEmpty && ( ask.status == 'waiting' || ask.status == 'done' ) ) {
+      return AgenticSubmitResponse(
+        status        : ask.status,
+        jobId         : jobId,
+        queuePosition : 0,            // /api/v2/submit reports no queue position
+        message       : ask.answer,
+      );
+    }
+    if ( ask.status == 'needs_input' ) {
+      throw AgenticApiException( 'Missing: ${ask.argsMissing.join( ", " )}' );
+    }
+    throw AgenticApiException(
+      ask.error ?? ask.answer ?? 'No job was created (${ask.path}/${ask.status}: ${ask.routeReason})',
+    );
+  }
 
   factory AgenticSubmitResponse.fromJson( Map<String, dynamic> j ) =>
       AgenticSubmitResponse(

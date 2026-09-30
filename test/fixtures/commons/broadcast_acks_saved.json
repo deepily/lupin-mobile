@@ -1,0 +1,32 @@
+{
+  "status": "success",
+  "broadcast_id": "b-fixture-0001",
+  "ack_count": 2,
+  "acks": [
+    {
+      "id": "notif-fixture-savedack-2",
+      "broadcast_id": "b-fixture-0001",
+      "session_id": "sess-fixture-2",
+      "persona_name": "tiffany",
+      "persona_icon": "📻",
+      "persona_color": "#26A69A",
+      "ack_status": "completed",
+      "body_summary": "Read it — merging after the suite.",
+      "state": "delivered",
+      "created_at": "2026-09-23T16:31:04.118000+00:00"
+    },
+    {
+      "id": "notif-fixture-savedack-1",
+      "broadcast_id": "b-fixture-0001",
+      "session_id": "sess-fixture-1",
+      "persona_name": "maria",
+      "persona_icon": "🌸",
+      "persona_color": "#F06292",
+      "ack_status": "completed-with-withheld",
+      "body_summary": "On it — picking this up now.",
+      "state": "created",
+      "created_at": "2026-09-23T16:30:41.007000+00:00"
+    }
+  ],
+  "timestamp": "2026-09-23T16:35:00.000000-04:00"
+}

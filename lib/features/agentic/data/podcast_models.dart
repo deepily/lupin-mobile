@@ -22,6 +22,17 @@ class PodcastGeneratorRequest {
     this.monopolize      = false,
   } );
 
+  /// v2 wave 2 — `/api/v2/submit` args. Renames per JOB_ARG_CONTRACTS:
+  /// `research_source` → `research`, `target_languages` → `languages`.
+  /// `max_segments` is carried but not read by the factory on b12174fc.
+  static const submitCommand = 'agent router go to podcast generator';
+  Map<String, dynamic> toSubmitArgs() => {
+    'research'                                       : researchSource,
+    if ( targetLanguages.isNotEmpty ) 'languages'    : targetLanguages,
+    if ( maxSegments != null        ) 'max_segments' : maxSegments,
+    if ( dryRun                     ) 'dry_run'      : dryRun,
+  };
+
   Map<String, dynamic> toJson() => {
     'research_source'                          : researchSource,
     if ( targetLanguages.isNotEmpty ) 'target_languages' : targetLanguages,

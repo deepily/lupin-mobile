@@ -1,0 +1,51 @@
+{
+  "endpoint" : "GET /api/notifications/conversation/{sender_id}/{user_email}",
+  "wire_fields" : [
+    "id", "sender_id", "message", "title", "type", "priority", "state", "is_hidden",
+    "abstract", "created_at", "delivered_at", "responded_at", "response_requested",
+    "response_type", "response_value", "job_id", "progress_group_id", "timestamp", "time_display"
+  ],
+  "raw_passthrough_check" : {
+    "verdict"          : "FAILS — THIN ADAPTER branch decided (S2 section 3.1, F-S2-S2-2)",
+    "missing_fields"   : [ "response_options", "voice_persona" ],
+    "source_grounding" : "notifications.py:1940-1962 — the serializer is a FIXED 19-field dict; response_options and voice_persona are never emitted on this route regardless of message type",
+    "present_state_fields" : [ "state", "response_requested", "response_type", "response_value", "responded_at" ],
+    "implications" : [
+      "Answered/unanswered discriminator IS wire-supported: answered iff state == 'responded' / non-null response_value",
+      "pendingPromptFor(senderId) selector inputs (responseRequested && !responded) are wire-supported for backfilled items",
+      "Backfilled multiple_choice asks arrive WITHOUT response_options — inline chips cannot render from backfill; S3's fallback affordance (legacy sheet) covers it; live WS arrivals carry full payload and are unaffected",
+      "voice_persona is NOT recoverable from backfill on this route — backfilled bubbles render without persona badge data unless S2 merges from the registry"
+    ]
+  },
+  "hours_param_semantics" : {
+    "senders"      : "Optional[int], server default None = FULL history (probe: omitted -> 102 senders; hours=24 -> 1). Source: notifications.py:1773-1775",
+    "conversation" : "int, server default 24 — omitting hours gives a 24-HOUR WINDOW, NOT full history. Source: notifications.py:1854. Cold-start backfill depth must pass hours explicitly if more than 24h is wanted; anchor param available for window repositioning"
+  },
+  "sample_message" : {
+    "id": "31efbf9a-736d-48a6-8b6f-f2ba7852393d",
+    "sender_id": "lupin-arbiter-app-8001",
+    "message": "[E2E-CARDGAP] simulated arbiter stall warning",
+    "title": "",
+    "type": "alert",
+    "priority": "high",
+    "state": "created",
+    "is_hidden": false,
+    "abstract": "",
+    "created_at": "2026-06-11T21:13:45.725701-04:00",
+    "delivered_at": null,
+    "responded_at": null,
+    "response_requested": false,
+    "response_type": null,
+    "response_value": null,
+    "job_id": null,
+    "progress_group_id": null,
+    "timestamp": "2026-06-11T21:13:45.725701-04:00",
+    "time_display": "21:13 EDT"
+  },
+  "_capture" : {
+    "utc"         : "2026-06-12T04:03:06Z",
+    "server"      : "http://localhost:7999 (dev)",
+    "captured_by" : "Mr. Radio (session dabf7fbb), Phase-0 cascade-focus-mode probe script",
+    "method"      : "live GET capture + serializer source-grounding (wire-grounding doctrine: file:line citations above)"
+  }
+}

@@ -1,0 +1,132 @@
+# Voice/Persona Mobile Port — Master Index
+
+**Project ID**: `voice-persona-mobile-port`
+**Created**: 2026-05-06
+**Pattern**: Pattern A (Multi-Phase Implementation Documentation), right-sized for a Pattern 3 (Feature Development) plan that opted into the full plan-review gate
+**Duration**: ~5 days, 5 phases, 12 tasks
+**Status**: Draft — pending plan-review (REUSE → Pass 1 Fitness → Pass 2 Adversarial)
+**Prefix**: [LUPIN-MOBILE]
+
+---
+
+## Why this Pattern A doc-set exists for a Pattern 3 plan
+
+The canonical `<planning-is-prompting>/workflow/p-is-p-02-documenting-the-implementation.md` says Pattern 3 plans should SKIP this step and use `history.md`. The user has explicitly opted in **specifically to satisfy plan-review's grep-based prerequisites** (`workflow/plan-review.md` §2). The Pattern A structure here is right-sized — five docs, no architecture doc (no system design beyond what's inline in implementation), no archive directory.
+
+If this milestone weren't going through plan-review, this subdirectory would not exist; `01-voice-persona-port-plan.md` at the parent level would be the single source of truth.
+
+---
+
+## Quick Navigation
+
+- **[Working Contract](00-working-contract.md)** — Rules of engagement (Convention 1: project-level anchor for Pass 2 Adversarial)
+- **[Implementation](01-implementation.md)** — Phases 1-5, tasks, files (with `EXECUTOR: AI/HUMAN` tags per Convention 3)
+- **[Decisions](03-decisions.md)** — `Q1`–`Q6` FROZEN 2026-05-06 (Convention 2: milestone-level anchor for Pass 1 Fitness)
+- **[Testing & Validation](04-testing-validation.md)** — EXECUTOR-tagged verification matrix
+- **[Parent entry pointer](../01-voice-persona-port-plan.md)** — thin link doc; lives at parent level for cross-ref stability with peer plans (`02-conversation-mode-port-plan.md`, `03-session-switcher-port-plan.md`)
+
+---
+
+## Project Overview
+
+Port the per-session voice persona surface (parent-Lupin commit `eedc823`, CoSA `2116566`, 2026-04-28) into the mobile client. Server stamps a persona dict `{ name, voice_id, icon, color, borrowed, assigned_at, display_name }` onto every notification envelope. Mobile must:
+
+1. Display a persona badge keyed to each session
+2. Route the assigned `voice_id` through the existing `StreamingTtsPlayer` pipeline so per-session voices are honored (instead of always falling through to Sam)
+3. Handle `voice_persona_assigned` / `voice_persona_released` events that ride **inside** `notification_queue_update` envelopes (the 2026-04-29 WS-event-cleanup migration)
+
+Clean port — no UX redesign. Persona model is well-defined server-side; mobile mirrors it.
+
+---
+
+## Current Status
+
+**Milestone status**: 🎯 **CODE-COMPLETE 2026-05-07** — all 6 phases AI-executable work landed; baseline 308 ✅ / 0 ❌; 44 ❌ quarantine drift baseline unchanged. HUMAN gate (single laptop+emulator session running runbook §"Voice-persona milestone gate" vp1-vp7) is the only remaining closure step.
+**Progress**: 6/6 phases complete (AI portion); HUMAN runbook acceptance pending
+**Test count**: 308 baseline-tracked (273 → 308; +35 across Phases 0–4)
+**Last Updated**: 2026-05-07
+
+---
+
+## Phase Summary
+
+| Phase | Status | Where | Notes |
+|---|---|---|---|
+| 0 (prereq) | ✅ complete 2026-05-06 | [`../00-phase-0-dispatch-audit.md`](../00-phase-0-dispatch-audit.md) | 🟡 partial drift confirmed; `switch (n.type)` pivot landed in `_onExternalUpdate`. 273 → 276 |
+| 1 — Data model | ✅ complete 2026-05-06 | [01-implementation.md §2](01-implementation.md) | `VoicePersona` model + `NotificationItem.voicePersona` field + fixture + 14 new tests. 276 → 290 |
+| 2 — WS dispatch | ✅ complete 2026-05-06 | [01-implementation.md §3](01-implementation.md) | 2 new bloc events + `PersonaSnapshotMixin` on 4 loaded states + bloc-instance persona map + 4 Pass-1-F3 blocTests. 290 → 294 |
+| 3 — UI badge | ✅ complete 2026-05-07 | [01-implementation.md §4](01-implementation.md) | `PersonaBadge` + `DashedBorderPainter` + 3 wiring sites + 8 widget tests. 294 → 302. HUMAN acceptance review pending (laptop+emulator). |
+| 4 — TTS routing | ✅ complete 2026-05-07 | [01-implementation.md §5](01-implementation.md) | Verify+comment per REUSE pre-pass. Q3 dartdoc on `speak()`; Q4 intentional-omit comment in `_speakViaFallback`; `enqueueIfSpeakable.voiceId` wired through `_Utterance` to `_player.speak`; bloc passes `n.voicePersona?.voiceId`. 6 new tests. 302 → 308. |
+| 5 — Docs + verify | ✅ AI complete 2026-05-07; ⏳ HUMAN gate pending | [01-implementation.md §6](01-implementation.md) | All 5 AI tasks done: tracking-doc closes + 308 ✅ baseline + 44 ❌ quarantine unchanged + 7 new runbook acceptance steps (vp1-vp7) bundling Phase 3 visual + Phase 4 audible gates into a single laptop+emulator pass. |
+
+---
+
+## Recent Updates
+
+- **2026-05-07 (Phase 5 AI portion landed; milestone code-complete)**: Final phase executed. AI tasks: TODO.md milestone-close entry; history.md session-end entry (above current Phase 4 checkpoint entry); full baseline `./flutter.sh test` returned `308 ✅ / 0 ❌` confirming Phases 0-4 cumulative; legacy_quarantine count `44 ❌` unchanged from session `0d54c763` (no silent reactivations); on-device TTS runbook (`src/rnd/v0.1.7/2026.04.24-on-device-tts-verify-runbook.md`) extended with a new "Voice-persona milestone gate" section containing 7 acceptance steps (vp1 inbox badge / vp2 conversation header / vp3 by-date item / vp4 borrowed dashed border / vp5 light+dark contrast — Phase 3 §3.6 HUMAN gate / vp6 persona-voice timbre vs Sam — Phase 4 F5 HUMAN gate / vp7 quota-fallback device-TTS Q4 audible verification). Persona timbre cheat sheet for the 6-voice pool documented inline (Adam/Bella/Domi/Antoni/Rachel/Arnold + Sam fallback). Per user direction 2026-05-07, BOTH outstanding HUMAN gates (Phase 3 visual + Phase 4 audible) are now bundled — single laptop+emulator session executing vp1-vp7 closes the milestone.
+- **2026-05-07 (Phase 4 landed)**: TTS routing phase executed (collapsed verify+comment per REUSE pre-pass). 13-line dartdoc block on `streaming_tts_player.dart:speak()` flagging `voiceId` as the persona pipe-through path with the absent-→-Sam server contract documented. 11-line "intentional omit" comment block inside `tts_orchestrator.dart:_speakViaFallback` warning future maintainers not to pipe `voiceId` to `flutter_tts` (different voice space, Q4). Wiring: `String? voiceId` param added to `TtsOrchestrator.enqueueIfSpeakable`; `_Utterance` extended with `voiceId` field; `_dispatchCurrent` passes `voiceId: utter.voiceId` to `_player.speak`. `NotificationBloc._onExternalUpdate` now passes `voiceId: n.voicePersona?.voiceId` at the `enqueueIfSpeakable` call site. 6 new tests: 3 in `streaming_tts_player_test.dart` (4.1 voiceId in body / 4.2 omitted when null per Q3 / 4.3 borrowed body shape unchanged); 3 in `tts_orchestrator_test.dart` (4.4 persona piped from notification / 4.4b null voiceId defensive / 4.5 quota fallback omits voiceId — uses error-stream injection per F11 to enter 5-min window then asserts `fallback.flutterTtsSpeak(text)` is called without voiceId). Baseline 302 → 308 (+6; plan estimated +5, the +1 is the 4.4b defensive case).
+- **2026-05-07 (Phase 3 landed)**: UI badge phase executed. New `PersonaBadge` widget (StatelessWidget wrapping `CircleAvatar`, hex-color parser with theme-primary fallback, F9 failure-mode contract — color always renders even when emoji glyph fails), new `DashedBorderPainter` (60-line `CustomPainter` per Q9), `TestKeys` extended with `personaBadgePrefix`/`personaBadgeDashedPrefix`. Wired into all 3 surfaces: `_SenderTile` (inbox; parent passes `state.personaFor(senderId)` to tile), `ConversationScreen` AppBar (BlocSelector reading from `personasBySender`), `_NotificationItemCard` (reads `item.voicePersona` directly per Q1). 6 tests in new `persona_badge_test.dart` + 2 in `conversation_screen_test.dart`. Baseline 294 → 302 (+8; plan estimated +5, the +3 extras are defensive coverage — 3.4 split into light+dark vs broken-emoji cells, plus malformed-color and empty-personasBySender edge cases). HUMAN acceptance review for badge contrast in light+dark mode pending laptop+emulator deployment.
+- **2026-05-06 (Phase 2 landed)**: Phase 2 WS dispatch executed post-checkpoint `fd8fc18`. New bloc events `NotificationsVoicePersonaAssigned`/`Released`; `PersonaSnapshotMixin` shared by 4 loaded states (`personaFor(senderId)` accessor); bloc-instance `_personasBySender` map + `_personasSnapshot()` defensive-copy helper threaded through 7 emit sites; `_onExternalUpdate` switch extended with explicit voice-persona cases (default-branch logger preserved for genuinely unknown types). 4 new blocTests in `notification_bloc_persona_test.dart` (2.4.1 assigned, 2.4.2 released, 2.4.3 borrowed-survives, 2.4.4 release-unknown idempotent). Baseline 290 → 294.
+- **2026-05-06 (Phase 1 landed)**: Phase 1 data model executed in same session continuation. New `voice_persona.dart` (liberal `fromJson` per Q7, null-defense per F1, equality keyed on `voiceId` per task 1.2). `NotificationItem` extended with `voicePersona` field. Fixture at `test/fixtures/notifications/notification-with-persona.json` (note: actual path is `test/fixtures/`, not `test/_fixtures/` — plan's path was a typo). 14 new tests across 3 files. Baseline 276 → 290.
+- **2026-05-06 (Phase 0 landed)**: Phase 0 dispatch audit + fix + regression test executed in session `a756441c` post-/clear continuation. `notification_bloc.dart:146-185` extended with `switch (n.type)` — whitelisted types route to existing audio+TTS path; default branch logs unknown types as canary for future migrations. New file `test/unit/notifications/notification_bloc_dispatch_test.dart` (3 tests, all green). Baseline-tracked test count: 273 → 276; quarantined-test count unchanged at 44. Voice-persona Phases 1.1-5 now actually unblocked (not just plan-review-unblocked).
+- **2026-05-06 (Pass 2 close)**: Pass 2 Adversarial complete (Task #9); 8 wording-polish findings + 1 meta-finding (F20). User picked option (b) — F20 only: tag the 13 bare checkboxes in `00-phase-0-dispatch-audit.md` §5 with `EXECUTOR: AI`. Plan-review FULLY CLOSED. Phase 0 implementation + voice-persona Phase 1.1-1.5 unblocked.
+- **2026-05-06 (latest)**: Pass 1 Fitness complete (Task #8); user approved all 11 findings. 12 edits applied across `01-implementation.md`, `04-testing-validation.md`, `00-working-contract.md`. Phase 1 tasks renumbered as Task 1.1-1.5 with explicit dependency chain. Null-defense, blocTest assertion shapes, badge wiring file paths, server ordering guarantee, emoji failure-mode contract, and 5 other clarifications added. No Q1-Q9 challenged. Convergence check: 0 TBD hits, only "all resolved at REUSE" references for Open sub-question grep.
+- **2026-05-06 (later)**: REUSE pre-pass complete (Task #7); 6 fix categories applied. Phase 4 Task 4.1 collapsed (`voiceId` already wired). Phase 0 scope narrowed to bloc handler only. Q7/Q8/Q9 promoted from Open sub-questions to FROZEN. Prior-art section added below.
+- **2026-05-06**: Pattern A doc-set created from `../01-voice-persona-port-plan.md` per user direction (upgrade for plan-review compatibility). Existing flat doc replaced with thin pointer.
+
+---
+
+## Key Decisions
+
+- **[Q1](03-decisions.md#q1-persona-storage-no-mobile-cache)** — Persona storage: server-stamped on notification envelope; no separate mobile-side cache
+- **[Q2](03-decisions.md#q2-borrowed-persona-rendering)** — Borrowed-persona rendering: dashed-border badge variant
+- **[Q3](03-decisions.md#q3-tts-voice_id-routing)** — TTS `voice_id` routing: optional named parameter; server falls back to Sam if absent
+- **[Q4](03-decisions.md#q4-fallback-tts-out-of-scope-for-voice_id)** — `flutter_tts` fallback path: NOT routed through `voice_id` (different voice space)
+- **[Q5](03-decisions.md#q5-persona-theming-scope-badge-only)** — Persona theming scope: badge only; no inbox/bubble color sweep in this milestone
+- **[Q6](03-decisions.md#q6-on-device-verification-bucketed)** — On-device verification: bucketed with existing TTS runbook; not a new on-device step
+- **[Q7](03-decisions.md#q7-fromjson-shape-liberal-not-enum-validated)** (FROZEN at REUSE 2026-05-06, was OSQ #1) — `VoicePersona.fromJson` is **liberal** — accepts any string `name` / `icon` / `voice_id`; not gated against a hard-coded enum
+- **[Q8](03-decisions.md#q8-personabadge-widget-location-features-not-shared)** (FROZEN at REUSE 2026-05-06, was OSQ #2) — `PersonaBadge` lives in `lib/features/notifications/presentation/`; `lib/shared/widgets/` is empty and would be premature generalization
+- **[Q9](03-decisions.md#q9-dashedborderpainter-genuinely-new)** (FROZEN at REUSE 2026-05-06, was OSQ #3) — `DashedBorderPainter` is genuinely new — no `CustomPainter` subclass found and no dashed-border package in `pubspec.yaml`
+
+---
+
+## Prior Art Referenced (canonical post-REUSE-pre-pass output, 2026-05-06)
+
+Per `<planning-is-prompting>/workflow/plan-review.md` §4: "Append a 'Prior art referenced' section to `00-index.md` listing all `reuse-as-is` and `extend-existing` verdicts with their file:line pointers — this persists past the review and is useful at code-write time."
+
+### `reuse-as-is`
+
+| What | Where | Notes |
+|---|---|---|
+| `String? voiceId` parameter on `StreamingTtsPlayer.speak()` | `lib/services/tts/streaming_tts_player.dart:130` | **Already shipping.** Body wiring at `:141` uses `if (voiceId != null) body['voice_id'] = voiceId`. Phase 4 Task 4.1 collapses from "write new" to "verify + comment". |
+| Bloc test harness (mocktail `MockBloc` pattern) | `test/unit/notifications/notification_bloc_test.dart:1-47` | Existing pattern is directly reusable for the new persona-related blocTest cases (Phase 2). |
+| `StubAdapter` test infrastructure | (per REUSE-pass observation; specific path not captured) | Reusable for fixture-backed tests in Phase 1. |
+
+### `extend-existing`
+
+| What | Where | Notes |
+|---|---|---|
+| Inner `notification.type` discriminator pivot | `lib/app.dart:80-91` (envelope routing — already correct); `lib/features/notifications/domain/notification_bloc.dart:146-170` (handler that needs the pivot) | Phase 0 (`../00-phase-0-dispatch-audit.md`) narrows to extending the existing handler with a `switch (notification.type)` block. Outer routing is unchanged. |
+| `PersonaBadge` widget — wraps `CircleAvatar` | `lib/features/notifications/presentation/inbox_screen.dart:~186` (`CircleAvatar` usage); `lib/features/auth/presentation/login_screen.dart:24` (sibling pattern: `_ContextBadge`) | Phase 3 Task 3.1: `PersonaBadge` is a `StatelessWidget` wrapping `CircleAvatar` with persona color/icon, plus `CustomPaint` overlay for the `borrowed=true` dashed-border variant. |
+
+### Cross-reference
+
+REUSE pre-pass executed by Explore agent in session `a756441c` on 2026-05-06; full findings table stored in conversation transcript (not serialized — convergence loop §7 has closed; this section is the persisted artifact).
+
+---
+
+## Token Budget Status
+
+| Document | Target | Notes |
+|---|---|---|
+| 00-index.md (this doc) | 500-1000 | Index/navigation |
+| 00-working-contract.md | 400-700 | Convention 1 anchor |
+| 01-implementation.md | 4000-7000 | Phases 1-5 |
+| 03-decisions.md | 1500-3000 | Q1-Q6 FROZEN |
+| 04-testing-validation.md | 1500-3000 | Test matrix |
+
+**Project total estimate**: ~10-15k tokens across 5 files. Fits comfortably under the 25k single-doc limit; no archival needed for this short-lived milestone.
+
+---
+
+*Last updated: 2026-05-06*

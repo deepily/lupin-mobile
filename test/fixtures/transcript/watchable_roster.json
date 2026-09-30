@@ -1,0 +1,46 @@
+{
+  "seats": [
+    {
+      "file_epoch": "f02ccfcd-0794-43fa-a7dc-3e60e9e1e7b3",
+      "last_ts": null,
+      "persona": "mr radio",
+      "project": null,
+      "session_id": "00000000-0000-4000-8000-000000000001",
+      "transcript_watchable": true
+    },
+    {
+      "file_epoch": "3ecf2f22-6e14-40de-b1d6-1085ebb9793e",
+      "last_ts": null,
+      "persona": "Tiffany",
+      "project": null,
+      "session_id": "00000000-0000-4000-8000-000000000002",
+      "transcript_watchable": true
+    },
+    {
+      "file_epoch": "dedf1abf-b605-46f9-8ecd-1dfe3cb4c2be",
+      "last_ts": null,
+      "persona": "maria",
+      "project": null,
+      "session_id": "00000000-0000-4000-8000-000000000003",
+      "transcript_watchable": true
+    },
+    {
+      "file_epoch": "96ab9154-0a23-4ef4-bcc7-4a77037cd79a",
+      "last_ts": null,
+      "persona": "Rio",
+      "project": null,
+      "session_id": "00000000-0000-4000-8000-000000000004",
+      "transcript_watchable": true
+    },
+    {
+      "file_epoch": null,
+      "last_ts": null,
+      "persona": null,
+      "project": null,
+      "session_id": "00000000-0000-4000-8000-000000000005",
+      "transcript_watchable": false
+    }
+  ],
+  "session_count": 5,
+  "status": "ok"
+}

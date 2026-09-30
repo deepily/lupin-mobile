@@ -24,6 +24,17 @@ class TestSuiteRequest {
     this.envVars,
   } );
 
+  /// v2 wave 2 — `/api/v2/submit` args (1:1 with the factory; `env_vars` is
+  /// still prefix-filtered server-side).
+  static const submitCommand = 'agent router go to test suite';
+  Map<String, dynamic> toSubmitArgs() => {
+    'test_types'                                      : testTypes,
+    if ( pytestArgs != null         ) 'pytest_args'        : pytestArgs,
+    if ( dryRun                     ) 'dry_run'            : dryRun,
+    if ( autoFixOnFailure != null   ) 'auto_fix_on_failure': autoFixOnFailure,
+    if ( envVars != null && envVars!.isNotEmpty ) 'env_vars' : envVars,
+  };
+
   Map<String, dynamic> toJson() => {
     'test_types'                                      : testTypes,
     if ( pytestArgs != null         ) 'pytest_args'        : pytestArgs,

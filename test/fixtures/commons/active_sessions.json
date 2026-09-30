@@ -1,0 +1,31 @@
+{
+  "sessions": [
+    {
+      "last_seen_iso": "2026-09-22T12:07:14-04:00",
+      "persona_color": "#FFD600",
+      "persona_icon": "\ud83d\udc8d",
+      "persona_name": "Tiffany",
+      "sender_id": "sender-fixture-0",
+      "session_id": "sess-fixture-0",
+      "speakerphone_on": false
+    },
+    {
+      "last_seen_iso": "2026-09-22T11:31:13-04:00",
+      "persona_color": "#F06292",
+      "persona_icon": "\ud83c\udf38",
+      "persona_name": "maria",
+      "sender_id": "sender-fixture-1",
+      "session_id": "sess-fixture-1",
+      "speakerphone_on": false
+    },
+    {
+      "last_seen_iso": "2026-09-22T12:03:57-04:00",
+      "persona_color": "#FFA000",
+      "persona_icon": "\ud83e\udd89",
+      "persona_name": "mr radio",
+      "sender_id": "sender-fixture-2",
+      "session_id": "sess-fixture-2",
+      "speakerphone_on": false
+    }
+  ]
+}

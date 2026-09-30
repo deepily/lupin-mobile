@@ -97,8 +97,8 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) async {
     emit( const QueueSubmitting() );
     try {
-      final res = await _repo.push( event.request );
-      emit( QueueSubmitted( res ) );
+      final res = await _repo.ask( event.request );
+      emit( QueueAnswered( res ) );
     } on QueueApiException catch ( e ) {
       emit( QueueError( e.message ) );
     }
@@ -173,8 +173,12 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     Emitter<QueueState> emit,
   ) async {
     try {
-      final res = await _repo.retryJob( event.jobId, event.websocketId );
-      emit( QueueActionComplete( 'Retried as ${res.status}' ) );
+      final res = await _repo.retryJob(
+        jobId        : event.jobId,
+        questionText : event.questionText,
+        websocketId  : event.websocketId,
+      );
+      emit( QueueActionComplete( 'Retried (${res.status}): ${res.summary}' ) );
     } on QueueApiException catch ( e ) {
       emit( QueueError( e.message ) );
     }

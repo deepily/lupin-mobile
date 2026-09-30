@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../data/claude_code_models.dart';
+import '../../queue/presentation/queue_dashboard_screen.dart';
 import '../domain/claude_code_bloc.dart';
-import '../domain/claude_code_state.dart';
-import 'chat_screen.dart';
 import 'dispatch_sheet.dart';
 
+const _kRetiredBannerYellow  = Color( 0xFFFFF3CD );
+const _kRetiredBannerAccent  = Color( 0xFFFF9800 );
+
+/// Retired 2026-05-05 — INTERACTIVE Claude Code session list was eliminated
+/// alongside the dispatch endpoint cluster. BOUNDED submissions land as `cc-*`
+/// jobs in the Queue Dashboard (Tier 3 surface).
+///
+/// Preserved as a banner + CTA so the home-tab entry surfaces the retirement
+/// notice and the live successor surface.
 class SessionListScreen extends StatelessWidget {
   const SessionListScreen( { super.key } );
 
@@ -15,84 +22,65 @@ class SessionListScreen extends StatelessWidget {
       context            : context,
       isScrollControlled : true,
       builder            : ( _ ) => BlocProvider.value(
-        value: context.read<ClaudeCodeBloc>(),
-        child: const DispatchSheet(),
+        value : context.read<ClaudeCodeBloc>(),
+        child : const DispatchSheet(),
       ),
     );
   }
 
-  void _openChat( BuildContext context, ClaudeCodeSession session ) {
+  void _openQueueDashboard( BuildContext context ) {
     Navigator.of( context ).push( MaterialPageRoute(
-      builder: ( _ ) => BlocProvider.value(
-        value: context.read<ClaudeCodeBloc>(),
-        child: ChatScreen( initialSession: session ),
-      ),
+      builder: ( _ ) => const QueueDashboardScreen(),
     ) );
   }
 
   @override
   Widget build( BuildContext context ) {
     return Scaffold(
-      appBar: AppBar( title: const Text( 'Claude Code' ) ),
+      appBar: AppBar( title: const Text( "Claude Code (retired)" ) ),
       floatingActionButton: FloatingActionButton(
         onPressed : () => _openDispatch( context ),
-        tooltip   : 'New session',
+        tooltip   : "New BOUNDED submission",
         child     : const Icon( Icons.add ),
       ),
-      body: BlocConsumer<ClaudeCodeBloc, ClaudeCodeState>(
-        listener: ( context, state ) {
-          if ( state is ClaudeCodeError ) {
-            ScaffoldMessenger.of( context ).showSnackBar(
-              SnackBar( content: Text( state.message ), backgroundColor: Colors.red ),
-            );
-          }
-          // Navigate to chat when a new interactive session becomes active.
-          if ( state is ClaudeCodeActive || state is ClaudeCodeAwaitingInput ) {
-            final session = state is ClaudeCodeActive
-                ? ( state as ClaudeCodeActive ).session
-                : ( state as ClaudeCodeAwaitingInput ).session;
-            _openChat( context, session );
-          }
-          if ( state is ClaudeCodeQueued ) {
-            ScaffoldMessenger.of( context ).showSnackBar(
-              SnackBar( content: Text( 'Job queued: ${state.response.jobId ?? ""}' ) ),
-            );
-          }
-        },
-        builder: ( context, state ) {
-          if ( state is ClaudeCodeInitial ) {
-            return const Center( child: Text( 'No active sessions.\nTap + to dispatch a new session.', textAlign: TextAlign.center ) );
-          }
-          if ( state is ClaudeCodeDispatching ) {
-            return const Center( child: CircularProgressIndicator() );
-          }
-          if ( state is ClaudeCodeDone ) {
-            return _SessionTile(
-              session  : state.session,
-              onTap    : () => _openChat( context, state.session ),
-            );
-          }
-          return const Center( child: Text( 'No active sessions.\nTap + to dispatch a new session.', textAlign: TextAlign.center ) );
-        },
+      body: Padding(
+        padding: const EdgeInsets.all( 16 ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                color  : _kRetiredBannerYellow,
+                border : Border( left: BorderSide( color: _kRetiredBannerAccent, width: 4 ) ),
+              ),
+              padding: const EdgeInsets.all( 16 ),
+              child: Row(
+                children: [
+                  const Icon( Icons.warning_amber_rounded, color: _kRetiredBannerAccent, size: 32 ),
+                  const SizedBox( width: 16 ),
+                  const Expanded(
+                    child: Text(
+                      "INTERACTIVE Claude Code session list retired 2026-05-05.\n\n"
+                      "BOUNDED submissions still work via the + button and land as `cc-*` jobs "
+                      "in the Queue Dashboard. INTERACTIVE controls return when ClaudeCodeJob "
+                      "gains inject / interrupt / end_session.",
+                      style: TextStyle( fontStyle: FontStyle.italic ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox( height: 24 ),
+            FilledButton.tonal(
+              onPressed : () => _openQueueDashboard( context ),
+              child     : const Padding(
+                padding: EdgeInsets.symmetric( vertical: 12 ),
+                child: Text( "View Claude Code jobs in Queue dashboard" ),
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-}
-
-class _SessionTile extends StatelessWidget {
-  final ClaudeCodeSession session;
-  final VoidCallback onTap;
-  const _SessionTile( { required this.session, required this.onTap } );
-
-  @override
-  Widget build( BuildContext context ) {
-    return ListTile(
-      title   : Text( session.taskId ),
-      subtitle: Text( session.status ),
-      trailing: Chip(
-        label: Text( session.status, style: const TextStyle( fontSize: 11 ) ),
-      ),
-      onTap: onTap,
     );
   }
 }

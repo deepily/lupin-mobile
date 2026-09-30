@@ -12,6 +12,7 @@ import '../data/queue_models.dart';
 import '../domain/queue_bloc.dart';
 import '../domain/queue_event.dart';
 import '../domain/queue_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class JobDetailScreen extends StatefulWidget {
   final JobSummary job;
@@ -103,7 +104,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       context: context,
       builder: ( ctx ) => AlertDialog(
         title  : const Text( 'Send message to job' ),
-        content: TextField(
+        content: DictationTextField(
           controller: ctrl,
           decoration: const InputDecoration( hintText: 'Your message...' ),
           autofocus: true,

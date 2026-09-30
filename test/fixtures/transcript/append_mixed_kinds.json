@@ -1,0 +1,47 @@
+{
+  "blocks": [
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Launching the delayed capture: it waits 30 s, so this turn ends first and the frame holds one prose block, one tool call and its result.",
+      "truncated": false,
+      "ts": "2026-09-29T20:46:22.680Z"
+    },
+    {
+      "kind": "tool_call",
+      "name": "Bash",
+      "role": "assistant",
+      "text": "Bash( command=cd /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/.claude/worktrees/seat-cc-author-tiffany-1; nohup bash -ic 'bash /tmp/claude-1001/-mnt-DATA01-include-www-deepily-ai-projects-lupin-mobile--claude-worktrees-seat-cc-author-tiffany-1/0aa2d6ad-6557-4f89-8367-1534ad97e1c5/scratchpad/delayed.sh' > /tmp/claude-1001/-mnt-DATA01-include-www-deepily-ai-projects-lupin-mobile--claude-worktrees-seat-cc-author-tiffany-1/0aa2d6ad-6557-4f89-8367-1534ad97e1c5/scratchpad/cap6.log 2>&1 & echo started, run_in_background=True )",
+      "truncated": false,
+      "ts": "2026-09-29T20:46:24.900Z"
+    },
+    {
+      "kind": "tool_result",
+      "role": "user",
+      "text": "Command running in background with ID: b82qrb4cd. Output is being written to: /tmp/claude-1001/-mnt-DATA01-include-www-deepily-ai-projects-lupin-mobile--claude-worktrees-seat-cc-author-tiffany-1/0aa2d6ad-6557-4f89-8367-1534ad97e1c5/tasks/b82qrb4cd.output. You will be notified when it completes. To check interim output, use Read on that file path.\nSession cwd remains /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/.claude/worktrees/seat-cc-author-tiffany-1; directory changes made by the backgrounded command do not apply to subsequent commands.",
+      "truncated": false,
+      "ts": "2026-09-29T20:46:26.426Z"
+    },
+    {
+      "kind": "thinking",
+      "role": "assistant",
+      "text": "",
+      "truncated": false,
+      "ts": "2026-09-29T20:46:30.111Z"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Delayed capture is running and will connect in about 30 seconds. I'm idle until it finishes.",
+      "truncated": false,
+      "ts": "2026-09-29T20:46:30.123Z"
+    }
+  ],
+  "cc_session_id": "00000000-0000-4000-8000-000000000001",
+  "file_epoch": "0aa2d6ad-6557-4f89-8367-1534ad97e1c5",
+  "next_offset": 2249485,
+  "offset": 2249485,
+  "timestamp": "2025-01-01T00:00:00+00:00",
+  "ts": "2025-01-01T00:00:00+00:00",
+  "type": "cc_transcript_append"
+}

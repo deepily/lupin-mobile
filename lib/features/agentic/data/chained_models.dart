@@ -22,6 +22,17 @@ class ResearchToPodcastRequest {
     this.dryRun          = false,
   } );
 
+  /// v2 wave 2 — `/api/v2/submit` args. `target_languages` → `languages`;
+  /// `max_segments` carried, not read by the factory on b12174fc.
+  static const submitCommand = 'agent router go to research to podcast';
+  Map<String, dynamic> toSubmitArgs() => {
+    'query'                                          : query,
+    if ( budget != null                ) 'budget'       : budget,
+    if ( targetLanguages.isNotEmpty    ) 'languages'    : targetLanguages,
+    if ( maxSegments != null           ) 'max_segments' : maxSegments,
+    if ( dryRun                        ) 'dry_run'      : dryRun,
+  };
+
   Map<String, dynamic> toJson() => {
     'query'                                          : query,
     if ( budget != null                ) 'budget'           : budget,
@@ -55,6 +66,19 @@ class ResearchToPresentationRequest {
     this.leadModel,
     this.dryRun = false,
   } );
+
+  /// v2 wave 2 — `/api/v2/submit` args (1:1 with the factory).
+  static const submitCommand = 'agent router go to research to presentation';
+  Map<String, dynamic> toSubmitArgs() => {
+    'query'                                              : query,
+    if ( budget != null                  ) 'budget'                   : budget,
+    if ( targetDurationMinutes != null   ) 'target_duration_minutes'  : targetDurationMinutes,
+    if ( theme != null                   ) 'theme'                    : theme,
+    if ( audience != null                ) 'audience'                 : audience,
+    if ( audienceContext != null         ) 'audience_context'         : audienceContext,
+    if ( leadModel != null               ) 'lead_model'               : leadModel,
+    if ( dryRun                          ) 'dry_run'                  : dryRun,
+  };
 
   Map<String, dynamic> toJson() => {
     'query'                                              : query,

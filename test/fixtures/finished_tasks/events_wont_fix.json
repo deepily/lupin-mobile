@@ -1,0 +1,71 @@
+{
+  "count": 6,
+  "events": [
+    {
+      "actor": "rick (operator foolish goat)",
+      "authority": "user_direct",
+      "id": 14003,
+      "item_id": "7350b450-b54d-4b84-9fa6-ef1951747d3b",
+      "reason": "Sort of Damocles \u00b7 rick-approved (his own promotion, no ask fired)",
+      "receipt_refs": null,
+      "title": "[LUPIN] run-gsm8k.sh is a documented CLAUDE.md COMMAND and it cannot import \u2014 gsm8k.py dies on `from cosa.agents import ",
+      "transition": "not_approved->wont_fix",
+      "ts": "2026-09-15T02:55:01.881895+00:00"
+    },
+    {
+      "actor": "rick (operator foolish goat)",
+      "authority": "user_direct",
+      "id": 12944,
+      "item_id": "97ff4426-c3b7-4970-81d0-d33dce06e22f",
+      "reason": "This question has already been answered by the code \u00b7 rick-approved (his own promotion, no ask fired)",
+      "receipt_refs": null,
+      "title": "PostToolUse fires COMPLETE at ~120s on a still-running ask, then reports FAILED at 660s after it returned",
+      "transition": "not_approved->wont_fix",
+      "ts": "2026-09-09T14:47:08.531355+00:00"
+    },
+    {
+      "actor": "rick (operator foolish goat)",
+      "authority": "user_direct",
+      "id": 12943,
+      "item_id": "b4bc91f2-7bdb-4182-b852-ec510b381823",
+      "reason": "Premise already answered elsewhere? \u00b7 rick-approved (his own promotion, no ask fired)",
+      "receipt_refs": null,
+      "title": "[LUPIN] Adversarially review the un-park verb (parent P0 row 03d3bf78) \u2014 prove the mutation arm bites",
+      "transition": "not_approved->wont_fix",
+      "ts": "2026-09-09T14:46:33.255612+00:00"
+    },
+    {
+      "actor": "rick (operator foolish goat)",
+      "authority": "user_direct",
+      "id": 12941,
+      "item_id": "3fdf4fb4-2370-4117-9a02-c271fcecc331",
+      "reason": "Premise is no longer true \u00b7 rick-approved (his own promotion, no ask fired)",
+      "receipt_refs": null,
+      "title": "[LUPIN] Main is RED: the prototype-chain sweep fails on the landed Finished-Tasks pills table",
+      "transition": "not_approved->wont_fix",
+      "ts": "2026-09-09T14:44:59.161648+00:00"
+    },
+    {
+      "actor": "rick (operator foolish goat)",
+      "authority": "user_direct",
+      "id": 12924,
+      "item_id": "176cd144-48aa-48c7-99a7-791f7862c785",
+      "reason": "This is trivial and highly unlikely to reoccur \u00b7 rick-approved (his own promotion, no ask fired)",
+      "receipt_refs": null,
+      "title": "[LUPIN] The DM condenser manufactured a PERSON from a commit sha \u2014 \"becca487\" arrived as \"Becca flags two items\"",
+      "transition": "not_approved->wont_fix",
+      "ts": "2026-09-09T13:57:44.216633+00:00"
+    },
+    {
+      "actor": "rick (operator foolish goat)",
+      "authority": "user_direct",
+      "id": 12651,
+      "item_id": "47fac460-a5ec-47e6-9f1a-3b56d59098e2",
+      "reason": "Superseded by another ticket \u00b7 rick-approved (his own promotion, no ask fired)",
+      "receipt_refs": null,
+      "title": "[LUPIN] Mar\u00eda's window-bound ruling landed UNBUILT \u2014 the multiplexer pane prints no window anywhere a reader can see",
+      "transition": "not_approved->wont_fix",
+      "ts": "2026-09-08T13:47:44.012460+00:00"
+    }
+  ]
+}

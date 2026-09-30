@@ -1,0 +1,9 @@
+{
+  "include_played": true,
+  "limit": 50,
+  "notification_count": 0,
+  "notifications": [],
+  "status": "success",
+  "timestamp": "2025-01-01T00:00:00+00:00",
+  "user_id": "uid-fixture"
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../queue/data/queue_models.dart';
 import '../../queue/presentation/job_detail_screen.dart';
 import '../data/agentic_common_models.dart';
@@ -8,6 +9,7 @@ import '../data/podcast_models.dart';
 import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class PodcastGeneratorForm extends StatefulWidget {
   const PodcastGeneratorForm( { super.key } );
@@ -67,7 +69,8 @@ class _PodcastGeneratorFormState extends State<PodcastGeneratorForm> {
         builder: ( context, state ) {
           final loading = state is AgenticSubmissionInProgress;
           return ListView( padding: const EdgeInsets.all( 16 ), children: [
-            TextField(
+            DictationTextField(
+              fieldKey   : const Key( TestKeys.pgSourceField ),
               controller : _sourceCtrl,
               minLines   : 3,
               maxLines   : 6,
@@ -79,12 +82,14 @@ class _PodcastGeneratorFormState extends State<PodcastGeneratorForm> {
             ),
             const SizedBox( height: 8 ),
             SwitchListTile(
+              key      : const Key( TestKeys.pgDryRunSwitch ),
               title    : const Text( 'Dry run' ),
               value    : _dryRun,
               onChanged: ( v ) => setState( () => _dryRun = v ),
             ),
             const SizedBox( height: 24 ),
             FilledButton(
+              key      : const Key( TestKeys.pgSubmitButton ),
               onPressed: loading ? null : _submit,
               child: loading
                   ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator( strokeWidth: 2 ) )

@@ -2,13 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../data/queue_models.dart';
+import '../domain/job_lifecycle.dart';
 import '../domain/queue_bloc.dart';
 import '../domain/queue_event.dart';
 import '../domain/queue_state.dart';
 import 'job_detail_screen.dart';
 import 'submit_job_sheet.dart';
 
-const _queueNames = [ 'todo', 'run', 'done', 'dead' ];
+/// AC-S1.10 — the tab names come from [JobLane], not a parallel string list.
+///
+/// The literal this replaced (`const _queueNames = ['todo','run','done','dead']`)
+/// happened to agree with the server; nothing made it keep agreeing. `JobLane`
+/// is the mirrored vocabulary (`job_state.py` `STATE_TO_UI_CONTAINER`), so a
+/// server-side lane change now has one place to land instead of two.
+final _queueNames = JobLane.values.map( ( l ) => l.name ).toList( growable: false );
 const _tabLabels  = [ 'Todo', 'Running', 'Done', 'Dead' ];
 
 class QueueDashboardScreen extends StatefulWidget {
@@ -79,6 +86,17 @@ class _QueueDashboardScreenState extends State<QueueDashboardScreen>
           if ( state is QueueSubmitted ) {
             ScaffoldMessenger.of( context ).showSnackBar(
               SnackBar( content: Text( 'Job queued: ${state.response.jobId ?? ""}' ) ),
+            );
+            _refresh();
+          }
+          if ( state is QueueAnswered ) {
+            // v2 ask is synchronous — the answer (or first question) is already here.
+            ScaffoldMessenger.of( context ).showSnackBar(
+              SnackBar(
+                content         : Text( state.response.summary ),
+                backgroundColor : state.response.isFailed ? Colors.red : null,
+                duration        : const Duration( seconds: 6 ),
+              ),
             );
             _refresh();
           }

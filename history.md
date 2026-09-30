@@ -1,977 +1,469 @@
 # LUPIN MOBILE - SESSION HISTORY
 
-## 2026.04.16 - Tier 4 Complete: Agentic Job UIs + Artifact Viewers
+## 📚 Archived Sessions
 
-### Session Summary
-- **Objective**: Implement all 9 agentic job types as first-class mobile features (Tier 4 of v0.1.6 resync).
-- **Status**: ✅ All 6 phases complete; **140/140 unit tests passing** (was 100).
-- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+Older session entries have been archived for token-limit hygiene. See:
+- **[2026-05-21-to-08-31-history.md](history/2026-05-21-to-08-31-history.md)** — notif-client sync, focus-mode milestone, v2 cutover waves, Quick Ask push-to-talk, the backup incident (archived 2026-09-16)
+- **[2026-05-06-to-11-history.md](history/2026-05-06-to-11-history.md)** — voice-persona milestone Phases 0–5 + CC-dispatch retirement sync + yes/no/neither tri-state (9 entries, May 6–11, 2026; archived 2026-08-21)
+- **[2026-04-17-to-24-history.md](history/2026-04-17-to-24-history.md)** — WS hookup → TTS overlap fix (5 sessions, Apr 17-24, 2026; archived 2026-05-11)
+- **[2026-04-15-to-16-history.md](history/2026-04-15-to-16-history.md)** — Tier 1-4 buildout (5 sessions, Apr 15-16, 2026)
+- **[2025-07-06-to-08-17-history.md](history/2025-07-06-to-08-17-history.md)** — Initial era (7 sessions, Jul 2025 – Aug 2025; project then dormant for 8 months)
 
-### Work Performed
-1. **Phase 0** — Serialized plan to `src/rnd/v0.1.6-migration/2026.04.16-tier-4-implementation-plan.md`.
-2. **Phase 1** — `pubspec.yaml` deps: `flutter_markdown ^0.7.3`, `share_plus ^10.0.0`, `open_file ^3.3.2`. 9 data model files covering all request/response shapes verified against live OpenAPI.
-3. **Phase 2** — `AgenticRepository` (10 typed methods) + `IoFileService` (binary fetch, cache, share, open).
-4. **Phase 3** — `AgenticSubmissionBloc` (single switch-dispatch BLoC for all 9 job types); `TfeResumeSuccess` as distinct state; DI wiring in `service_locator.dart` + `app.dart` MultiBlocProvider.
-5. **Phase 4** — `AgenticHubScreen` (9 cards) + 9 per-job form screens; `home_screen.dart` "Agentic Jobs" card added.
-6. **Phase 5** — `MarkdownReportViewer` (flutter_markdown + share), `AudioArtifactPlayer` (download + share), `SlideDeckViewer` (open-in-app + share); `JobDetailScreen` gets "View Artifact" button on `done` jobs (routed by job_id prefix `dr-`/`pg-`/`rp-`/`px-`/`rx-`) and "Re-run with Fix" button on `dead` jobs → `BugFixExpediterForm(deadJobId:)`.
-7. **Phase 6** — 40 new unit tests (models, repository, bloc); 140/140 passing.
-
-### Files Added
-- `lib/features/agentic/data/{agentic_common,deep_research,podcast,presentation,swe_team,bug_fix_expediter,test_suite,test_fix_expediter,chained}_models.dart`
-- `lib/features/agentic/data/agentic_repository.dart`
-- `lib/features/agentic/domain/{agentic_submission_event,agentic_submission_state,agentic_submission_bloc}.dart`
-- `lib/features/agentic/presentation/{agentic_hub,deep_research,podcast_generator,presentation_generator,swe_team,bug_fix_expediter,test_suite,test_fix_expediter,research_to_podcast,research_to_presentation}_form.dart` (and hub screen)
-- `lib/services/artifacts/io_file_service.dart`
-- `lib/features/artifacts/{markdown_report_viewer,audio_artifact_player,slide_deck_viewer}.dart`
-- `test/unit/agentic/{agentic_models,agentic_repository,agentic_submission_bloc}_test.dart`
-- `src/rnd/v0.1.6-migration/2026.04.16-tier-4-{agentic-uis-plan,implementation-plan}.md`
-
-### Files Modified
-- `pubspec.yaml` — flutter_markdown, share_plus, open_file added
-- `lib/app.dart` — AgenticSubmissionBloc added to MultiBlocProvider
-- `lib/core/di/service_locator.dart` — AgenticRepository, IoFileService, AgenticSubmissionBloc registered
-- `lib/features/home/home_screen.dart` — "Agentic Jobs" nav card added
-- `lib/features/queue/presentation/job_detail_screen.dart` — View Artifact + Re-run with Fix actions
-
-### Test Results
-| Suite | Before | After |
-|-------|--------|-------|
-| Tiers 1–3 unit | 100 | 100 |
-| Tier 4 models | 0 | 18 |
-| Tier 4 repository | 0 | 12 |
-| Tier 4 bloc | 0 | 10 |
-| **Total** | **100** | **140** |
-
-### Architecture Decisions
-- Single `AgenticRepository` (not 9 per-job repos) — mirrors Lupin's grouping of all agentic routers.
-- Single `AgenticSubmissionBloc` with switch dispatch — avoids 9 near-identical BLoCs.
-- `BugFixExpediterForm` launched from `JobDetailScreen` on dead jobs (deadJobId pre-filled) — better UX than asking users to type IDs manually.
-- `TfeResumeResponse` / `TfeResumeSuccess` as distinct types — resume returns extra fields (phaseName, resumeCount) not in the standard submit response.
-- Stats dashboard (`TimeSavedDashboard`, `StatsRepository`, `fl_chart`) **deferred** to a future tier.
+Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
-## 2026.04.16 - Tier 3 Complete: Queue / CJ Flow + Claude Code
+## 2026.09.30 | Session `43b31a9d` (Tiffany 💍) — PR prep for the v0.2.2 branch
 
-### Session Summary
-- **Objective**: Complete all 7 phases of Tier 3 (Queue / CJ Flow + Interactive Claude Code Sessions).
-- **Status**: ✅ All phases delivered; **100/100 unit tests passing** (was 63).
-- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
-
-### Work Performed
-1. **Phase 4 UI** — `submit_job_sheet.dart` (bottom sheet, standard/agentic toggle), `chat_screen.dart` (bidirectional chat, status banner, interrupt/end controls), `session_list_screen.dart` (active session list, FAB dispatches), `dispatch_sheet.dart` (project path + BOUNDED/INTERACTIVE SegmentedButton).
-2. **Phase 5 WS integration** — Added `eventClaudeCodeMessage` + `eventClaudeCodeStateChange` constants to `app_constants.dart`; `app.dart` converted to `StatefulWidget` with `_wsSubscription` that routes queue events → `QueueExternalUpdate` and claude_code events → `ClaudeCodeExternalMessage`.
-3. **Phase 6 DI wiring** — `service_locator.dart`: `QueueRepository` + `ClaudeCodeRepository` registered as singletons; `QueueBloc` + `ClaudeCodeBloc` as lazy singletons. `app.dart` `MultiBlocProvider` includes both. `home_screen.dart` rebuilt as card-nav hub with Job Queue + Claude Code + Notifications + Trust entries.
-4. **Phase 7 unit tests** — 6 new test files (3 queue, 3 claude_code); 37 new cases covering models, repository, and BLoC layers. Two model bugs caught and fixed during test run (see below).
-5. **Bug fixes** — `ClaudeCodeDispatchRequest.project` changed from `required` to optional (dispatch sheet always had optional project); `JobHistoryEntry.metadataJson` type corrected to `String?` (backend sends JSON string, not parsed map).
-
-### Files Added
-- `lib/features/queue/presentation/submit_job_sheet.dart`
-- `lib/features/claude_code/presentation/chat_screen.dart`
-- `lib/features/claude_code/presentation/session_list_screen.dart`
-- `lib/features/claude_code/presentation/dispatch_sheet.dart`
-- `test/unit/queue/queue_models_test.dart`
-- `test/unit/queue/queue_repository_test.dart`
-- `test/unit/queue/queue_bloc_test.dart`
-- `test/unit/claude_code/claude_code_models_test.dart`
-- `test/unit/claude_code/claude_code_repository_test.dart`
-- `test/unit/claude_code/claude_code_bloc_test.dart`
-
-### Files Modified
-- `lib/app.dart` — StatefulWidget with WS → BLoC subscription wiring; QueueBloc + ClaudeCodeBloc added to MultiBlocProvider
-- `lib/core/constants/app_constants.dart` — Added `eventClaudeCodeMessage` + `eventClaudeCodeStateChange`
-- `lib/core/di/service_locator.dart` — Tier 3 repos + BLoCs registered
-- `lib/features/home/home_screen.dart` — Rebuilt as card-nav hub (replaced old TTS/WS debug screen)
-- `lib/features/claude_code/data/claude_code_models.dart` — `project` made optional; `toJson()` conditionally includes it
-- `lib/features/queue/data/queue_models.dart` — `metadataJson` type corrected to `String?`
-- `lib/features/queue/domain/queue_bloc.dart` — (previously written this session, unchanged here)
-
-### Test Results
-| Suite | Before | After |
-|-------|--------|-------|
-| Tier 1+2 unit | 63 | 63 |
-| Tier 3 queue | 0 | 17 |
-| Tier 3 claude_code | 0 | 20 |
-| **Total** | **63** | **100** |
+- Rick's broadcast `0375db54`: wip is being PR'd to `main`; next branch is `wip-v0.2.2-2026.09.30-tracking-lupin`.
+- TODO.md gained a START HERE handoff table (open threads, stale remote branches, post-merge steps).
+- Committed the deep-research response to the wake-socket problem statement, with frontmatter; removed an empty stray file `workers.`.
 
 ---
 
-## 2026.04.16 - Legacy Test Triage + Phase 1 Baseline
+## 2026.09.29 | Session `3ecf2f22` (Tiffany 💍) — Wake backlog, dictation field, push pause, "off means off", transcript fixtures
 
-### Session Summary
-- **Objective**: Establish green Tier 1+2 baseline; triage all 27 legacy test files; quarantine drift-broken tests.
-- **Status**: ✅ 54 Tier 1+2 tests green; 21 legacy files quarantined; 6 legacy files confirmed green; 1 legacy file fixed (adaptive_services).
-- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+**RESUME HERE:**
 
-### Work Performed
-1. **Phase 0** — `./flutter.sh pub get` succeeded; 14 deps updated (flutter_secure_storage, local_auth, bloc_test, etc.).
-2. **Phase 1** — Fixed AuthInterceptor production bug (retry used new Dio without stub adapter); added `dio:` param to constructor + 5 test instantiations; fixed 5 bloc test timing failures by adding `wait: 50ms`. Final result: **54/54 Tier 1+2 tests pass**.
-3. **Phase 2** — Ran all 27 legacy test files individually; categorized G/R/C; output to `src/rnd/v0.1.6-migration/2026.04.16-legacy-test-triage.log`.
-4. **Phase 3+4** — `git mv` 21 C-category files + 4 associated `.mocks.dart` to `test/legacy_quarantine/`; wrote `test/legacy_quarantine/README.md`.
-5. **Fix** — `adaptive_services_test.dart` (R-category): added `isClosed` guard in `AdaptiveConnectionManager._updateAdaptiveStrategy` (stream-after-dispose race condition); **19/19 pass**.
-6. **Phase 5** — `./flutter.sh test test/unit/` → **63/63 pass**; all 6 kept legacy files green (80 total); deleted stale `test_results.log` (Jul 2025).
+1. **Only live row: `768e852f`** (transcript console). C5.18 needs a recapture of `append_mixed_kinds` now that the server puts `name` on tool_result (Mr. Radio `687310b7`, live). The capture needs the admin test account: the script now reads `LUPIN_TEST_ADMIN_EMAIL` / `_PASSWORD` (Rick's `.bashrc`), and seats get them at the 09-30 fleet restart. C5.22 (thinking) stays pending-capture: no seat records thinking text.
+2. **The ask-audio contract fixture drifts** whenever lupin touches the ask response, and the guard blocks worker syncs, so Rick ran it twice today. A permission rule for `test/fixtures/asr/ask_audio_ndjson_contract.json` would stop the recurrence.
+3. Branches: only `main` + wip remain (Rick deleted 8 merged/stale ones). No worktrees.
 
-### Files Added
-- `test/legacy_quarantine/README.md` — quarantine index
-- `src/rnd/v0.1.6-migration/2026.04.16-legacy-test-triage.log` — per-file triage table
-
-### Files Modified
-- `lib/services/auth/auth_interceptor.dart` — added `Dio _dio` field; constructor `required Dio dio`; retry uses `_dio.fetch()` (production bug fix)
-- `lib/services/adaptive/adaptive_connection_manager.dart` — `isClosed` guard before stream add (stream-after-dispose race fix)
-- `lib/core/di/service_locator.dart` — `AuthInterceptor` DI updated with `dio:` param
-- `test/unit/auth/auth_interceptor_test.dart` — `dio:` param added to all 5 instantiations
-- `test/unit/notifications/notification_bloc_test.dart` — `wait: 50ms` added to 3 blocTests
-- `test/unit/decision_proxy/decision_proxy_bloc_test.dart` — `wait: 50ms` added to 2 blocTests
-- `test/adaptive_services_test.dart` — (kept, not quarantined; fix applied to production code)
-
-### Files Moved (quarantined)
-21 test files + 4 mocks → `test/legacy_quarantine/` (see README there for full list)
-
-### Files Deleted
-- `test_results.log` — stale Jul 2025 scan referencing old `genie-in-the-box/` paths
-
-### Triage Summary
-| Category | Count | Tests | Action |
-|----------|-------|-------|--------|
-| G (green) | 6 | 80 | Keep |
-| R (fixed) | 1 | 19 | Fix applied |
-| C (quarantine) | 21 | — | `git mv` to `test/legacy_quarantine/` |
+**Shipped** (crew: Pocholo, Tiberius, Chloé, Cheech, Maya, Clayton; every commit reviewed and cherry-picked; suite 2728/2/0 at `bded008`, `--fcm` APK built there):
+- **Wake fetch** asks the server for only the allowed priorities, oldest first: `95b7095` (`1a7678ff`). Also closes `33ee7329`.
+- **Wake backlog, show each**: up to 5 items per wake, each with its own notification id (review caught a same-second id collision): `8aebb59` (`8e91d937`). One whole-handler 27 s deadline: `416450b` (`5365750f`).
+- **DictationTextField**: all 15 mic-yes sites, census-guarded, plus a fix for a start completing on a dead widget: `c4e60ea` (`c67f9781`).
+- **Pause push from server** (P0 `67ee93b0`): admin toggle on the Notifications screen, 30 min to 24 h or until resumed: `29579af`.
+- **Off means off** (Rick's ruling): Focus speech honors Notifications off, Master mute, muted senders, and quiet hours: `bb12bd1` (`ea716d77`).
+- **A push-registration throw at login no longer skips the permission prompt**: `ab4f895` (`dfea49e7`, from Maya's review `20df4428`).
+- **Transcript fixtures**: `state_refused` captured (C5.21 green), `append_mixed_kinds` recaptured, the JWT-shape guard: `fed43e7`, `aab5824`; the capture script reads `LUPIN_TEST_ADMIN_*`: `e789f07`.
+- Fixture syncs to lupin: `d596526`, `bded008`.
 
 ---
 
-## 2026.04.16 - Tier 2 Data Layer + UI + Tier 3/4 Plan Expansion
+## 2026.09.28 | Session `1b9a6410` (Tiffany 💍) — FCM wake-ups live on the phone, tap-to-sender, notification controls, the append mic
 
-### Session Summary
-- **Objective**: Implement Tier 2 (notifications + decision proxy) end-to-end and expand the Tier 3 + Tier 4 stubs into full plans while user is offline.
-- **Status**: ✅ Tier 2 data layer + BLoCs + UI scaffolds complete with unit/BLoC tests; Tier 3 + 4 plans fully expanded against live OpenAPI; all changes uncommitted (waiting for user review).
-- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+**RESUME HERE:**
 
-### Work Performed
-1. **Endpoint shape extraction** — fetched live `http://localhost:7999/openapi.json` (149KB) and traced both `notifications.py` + `decision_proxy.py` router responses one level into manager calls. Captured every dict-literal field name + type for hand-coded DTOs.
-2. **Notifications data layer** — 18 model classes (NotificationItem, ConversationMessage, SenderSummary, DateSummary, ProjectSession, GistResponse, NotifyDispatchResponse, NotificationResponseAck, request payloads + envelopes); `NotificationRepository` wraps all 17 endpoints with typed methods.
-3. **Decision-proxy data layer** — `TrustMode` enum + 11 model classes (ProxyDecision, PendingSummary, RatifyResponse, TrustStateItem, TrustModeStatus, TrustModeUpdateRequest/Response, AcknowledgeResponse, BatchIdResponse); `DecisionProxyRepository` wraps all 9 endpoints.
-4. **NotificationBloc rewrite** — replaced WS-only skeleton with repo-backed BLoC. Events: LoadInbox, LoadConversation, MarkPlayed, Respond, BulkDelete, DeleteConversation, ExternalUpdate. States carry sender/conversation context for refresh-on-WS-event.
-5. **DecisionProxyBloc** — new. Events: LoadDashboard, SetMode, Ratify, DeleteDecision, Acknowledge, LoadTrust. States carry mode + pending + summary + batch id.
-6. **Notifications UI** — `InboxScreen` (multi-sender list, swipe-to-delete, new_count badges, pull-to-refresh, bulk-delete confirmation), `ConversationScreen` (date-grouped messages, state chips, response button), `InteractivePromptSheet` (yes_no / multiple_choice / open_ended / open_ended_batch variants).
-7. **Decision-proxy UI** — `TrustDashboardScreen` with color-coded mode header, SegmentedButton mode picker (with downshift confirmation dialog), per-decision cards (approve/reject/delete), summary footer with batch acknowledge.
-8. **DI + app wiring** — registered both repos + both BLoCs in `service_locator.dart`; added MultiBlocProvider entries in `app.dart`; added Inbox/Trust/Logout AppBar actions to `home_screen.dart`.
-9. **Tests** — 6 new test files (`auth/_helpers/stub_dio.dart` shared adapter; notification_models, notification_repository, decision_proxy_models, decision_proxy_repository at unit level; notification_bloc, decision_proxy_bloc using `bloc_test`). 30+ cases total.
-10. **Plan expansion** — Tier 2 plan converted from stub to full active doc; Tier 3 plan expanded with all 14 queue + 5 Claude Code + 1 BOUNDED endpoints, models, UI surface, file paths; Tier 4 plan expanded with 11 agentic + 2 IO + 2 stats endpoints, per-job UI structure, artifact viewer strategy.
+1. **Rick owes:** the dev test admin account (`f2f30810`, which unblocks `768e852f` slice 4) and the NDK 27 install (`sdkmanager "ndk;27.0.12077973" "platforms;android-36"`, for P3 `5cbd2e42`).
+2. **Merged late:** Cheech's notification management view `370e491` (P0 `7cac3a17`, awaiting Rick's device check) and Maya's prompt-bubble mic `286e02c` (Focus half of `928c5808`). Next for Maya: the mic in the notification sheet (Rick: "both"). Tip `286e02c`, suite 2558/1/8, `--fcm` APK built from it.
+3. **Unmerged:** `feat/transcript-dispatcher` (the 0fa608b rebase), `feat/transcript-mobile-s4` (`c310763`), and 281a10d6 (device_id / close 4004), which isn't staffed yet.
 
-### Files Added (22 new)
-- `lib/features/notifications/data/{notification_models,notification_repository}.dart`
-- `lib/features/decision_proxy/data/{decision_proxy_models,decision_proxy_repository}.dart`
-- `lib/features/decision_proxy/domain/{decision_proxy_event,decision_proxy_state,decision_proxy_bloc}.dart`
-- `lib/features/notifications/presentation/{inbox_screen,conversation_screen,interactive_prompt_sheet}.dart`
-- `lib/features/decision_proxy/presentation/trust_dashboard_screen.dart`
-- `test/unit/_helpers/stub_dio.dart`
-- `test/unit/notifications/{notification_models_test,notification_repository_test,notification_bloc_test}.dart`
-- `test/unit/decision_proxy/{decision_proxy_models_test,decision_proxy_repository_test,decision_proxy_bloc_test}.dart`
-
-### Files Modified (7)
-- `lib/core/di/service_locator.dart` — Tier 2 repos + BLoCs registered
-- `lib/app.dart` — MultiBlocProvider includes both Tier 2 BLoCs
-- `lib/features/home/home_screen.dart` — Inbox / Trust / Logout AppBar actions
-- `lib/features/notifications/domain/{notification_bloc,notification_event,notification_state}.dart` — full rewrite
-- `src/rnd/v0.1.6-migration/2026.04.15-tier-{2,3,4}-*.md` — plan stubs → full plans
-
-### Decisions for Future Sessions
-- Old `lib/shared/models/notification_item.dart` is now orphaned (no consumers) — leave for cleanup pass when convenient.
-- `home_screen.dart` has a pre-existing broken import (`getIt` from `main.dart`) — predates this session.
-- WebSocket→BLoC bridge for `NotificationsExternalUpdate` not yet wired (event added but not dispatched from WS layer).
-- Push notifications (FCM/APNs), local notification mirror, voice-first prompts all explicitly deferred per Tier 2 plan.
+**Shipped** (crew: Maya, Pocholo, Chloé, Cheech; every merge independently reviewed; suite 2484/1/8 at `ea0d2f3`, the 8 being the known pending-capture reds):
+- **FCM background wake proven on the emulator and the phone** (row `8ff78c69`, closed): live bugs fixed along the way: `ba07dc8` notification permission never requested, `f827e7a` fingerprint unlock never worked (FlutterFragmentActivity).
+- **Tap a notification → that sender's conversation**, sender emoji and name in the title: `265947d` (Maya; `d9bc6f6c`, `1ae4c68c`; Rick confirmed on the phone).
+- **Review F1–F9 + C1–C4** (Pocholo, reviewed by Chloé): `62a319d`, `e004517`: speech/network budgets, the token-rotation race, the wake switch, the v2 channel at default importance, APK build stamp.
+- **Append mic in the Focus reply draft**: `ea0d2f3` (Maya; `570c2fce`; Rick confirmed).
+- **pubspec.lock tracked**, dio switch made total, seat provisioning fixed: Chloé (`0705bcce`); stale AC-G2 fixture `f113473` (`6f9c0fe4`).
+- CLAUDE.md: always build with `--fcm` (`5c62999`).
 
 ---
 
-## 2026.04.15 - Tier 1 Auth + WS Persistence Implementation
+## 2026.09.27 | Session `0fb2674f` (Tiffany 💍) — Transcript phase 3 slices 1–3, the Surfaces drawer, and a one-command phone deploy
 
-### Session Summary
-- **Objective**: Implement Tier 1 plan — replace mock auth with real JWT against Lupin v0.1.6, add biometric unlock, WS session persistence, and Dev↔Test server-context toggle.
-- **Status**: ✅ Code complete (all 12 plan steps built); tests written but unexecuted (no Flutter SDK in this env).
-- **Branch**: `2026.04.15-resync-with-lupin-v0.1.6` (continued)
+**RESUME HERE:**
 
-### Work Performed
-1. **pubspec.yaml** — added `flutter_secure_storage ^9.2.2`, `local_auth ^2.3.0`, `assets/config/` bundle.
-2. **`assets/config/server-contexts.json`** — bundled Dev/Test URL defaults.
-3. **Auth services (6 new files in `lib/services/auth/`)** — `ServerContextService`, `SecureCredentialStore`, `AuthRepository`, `AuthInterceptor` (401 refresh-and-retry), `BiometricGate`, `SessionPersistence`, `auth_token_provider`.
-4. **Auth UI (3 new files in `lib/features/auth/presentation/`)** — `LoginScreen` (email pre-fill + context badge), `BiometricPromptScreen`, `AuthGate` (routes by AuthBloc state).
-5. **AuthBloc rewrite** — replaced 3 TODO stubs with real backend calls via AuthRepository; added `AuthBiometricUnlockRequested` and `AuthServerContextChanged` events; states now carry `lastEmail`.
-6. **WebSocket real JWT** — replaced `mock_token_email_*` at `websocket_service.dart:161` and `enhanced_websocket_service.dart:286` with `readAccessToken()`.
-7. **`AppConstants`** — `apiBaseUrl`/`wsBaseUrl` now runtime-mutable; `ServerContextService` rewrites them on context switch.
-8. **DI wiring (`service_locator.dart`)** — registers all new services + AuthBloc; installs AuthInterceptor on Dio.
-9. **`app.dart`** — provides AuthBloc, wraps home screen in `AuthGate`.
-10. **Settings toggle** — `ServerContextToggle` widget with segmented button + confirmation dialog.
-11. **Unit tests (4 files, 16 cases)** — `auth_repository_test`, `auth_interceptor_test`, `auth_token_provider_test`, `server_context_service_test`.
+1. **Rick's two P0s:** run `src/scripts/deploy-apk-to-device.sh` once from the laptop, which closes `651e3956`, and file a ticket from the phone with New Task, which closes `5e315760`. The check list is `tmp/2026.09.28-phone-check-list.md`.
+2. **Stop-list `f27a61f4`** is re-looped for its undo defects; the fix plan is in `io/mementos/cheech.md`.
+3. **Phase 3** waits on Mr. Radio's server: slice 4, and merging `0fa608b`.
 
-### Files Added (16 new)
-- `assets/config/server-contexts.json`
-- `lib/services/auth/{auth_token_provider,server_context_service,secure_credential_store,auth_repository,auth_interceptor,biometric_gate,session_persistence}.dart`
-- `lib/features/auth/presentation/{login_screen,biometric_prompt_screen,auth_gate}.dart`
-- `lib/features/settings/presentation/server_context_toggle.dart`
-- `test/unit/auth/{auth_repository_test,auth_interceptor_test,auth_token_provider_test,server_context_service_test}.dart`
+**Shipped** (5-seat crew: Maya, Pocholo, Chloé, Cheech, Clayton; each merge reviewed and tested):
+- **Transcript phase 3** (row `768e852f`): slice 1 `a086a0c` (PaneVisibilityMixin extraction), slice 2 `fad452e` (fleet-row watch button), slice 3 `9962f59` (router, route-scoped bloc, Live Console). The dispatcher `0fa608b` is held back until the server emits.
+- **Surfaces drawer** `bb8c72e` (row `c59457f0`).
+- **Phone deploy script** `d15210f` + `c6db075` (row `651e3956`): installs the server-built APK over the SMB mount to whatever adb sees, phone first, and refuses a stale APK.
+- `686576b` CLAUDE.md dev commands; `610f8c9` `/coverage/` gitignored.
+- **Rick confirmed on the device:** record button `3f2a7dab`, mic hold `a1c12c6e`, Files `0534b50d`.
 
-### Files Modified (7)
-- `pubspec.yaml`, `lib/core/constants/app_constants.dart`, `lib/core/di/service_locator.dart`, `lib/app.dart`, `lib/features/auth/domain/{auth_bloc,auth_event,auth_state}.dart`, `lib/services/websocket/{websocket_service,enhanced_websocket_service}.dart`
+**Suite: 2055 → 2299 passed / 1 skipped / 0 failed** at `bb8c72e` (8 pending-capture reds by design).
 
-### Decisions for Future Sessions
-- `mock_token_email_*` remains in `test/mocks/` (test-only stubs, not production code).
-- Dio baseUrl is snapshot at construction — context switch updates AppConstants but the singleton Dio keeps its old baseUrl until app restart; evaluate adding `Dio.options.baseUrl` mutation on switch.
-- Need `flutter pub get` + `flutter test test/unit/auth/` to validate.
+**Lesson:** twice, a fix commit was stacked on something that must not merge (the C9 hold-back, then row A). A one-line `git merge-base --is-ancestor` check before every merge caught both.
 
 ---
 
-## 2026.04.15 - Re-sync with Lupin v0.1.6 + Planning-is-Prompting Install
+## 2026.09.26 | Session `90e34e30` (Tiffany 💍) — Skeleton Shift: five-accordion status report, the TaskRow call-site guard, and file_picker passing on the phone
 
-### Session Summary
-- **Objective**: Reorient on the project after ~9 months idle, audit the gap between the mobile app and the now-much-larger Lupin backend, and bring the project under the planning-is-prompting workflow toolkit.
-- **Status**: ✅ COMPLETE — audit + per-tier plans committed; planning-is-prompting installed (full set).
-- **Branch created**: `2026.04.15-resync-with-lupin-v0.1.6` (off `2025.07.07-wip-mobile-phased-implementation`)
+**RESUME HERE:**
 
-### Work Performed
-1. **Lupin API audit** — pulled live `/openapi.json` (113 endpoints across 24 router groups, FastAPI v0.6.0 / Lupin v0.1.6); categorized into 28 functional groups; mobile coverage measured at 4 endpoints (~5%).
-2. **Mobile integration audit** — parallel Explore agents mapped REST + WebSocket usage across `lib/features/` and `lib/services/`. Confirmed only `/api/get-session-id`, `/api/get-speech`, `/api/get-speech-elevenlabs`, and `/api/upload-and-transcribe-mp3` are wired; `/ws/queue/{sid}` and `/ws/audio/{sid}` connected with 19 event types defined; notifications BLoC is skeleton-only; zero decision-proxy/Claude Code integration.
-3. **Migration directory** — created `src/rnd/v0.1.6-migration/` with master audit + per-tier plan docs (Tier 1 detailed, Tiers 2-4 stubbed).
-4. **Tier 1 scope locked** — login-only (4 of 10 `/auth/*` endpoints), single account, biometric unlock with password fallback, last-used email pre-fill, WS session persistence, server-context toggle (Dev :7999 ↔ Test :8000, default Dev), always-store refresh token.
-5. **Branch hygiene** — created today's date branch off WIP without merge ceremony; deleted `src/scripts/notify.sh`, untracked auto-generated `ios/Flutter/flutter_export_environment.sh` and added it to `.gitignore`.
-6. **planning-is-prompting installation** — ran installation-wizard end-to-end; installed all 13 workflow groups (30 slash commands), backup script + exclusions, gitignore for `.claude/*` (preserving `commands/`), CLAUDE.md workflows section.
+1. **Row `61ecfb22` (doc viewer) is ready to close, and only Rick can close it** because it is parked. He confirmed on the phone that `file_picker` 11.0.3 builds, installs, logs no errors, and uploads.
+2. **Device walk-through**: item 10 is done. Rick's test broadcast `f670a706` reached this seat, the first real send from the app. Items 11-13 (the reply tally through the notification shade, backgrounding and navigation) and item 14 (landscape) are still owed.
+3. **Rebuild the APK** to get New Task on the phone. It's merged and pushed, and never yet tapped on a device. The Project field defaults to `lupin`, as on the web.
 
-### Files Added / Modified
-- `src/rnd/v0.1.6-migration/` — README + 5 planning docs (committed: 9554ade)
-- `src/scripts/notify.sh` — DELETED, `.gitignore` += flutter env (committed: 28ce517)
-- `.claude/commands/` — 30 slash commands (uncommitted)
-- `src/scripts/backup.sh` + `src/scripts/conf/rsync-exclude.txt` — installed + customized (uncommitted)
-- `.gitignore`, `CLAUDE.md` — updated for planning-is-prompting (uncommitted)
+**Shipped:**
+- `1d61d2d` + `db9162c`, merged as `92a3fc0`, row `d5bbd786`: a source-scan test that fails when any `TaskRow(` call in `lib/` drops a constructor argument, unless a `// taskrow-omit: <param> <why>` comment explains it. It was mutation-tested on four breakages. María reviewed it; her two points (a `//` inside a string hid a call, and `super.x` parameters were not counted) are fixed.
+- A done-versus-remaining report on the five accordions, sent to Rick as a notification card (broadcast `7938c019`).
+- `a36ef40`, merged as `30efd26`, plus fix `e7f2bcc` merged as `ce3fe8a`, row `b31a9ed9`: **New Task**, the web's new-ticket card on the phone (M4, on Rick's keypress yes). It's ported from lupin `shared/task-create.js`: nine fields, the same defaults, validation and outcome text, and a POST to `/api/tasks`. A petition or no answer keeps the card open; a created ticket closes it and refreshes the board. Title and Details have mics. It was mutation-tested on 7 breakages. A test caught the Approval dropdown overflowing by 156 px at 360 dp. María reviewed the rules layer and the card; she found that a cancelled capture left the mics dead, which is now fixed with two tests that fail on `30efd26`.
 
-### Decisions for Future Sessions
-- Tier sequence: Tier 1 (auth + WS persistence) → Tier 2 (notifications + decision-proxy) → Tier 3 (queue/CJ Flow + Claude Code) → Tier 4 (agentic UIs).
-- Defer registration, password reset, change password, email verification UI to a later tier.
-- Backup destination: `/mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/`.
+**Rulings:** row `e1e2c545` (the two re-spin doors read different memento files) stays with Mr. Radio, because it is lupin tooling. Rick's test upload was deleted from `lupin/io` on his yes.
+
+**Housekeeping:** the memento sweep trashed 6 stale records and kept 3.
+
+**Suite: 1999 → 2035 passed / 1 skipped / 0 failed.**
+
+**Lesson:** a review DM that is condensed in transit can drop a finding. María's first accept on `a36ef40` lost the stale-mic point, and it only surfaced when she resent it after the merge. When a reviewer says there are nits, ask for the list in full before merging.
 
 ---
 
-## 2025.08.17 - Phase 4.5 Voice Input/Output Integration Complete
+## 2026.09.24 | Session `ecb8e6e3` (Tiffany 💍) — Task List M1/M3/M4, and doc-viewer parity with the web: Download, Folder, listing, Roots, Upload
 
-### Session Summary
-- **Objective**: Complete Phase 4.5 voice input/output integration with comprehensive audio pipeline
-- **Status**: ✅ COMPLETE - Full voice recording, TTS playback, and adaptive integration implemented
-- **Branch**: 2025.07.07-wip-mobile-phased-implementation
+**RESUME HERE:**
 
-### Work Performed
-1. **Voice Input/Output Service**: Comprehensive voice recording and playback with VAD
-2. **Enhanced TTS Service**: Multi-provider TTS with adaptive behavior and performance tracking
-3. **Compilation Error Resolution**: Fixed all remaining WebSocket integration errors
-4. **Integration Testing**: All voice and TTS tests passing (19/19)
-5. **Adaptive Integration**: Voice and TTS services fully integrated with network/lifecycle management
+1. 🔴 **Rick's laptop APK build is the first real test of `file_picker` 11.0.3**, because this machine has no Android SDK. If it breaks: take it out of `pubspec.yaml` and set `platformDocFilePicker = null` in `lib/features/docs/presentation/doc_upload_sheet.dart`. Row `61ecfb22` is blocked on that build (chase 09-25 09:00 EDT).
+2. **Row `651e3956` (P1)**: investigate reviving the Android SDK here. Rick is picking it up 09-25.
+3. The device walkthrough from 09-23 is still owed (items 7-14 plus one real broadcast).
 
-### Major Achievements
-**Complete Voice Input Pipeline:**
-- **VoiceInputOutputService**: Full-featured voice recording service
-  - Voice activity detection with confidence scoring
-  - Real-time audio streaming to server via WebSocket
-  - Adaptive configuration based on network and app state
-  - Audio buffering and caching for offline support
-  - Comprehensive event system for UI integration
+**Shipped** (21 files, +2100/−28):
+- `84ebb4d` / merge `6ce802e`: Task List headline ("Live: N", split only while a park is active), paste-a-ticket-number lookup via `GET /api/tasks/<ref>` (finds held rows), and a disabled New task button. Row `323d0f9c`.
+- `8bc9b9e` / merge `312aa40`: doc viewer ⬇ Download (original bytes through the share sheet), 📁 Folder, a real folder listing, and a folded 🗂 Roots panel. Row `61ecfb22`, agreed with Mr. Radio before building.
+- `0528f11` / merge `104401b`: ⬆ Upload for admins. It sends refuse first; on a name clash, a sheet offers Replace, Rename or Cancel. It adds `file_picker`.
 
-**Enhanced TTS with Intelligence:**
-- **EnhancedTTSService**: Advanced TTS with provider switching
-  - Multi-provider support (ElevenLabs, OpenAI) with performance metrics
-  - Intelligent provider selection based on success rate and latency
-  - Quality adaptation (high/standard/low) based on network conditions
-  - Audio buffering and streaming for smooth playback
-  - Comprehensive performance tracking and optimization
+**Bugs found on the way**:
+- The listing parser read `type`/`path` while the server sends `kind`/`rel_path`, so every entry was a pathless file. This was invisible because nothing rendered listings.
+- PDF, audio and video were decoded as text.
 
-**Adaptive Integration:**
-- **Network-Aware Behavior**: Voice quality and streaming adapt to connection quality
-- **App Lifecycle Integration**: Recording stops in background, TTS pauses appropriately
-- **Battery Optimization**: Power-aware configurations for different usage states
-- **WebSocket Integration**: Seamless audio streaming through WebSocket connections
+**Coordination**: Mr. Radio's upload endpoint shipped as lupin `627ef22c8`. Only io and lupin accept uploads; the other mounts answer 403 until Rick makes them writable.
 
-### Technical Fixes Applied
-**Compilation Error Resolution:**
-- Fixed `!_webSocketService?.isConnected == true` → `_webSocketService?.isConnected != true`
-- Fixed `establishConnection()` → `connect()` method calls
-- Fixed `WebSocketMessage.custom({...})` → `WebSocketMessage.custom(type: ..., data: {...})`
-- Resolved all nullable boolean comparison issues
-- Updated method signatures to match actual WebSocket service API
+**suite 1936 → 1999 passed / 1 skipped / 0 failed** on the merged tree.
 
-**Integration Enhancements:**
-- Voice service fully integrated with adaptive connection management
-- TTS service integrated with network quality monitoring
-- Audio streaming properly routed through WebSocket message system
-- Error handling and recovery for all audio operations
+## 2026.09.23 | Session `693d5366` (Tiffany 💍) — Fleet pane parity closed, broadcast ack recovery built on the new server read, two rulings in hand
 
-### Files Created/Modified
-**Voice Input/Output System:**
-- `lib/services/voice/voice_input_output_service.dart` - Complete voice I/O service
-- `lib/services/tts/enhanced_tts_service.dart` - Advanced TTS with adaptive behavior
-- `test/voice_tts_integration_test.dart` - Comprehensive integration tests
+**RESUME HERE:**
 
-**Voice Configuration:**
-- Voice configuration adapts to 7 different strategies (aggressive, performance, standard, conservative, background, power saver, offline)
-- TTS configuration optimizes for network conditions and app state
-- Audio quality dynamically adjusts based on adaptive strategy
+1. 🔴 **REBUILD THE APK AND CHECK ON DEVICE**: the P0 DM editor, the B1 spinner (walk-through item 8), items 7-14 of `src/rnd/2026.09.22-emulator-walkthrough-five-accordions.md`, and now **one real broadcast** that exercises the ack read-back after backgrounding the app. ⚠️ A broadcast reaches every live seat, so warn the fleet first.
+2. **d5bbd786 TaskRow call-site guard**: Rick **approved** it (22:15), but it's still `not_approved` because only he can admit it. Once admitted, staff a worker.
+3. **c51e92da** phone probe stays parked until about 10-19. Don't raise it.
 
-### Test Results ✅
-**Voice and TTS Integration Tests: 19/19 Passing**
-- VoiceInputOutputService: 6/6 tests passing
-- EnhancedTTSService: 6/6 tests passing  
-- Enums and Constants: 3/3 tests passing
-- Integration Scenarios: 2/2 tests passing
-- All voice events, TTS events, metrics, and configuration tests successful
+**Shipped**: 73ce4cb inbox hidden + Task List indent · d80419b logout pops routes, Lupin Focus first on the grid · 7e005e8+125f37f Broadcast @mention chips · da54a06 B1 Fleet Status spinner · 67500ca P0 DM editor (composer capped at 60% above the keyboard) · aac32aa Broadcast history disabled state · crew merges a9d0d0d, e397c9c, 0952925, dd8de55, 3c1ebe7, ae75043, 39c8a14 · 5ad3fc8 post-game · **19b8c6e broadcast ack recovery** (Sam, row 973e4b6b): `drainMissedAcks()` now reads `GET /api/notifications/broadcast-acks/{id}` (lupin 1c7da903) on resume/reconnect. It merges saved acks per seat, ignores other broadcasts, lets a seat that moved during the read keep its live ack (a race caught in review, fixed in 0cdfe1a), and leaves a failed read "interrupted". Expired vs partial runs on a 5-minute window from the **send**, which differs from the web on purpose.
 
-### Technical Achievements
-1. **Complete Audio Pipeline**: Full voice recording → server processing → TTS response → playback
-2. **Adaptive Intelligence**: Services automatically optimize based on network and app conditions
-3. **Provider Performance Tracking**: TTS providers rated and selected based on actual performance
-4. **Seamless Integration**: All services work together through unified WebSocket communication
-5. **Production Ready**: Comprehensive error handling, recovery, and performance monitoring
+**Rulings**: 19190a5b Task List **hides** illegal verbs (Rick, closed). Server `limit` is `Query(500)` with no maximum, so going over 500 is not an error (Sam, verified at `notifications.py:2444`).
 
-### Integration Status
-**Phase 4.5 Components:**
-- ✅ Voice recording with activity detection
-- ✅ Real-time audio streaming via WebSocket  
-- ✅ TTS generation with multiple providers
-- ✅ Audio buffering and smooth playback
-- ✅ Adaptive behavior based on network/app state
-- ✅ Performance metrics and provider selection
-- ✅ Complete integration testing
+**suite 1904 → 1936 passed / 1 skipped / 0 failed** on the merge result. One self-respin (wake proof written). The Last Call bell (row 3d741e8b) never fired because `last_call.py` isn't executable (María's bug 8a838de5), so the close was run by hand.
 
-### Next Steps TODO (Phase 5)
-- [ ] Complete integration testing across all services
-- [ ] Performance benchmarking on real devices
-- [ ] End-to-end validation of complete voice assistant flow
-- [ ] Production deployment preparation
+## 2026.09.23 | Memento sweep (María 🌸, row `5b29a807`) — 50 mementos moved to the trash (3 kept for Tiffany); per Rick's ruling, only the last two days summarized
 
-### Session Status
-- **Voice Input/Output Integration**: ✅ Complete
-- **Enhanced TTS Service**: ✅ Complete  
-- **Compilation Errors**: ✅ All resolved
-- **Integration Testing**: ✅ 19/19 tests passing
-- **Adaptive Behavior**: ✅ Fully integrated
-- **Ready for Phase 5**: ✅ Yes
+- **09-22**: `await bloc.close()` inside `testWidgets` never returns for a bloc with an `on<Event>` handler. Four of five fleet panes were unreachable, referenced only by their own files and tests. Untrack `local.properties` and gitignore `google-services.json` (Rick).
+
+## 2026.09.22 | Session `f19a8996` (Tiffany 💍) — Phase 5 shipped, five accordions wired, then Rick walked them on the emulator and found ten things
+
+**RESUME HERE — FIRST THING IN THE MORNING, IN THIS ORDER:**
+
+1. 🔴 **REBUILD AND FINISH THE WALK-THROUGH.** Nothing else is blocked. `src/scripts/build-and-deploy-lupin-mobile.sh` (or `--push-only` if the APK is current), then **items 8-14** of `src/rnd/2026.09.22-emulator-walkthrough-five-accordions.md`. Item 7 is fixed and pushed but **not in Rick's APK**, so it has to be re-checked too. Items 10-13 are the four no test can reach: the first real broadcast ever fired from this app, the `inactive` guard measured in **both** directions, and the ack tally surviving navigation.
+   ⚠️ **A broadcast send hits every live seat.** Tell the fleet first or send something that reads as a test.
+2. **B1 Fleet Status spinner — highest-priority code work.** Order is **B1b first** (the debug line), on María's call: it is the only item that can say whether Rick's spinner is the defect we found or another one still unidentified. Then both cancel fixes — data-in-hand emits the composite, no-data keeps returning — and **two** tests so the second cannot regress into the first. ⚠️ **My causal claim is withdrawn**: a lifecycle cancel self-heals on resume, so the path I found probably does **not** explain what he saw.
+3. **R1+N2 Holding Area, one piece of work.** Ruled **B**: group by persona, **sessions unlabelled** (no hash, no count, no subtitle), **collapsed by default**. Inside B: approve-all now spans all of a persona's sessions, so **the button and confirm must report that wider count**.
+4. **Cheap and independent, no rulings needed**: **M1** the conditional headline (`Live: L` alone when parked is 0; the three-part form only when parked > 0) · **M4** the new-task stub · **B3** left padding — **measure at 360 dp, do not eyeball at 800**; the title only has ~90 dp there.
+5. **M2** the `⋯` disclosure (state in `aria-expanded` **and** `hidden`, both required) and **M3** the paste-a-hash lookup box — which is **not** a filter: it must hit `/api/tasks/<ref>`, never `/api/tasks?id_prefix=`, because the query form hid 22 of 23 held rows.
+6. **N1 Broadcast recipient picker** — the biggest item, and **still gated on one question for Rick**: does the endpoint accept a recipient list at all? Ask before building, or the picker's selection gets discarded.
+
+**Two implementers were offered and not yet staffed.** The split: seat 1 takes B1 then N1; seat 2 takes M1/M4/B3 then R1+N2.
+
+**Still Rick's, not started**: the 244 pre-existing analyzer errors in `lib/core/**` scaffolding (none new, none mine — and they mean the analyzer cannot serve as a gate). `c51e92da` phone probe stays held to 2026-10-19; **do not re-raise it.**
+
+**Where the evening ended**: commit `75f1291`, **16 commits pushed**, backup verified off the mirror, board at **0 live rows**, tree clean.
 
 ---
 
-## 2025.07.12 - Design by Contract Documentation & Code Quality Enhancement
+**suite 1586 → 1673 passed / 1 skipped / 0 failed.** All five fleet accordions are built, merged and **reachable**. Rick walked them on the emulator and filed ten findings; one is fixed, one he ruled on, and the rest are scoped in a peer-reviewed work plan with **nothing blocked on him but a rebuild**. Two self-respins this session (`fc9e316a`, then `a9df00ea`).
 
-### Session Summary
-- **Objective**: Comprehensive Design by Contract documentation across all critical application layers
-- **Status**: ✅ COMPLETE - DbC documentation added to 20+ core service classes
-- **Branch**: 2025.07.07-wip-mobile-phased-implementation
+**Shipped**
+- **Phase 5 Broadcast** — data layer, bloc, pane, 59 tests, mutation-proved 14/14; bloc at **app root** on Rick's ruling so the ack tally survives navigation.
+- **The orphan-pane fix** (`43342f0`) — four of five accordions had no door: no card, no route, no provider. Four phases of green work nobody could open.
+- **Finished Tasks first load** — the pane was a spinner forever because *nothing ever dispatched the load*. His log carried `/api/tasks` and **no `/api/tasks/events` at all**; the absence was the evidence.
+- **Trust Dashboard hidden** on his order — both doors, the card and the app-bar shield, behind one flag rather than a deletion.
+- **`--push-only`** on the build-and-deploy script; **`io/`** into `.gitignore`; a false docstring in `pane_polling_mixin` corrected.
+- **Three new test files, 10 cases, every one mutation-proved.**
 
-### Work Performed
-1. **Test Compilation Fixes**: Resolved all outstanding test compilation issues
-2. **Endpoint Updates**: Migrated from `/api/get-audio` to `/api/get-speech` endpoints
-3. **Design by Contract Documentation**: Comprehensive DbC patterns across 8 major areas
-4. **Code Quality Enhancement**: Improved documentation quality and maintainability
+**The three defects that were all the same defect**
+`PaneHostScreen` had zero tests; the ack **dispatch** seam had none; Finished Tasks' first load had none. In each case the tests either side proved their own half — and for Finished Tasks the harness literally sent the event production never sent. **Unit tests either side of a seam cannot fail on the seam.**
 
-### Major Achievements
-**Complete Design by Contract Implementation:**
-- **HttpService & CachedHttpService**: Network communication with caching strategies
-- **AudioCacheManager**: Multi-layer audio caching with compression and analytics
-- **Enhanced WebSocket Services**: Real-time communication with resilience patterns
-- **Repository Layer**: CRUD operations with pagination, caching, and validation
-- **Cache Management**: Eviction strategies, analytics, and optimization
-- **Core Infrastructure**: Service locator, error handling, and dependency injection
-- **Use Cases & BLoC**: Business logic patterns with error handling and state management
+**Rick's rulings**
+- Skeleton crew is the **standing** weekday mode before 17:00, and in it a manager implements its own rows — I had recorded it as a one-off waiver and was corrected.
+- Broadcast bloc at **app root**; **wire the orphan panes**; Trust Dashboard **back-burnered then hidden**; `io/` ignored; **Holding Area grouping by persona with sessions unlabelled and collapsed** — overruling my recommendation, and he was right that mirroring the clients he uses is the requirement.
+- **"Leave it refreshing"** on the polling question.
 
-**Test Compilation Fixes:**
-- ✅ Fixed `performance_monitor_test.dart` import and mock issues
-- ✅ Fixed `voice_recording_cache_test.dart` constructor and type issues
-- ✅ Added `createForTesting` factory method to VoiceRecordingCache
+**What I got wrong, because it is the useful part**
+Twice I attached a true observation to the wrong mechanism — the parity-guard hang (blamed the poll timer; it was `bloc.close()`), and the Fleet Status spinner (claimed "nothing retries"; María proved a lifecycle cancel self-heals, and I withdrew the diagnosis). My first Trust Dashboard guard **could not fail** — it scrolled past the card, which disposes it. I read two killed background runs' `exit 0` as a pass. And I spent four of Rick's interruptions asking questions whose answers were written in the clients he had already told me to read: *"a question that source can answer is not a question."*
 
-**Endpoint Migration:**
-- ✅ Updated 7 files with new endpoint references
-- ✅ Migrated `/api/get-audio` → `/api/get-speech`
-- ✅ Migrated `/api/get-audio-elevenlabs` → `/api/get-speech-elevenlabs`
+**María reviewed the plan and changed it three times** — smaller fix, withdrawn causal claim, and a finding of her own (`de509b51`) that made my own document weaker. Mr. Radio's `1c7da903` shape accepted; I withdrew a reconcile proposal of mine as unsound after he showed two counts from the same source prove nothing.
 
-### Documentation Impact
-**Files Enhanced with Design by Contract:**
-- `lib/services/network/http_service.dart` - Network operations with error handling
-- `lib/services/network/cached_http_service.dart` - Intelligent caching strategies
-- `lib/services/audio/audio_cache_manager.dart` - Multi-layer audio caching
-- `lib/services/websocket/enhanced_websocket_service.dart` - Real-time communication
-- `lib/services/websocket/websocket_connection_manager.dart` - Connection coordination
-- `lib/core/repositories/base_repository.dart` - Data access patterns
-- `lib/core/repositories/audio_repository.dart` - Audio-specific operations
-- `lib/core/cache/cache_manager.dart` - Generic caching with policies
-- `lib/core/cache/eviction_manager.dart` - Intelligent eviction strategies
-- `lib/core/di/service_locator.dart` - Dependency injection management
-- `lib/core/error_handling/error_handler.dart` - Centralized error processing
-- `lib/core/use_cases/base_use_case.dart` - Business logic patterns
-- `lib/features/voice/domain/voice_bloc.dart` - Voice state management
-
-### Quality Improvements
-**Documentation Standards:**
-- **Consistent Patterns**: Applied Requires/Ensures/Raises throughout
-- **Error Clarity**: Detailed exception specifications for all public methods
-- **Business Logic**: Clear pre/post-conditions for use cases and BLoCs
-- **Type Safety**: Comprehensive parameter and return value contracts
-- **Performance**: Documented cache behavior and optimization strategies
-
-**Code Maintainability:**
-- Enhanced API contract clarity for all service layers
-- Improved debugging capabilities through detailed specifications
-- Better test coverage enablement through clear contracts
-- Reduced integration complexity through explicit requirements
-
-### Technical Achievements
-1. **Comprehensive Coverage**: 20+ core service classes documented with DbC patterns
-2. **Consistency**: Uniform documentation approach across all architectural layers
-3. **Error Handling**: Complete exception documentation for all public APIs
-4. **Business Logic**: Clear specifications for all use cases and state management
-5. **Integration**: Well-defined contracts for service interactions
-
-### Files Modified (20 files with +1451 insertions, -161 deletions)
-**Core Services:**
-- `lib/services/network/http_service.dart` (+155 lines DbC documentation)
-- `lib/services/network/cached_http_service.dart` (+163 lines DbC documentation)
-- `lib/services/audio/audio_cache_manager.dart` (+164 lines DbC documentation)
-
-**WebSocket Infrastructure:**
-- `lib/services/websocket/enhanced_websocket_service.dart` (+87 lines DbC documentation)
-- `lib/services/websocket/websocket_connection_manager.dart` (+91 lines DbC documentation)
-
-**Repository Layer:**
-- `lib/core/repositories/base_repository.dart` (+239 lines DbC documentation)
-- `lib/core/repositories/audio_repository.dart` (+254 lines DbC documentation)
-
-**Cache Management:**
-- `lib/core/cache/cache_manager.dart` (+114 lines DbC documentation)
-- `lib/core/cache/eviction_manager.dart` (+117 lines DbC documentation)
-
-**Core Infrastructure:**
-- `lib/core/di/service_locator.dart` (+80 lines DbC documentation)
-- `lib/core/error_handling/error_handler.dart` (+67 lines DbC documentation)
-- `lib/core/use_cases/base_use_case.dart` (+99 lines DbC documentation)
-- `lib/features/voice/domain/voice_bloc.dart` (+62 lines DbC documentation)
-
-**Test Fixes & Endpoint Updates:**
-- `test/core/monitoring/performance_monitor_test.dart` - Fixed imports and mocks
-- `test/core/cache/voice_recording_cache_test.dart` - Fixed constructor access
-- `lib/core/constants/app_constants.dart` - Updated endpoint constants
-- Various service files - Updated endpoint references
-
-### Implementation Status
-- **Design by Contract**: 100% Complete across all major layers
-- **Test Compilation**: 100% Resolved
-- **Endpoint Migration**: 100% Complete
-- **Code Quality**: Significantly enhanced through comprehensive documentation
-- **Maintainability**: Greatly improved through clear API contracts
-
-### Next Steps TODO
-- [ ] Weekend collaborative testing on physical devices
-- [ ] Performance benchmarking on real Android hardware
-- [ ] End-to-end validation flows
-- [ ] Production deployment preparation
+**Docs**: check-in briefing · emulator walk-through checklist · walk-through findings work plan, all in `src/rnd/`, all linked in the README.
 
 ---
 
-## 2025.07.10 - Final Implementation Complete (Tasks 18-20)
+## 2026.09.20 | Session `cc9c1f1a` (Tiffany 💍) — Manager on duty: a three-seat cascade review, then five fleet-pane phases built, reviewed and merged in one evening
 
-### Session Summary
-- **Objective**: Complete final 3 tasks independently and prepare for weekend collaborative testing
-- **Status**: ✅ ALL 20 TASKS COMPLETE - 95% Implementation Ready for Weekend Validation
-- **Branch**: 2025.07.07-wip-mobile-phased-implementation
+**RESUME HERE**: **nine merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work`, union verified green, PUSHED AND BACKED UP at Rick's 22:55 ritual order.** Rick ruled everything outstanding tonight: admit both held rows (done), batch won't-fix keeps NO confirm matching web (closed), and the phone round-trip probe `c51e92da` is **PARKED to 2026-10-19** — he has no cell service and no public-IP server for at least a month, and told the fleet to stop asking. **Do not re-raise it.** Still owed by him: untracking `android/local.properties`. P0 `4b16174d` remains `blocked` on `user:rick` with a chase at 09:00Z; Rick's own P0 `72e01fb3` (four legacy accordions) was CLOSED on receipts this session.
 
-### Work Performed
-1. **Task 18 - CI/CD Pipeline**: Complete GitHub Actions workflows for testing, PR validation, and releases
-2. **Task 19 - Documentation**: Design by Contract documentation throughout codebase + comprehensive README
-3. **Task 20 - Smoke Tests**: Comprehensive testing with results analysis and weekend preparation
-4. **Android-First Conversion**: Completed native mobile dependencies and AudioPlayer integration
-5. **Code Quality**: Massive 84% improvement from 8,794 to 1,392 analysis issues
+**CLOSED AFTER THE POST-GAME WAS WRITTEN** (this session continued past `e7afbbb`):
 
-### Major Achievements
-**Complete CI/CD Infrastructure:**
-- `flutter-ci.yml`: Full test suite, analyze, build pipeline
-- `pr-check.yml`: PR validation with size checks and quick tests
-- `release.yml`: Automated release builds with artifact management
-- Code coverage integration with Codecov
+| row | outcome |
+|---|---|
+| `67c7a2e1` roster addressability guard | **merged `488f189`**, 71/71 focus_mode tests green on the merge result |
+| `72e01fb3` Rick's four legacy accordions | **closed on receipts** — verified `lib/features/` carries `fleet_status`, `finished_tasks`, `task_list`, `holding_area`, not taken from a report |
+| `c597c4fc` cross-pane cell-key parity | minted, admitted, **scope and mutation proof both corrected by Rachel before she started** |
+| `384591dd` Phase 5 Broadcast | **blocked on a server defect**, not on Rick — see below |
+| `c51e92da` phone round-trip probe | **parked to 2026-10-19 on Rick's direct order** |
+| `e1e2c545` two re-spin doors read different memento slots | filed to Mr. Radio (Chloé's find) |
 
-**Comprehensive Documentation:**
-- Design by Contract docstrings for all services and repositories
-- Updated README with installation, architecture, and usage guides
-- API documentation with examples and best practices
-- Contributing guidelines and development workflow
+**THREE MANAGER ERRORS CAUGHT BY WORKERS BEFORE ANY CODE WAS WRITTEN**, all mine, all recorded on their rows rather than quietly fixed:
+1. I specified a guard that had already shipped with Phase 2 (Rachel).
+2. I prescribed a mutation proof that **could not fail** — both panes render the same shared widget, so mutating a cell key changes both identically and the comparison stays green (Rachel). Her fix: a wrapper at one pane's call site so exactly one side diverges.
+3. I asked Rick to schedule a device sitting whose every option assumed the work was possible. It never was — he has told this fleet repeatedly that he has no cell service and no public IP. **A well-formed answer to a badly-framed question reads exactly like a ruling.** The wrong amendment is left on the row with the correction underneath.
 
-**Smoke Test Results:**
-- ✅ 25/25 audio compression tests passing
-- ✅ Core functionality validated (caching, compression, WebSocket foundation)
-- ⚠️ 2 test files have compilation issues (weekend fixes identified)
-- 📊 84% error reduction in static analysis (8,794 → 1,392 issues)
+**THE FINDING THAT STOPPED PHASE 5**, and it surfaced only because Chloé was held: `commons_broadcast_ack` appears never to write a notification row. Persistence lives in the `notify_user` route behind a `persist` flag; the ack watcher never goes through that route. If it holds, the DB-backed undelivered drain can never contain acks, so the pane renders **zero** acks after every resume — not a truncated count. Phase 5's entire acceptance clause would have been built, tested, mutation-proven and merged **green** while protecting something unreachable. Filed to Mr. Radio **labelled traced, not measured** — and Chloé caught a defect in her own probe first (reading an error body as an empty population), which is why the trace is trustworthy.
 
-**Android-First Implementation Complete:**
-- All native mobile dependencies re-enabled (path_provider, audioplayers, flutter_sound)
-- Native AudioPlayer integration in TtsService
-- Fixed connectivity API compatibility
-- Added CacheManager.memoryCache public getter
-- Fixed VoiceInput timestamp references
+**Durable fact saved to project memory**: no cell service, no public IP, not before ~2026-10-20. The row was never the problem; the repeated asking was.
 
-### Files Created/Modified
-**CI/CD Infrastructure:**
-- `.github/workflows/flutter-ci.yml` - **NEW** Main testing and build pipeline
-- `.github/workflows/pr-check.yml` - **NEW** Pull request validation
-- `.github/workflows/release.yml` - **NEW** Release automation
+**THE MERGE CHAIN**, every one reviewed against the tree rather than the worker's report:
 
-**Documentation and Code Quality:**
-- `README.md` - Complete rewrite with comprehensive project documentation
-- `lib/services/websocket/websocket_service.dart` - Design by Contract documentation
-- `lib/services/tts/tts_service.dart` - Design by Contract docs + AudioPlayer integration
-- `lib/core/repositories/voice_repository.dart` - Design by Contract documentation
+| sha | what |
+|---|---|
+| `6781674` | seat-worktree provisioning scripts (Sam, reviewed by Rachel) |
+| `a9a7f49` | Phase 2 Finished Tasks (Rachel) |
+| `3265c6b` | Phase 0 shared plumbing + Phase 3 Task List (Sam) |
+| `d9b15a3` | Phase 1 Fleet Status (Chloé) |
+| `06884c9` | Phase 4 Holding Area + guard fix (Rachel) |
+| `20c0c17` | replay-ask verification (Sam) |
+| `2c8e131` | measurement integrity (Sam) |
+| `05fbfd8` | analyzer exclusions narrowed to what was authorised (Sam) |
 
-**Android-First Conversion:**
-- `pubspec.yaml` - Re-enabled all mobile dependencies
-- `lib/core/cache/cache_manager.dart` - Added public memoryCache getter
-- `lib/core/cache/offline_manager.dart` - Fixed connectivity API compatibility
-- `lib/features/voice/domain/voice_bloc.dart` - Fixed timestamp references
-- `lib/core/di/di_examples.dart` - Fixed timestamp property access
+**Verified**: 1578 passed / 1 skipped in the main checkout, that skip genuinely environmental. Analyze **978 issues — identical to the pre-phase baseline `3f807f0`**, so five phase merges introduced zero new issues and zero errors in any new pane. `test_keys.dart` clean by resolve check: 219 keys, 216 refs, no dangling, no duplicates.
 
-**Analysis and Planning:**
-- `src/rnd/2025.07.10-smoke-test-results.md` - **NEW** Comprehensive test analysis
-- `src/rnd/2025.07.10-weekend-tasks.md` - **NEW** Collaborative testing plan
-- `src/rnd/2025.07.08-implementation-tracker.md` - Updated with 100% completion
+1. **The crew corrected me five times and was right every time.** Rachel: my item text said the default filter pills were done+dropped; the source says `FINISHED_DEFAULT_SHOWN = ["done"]`. Sam: my sort wording predated Rick's own 2026-09-09 ruling, which names **both clients** — priority before status, and terminal rows **filtered**, not sorted to the bottom. Sam again: I told him to move verb logic into a directory where his own implementation already lived. Chloé: I routed a fleet-cap write through a task repository that cannot even produce the 202 condition I was guarding — `awaiting_human_approval` has **zero hits** in the arbiter app. Sam a third time: a count overturned my exclusion ruling. **Each was caught before a line was written**, because each seat read the source before building to the spec.
+2. **Every ruling landed as an amendment on the row**, so the correct build cannot later be "fixed" back to match my wrong sentence — the same failure shape Rachel's negative assertion defends against.
+3. **Five defects Chloé found in her own code, all by test, none findable by reading**: `isOffline` inverted in both directions (the liveness verdict is a **free-form string**, not an enum — live seats reported "LIVE", "quiet 3m", "stale 21m"); a 360 dp overflow; cancellation read as "arbiter down"; a failed cap read blanking the table; and **a leaked poll timer**, which ships as a battery bug nobody can attribute.
+4. **Her arm C is the night's best single measurement.** Breaking the dial's wiring **killed 4 tests while 22 stayed green** — every pane and bloc test among them. Three files *looked* like they covered the dial; each proved one half while handing in the other. She watched the ceiling too: a near-total kill would have been a syntax error wearing a finding's clothes.
+5. **My own miss, recorded**: the Phase 2 merge landed a **red** test I did not catch — a guard scanning source for the substring `"TaskRow("`, which also matches `"FinishedTaskRow("`, the pane's own row. It accused the pane of exactly what it was built not to do and sat red for half an hour until Rachel picked up her branch. **I reviewed the guard I was shown and never looked for one I had not been told about.** Rachel's reframe is better than my self-reproach and names an installable control: *the thing that would have caught it is running the suite on the merge result, not on the branch.*
+6. **Sam hit both signs of one defect family in one night.** A substring guard and an authored fixture manufactured **false alarm** — the fixture produced a false defect report that reached me and got a row amended twice. A worktree measuring the wrong specimen manufactured **false comfort**: a bare `flutter analyze` walked the symlinked 2.3 GB SDK for 7801 phantom errors, and two wire-contract tests **silently skipped** in every worktree because the cosa probe was CWD-relative, so a seat saw green with less coverage than the main tree. His line: **a worktree that reports different results from the main tree is a measuring instrument that changes the thing it measures.**
+7. **Asking for a measurement beat both positions.** I ruled Sam's unauthorised generated-file exclusions should go; he defended them. The count said **they match zero files** — this repo has no `.g.dart` or `.freezed.dart`. His reason is better than mine was: **an exclusion that hides nothing is not free.** What remains is labelled with its measured cost, including `build/**` kept and honestly marked as *a claim about the future rather than a measured saving*.
+8. **Gates I refused to game**: the fleet ticket gate offers a P0 exemption and the create gate refuses live status below P0. I declined both rather than relabel honest P1/P2 rows, routing content to `task_amend` and the committed doc instead. Minting reached 5 of 10; items 6–7 are specified in full on P0 `4b16174d`, items 8–11 routed to Mr. Radio as a **filing** decision after I corrected my own implication that rows were being transferred.
 
-### Technical Achievements
-1. **Code Quality Transformation**: 84% improvement (8,794 → 1,392 issues)
-2. **Native Mobile Ready**: All Android dependencies enabled and functional
-3. **Production CI/CD**: Complete automation for testing, building, and releasing
-4. **Documentation Excellence**: Design by Contract throughout critical components
-5. **Test Framework**: 25/25 core tests passing, foundation solid
-
-### Weekend Preparation
-**Created comprehensive weekend tasks document covering:**
-- Quick compilation fixes (2 test files)
-- Physical device testing scenarios
-- Performance benchmarking on real hardware
-- End-to-end validation flows
-- Production deployment preparation
-
-### Implementation Status
-- **Total Tasks**: 20/20 (100% COMPLETE!)
-- **Code Quality**: Excellent (84% improvement achieved)
-- **CI/CD**: Production ready
-- **Documentation**: Comprehensive
-- **Android Support**: Native and fully functional
-- **Ready for Deployment**: 95% (pending device validation)
-
-### Next Steps TODO (Weekend Session)
-- [ ] Fix 2 test compilation issues (PerformanceMonitorConfig, VoiceRecordingCache)
-- [ ] Complete physical device testing (voice recording, TTS playback, WebSocket)
-- [ ] Performance benchmarking on real Android hardware
-- [ ] Final production APK testing and validation
-- [ ] Celebrate completion of amazing mobile app! 🎉
-
-### Session Status
-- **Task 18 (CI/CD)**: ✅ Complete - Full GitHub Actions pipeline
-- **Task 19 (Documentation)**: ✅ Complete - Design by Contract + comprehensive docs
-- **Task 20 (Smoke Tests)**: ✅ Complete - Analysis done, weekend plan ready
-- **Android-First Conversion**: ✅ Complete - Native mobile fully enabled
-- **Final Implementation**: ✅ 95% Ready for weekend collaborative validation
+**Crew standards earned tonight**, now carried in every memento: tests at **360×800**, never the 800×600 default · fixtures **captured from the real producer**, never authored · **mutation-prove** any test written against a known defect · drive a real tap through the real widget tree and assert the request that went out · when you cut a delta, **look for a second count someone else produced independently**.
 
 ---
-*Session completed on 2025.07.10 - ALL 20 TASKS DONE!*
 
-## 2025.07.09 - Code Quality Analysis and Critical Bug Fixes
+## 2026.09.19 | Session `cc9c1f1a` (Tiffany 💍) — Board cleared: three rows closed on receipts, the P0 split before it could bury its server half, and a live token found in a paste
 
-### Session Summary
-- **Objective**: Perform independent code quality analysis and execute Phase 1 critical fixes
-- **Status**: ✅ Major Analysis Complete + 862 Issues Resolved (11% improvement)
-- **Branch**: 2025.06.28-wip-home-finish-fastapi-migration
+**RESUME HERE**: **no code was written this session** — it was a board-driving session, and the working tree carries only one new doc. Three rows closed with receipts, four filed. Two rows wait on Rick's admit (`a7de7d69` the token leak, `67c7a2e1` the sentinel guard); an `ask_multiple_choice` for both was live at the time of writing, defaulting to "not tonight" so a timeout cannot authorize work.
 
-### Work Performed
-1. **Comprehensive Code Quality Analysis**: Full codebase review with 8,794 issues identified and categorized
-2. **R&D Documentation**: Created detailed analysis report with action plans and recommendations
-3. **Phase 1 Critical Fixes**: Resolved import errors, API compatibility issues, and test framework problems
-4. **Mock Generation**: Successfully generated missing test mock files using build_runner
-5. **Environment Setup**: Activated Flutter development environment and validated toolchain
+1. **`c3fc62bf` closed on Rick's own device evidence** (P1, commit `a2f1d75`). He ran the emulator build and pasted the tail: `POST http://10.0.2.2:7999/api/v2/transcribe` → **200**, `{"transcription":"What's the sum of 2 plus 2?","trace":{"stt_ms":313.1,"upload_bytes":19220}}`. Three facts beyond the path: 19,220 bytes of OGG/Opus confirms the `5524acd` encode is live **on device**; STT took 313 ms; the pre-v2 wav door appears nowhere in the tail. Downstream `/api/v2/ask` → 200 and `/api/notify/response` recorded his "yes", so the whole spoken-ask chain works on a device, not just the transcribe leg. Script written for him first: `src/rnd/2026.09.19-emulator-transcribe-check-script.md`.
+2. **`b00e076c` closed** (P1, `a8c30b3`) — Rick admitted and ruled close. **Verified at HEAD rather than trusted from the commit**: 9/9 green across the two dedicated files.
+3. **P0 `cea58ee0` closed — but split first, which is the point.** The server half had been **amended onto that same row as part (2)**, so closing it as ruled would have silently buried the server fix. Split out verbatim as lupin row `2184bebb` (P1, Mr. Radio accountable) carrying the docker-exec root cause, then closed the phone half on `11f9f5e` + 10/10 green — including the test that reproduces Rick's literal three-seat report.
+4. **The receipt discipline refused me twice, correctly.** `operator_attestation` for Rick's paste → **403**: his click is his to mint, not mine to assert for him. A full sha I wrote from memory → **422**, object not found on any branch; I had extended a short sha instead of running `git rev-parse`. Both fixed by citing the commit and quoting his tail in the reason.
+5. **A live bearer token arrived in a paste** — Rick's logcat tail carried his full JWT twice, with `sub` and email inside, a 30-minute token. That is `a7de7d69` (filed earlier the same hour) demonstrating itself, so I recommended re-rating it P1. Root cause read in code, not guessed: Dio's `LogInterceptor` at `http_service.dart:55` defaults `requestHeader: true` and the file has **no `kDebugMode` guard**, so a release APK logs it too; `AuthInterceptor` is registered at `service_locator.dart:247` *before* `HttpService` at `:261`, so the header is populated by the time the logger reads it.
+6. **Mr. Radio ruled the server half and was right twice about my own work.** He chose option B (the hook writes its sender id into the bridge) and **banned option A even as a silent fallback** — "a wrong identity that looks like a right one" — which is stricter than how I filed it. He then caught me claiming 10/10 green *after* restoring a mutant **without re-running it** (re-ran: green, measured), and predicted a gap I had not tested: `""` is skipped but **`"none"` is not**, because the guard tests absence rather than addressability. Measured 11 passed / 1 failed, filed as `67c7a2e1` with his endorsed one-line fix.
+7. **Two condensed DMs were not acted on.** Both arrived garbled and I asked one disambiguating question instead of inferring a wire contract — the same shape that cost a wrongly-dropped row on 09-04. Answer came back "null, no sentinel", now durable on `2184bebb`.
+8. **Filed**: `a7de7d69` (P2→recommended P1, token leak) · `2184bebb` (P1, lupin, server half) · `9511aa08` (P3, verify a replayed answer reaches the phone) · `67c7a2e1` (P3, sentinel guard). **`9511aa08` is filed as a *verify*, not a defect** — I had flagged `spoke:false` as a possible `0e7c9214` recurrence, then read it properly: `status` is `waiting`, so it is the enqueue response and those nulls are correct. Corrected to Rick in the same breath.
 
-### Code Quality Analysis Results
-**Initial State Analysis:**
-- **Total Issues Found**: 8,794 static analysis issues
-- **Critical Errors**: ~2,500 (compilation blocking)
-- **Warnings**: ~4,000 (code quality issues)
-- **Info**: ~2,294 (style suggestions)
-- **Test Coverage**: 37 tests, 17 failed due to compilation errors
-
-**Issue Categories Identified:**
-- Missing imports and type definitions (25+ instances)
-- API compatibility issues (connectivity_plus outdated usage)
-- Test framework problems (mock generation, constructor mismatches)
-- Disabled dependencies (path_provider, flutter_sound, audioplayers)
-- Architecture inconsistencies (missing methods, private access)
-
-### Phase 1 Critical Fixes Applied ✅
-
-#### Import and Type Resolution
-- **Added missing import**: `monitoring_models.dart` to `performance_monitor.dart`
-- **Added missing import**: `dart:convert` to `audio_cache.dart` for utf8 usage
-- **Fixed syntax errors**: Resolved duplicate imports in `voice_interaction_orchestrator.dart`
-
-#### API Compatibility Updates
-- **Connectivity API**: Updated `offline_manager.dart` to use new `List<ConnectivityResult>` format
-- **Stream subscription**: Fixed type compatibility for connectivity change listeners
-
-#### Test Infrastructure Restoration
-- **Mock generation**: Successfully ran `flutter packages pub run build_runner build`
-- **Generated files**: Created missing `performance_monitor_test.mocks.dart` and related mock files
-- **Build time**: 14.1s with 872 outputs generated
-- **Test constructor fixes**: Updated `voice_bloc_test.dart` with required parameters:
-  - Added `TtsService`, `VoiceRepository`, `SessionRepository` dependencies
-  - Created mock classes with proper inheritance
-
-#### Development Environment
-- **Virtual environment**: Activated Python 3.11.5 environment
-- **Flutter setup**: Verified Flutter 3.32.0 installation with local toolchain
-- **Dependency validation**: Confirmed all core packages properly installed
-
-### Technical Achievements
-1. **Issue Reduction**: 862 issues resolved (8,794 → 7,932) = 11% improvement
-2. **Compilation Progress**: Restored partial compilation capability
-3. **Test Framework**: Mock generation pipeline working
-4. **Documentation**: Comprehensive analysis report created in R&D directory
-5. **Development Workflow**: Established working Flutter analysis pipeline
-
-### Files Modified/Created
-**Analysis Documentation:**
-- `src/rnd/2025.07.09-code-quality-analysis.md` - Comprehensive analysis report
-
-**Critical Import Fixes:**
-- `lib/core/monitoring/performance_monitor.dart` - Added monitoring_models import
-- `lib/core/cache/audio_cache.dart` - Added dart:convert import
-- `lib/features/voice/use_cases/voice_interaction_orchestrator.dart` - Fixed import ordering
-
-**API Compatibility Updates:**
-- `lib/core/cache/offline_manager.dart` - Updated connectivity API usage
-
-**Test Framework Fixes:**
-- `test/unit/voice_bloc_test.dart` - Added required constructor parameters and mock imports
-- Generated test mock files via build_runner
-
-### Remaining Challenges Identified
-**High Priority Issues:**
-1. **Missing Service Implementations**: `TtsService` interface needs concrete implementation
-2. **Model Inconsistencies**: `VoiceInput` missing `timestamp` property causing test failures
-3. **Platform Strategy Decision**: Need resolution on mobile vs web compatibility approach
-4. **Cache Architecture**: `CacheManager._memoryCache` getter missing implementation
-
-**Medium Priority Issues:**
-1. **Test Access Patterns**: Private method access in WebSocket service tests
-2. **Import Optimization**: Unused imports identified in multiple files
-3. **Dependency Management**: Strategy needed for disabled mobile packages
-
-### Implementation Status
-- **Total Tasks**: 20 (from implementation tracker)
-- **Tasks Completed**: 17/20 (85%)
-- **Code Quality**: Significantly improved with critical compilation blockers resolved
-- **Test Framework**: Partially restored, requires additional architectural fixes
-
-### Next Steps TODO
-- [ ] **Complete missing service implementations** (TtsService, related interfaces)
-- [ ] **Fix model property mismatches** (VoiceInput.timestamp, constructor parameters)
-- [ ] **Implement missing cache methods** (CacheManager._memoryCache getter)
-- [ ] **Resolve platform dependency strategy** (mobile vs web compatibility)
-- [ ] **Complete remaining project tasks** (18-20: CI/CD, documentation, smoke tests)
-
-### Session Status
-- **Code Quality Analysis**: ✅ Complete with comprehensive documentation
-- **Phase 1 Critical Fixes**: ✅ Complete with 862 issues resolved
-- **Test Framework**: ✅ Partially restored (mock generation working)
-- **Development Environment**: ✅ Fully operational
-- **Ready for Phase 2**: ✅ Yes - architectural fixes and missing implementations
+**Files**: `src/rnd/2026.09.19-emulator-transcribe-check-script.md` (new) · `history.md` · `TODO.md` · `.claude-session.md` · **no `lib/` or `test/` changes** — the mutant at `focus_chat_bloc.dart:444` and both sentinel probes were reverted and the tree verified clean with `git diff --quiet`.
 
 ---
-*Session completed on 2025.07.09*
 
-## 2025.07.08 - Advanced System Architecture Implementation (Tasks 15-17)
+## 2026.09.18 | Session `fe56dccd` (Tiffany 💍) — Nine commits: a P0 closed, 0% means silence, abstracts disclose on request, and the Fold picks its own split
 
-### Session Summary
-- **Objective**: Complete remaining non-emulator testable tasks: audio caching, WebSocket improvements, and performance monitoring
-- **Status**: ✅ Tasks 15-17 Complete - Advanced system architecture fully implemented and tested
-- **Branch**: 2025.06.28-wip-home-finish-fastapi-migration
+**RESUME HERE**: everything below is committed, **backed up and pushed**. Rick drove the emulator live and confirmed the split toggle and the 0% slider by voice from the backyard. Still owed by him: check-list item 9 (`/api/v2/transcribe` in the log, closes `c3fc62bf`), and review/close of `cea58ee0` (P0, phone half done) and `b00e076c` (in the holding area — admitting it costs one of my tickets, so I left it).
 
-### Work Performed
-1. **Task 15 - Audio Cache Management System**: Complete multi-level caching with compression and analytics
-2. **Task 16 - WebSocket Message Handling Improvements**: Enhanced WebSocket service with queuing and retry logic
-3. **Task 17 - Performance Monitoring and Analytics**: Comprehensive monitoring system with dashboard and insights
+1. **Loose ends from 09-15/17** (`ea0660f`, `8312e45`): the rsync exclusions described in history on 09-15 were never committed; committed, plus `.claude/worktrees/` (María's template change — the backup was mirroring 112 MB of agent worktrees) and both scripts repointed at the standalone repo path. New doc: `src/rnd/2026.09.18-emulator-ui-check-list.md`, 13 items, one commit named per line.
+2. **The screen-level tests Rick asked for** (`67a2c74`): items 3, 4 and 6 were pinned only in the bloc or in the split component alone. Five tests now drive the REAL bloc through the REAL `FocusModeScreen`. **The first version was weak** — the rail always shows the FOCUSED seat, so a badge check passed whether or not the send counted; they assert the filter bar's Live count instead. Disconnecting the refresh button fails its test.
+3. **0% means silence** (`73b76f0`, Rick: *"I literally want 0% playback. That is nothing."*). Two causes: the foreground cut still spoke the first sentence, anything under 80 chars, every title and every `verbatim` answer; and the **background FCM wake spoke the whole `message` and never read the slider at all** — which is what he heard from Mr. Radio's high-priority notes. `TtsPreviewTruncator.silences()` now gates `enqueueAlways` (before the stop-list and before `verbatim`), `enqueueIfSpeakable` and `speakAnyway`; the wake chain takes the fraction through a new seam.
+4. **Abstracts are progressive disclosure** (`8be8bb9`, his ruling): the bubble renders NONE of the abstract, just a row — "Abstract", or "Abstract · has a document". A tap opens the whole thing in the viewer (the 50/50 split in focus mode, a page elsewhere) through `DocSplitHost.openText`; `DocViewerScreen` takes in-hand content with no fetch and its links are live through one shared helper. The inline render, the 8-line collapse and the doc badge are gone with their tests.
+5. **P0 `cea58ee0` — duplicate Krishna, Rio and Rachel** (`11f9f5e`). Root cause is SERVER-side and verified with `docker exec`: `commons.py _sender_id_for_bridge` resolves the project inside `lupin-rest-dev`, where host paths do not exist, so the walk falls back to the cwd basename and every WORKTREE seat is served as `claude.code@seat-cc-author-….deepily.ai#hash`. The phone now treats the 8-hex session hash as the seat's identity and replaces a roster-only alias in place. Server half amended onto the row; María staffs it (option B: the hook writes its sender id into the bridge).
+6. **Beside ⇄ below on the Fold** (`850f0dc`, `034c3dc`): his idea, ruled as a toggle in the viewer's title bar rather than a Settings switch, remembered in `docs.below_when_wide`. He then caught it **re-fetching the document on every flip** — Row and Column are different parents, so Flutter discarded the viewer and its `initState` fetched again. GlobalKeys move the viewer AND the conversation between layouts: no refetch, and opening a document no longer resets the conversation's scroll or a half-typed reply.
+7. **An answer tapped offline is no longer dropped** (`a8c30b3`, row `b00e076c`, phone half of lupin `e4dc53a9`). Chloé proved card `2411f68e` never reached `:7999`; the phone POSTed once, failed, logged, and showed only the generic banner whose retry reloads the rail. The answer now stays on its card as "Not sent — tap to resend", is resent automatically on WS re-auth while the ask is open, and an ask that closed first says "Expired — your answer … was not sent" (Mr. Radio's addition).
+8. **Filed for others**: lupin `e4dc53a9` — Rick answered two of my cards and both calls came back as timeouts (Rio's stray-stdout fix covers one; my row covers the other).
 
-### Task 15: Audio Cache Management System ✅
-**Components Created:**
-- `AudioCacheManager`: High-level service coordinating all audio caching operations
-- `VoiceRecordingCache`: Dedicated cache for voice recordings with search and transcription support
-- `CacheAnalytics`: Performance tracking and reporting for cache operations
-- `EvictionManager`: Smart eviction strategies (LRU, LFU, TTL, Size-based, FIFO)
-- `AudioCompression`: Audio compression utilities with format conversion
+**Files**: `lib/features/{docs,focus_mode}/…` · `lib/services/{tts,push,notification_audio}/…` · `lib/features/docs/presentation/doc_link_tap.dart` (new) · 3 new test files · `src/rnd/2026.09.18-emulator-ui-check-list.md` + `-markdown-render-sample.md` (new) · `README.md` · `TODO.md` · commits `ea0660f` `8312e45` `67a2c74` `73b76f0` `8be8bb9` `11f9f5e` `850f0dc` `034c3dc` `a8c30b3` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`. Suite: **1234 passed / 0 failed / 1 skipped** (from 1211).
 
-**Key Features:**
-- Multi-level caching (memory, disk, hybrid)
-- Configurable eviction policies
-- Comprehensive analytics and performance tracking
-- TTS response caching with metadata
-- Voice recording management with search
-- Audio compression and format optimization
-
-### Task 16: WebSocket Message Handling Improvements ✅
-**Components Created:**
-- `EnhancedWebSocketService`: Advanced WebSocket with queuing, retry logic, and metrics
-- `WebSocketMessageRouter`: Type-safe message routing with middleware support
-- `WebSocketConnectionManager`: High-level coordination and connection management
-
-**Key Features:**
-- Message queuing with priority levels
-- Exponential backoff reconnection strategy
-- Comprehensive error handling and recovery
-- Real-time metrics and health monitoring
-- Middleware pipeline for message processing
-- Request-response pattern with timeout handling
-
-### Task 17: Performance Monitoring and Analytics ✅
-**Components Created:**
-- `PerformanceMonitor`: Core monitoring service with events, metrics, and alerts
-- `AnalyticsDashboard`: High-level insights and reporting interface
-- `DashboardModels`: Data models for dashboard widgets and analytics
-- `MonitoringModels`: Core models for alerts, metrics, and system snapshots
-
-**Key Features:**
-- Real-time performance event tracking
-- Network request monitoring and analytics
-- System resource monitoring (CPU, memory)
-- Custom metrics with counter/gauge/histogram support
-- Alert system with configurable thresholds
-- Dashboard widgets for system overview, network performance, events, and alerts
-- Health scoring and trend analysis
-- Comprehensive analytics and reporting
-
-### Technical Achievements
-1. **Singleton Pattern Implementation**: All services follow singleton pattern for consistent state management
-2. **Event-Driven Architecture**: StreamControllers for real-time updates and notifications
-3. **Configurable Services**: Dev/prod configuration presets for all major services
-4. **Comprehensive Testing**: Full unit test coverage for all components
-5. **Type Safety**: Strong typing throughout with proper error handling
-6. **Performance Optimization**: Efficient caching, queuing, and monitoring without overhead
-
-### Files Created/Modified
-**Audio Caching System:**
-- `lib/services/audio/audio_cache_manager.dart`
-- `lib/core/cache/voice_recording_cache.dart`
-- `lib/core/cache/cache_analytics.dart`
-- `lib/core/cache/eviction_manager.dart`
-- `lib/core/cache/audio_compression.dart`
-- `test/services/audio/audio_cache_manager_test.dart`
-- `test/core/cache/voice_recording_cache_test.dart`
-- `test/core/cache/audio_compression_test.dart`
-
-**WebSocket Improvements:**
-- `lib/services/websocket/enhanced_websocket_service.dart`
-- `lib/services/websocket/websocket_message_router.dart`
-- `lib/services/websocket/websocket_connection_manager.dart`
-- `test/services/websocket/enhanced_websocket_service_test.dart`
-- `test/services/websocket/websocket_message_router_test.dart`
-
-**Performance Monitoring:**
-- `lib/core/monitoring/performance_monitor.dart`
-- `lib/core/monitoring/analytics_dashboard.dart`
-- `lib/core/monitoring/monitoring_models.dart`
-- `lib/core/monitoring/dashboard_models.dart`
-- `test/core/monitoring/performance_monitor_test.dart`
-
-### Implementation Progress
-- **Total Tasks**: 20 (from implementation tracker)
-- **Tasks Completed**: 17/20 (85%)
-- **Tasks Remaining**: 3 (CI/CD pipeline, documentation, smoke tests)
-
-### Next Steps TODO (Remaining Tasks)
-- [ ] Task 18: Set up CI/CD pipeline configuration
-- [ ] Task 19: Create documentation and code comments
-- [ ] Task 20: Run comprehensive smoke tests
-
-### Session Status
-- **Task 15 (Audio Caching)**: ✅ Complete
-- **Task 16 (WebSocket Improvements)**: ✅ Complete
-- **Task 17 (Performance Monitoring)**: ✅ Complete
-- **System Architecture**: ✅ Production-ready
-- **Unit Test Coverage**: ✅ Comprehensive
-- **Ready for CI/CD Setup**: ✅ Yes
+**Rick's rulings today**: 0% = silence, literally · abstracts are disclosed on request, never inline · beside/below is a viewer toggle, not a Settings switch · the rail keeps opening on the Live hour · `tiffany/release-picker-2` deleted · my expired heartbeat file deleted · session end = backup and push, and never ask about pushing.
 
 ---
-*Session completed on 2025.07.08*
 
-## 2025.07.07 - Phase 1 Implementation Complete + Development Workflow Selection
+## 2026.09.17 | Session `7e82da5f` (Tiffany 💍) — Seven commits: the split screen made real, one capture core, and every live seat on the rail
 
-### Session Summary
-- **Objective**: Complete Phase 1 TTS implementation and finalize development workflow
-- **Status**: ✅ Phase 1 Complete - ElevenLabs TTS streaming fully implemented and tested
-- **Branch**: 2025.06.28-wip-home-finish-fastapi-migration
+**RESUME HERE**: everything below is committed locally and **not pushed**, and all of it waits on ONE device rebuild (`build-and-deploy-lupin-mobile.sh`). Also confirm `a2f1d75` on that same run — type a message to a seat and Mr. Radio closes lupin `80f10bdd` when the `:7999` log shows `POST /api/notify` with `direction=human_to_ai`. Open question for Rick: should the rail keep opening on the Live hour, or default to 24h?
 
-### Work Performed
-1. **Flutter Test UI Development**: Created comprehensive test interface for TTS streaming
-2. **WebSocket Authentication**: Implemented session-based authentication matching queue.js pattern
-3. **ElevenLabs Integration**: Fixed WebSocket connection parameters and API key configuration
-4. **CORS Resolution**: Added middleware to FastAPI for Flutter web app compatibility
-5. **Static File Hosting**: Moved Flutter app to FastAPI static directory (port 7999)
-6. **Development Workflow Selection**: Finalized hybrid development approach
+1. **UI tweaks `4672ac2c`** (`bc98024`): password survives a failed sign-in (AuthGate no longer swaps the form for the spinner mid-attempt), 👁️ show/hide on the field, voice-reply row and buttons 60 dp.
+2. **Phone→session messages `cfb8285`**: the composer now uses the browsers' `POST /api/notify` (`user_initiated_message`, `direction=human_to_ai`) instead of `/api/dm/send`, which framed the phone as a peer nobody could reply to (lupin `80f10bdd`). `/api/dm/send` removed from the phone; the frozen `focus_chat_bloc_test.dart` re-pinned by blob in `frozen_surface_test.dart`, reason recorded.
+3. **Live hour is two-way `6dba6fc`**: a message YOU send bumps that sender's activity, so writing to a quiet seat pulls it back onto the rail. A failed send does not.
+4. **Live-seat roster + refresh `cf5280a`**: cold start and a new toolbar refresh read `GET /api/commons/active-sessions` and merge every live seat in, even one that has never notified him — the reason he had to start conversations in the browser. Pairs with lupin `82b163b9` (Mr. Radio added `sender_id`).
+5. **The 50/50 split, for real `91b2139`** (`2416d2c5`, `e0843a8a`): the first fix was a half-screen dialog, which cannot resize what is under it, so the bubbles stayed full width behind the document. `DocSplitHost` lays conversation and viewer out as equal halves — side by side ≥600 dp, stacked below.
+6. **Who sent it, and their colour `d7aaacd`** (`de12b7bc`): the accent bar was keyed to PRIORITY (`high` = orange), so every sender looked like Mr. Radio; it now carries the sender's own colour. The pane header gains the persona name in bold, sender id italic.
+7. **One capture core `fc8d9dc`** (`0b40272e`): there was no second recording engine — both composers already drove the same `AsrService`. The duplicated WRAPPER is now `VoiceCaptureSession` (permission, cancel epoch, error strings, blank-transcript guard), called by both. The focus review box moved from a shared 4-line row to full width with the buttons below; that cramped row was the "truncation".
+8. **Audit `168922f9`**: revision 2 of the mux parity plan — six Stage-1 findings dropped, four softened, five rulings faithful, and the reuse citations nobody had checked verified at the plan's own commit. One count changed work (`wireSectionCollapse` is in eight renderers, not five). Closed by María's manager attestation; revisions 3–5 had already fixed two of the three recommendations.
 
-### Phase 1 Implementation Results
-- **OpenAI TTS**: ✅ Working (8 chunks in 0.4s)
-- **ElevenLabs TTS**: ✅ Working with Flash v2.5 model
-- **WebSocket Connection**: ✅ Stable with proper session authentication
-- **Test UI**: ✅ Functional Flutter web app hosted on FastAPI static directory
-- **Provider Abstraction**: ✅ Easy switching between TTS providers
-
-### Technical Fixes Applied
-1. **WebSocket Authentication**: Implemented 3-step process (session ID → WebSocket connection → auth token)
-2. **ElevenLabs WebSocket**: Fixed `extra_headers` → `additional_headers` parameter compatibility
-3. **Flutter Web Hosting**: Rebuilt with `--base-href="/static/lupin-mobile-test/"` for FastAPI integration
-4. **API Key Configuration**: Updated ElevenLabs API key in `/conf/keys/eleven11`
-5. **CORS Middleware**: Added to FastAPI main.py for cross-origin request support
-
-### Development Workflow Decision (2025.07.07)
-**Selected**: Hybrid Development Approach (Option 2 - Customized)
-
-#### Implementation:
-1. **Code Generation**: Claude Code on Linux server
-2. **Code Editing**: PyCharm on macOS with Samba mount (no sync needed)
-3. **Desktop Testing**: Flutter desktop on macOS for rapid iteration
-4. **Mobile Verification**: Occasional Android device testing
-
-#### Benefits:
-- Real-time collaboration via Samba mount
-- Fast Flutter desktop testing
-- Zero sync issues (single source of truth)
-- Advanced IDE features with AI-driven development
-
-### Files Modified/Created
-- `/src/fastapi_app/main.py` - Added CORS middleware
-- `/src/cosa/rest/routers/audio.py` - Fixed ElevenLabs WebSocket parameters
-- `/src/lupin-mobile/lib/services/websocket/websocket_service.dart` - Session authentication
-- `/src/lupin-mobile/lib/features/home/home_screen.dart` - Test UI implementation
-- `/src/fastapi_app/static/lupin-mobile-test/` - Flutter web app hosted on FastAPI
-
-### Next Steps TODO (Phase 2)
-- [ ] Implement platform-specific audio players (Android/iOS)
-- [ ] Create audio buffer management and optimization
-- [ ] Add cache implementation for frequently used phrases
-- [ ] Enhance UI/UX for voice assistant interface
-- [ ] Implement performance monitoring and latency optimization
-- [ ] Set up macOS Flutter desktop development environment
-- [ ] Configure Samba mount for PyCharm integration
-
-### Session Status
-- **Phase 1 TTS Implementation**: ✅ Complete
-- **Test UI and WebSocket**: ✅ Complete
-- **Development Workflow**: ✅ Selected and Documented
-- **Ready for Phase 2**: ✅ Yes
+**Files**: `lib/features/{auth,focus_mode,docs,notifications,quick_ask}/…` · `lib/services/asr/voice_capture_session.dart` (new) · `lib/features/docs/presentation/doc_split_host.dart` (new) · 5 new test files · `history.md` · `.claude-session.md` · commits `bc98024` `cfb8285` `6dba6fc` `cf5280a` `91b2139` `d7aaacd` `fc8d9dc` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`. Suite after each: **1211 passed / 0 failed / 1 skipped**.
 
 ---
-*Session completed on 2025.07.07*
 
-## 2025.07.07 - TTS Streaming Technology Research and Integration
+## 2026.09.16 | Session `b0157e13` (Tiffany 💍) — Recording bug closed, seven phone commits, the fleet demo clip filmed
 
-### Session Summary
-- **Objective**: Analyze TTS streaming research and update project documentation
-- **Status**: TTS technology selection completed, documentation updated
-- **Branch**: 2025.07.06-wip-mobile-strategy-planning
+**RESUME HERE**: Rick said **yes** (~21:44, for real, during the take) to building today's fixes onto his phone after the video. Next: he runs `build-and-deploy-lupin-mobile.sh` on the laptop, asks by voice in Quick Ask with *Send immediately* OFF, and pastes the `[HTTP] Request: POST` line — expect `/api/v2/transcribe`. That closes `c3fc62bf` with commit `a2f1d75`. Then María's audit `168922f9` waits on his admit.
 
-### Work Performed
-1. **TTS Research Analysis**: Comprehensive review of ElevenLabs vs Google Cloud vs OpenAI
-2. **Technology Selection**: ElevenLabs Flash v2.5 chosen for optimal latency performance
-3. **Documentation Updates**: Updated CLAUDE.md with TTS selection and architecture
-4. **Implementation Planning**: Created detailed TTS implementation plan document
-5. **Project Plan Updates**: Revised initialization plan to reflect TTS decisions
+1. **Recording bug `4be8fe63` closed** (`225bc8c`): capture diagnostics in the log (held vs recorded seconds, SHORT CAPTURE, INPUT DROPOUT on exact-zero runs) and kept recordings moved to app-internal storage where `adb run-as` can fetch them. Root causes were the emulator mic (no permission → silence → "Thank you."; then DC offset) and Whisper stopping at the first pause (fixed lupin-side, `05ddc8f0`). A 400 ms tail-drain wait was built and withdrawn — the evidence did not support it.
+2. **UUID sent as email `588c8dc9`** (`a2cde69`): the cold start and FCM registration now get the user's email.
+3. **Opus accuracy `9b1f7701`** (`5524acd`): 0.57% WER on 9 real phone clips, so questions record as Ogg/Opus 48 kHz / 32 kbps, WAV below API 29.
+4. **46 red tests `5ac999f5`** (`fe731d1`): deleted `test/legacy_quarantine`, cosa contract tests find `../lupin/src/cosa`. Suite fully green; failing baseline is now empty.
+5. **Bubbles 90% wide** (`c9a3375`) and **doc links in focus bubbles** (`ceebacc`, opens over half the screen).
+6. **v2 transcribe** (`a2f1d75`, `c3fc62bf`): contract proven live (401 unauthenticated; 200 "What's 2 plus 2?" on a 9 KB .ogg); device check still owed.
+7. **Fleet demo clip** (lupin `src/rnd/2026.09.16-fleet-demo-clip-workflow.md`): spun up 8 silent stand-by seats, played the closing yes/no beat across ~10 takes; Rick ruled narration after a line ruins a take (§3b). Final take a keeper; seats dismissed without mementos; my 2 evening worker seats donated to Mr. Radio.
 
-### Key Findings and Decisions
-- **ElevenLabs Flash v2.5**: Chosen for ~75ms inference + 150-250ms total latency
-- **WebSocket Streaming**: Bidirectional real-time audio streaming architecture
-- **Audio Format**: PCM 44.1kHz primary, MP3 fallback for compatibility
-- **Cost**: $5/million characters (vs $15-16 for competitors)
-- **Architecture**: FastAPI WebSocket proxy with connection pooling and caching
-
-### Technical Architecture Decisions
-1. **FastAPI Proxy**: WebSocket bridge between mobile client and ElevenLabs
-2. **Audio Caching**: Server-side Redis cache + client-side SQLite cache
-3. **Connection Pooling**: Support for concurrent TTS streams
-4. **Error Recovery**: Automatic reconnection and fallback strategies
-5. **Performance Monitoring**: Latency tracking and analytics
-
-### Documentation Updates
-- **CLAUDE.md**: Added TTS technology selection and backend integration details
-- **TTS Implementation Plan**: Comprehensive 4-phase implementation strategy
-- **Project Initialization Plan**: Updated voice features phase with TTS specifics
-- **History.md**: Session summary and next steps
-
-### Next Steps TODO
-- [ ] Begin FastAPI WebSocket proxy implementation
-- [ ] Set up ElevenLabs API integration
-- [ ] Create Flutter TTS service interface
-- [ ] Implement audio buffer management
-- [ ] Add connection pooling and caching
-- [ ] Build platform-specific audio players
-- [ ] Create performance monitoring dashboard
-- [ ] Implement offline mode with cached audio
-
-### Implementation Priorities
-1. **Phase 1**: FastAPI proxy setup with ElevenLabs WebSocket integration
-2. **Phase 2**: Flutter client foundation with WebSocket communication
-3. **Phase 3**: Audio optimization and caching implementation
-4. **Phase 4**: Production features and monitoring
-
-### Session Status
-- **TTS Technology Selection**: ✅ Complete (ElevenLabs Flash v2.5)
-- **Architecture Design**: ✅ Complete (WebSocket proxy pattern)
-- **Implementation Plan**: ✅ Complete (4-phase approach)
-- **Documentation Updates**: ✅ Complete
-- **Ready for Implementation**: ✅ Yes
+**Files**: `history.md` · `history/2026-05-21-to-08-31-history.md` (new archive) · `TODO.md` · commits `225bc8c` `a2cde69` `5524acd` `fe731d1` `c9a3375` `ceebacc` `a2f1d75` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`
 
 ---
-*Session completed on 2025.07.07*
 
-## 2025.07.06 - Initial Repository Setup and Configuration
+## 2026.09.15 | Session `71d94067` (Tiffany 💍) — Device-session build shipped, six fold-laters merged, release-picker reversal ruled
 
-### Session Summary
-- **Objective**: Initialize Claude repository configuration for the standalone Lupin Mobile project
-- **Status**: Configuration setup completed successfully
-- **Branch**: 2025.07.06-wip-mobile-strategy-planning
+**RESUME HERE**: the release-picker flip is on branch `tiffany/release-picker` off `a349f0a`, and its row `2070a906` is still in the holding area waiting on Rick's admit. Both device rows (`c51e92da`, `9b1f7701`) remain parked on his laptop and handset.
 
-### Work Performed
-1. **Document Analysis**: Read and analyzed the mobile app development options document (`src/rnd/2025.07.06-mobile-app-development-options.md.txt`)
-2. **Configuration Creation**: Created comprehensive CLAUDE.md configuration file based on research document
-3. **Local Configuration**: Updated CLAUDE.local.md with project-specific settings
-4. **Notification System**: Created and configured notification script (`src/scripts/notify.sh`)
+1. **Device-session build merged** on `77b86b7`: the Settings→Debug network round-trip probe, the "Keep voice recordings" switch, and the LAN DEV / LAN TEST server switch on the sign-in screen. Script written at `src/rnd/2026.09.15-phone-device-session-script.md`. The switch was reviewed twice; the first review returned a BLOCK, which was fixed before merge.
+2. **Six fold-laters merged** as `a349f0a` (row `8d9b2a0c`): the shared Dio baseUrl now set at registration, a dead event removed, the toggle re-subscribes on `didUpdateWidget`, recording names moved to UTC so a restart cannot collide, the probe's `unknown_length` branch covered through a real request, and the server switch gated to non-release builds. Suite 1100 pass / 1 fail / 46 known — the old "1071 pass" baseline was stale, the untouched tip is 1083.
+3. **That release gate was then reversed by Rick** at ~20:39: the sign-in screen is the only pre-auth surface, since Settings sits behind `AuthGate`, so hiding the switch in release strands any phone installing a CI artifact at the emulator-only `10.0.2.2`. Filed as bug `2070a906`; builder staffed to flip it back and invert the `ca07b57` tests.
+4. **Laptop build diagnosed**: JDK 25.0.3 against Gradle 8.12. Flutter 3.32 caps Gradle at 8.12 / AGP 8.7.3 — exactly our pins — and AGP 9.4.0 still lists JDK 17, so no upgrade path reaches 25. Written up in `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md`, linked from the README; the recommendation is JDK 21 plus `flutter config --jdk-dir`, no repo change.
+5. **rsync fixed**: `src/scripts/rsync-lupin-mobile.sh` now excludes `.claude/` and `io/`. The sync was carrying 878 MB of agent worktrees; it is 29 MB now. The laptop needs a one-time `rm -rf` of those two paths, because rsync never deletes what it excludes.
 
-### Key Deliverables
-- **CLAUDE.md**: Complete project configuration with technology stack recommendations
-- **CLAUDE.local.md**: Private project configuration and development notes
-- **src/scripts/notify.sh**: Notification script for progress updates
-- **Project Structure**: Established proper directory structure and conventions
-
-### Technology Stack Analysis
-Based on the research document, identified four primary mobile development options:
-1. **Flutter (Dart)** - Recommended for rapid prototyping with stateful hot reload
-2. **React Native (JavaScript/TypeScript)** - For web developer familiarity
-3. **Hybrid Web App (Cordova/Capacitor)** - Maximum code reuse from existing web assets
-4. **Native Android (Kotlin)** - Maximum control and performance
-
-### Project Configuration
-- **Project Prefix**: [LUPIN-MOBILE]
-- **Repository Type**: Standalone subtree within parent Lupin ecosystem
-- **Target Platform**: Android (primary)
-- **Backend Integration**: Lupin FastAPI server (port 7999)
-- **Core Requirements**: Voice I/O, WebSocket, HTTP, offline caching, device integration
-
-### Next Steps TODO
-- [ ] Framework selection decision
-- [ ] Initial project setup with chosen framework
-- [ ] Voice interface implementation
-- [ ] WebSocket communication with Lupin backend
-- [ ] HTTP API integration
-- [ ] Offline caching implementation
-- [ ] Device integration (vibration, Bluetooth)
-- [ ] Testing and refinement
-
-### Session Status
-- **Repository Configuration**: ✅ Complete
-- **Documentation**: ✅ Complete
-- **Notification System**: ✅ Complete
-- **Ready for Development**: ✅ Yes
+**Files**: `README.md` · `src/scripts/rsync-lupin-mobile.sh` · `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md` · `src/rnd/2026.09.15-phone-device-session-script.md` · merges `77b86b7`, `a349f0a` on `wip-v0.1.6-2026.04.16-tracking-lupin-work` · nothing pushed
 
 ---
-*Session completed on 2025.07.06*
+
+## 2026.09.15 evening | Session `71d94067` (Tiffany 💍) — Two merges, four reviews, and one defect shape that kept reappearing
+
+**RESUME HERE**: both device rows are queued and wait only on Rick recording about ten voice memos — no device session, no emulator and no working laptop build are needed. Krishna's row `0b3f063a` is queued and approved with two open nits.
+
+1. **Release picker merged** `dcc7263`. A context clear left a builder alive that I did not know about, so two independent implementations arrived for one bug; a reviewer ruled between them and found a third way to hide the picker — `bool.fromEnvironment("dart.vm.product")` — that escaped every assertion on both branches. The tests now strip comments before grepping, so the docstring can finally name the constant it warns against.
+2. **Quick Ask overflow merged** `82c97cc`, nine commits, after **three review rounds that each found a real defect**: a question arriving post-scroll was never rendered; the re-anchor fixing that landed short on short cards; and the tests could not see either because all four used one content shape. Filed figures were wrong — prompt-plus-error is 114px, not 82, and an ordinary 360×640 phone clipped by 2px, voiding the P3 reasoning.
+3. **JDK 21 proven, not just recommended**: a worker built a real debug APK end to end. Rick's own `flutter doctor -v` then killed his own JBR proposal and my stale research row — **Android Studio 2026.1 bundles JBR 25.0.3**, the very Java breaking his build. Corrected in `ac880d2`. Flutter 3.35.1 was investigated and changes nothing: its Gradle cap is identical.
+4. **Peer reviews delivered**: Mr. Radio's janitor fix approved with nits (the summary card still made the false claim his commit was named after); Krishna's visual-normalizer fix blocked, reworked, then approved across 31 mutants.
+5. **The through-line, worth more than any single fix**: five separate findings tonight were all **a check whose success condition is weaker than the claim it supports** — a dead selector, a stub that never ran its JS, a shared id resolving on the wrong page, a control that re-implemented its checker, and a measurement that was incomplete rather than mistaken.
+
+**Files**: `src/rnd/2026.09.15-android-toolchain-briefing-for-outside-review.md` (new) · `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md` · `README.md` · merges `dcc7263`, `82c97cc` · commits `6a07f64`, `ac880d2` · nothing pushed
+
+---
+
+## 2026.09.14 | Session `b3e285b8` (Tiffany 💍) — Spoken-ask door built and merged: §B `83f19a7`, §C `16d73f8`
+
+**RESUME HERE**: the phone half of the spoken-ask door is merged on wip. At 09:00 on 09-15 Rick gives a device session for `c51e92da` (round-trip probe) and `9b1f7701` (Opus/AAC check). See TODO.md § Owed.
+
+1. **Build go** 15:48 (`ccd7d20e`), conditional on rev 13. Sam folded rev 13 and Chloé verified it 13/13 (`7a6ca84`); revs 14–19 were folded while the build ran.
+2. **Staffed two builders** from Rick's seat grant: Rachel on §B (5 commits) and Maya on §C (5 commits), each in its own worktree after the spawn dropped both into the main tree. Every handoff was pinned to a sha and checked on disk; the contract fixture blob `5b2ae802` was byte-identical across lupin → phone.
+3. **Merged**: `83f19a7` and `16d73f8` (`--no-ff`, commit `-F`). `git diff d867576 HEAD -- lib test` is empty, and Mr. Radio verified it independently. Tests: the same 46 already failing before and after, 1030 passing, 72 of them new. §A merged in lupin (`993be2b6`).
+4. **Filed**: `5ac999f5` (46 pre-existing failures) and `9cddb791` (320×568 overflow, 10/82px). Rick kept both.
+5. **Post-game** (María): 6 own misses posted, including a duplicate María spawn, a hold file written where the hook never reads, and a reap run in the same batch as the memento edit it cited. Q4 was measured: the hold was ignored because of its location, not its fields. R2's wording was extended to cover claims carried in another call's arguments.
+
+**Files**: `TODO.md` · `history.md` · merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work` · memory `never-ask-rick-about-push.md`
+
+---
+
+## 2026.09.11 | Session `afe9bfdc` (Tiffany 💍) — Cascaded review closed; plan rev 8 → rev 12, nothing built
+
+**RESUME HERE**: plan rev 12 committed `2def6e4` (sha256 `ccc0430b`, 646 lines); six pins in git. Nine-stage cascade closed plus two verification passes folded. **Nothing built** — Rick's plan-only ruling held all session, and he declined a build at 22:39.
+
+1. **Cascade closed, 9/9 stages, 0 escalations, 0 votes.** Every finding folded across five committed revisions. The resumption point is task row `9df9f1c2` plus memento `38e7a298`.
+2. **Verification found what the cascade could not.** Rev 9 scored 19 PASS / 1 FAIL; rev 10 scored 3 PASS / 4 FAIL. Both passes surfaced defects introduced *by the folds themselves* — a population no findings-checklist covers by construction.
+3. **Five over-claims retracted**, mine and the manager's, each caught by re-measuring rather than trusting a summary. Rules earned: *a self-inconsistent file hashes perfectly* · *renumbering a list edits every reference to it* · *"same" is positional* · *a durable record needs revising when the world moves, not only when the work does*.
+4. **Rev 13 is owed and held** — 11 items, framed as a **list-to-verify, not a list-to-apply**: measured at rev 11 against a rev-12 head, so coordinates have drifted ~49 lines.
+5. **Five items parked on Rick**, chase 09:00 — build go/no-go `ccd7d20e` (answered *no* tonight), CB4's ruling `7b5458f5`, seat restart `79c4ad06`, and approval of `c51e92da` + `9b1f7701`, the last two being `9df9f1c2`'s own closing condition.
+
+**Checkpoint**: rev 12 committed + manager-verified; row `9df9f1c2` reassigned to Mr. Radio with receipt (event `13786`); memento final `38e7a298`, record ≡ mirror; seat handed off at ~89% context.
+
+**Files**: `src/rnd/2026.09.11-spoken-ask-streamed-door-implementation-plan.md` · `src/rnd/2026.09.11-voice-one-leg-ask-decision-brief.md` · `.claude-memento-tiffany-afe9bfdc.md` · `TODO.md` · `history.md`
+
+**Detail**: task row `9df9f1c2` (all findings, rulings, parked items) · `projects-data/lupin/cascade-pins/` (reviewer findings files, fold queue, per-rev pins)
+
+---
+
+## 2026.09.08 | Session `a08d762c` (Tiffany 💍) — Abstracts render as markdown; doc links open in-app
+
+**One commit `756ae43`, 69 new tests, suite 882 → 951 passing.** Analyze clean on every touched file.
+
+A notification's `abstract` was rendered with a plain `Text` widget, so the markdown the fleet
+already writes into it showed as literal brackets and parens and the doc links were dead. Now a
+null/empty abstract renders nothing (unchanged), a present one renders formatted inline, and a doc
+link inside it is tappable and opens the target in-app.
+
+**The finding that shrank the job**: `GET /api/docs/file` returns RAW source text over the shared
+Dio that already injects the Bearer token. No WebView, no second auth path, no backend change — the
+expensive design (embed the Lupin SPA in a browser view) was never the design we needed.
+
+| Phase | What landed |
+|---|---|
+| P1 | `flutter_markdown` → `flutter_markdown_plus`. Google discontinued the former 2025-05-30; we shipped it until today. Pinned 1.0.7 (not 1.0.12 — ≥1.0.8 needs Dart 3.9, toolchain is 3.8.0). New pure parser `doc_link.dart` + `doc_models.dart`. |
+| P2 | `DocRepository` dispatching on content-type rather than file extension (a directory has no extension) + `DocViewerScreen` for markdown / source / image. Server refusals surface verbatim. |
+| P3 | `AbstractBody` wired into both conversation card screens, with a document icon badge shown only when a *fetchable* link is present. |
+
+**Rick's amendment**: modern link format only. A legacy `?scope=` link classifies `unknown` and
+renders inert rather than being rewritten — the backend 400s on that parameter, so a tap would offer
+a guaranteed failure. Detected explicitly so it stays a decision someone can find and reverse.
+
+**Two defects the tests caught**: `DocViewerScreen`'s `FutureBuilder` did not subscribe until the
+next frame, so a fast rejection escaped as an unhandled async error instead of reaching the error
+view (replaced with explicit load state); and `setState()` was handed a closure returning a Future.
+
+The 46 pre-existing suite failures are unchanged and identical test-for-test — 44 in
+`legacy_quarantine/`, 2 requiring a sibling `../cosa` checkout this standalone clone lacks.
+
+**Session end**: Rick scoped P4 down to the two loose ends and `2e8d02c` closed them — the
+external-link confirm, which had shipped with zero tests, now has 7 (with `url_launcher` mocked at
+its MethodChannel, so they assert what the platform was actually *asked* to do); and `flutter_html`
+was removed, having been added and imported nowhere. The `.html` and directory renderers stay
+descoped until a real abstract links one; both degrade to a readable source view.
+
+**Final**: 76 new tests, suite 882 → **958 passing**, 46 pre-existing failures unchanged
+test-for-test. Ticket `2df54cf6` closed with receipts. **Pushed** — `a55ed01..2e8d02c`, verified
+0 ahead of origin.
+
+One finding worth carrying: tapping a markdown link *embedded in prose* needs
+`tester.tapOnText( find.textRange.ofSubstring(...) )`. `find.textContaining` returns the whole
+paragraph, whose centre is the surrounding words rather than the link span, so a test written the
+obvious way passes for the wrong reason.
+
+Docs: `src/rnd/2026.09.08-abstract-doc-link-viewer-feasibility.md`,
+`src/rnd/2026.09.08-abstract-doc-link-viewer-implementation-plan.md`.
+
+---
+
+## 2026.09.04 | Session `3d7921bc` (Tiffany 💍) — Quick Ask shipped three fixes; the cache bug I found was filed, not taken
+
+**Five commits, 220/220 green** (was 130 at session start), analyze clean on every touched file.
+
+| commit | what |
+|---|---|
+| `1ee125b` | Quick Ask tap-to-toggle recording with a deliberate send (15 files) |
+| `32c7980` | card dismiss X, cancelling the job if it is still running (8 files) |
+| `153ac19` | inject `isQuickAskJob` so answers speak in full — DI registration extracted to `ServiceLocator.buildFocusChatBloc()` so the seam is testable without `path_provider` |
+| `649f458` | a progress notification is not the answer — belt channel guards on `n.type`, `QuickAskEntry.progressText`, spinner + muted status line rendered LAST so an answer outranks a stale milestone |
+| `ff2e90c` | the long-running-jobs plan doc (507 lines) + README entry, on Rick's ruling |
+
+Both behaviour commits were mutation-checked, not just run.
+
+**The plan doc's bottom line corrects its own premise.** It is not "build a notification pane" — it is a **cap change**. All eleven agentic builders were checked: **10 of 11 already emit a per-job sender id**, so focus mode's sender-keyed windows already group by job; `claude_code` is the sole exception. What actually needs doing is revealing the `ask.flow` bucket the persona-less default rail scope hides, raising the per-sender cap of 7 (right for a chatty human, wrong for a job emitting ~10 milestones), and queuing the second interrupt. Two of my own mid-plan mechanisms are logged as wrong in its §11: `progress_group_id` is not the job key, and job grouping did not need building.
+
+**A cache defect found, filed, and handed off — what I got wrong was the timing.** While chasing Rick's paraphrase-replay report I measured 5,028 trace records and found **103 PERFECT (100.0) cache matches refused and re-run as fresh jobs**. `_may_serve` (`flow.py:1099`) serves only on `answer_is_correct is True` and fails closed at None; **every refusal reads `:None`, not one `:False`** — nobody is ever asked, because the only confirmation sought lands on a daemon thread that times out. V1 (`todo_fifo_queue.py:534-640`, still present, not deleted) auto-accepted >=100 with no gate and asked the 90-band with 3 retries and backoff. Both V2 behaviours are regressions, and Rick diagnosed both from observable behaviour before either file was opened.
+
+Filed as `fe1c0d3f`, reassigned to **Pocholo** with **Mr Radio** accountable, on Rick's instruction: *"file that as a bug and have someone else look into it, it's not your job to edit the Lupin repo."* I stayed read-only throughout, which was right — **but I should have found an owner at filing time instead of working the row for another ten minutes.**
+
+**Rick corrected his own ruling and the row carries both readings.** First *"restore what version 1 did"*, then immediately: *"I don't need to restore V1 verbatim — I mean use the logic, or copy the logic, that V1 uses. Do NOT resuscitate V1. Do not!"* Amended under `user_direct` and relayed to Pocholo and Mr Radio, who had been about to route it back to Rick as an open proposal.
+
+**Six of my hypotheses died today, every one refuted by someone checking recorded state.** tier-1 floor as mechanism · `_may_serve` as Rick's cause · silent exits as the diagnostic gap · "no score on this path" · `snapshotable` explaining `usage_count` · `confirmation_threshold is None`. The largest withdrawal: I argued "286 asks cleared the 90.0 bar and only 1 ever replayed, so the funnel is blocked downstream." Pocholo established that **`_near_match_replay` postdates the trace corpus** — those asks had no branch to traverse. **You cannot measure a gate on traffic that predates it.** Whether 90.0 is the right bar is open again. Every one of the six was reasoning forward from source; every refutation was measurement.
+
+**🔴 An error at the wrap, recorded because a dropped row is easy to lose.** I dropped `3658ec66` — Pocholo's row, Mr Radio accountable — on standing authority. Mr Radio had already ruled it queued at 00:14Z; his DM reply reached me **condensed** as "not within my team's responsibility," which I read as a drop instruction when he almost certainly meant his crew were not working it during the wrap. `dropped` is terminal, so the correction is a post-terminal amendment on the row and reinstatement is his call. **The failure was not the misreading — `task_get` returned his full ruling to me seconds before I called the transition and I acted on the DM summary instead of the row I was acting on.** Same shape as the six above: a condensed secondhand account beat the recorded state that was already in my hands.
+
+**Session ran through two self-respins** at the 50% context line, both clean — memento written, nonce verified, wake proof confirmed against `claude_code.session_id` rather than introspection.
+
+**Files**: `lib/features/quick_ask/**`, `lib/features/focus_mode/domain/focus_chat_bloc.dart`, `lib/core/di/service_locator.dart`, `lib/core/testing/test_keys.dart`, `test/unit/quick_ask/**`, `test/widget/quick_ask/**`, `test/service_integration/quick_ask_probe_wiring_test.dart`, `src/rnd/2026.09.04-long-running-quick-ask-notification-pane.md`, `README.md`
+
+---
+
+## 2026.09.01 | Session `5b101cc5` (Tiffany 💍) — the backup was 99% Flutter SDK, and the bounce we were waiting on had already happened
+
+**Backup fixed twice, then verified.** The 2026-08-30 fix corrected `SOURCE_DIR` but left `DEST_DIR` naming the retired subtree `lupin/src/lupin-mobile/`; repointed to the standalone mirror `projects/lupin-mobile/` (`1da5b72`). The first green dry run then turned out to be backing up the wrong thing: `flutter/` is a vendored 1.9 GB SDK clone, gitignored and re-obtainable, and the exclusion file was the generic Python list shipped with the canonical script — it knows `.venv/` and `build/` and nothing about Dart. Added `flutter/`, `.flutter/`, `.dart_tool/`, `.flutter-plugins*`, `.gradle/` (`717e94c`). **1.79 GB / 20,433 files → 6.22 MB / 794.**
+
+**Verified rather than assumed.** Diffed `git ls-files` (532) against rsync's own `--out-format='%n'` list: 530 of 532 tracked files reach the mirror, the two absent being `.gitignore` and `android/.gitignore`, caught by the canonical list's own pattern. Rick ran the cleanup `rm` (858 MB → 47 MB) and then the `--write` run; walked all 532 against the destination filesystem afterwards — **missing: 0**. One residue noted: the destination's root `.gitignore` is a stale April copy, since rsync neither updates nor deletes excluded files on the receiving side.
+
+**Two stale facts corrected** (`9f175bd`, `ce6e218`). `TODO.md` carried "bounce `:7999` first" as the next action; measured, the container had started 2026-09-01 23:13 UTC with both fixes (`c91bd1bb`, `7aac0061`, merged 2026-08-30) already ancestors of the served HEAD, over a live `/src` bind-mount — **a bounce would have changed nothing.** And I had twice told Rick row `734bd1bf` was "blocked on you at the mic"; it had not been since its 2026-08-31 amendment.
+
+**`734bd1bf` (AC-G3) CLOSED — worked server-side, handed off, settled.** Ran `test_9b_the_read_guard.py` (14 passed, incl. "a confirmed exact hit is still served"), eliminating `_may_serve` as the explanation for Rick's probe. `path`/`route_reason` turned out to already ship in the response body (`_finish` → `_emit`); the web Q&A UI just does not surface them. Found `test_v2_ask_roundtrip.py`'s strict-xfail exit condition unreachable — it never confirms its answer, so a free consumer is necessary but not sufficient. **Two self-corrections**: my two-ask remedy hit the same drain wall on `:8000`, and my "seed a snapshot row" spec was half-written — tier 1 queries the *canonical-synonym* table, so a bare snapshot is unfindable. Rick ruled implementation is not a mobile seat's job; Mr Radio 🦉 ruled the relay was lossy and sent me to **Rio ⚡ direct** (spec carried search-strings, no line numbers — the lupin tree moved three times in the hour).
+
+**Rio's version beat the spec twice.** He used `V2Cache.write_back()` (both writes, normalizer-computed fields — my drift warning made structurally moot), added a **negative arm** I failed to specify, and checked `replayed_snapshot_id` against the seed. `ts-fee0022f`: confirmed row → `path=replay`/`exact_hit`/`cache_hit=True`; unconfirmed → `path=agent`. **That negative arm killed the two-day ambiguity without the trace field I insisted was needed** — a refusal is visible from outside on a question the cache demonstrably holds. Row closed with receipts. He then fixed the roundtrip docstring, again better than instructed: rather than naming both blockers on both tests, he checked which test needs which (`ts-cdba4e5e`, 4 passed, 2 xfails holding). Nine amendments on the row carry the full trail.
+
+**Files**: `src/scripts/backup.sh`, `src/scripts/conf/rsync-exclude.txt`, `TODO.md`, `history.md`
+
+---

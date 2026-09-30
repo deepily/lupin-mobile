@@ -10,6 +10,11 @@ class DecisionProxyApiException implements Exception {
   String toString() => "DecisionProxyApiException($statusCode): $message";
 }
 
+// Percent-encode a single path segment so values containing `/`, `@`, `+`,
+// spaces, etc. don't collapse into extra FastAPI path params. Mirrors the
+// `_enc()` helper in `notification_repository.dart`.
+String _enc( String s ) => Uri.encodeComponent( s );
+
 /// Typed wrapper over the 9-endpoint Lupin decision-proxy / trust API.
 class DecisionProxyRepository {
   final Dio _dio;
@@ -53,7 +58,7 @@ class DecisionProxyRepository {
   } ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/proxy/pending/$userEmail",
+        "/api/proxy/pending/${_enc( userEmail )}",
         queryParameters: {
           if ( domain   != null ) "domain"  : domain,
           if ( category != null ) "category": category,
@@ -117,7 +122,7 @@ class DecisionProxyRepository {
   } ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/proxy/trust/$userEmail",
+        "/api/proxy/trust/${_enc( userEmail )}",
         queryParameters: { if ( domain != null ) "domain": domain },
       );
       return TrustStateResponse.fromJson( res.data! );
@@ -136,7 +141,7 @@ class DecisionProxyRepository {
   } ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
-        "/api/proxy/decisions/$domain/$category",
+        "/api/proxy/decisions/${_enc( domain )}/${_enc( category )}",
         queryParameters: { "limit": limit },
       );
       return DecisionsByCategoryResponse.fromJson( res.data! );

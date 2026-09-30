@@ -5,10 +5,45 @@
 /// `cosa/rest/notification_fifo_queue.NotificationItem.to_dict()`.
 library;
 
+import 'package:equatable/equatable.dart';
+
+import 'voice_persona.dart';
+
+export 'voice_persona.dart' show VoicePersona;
+
 DateTime? _parseDt( dynamic v ) =>
     v == null ? null : DateTime.tryParse( v.toString() );
 
 T? _as<T>( dynamic v ) => v is T ? v : null;
+
+/// Per-session speakerphone state record (Section B / Phase 2, 2026-05-23
+/// notif-client-sync). Stored in `NotificationBloc._speakerphoneBySession`
+/// keyed by `n.senderId`, mutated by the `speakerphone_changed` case in
+/// `_onExternalUpdate`. Diagnostic only — no UI surface (Q1 record-only
+/// resolution, plan §8.0).
+///
+/// `displaced` / `displacedBy` are stored verbatim from the wire payload
+/// (extracted via `n.raw["displaced"]` / `n.raw["displaced_by"]` per the
+/// OSQ B-1 resolution — `NotificationItem` has no typed accessor for these
+/// payload fields). They are NOT acted on by the bloc.
+///
+/// Extends `Equatable` so `Map<String, SpeakerphoneRecord>`-equality
+/// assertions in dispatch tests (AC-B3 idempotency: same payload injected
+/// twice → record equal) work via value-equality rather than identity.
+class SpeakerphoneRecord extends Equatable {
+  final bool    on;
+  final String? displaced;
+  final String? displacedBy;
+
+  const SpeakerphoneRecord( {
+    required this.on,
+    this.displaced,
+    this.displacedBy,
+  } );
+
+  @override
+  List<Object?> get props => [ on, displaced, displacedBy ];
+}
 
 /// A single notification item — matches `NotificationItem.to_dict()`.
 /// Returned by `GET /api/notifications/{user_id}` and `/next`, and by
@@ -41,6 +76,11 @@ class NotificationItem {
   final Map<String, dynamic>? predictionHint;
   final bool     displayQualifierWidget;
   final String?  sessionName;
+  /// Per-session voice/persona allocation, server-stamped per Q1.
+  /// Null when the server did not stamp a persona (legacy envelopes,
+  /// pre-allocation events). Consumers null-check before use; absence flows
+  /// cleanly to Sam fallback per Q3.
+  final VoicePersona? voicePersona;
   final Map<String, dynamic> raw;
 
   const NotificationItem( {
@@ -71,10 +111,12 @@ class NotificationItem {
     this.predictionHint,
     required this.displayQualifierWidget,
     this.sessionName,
+    this.voicePersona,
     this.raw = const {},
   } );
 
   factory NotificationItem.fromJson( Map<String, dynamic> json ) {
+    final personaRaw = json["voice_persona"];
     return NotificationItem(
       id                      : json["id"].toString(),
       idHash                  : _as<String>( json["id_hash"] ),
@@ -103,6 +145,9 @@ class NotificationItem {
       predictionHint          : _as<Map<String, dynamic>>( json["prediction_hint"] ),
       displayQualifierWidget  : json["display_qualifier_widget"] == true,
       sessionName             : _as<String>( json["session_name"] ),
+      voicePersona            : personaRaw is Map
+          ? VoicePersona.fromJson( Map<String, dynamic>.from( personaRaw ) )
+          : null,
       raw                     : Map<String, dynamic>.from( json ),
     );
   }
@@ -305,21 +350,75 @@ class SenderSummary {
   final String   senderId;
   final DateTime? lastActivity;
   final int      count;
-  final int?     newCount;       // only present in senders-visible
+  final int?     newCount;        // only present in senders-visible
+  final VoicePersona? voicePersona;    // senders-visible only: stamped from the
+                                       // session bridge for LIVE CC sessions
+  final VoicePersona? managerPersona;  // senders-visible only: spawning manager
 
   const SenderSummary( {
     required this.senderId,
     this.lastActivity,
     required this.count,
     this.newCount,
+    this.voicePersona,
+    this.managerPersona,
   } );
+
+  static VoicePersona? _persona( dynamic v ) =>
+      v is Map ? VoicePersona.fromJson( Map<String, dynamic>.from( v ) ) : null;
 
   factory SenderSummary.fromJson( Map<String, dynamic> json ) {
     return SenderSummary(
-      senderId     : ( json["sender_id"] ?? "" ).toString(),
-      lastActivity : _parseDt( json["last_activity"] ),
-      count        : ( json["count"] as num? )?.toInt() ?? 0,
-      newCount     : ( json["new_count"] as num? )?.toInt(),
+      senderId       : ( json["sender_id"] ?? "" ).toString(),
+      lastActivity   : _parseDt( json["last_activity"] ),
+      count          : ( json["count"] as num? )?.toInt() ?? 0,
+      newCount       : ( json["new_count"] as num? )?.toInt(),
+      voicePersona   : _persona( json["voice_persona"] ),
+      managerPersona : _persona( json["manager_persona"] ),
+    );
+  }
+}
+
+/// One live Claude Code seat from `GET /api/commons/active-sessions` — the
+/// roster the SESSION BRIDGES know about, not the one notifications imply.
+/// Rick 2026-09-17: a seat that has never notified him was invisible on the
+/// phone, so he had to start the conversation in the browser. The mux
+/// broadcast card reads the same endpoint for its recipient chips.
+///
+/// `senderId` is the rail's key (`email#hash`). The server projected only
+/// `session_id` until 2026-09-17; it stays nullable so an older server
+/// degrades to "listed but not addressable" instead of throwing.
+class ActiveSession {
+  final String        sessionId;
+  final String?       senderId;
+  final VoicePersona? persona;
+  final DateTime?     lastSeen;
+  final bool          speakerphoneOn;
+
+  const ActiveSession( {
+    required this.sessionId,
+    this.senderId,
+    this.persona,
+    this.lastSeen,
+    this.speakerphoneOn = false,
+  } );
+
+  /// Liberal parse, like every other envelope here: the persona is assembled
+  /// from the FLAT `persona_*` fields this endpoint uses (not the nested
+  /// `voice_persona` block `senders-visible` returns), and a seat with no
+  /// persona name parses with a null persona rather than an empty badge.
+  factory ActiveSession.fromJson( Map<String, dynamic> json ) {
+    final name = _as<String>( json["persona_name"] );
+    return ActiveSession(
+      sessionId      : ( json["session_id"] ?? "" ).toString(),
+      senderId       : _as<String>( json["sender_id"] ),
+      persona        : ( name == null || name.isEmpty ) ? null : VoicePersona(
+        name  : name,
+        icon  : _as<String>( json["persona_icon"]  ),
+        color : _as<String>( json["persona_color"] ),
+      ),
+      lastSeen       : _parseDt( json["last_seen_iso"] ),
+      speakerphoneOn : json["speakerphone_on"] == true,
     );
   }
 }
@@ -532,6 +631,7 @@ class NotifyRequest {
   final String  message;
   final String  targetUser;
   final String? type;
+  final String? direction;         // human_to_ai for a user's message to a session
   final String? priority;
   final bool?   responseRequested;
   final String? responseType;
@@ -554,6 +654,7 @@ class NotifyRequest {
     required this.message,
     required this.targetUser,
     this.type,
+    this.direction,
     this.priority,
     this.responseRequested,
     this.responseType,
@@ -580,6 +681,7 @@ class NotifyRequest {
     };
     void put( String k, Object? v ) { if ( v != null ) q[ k ] = v; }
     put( "type",                         type );
+    put( "direction",                    direction );
     put( "priority",                     priority );
     put( "response_requested",           responseRequested );
     put( "response_type",                responseType );

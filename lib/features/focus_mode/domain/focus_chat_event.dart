@@ -1,0 +1,201 @@
+import 'package:equatable/equatable.dart';
+
+import '../../notifications/data/notification_models.dart';
+import 'focus_chat_state.dart' show FocusFilter, FocusSenderScope;
+
+/// Typed prompt-context for [FocusRespondRequested] (F-S2-S2-3): inline
+/// prompts pass the target notification id explicitly; voice replies omit
+/// it and the bloc falls back to `pendingPromptFor( senderId )`.
+class FocusPromptContext extends Equatable {
+  final String  notificationId;
+  final String? promptType;     // yes_no | open_ended | multiple_choice
+
+  const FocusPromptContext( {
+    required this.notificationId,
+    this.promptType,
+  } );
+
+  @override
+  List<Object?> get props => [ notificationId, promptType ];
+}
+
+abstract class FocusChatEvent extends Equatable {
+  const FocusChatEvent();
+  @override
+  List<Object?> get props => [];
+}
+
+/// WS bridge dispatch (`app.dart`) for every user-facing inner type on
+/// `notification_queue_update`. Effect: upsert sender (append if new) →
+/// append to window (evict >7) → unread++ if not focused → emit; then
+/// `TtsOrchestrator.enqueueAlways(...)` — EVERY item, EVERY priority (Q6).
+class FocusInboundNotification extends FocusChatEvent {
+  final NotificationItem item;
+  const FocusInboundNotification( this.item );
+  @override
+  List<Object?> get props => [ item.id ];
+}
+
+/// "Speak it anyway" on a stop-list-muted item — AC-S4.14. Carries only
+/// the notification id; the bloc holds the orchestrator's own suppression
+/// record and hands that back, so the UI never constructs one.
+class FocusSpeakAnywayRequested extends FocusChatEvent {
+  final String notificationId;
+  const FocusSpeakAnywayRequested( this.notificationId );
+  @override
+  List<Object?> get props => [ notificationId ];
+}
+
+/// The ask TIMED OUT — `notification_expired` (AC-S4.3). The server has
+/// already substituted [defaultUsed]; there is nothing left to answer, and
+/// the card says so rather than sitting pending forever.
+class FocusAskExpired extends FocusChatEvent {
+  final String  notificationId;
+  final String? defaultUsed;
+  const FocusAskExpired( { required this.notificationId, this.defaultUsed } );
+  @override
+  List<Object?> get props => [ notificationId, defaultUsed ];
+}
+
+/// Somebody ELSE answered — `notification_responded` (AC-S4.3). Another
+/// device, a proxy, or the browser. Retire the card as answered; it is not
+/// an error and it is not our answer.
+class FocusAskResponded extends FocusChatEvent {
+  final String  notificationId;
+  final String? responseValue;
+  const FocusAskResponded( { required this.notificationId, this.responseValue } );
+  @override
+  List<Object?> get props => [ notificationId, responseValue ];
+}
+
+/// S3 rail tap: set focused, zero its unread, trigger backfill if the
+/// window is not yet hydrated (OSQ-4).
+class FocusSenderSelected extends FocusChatEvent {
+  final String senderId;
+  const FocusSenderSelected( this.senderId );
+  @override
+  List<Object?> get props => [ senderId ];
+}
+
+/// A NOTIFICATION TAP (row d9bc6f6c): select [senderId] AND mark
+/// [notificationId] as the message to bring into view.
+///
+/// WHY THIS IS NOT JUST `FocusSenderSelected` PLUS A SECOND EVENT. The two
+/// halves of one user gesture must not be able to half-apply. `on<E>` handlers
+/// of DIFFERENT event types run CONCURRENTLY under bloc's default transformer,
+/// so a pair of events could interleave with each other and with the cold-start
+/// handler, leaving a sender selected and no reveal target, or a reveal target
+/// pointing at a conversation that is no longer focused.
+///
+/// 🔴 AND IT CARRIES THE EMAIL FOR THE SAME REASON. Backfill needs the
+/// authenticated email, which the bloc normally learns from
+/// [FocusColdStartRequested] on the WS `auth_success` frame. A tap is drained at
+/// `AuthAuthenticated`, which happens EARLIER and by a different path, so a
+/// reveal that relied on cold start having run first would — on exactly the
+/// swiped-away cold start this row is about — select the sender, skip the
+/// backfill, and show "No messages yet in this window" for a conversation that
+/// has messages. Carrying the email makes the handler independent of that race;
+/// `_backfilled` keeps the two paths from fetching twice.
+class FocusMessageRevealRequested extends FocusChatEvent {
+  final String senderId;
+  final String notificationId;
+  final String userEmail;
+
+  const FocusMessageRevealRequested( {
+    required this.senderId,
+    required this.notificationId,
+    required this.userEmail,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, notificationId, userEmail ];
+}
+
+/// The reveal has been honoured (the pane scrolled to it, or it was not in the
+/// window) — clear the target so a later rebuild does not scroll again while
+/// the user is reading something else.
+class FocusRevealConsumed extends FocusChatEvent {
+  const FocusRevealConsumed();
+}
+
+/// Screen init AND WS reconnect (S2 §3.3). MODE-DEPENDENT (F-S2-S3-1):
+/// cold start (`senderOrder` empty) builds the one-time `lastActivity`
+/// DESC snapshot; reconnect-refresh MERGES per the §3.1 contract.
+class FocusColdStartRequested extends FocusChatEvent {
+  final String userEmail;
+  const FocusColdStartRequested( { required this.userEmail } );
+  @override
+  List<Object?> get props => [ userEmail ];
+}
+
+/// Toolbar refresh tap (Rick 2026-09-17): re-read BOTH rosters — the senders
+/// who have written, and the live seats from the bridges — so a seat that has
+/// never notified this user can still be reached from the phone.
+class FocusRosterRefreshRequested extends FocusChatEvent {
+  const FocusRosterRefreshRequested();
+  @override
+  List<Object?> get props => const [];
+}
+
+/// WS `voice_persona_assigned` / `voice_persona_released` bridge.
+/// `persona == null` ⇒ released.
+class FocusPersonaUpdated extends FocusChatEvent {
+  final String        senderId;
+  final VoicePersona? persona;
+  const FocusPersonaUpdated( { required this.senderId, this.persona } );
+  @override
+  List<Object?> get props => [ senderId, persona ];
+}
+
+/// Toolbar `SegmentedButton` tap — switch the rail's visibility lens.
+class FocusFilterChanged extends FocusChatEvent {
+  final FocusFilter filter;
+  const FocusFilterChanged( this.filter );
+  @override
+  List<Object?> get props => [ filter ];
+}
+
+/// Toolbar Personas / All tap — switch the rail's sender-scope lens
+/// (rail only; Rick 2026-08-21).
+class FocusSenderScopeChanged extends FocusChatEvent {
+  final FocusSenderScope scope;
+  const FocusSenderScopeChanged( this.scope );
+  @override
+  List<Object?> get props => [ scope ];
+}
+
+/// Periodic / on-resume re-evaluation of the recency bands (`asOf = now`).
+/// No refetch — aged-out senders simply leave `visibleOrder`.
+class FocusActivityTick extends FocusChatEvent {
+  const FocusActivityTick();
+}
+
+/// Confirmed session exit: `session_reaped` (unambiguous, workers) or the
+/// `voice_persona_released` debounce elapsing with no re-assign. In Live
+/// the sender's icon + card go invisible; History still shows them.
+class FocusSenderExited extends FocusChatEvent {
+  final String senderId;
+  const FocusSenderExited( this.senderId );
+  @override
+  List<Object?> get props => [ senderId ];
+}
+
+/// The ONE response-dispatch shape (F-S3-2): S3 inline-prompt taps pass a
+/// typed [FocusPromptContext]; S4's `VoiceReplyField` (via S3-wired
+/// `onSubmit`) omits it. `text` is a SINGLE String end-to-end — batch
+/// open-ended asks are scoped OUT of the focus inline path in v1 and route
+/// to the legacy sheet (F-S3-S2-2(d)); this event never carries a Map.
+class FocusRespondRequested extends FocusChatEvent {
+  final String              senderId;
+  final String              text;
+  final FocusPromptContext? promptContext;
+
+  const FocusRespondRequested( {
+    required this.senderId,
+    required this.text,
+    this.promptContext,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, text, promptContext ];
+}

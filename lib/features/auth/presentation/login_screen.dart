@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../../../services/auth/server_context_service.dart';
+import '../../settings/presentation/server_context_toggle.dart';
 import '../domain/auth_bloc.dart';
 import '../domain/auth_event.dart';
 import '../domain/auth_state.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialEmail;
+  final String? initialPassword;
   final ServerContextService serverContext;
 
   const LoginScreen( {
     super.key,
     this.initialEmail,
+    this.initialPassword,
     required this.serverContext,
   } );
 
@@ -22,13 +26,15 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _email;
-  final TextEditingController _password = TextEditingController();
+  late final TextEditingController _password;
   final GlobalKey<FormState> _form = GlobalKey<FormState>();
+  bool _passwordVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _email = TextEditingController( text: widget.initialEmail ?? "" );
+    _email    = TextEditingController( text: widget.initialEmail    ?? "" );
+    _password = TextEditingController( text: widget.initialPassword ?? "" );
   }
 
   @override
@@ -56,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Padding(
             padding: const EdgeInsets.only( right: 12 ),
             child: Center(
-              child: _ContextBadge( label: ctx.label ),
+              child: _ContextBadge( id: ctx.id, label: ctx.label ),
             ),
           ),
         ],
@@ -71,7 +77,9 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         builder: ( context, state ) {
           final busy = state is AuthLoading;
-          return Padding(
+          // Scrollable: the server switch below the form would otherwise
+          // push past the bottom of a small phone once the keyboard is up.
+          return SingleChildScrollView(
             padding: const EdgeInsets.all( 24 ),
             child: Form(
               key: _form,
@@ -79,24 +87,40 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextFormField(
+                    key: const Key( TestKeys.loginEmailField ),
                     controller: _email,
                     decoration: const InputDecoration( labelText: "Email" ),
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,   // soft-keyboard "next" → password
                     autofillHints: const [ AutofillHints.email ],
                     validator: ( v ) =>
                       ( v == null || !v.contains( "@" ) ) ? "Enter a valid email" : null,
                   ),
                   const SizedBox( height: 16 ),
                   TextFormField(
+                    key: const Key( TestKeys.loginPasswordField ),
                     controller: _password,
-                    decoration: const InputDecoration( labelText: "Password" ),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: "Password",
+                      suffixIcon: IconButton(
+                        key: const Key( TestKeys.loginPasswordVisibility ),
+                        icon: Icon( _passwordVisible ? Icons.visibility_off : Icons.visibility ),
+                        tooltip: _passwordVisible ? "Hide password" : "Show password",
+                        onPressed: () => setState( () => _passwordVisible = !_passwordVisible ),
+                      ),
+                    ),
+                    obscureText: !_passwordVisible,
+                    // Rick 2026-08-21: the keyboard's enter/done key submits —
+                    // no reaching up to tap "Sign in" after typing the password.
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: ( _ ) { if ( !busy ) _submit(); },
                     autofillHints: const [ AutofillHints.password ],
                     validator: ( v ) =>
                       ( v == null || v.isEmpty ) ? "Password required" : null,
                   ),
                   const SizedBox( height: 24 ),
                   FilledButton(
+                    key: const Key( TestKeys.loginSubmitButton ),
                     onPressed: busy ? null : _submit,
                     child: busy
                       ? const SizedBox(
@@ -104,6 +128,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: CircularProgressIndicator( strokeWidth: 2 ),
                         )
                       : const Text( "Sign in" ),
+                  ),
+                  // Pick the server BEFORE signing in: a real handset can't
+                  // reach the emulator-only 10.0.2.2 contexts, so it needs
+                  // LAN DEV / LAN TEST, and Settings is behind the login.
+                  // Shown in release builds too, for that same reason — this
+                  // is the only pre-auth surface there is, and CI ships release
+                  // APKs (flutter-ci.yml builds at :144, uploads at :152), so
+                  // a `kReleaseMode` gate here would strand a real phone.
+                  // Brings its own 32px lead-in, so there is no SizedBox here.
+                  ServerContextToggle(
+                    service   : widget.serverContext,
+                    onChanged : ( _ ) { if ( mounted ) setState( () {} ); },
                   ),
                 ],
               ),
@@ -116,16 +152,17 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _ContextBadge extends StatelessWidget {
+  final String id;
   final String label;
-  const _ContextBadge( { required this.label } );
+  const _ContextBadge( { required this.id, required this.label } );
 
   @override
   Widget build( BuildContext context ) {
-    final color = label == "DEV" ? Colors.green : Colors.orange;
+    final color = serverContextColor( id );
     return Container(
       padding: const EdgeInsets.symmetric( horizontal: 10, vertical: 4 ),
       decoration: BoxDecoration(
-        color: color.withOpacity( 0.15 ),
+        color: color.withValues( alpha: 0.15 ),
         border: Border.all( color: color, width: 1.5 ),
         borderRadius: BorderRadius.circular( 12 ),
       ),

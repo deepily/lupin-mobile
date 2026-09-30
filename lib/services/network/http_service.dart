@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/logging/log_redaction.dart';
 
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
@@ -24,28 +26,51 @@ class HttpService {
     _configureDio();
   }
   
+  /// Marker stored on the Dio's `options.extra` so a single shared Dio (e.g.
+  /// the DI singleton consumed by both `HttpService` and `CachedHttpService`)
+  /// is configured exactly once. Without this guard each subclass ctor would
+  /// re-add the logging interceptors, producing 2× log output per request
+  /// (and confusing any reader into thinking the request was dispatched twice).
+  static const String _configuredMarker = '_lupin_http_configured';
+
   void _configureDio() {
+    // Idempotent: if another HttpService instance already configured this
+    // Dio, skip — re-adding interceptors would double the logging output.
+    if (_dio.options.extra[_configuredMarker] == true) return;
+    _dio.options.extra[_configuredMarker] = true;
+
     // Configure base URL
     _dio.options.baseUrl = AppConstants.apiBaseUrl;
-    
+
     // Configure timeouts
     _dio.options.connectTimeout = const Duration(seconds: 10);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
     _dio.options.sendTimeout = const Duration(seconds: 30);
-    
+
     // Configure headers
     _dio.options.headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    
-    // Add interceptors for logging and error handling
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-      logPrint: (obj) => print('[HTTP] $obj'),
-    ));
-    
+
+    // Verbose body logging is a DEBUG-ONLY diagnostic, and even there it is
+    // scrubbed (row a7de7d69). Three controls, deliberately independent:
+    //   1. `kDebugMode` — a release APK registers this interceptor at all.
+    //   2. `requestHeader: false` — the Authorization header is never offered
+    //      to the sink. Method and URI still reach it via the wrapper below,
+    //      which is what device checks actually read.
+    //   3. `redactSecrets` — anything that still prints is masked, so a token
+    //      carried in a field we did not anticipate does not reach logcat.
+    // A credential therefore needs two of the three to fail, not one.
+    if ( kDebugMode ) {
+      _dio.interceptors.add(LogInterceptor(
+        requestHeader: false,
+        requestBody: true,
+        responseBody: true,
+        logPrint: (obj) => print('[HTTP] ${redactSecrets(obj.toString())}'),
+      ));
+    }
+
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
         print('[HTTP] Request: ${options.method} ${options.uri}');
@@ -177,6 +202,18 @@ class HttpService {
   ///   - DioException if upload or transcription fails
   ///   - FileSystemException if file cannot be read
   ///   - ArgumentError if file format is unsupported
+  ///
+  /// ⚠️ MP3-ENDPOINT TRAP (F-S4-2, focus-mode-voice-chat 2026-06-12): this
+  /// method POSTs to `/api/upload-and-transcribe-mp3`, which QUEUES A
+  /// MULTIMODAL JOB on the parent — it does NOT return a chat-reply
+  /// transcript, despite the WAV mention in the docstring above. For
+  /// voice-reply transcription use `AsrService`
+  /// (`lib/services/asr/asr_service.dart`), which POSTs to the synchronous
+  /// `/api/upload-and-transcribe-wav` endpoint. Deprecated for new callers;
+  /// kept for the legacy voice stack (zero active callers at annotation
+  /// time).
+  @Deprecated( 'Wrong tool for chat replies — queues a multimodal job. '
+      'Use AsrService (/api/upload-and-transcribe-wav) instead. F-S4-2.' )
   Future<Map<String, dynamic>> uploadAndTranscribe({
     required String filePath,
     required String sessionId,

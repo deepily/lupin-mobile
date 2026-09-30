@@ -1,0 +1,428 @@
+/// AC-S2.8 + AC-S2.10 (app-level half) — service-integration tests driving
+/// the REAL `app.dart` dispatch wiring (`WsBlocDispatcher`) with production
+/// bloc construction parity: the legacy NotificationBloc is built WITHOUT a
+/// `tts` dependency (the F-S2-1 DI withdrawal, mirrored from
+/// `service_locator.dart`), FocusChatBloc with the shared mock orchestrator.
+library;
+
+import 'package:bloc_test/bloc_test.dart';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:mocktail/mocktail.dart';
+
+import 'package:lupin_mobile/app.dart';
+import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_bloc.dart';
+import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
+import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
+import 'package:lupin_mobile/features/notifications/data/ask_resolution.dart';
+import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
+import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
+import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
+import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
+import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_event.dart';
+import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_state.dart';
+import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.dart';
+import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+
+class _MockRepo  extends Mock implements NotificationRepository {}
+class _MockAudio extends Mock implements NotificationAudioService {}
+class _MockTts   extends Mock implements TtsOrchestrator {}
+class _MockWs    extends Mock implements WebSocketService {}
+
+/// The dispatcher reaches for `QuickAskBloc` on the belt channel (S1 §3).
+/// Registered as a MOCK, deliberately: this file pins the DISPATCH wiring,
+/// not Quick Ask's behavior, and a mock keeps the pin independent of that
+/// bloc's constructor as S1 evolves. The plan's instruction is to register
+/// it in `setUp` rather than guard the production path with `isRegistered`
+/// — a production `if` would make the belt channel silently optional, and
+/// nothing would notice if it were never wired at all.
+class _MockQuickAsk extends MockBloc<QuickAskEvent, QuickAskState>
+    implements QuickAskBloc {}
+
+Map<String, dynamic> _queueUpdateFrame( {
+  String priority = 'high',
+  String type     = 'task',
+} ) {
+  return {
+    'type'         : 'notification_queue_update',
+    'notification' : {
+      'id'                 : 'n-1',
+      'message'            : 'frame message',
+      'type'               : type,
+      'priority'           : priority,
+      'sender_id'          : 'sender-1',
+      'timestamp'          : '2026-06-12T01:00:00',
+      'response_requested' : false,
+      'suppress_ding'      : false,
+    },
+  };
+}
+
+void main() {
+  group( 'WsBlocDispatcher (S2 app wiring)', () {
+    late _MockRepo  repo;
+    late _MockAudio audio;
+    late _MockTts   tts;
+    late NotificationBloc legacyBloc;
+    late FocusChatBloc    focusBloc;
+    late _MockQuickAsk    quickAskBloc;
+    late WsBlocDispatcher dispatcher;
+
+    late TranscriptFrameRouter transcriptRouter;
+
+    setUp( () {
+      repo             = _MockRepo();
+      audio            = _MockAudio();
+      tts              = _MockTts();
+      transcriptRouter = TranscriptFrameRouter();
+
+      when( () => audio.handleIncoming(
+        priority     : any( named: 'priority' ),
+        message      : any( named: 'message' ),
+        title        : any( named: 'title' ),
+        suppressDing : any( named: 'suppressDing' ),
+        notificationId : any( named: 'notificationId' ),
+        senderId       : any( named: 'senderId' ),
+      ) ).thenAnswer( ( _ ) async {} );
+
+      // Production-parity construction (service_locator.dart): legacy bloc
+      // gets audio but NO tts (F-S2-1 withdrawal); focus bloc owns speech.
+      legacyBloc = NotificationBloc( repo, audio: audio );
+      focusBloc  = FocusChatBloc( repo, tts: tts );
+      // Persona-less fixtures: widen the rail scope (default Personas-only, §5f).
+      focusBloc.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );
+
+      quickAskBloc = _MockQuickAsk();
+
+      GetIt.instance.registerSingleton<NotificationBloc>( legacyBloc );
+      GetIt.instance.registerSingleton<FocusChatBloc>( focusBloc );
+      GetIt.instance.registerSingleton<QuickAskBloc>( quickAskBloc );
+      // The `auth_success` arm now also tells the Live Console's app-root router to
+      // re-watch (C5.8): the console bloc is route-scoped, so the router is the only seam
+      // the dispatcher can reach. Registered here for the same reason `QuickAskBloc` is,
+      // and for the reason this file's header already gives — a production `isRegistered`
+      // guard would make the reconnect re-watch silently optional, and nothing would
+      // notice if the router were never wired at all.
+      GetIt.instance.registerSingleton<TranscriptFrameRouter>( transcriptRouter );
+
+      dispatcher = WsBlocDispatcher();
+    } );
+
+    tearDown( () async {
+      transcriptRouter.dispose();
+      await GetIt.instance.reset();
+    } );
+
+    // ── AC-S4.3 — the ask LIFECYCLE frames, through the REAL dispatcher ──
+    //
+    // Both names appeared ZERO times in `lib/` before this: the frames
+    // arrived and were dropped on the floor. An expired ask therefore
+    // stayed "pending" forever and poisoned `pendingPromptFor`, so the
+    // composer aimed every voice reply at a dead ask and took a 400 the
+    // user never saw.
+    //
+    // Payload keys sit at the TOP level of the frame — verified against the
+    // emit sites, `notifications.py:1442` and `:1636` — NOT nested under
+    // `notification` the way `notification_queue_update` nests them. A case
+    // that reads `data['notification']` here finds nothing and drops the
+    // frame just as silently as having no case at all.
+
+    NotificationItem askItem( String id ) => NotificationItem(
+      id                     : id,
+      message                : 'Proceed?',
+      type                   : 'task',
+      priority               : 'medium',
+      senderId               : 'sender-1',
+      timestamp              : DateTime( 2026, 8, 29, 20 ),
+      played                 : false,
+      playCount              : 0,
+      responseRequested      : true,
+      responseType           : 'yes_no',
+      suppressDing           : false,
+      displayQualifierWidget : false,
+    );
+
+    Future<FocusMessage> deliverThen( Map<String, dynamic> frame ) async {
+      focusBloc.add( FocusInboundNotification( askItem( 'n-live' ) ) );
+      await Future<void>.delayed( Duration.zero );
+      dispatcher.dispatch( frame[ 'type' ] as String, frame );
+      await Future<void>.delayed( Duration.zero );
+      return focusBloc.state.windows[ 'sender-1' ]!
+          .firstWhere( ( m ) => m.item.id == 'n-live' );
+    }
+
+    test( 'AC-S4.3 — notification_expired marks the ask dead and surfaces '
+          'the default the server used', () async {
+      final msg = await deliverThen( {
+        'type'            : 'notification_expired',
+        'notification_id' : 'n-live',
+        'default_used'    : 'no',
+        'timeout'         : true,
+      } );
+
+      expect( msg.answered, isTrue, reason: 'an expired ask is FINISHED' );
+      expect( msg.resolution, AskResolution.expired );
+      expect( msg.resolutionDetail, 'no',
+              reason: '"expired" alone is thin — the user should see what the '
+                      'server answered on their behalf' );
+      expect( focusBloc.state.pendingPromptFor( 'sender-1' ), isNull );
+    } );
+
+    test( 'AC-S4.3 — notification_responded retires the ask as answered '
+          'ELSEWHERE, which is not an error and not our answer', () async {
+      final msg = await deliverThen( {
+        'type'            : 'notification_responded',
+        'notification_id' : 'n-live',
+        'response_value'  : 'yes',
+      } );
+
+      expect( msg.answered, isTrue );
+      expect( msg.resolution, AskResolution.answeredElsewhere );
+      expect( msg.resolutionDetail, 'yes' );
+      expect( focusBloc.state.hydration, isNot( FocusHydration.error ) );
+    } );
+
+    // ── The shared stop-list, pinned so it stays deliberate ─────────────
+    test( 'the orchestrator and FocusChatBloc resolve the SAME '
+          'NotificationStopList instance in production DI', () {
+      // Load-bearing since the suppressed-question path stopped returning
+      // early: the bloc now CALLS `enqueueAlways` and relies on the
+      // orchestrator's gate 1 to mute it. If the two ever hold different
+      // stop lists — or the orchestrator holds none — a question the user
+      // muted starts talking, and every existing test still passes because
+      // each half is individually correct.
+      //
+      // Asserted against the registration source rather than a running
+      // container: both sites must read from the same registered singleton.
+      final di = File( 'lib/core/di/service_locator.dart' ).readAsStringSync();
+      final resolvers = RegExp( r'stopList\s*:\s*_getIt<NotificationStopList>\(\)' )
+          .allMatches( di ).length;
+      expect( resolvers, greaterThanOrEqualTo( 2 ),
+              reason: 'the orchestrator and the focus bloc must BOTH take the '
+                      'registered stop list; a literal or a null at either '
+                      'site un-mutes suppressed questions' );
+      expect( di.contains( 'registerLazySingleton<NotificationStopList>' )
+           || di.contains( 'registerSingleton<NotificationStopList>' ), isTrue,
+              reason: 'one instance, registered once' );
+    } );
+
+    test( 'a lifecycle frame for an UNKNOWN id changes nothing — it does not '
+          'blank the window or throw', () async {
+      final msg = await deliverThen( {
+        'type'            : 'notification_expired',
+        'notification_id' : 'someone-elses-ask',
+        'default_used'    : 'no',
+      } );
+
+      expect( msg.answered, isFalse );
+      expect( msg.resolution, isNull );
+      expect( focusBloc.state.pendingPromptFor( 'sender-1' )?.item.id, 'n-live' );
+    } );
+
+    Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
+    test( 'AC-S2.8 — one notification_queue_update frame → EXACTLY ONE orchestrator enqueue across BOTH blocs', () async {
+      dispatcher.dispatch( 'notification_queue_update', _queueUpdateFrame( priority: 'high' ) );
+      await pump();
+
+      // FocusChatBloc spoke it once via the ungated path...
+      verify( () => tts.enqueueAlways(
+        priority : 'high',
+        message  : 'frame message',
+        title    : any( named: 'title' ),
+        voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
+      ) ).called( 1 );
+      // ...and the legacy gated path stayed SILENT (tts not injected).
+      verifyNever( () => tts.enqueueIfSpeakable(
+        priority : any( named: 'priority' ),
+        message  : any( named: 'message' ),
+        title    : any( named: 'title' ),
+        voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
+      ) );
+      // Legacy bloc still processed the frame (audio/ding ownership stays).
+      verify( () => audio.handleIncoming(
+        priority     : any( named: 'priority' ),
+        message      : any( named: 'message' ),
+        title        : any( named: 'title' ),
+        suppressDing : any( named: 'suppressDing' ),
+        notificationId : any( named: 'notificationId' ),
+        senderId       : any( named: 'senderId' ),
+      ) ).called( 1 );
+    } );
+
+    test( 'AC-S2.10 (app half) — auth_success frame re-dispatches FocusColdStartRequested with the authenticated email', () async {
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )
+          .thenAnswer( ( _ ) async => [] );
+
+      dispatcher.lastAuthenticatedEmail = 'rick@test.com';
+      dispatcher.dispatch( 'auth_success', { 'type': 'auth_success' } );
+      await pump();
+
+      verify( () => repo.sendersVisible( 'rick@test.com', hours: any( named: 'hours' ) ) ).called( 1 );
+    } );
+
+    test( 'auth_success before any authentication → no cold-start dispatch (defensive)', () async {
+      dispatcher.dispatch( 'auth_success', { 'type': 'auth_success' } );
+      await pump();
+
+      verifyNever( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) );
+    } );
+
+    test( 'row 281a10d6 — resume_complete with gap:true triggers the full refetch', () async {
+      when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )
+          .thenAnswer( ( _ ) async => [] );
+
+      dispatcher.lastAuthenticatedEmail = 'rick@test.com';
+      dispatcher.dispatch( 'resume_complete', { 'type': 'resume_complete', 'replayed': 0, 'gap': true, 'seq': 9 } );
+      await pump();
+
+      verify( () => repo.sendersVisible( 'rick@test.com', hours: any( named: 'hours' ) ) ).called( 1 );
+    } );
+
+    test( 'row 281a10d6 — resume_complete with gap:false does NOT refetch', () async {
+      dispatcher.lastAuthenticatedEmail = 'rick@test.com';
+      dispatcher.dispatch( 'resume_complete', { 'type': 'resume_complete', 'replayed': 3, 'gap': false, 'seq': 9 } );
+      await pump();
+
+      verifyNever( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) );
+    } );
+
+    test( 'persona frames route to FocusPersonaUpdated, not the inbound path (no TTS enqueue)', () async {
+      dispatcher.dispatch( 'notification_queue_update', {
+        'type'         : 'notification_queue_update',
+        'notification' : {
+          'id'            : 'p-1',
+          'message'       : 'persona admin frame',
+          'type'          : 'voice_persona_assigned',
+          'priority'      : 'low',
+          'sender_id'     : 'sender-1',
+          'timestamp'     : '2026-06-12T01:00:00',
+          'voice_persona' : { 'name': 'Tiffany', 'voice_id': 'vx-1' },
+        },
+      } );
+      await pump();
+
+      verifyNever( () => tts.enqueueAlways(
+        priority : any( named: 'priority' ),
+        message  : any( named: 'message' ),
+        title    : any( named: 'title' ),
+        voiceId  : any( named: 'voiceId' ),
+        sender   : any( named: 'sender' ),
+        senderKey: any( named: 'senderKey' ),
+      ) );
+      expect( focusBloc.state.personasBySender[ 'sender-1' ], isNotNull );
+      expect( focusBloc.state.senderOrder, isEmpty,
+          reason: 'admin frames never create rail entries' );
+    } );
+      test( 'session_reaped frame → FocusSenderExited (immediate hide in Live; no TTS, no rail entry)', () async {
+      // establish the sender first so the exit has something to hide
+      dispatcher.dispatch( 'notification_queue_update', _queueUpdateFrame() );
+      await pump();
+      expect( focusBloc.state.visibleOrder, [ 'sender-1' ] );
+
+      dispatcher.dispatch( 'notification_queue_update', {
+        'type'         : 'notification_queue_update',
+        'notification' : {
+          'id'        : 'r-1',
+          'message'   : 'worker reaped',
+          'type'      : 'session_reaped',
+          'priority'  : 'low',
+          'sender_id' : 'sender-1',
+          'timestamp' : '2026-06-12T01:00:00',
+        },
+      } );
+      await pump();
+
+      expect( focusBloc.state.exitedSenders, { 'sender-1' } );
+      expect( focusBloc.state.visibleOrder, isEmpty );
+      expect( focusBloc.state.senderOrder, [ 'sender-1' ], reason: 'retained — visibility only' );
+    } );
+  } );
+
+  // ── Row 588c8dc9 — the login hook routes each identity to the consumer
+  // that expects it. It once handed the account UUID to every consumer, so
+  // the reconnect cold start asked senders-visible for a UUID (10 × 404 in
+  // the dev log) and FCM registered the token under `user_email: <UUID>`.
+  // The UUID and the email are deliberately DIFFERENT strings here: with
+  // equal fixtures a swap would pass.
+  group( 'onWsAuthenticated (login hook identity routing)', () {
+    const uuid  = '7217ccef-72fb-4bc1-bf46-8b0ab5d82594';
+    const email = 'rick@test.com';
+
+    late _MockWs          ws;
+    late WsBlocDispatcher dispatcher;
+    late List<String>     pushed;
+    late List<String>     calls;
+
+    setUp( () {
+      ws         = _MockWs();
+      dispatcher = WsBlocDispatcher();
+      pushed     = [];
+      calls      = [];
+      when( () => ws.connect( userId: any( named: 'userId' ) ) ).thenAnswer( ( _ ) async {} );
+    } );
+
+    Future<void> login( { bool connected = false } ) async {
+      when( () => ws.isConnected ).thenReturn( connected );
+      await onWsAuthenticated(
+        dispatcher   : dispatcher,
+        ws           : ws,
+        userId       : uuid,
+        email        : email,
+        registerPush : ( e ) async { pushed.add( e ); calls.add( 'push' ); },
+        requestNotifications : () async { calls.add( 'permission' ); return true; },
+      );
+    }
+
+    test( 'cold-start dispatcher is stamped with the EMAIL, not the UUID', () async {
+      await login();
+      expect( dispatcher.lastAuthenticatedEmail, email );
+    } );
+
+    test( 'push registration receives the EMAIL, not the UUID', () async {
+      await login();
+      expect( pushed, [ email ] );
+    } );
+
+    test( 'the WebSocket still connects with the UUID (it authenticates by bearer token)', () async {
+      await login();
+      verify( () => ws.connect( userId: uuid ) ).called( 1 );
+    } );
+
+    test( 'an already-connected socket is not reconnected, but the email is still stamped and pushed', () async {
+      await login( connected: true );
+      verifyNever( () => ws.connect( userId: any( named: 'userId' ) ) );
+      expect( dispatcher.lastAuthenticatedEmail, email );
+      expect( pushed, [ email ] );
+    } );
+
+    // Row 8ff78c69: nothing requested POST_NOTIFICATIONS, so Android 13+
+    // dropped every notification the FCM wake showed.
+    test( 'login requests the notification permission once, after push registration', () async {
+      await login();
+      expect( calls, [ 'push', 'permission' ] );
+    } );
+
+    test( 'a denied notification permission does not undo the login', () async {
+      when( () => ws.isConnected ).thenReturn( false );
+      await onWsAuthenticated(
+        dispatcher           : dispatcher,
+        ws                   : ws,
+        userId               : uuid,
+        email                : email,
+        registerPush         : ( e ) async => pushed.add( e ),
+        requestNotifications : () async => false,
+      );
+      expect( dispatcher.lastAuthenticatedEmail, email );
+      expect( pushed, [ email ] );
+      verify( () => ws.connect( userId: uuid ) ).called( 1 );
+    } );
+  } );
+}

@@ -4,6 +4,8 @@
 /// `cosa/rest/routers/queues.py` and `cosa/rest/job_persistence.py`.
 library;
 
+import 'package:equatable/equatable.dart';
+
 DateTime? _parseDt( dynamic v ) =>
     v == null ? null : DateTime.tryParse( v.toString() );
 
@@ -13,16 +15,72 @@ T? _as<T>( dynamic v ) => v is T ? v : null;
 // Submission requests
 // ─────────────────────────────────────────────
 
-/// Request body for POST /api/push (standard job via runtime-arg expediter).
-class PushJobRequest {
+/// Request body for POST /api/v2/ask — the CJ Flow v2 question door.
+///
+/// Replaces POST /api/push (410 tombstone since 2026-08-21; REMOVE BY 2026-12-31).
+/// Field names match `cosa/rest/routers/v2_ask.py::AskRequest`.
+class AskRequest {
   final String  question;
-  final String  websocketId;
+  final String? websocketId;
+  final bool    speak;        // dispatch the answer as a TTS notification
+  final bool    interactive;  // park + resume on a missing argument (else needs_input)
 
-  const PushJobRequest( { required this.question, required this.websocketId } );
+  const AskRequest( {
+    required this.question,
+    this.websocketId,
+    this.speak       = true,
+    this.interactive = true,
+  } );
 
   Map<String, dynamic> toJson() => {
     'question'     : question,
-    'websocket_id' : websocketId,
+    if ( websocketId != null ) 'websocket_id' : websocketId,
+    'speak'        : speak,
+    'interactive'  : interactive,
+  };
+}
+
+/// Request body for POST /api/v2/submit — work whose COMMAND is already
+/// decided (the door beside `ask`; Rick's two-door ruling, 2026-08-21). The
+/// caller names the routing command and hands over every argument it needs;
+/// the server skips routing + extraction. `question` is optional and only
+/// carried for the record; a submit NEVER parks — missing args come back as
+/// `status == 'needs_input'` with `argsMissing` filled in. Wave 2 of the
+/// v2 cutover routes the eleven submit-shaped doors through this one body.
+/// `scheduledAt` / `monopolize` ride TOP-LEVEL, not inside `args`: `args` is
+/// contract-validated against `JOB_ARG_CONTRACTS` and these two are queue
+/// directives, not agent arguments (Rachel's recommendation 2026-08-21; the
+/// server-side ruling is pending — see
+/// `src/rnd/2026.08.21-v2-cutover-wave-2-readiness.md` § Rachel's answers).
+/// They are serialized ONLY when set, so bodies stay byte-identical until the
+/// server accepts them.
+class SubmitRequest {
+  final String               command;
+  final Map<String, dynamic> args;
+  final String?              question;
+  final String?              websocketId;
+  final bool                 speak;
+  final String?              scheduledAt;
+  final bool?                monopolize;
+
+  const SubmitRequest( {
+    required this.command,
+    this.args        = const {},
+    this.question,
+    this.websocketId,
+    this.speak       = true,
+    this.scheduledAt,
+    this.monopolize,
+  } );
+
+  Map<String, dynamic> toJson() => {
+    'command'      : command,
+    'args'         : args,
+    if ( question    != null ) 'question'     : question,
+    if ( websocketId != null ) 'websocket_id' : websocketId,
+    'speak'        : speak,
+    if ( scheduledAt != null ) 'scheduled_at' : scheduledAt,
+    if ( monopolize  != null ) 'monopolize'   : monopolize,
   };
 }
 
@@ -44,6 +102,19 @@ class PushAgenticRequest {
     this.monopolize = false,
   } );
 
+  /// v2 wave 2 — the same submission as a `SubmitRequest` (door 10 is 1:1:
+  /// `routing_command` → `command`; `args`/`question` carry over verbatim; the
+  /// queue directives stay top-level).
+  SubmitRequest toSubmitRequest( { bool speak = true } ) => SubmitRequest(
+    command     : routingCommand,
+    args        : args,
+    question    : question,
+    websocketId : websocketId,
+    speak       : speak,
+    scheduledAt : scheduledAt,
+    monopolize  : monopolize ? true : null,
+  );
+
   Map<String, dynamic> toJson() => {
     'routing_command' : routingCommand,
     'websocket_id'    : websocketId,
@@ -58,7 +129,8 @@ class PushAgenticRequest {
 // Submission response
 // ─────────────────────────────────────────────
 
-/// Response from POST /api/push and POST /api/push-agentic.
+/// Response from POST /api/push-agentic (queue-and-poll).
+/// (POST /api/push is gone — see [AskResponse] for the synchronous v2 reply.)
 class PushJobResponse {
   final String  status;
   final String  websocketId;
@@ -76,6 +148,18 @@ class PushJobResponse {
     this.routingCommand,
   } );
 
+  /// v2 wave 2: door 10 (`/api/push-agentic`) now rides `/api/v2/submit`; the
+  /// synchronous body is adapted back to the queue-and-poll shape the dashboard
+  /// already renders ("Job queued: <id>"). `user_id` is not in the v2 body.
+  factory PushJobResponse.fromAsk( AskResponse ask, { required String websocketId } ) => PushJobResponse(
+    status         : ask.status,
+    websocketId    : websocketId,
+    userId         : '',
+    jobId          : ask.jobId,
+    result         : ask.answer,
+    routingCommand : ask.command,
+  );
+
   factory PushJobResponse.fromJson( Map<String, dynamic> j ) => PushJobResponse(
     status         : j[ 'status' ]       as String,
     websocketId    : j[ 'websocket_id' ] as String,
@@ -84,6 +168,267 @@ class PushJobResponse {
     result         : _as<String>( j[ 'result' ] ),
     routingCommand : _as<String>( j[ 'routing_command' ] ),
   );
+}
+
+// ─────────────────────────────────────────────
+// v2 ask response (§8 result dict)
+// ─────────────────────────────────────────────
+
+/// Response from POST /api/v2/ask — SYNCHRONOUS: the answer (or the first
+/// clarifying question) comes back in the body; nothing is queued for polling.
+/// Field names match `cosa/rest/routers/v2_ask.py::AskResponse`.
+/// Body of `POST /api/v2/resume` — the Door A answer turn (AC-S4.8).
+///
+/// 🔴 **FOUR fields, and `websocketId` is the one that gets forgotten.**
+/// Verified against `ResumeRequest` in `rest/v2/routers/v2_ask.py`:
+/// `pending_id`, `answer`, `websocket_id`, `speak`. The ask turn sets
+/// `websocket_id` and that is **how the answer's TTS is routed** — a
+/// two-argument `resume( pendingId, answer )` drops it, and the second
+/// turn of one conversation speaks nowhere. The interview is re-entrant
+/// (AC-S4.12), so every turn after the first is this call.
+class ResumeRequest {
+  final String  pendingId;
+  final String  answer;
+  final String? websocketId;
+  final bool    speak;
+
+  const ResumeRequest( {
+    required this.pendingId,
+    required this.answer,
+    this.websocketId,
+    this.speak = true,
+  } );
+
+  Map<String, dynamic> toJson() => {
+    'pending_id'   : pendingId,
+    'answer'       : answer,
+    if ( websocketId != null ) 'websocket_id' : websocketId,
+    'speak'        : speak,
+  };
+}
+
+class AskResponse {
+  final String        path;          // replay | agent | needs_input | receptionist
+  final String        status;        // done | parked | needs_input | failed
+  final String        routeReason;
+  final String?       answer;
+  final String?       answerRaw;
+  final String?       command;
+  final List<String>  argsKnown;
+  final List<String>  argsMissing;
+  final String?       pendingId;     // set when interactive + needs_input (resume with /api/v2/resume)
+  final String?       jobId;
+  final String?       snapshotId;
+  final double?       similarity;
+  final bool          wroteSnapshot;
+  final bool          cacheHit;
+  final bool          spoke;
+  final Map<String, dynamic> timingsMs;
+  final String        traceId;
+  final String?       error;
+
+  const AskResponse( {
+    required this.path,
+    required this.status,
+    required this.routeReason,
+    required this.traceId,
+    this.answer,
+    this.answerRaw,
+    this.command,
+    this.argsKnown     = const [],
+    this.argsMissing   = const [],
+    this.pendingId,
+    this.jobId,
+    this.snapshotId,
+    this.similarity,
+    this.wroteSnapshot = false,
+    this.cacheHit      = false,
+    this.spoke         = false,
+    this.timingsMs     = const {},
+    this.error,
+  } );
+
+  bool get isDone     => status == 'done';
+  /// Kept as the union both branches used to share — callers that only
+  /// ask "does this want something from the user?" are still right.
+  bool get needsInput => status == 'needs_input' || status == 'parked';
+
+  /// 🔴 The two halves of that union are NOT the same thing (AC-S4.1,
+  /// AC-S4.2), and treating them alike is what the id-sniffing design got
+  /// wrong:
+  ///   - `parked` carries a `pending_id` — the server is ASKING, and the
+  ///     answer goes back through `POST /api/v2/resume`.
+  ///   - `needs_input` carries NO id at all — `flow.py:365` hard-codes
+  ///     `interactive=False` on the submit path, so it never parks. The
+  ///     server is TELLING you, not asking. An answer box here has nowhere
+  ///     to send its value.
+  bool get isParked    => status == 'parked';
+  bool get isNeedsInput => status == 'needs_input';
+
+  bool get isFailed   => status == 'failed';
+
+  /// The sixth outcome (`v2_ask.py:91`), emitted only by the resume door:
+  /// `pending_expired` / `already_resumed` at `flow.py:698` / `:727`.
+  bool get isExpired  => status == 'expired';
+
+  /// AC-S1.5 — the `waiting` branch that was missing.
+  ///
+  /// `pushAgentic()` already knew about `'waiting'`; the knowledge never
+  /// reached this model, so `isDone`/`needsInput`/`isFailed` were ALL false
+  /// for a queued job and `summary` fell through to `'Done ($path)'`.
+  /// `submit_job_sheet.dart` then popped its sheet and reported success for
+  /// work that had not started.
+  bool get isWaiting  => status == 'waiting';
+
+  /// One-line summary for snackbars / toasts.
+  String get summary {
+    if ( needsInput ) return answer ?? 'Needs input: ${argsMissing.join( ", " )}';
+    if ( isFailed )   return error ?? 'Request failed';
+    // Before the answer fallback: a queued job has no answer yet, and saying
+    // "Done" about it is the defect this branch exists to remove.
+    if ( isWaiting )  return 'Queued\u2026';
+    return answer ?? 'Done ($path)';
+  }
+
+  static List<String> _strList( dynamic v ) =>
+      v is List ? v.map( ( e ) => e.toString() ).toList() : const [];
+
+  factory AskResponse.fromJson( Map<String, dynamic> j ) => AskResponse(
+    path          : j[ 'path' ]         as String,
+    status        : j[ 'status' ]       as String,
+    routeReason   : _as<String>( j[ 'route_reason' ] ) ?? '',
+    traceId       : _as<String>( j[ 'trace_id' ] ) ?? '',
+    answer        : _as<String>( j[ 'answer' ] ),
+    answerRaw     : _as<String>( j[ 'answer_raw' ] ),
+    command       : _as<String>( j[ 'command' ] ),
+    argsKnown     : _strList( j[ 'args_known' ] ),
+    argsMissing   : _strList( j[ 'args_missing' ] ),
+    pendingId     : _as<String>( j[ 'pending_id' ] ),
+    jobId         : _as<String>( j[ 'job_id' ] ),
+    snapshotId    : _as<String>( j[ 'snapshot_id' ] ),
+    similarity    : ( j[ 'similarity' ] as num? )?.toDouble(),
+    wroteSnapshot : _as<bool>( j[ 'wrote_snapshot' ] ) ?? false,
+    cacheHit      : _as<bool>( j[ 'cache_hit' ] ) ?? false,
+    spoke         : _as<bool>( j[ 'spoke' ] ) ?? false,
+    timingsMs     : _as<Map<String, dynamic>>( j[ 'timings_ms' ] ) ?? const {},
+    error         : _as<String>( j[ 'error' ] ),
+  );
+}
+
+// ─────────────────────────────────────────────
+// POST /api/v2/ask-audio — the spoken-ask stream
+// ─────────────────────────────────────────────
+
+/// One event read off the `POST /api/v2/ask-audio` NDJSON body, as returned by
+/// `QueueRepository.askSpoken`.
+///
+/// 🔴 This file's FIRST `sealed` type and first `Equatable`, deliberately (plan
+/// rev 14 §3.2 SB3). Every other class here is a plain data model; this one is
+/// borrowed from the app's only union precedent, `quick_ask_event.dart:8`,
+/// because the bloc compares emitted events by value. A plain abstract class
+/// with `==` unimplemented would make those comparisons identity checks —
+/// failing a correct parser, or passing because both sides are one instance.
+/// It lives here, not in its own file, because it is the element type of a
+/// stream this directory's repository returns and [SpokenAskResult] wraps
+/// [AskResponse], which already lives here.
+///
+/// End-of-stream rules (§3.2 — what the bloc may rely on):
+///
+/// | Wire outcome                                   | Event(s), in order                          |
+/// |------------------------------------------------|---------------------------------------------|
+/// | non-200                                        | [SpokenAskFailed] with `statusCode`         |
+/// | body closes before any line                    | [SpokenAskFailed]                           |
+/// | `transcript` line                              | [SpokenAskTranscript] (stream continues)    |
+/// | `ask` line                                     | [SpokenAskResult]                           |
+/// | `error` line                                   | [SpokenAskFailed], after the Transcript     |
+/// | body closes after the transcript, no 2nd line  | [SpokenAskCutOff]                           |
+/// | malformed line / network error mid-body        | Failed before the transcript, CutOff after  |
+///
+/// A stream emits AT MOST ONE terminal event ([isTerminal]) and then closes. It
+/// never throws: every failure arrives as an event.
+sealed class SpokenAskEvent extends Equatable {
+  const SpokenAskEvent();
+
+  /// True for [SpokenAskResult], [SpokenAskFailed] and [SpokenAskCutOff] —
+  /// the three events after which the stream closes.
+  bool get isTerminal;
+}
+
+/// Line 1: the server's transcript of the audio. Not terminal — the ask is
+/// already running server-side when this arrives (§2.1 D4).
+class SpokenAskTranscript extends SpokenAskEvent {
+  final String text;
+  const SpokenAskTranscript( this.text );
+
+  @override
+  bool get isTerminal => false;
+
+  @override
+  List<Object?> get props => [ text ];
+}
+
+/// Line 2: the full [AskResponse], carrying the `job_id` that tracking and
+/// cancelling key on.
+class SpokenAskResult extends SpokenAskEvent {
+  final AskResponse response;
+  const SpokenAskResult( this.response );
+
+  @override
+  bool get isTerminal => true;
+
+  /// [AskResponse] has no value equality, so equality is taken over its
+  /// fields — two Results parsed from the same bytes compare equal.
+  @override
+  List<Object?> get props => [
+    response.path,
+    response.status,
+    response.routeReason,
+    response.answer,
+    response.answerRaw,
+    response.command,
+    response.argsKnown,
+    response.argsMissing,
+    response.pendingId,
+    response.jobId,
+    response.snapshotId,
+    response.similarity,
+    response.wroteSnapshot,
+    response.cacheHit,
+    response.spoke,
+    response.timingsMs,
+    response.traceId,
+    response.error,
+  ];
+}
+
+/// Nothing usable came back: a non-200 (then NOTHING was asked, §2.1 D1), a
+/// body that closed or broke before the transcript, or an `error` line after
+/// it. `statusCode` is set only when the server answered with a non-200.
+class SpokenAskFailed extends SpokenAskEvent {
+  final String detail;
+  final int?   statusCode;
+  const SpokenAskFailed( this.detail, { this.statusCode } );
+
+  @override
+  bool get isTerminal => true;
+
+  @override
+  List<Object?> get props => [ detail, statusCode ];
+}
+
+/// The transcript arrived and then the body ended without a second line — a
+/// dropped connection, a malformed line or a network error. The ask WAS sent
+/// and is still running server-side (§2.1 D4), so its answer may yet arrive
+/// over the WebSocket; only the job ID is lost.
+class SpokenAskCutOff extends SpokenAskEvent {
+  final String transcript;
+  const SpokenAskCutOff( this.transcript );
+
+  @override
+  bool get isTerminal => true;
+
+  @override
+  List<Object?> get props => [ transcript ];
 }
 
 // ─────────────────────────────────────────────
@@ -386,19 +731,6 @@ class MessageDeliveredResponse {
         notificationId : j[ 'notification_id' ] as String,
         jobId          : j[ 'job_id' ]          as String,
       );
-}
-
-/// Response from POST /api/job-history/{job_id}/retry.
-class RetryJobResponse {
-  final String status;
-  final String originalJobId;
-
-  const RetryJobResponse( { required this.status, required this.originalJobId } );
-
-  factory RetryJobResponse.fromJson( Map<String, dynamic> j ) => RetryJobResponse(
-    status        : j[ 'status' ]           as String,
-    originalJobId : j[ 'original_job_id' ]  as String,
-  );
 }
 
 /// Response from POST /api/jobs/{id_hash}/resume-from-checkpoint.

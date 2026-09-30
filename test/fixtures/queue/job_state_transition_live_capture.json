@@ -1,0 +1,72 @@
+{
+  "_source": "CAPTURED VERBATIM from the live :7999 dev server, 2026-08-29, by AC-G3's probe. Not hand-written \u2014 these are the bytes the server actually put on the wire.",
+  "_ask_response": {
+    "path": "agent",
+    "status": "waiting",
+    "route_reason": "args_none",
+    "job_id": "a0800daf359b01533540822e64bce9f969cc4836d852c495dbf575dff989b92d::50c73ba7-36dd-4eaf-a7e2-63256252c84f",
+    "similarity": null,
+    "wrote_snapshot": false,
+    "cache_hit": false
+  },
+  "frames": [
+    {
+      "type": "job_state_transition",
+      "timestamp": "2026-08-29T21:18:44.944028-04:00",
+      "job_id": "a0800daf359b01533540822e64bce9f969cc4836d852c495dbf575dff989b92d::50c73ba7-36dd-4eaf-a7e2-63256252c84f",
+      "from_state": "pending",
+      "to_state": "queued",
+      "metadata": {
+        "question_text": "what time is it right now",
+        "agent_type": "DateAndTimeAgent",
+        "timestamp": "2026-08-29 @ 21:18:44.942836 EDT",
+        "scheduled_at": null,
+        "monopolize": false,
+        "paused": false,
+        "user_email": "test.user@example.test",
+        "session_id": "timid bison",
+        "routing_command": "agent router go to datetime",
+        "original_args": null
+      }
+    },
+    {
+      "type": "job_state_transition",
+      "timestamp": "2026-08-29T21:18:44.944227-04:00",
+      "job_id": "a0800daf359b01533540822e64bce9f969cc4836d852c495dbf575dff989b92d::50c73ba7-36dd-4eaf-a7e2-63256252c84f",
+      "from_state": "queued",
+      "to_state": "running",
+      "metadata": {
+        "question_text": "what time is it right now",
+        "agent_type": "DateAndTimeAgent",
+        "timestamp": "2026-08-29 @ 21:18:44.942836 EDT",
+        "user_email": "test.user@example.test",
+        "started_at": "2026-08-29T21:18:44.944153-04:00"
+      }
+    },
+    {
+      "type": "job_state_transition",
+      "timestamp": "2026-08-29T21:18:56.699757-04:00",
+      "job_id": "a0800daf359b01533540822e64bce9f969cc4836d852c495dbf575dff989b92d::50c73ba7-36dd-4eaf-a7e2-63256252c84f",
+      "from_state": "running",
+      "to_state": "completed",
+      "metadata": {
+        "response_text": "It's 9:18 PM.",
+        "abstract": null,
+        "report_link": null,
+        "cost_summary": null,
+        "error": null,
+        "question_text": "what time is it right now",
+        "agent_type": "DateAndTimeAgent",
+        "timestamp": "2026-08-29 @ 21:18:54 EDT",
+        "status": "completed",
+        "has_interactions": true,
+        "is_cache_hit": false,
+        "user_email": "test.user@example.test",
+        "answer_is_correct": null,
+        "started_at": null,
+        "completed_at": "2026-08-29T21:18:56.699708-04:00",
+        "duration_seconds": null
+      }
+    }
+  ]
+}

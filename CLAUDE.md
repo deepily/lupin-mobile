@@ -63,15 +63,30 @@ Based on the mobile development options analysis, the following technologies are
 
 ## DEVELOPMENT COMMANDS
 ```bash
-# Development server commands (if applicable)
-# TBD based on chosen framework
+# Always use the wrapper; bare `flutter` is not on every seat's PATH.
 
-# Build commands
-# TBD based on chosen framework
+# Testing
+./flutter.sh test                      # full suite, the merge gate (green on the exact sha)
+./flutter.sh test --coverage           # lcov at coverage/lcov.info
+./flutter.sh analyze <changed files>   # repo-wide analyze has pre-existing noise
 
-# Testing commands
-# TBD based on chosen framework
+# Android debug APK on the dev server (toolchain installed 2026-09-27, row 651e3956)
+#   JDK 21 at ~/opt/jdk-21, SDK at ~/Android/Sdk; `flutter config` already points at both.
+#   Build in the MAIN checkout: worktrees lack android/app/google-services.json (gitignored).
+#   Worker seats are capped at 8 GiB, but android/gradle.properties asks Gradle for
+#   -Xmx8G plus 4G metaspace, so an unmodified build is OOM-killed and reports only
+#   "Gradle build daemon disappeared unexpectedly". Pass the override below (session-local).
+JAVA_HOME=$HOME/opt/jdk-21 \
+GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g\ -XX:MaxMetaspaceSize=1g\ -XX:ReservedCodeCacheSize=256m -Dkotlin.daemon.jvmargs=-Xmx1500m -Dorg.gradle.workers.max=6" \
+./flutter.sh build apk --debug         # ~7 min cold, ~64 s warm; installing to the phone still needs the laptop or adb
+
+# The same build, wrapped (main checkout only, one at a time, memory override built in):
+src/scripts/build-apk-on-server.sh --fcm   # --fcm keeps push wake-ups in; without it they are compiled OUT
+# From the laptop: build on the server over ssh, then install to the phone (row f681440d)
+src/scripts/deploy-apk-to-device.sh --build --fcm
 ```
+
+**Always rebuild the APK after a client change (Rick, 2026-09-28).** Whenever a client change or bug fix merges into the main checkout and the suite is green, run `src/scripts/build-apk-on-server.sh --fcm` there and say the APK is ready. Rick then only runs `deploy-apk-to-device.sh` (no flags) from the laptop. **Always pass `--fcm`**: a build without it silently has no background wake-ups, and nothing on the phone says so (Pocholo's review F3, 2026-09-28).
 
 ## CODE STYLE AND CONVENTIONS
 - **File Naming**: Use dashes for non-code files (e.g., `mobile-app-config.md`)
@@ -160,6 +175,7 @@ Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow 
 | Branch / PR / Merge | `/plan-branch-pr-and-merge` |
 | Workflow Audit | `/plan-workflow-audit` |
 | About | `/plan-about` |
+| Session Close | `/plan-last-call` (🔔 — two-stage close; deliverables `push` → `/plan-session-end` push step · `backup` → `/plan-backup-write` · `post-game` → `/plan-post-game`), `/plan-post-game` |
 | Install / Uninstall Wizards | `/plan-install-wizard`, `/plan-uninstall-wizard` |
 
 **Behavioral Directives** (already established globally in `~/.claude/CLAUDE.md`):
@@ -172,3 +188,16 @@ Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow 
 
 **Session Start**: Use `/plan-session-start` or see planning-is-prompting → workflow/session-start.md
 **Session End**: Use `/plan-session-end` or see planning-is-prompting → workflow/session-end.md
+
+## Doc Viewer Scope
+
+When sending document viewer links from this repo, use:
+
+- **Scope name**: `lupin-mobile`
+- **Allowed prefixes** (per Lupin INI): wildcard (any path under repo root)
+- **Source of truth**: Lupin's `lupin-app.ini` § `external repos`
+- **Runtime discovery**: inspect the `doc_scope` field returned by `mcp__cosa-voice__get_session_info()`
+
+Example: `/app/docs?path=lupin-mobile/README.md`
+
+The project name is the **first segment of `path`**. The old `&scope=` parameter was retired on 2026-05-21: a link like `path=src/rnd/x.md&scope=lupin-mobile` reads `src` as the project and 404s (this happened on 2026-09-16).

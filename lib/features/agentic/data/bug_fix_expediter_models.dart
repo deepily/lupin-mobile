@@ -24,6 +24,14 @@ class BugFixExpediterRequest {
     this.monopolize  = false,
   } );
 
+  /// v2 wave 2 — `/api/v2/submit` args (1:1 with the factory).
+  static const submitCommand = 'agent router go to bug fix expediter';
+  Map<String, dynamic> toSubmitArgs() => {
+    'dead_job_id'                          : deadJobId,
+    if ( extraContext != null ) 'extra_context' : extraContext,
+    if ( dryRun               ) 'dry_run'       : dryRun,
+  };
+
   Map<String, dynamic> toJson() => {
     'dead_job_id'                          : deadJobId,
     if ( extraContext != null ) 'extra_context' : extraContext,

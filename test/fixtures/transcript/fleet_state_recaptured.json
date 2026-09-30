@@ -1,0 +1,265 @@
+{
+  "app_timezone": "America/New_York",
+  "context_pressure": {
+    "generated_at": "2026-09-29T19:38:33.510913+00:00",
+    "personas": {
+      "Rio": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 21.5,
+        "headroom_pct_points": 28.5,
+        "headroom_tokens_current": 285065,
+        "headroom_tokens_forward": 284648,
+        "last_turn_age_s": 8.4,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 215352,
+        "occupancy_tokens": 214935,
+        "pending_input_estimate": 57,
+        "pressure_pct": 21.5,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000004",
+        "status": "within_budget",
+        "tmux_session": "cc-author-mr-radio-1",
+        "window_size": 1000000
+      },
+      "Tiffany": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 45.2,
+        "headroom_pct_points": 4.8,
+        "headroom_tokens_current": 47661,
+        "headroom_tokens_forward": 46759,
+        "last_turn_age_s": 4.7,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 453241,
+        "occupancy_tokens": 452339,
+        "pending_input_estimate": 535,
+        "pressure_pct": 45.3,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000002",
+        "status": "within_budget",
+        "tmux_session": "cc-tmux-session-67a3d4c9",
+        "window_size": 1000000
+      },
+      "maria": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 9.3,
+        "headroom_pct_points": 40.7,
+        "headroom_tokens_current": 407030,
+        "headroom_tokens_forward": 406908,
+        "last_turn_age_s": 24.0,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 93092,
+        "occupancy_tokens": 92970,
+        "pending_input_estimate": 0,
+        "pressure_pct": 9.3,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000003",
+        "status": "within_budget",
+        "tmux_session": "cc-tmux-session-a08bddf1",
+        "window_size": 1000000
+      },
+      "mr radio": {
+        "budget_ceiling_tokens": 500000,
+        "budget_fraction": 0.5,
+        "consumption_pct_of_window": 21.0,
+        "headroom_pct_points": 29.0,
+        "headroom_tokens_current": 290426,
+        "headroom_tokens_forward": 289771,
+        "last_turn_age_s": 2.0,
+        "liveness": "ACTIVE",
+        "next_prompt_estimate": 210229,
+        "occupancy_tokens": 209574,
+        "pending_input_estimate": 263,
+        "pressure_pct": 21.0,
+        "pressure_state": "OK",
+        "recommendation": "",
+        "session_id": "00000000-0000-4000-8000-000000000001",
+        "status": "within_budget",
+        "tmux_session": "cc-tmux-session-777e1cee",
+        "window_size": 1000000
+      }
+    },
+    "policy": {
+      "1000000": 0.5,
+      "200000": 0.75,
+      "default": 0.5
+    },
+    "summary": {
+      "idle_or_unknown": 0,
+      "over_budget": 0,
+      "personas": 4,
+      "unnamed_live_seats": 0,
+      "within_budget": 4
+    },
+    "unnamed_seats": []
+  },
+  "fleet_arbiter": {
+    "generated_at": "2025-01-01T00:00:00+00:00",
+    "session_count": 5,
+    "sessions": [
+      {
+        "holding_on": "peer:rio",
+        "liveness": {
+          "bridge_age_s": 1,
+          "commons_age_s": 760,
+          "dm_age_s": 13,
+          "event_age_s": 2,
+          "freshest_age_s": 0,
+          "hold_age_s": 96,
+          "idle_prompt_age_s": 227,
+          "transcript_age_s": 0,
+          "verdict": "LIVE"
+        },
+        "manager": null,
+        "persona": "mr radio",
+        "role": "manager",
+        "session_id": "00000000-0000-4000-8000-000000000001",
+        "state": "holding",
+        "stuck": false
+      },
+      {
+        "holding_on": "user:rick",
+        "liveness": {
+          "bridge_age_s": 0,
+          "commons_age_s": 760,
+          "dm_age_s": 2140,
+          "event_age_s": 2135,
+          "freshest_age_s": 0,
+          "hold_age_s": 2579,
+          "idle_prompt_age_s": 232,
+          "transcript_age_s": 0,
+          "verdict": "LIVE"
+        },
+        "manager": null,
+        "persona": "Tiffany",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000002",
+        "state": "holding",
+        "stuck": false
+      },
+      {
+        "holding_on": "user:rick",
+        "liveness": {
+          "bridge_age_s": 12,
+          "commons_age_s": 760,
+          "dm_age_s": 320,
+          "event_age_s": 13,
+          "freshest_age_s": 11,
+          "hold_age_s": null,
+          "idle_prompt_age_s": 527,
+          "transcript_age_s": 11,
+          "verdict": "LIVE"
+        },
+        "manager": null,
+        "persona": "maria",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000003",
+        "state": "holding",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": 3,
+          "commons_age_s": 760,
+          "dm_age_s": 753,
+          "event_age_s": 3684,
+          "freshest_age_s": 2,
+          "hold_age_s": null,
+          "idle_prompt_age_s": 689,
+          "transcript_age_s": 2,
+          "verdict": "LIVE"
+        },
+        "manager": "mr radio",
+        "persona": "Rio",
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000004",
+        "state": "idle",
+        "stuck": false
+      },
+      {
+        "holding_on": "none",
+        "liveness": {
+          "bridge_age_s": null,
+          "commons_age_s": null,
+          "dm_age_s": 680,
+          "event_age_s": null,
+          "freshest_age_s": 680,
+          "hold_age_s": null,
+          "idle_prompt_age_s": null,
+          "transcript_age_s": null,
+          "verdict": "stale 11m"
+        },
+        "manager": null,
+        "persona": null,
+        "role": "worker",
+        "session_id": "00000000-0000-4000-8000-000000000005",
+        "state": "unknown",
+        "stuck": false
+      }
+    ]
+  },
+  "generated_at": "2025-01-01T00:00:00+00:00",
+  "health_watcher": {
+    "blind": false,
+    "containers": {
+      "lupin-model-server": {
+        "flap_excluded": false,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      },
+      "lupin-postgres": {
+        "flap_excluded": false,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      },
+      "lupin-rest-dev": {
+        "flap_excluded": true,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      },
+      "lupin-rest-test": {
+        "flap_excluded": false,
+        "flapping": false,
+        "status": "healthy",
+        "transitions_in_window": 0
+      }
+    },
+    "restart_watch": {
+      "lupin-model-server": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      },
+      "lupin-postgres": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      },
+      "lupin-rest-dev": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      },
+      "lupin-rest-test": {
+        "restart_count": 0,
+        "rises_in_window": 0
+      }
+    },
+    "updated_at": "2026-09-29T19:38:46.235012+00:00"
+  },
+  "loops": {
+    "context_pressure_writer": "alive",
+    "fleet_arbiter": "alive",
+    "health_watcher": "alive",
+    "turn_age_watchdog": "alive"
+  },
+  "service": "lupin-arbiter-app",
+  "status": "ok",
+  "version": "0.1.0"
+}

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/testing/test_keys.dart';
 import '../data/notification_models.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'conversation_screen.dart';
+import 'mute_sender_action.dart';
+import 'persona_badge.dart';
 
 class InboxScreen extends StatefulWidget {
   final String userEmail;
@@ -71,6 +74,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 itemBuilder: ( _, i ) => _SenderTile(
                   sender    : state.senders[ i ],
                   userEmail : widget.userEmail,
+                  persona   : state.personaFor( state.senders[ i ].senderId ),
                 ),
               ),
             );
@@ -110,17 +114,22 @@ class _InboxScreenState extends State<InboxScreen> {
 }
 
 class _SenderTile extends StatelessWidget {
-  final SenderSummary sender;
-  final String        userEmail;
+  final SenderSummary  sender;
+  final String         userEmail;
+  final VoicePersona?  persona;
 
-  const _SenderTile( { required this.sender, required this.userEmail } );
+  const _SenderTile( {
+    required this.sender,
+    required this.userEmail,
+    this.persona,
+  } );
 
   @override
   Widget build( BuildContext context ) {
     final theme    = Theme.of( context );
     final newCount = sender.newCount ?? 0;
     return Dismissible(
-      key: ValueKey( sender.senderId ),
+      key: Key( '${TestKeys.inboxSenderTilePrefix}${sender.senderId}' ),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
@@ -137,9 +146,14 @@ class _SenderTile extends StatelessWidget {
         );
       },
       child: ListTile(
-        leading: CircleAvatar(
-          child: Text( sender.senderId.isNotEmpty ? sender.senderId[ 0 ].toUpperCase() : "?" ),
-        ),
+        leading: persona != null
+            ? PersonaBadge(
+                persona  : persona,
+                senderId : sender.senderId,
+              )
+            : CircleAvatar(
+                child: Text( sender.senderId.isNotEmpty ? sender.senderId[ 0 ].toUpperCase() : "?" ),
+              ),
         title: Text(
           sender.senderId,
           maxLines: 1,
@@ -170,6 +184,10 @@ class _SenderTile extends StatelessWidget {
             userEmail : userEmail,
           ),
         ) ),
+        onLongPress: () => showMuteSenderMenu(
+          context,
+          item: senderItemFor( sender.senderId, persona ),
+        ),
       ),
     );
   }

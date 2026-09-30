@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../data/notification_models.dart';
+
 abstract class NotificationEvent extends Equatable {
   const NotificationEvent();
 
@@ -93,7 +95,121 @@ class NotificationsDeleteConversation extends NotificationEvent {
 }
 
 /// Used by the WebSocket bridge to nudge a refresh when a queue update
-/// event lands on the wire.
+/// event lands on the wire. When the event carries a full notification
+/// payload (the common case — backend `notification_queue_update` always
+/// includes the NotificationItem), the [notification] field is populated
+/// and the bloc dispatches audio on top of the standard refresh path.
 class NotificationsExternalUpdate extends NotificationEvent {
-  const NotificationsExternalUpdate();
+  final NotificationItem? notification;
+  const NotificationsExternalUpdate( { this.notification } );
+
+  @override
+  List<Object?> get props => [ notification?.id ];
+}
+
+/// Request a LLM-generated gist/summary of the currently-loaded conversation.
+/// Only valid while a [NotificationsConversationLoaded] state holds messages;
+/// the bloc pulls messages straight from that state so the UI doesn't have to
+/// pass them in.
+class NotificationsGenerateGistRequested extends NotificationEvent {
+  const NotificationsGenerateGistRequested();
+}
+
+/// List dates (with per-date counts) for a single sender's conversation.
+class NotificationsLoadSenderDates extends NotificationEvent {
+  final String senderId;
+  final String userEmail;
+  final bool   includeHidden;
+
+  const NotificationsLoadSenderDates( {
+    required this.senderId,
+    required this.userEmail,
+    this.includeHidden = false,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, userEmail, includeHidden ];
+}
+
+/// Load a sender's conversation grouped by date (YYYY-MM-DD keys).
+class NotificationsLoadConversationByDate extends NotificationEvent {
+  final String  senderId;
+  final String  userEmail;
+  final int?    hours;
+  final String? anchor;
+  final bool    includeHidden;
+
+  const NotificationsLoadConversationByDate( {
+    required this.senderId,
+    required this.userEmail,
+    this.hours,
+    this.anchor,
+    this.includeHidden = false,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, userEmail, hours, anchor, includeHidden ];
+}
+
+/// Per-session voice/persona allocation arrived for [senderId]. Source of
+/// truth is the server bridge; mobile mirrors the persona into bloc state
+/// for header rendering only (per Q1 — TTS reads persona straight off the
+/// originating notification, not from this map).
+///
+/// Triggered via two paths:
+/// 1. Real WS: `notification_queue_update` envelope with inner
+///    `notification.type == "voice_persona_assigned"` — `_onExternalUpdate`
+///    dispatch routes here.
+/// 2. Test/programmatic: blocTest fires this event directly to verify the
+///    persona-map mutation contract (Phase 1 Task 2.4 cases).
+class NotificationsVoicePersonaAssigned extends NotificationEvent {
+  final String       senderId;
+  final VoicePersona persona;
+
+  const NotificationsVoicePersonaAssigned( {
+    required this.senderId,
+    required this.persona,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, persona.voiceId ];
+}
+
+/// Per-session persona was released (server-side SessionEnd cleared the
+/// bridge for this sender). Removes the entry from the bloc's persona map.
+/// Idempotent — released for a sender with no current persona is a no-op.
+class NotificationsVoicePersonaReleased extends NotificationEvent {
+  final String  senderId;
+  final String? personaName;  // informational only; bloc keys removal by senderId
+
+  const NotificationsVoicePersonaReleased( {
+    required this.senderId,
+    this.personaName,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, personaName ];
+}
+
+/// Per-session speakerphone state changed for [senderId]. Used for test
+/// injection of the `on`-state ACs (AC-B2/B3/B4) — mirrors
+/// `NotificationsVoicePersonaAssigned`.
+///
+/// Kept 2-field (senderId, on) per Section B / F-Krishna-B1 resolution:
+/// the `displaced`/`displaced_by` raw-payload diagnostic fields are tested
+/// via raw `_onExternalUpdate` injection (AC-B6), NOT via this typed event.
+/// The bloc's typed-event handler builds a `SpeakerphoneRecord(on: event.on)`
+/// with null displaced fields; the WS-path case in `_onExternalUpdate`
+/// extracts the full payload via `n.raw[...]`.
+class NotificationsSpeakerphoneChanged extends NotificationEvent {
+  final String senderId;
+  final bool   on;
+
+  const NotificationsSpeakerphoneChanged( {
+    required this.senderId,
+    required this.on,
+  } );
+
+  @override
+  List<Object?> get props => [ senderId, on ];
 }

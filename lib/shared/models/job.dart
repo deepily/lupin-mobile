@@ -1,5 +1,25 @@
 import 'package:equatable/equatable.dart';
 
+/// DISPOSITION (AC-S1.10, 2026-08-29): **LEFT ALONE — not superseded by
+/// [JobLane], and not quarantined.**
+///
+/// Three lane vocabularies exist in this tree and this is one of them. They
+/// are not redundant copies of each other:
+///
+///   * [JobLane] (`features/queue/domain/job_lifecycle.dart`) mirrors the
+///     SERVER's `STATE_TO_UI_CONTAINER` verbatim and is the wire vocabulary.
+///     Its member names are the correct ones for anything reading a
+///     `job_state_transition` frame or a `/api/get-queue/{name}` listing.
+///   * `JobStatus` (here) belongs to the LOCAL `Job` record persisted through
+///     `JobRepository` (`core/repositories/impl/job_repository_impl.dart`,
+///     wired in `use_case_registry.dart`). It never touches the wire.
+///
+/// ⚠️ They disagree on two of four members — `running`/`completed` here vs
+/// `run`/`done` there. That is stated rather than silently tolerated: renaming
+/// this enum to match would change a persisted local model's serialized values
+/// for no gain, since nothing maps between the two. **If a mapping is ever
+/// introduced, it goes in one named adapter — never by assuming the names
+/// line up.**
 enum JobStatus {
   todo,
   running,

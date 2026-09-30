@@ -39,23 +39,116 @@ void main() {
     );
 
     blocTest<QueueBloc, QueueState>(
-      'QueueSubmitJob emits Submitting → Submitted',
+      'QueueSubmitJob emits Submitting → Answered (v2 ask is synchronous)',
       setUp: () {
-        adapter.handlers[ 'POST /api/push' ] = ( _ ) => jsonBody( {
-          'status'      : 'queued',
-          'websocket_id': 'mobile',
-          'user_id'     : 'u-1',
-          'job_id'      : 'j-new',
+        adapter.handlers[ 'POST /api/v2/ask' ] = ( _ ) => jsonBody( {
+          'path'         : 'agent',
+          'status'       : 'done',
+          'route_reason' : 'router:math',
+          'answer'       : 'Four.',
+          'answer_raw'   : '4',
+          'command'      : 'agent router go to math',
+          'args_known'   : [ 'expression' ],
+          'args_missing' : [],
+          'pending_id'   : null,
+          'job_id'       : 'j-new',
+          'snapshot_id'  : null,
+          'similarity'   : 0.0,
+          'wrote_snapshot': false,
+          'cache_hit'    : false,
+          'spoke'        : true,
+          'timings_ms'   : { 'route': 12, 'total': 840 },
+          'trace_id'     : 'tr-1',
+          'error'        : null,
         } );
       },
       build : () => QueueBloc( repo ),
       act   : ( b ) => b.add(
-        QueueSubmitJob( PushJobRequest( question: 'hello', websocketId: 'mobile' ) ),
+        const QueueSubmitJob( AskRequest( question: 'hello', websocketId: 'mobile' ) ),
       ),
       wait  : const Duration( milliseconds: 50 ),
       expect: () => [
         isA<QueueSubmitting>(),
-        isA<QueueSubmitted>().having( ( s ) => s.response.jobId, 'jobId', 'j-new' ),
+        isA<QueueAnswered>()
+          .having( ( s ) => s.response.answer, 'answer', 'Four.' )
+          .having( ( s ) => s.response.isDone, 'isDone', isTrue )
+          .having( ( s ) => s.response.jobId,  'jobId',  'j-new' ),
+      ],
+    );
+
+    blocTest<QueueBloc, QueueState>(
+      'QueueSubmitJob emits Answered(needsInput) when the server parks the question',
+      setUp: () {
+        adapter.handlers[ 'POST /api/v2/ask' ] = ( _ ) => jsonBody( {
+          'path'         : 'needs_input',
+          'status'       : 'parked',
+          'route_reason' : 'missing:city',
+          'answer'       : 'Which city?',
+          'args_missing' : [ 'city' ],
+          'pending_id'   : 'pend-9',
+          'trace_id'     : 'tr-2',
+        } );
+      },
+      build : () => QueueBloc( repo ),
+      act   : ( b ) => b.add( const QueueSubmitJob( AskRequest( question: 'weather?' ) ) ),
+      wait  : const Duration( milliseconds: 50 ),
+      expect: () => [
+        isA<QueueSubmitting>(),
+        isA<QueueAnswered>()
+          .having( ( s ) => s.response.needsInput, 'needsInput', isTrue )
+          .having( ( s ) => s.response.pendingId,  'pendingId',  'pend-9' ),
+      ],
+    );
+
+    blocTest<QueueBloc, QueueState>(
+      'QueueSubmitJob emits QueueError when /api/v2/ask refuses (503 feature gate)',
+      setUp: () {
+        adapter.handlers[ 'POST /api/v2/ask' ] = ( _ ) => jsonBody(
+          { 'detail': 'CJ Flow v2 is disabled (v2 flow enabled = False).' }, status: 503 );
+      },
+      build : () => QueueBloc( repo ),
+      act   : ( b ) => b.add( const QueueSubmitJob( AskRequest( question: 'x' ) ) ),
+      wait  : const Duration( milliseconds: 50 ),
+      expect: () => [
+        isA<QueueSubmitting>(),
+        isA<QueueError>().having( ( s ) => s.message, 'message', contains( 'v2 flow enabled' ) ),
+      ],
+    );
+
+    blocTest<QueueBloc, QueueState>(
+      'QueueRetryJob re-asks via /api/v2/ask and emits ActionComplete',
+      setUp: () {
+        adapter.handlers[ 'POST /api/v2/ask' ] = ( opts ) {
+          expect( ( opts.data as Map )[ 'question' ], 'original question?' );
+          return jsonBody( {
+          'path'         : 'agent',
+          'status'       : 'done',
+          'route_reason' : 'router:math',
+          'answer'       : 'Four.',
+          'answer_raw'   : '4',
+          'command'      : 'agent router go to math',
+          'args_known'   : [ 'expression' ],
+          'args_missing' : [],
+          'pending_id'   : null,
+          'job_id'       : 'j-new',
+          'snapshot_id'  : null,
+          'similarity'   : 0.0,
+          'wrote_snapshot': false,
+          'cache_hit'    : false,
+          'spoke'        : true,
+          'timings_ms'   : { 'route': 12, 'total': 840 },
+          'trace_id'     : 'tr-1',
+          'error'        : null,
+        } );
+        };
+      },
+      build : () => QueueBloc( repo ),
+      act   : ( b ) => b.add( const QueueRetryJob(
+        jobId: 'j-old', questionText: 'original question?', websocketId: 'mobile' ) ),
+      wait  : const Duration( milliseconds: 50 ),
+      expect: () => [
+        isA<QueueActionComplete>()
+          .having( ( s ) => s.message, 'message', allOf( contains( 'Retried' ), contains( 'Four.' ) ) ),
       ],
     );
 

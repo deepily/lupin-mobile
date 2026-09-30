@@ -5,6 +5,7 @@ import '../data/queue_models.dart';
 import '../domain/queue_bloc.dart';
 import '../domain/queue_event.dart';
 import '../domain/queue_state.dart';
+import '../../../shared/widgets/dictation_text_field.dart';
 
 class SubmitJobSheet extends StatefulWidget {
   const SubmitJobSheet( { super.key } );
@@ -37,7 +38,7 @@ class _SubmitJobSheetState extends State<SubmitJobSheet> {
     } else {
       context.read<QueueBloc>().add(
         QueueSubmitJob(
-          PushJobRequest( question: question, websocketId: 'mobile' ),
+          AskRequest( question: question, websocketId: 'mobile' ),
         ),
       );
     }
@@ -48,7 +49,7 @@ class _SubmitJobSheetState extends State<SubmitJobSheet> {
     final bottom = MediaQuery.of( context ).viewInsets.bottom;
     return BlocListener<QueueBloc, QueueState>(
       listener: ( context, state ) {
-        if ( state is QueueSubmitted ) {
+        if ( state is QueueSubmitted || state is QueueAnswered ) {
           Navigator.of( context ).pop();
         }
         if ( state is QueueSubmitting ) {
@@ -66,7 +67,7 @@ class _SubmitJobSheetState extends State<SubmitJobSheet> {
           children: [
             Text( 'Submit Job', style: Theme.of( context ).textTheme.titleLarge ),
             const SizedBox( height: 16 ),
-            TextField(
+            DictationTextField(
               controller : _questionCtrl,
               decoration : const InputDecoration(
                 labelText: 'Question / Command',

@@ -5,8 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
 
-enum ServerContext { dev, test }
-
 class ServerContextConfig {
   final String id;
   final String label;
@@ -30,39 +28,42 @@ class ServerContextConfig {
   }
 }
 
-/// Resolves the active server context (dev / test) and exposes its
-/// base URL + WS URL. Persists the user's last selection via
-/// SharedPreferences (non-secret; URLs are not sensitive).
+/// Resolves the active server context and exposes its base URL + WS URL.
+///
+/// A context is identified by its key in `server-contexts.json` ("dev",
+/// "test", "lan-dev", "lan-test", ...), so adding a server is a JSON edit
+/// only. Persists the user's last selection via SharedPreferences
+/// (non-secret; URLs are not sensitive).
 class ServerContextService {
   static const String _assetPath    = "assets/config/server-contexts.json";
   static const String _prefsKey     = "active_server_context";
 
   final SharedPreferences _prefs;
-  final Map<ServerContext, ServerContextConfig> _contexts;
-  ServerContext _active;
+  final Map<String, ServerContextConfig> _contexts;
+  String _active;
 
   ServerContextService._( this._prefs, this._contexts, this._active );
 
   /// Load the bundled config and resolve the previously-selected context
-  /// (or the file's declared default on first launch).
+  /// (or the file's declared default on first launch). A stored id that is
+  /// no longer in the JSON falls back to the default.
   static Future<ServerContextService> load( SharedPreferences prefs ) async {
     final raw  = await rootBundle.loadString( _assetPath );
     final json = jsonDecode( raw ) as Map<String, dynamic>;
 
     final contextsJson = json["contexts"] as Map<String, dynamic>;
-    final contexts     = <ServerContext, ServerContextConfig>{};
+    final contexts     = <String, ServerContextConfig>{};
     for ( final entry in contextsJson.entries ) {
-      final ctx = _parseContext( entry.key );
-      if ( ctx == null ) continue;
-      contexts[ ctx ] = ServerContextConfig.fromJson(
+      contexts[ entry.key ] = ServerContextConfig.fromJson(
         entry.key,
         entry.value as Map<String, dynamic>,
       );
     }
 
-    final defaultId = json["default"] as String? ?? "dev";
+    final declared  = json["default"] as String? ?? "dev";
+    final defaultId = contexts.containsKey( declared ) ? declared : contexts.keys.first;
     final stored    = prefs.getString( _prefsKey );
-    final active    = _parseContext( stored ?? defaultId ) ?? ServerContext.dev;
+    final active    = ( stored != null && contexts.containsKey( stored ) ) ? stored : defaultId;
 
     final service = ServerContextService._( prefs, contexts, active );
     service._applyToAppConstants();
@@ -74,36 +75,54 @@ class ServerContextService {
     AppConstants.wsBaseUrl  = activeConfig.wsUrl;
   }
 
-  ServerContext get active => _active;
+  /// Id of the active context (its key in the JSON).
+  String get active => _active;
   ServerContextConfig get activeConfig => _contexts[ _active ]!;
   String get baseUrl => activeConfig.baseUrl;
   String get wsUrl   => activeConfig.wsUrl;
 
-  ServerContextConfig configFor( ServerContext ctx ) => _contexts[ ctx ]!;
+  ServerContextConfig configFor( String id ) => _contexts[ id ]!;
+
+  /// Every context in the JSON, in file order.
   List<ServerContextConfig> get all => _contexts.values.toList();
 
-  /// Switch the active context. Callers are responsible for invoking any
-  /// logout / session-clear hooks before or after this call; this service
-  /// only mutates the stored URL selection.
-  Future<void> setActive( ServerContext ctx ) async {
-    if ( ctx == _active ) return;
-    _active = ctx;
+  final List<void Function( ServerContextConfig )> _listeners = [];
+
+  /// Register [listener] to run, synchronously, every time [setActive]
+  /// switches to a different context. Anything that captured a base URL at
+  /// start-up (the shared Dio's `options.baseUrl`, a screen showing the
+  /// active server) must follow the switch through here, or its requests
+  /// keep going to the old host while AppConstants readers use the new one.
+  void addListener( void Function( ServerContextConfig ) listener ) => _listeners.add( listener );
+
+  void removeListener( void Function( ServerContextConfig ) listener ) => _listeners.remove( listener );
+
+  /// Switch the active context: updates AppConstants, notifies listeners,
+  /// and persists the choice. Callers are responsible for clearing the OLD
+  /// context's session BEFORE calling this (see AuthBloc's
+  /// AuthServerContextSwitchRequested); this service only owns the URL
+  /// selection.
+  ///
+  /// Requires:
+  ///   - [id] is a context key in server-contexts.json
+  ///
+  /// Ensures:
+  ///   - AppConstants URLs and every listener see the new context before the
+  ///     returned future's first await
+  ///   - a no-op (no listener calls) when [id] is already active
+  ///
+  /// Raises:
+  ///   - ArgumentError if [id] is not a context in the JSON
+  Future<void> setActive( String id ) async {
+    if ( !_contexts.containsKey( id ) ) {
+      throw ArgumentError.value( id, "id", "unknown server context" );
+    }
+    if ( id == _active ) return;
+    _active = id;
     _applyToAppConstants();
-    await _prefs.setString( _prefsKey, _idOf( ctx ) );
-  }
-
-  static ServerContext? _parseContext( String? id ) {
-    switch ( id ) {
-      case "dev":  return ServerContext.dev;
-      case "test": return ServerContext.test;
-      default:     return null;
+    for ( final listener in List.of( _listeners ) ) {
+      listener( activeConfig );
     }
-  }
-
-  static String _idOf( ServerContext ctx ) {
-    switch ( ctx ) {
-      case ServerContext.dev:  return "dev";
-      case ServerContext.test: return "test";
-    }
+    await _prefs.setString( _prefsKey, id );
   }
 }
