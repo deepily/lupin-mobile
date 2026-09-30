@@ -50,6 +50,7 @@ import 'services/websocket/websocket_service.dart';
 ///   - dispatcher.lastAuthenticatedEmail == email
 ///   - ws.connect( userId: userId ) is called iff ws is not connected
 ///   - registerPush receives email, never userId
+///   - a throwing registerPush is logged and does not stop the rest of the hook
 ///   - requestNotifications is called once, AFTER registerPush, so a
 ///     system prompt the user has not answered yet never delays registration
 ///   - a notification tap held by [tapRouter] is routed to FocusChatBloc, ONCE,
@@ -81,7 +82,17 @@ Future<void> onWsAuthenticated( {
   // transition, Arnold residual #1). No-op unless built with
   // --dart-define=ENABLE_FCM=true. POST /api/fcm/register-token's body
   // field is `user_email`.
-  await registerPush( email );
+  //
+  // 🔴 GUARDED, BECAUSE THE PERMISSION PROMPT SITS RIGHT BEHIND IT (row dfea49e7).
+  // FCM token retrieval throws on a phone with no Play services, no route to
+  // Google, or a failed Firebase init; unguarded, that exits this hook and the
+  // prompt below never runs, so a fresh Android 13+ install drops every wake
+  // notification silently. Registration is best-effort; the prompt is not.
+  try {
+    await registerPush( email );
+  } catch ( e ) {
+    ( logSink ?? debugPrint )( 'push registration failed at login (continuing): $e' );
+  }
   // Row 8ff78c69: Android 13+ starts a fresh install with notifications
   // DENIED, and nothing else asks. Without this, wake notifications and the
   // ws_wake fallback are silently dropped by the OS.

@@ -74,4 +74,38 @@ void main() {
     expect( registered, isTrue );
     expect( dispatcher.lastAuthenticatedEmail, 'rick@test.com' );
   } );
+
+  // Row dfea49e7: a push-registration throw must not skip the permission prompt.
+  test( 'a THROWING push registration still reaches the permission prompt', () async {
+    var prompted = 0;
+    await onWsAuthenticated(
+      dispatcher           : dispatcher,
+      ws                   : ws,
+      userId               : 'uuid-1',
+      email                : 'rick@test.com',
+      registerPush         : ( _ ) async => throw StateError( 'no Play services' ),
+      requestNotifications : () async { prompted++; return true; },
+      logSink              : logs.add,
+    );
+    expect( prompted, 1, reason: 'else a fresh Android 13+ install never gets asked' );
+    expect( logs.single, contains( 'push registration failed' ) );
+    expect( logs.single, contains( 'no Play services' ) );
+  } );
+
+  test( 'a normal registration is unchanged: prompted once, nothing logged', () async {
+    var prompted = 0;
+    var pushed   = <String>[];
+    await onWsAuthenticated(
+      dispatcher           : dispatcher,
+      ws                   : ws,
+      userId               : 'uuid-1',
+      email                : 'rick@test.com',
+      registerPush         : ( e ) async => pushed.add( e ),
+      requestNotifications : () async { prompted++; return true; },
+      logSink              : logs.add,
+    );
+    expect( pushed, [ 'rick@test.com' ] );
+    expect( prompted, 1 );
+    expect( logs, isEmpty );
+  } );
 }
