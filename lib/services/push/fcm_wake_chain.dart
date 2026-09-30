@@ -125,6 +125,17 @@ const Duration kFcmWakeFallbackBudget = Duration( seconds: 5 );
 const Duration kFcmWakeSpeakBudget      = Duration( seconds: 12 );
 const Duration kFcmWakeMarkPlayedBudget = Duration( seconds: 5 );
 
+/// The WHOLE handler's window, from the first statement to the return (row
+/// 5365750f). The Android handler gets roughly 30 s; this leaves a margin.
+///
+/// 🔴 THE PRE-NOTIFICATION DEADLINE ABOVE STOPS AT THE SHADE. Past it, speak and
+/// mark-played each had a per-call budget, and the wake now drains up to
+/// [kFcmWakeDrainMax] items, so those budgets stacked once per item. Speech and
+/// the ledger write now draw down from this one deadline, and the drain does not
+/// start an item it could not finish marking played: a shown-but-unmarked item is
+/// re-shown by the next wake.
+const Duration kFcmWakeHandlerBudget = Duration( seconds: 27 );
+
 /// The most unplayed items one wake shows (row 8e91d937). The server wakes only
 /// for a NEW notification, so a backlog would otherwise sit unseen behind the
 /// first item until the app opened. Capped so a long backlog cannot flood the
@@ -227,6 +238,10 @@ class FcmWakeChain {
   final Duration speakBudget;
   final Duration markPlayedBudget;
 
+  /// Deadline for the whole handler ([kFcmWakeHandlerBudget]); speech and
+  /// mark-played are cut to whatever it has left.
+  final Duration handlerBudget;
+
   const FcmWakeChain( {
     required this.readCredentials,
     required this.exchangeForAccessToken,
@@ -243,6 +258,7 @@ class FcmWakeChain {
     this.fallbackBudget   = kFcmWakeFallbackBudget,
     this.speakBudget      = kFcmWakeSpeakBudget,
     this.markPlayedBudget = kFcmWakeMarkPlayedBudget,
+    this.handlerBudget    = kFcmWakeHandlerBudget,
   } );
 
   /// Handle one wake payload. Never throws — the FCM handler budget
@@ -277,6 +293,19 @@ class FcmWakeChain {
     Duration remaining() {
       final left = deadline.difference( DateTime.now() );
       return left.isNegative ? Duration.zero : left;
+    }
+
+    // The overall deadline, across the pre-notification phase AND the drain loop.
+    final overallDeadline = DateTime.now().add( handlerBudget );
+    Duration overallRemaining() {
+      final left = overallDeadline.difference( DateTime.now() );
+      return left.isNegative ? Duration.zero : left;
+    }
+    Duration lesser( Duration a, Duration b ) => a < b ? a : b;
+    // Speech may not eat the time mark-played needs, so it is cut short of it.
+    Duration speechLeft() {
+      final left = overallRemaining() - markPlayedBudget;
+      return lesser( speakBudget, left.isNegative ? Duration.zero : left );
     }
 
     try {
@@ -367,7 +396,8 @@ class FcmWakeChain {
           // Out of time: stop draining. Nothing is consumed that was not shown.
           // (Never before the FIRST item: that one takes the ordinary path, where
           // a spent budget throws into the catch arm and posts the fallback.)
-          if ( shownIds.isNotEmpty && remaining() == Duration.zero ) {
+          if ( shownIds.isNotEmpty &&
+               ( remaining() == Duration.zero || overallRemaining() <= markPlayedBudget ) ) {
             log( '[FcmWake] handler budget spent after ${shownIds.length} — '
                  'the rest stays unplayed' );
             break;
@@ -430,9 +460,9 @@ class FcmWakeChain {
               // The prefs reads are budgeted too: in a fresh isolate a wedged
               // SharedPreferences is as capable of parking the handler as a wedged
               // engine is, and it would park it BEFORE anything was spoken.
-              final maySpeak = await shouldSpeak( priority ).timeout( speakBudget );
+              final maySpeak = await shouldSpeak( priority ).timeout( speechLeft() );
               final fraction = maySpeak
-                  ? await ttsFraction().timeout( speakBudget )
+                  ? await ttsFraction().timeout( speechLeft() )
                   : 0.0;
               if ( !maySpeak ) {
                 log( '[FcmWake] muted by speak-toggle prefs' );
@@ -440,7 +470,7 @@ class FcmWakeChain {
                 log( '[FcmWake] muted by the TTS slider at 0%' );
               } else {
                 await speak( TtsPreviewTruncator.previewFor( message, fraction ) )
-                    .timeout( speakBudget );
+                    .timeout( speechLeft() );
                 spoke = true;
                 log( '[FcmWake] spoke (message field only)' );
               }
@@ -461,7 +491,8 @@ class FcmWakeChain {
           // cap cut off is never consumed.
           if ( id.isNotEmpty ) {
             try {
-              await markPlayed( id, accessToken ).timeout( markPlayedBudget );
+              await markPlayed( id, accessToken )
+                  .timeout( lesser( markPlayedBudget, overallRemaining() ) );
               log( '[FcmWake] marked played (dedupe)' );
             } catch ( e ) {
               log( '[FcmWake] mark-played failed (best-effort): $e' );

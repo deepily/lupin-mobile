@@ -35,6 +35,10 @@ void main() {
     Future<void> Function( String, String, String? )? show,
     Future<void> Function( String, String )?          mark,
     Duration budget = kFcmWakeShowBudget,
+    Future<void> Function( String )? speakFn,
+    Duration speakBudget      = kFcmWakeSpeakBudget,
+    Duration markPlayedBudget = kFcmWakeMarkPlayedBudget,
+    Duration handlerBudget    = kFcmWakeHandlerBudget,
   } ) => FcmWakeChain(
     readCredentials             : () async => const FcmWakeCredentials( refreshToken: 'r', userEmail: 'e@x.com' ),
     exchangeForAccessToken      : ( _ ) async => 'a',
@@ -46,12 +50,15 @@ void main() {
     },
     shouldSpeak                 : ( _ ) async => true,
     ttsFraction                 : () async => 1.0,
-    speak                       : ( text ) async => spoken.add( text ),
+    speak                       : speakFn ?? ( text ) async => spoken.add( text ),
     markPlayed                  : mark ?? ( id, __ ) async => markedPlayed.add( id ),
     backgroundAllowsAnyPriority : () async => true,
     itemAllowed                 : ( _, i ) async => !mutedIds.contains( i[ 'id' ] ),
     log                         : ( _ ) {},
     showBudget                  : budget,
+    speakBudget                 : speakBudget,
+    markPlayedBudget            : markPlayedBudget,
+    handlerBudget               : handlerBudget,
   );
 
   setUp( () {
@@ -194,5 +201,61 @@ void main() {
 
     expect( shownBodies, [ 'body-1' ] );
     expect( outcome.detail, 'id=n-1' );
+  } );
+
+  // Row 5365750f: speak and mark-played draw down from ONE handler deadline.
+  group( 'whole-handler deadline', () {
+    const window = Duration( milliseconds: 300 );
+    const slack  = Duration( milliseconds: 150 );
+
+    Future<Duration> timed( Future<FcmWakeOutcome> Function() run ) async {
+      final sw = Stopwatch()..start();
+      await run().timeout( const Duration( seconds: 5 ),
+          onTimeout: () => fail( 'handleWake hung' ) );
+      return sw.elapsed;
+    }
+
+    test( 'a slow (never-finishing) speak cannot push the handler past its window', () async {
+      unplayed = [ item( 1 ) ];
+      final took = await timed( () => chain(
+        speakFn          : ( _ ) => Completer<void>().future,
+        speakBudget      : const Duration( seconds: 10 ),
+        markPlayedBudget : const Duration( milliseconds: 100 ),
+        handlerBudget    : window,
+      ).handleWake( wake() ) );
+
+      expect( took, lessThan( window + slack ) );
+      expect( markedPlayed, [ 'n-1' ], reason: 'speech is cut short of the ledger write' );
+    } );
+
+    test( 'a never-finishing mark-played cannot push the handler past its window', () async {
+      unplayed = [ item( 1 ), item( 2 ), item( 3 ), item( 4 ), item( 5 ) ];
+      final took = await timed( () => chain(
+        mark             : ( _, __ ) => Completer<void>().future,
+        markPlayedBudget : const Duration( milliseconds: 100 ),
+        handlerBudget    : window,
+      ).handleWake( wake() ) );
+
+      // Per-call budgets alone would allow 5 x 100 ms = 500 ms here.
+      expect( took, lessThan( window + slack ) );
+    } );
+
+    test( 'slow-but-succeeding mark-played stops the drain, and never shows an item it cannot mark',
+        () async {
+      unplayed = [ item( 1 ), item( 2 ), item( 3 ), item( 4 ), item( 5 ) ];
+      final took = await timed( () => chain(
+        mark             : ( id, __ ) async {
+          await Future<void>.delayed( const Duration( milliseconds: 80 ) );
+          markedPlayed.add( id );
+        },
+        markPlayedBudget : const Duration( milliseconds: 100 ),
+        handlerBudget    : window,
+      ).handleWake( wake() ) );
+
+      expect( took, lessThan( window + slack ) );
+      expect( shownBodies.length, lessThan( 5 ), reason: 'the window ran out before the cap' );
+      expect( markedPlayed.length, shownBodies.length,
+          reason: 'every item shown was also marked — none left to be re-shown next wake' );
+    } );
   } );
 }
