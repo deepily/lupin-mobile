@@ -13,13 +13,15 @@ import '../data/test_suite_models.dart';
 import 'agentic_submission_event.dart';
 import 'agentic_submission_state.dart';
 
-/// Single BLoC for all 9 agentic job submission forms.
-/// All forms share the same request → response lifecycle:
-///   submit → InProgress → Success(jobId) → navigate to JobDetailScreen.
+/// Bloc behind all nine agentic job submission forms.
+///
+/// Every form follows the same lifecycle: submit, in progress, then success with a job id.
+/// The form then opens the job detail screen. Any failure becomes a failure state with its message.
 class AgenticSubmissionBloc
     extends Bloc<AgenticSubmissionEvent, AgenticSubmissionState> {
   final AgenticRepository _repo;
 
+  /// Creates the bloc over [_repo]; it starts in the initial state.
   AgenticSubmissionBloc( this._repo ) : super( const AgenticSubmissionInitial() ) {
     on<AgenticSubmitRequested>( _onSubmitRequested );
     on<AgenticFormReset>( ( _, emit ) => emit( const AgenticSubmissionInitial() ) );

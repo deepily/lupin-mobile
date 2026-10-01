@@ -11,24 +11,24 @@ import 'swe_team_models.dart';
 import 'test_fix_expediter_models.dart';
 import 'test_suite_models.dart';
 
-/// Typed wrapper over the agentic job doors.
-/// Uses the shared Dio (auth interceptor injects Bearer automatically).
+/// Typed wrapper over the agentic job endpoints, using the shared authenticated Dio.
 ///
-/// v2 cutover wave 2 (2026-08-21, server sha 799e43d0): the eight submit-shaped
-/// doors POST `/api/v2/submit` — `{command, args, question?, websocket_id?,
-/// scheduled_at?, monopolize?}` — and read the synchronous `AskResponse`
-/// (`status == 'waiting'` + `job_id` is the success). The per-door request
-/// models stay the UI's input; `toSubmitArgs()` produces the contract keys.
-/// `/api/test-fix-expediter/resume-from` stays v1 (a checkpoint-built job the
-/// submit body cannot express) and `/api/deep-research/report` is a READ.
+/// Eight submit calls post to `/api/v2/submit` and read the synchronous answer.
+/// Status `waiting` with a job id is the success case.
+/// Each request model supplies the contract keys through `toSubmitArgs()`.
+/// The test-fix-expediter resume call keeps its own endpoint, because a job built
+/// from a checkpoint cannot be expressed in the submit body.
+/// The deep research report call is a read.
 class AgenticRepository {
   final Dio _dio;
+  /// Creates a repository over [_dio].
   const AgenticRepository( this._dio );
 
   // ─────────────────────────────────────────────
   // DeepResearchRequest → POST /api/v2/submit   (was /api/deep-research/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits a deep research job and returns the created job.
   Future<AgenticSubmitResponse> submitDeepResearch( DeepResearchRequest req ) =>
       _submit( 'submitDeepResearch', SubmitRequest(
         command     : DeepResearchRequest.submitCommand,
@@ -43,6 +43,9 @@ class AgenticRepository {
   // GET /api/deep-research/report?job_id=...
   // ─────────────────────────────────────────────
 
+  /// Fetches the finished markdown report for [jobId].
+  ///
+  /// Raises [AgenticApiException] when the request fails.
   Future<DeepResearchReport> fetchDeepResearchReport( String jobId ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
@@ -59,6 +62,7 @@ class AgenticRepository {
   // PodcastGeneratorRequest → POST /api/v2/submit   (was /api/podcast-generator/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits a podcast generation job and returns the created job.
   Future<AgenticSubmitResponse> submitPodcast( PodcastGeneratorRequest req ) =>
       _submit( 'submitPodcast', SubmitRequest(
         command     : PodcastGeneratorRequest.submitCommand,
@@ -73,6 +77,7 @@ class AgenticRepository {
   // PresentationGeneratorRequest → POST /api/v2/submit   (was /api/presentation-generator/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits a presentation generation job and returns the created job.
   Future<AgenticSubmitResponse> submitPresentation( PresentationGeneratorRequest req ) =>
       _submit( 'submitPresentation', SubmitRequest(
         command     : PresentationGeneratorRequest.submitCommand,
@@ -87,6 +92,7 @@ class AgenticRepository {
   // SweTeamRequest → POST /api/v2/submit   (was /api/swe-team/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits a software-engineering team job and returns the created job.
   Future<AgenticSubmitResponse> submitSweTeam( SweTeamRequest req ) =>
       _submit( 'submitSweTeam', SubmitRequest(
         command     : SweTeamRequest.submitCommand,
@@ -101,6 +107,7 @@ class AgenticRepository {
   // BugFixExpediterRequest → POST /api/v2/submit   (was /api/bug-fix-expediter/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits a job that fixes a dead job's bug and returns the created job.
   Future<AgenticSubmitResponse> submitBugFixExpediter( BugFixExpediterRequest req ) =>
       _submit( 'submitBugFixExpediter', SubmitRequest(
         command     : BugFixExpediterRequest.submitCommand,
@@ -115,6 +122,7 @@ class AgenticRepository {
   // TestSuiteRequest → POST /api/v2/submit   (was /api/test-suite/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits a test suite run and returns the created job.
   Future<AgenticSubmitResponse> submitTestSuite( TestSuiteRequest req ) =>
       _submit( 'submitTestSuite', SubmitRequest(
         command     : TestSuiteRequest.submitCommand,
@@ -129,6 +137,9 @@ class AgenticRepository {
   // POST /api/test-fix-expediter/resume-from
   // ─────────────────────────────────────────────
 
+  /// Resumes a test-fix-expediter job from a job id, plan file or description.
+  ///
+  /// Raises [AgenticApiException] when the request fails.
   Future<TfeResumeResponse> resumeTestFixExpediter( TfeResumeFromRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -145,6 +156,7 @@ class AgenticRepository {
   // ResearchToPodcastRequest → POST /api/v2/submit   (was /api/deep-research-to-podcast/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits deep research chained into a podcast and returns the created job.
   Future<AgenticSubmitResponse> submitResearchToPodcast( ResearchToPodcastRequest req ) =>
       _submit( 'submitResearchToPodcast', SubmitRequest(
         command     : ResearchToPodcastRequest.submitCommand,
@@ -159,6 +171,7 @@ class AgenticRepository {
   // ResearchToPresentationRequest → POST /api/v2/submit   (was /api/deep-research-to-presentation/submit)
   // ─────────────────────────────────────────────
 
+  /// Submits deep research chained into a presentation and returns the created job.
   Future<AgenticSubmitResponse> submitResearchToPresentation( ResearchToPresentationRequest req ) =>
       _submit( 'submitResearchToPresentation', SubmitRequest(
         command     : ResearchToPresentationRequest.submitCommand,
