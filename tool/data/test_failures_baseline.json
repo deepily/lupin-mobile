@@ -1,0 +1,27 @@
+{
+  "_captured_at_sha": "c55a6d0",
+  "runs": 3,
+  "passed_per_run": [
+    2730,
+    2731,
+    2731
+  ],
+  "failed_per_run": [
+    4,
+    3,
+    3
+  ],
+  "always_fail": [
+    "test/widget/transcript/live_console_captured_test.dart::C5.18 (captured) \u2014 ruling Q2's content model over real server output prose open, tool call a one-line chip, tool result collapsed",
+    "test/widget/transcript/live_console_captured_test.dart::C5.22 (captured) \u2014 a `thinking` block is folded, then expandable (OSQ-7) collapsed by default: the captured scratch text is NOT on screen",
+    "test/widget/transcript/live_console_captured_test.dart::C5.22 (captured) \u2014 a `thinking` block is folded, then expandable (OSQ-7) expands in place to monospace SelectableText, never Markdown"
+  ],
+  "sometimes_fail": [
+    "test/unit/services/asr/asr_contract_test.dart::ASR wire contract (S4) AC-S4.7 \u2014 live probe: POST the checked-in canned WAV to :7999 \u2192 known transcript"
+  ],
+  "_notes": {
+    "always_fail": "live_console_captured_test: PathNotFoundException test/fixtures/transcript/append_thinking.json (fixture absent at this sha); the C5.18 one fails on missing 'Result \u2014 null' text",
+    "sometimes_fail": "ASR live probe POSTs to :7999 \u2014 failed in run 1 only, which overlapped the :7999 bounce (boot #223, 2026-10-01T00:15Z); a lone re-run passes. Server-dependent, not a flake in the code.",
+    "sha_note": "captured at c55a6d0 = cf5be6f + tool/ files only; lib/ and test/ identical to cf5be6f. Full run ~150 s each, 2730-2731 passing."
+  }
+}

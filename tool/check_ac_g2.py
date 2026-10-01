@@ -8,8 +8,10 @@ Exit 0 = PASS · 1 = REGRESSION · 2 = BASELINE INCOMPLETE.
 
 🔴 DO NOT READ `flutter test`'s OWN EXIT CODE AS THE VERDICT.
 It exits non-zero whenever anything failed, and this repo carries a standing
-~44 failures under `test/legacy_quarantine/`. A reader who takes that process
-exit code as the answer will call a healthy tree red. THIS tool's exit code is
+handful of known failures (3 always + 1 server-dependent at cf5be6f; see
+tool/data/test_failures_baseline.json and tool/check_test_failures.py). The old
+~44 under `test/legacy_quarantine/` are gone: that dir no longer exists. A reader
+who takes the process exit code as the answer will call a healthy tree red. THIS tool's exit code is
 the verdict; it is computed from the parsed testDone event stream.
 
 Counting, because three different numbers exist for one tree and they are not
