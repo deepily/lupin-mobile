@@ -187,10 +187,235 @@
             ]
         },
         {
-            "phase"          : 4,
-            "name"           : "M3 Sweep",
-            "steps"          : [],
-            "expand_trigger" : "M2 Pilot closes (the pilot's measured rate sets the batch size; 25 sweep units remain: 22 feature directories plus lib/core, lib/services and lib/shared, worst first)"
+            "phase" : 4,
+            "name"  : "M3 Sweep",
+            "steps" : [
+                {
+                    "key"        : "m3-s01",
+                    "name"       : "Sweep lib/services",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/services/ under a nested options file (1224 findings and 1322 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s02",
+                    "name"       : "Sweep lib/core",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/core/ under a nested options file (350 findings and 1419 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s03",
+                    "name"       : "Sweep lib/features/fleet",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/fleet/ under a nested options file (1148 findings and 51 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s04",
+                    "name"       : "Sweep lib/features/fleet_status",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/fleet_status/ under a nested options file (732 findings and 65 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s05",
+                    "name"       : "Sweep lib/features/task_list",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/task_list/ under a nested options file (699 findings and 96 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s06",
+                    "name"       : "Sweep lib/features/transcript",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/transcript/ under a nested options file (668 findings and 68 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s07",
+                    "name"       : "Sweep lib/features/broadcast",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/broadcast/ under a nested options file (581 findings and 79 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s08",
+                    "name"       : "Sweep lib/features/focus_mode",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/focus_mode/ under a nested options file (524 findings and 91 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s09",
+                    "name"       : "Sweep lib/features/notifications",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/notifications/ under a nested options file (161 findings and 327 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s10",
+                    "name"       : "Sweep lib/features/queue",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/queue/ under a nested options file (117 findings and 273 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s11",
+                    "name"       : "Sweep lib/features/finished_tasks",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/finished_tasks/ under a nested options file (289 findings and 56 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s12",
+                    "name"       : "Sweep lib/features/quick_ask",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/quick_ask/ under a nested options file (274 findings and 60 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s13",
+                    "name"       : "Sweep lib/shared",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/shared/ under a nested options file (110 findings and 209 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s14",
+                    "name"       : "Sweep lib/features/docs",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/docs/ under a nested options file (159 findings and 51 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s15",
+                    "name"       : "Sweep lib/features/agentic",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/agentic/ under a nested options file (19 findings and 183 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s16",
+                    "name"       : "Sweep lib/features/settings",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/settings/ under a nested options file (80 findings and 111 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s17",
+                    "name"       : "Sweep lib/features/decision_proxy",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/decision_proxy/ under a nested options file (2 findings and 169 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s18",
+                    "name"       : "Sweep lib/features/voice",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/voice/ under a nested options file (0 findings and 96 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s19",
+                    "name"       : "Sweep lib/features/auth",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/auth/ under a nested options file (16 findings and 51 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s20",
+                    "name"       : "Sweep lib/features/claude_code",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/claude_code/ under a nested options file (14 findings and 44 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s21",
+                    "name"       : "Sweep lib/features/home",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/home/ under a nested options file (20 findings and 2 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s22",
+                    "name"       : "Sweep lib/features/artifacts",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/artifacts/ under a nested options file (1 findings and 18 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s23",
+                    "name"       : "Sweep lib/features/audio",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/audio/ under a nested options file (0 findings and 11 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s24",
+                    "name"       : "Sweep lib/features/session",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/session/ under a nested options file (0 findings and 11 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m3-s25",
+                    "name"       : "Claim judge over the pilot and the sweep",
+                    "item_class" : "gate",
+                    "priority"   : "P2",
+                    "acceptance" : "The claim judge has run over the before and after doc text of holding_area and every swept directory, and each lost claim it reports is restored or dismissed with a reason",
+                    "owner_role" : "reviewer",
+                    "depends_on" : []
+                }
+            ]
         },
         {
             "phase" : 5,
