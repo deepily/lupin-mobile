@@ -4,16 +4,19 @@ import 'dart:typed_data';
 
 /// Deterministic in-memory WAV clip for the network round-trip probe.
 ///
-/// Generated rather than bundled so the APK does not grow by megabytes: a
-/// linear frequency sweep (220 Hz → 1760 Hz) at moderate amplitude, mono,
-/// 16-bit PCM, wrapped in a canonical 44-byte RIFF/WAVE header. The same
-/// arguments always produce the same bytes.
+/// Generated, not bundled, so the APK does not grow by megabytes. The clip is a linear frequency sweep
+/// from 220 Hz to 1760 Hz at moderate amplitude: mono, 16-bit PCM, with a canonical 44-byte WAV
+/// header. The same arguments always produce the same bytes.
 class ProbeWav {
   ProbeWav._();
 
+  /// Size of the WAV header, in bytes.
   static const int headerBytes    = 44;
+  /// Bits per sample.
   static const int bitsPerSample  = 16;
+  /// Channel count; the clip is mono.
   static const int numChannels    = 1;
+  /// Clip length used when none is given, in seconds.
   static const int defaultSeconds = 30;
 
   static const double _startHz   = 220.0;
@@ -30,14 +33,14 @@ class ProbeWav {
   static int byteLength( { required int sampleRate, int seconds = defaultSeconds } ) =>
       headerBytes + sampleRate * seconds * numChannels * ( bitsPerSample ~/ 8 );
 
-  /// Build the clip.
+  /// Builds the clip.
   ///
   /// Requires:
   ///   - sampleRate > 0 and seconds > 0
   ///
   /// Ensures:
   ///   - returns exactly [byteLength] bytes
-  ///   - bytes 0-43 are a valid PCM RIFF/WAVE header for mono 16-bit audio
+  ///   - bytes 0-43 are a valid PCM WAV header for mono 16-bit audio
   ///   - output is identical for identical arguments
   ///
   /// Raises:
@@ -85,18 +88,16 @@ class ProbeWav {
     return bytes;
   }
 
-  /// Build the clip on a background isolate so the UI thread never stalls.
+  /// Builds the clip on a background isolate so the UI thread never stalls.
   ///
   /// Requires:
   ///   - sampleRate > 0 and seconds > 0
   ///
   /// Ensures:
-  ///   - completes with exactly the bytes [generate] returns for the same
-  ///     arguments
+  ///   - completes with the same bytes [generate] returns for the same arguments
   ///
   /// Raises:
-  ///   - ArgumentError (through the future) if sampleRate or seconds is not
-  ///     positive
+  ///   - ArgumentError (through the future) if sampleRate or seconds is not positive
   static Future<Uint8List> generateInBackground( { required int sampleRate, int seconds = defaultSeconds } ) =>
       Isolate.run( () => generate( sampleRate: sampleRate, seconds: seconds ) );
 }
