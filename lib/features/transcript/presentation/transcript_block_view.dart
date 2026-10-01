@@ -6,30 +6,26 @@ import '../data/transcript_models.dart';
 
 /// One block, rendered according to its `kind`.
 ///
-/// 🔴 PROSE AND TOOL CONTENT DO NOT SHARE A RENDERER, AND THE REASON IS MANGLING RATHER THAN
-/// INJECTION. §3 states the rule once for both clients: `kind: text` renders as **markdown**;
-/// `tool_call` and `tool_result` render as **plain text**. A markdown renderer turns a raw
-/// file dump into markup — `#` becomes a heading, `*` a list, indentation a code block — so
-/// a diff or a config file renders WRONG. Plain text is the safe arm because it cannot
-/// mangle and cannot execute. (C4 on the phone, B6 on the web: one finding, one rule.)
-///
-/// 🔴 AND THE `switch` HAS A DEFAULT ARM THAT RENDERS, NOT ONE THAT DROPS. §3: "a kind the
-/// client does not recognise renders as plain text, never dropped and never thrown on." The
-/// server's mapper is open-ended by design (§2 item 1(a)) and OSQ-7 already added a fourth
-/// kind after the first three were written — so a three-literal switch with no fallback
-/// would render nothing in the one surface whose whole job is to show everything, and
-/// silently. C5.15 is the row that fails if the default arm goes away.
-///
-/// ⚠️ `flutter_markdown_plus`, NEVER `flutter_markdown` (C10). Google marked the latter
-/// DISCONTINUED on 2025-05-30; the `_plus` package is the maintained continuation and is
-/// already pinned in `pubspec.yaml` and in use in `doc_viewer_screen.dart`.
+/// Prose and tool content do not share a renderer, because of mangling and not injection.
+/// `kind: text` renders as markdown; tool calls, tool results and thinking render as plain
+/// text. A markdown renderer turns a raw file dump into markup, so a diff or a config file
+/// renders wrong. Plain text cannot mangle and cannot execute.
+/// The `switch` has a default arm that renders, not one that drops. A kind the client does
+/// not recognise renders as plain text, never dropped and never thrown on. A three-literal
+/// switch with no fallback would silently render nothing.
+/// Use `flutter_markdown_plus`, never `flutter_markdown`, which is discontinued. The `_plus`
+/// package is the maintained continuation, pinned in `pubspec.yaml` and used in
+/// `doc_viewer_screen.dart`.
 class TranscriptBlockView extends StatefulWidget {
+  /// The block to render.
   final TranscriptBlock block;
 
-  /// Fetch this block's full text over REST. Called at most once, on the first expand of a
-  /// server-truncated block.
+  /// Fetches this block's full text over REST.
+  ///
+  /// It is called at most once, on the first expand of a server-truncated block.
   final Future<void> Function()? onFetchFull;
 
+  /// Creates the view.
   const TranscriptBlockView( {
     super.key,
     required this.block,
@@ -47,9 +43,9 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
   @override
   void initState() {
     super.initState();
-    // Ruling Q2's content model: prose renders OPEN; tool calls, tool results and thinking
-    // arrive COLLAPSED. C5.18's negative control is a build that renders every block
-    // expanded, and this line is what makes that build fail.
+    // Prose renders open; tool calls, tool results and thinking arrive collapsed. A build
+    // that rendered every block expanded would fail a test on this line.
+    // Design: src/docs/decisions/README.md (R-TR-tool-collapsed)
     _expanded = !widget.block.kind.startsCollapsed;
   }
 
@@ -57,8 +53,8 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
   Widget build( BuildContext context ) {
     final block = widget.block;
 
-    // 🔴 THE ONLY KIND THAT REACHES `Markdown`. Everything else — including a kind invented
-    // after this file was written — goes to `SelectableText`.
+    // The only kind that reaches `Markdown`. Everything else, including a kind invented
+    // after this file was written, goes to `SelectableText`.
     if ( block.kind == TranscriptBlockKind.text ) {
       return Padding(
         padding : const EdgeInsets.symmetric( horizontal: 12, vertical: 4 ),
@@ -73,11 +69,9 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
     return _collapsible( context, block );
   }
 
-  /// A one-line header that toggles, over a monospace body.
-  ///
-  /// The header is the whole hit target and carries its own `Semantics`, because the visible
-  /// text is a bare label like "Thinking…" and a screen reader would otherwise announce an
-  /// unnamed control.
+  // A one-line header that toggles, over a monospace body. The header is the whole hit
+  // target and carries its own `Semantics`, because the visible text is a bare label such as
+  // "Thinking..." and a screen reader would otherwise announce an unnamed control.
   Widget _collapsible( BuildContext context, TranscriptBlock block ) {
     final theme = Theme.of( context );
 
@@ -113,9 +107,9 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
                       ),
                     ),
                     if ( block.truncated )
-                      // The marker is drawn whether or not the block is expanded: it is a
-                      // fact about the CONTENT, and C5.19 asserts it is visible before the
-                      // expand that goes and fetches the rest.
+                      // The marker is drawn whether or not the block is expanded: it is a fact
+                      // about the content, and it is visible before the expand that fetches
+                      // the rest.
                       Padding(
                         padding : const EdgeInsets.only( left: 6 ),
                         child   : Text(
@@ -132,10 +126,9 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
             ),
           ),
           if ( _expanded )
-            // 🔴 MONOSPACE `SelectableText`, WITH NO `Markdown` ANCESTOR. C5.14 asserts
-            // exactly that for tool output and C5.22 for `thinking` — "model scratch text",
-            // which must not be re-flowed as prose. Selectable and copyable, no input
-            // (ruling Q8).
+            // Monospace `SelectableText` with no `Markdown` ancestor, for tool output and for
+            // `thinking`, which is model scratch text and must not be re-flowed as prose. It
+            // is selectable and copyable, with no input.
             Padding(
               padding : const EdgeInsets.only( left: 22, top: 2, bottom: 6 ),
               child   : SelectableText(
@@ -157,9 +150,8 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
     final opening = !_expanded;
     setState( () => _expanded = opening );
 
-    // 🔴 EXACTLY ONE FETCH, AND ONLY ON THE WAY OPEN (C5.19). `_fetched` is what makes it
-    // once: a second expand of the same block must not re-ask, and collapsing must not ask
-    // at all.
+    // Exactly one fetch, and only on the way open. `_fetched` makes it once: a second expand
+    // of the same block must not re-ask, and collapsing must not ask at all.
     if ( opening && block.truncated && !_fetched && widget.onFetchFull != null ) {
       _fetched = true;
       await widget.onFetchFull!();
@@ -172,7 +164,7 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
             ? "Tool result"
             : "Result — ${ block.name }",
         TranscriptBlockKind.thinking   => "Thinking…",
-        // A kind this build has never heard of. NAMED, so the operator can see what the
+        // A kind this build has never heard of. It is named, so the operator can see what the
         // server called it and whoever adds the fifth kind can see it already arriving.
         _ => block.rawKind == null ? "Block" : "Block — ${ block.rawKind }",
       };

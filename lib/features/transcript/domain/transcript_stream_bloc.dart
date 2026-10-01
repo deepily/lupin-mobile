@@ -15,25 +15,37 @@ import 'transcript_frame_router.dart';
 // Events
 // ---------------------------------------------------------------------------
 
+/// An input to [TranscriptStreamBloc].
 sealed class TranscriptEvent extends Equatable {
+  /// Creates an event.
   const TranscriptEvent();
   @override
   List<Object?> get props => const [];
 }
 
-/// A REST read landed. `replace` distinguishes the two reasons for one:
-/// a fresh open or an epoch change (replace) from a catch-up or gap repair (append).
+/// A REST read landed.
+///
+/// `replace` separates a fresh open or an epoch change (replace) from a catch-up or gap
+/// repair (append).
 class TranscriptBacklogLoaded extends TranscriptEvent {
+  /// The response body.
   final TranscriptBacklog backlog;
+
+  /// True when the buffer is replaced, false when the blocks are appended.
   final bool              replace;
+
+  /// Creates the event.
   const TranscriptBacklogLoaded( this.backlog, { this.replace = false } );
   @override
   List<Object?> get props => [ backlog.offset, backlog.nextOffset, replace ];
 }
 
-/// A backwards page landed (C-7).
+/// A backwards page landed.
 class TranscriptEarlierLoaded extends TranscriptEvent {
+  /// The page of older blocks.
   final TranscriptBacklog backlog;
+
+  /// Creates the event.
   const TranscriptEarlierLoaded( this.backlog );
   @override
   List<Object?> get props => [ backlog.offset, backlog.blocks.length ];
@@ -41,7 +53,10 @@ class TranscriptEarlierLoaded extends TranscriptEvent {
 
 /// A socket chunk arrived.
 class TranscriptAppendReceived extends TranscriptEvent {
+  /// The chunk.
   final TranscriptAppend frame;
+
+  /// Creates the event.
   const TranscriptAppendReceived( this.frame );
   @override
   List<Object?> get props => [ frame.offset, frame.nextOffset, frame.fileEpoch ];
@@ -49,7 +64,10 @@ class TranscriptAppendReceived extends TranscriptEvent {
 
 /// A socket state frame arrived.
 class TranscriptStateReceived extends TranscriptEvent {
+  /// The state frame.
   final TranscriptStateFrame frame;
+
+  /// Creates the event.
   const TranscriptStateReceived( this.frame );
   @override
   List<Object?> get props => [ frame.state, frame.fileEpoch ];
@@ -57,23 +75,32 @@ class TranscriptStateReceived extends TranscriptEvent {
 
 /// The buffer and offset are dropped: an epoch changed, or the server refused our epoch.
 class TranscriptCleared extends TranscriptEvent {
+  /// The new epoch, or null when none was named.
   final String? newEpoch;
+
+  /// Creates the event.
   const TranscriptCleared( this.newEpoch );
   @override
   List<Object?> get props => [ newEpoch ];
 }
 
-/// A retryable failure. Not a refusal.
+/// A retryable failure; not a refusal.
 class TranscriptFailed extends TranscriptEvent {
+  /// The failure text.
   final String message;
+
+  /// Creates the event.
   const TranscriptFailed( this.message );
   @override
   List<Object?> get props => [ message ];
 }
 
-/// The server will not serve this console. **Terminal.**
+/// The server will not serve this console; the refusal is terminal.
 class TranscriptRefusalReceived extends TranscriptEvent {
+  /// The server's reason, when it gave one.
   final String? reason;
+
+  /// Creates the event.
   const TranscriptRefusalReceived( this.reason );
   @override
   List<Object?> get props => [ reason ];
@@ -81,16 +108,27 @@ class TranscriptRefusalReceived extends TranscriptEvent {
 
 /// One truncated block's full text came back from REST.
 class TranscriptBlockFilled extends TranscriptEvent {
+  /// The index of the block in the buffer.
   final int             index;
+
+  /// The block with its full text.
   final TranscriptBlock full;
+
+  /// Creates the event.
   const TranscriptBlockFilled( this.index, this.full );
   @override
   List<Object?> get props => [ index, full.text.length ];
 }
 
+/// The loading flags changed.
 class TranscriptLoadingChanged extends TranscriptEvent {
+  /// True while the opening read is in flight.
   final bool loading;
+
+  /// True while a "Load earlier" page is in flight.
   final bool loadingEarlier;
+
+  /// Creates the event.
   const TranscriptLoadingChanged( { this.loading = false, this.loadingEarlier = false } );
   @override
   List<Object?> get props => [ loading, loadingEarlier ];
@@ -100,41 +138,54 @@ class TranscriptLoadingChanged extends TranscriptEvent {
 // State
 // ---------------------------------------------------------------------------
 
+/// The console's state.
 class TranscriptViewState extends Equatable {
-  /// Oldest first. The screen reverses for display (OSQ-9 ruled B: live end at the bottom).
+  /// The buffered blocks, oldest first.
+  ///
+  /// The screen reverses them so the live end is at the bottom.
+  /// Design: src/docs/decisions/README.md (R-TR-live-end-bottom)
   final List<TranscriptBlock> blocks;
 
+  /// The current epoch of the source file, or null before the first read.
   final String? fileEpoch;
 
-  /// 🔴 THE SEQUENCE CURSOR. §3: "`offset` is the sequence number… `next_offset` always
-  /// lands at the end of a complete line." A chunk whose `offset` is not this value has a
-  /// gap in front of it.
+  /// The sequence cursor: the `next_offset` of the last chunk applied.
+  ///
+  /// A chunk's `offset` is its sequence number, and `next_offset` always lands at the end
+  /// of a complete line. A chunk whose `offset` differs from this value has a gap in
+  /// front of it.
   final int? lastNextOffset;
 
   /// The oldest offset held, for "Load earlier" to page back from.
   final int? oldestOffset;
 
-  /// The backwards pager has reached the start of this epoch, so it hides (C-7).
+  /// True when the backwards pager has reached the start of this epoch, so it hides.
   final bool atEpochStart;
 
+  /// True while the opening read is in flight.
   final bool loading;
+
+  /// True while a "Load earlier" page is in flight.
   final bool loadingEarlier;
 
-  /// A retryable failure. The console shows it and keeps its buffer.
+  /// A retryable failure; the console shows it and keeps its buffer.
   final String? error;
 
-  /// 🔴 TERMINAL AND NOT A KIND OF ERROR. §5 (F-Clayton-C6): a refused watch "shows a static
-  /// 'Console not available for this session' message with the server's reason if one is
-  /// given, keeps no buffer, sends no further watch, **does not retry**, and offers only
-  /// Back. No spinner, no retry loop." Folding it into [error] would let a foreground return
-  /// or an `auth_success` re-arm it, which C5.21's negative control fails on.
+  /// True when the server refused this console.
+  ///
+  /// A refusal is terminal and not a kind of error. The screen shows a static "Console not
+  /// available for this session" message with the server's reason if one is given. It keeps
+  /// no buffer, sends no further watch, does not retry, and offers only Back. Folding it
+  /// into [error] would let a foreground return or an `auth_success` re-arm it.
   final bool    refused;
+
+  /// The server's reason for the refusal, when it gave one.
   final String? refusedReason;
 
-  /// How many REST repairs this bloc has issued. C5.1 and C5.6 assert on it, and C5.6's
-  /// control is a clean sequence where it must stay at zero.
+  /// How many REST repairs this bloc has issued; a clean sequence leaves it at zero.
   final int repairFetches;
 
+  /// Creates the state; everything defaults to empty.
   const TranscriptViewState( {
     this.blocks         = const [],
     this.fileEpoch,
@@ -149,10 +200,11 @@ class TranscriptViewState extends Equatable {
     this.repairFetches  = 0,
   } );
 
-  /// Total bytes held, by the shared size definition (C8).
+  /// Total bytes held, by [TranscriptBlock.sizeBytes].
   int get bufferBytes =>
       blocks.fold( 0, ( sum, b ) => sum + b.sizeBytes );
 
+  /// Copies the state with changes; [clearError] drops the error.
   TranscriptViewState copyWith( {
     List<TranscriptBlock>? blocks,
     String? fileEpoch,
@@ -195,55 +247,48 @@ class TranscriptViewState extends Equatable {
 
 /// One watched seat's console.
 ///
-/// 🔴 ROUTE-SCOPED, NEVER APP-ROOT (C1). It is built by the Live Console route's own
-/// `BlocProvider( create: )` and closed when that route pops — which is what sends
-/// `cc_transcript_unwatch` and cancels the in-flight fetch. An app-root instance would keep
-/// its watch open after the operator walked away, and C5.11's negative control is exactly
-/// that: register it app-root and the test must fail.
-///
-/// It mixes in [PaneVisibilityMixin] and **not** `PanePollingMixin`: a WebSocket pushes to
-/// this screen, so there is nothing to poll. That asymmetry is why the mixin was split.
+/// It is route-scoped, never app-root. The Live Console route builds it in its own
+/// `BlocProvider( create: )` and closes it when the route pops. That sends
+/// `cc_transcript_unwatch` and cancels the in-flight fetch. An app-root instance would
+/// keep its watch open after the operator walked away. It mixes in [PaneVisibilityMixin]
+/// and not `PanePollingMixin`, because a WebSocket pushes to this screen.
 class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     with PaneVisibilityMixin<TranscriptEvent, TranscriptViewState> {
-  /// The seat's full `stable_session_id` (§3's `cc_session_id`).
+  /// The seat's full `stable_session_id`, sent as `cc_session_id`.
   final String ccSessionId;
 
   final TranscriptRepository   _repo;
   final TranscriptFrameRouter  _router;
 
-  /// How watch and unwatch reach the server.
-  ///
-  /// ⚠️ A FUNCTION, NOT THE SERVICE. `WebSocketService` is a singleton with private state,
-  /// and what this bloc needs from it is one verb — `sendMessage` (`:375`). Injecting the
-  /// verb is the same seam `lifecycleStream` and `isMeteredConnection` already use, and for
-  /// the same reason: a hard singleton cannot be faked, so what is injectable is the thing
-  /// the consumer actually uses. The "enhanced" service is legacy and stays untouched (F6).
+  // How watch and unwatch reach the server. It is a function, not the service:
+  // `WebSocketService` is a singleton with private state, and this bloc needs one verb,
+  // `sendMessage`. Injecting the verb is the same seam `lifecycleStream` and
+  // `isMeteredConnection` use, because a hard singleton cannot be faked. The "enhanced"
+  // service is legacy and stays untouched.
   final Future<void> Function( Map<String, dynamic> frame ) _send;
 
-  /// The ring's cap in bytes.
+  /// The ring buffer's cap in bytes.
   ///
-  /// 🔴 READ FROM CONFIG, NEVER HARD-CODED (F-Clayton-C9), and provisional pending OSQ-5.
-  /// It is a constructor parameter so C5.3 can assert the eviction RULE against a small cap
-  /// instead of manufacturing 256 KB of fixture — a test that has to build a quarter of a
-  /// megabyte to exercise a boundary usually ends up asserting the fixture instead.
+  /// It is read from config, never hard-coded, and provisional. It is a constructor
+  /// parameter so a test can assert the eviction rule against a small cap. Building 256 KB
+  /// of fixture instead tends to assert the fixture.
   final int ringBytes;
 
   StreamSubscription<TranscriptAppend>? _appendSub;
   StreamSubscription<TranscriptStateFrame>? _stateSub;
   StreamSubscription<void>? _reconnectSub;
 
-  /// Set synchronously by [close], on its FIRST line, before any controller is touched.
-  ///
-  /// 🔴 THIS FLAG EXISTS BECAUSE `isClosed` GOES TRUE TOO LATE TO BE USEFUL — see
-  /// [_addUnlessGone]. `close()` is ours and runs before `super.close()`, so a flag set here
-  /// is the earliest truthful answer to "is this bloc still taking events", and it is set
-  /// with no await in front of it.
+  // Set synchronously on the first line of [close], before any controller is touched.
+  // `isClosed` goes true too late to be useful (see [_addUnlessGone]). `close()` runs before
+  // `super.close()`, so a flag set here is the earliest truthful answer to "is this bloc
+  // still taking events", with no await in front of it.
   bool _closing = false;
 
-  /// "This bloc can no longer receive an event." The union of the flag above and the
-  /// framework's own late-arriving signal, never `isClosed` alone.
+  // True when this bloc can no longer receive an event: the flag above or the framework's
+  // own late-arriving signal, never `isClosed` alone.
   bool get _gone => _closing || isClosed;
 
+  /// Creates the console bloc for one seat; call [start] to begin.
   TranscriptStreamBloc( {
     required this.ccSessionId,
     required TranscriptRepository repository,
@@ -286,53 +331,49 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     } );
   }
 
-  /// Subscribe to this seat's frames and start the visibility machine.
+  /// Subscribes to this seat's frames and starts the visibility machine.
   ///
-  /// ⚠️ THE SUBSCRIPTION IS SEPARATE FROM THE WATCH, and both are separate from
-  /// `startVisibility()`. Subscribing to the router costs nothing and must happen before the
-  /// first watch, or a chunk that arrives between the two is lost. The WATCH is sent by
-  /// `onActiveChanged`, once the route says the screen is on view.
+  /// The subscription is separate from the watch, and both are separate from
+  /// `startVisibility()`. Subscribing to the router is free and must happen before the first
+  /// watch, or a chunk arriving between the two is lost. The watch itself is sent by
+  /// `onActiveChanged` once the route says the screen is on view.
   void start() {
     _appendSub ??= _router.appendsFor( ccSessionId )
         .listen( ( f ) => add( TranscriptAppendReceived( f ) ) );
     _stateSub  ??= _router.statesFor( ccSessionId )
         .listen( ( f ) => add( TranscriptStateReceived( f ) ) );
-    // The `auth_success` seam, routed through the app-root router because the dispatcher
-    // cannot reach a route-scoped bloc (C1). [onReconnected] is still public and called
-    // directly by tests — this only gives it a producer in the running app.
+    // The `auth_success` seam goes through the app-root router, because the dispatcher
+    // cannot reach a route-scoped bloc. [onReconnected] stays public and tests call it
+    // directly; this only gives it a producer in the running app.
     _reconnectSub ??= _router.reconnects.listen( ( _ ) => onReconnected() );
     startVisibility();
   }
 
-  /// The visibility hook — §5's catch-up-then-re-watch two-step.
+  /// The visibility hook: catch up over REST, then re-watch.
   ///
-  /// 🔴 THE CATCH-UP IS HERE AND NOT IN `start()`, WHICH IS THE WHOLE POINT OF C-2. A
-  /// catch-up placed in the subscribe-time verb fires ONCE and passes a test that returns to
-  /// the foreground once. `_reconcile` calls this on EVERY transition, so the catch-up runs
-  /// on every return from the background — which is what C5.7 asserts with **two** returns
-  /// in one test.
+  /// The catch-up lives here and not in `start()`. A catch-up in the subscribe-time verb
+  /// fires once and would pass a test that returns to the foreground once. `_reconcile`
+  /// calls this on every transition, so the catch-up runs on every return from the
+  /// background, and a test must return twice in one test.
   @override
   void onActiveChanged( { required bool active, required bool refreshNow } ) {
     if ( !active ) {
       // The mixin has already cancelled the in-flight fetch. What is left is telling the
-      // server to stop sending: §5, "on screen close, and when the app goes to the
-      // background: cc_transcript_unwatch".
+      // server to stop sending, on screen close and when the app goes to the background.
       _sendUnwatch();
       return;
     }
     if ( refreshNow ) _catchUpThenWatch();
   }
 
-  /// On reconnect (`auth_success`): watch the open screen again from its last offset and
-  /// epoch.
+  /// On reconnect, watches the open screen again from its last offset and epoch.
   ///
-  /// 🔴 THIS IS THE STALE-EPOCH PATH, AND A PHONE IS THE CLIENT MOST LIKELY TO HIT IT (§5,
-  /// T15). If the seat cleared while the phone was away, the watch names an epoch that is no
-  /// longer current and the server answers `epoch_mismatch` rather than silently rebasing —
-  /// a rebase "would hand the client the whole new file labelled as its own continuation".
+  /// This is the stale-epoch path, and a phone is the client most likely to hit it. If the
+  /// seat cleared while the phone was away, the watch names an epoch that is no longer
+  /// current. The server then answers `epoch_mismatch` instead of silently rebasing.
   void onReconnected() {
     if ( state.refused ) {
-      // C5.21: no further watch after a refusal, including across a reconnect.
+      // No further watch after a refusal, including across a reconnect.
       debugPrint( '[Transcript] auth_success ignored — this console was refused' );
       return;
     }
@@ -340,29 +381,25 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     _catchUpThenWatch();
   }
 
-  /// Add an event only if this bloc is still able to receive one.
-  ///
-  /// 🔴 `isClosed` IS NOT A SAFE GUARD FOR `add()`, AND EVERY `if ( !isClosed ) add( … )`
-  /// THIS REPLACED WAS A LIE. `isClosed` reports the STATE controller; `add()` throws on the
-  /// EVENT controller, and `Bloc.close()` closes the event controller FIRST, reaching the
-  /// state controller only after the pending handlers settle. In that window `isClosed` is
-  /// still **false** and `add()` throws anyway. Measured 2026-09-27 by C5.12: a gated fetch
-  /// that returned after the route popped threw `Bad state: Cannot add new events after
-  /// calling close` straight past the guard — with `isClosed` reading false on both sides
-  /// of the throw.
-  ///
-  /// ⇒ The token is the honest signal. `PaneVisibilityMixin.close()` cancels the in-flight
-  /// token synchronously, before any controller closes, and `_reconcile` cancels it the
-  /// moment the pane hides. A cancelled token means "the surface this answer was for is
-  /// gone" — which is the question being asked here, and `isClosed` only ever approximated
-  /// it. `isClosed` is kept as a second belt because a token is cancelled per request while
-  /// the bloc can be closed with none outstanding.
+  // Adds an event only if this bloc can still receive one. `isClosed` is not a safe guard
+  // for `add()`: it reports the state controller, while `add()` throws on the event
+  // controller, and `Bloc.close()` closes the event controller first and the state
+  // controller only after pending handlers settle. In that window `isClosed` is still false
+  // and `add()` throws anyway; a gated fetch that returned after the route popped threw `Bad
+  // state: Cannot add new events after calling close` past the guard. The honest signal is
+  // the token. `PaneVisibilityMixin.close()` cancels the in-flight token synchronously before
+  // any controller closes, and `_reconcile` cancels it when the pane hides, so a cancelled
+  // token means the surface this answer was for is gone. `isClosed` stays as a second belt,
+  // because a token is cancelled per request while the bloc can close with none outstanding.
   void _addUnlessGone( CancelToken token, TranscriptEvent event ) {
     if ( token.isCancelled || _gone ) return;
     add( event );
   }
 
-  /// "Load earlier" — a page backwards from the oldest block held (C-7).
+  /// Fetches a page backwards from the oldest block held, for "Load earlier".
+  ///
+  /// Does nothing after a refusal, at the start of the epoch, while one is loading, or
+  /// before any block is held.
   Future<void> loadEarlier() async {
     if ( state.refused || state.atEpochStart || state.loadingEarlier ) return;
 
@@ -385,7 +422,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
       _addUnlessGone( token, TranscriptRefusalReceived( e.reason ) );
     } on DioException catch ( e ) {
       if ( e.type != DioExceptionType.cancel ) rethrow;
-      // The route closed mid-page. Nothing to say and nobody to say it to.
+      // The route closed mid-page: nothing to say and nobody to say it to.
     } on TranscriptApiException catch ( e ) {
       _addUnlessGone( token, TranscriptFailed( e.message ) );
     } finally {
@@ -394,11 +431,11 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     }
   }
 
-  /// Fetch one server-truncated block's full text.
+  /// Fetches one server-truncated block's full text and replaces the block with it.
   ///
-  /// 🔴 EXACTLY ONE REST FETCH, AND THE ANSWER REPLACES THE BLOCK (C5.19). Expanding from
-  /// memory would re-show the truncated prefix and call it the full text — which is why
-  /// that row's control has the stub return text that DIFFERS from the prefix.
+  /// It makes exactly one REST fetch. Expanding from memory would re-show the truncated
+  /// prefix and call it the full text, so the test stub returns text that differs from the
+  /// prefix.
   Future<void> expandTruncated( int index ) async {
     if ( index < 0 || index >= state.blocks.length ) return;
 
@@ -425,16 +462,13 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
       final replacement = full.blocks.isNotEmpty ? full.blocks.first : null;
       if ( replacement == null ) return;
 
-      // 🔴 THE FULL TEXT IS MERGED ONTO THE **ORIGINAL** BLOCK, NOT SUBSTITUTED FOR IT, and
-      // the difference is not cosmetic. A REST read for one block's full text answers with
-      // the TEXT; it is not obliged to repeat that block's `offset` or its tool `name`, and
-      // the fake proved it — my first version took the response's block wholesale, lost the
-      // offset, and the screen's offset-keyed element was rebuilt from scratch. The block
-      // re-collapsed and hid the text the operator had just waited on. C5.19 caught it.
-      //
-      // ⇒ Identity comes from the block we already have; only the text and the truncation
-      // flag come from the server. `truncated: false` so the marker goes and a second tap
-      // does not re-fetch.
+      // The full text is merged onto the original block, not substituted for it. A REST read
+      // for one block's full text answers with the text and need not repeat that block's
+      // `offset` or tool `name`. Taking the response's block wholesale lost the offset, so
+      // the screen's offset-keyed element was rebuilt, the block re-collapsed and the text
+      // the operator had just waited for was hidden. Identity comes from the block already
+      // held and only the text and truncation flag come from the server. `truncated: false`
+      // removes the marker, so a second tap does not re-fetch.
       add( TranscriptBlockFilled(
         index,
         block.withText( replacement.text, truncated: false ),
@@ -454,33 +488,29 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
   // The wire
   // -------------------------------------------------------------------------
 
-  /// REST catch-up, then watch from where that response ended.
-  ///
-  /// Ensures:
-  ///     - on a FIRST open, `tail_bytes` — the LAST ~64 KB (ruling Q6). **Never
-  ///       `since_offset=0`**, which returns the FIRST 64 KB and would open the screen at
-  ///       the top of the transcript (§2 item 4, A2.9; C5.16)
-  ///     - on a resume, `since_offset` from [TranscriptViewState.lastNextOffset]
-  ///     - the watch's `from_offset` is the RESPONSE's `next_offset`, so the server starts
-  ///       exactly where the backlog stopped — §3: "the server starts where the client
-  ///       asked… never silently starts at the current end of the file"
-  ///     - a refusal is terminal and no watch is sent
-  ///     - `forceTail` overrides the resume branch, for the one case where `state` cannot
-  ///       be trusted to answer it
+  // REST catch-up, then watch from where that response ended.
+  //
+  // - On a first open it reads `tail_bytes`, the last ~64 KB, never `since_offset=0`, which
+  //   returns the first 64 KB and would open the screen at the top of the transcript.
+  // - On a resume it reads `since_offset` from [TranscriptViewState.lastNextOffset].
+  // - The watch's `from_offset` is the response's `next_offset`, so the server starts exactly
+  //   where the backlog stopped and never silently at the current end of the file.
+  // - A refusal is terminal and no watch is sent.
+  // - `forceTail` overrides the resume branch for the one case where `state` cannot be
+  //   trusted to answer it.
+  // Design: src/docs/decisions/README.md (R-TR-open-tail)
   Future<void> _catchUpThenWatch( { bool forceTail = false } ) async {
     if ( state.refused ) return;
 
     final token = claimRequest();
     if ( token == null ) return;
 
-    // 🔴 `forceTail` EXISTS BECAUSE A REDUCER'S `add()` HAS NOT LANDED YET WHEN THE NEXT
-    // MICROTASK RUNS, AND THAT COST ME FOUR RED TESTS. An epoch change adds
-    // `TranscriptCleared` — which drops `lastNextOffset` — and then schedules this. But the
-    // bloc's event queue processes `TranscriptCleared` asynchronously, so reading
-    // `state.lastNextOffset` here still sees the OLD epoch's cursor and takes the resume
-    // branch: a `since_offset` read against a file that no longer exists, at an offset that
-    // means nothing in the new one. The caller knows it cleared; the state does not know yet.
-    // So the caller says so, rather than this method inferring it from a value in flight.
+    // `forceTail` exists because a reducer's `add()` has not landed when the next microtask
+    // runs. An epoch change adds `TranscriptCleared`, which drops `lastNextOffset`, and then
+    // schedules this. The event queue processes `TranscriptCleared` asynchronously, so
+    // reading `state.lastNextOffset` here still sees the old epoch's cursor and takes the
+    // resume branch: a `since_offset` read against a file that no longer exists. The caller
+    // knows it cleared and the state does not yet, so the caller says so.
     final resuming = !forceTail && state.lastNextOffset != null;
     if ( !resuming ) _addUnlessGone( token, const TranscriptLoadingChanged( loading: true ) );
 
@@ -516,10 +546,8 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     }
   }
 
-  /// Repair a gap: fetch from `last_next_offset` and append.
-  ///
-  /// §3's gap rule: "if `chunk.offset != last_next_offset`, drop the chunk and fetch over
-  /// REST from `last_next_offset`."
+  // Repairs a gap: if `chunk.offset != last_next_offset`, the chunk is dropped and the
+  // missing range is fetched over REST from `last_next_offset` and appended.
   Future<void> _repairGap( int from ) async {
     final token = claimRequest();
     if ( token == null ) return;
@@ -548,11 +576,11 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         "type"          : AppConstants.eventTranscriptWatch,
         "cc_session_id" : ccSessionId,
         "from_offset"   : fromOffset ?? 0,
-        // §3: `file_epoch` is nullable — null means "whatever file is current", and the
-        // server answers with the epoch it chose. So a FIRST watch needs no prior REST call.
+        // `file_epoch` is nullable: null means whatever file is current, and the server
+        // answers with the epoch it chose. A first watch therefore needs no prior REST call.
         "file_epoch"    : fileEpoch,
       } );
-      // Only a frame the socket ACCEPTED earns an unwatch: if the watch never left, there is
+      // Only a frame the socket accepted earns an unwatch: if the watch never left, there is
       // no server-side watcher to retire.
       _watching = true;
     } on Object catch ( e ) {
@@ -562,15 +590,12 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     }
   }
 
-  /// True from the moment a watch frame goes out until the unwatch that retires it.
-  ///
-  /// 🔴 ONE UNWATCH PER WATCH, AND NOTHING ELSE MAKES THAT TRUE. Popping the route runs BOTH
-  /// `onActiveChanged( active: false )` and `close()`, and each sent its own unwatch — two
-  /// frames for one pop (measured 2026-09-27; C5.11 asserted 1 and read 2). A console closed
-  /// before it ever became active sent one for a seat that was never watched at all. Neither
-  /// is fatal — the server drops an unknown watcher — but the frame is a claim about this
-  /// client's state, and a client that says "stop" twice for one "start" cannot be read from
-  /// a log.
+  // True from the moment a watch frame goes out until the unwatch that retires it, so each
+  // watch gets one unwatch. Popping the route runs both `onActiveChanged( active: false )`
+  // and `close()`, which each sent an unwatch, so one pop sent two frames; a console closed
+  // before it was ever active sent one for a seat never watched. The server drops an unknown
+  // watcher, so neither is fatal, but a client that says "stop" twice for one "start" cannot
+  // be read from a log.
   bool _watching = false;
 
   void _sendUnwatch() {
@@ -581,8 +606,8 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
       "type"          : AppConstants.eventTranscriptUnwatch,
       "cc_session_id" : ccSessionId,
     } ).catchError( ( Object e ) {
-      // Unwatching a socket that is already gone is a no-op, not a failure: the server
-      // drops the watcher when the connection closes.
+      // Unwatching a socket that is already gone is a no-op: the server drops the watcher
+      // when the connection closes.
       debugPrint( '[Transcript] unwatch not sent (${ e.runtimeType }) — socket is gone' );
     } );
   }
@@ -611,18 +636,16 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     ) );
   }
 
-  /// A backwards page goes on the FRONT, and the cursor does not move.
-  ///
-  /// ⚠️ `lastNextOffset` IS DELIBERATELY UNTOUCHED HERE. It is the LIVE end's cursor, and a
-  /// page of older content must not rewind it — doing so would make the next chunk look like
-  /// a gap and fire a repair fetch for content already held.
+  // A backwards page goes on the front and the cursor does not move. `lastNextOffset` is
+  // the live end's cursor, and a page of older content must not rewind it, or the next chunk
+  // would look like a gap and fire a repair for content already held.
   void _onEarlier( TranscriptEarlierLoaded e, Emitter<TranscriptViewState> emit ) {
     final b = e.backlog;
 
     emit( state.copyWith(
-      // 🔴 EVICT FROM THE **LIVE** END WOULD BE WRONG HERE AND RIGHT EVERYWHERE ELSE, so
-      // the older page is trimmed instead: a "Load earlier" that evicted the newest blocks
-      // to make room would scroll the live end out of the buffer the operator is following.
+      // The older page is trimmed here, unlike every other path: a "Load earlier" that
+      // evicted the newest blocks to make room would scroll the live end out of the buffer
+      // the operator is following.
       blocks         : _evictOldestFirst( [ ...b.blocks, ...state.blocks ] ),
       oldestOffset   : b.offset ?? state.oldestOffset,
       atEpochStart   : b.atStart,
@@ -636,10 +659,10 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
 
     if ( state.refused ) return;
 
-    // 🔴 EPOCH FIRST, BEFORE THE GAP CHECK. A `/clear` on the watched seat changes the
-    // epoch while `cc_session_id` stays put, and the new file's offsets are unrelated to
-    // ours — so an offset comparison across an epoch boundary is meaningless, and treating
-    // it as a gap would issue a repair fetch against the WRONG file.
+    // The epoch is checked before the gap. A `/clear` on the watched seat changes the epoch
+    // while `cc_session_id` stays put, and the new file's offsets are unrelated to ours, so
+    // an offset comparison across an epoch boundary is meaningless and treating it as a gap
+    // would repair against the wrong file.
     final incoming = f.fileEpoch;
     if ( incoming != null && state.fileEpoch != null && incoming != state.fileEpoch ) {
       debugPrint(
@@ -653,7 +676,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     final offset   = f.offset;
 
     if ( expected != null && offset != null && offset != expected ) {
-      // §3's gap rule. The chunk is DROPPED — not appended and then repaired, which would
+      // The gap rule: the chunk is dropped, not appended and then repaired, which would
       // render out-of-order content for one frame and leave it in the buffer.
       debugPrint( '[Transcript] gap: chunk at $offset, expected $expected — repairing' );
       emit( state.copyWith( repairFetches: state.repairFetches + 1 ) );
@@ -683,9 +706,9 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
 
       case TranscriptStreamState.epochMismatch:
       case TranscriptStreamState.rotated:
-        // 🔴 CLEAR AND RE-FETCH, NEVER APPEND. §3 (T15): the server refuses a stale epoch
-        // rather than rebasing, precisely so the client can tell the difference. Appending
-        // here would splice a different file onto this one.
+        // Clear and re-fetch, never append. The server refuses a stale epoch instead of
+        // rebasing so the client can tell the difference, and appending would splice a
+        // different file onto this one.
         debugPrint( '[Transcript] ${ f.rawState } — clearing and re-fetching' );
         add( TranscriptCleared( f.fileEpoch ) );
         _catchUpAfterEpochChange();
@@ -697,8 +720,8 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
         ) );
 
       case TranscriptStreamState.ended:
-        // The seat is gone. Keep what we have — the operator may still be reading it — and
-        // say nothing, because "ended" is not an error.
+        // The seat is gone. Keep what we have, because the operator may still be reading it,
+        // and say nothing, because "ended" is not an error.
         debugPrint( '[Transcript] seat ended; buffer kept' );
 
       case TranscriptStreamState.unknown:
@@ -707,19 +730,17 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     }
   }
 
-  /// After a clear, re-fetch the backlog from the top of the new epoch's live end.
-  ///
-  /// The `TranscriptCleared` event has already dropped `lastNextOffset`, so
-  /// [_catchUpThenWatch] takes its first-open branch — a `tail_bytes` read, which is right:
-  /// a new epoch has a new live end.
+  // After a clear, re-fetches the backlog from the live end of the new epoch. The
+  // `TranscriptCleared` event has already dropped `lastNextOffset`, so [_catchUpThenWatch]
+  // takes its first-open branch, a `tail_bytes` read, which is right: a new epoch has a new
+  // live end.
   void _catchUpAfterEpochChange() {
-    // The in-flight token belongs to a fetch against the OLD epoch; its answer must not land
-    // in the new buffer.
+    // The in-flight token belongs to a fetch against the old epoch, and its answer must not
+    // land in the new buffer.
     cancelInFlight( 'epoch changed' );
     scheduleMicrotask( () {
-      // `forceTail: true`, NOT a read of `state`: see the comment in `_catchUpThenWatch`.
-      // A new epoch has a new live end, so the right read is a tail read regardless of what
-      // cursor the old epoch left behind.
+      // `forceTail: true`, not a read of `state`; see `_catchUpThenWatch`. A new epoch has a
+      // new live end, so the right read is a tail read whatever cursor the old epoch left.
       if ( !_gone ) _catchUpThenWatch( forceTail: true );
     } );
   }
@@ -728,18 +749,13 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
   // The ring
   // -------------------------------------------------------------------------
 
-  /// Trim to [ringBytes], oldest first.
-  ///
-  /// 🔴 THE CAP IS IN BYTES AND THE EVICTION IS BY COUNT, WHICH IS THE APP'S EXISTING IDIOM
-  /// PLUS THE ONE NEW PART. `monitoring_models.dart:141-142` already evicts with
-  /// `removeAt( 0 )` past a limit; byte accounting is what C8 adds, and it uses
-  /// [TranscriptBlock.sizeBytes] — the UTF-8 length after server truncation — so "never
-  /// exceeds its cap" means the same thing here as on the server.
-  ///
-  /// ⚠️ ONE BLOCK LARGER THAN THE WHOLE RING IS KEPT, NOT DROPPED. Evicting it would leave
-  /// an empty console showing nothing while the server had sent something, which is worse
-  /// than briefly exceeding a provisional cap. Named because it is the one case where the
-  /// buffer can be over [ringBytes].
+  // Trims to [ringBytes], oldest first. The cap is in bytes and the eviction is by count,
+  // the app's existing idiom plus byte accounting: `monitoring_models.dart` already evicts
+  // with `removeAt( 0 )` past a limit, and this adds [TranscriptBlock.sizeBytes], the UTF-8
+  // length after server truncation, so "never exceeds its cap" means the same thing here as
+  // on the server. One block larger than the whole ring is kept, not dropped, because
+  // evicting it would leave an empty console while the server had sent something. It is the
+  // one case where the buffer can exceed [ringBytes].
   List<TranscriptBlock> _evict( List<TranscriptBlock> blocks ) =>
       _evictOldestFirst( blocks );
 
@@ -761,9 +777,8 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
   Future<void> close() {
     _closing = true;
 
-    // 🔴 THE UNWATCH GOES OUT BEFORE THE SUBSCRIPTIONS DIE, or the server keeps streaming to
-    // a client that has stopped listening. C5.11 asserts the fake socket RECORDED an
-    // unwatch, which is only true if this runs.
+    // The unwatch goes out before the subscriptions die, or the server keeps streaming to a
+    // client that has stopped listening. A test asserts the fake socket recorded an unwatch.
     _sendUnwatch();
 
     _appendSub?.cancel();
@@ -775,7 +790,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
     _router.release( ccSessionId );
 
     // `super.close()` reaches PaneVisibilityMixin, which cancels the in-flight fetch and the
-    // lifecycle subscription (C5.12).
+    // lifecycle subscription.
     return super.close();
   }
 }

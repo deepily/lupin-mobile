@@ -4,63 +4,51 @@ import 'package:flutter/foundation.dart';
 
 import '../data/transcript_models.dart';
 
-/// The one app-root object in this feature: it takes frames off the WebSocket dispatcher and
-/// hands them to whichever route-scoped bloc is watching that seat, if any.
+/// The one app-root object here; it hands WebSocket frames to the watching route's bloc.
 ///
-/// 🔴 THIS EXISTS BECAUSE THE BLOC MUST **NOT** BE APP-ROOT, AND THE DISPATCHER CAN ONLY
-/// REACH APP-ROOT THINGS. `WsBlocDispatcher.dispatch` resolves its targets through
-/// `ServiceLocator.get<XBloc>()`, which returns singletons that outlive their routes (C1).
-/// A `TranscriptStreamBloc` registered that way would keep its server-side watch open after
-/// the operator walked away — and the obvious test, *"the console stops when you leave
-/// it"*, PASSES ANYWAY, because nothing on screen is asking. So the bloc is route-scoped in
-/// its own `BlocProvider`, and this router is the app-root seam the dispatcher can address.
-///
-/// ⚠️ IT IS ALSO THE FIRST OF §5's TWO BELTS (C6). The primary mitigation is server-side —
-/// frames go only to watchers (§3) — but that rests on §2 carrying the stream over
-/// `emit_to_session`. If A-T2 ever resolves to `emit_to_user` instead, the phone's
-/// receive-all subscription (`websocket_service.dart:210`, `'subscribed_events': []`) would
-/// see other clients' watched seats. [publishAppend] dropping frames for seats with no open
-/// route is what makes that harmless here. The second belt is
-/// `websocket_subscription_manager.dart`, and nothing new gets built for it.
-///
-/// 🔴 AND "DROPS FRAMES FOR A SEAT WITH NO LISTENER" IS A PROPERTY THAT NEEDS A TEST THAT
-/// CAN FAIL. C5.11's negative control is to register the bloc app-root and watch the test
-/// go red. Here the observable is [droppedFrames]: a counter, because "nothing happened" is
-/// not something a test can assert on directly, and a silent drop is indistinguishable from
-/// a router that was never called at all.
+/// The bloc is route-scoped, and the dispatcher can reach only app-root objects, so this
+/// router is the seam the dispatcher can address. An app-root bloc would keep its server
+/// watch open after the operator walked away. See the notes on the belts below.
 class TranscriptFrameRouter {
-  /// One broadcast controller per watched seat, keyed by `cc_session_id`.
-  ///
-  /// ⚠️ BROADCAST, NOT SINGLE-SUBSCRIPTION, and created lazily on the first [appendsFor].
-  /// A single-subscription stream would throw on a second listener, and a route re-entered
-  /// before its predecessor's `cancel()` has settled is exactly that.
+  // The router is the first of two belts. The primary protection is server-side: frames go
+  // only to watchers. If the server ever sent frames to every session of the user, the
+  // phone's receive-all subscription would see other clients' watched seats, and
+  // [publishAppend] dropping frames for seats with no open route makes that harmless. The
+  // second belt is `websocket_subscription_manager.dart`. `WsBlocDispatcher.dispatch`
+  // resolves its targets through `ServiceLocator.get<XBloc>()`, which returns singletons
+  // that outlive their routes, so the bloc itself cannot go there. The drop needs a test
+  // that can fail, so [droppedFrames] is a counter: "nothing happened" cannot be asserted
+  // directly, and a silent drop looks like a router never called.
+  //
+  // One broadcast controller per watched seat, keyed by `cc_session_id` and created lazily
+  // on the first [appendsFor]. A single-subscription stream would throw on a second
+  // listener, and a route re-entered before its predecessor's `cancel()` settles is exactly
+  // that.
   final Map<String, StreamController<TranscriptAppend>> _appends = {};
   final Map<String, StreamController<TranscriptStateFrame>> _states = {};
 
-  /// Fires once per `auth_success`, for every open console.
-  ///
-  /// 🔴 THE RECONNECT SIGNAL HAS TO COME THROUGH HERE BECAUSE THE BLOC IS ROUTE-SCOPED AND
-  /// THE DISPATCHER CANNOT REACH IT. `WsBlocDispatcher` resolves every other bloc from
-  /// `ServiceLocator`; the console bloc is deliberately NOT there — that is C1, and an
-  /// app-root instance is the build C5.11 fails. So the dispatcher tells the router, which
-  /// is app-root, and whichever console is open hears it. A console that is closed has no
-  /// listener and the signal costs nothing.
+  // Fires once per `auth_success`, for every open console. The reconnect signal comes
+  // through the router because the bloc is route-scoped and the dispatcher cannot reach it:
+  // the dispatcher tells the router, which is app-root, and whichever console is open hears
+  // it. A closed console has no listener and the signal costs nothing.
   final StreamController<void> _reconnects = StreamController<void>.broadcast();
 
-  /// Subscribe on route open, cancel on close — same discipline as the frame streams.
+  /// Fires on each successful reconnection; subscribe on route open and cancel on close.
   Stream<void> get reconnects => _reconnects.stream;
 
-  /// Called by the dispatcher on `auth_success`, which every successful (re)connection
-  /// completes. §5/T15: if the seat cleared while the phone was away, the re-watch names a
-  /// stale epoch and the server answers `epoch_mismatch` rather than rebasing.
+  /// Called by the dispatcher on `auth_success`, which every successful reconnection
+  /// completes.
+  ///
+  /// If the seat cleared while the phone was away, the re-watch names a stale epoch and the
+  /// server answers `epoch_mismatch` instead of rebasing.
   void publishReconnected() {
     if ( _reconnects.isClosed ) return;
     _reconnects.add( null );
   }
 
-  /// Frames that arrived for a seat nobody is watching.
+  /// How many frames arrived for a seat nobody is watching.
   ///
-  /// This is the belt's receipt. It is not diagnostics: C5.11 asserts it moves.
+  /// It is the belt's receipt, not diagnostics: a test asserts that it moves.
   int droppedFrames = 0;
 
   /// The frames for one seat. Subscribe on route open, cancel on close.
@@ -75,6 +63,7 @@ class TranscriptFrameRouter {
         () => StreamController<TranscriptAppend>.broadcast(),
       ).stream;
 
+  /// The state frames for one seat; subscribe on route open, cancel on close.
   Stream<TranscriptStateFrame> statesFor( String ccSessionId ) =>
       _states.putIfAbsent(
         ccSessionId,
@@ -89,14 +78,14 @@ class TranscriptFrameRouter {
            ( states  != null && states.hasListener );
   }
 
-  /// Route one `cc_transcript_append` frame.
+  /// Routes one `cc_transcript_append` frame.
   ///
   /// Ensures:
   ///     - delivered only to a seat with a live listener
   ///     - otherwise counted in [droppedFrames] and discarded
-  ///     - a frame with no `cc_session_id` is dropped: it cannot be routed, and guessing
-  ///       "the only open console" would deliver another seat's output under this seat's
-  ///       heading — the one failure this surface must never have
+  ///     - a frame with no `cc_session_id` is dropped. It cannot be routed, and guessing
+  ///       "the only open console" would put another seat's output under this seat's
+  ///       heading, which this surface must never do
   void publishAppend( TranscriptAppend frame ) {
     final id = frame.ccSessionId;
     if ( id == null ) {
@@ -107,6 +96,7 @@ class TranscriptFrameRouter {
     _publish( _appends[ id ], frame, id, "append" );
   }
 
+  /// Routes one `cc_transcript_state` frame; dropped and counted like [publishAppend].
   void publishState( TranscriptStateFrame frame ) {
     final id = frame.ccSessionId;
     if ( id == null ) {
@@ -126,18 +116,17 @@ class TranscriptFrameRouter {
     controller.add( frame );
   }
 
-  /// Release a seat's controllers once its route is gone.
+  /// Releases a seat's controllers once its route is gone.
   ///
-  /// ⚠️ CALLED BY THE BLOC'S `close()`, NOT BY THE ROUTER ITSELF. The router cannot know
-  /// when a subscription is the last one; the bloc knows when it is closing. Without this,
-  /// `_appends` grows by one entry per console ever opened — small, but unbounded, and this
-  /// object lives as long as the app does.
+  /// The bloc's `close()` calls this, not the router, because the router cannot know when a
+  /// subscription is the last one. Without it `_appends` would grow by one entry per console
+  /// ever opened, unbounded on an object that lives as long as the app.
   void release( String ccSessionId ) {
     _appends.remove( ccSessionId )?.close();
     _states.remove( ccSessionId )?.close();
   }
 
-  /// For tests and for app teardown.
+  /// Closes every controller; for tests and for app teardown.
   void dispose() {
     for ( final c in _appends.values ) { c.close(); }
     for ( final c in _states.values ) { c.close(); }

@@ -2,41 +2,39 @@ import 'package:dio/dio.dart';
 
 import 'transcript_models.dart';
 
-/// The four REST reads the Live Console needs, over §3's one endpoint.
+/// The four REST reads the Live Console needs, over one endpoint.
 ///
-/// 🔴 EVERY CALL TAKES A `CancelToken` AND IT IS NOT OPTIONAL COURTESY. §5 (C3): "Every
-/// backlog and repair fetch carries a Dio `CancelToken`, cancelled when the route closes or
-/// the app backgrounds… A response must never land in a closed bloc." `PanePollingMixin`
-/// already says the same thing from the other side — "honour it by handing it to the Dio
-/// call, or the cancellation buys nothing" — so the token is `required` here rather than a
-/// named optional a caller can forget.
+/// Every call takes a `CancelToken`, and it is required, not a courtesy. Every backlog and
+/// repair fetch is cancelled when the route closes or the app backgrounds, because a
+/// response must never land in a closed bloc. The token is `required` rather than a named
+/// optional a caller can forget, and it must reach the Dio call or cancelling does nothing.
 class TranscriptRepository {
-  /// 🔴 THE PATH IS PROVISIONAL AND OSQ-6 IS OPEN ON IT. §3 proposes
-  /// `/api/cc-transcript/{cc_session_id}`: "transcript" already means speech-to-text on
-  /// three other surfaces in this system (`/api/v2/transcribe`,
-  /// `/upload-and-transcribe-{mp3,wav}`, and `transcript` as an STT NDJSON line name), so
-  /// the `cc-` prefix is what keeps it unambiguous. It is María's to carry to Rick.
+  /// The endpoint path prefix.
   ///
-  /// TODO(OSQ-6): confirm once phase 1 lands. One constant, one edit.
+  /// The path is provisional and the REST naming is an open question. "Transcript" already
+  /// means speech-to-text on other surfaces, and the `cc-` prefix keeps this one
+  /// unambiguous. It is one constant, so changing it is one edit.
+  /// TODO: confirm the path against the server.
   static const String pathPrefix = "/api/cc-transcript";
 
-  /// Ruling Q6's number: the LAST ~64 KB on open.
+  /// How many bytes to fetch on open: the last 64 KB of the current epoch.
   ///
-  /// 🔴 NEVER `since_offset=0`, WHICH RETURNS THE **FIRST** 64 KB. That would open the
-  /// screen at the top of the transcript rather than at the live end — §2 item 4 / A2.9, and
-  /// C5.16's negative control is a stub that serves `since_offset=0` and must fail the test.
+  /// Never `since_offset=0`, which returns the first 64 KB. That would open the screen at
+  /// the top of the transcript instead of the live end, and a test stub that serves
+  /// `since_offset=0` must fail.
   static const int openTailBytes = 65536;
 
-  /// A backwards page's size (C-7).
+  /// A backwards page's size in bytes.
   static const int pageBytes = 65536;
 
   final Dio _dio;
 
+  /// Creates the repository over the shared Dio.
   const TranscriptRepository( this._dio );
 
   String _path( String ccSessionId ) => "$pathPrefix/$ccSessionId";
 
-  /// On screen open: the last [openTailBytes] of the current epoch.
+  /// Fetches the last [tailBytes] of the current epoch, on screen open.
   Future<TranscriptBacklog> fetchTail( {
     required String      ccSessionId,
     required CancelToken cancelToken,
@@ -49,11 +47,11 @@ class TranscriptRepository {
     );
   }
 
-  /// Catch-up after a background trip, and gap repair.
+  /// Fetches forward from [sinceOffset], for catch-up after a background trip and gap repair.
   ///
   /// Requires:
-  ///     - sinceOffset is the client's `last_next_offset` — §3's gap rule repairs FROM
-  ///       there, not from 0
+  ///     - sinceOffset is the client's `last_next_offset`, because a gap is repaired from
+  ///       there and not from 0
   Future<TranscriptBacklog> fetchSince( {
     required String      ccSessionId,
     required int         sinceOffset,
@@ -70,7 +68,7 @@ class TranscriptRepository {
     );
   }
 
-  /// "Load earlier" — a page backwards from the oldest block held (C-7).
+  /// Fetches a page backwards from the oldest block held, for "Load earlier".
   Future<TranscriptBacklog> fetchBefore( {
     required String      ccSessionId,
     required int         beforeOffset,
@@ -87,12 +85,12 @@ class TranscriptRepository {
     );
   }
 
-  /// One server-truncated block's FULL text.
+  /// Fetches one server-truncated block's full text.
   ///
-  /// 🔴 BY REST, NEVER FROM MEMORY (C5.19, the phone's twin of A2.4). The truncated prefix
-  /// is all the client ever had; expanding from memory would show the prefix again and call
-  /// it the full text. `max_bytes: 0` is §2 item 7's unbounded sentinel, adopted from
-  /// `tasks.py:770-785` where `budget == 0` already means the same thing.
+  /// It goes by REST and never from memory. The truncated prefix is all the client ever had,
+  /// and expanding from memory would show the prefix again and call it the full text.
+  /// `max_bytes: 0` is the unbounded sentinel, the same meaning `budget == 0` has on the
+  /// tasks endpoint.
   Future<TranscriptBacklog> fetchFullBlock( {
     required String      ccSessionId,
     required int         blockOffset,
@@ -108,19 +106,13 @@ class TranscriptRepository {
     );
   }
 
-  /// Requires:
-  ///     - query values are scalars Dio can serialise
-  ///
-  /// Ensures:
-  ///     - a 2xx body is parsed
-  ///     - a 403 raises [TranscriptRefused], which the screen treats as FINAL — §5: it
-  ///       "shows a static message… sends no further watch, does not retry, and offers
-  ///       only Back". A generic exception here would be retried by a caller that could not
-  ///       tell a refusal from a flaky network
-  ///     - any other non-2xx or transport failure raises [TranscriptApiException], which IS
-  ///       retryable
-  ///     - a CANCELLED request rethrows the DioException unflattened, so the bloc can tell
-  ///       "the route closed" from "the fetch failed"
+  // Performs one GET and parses the body. Query values must be scalars Dio can serialise.
+  // A 2xx body is parsed. A 403 raises [TranscriptRefused], which the screen treats as
+  // final: it shows a static message, sends no further watch, does not retry and offers only
+  // Back; a generic exception would be retried by a caller that cannot tell a refusal from a
+  // flaky network. Any other non-2xx or transport failure raises [TranscriptApiException],
+  // which is retryable. A cancelled request rethrows the DioException unflattened, so the
+  // bloc can tell "the route closed" from "the fetch failed".
   Future<TranscriptBacklog> _get( {
     required String            ccSessionId,
     required CancelToken       cancelToken,
@@ -160,23 +152,30 @@ class TranscriptRepository {
   }
 }
 
-/// The server will not let this caller watch this seat. **Terminal.**
+/// The server will not let this caller watch this seat; the refusal is terminal.
 class TranscriptRefused implements Exception {
   /// The server's own words, when it gave any.
   final String? reason;
 
+  /// Creates the refusal, with the server's reason when it gave one.
   const TranscriptRefused( [ this.reason ] );
 
   @override
   String toString() => "TranscriptRefused${ reason == null ? "" : ": $reason" }";
 }
 
-/// A transport or HTTP failure that is NOT a refusal. Retryable in principle — though the
-/// console does not retry on its own; it waits for the next lifecycle event.
+/// A transport or HTTP failure that is not a refusal.
+///
+/// It is retryable in principle, though the console does not retry on its own and waits for
+/// the next lifecycle event.
 class TranscriptApiException implements Exception {
+  /// The server's detail, or a status-bearing fallback.
   final String message;
+
+  /// The HTTP status, or null for a transport failure.
   final int?   statusCode;
 
+  /// Creates the exception.
   const TranscriptApiException( this.message, { this.statusCode } );
 
   @override
