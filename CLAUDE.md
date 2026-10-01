@@ -93,6 +93,7 @@ src/scripts/deploy-apk-to-device.sh --build --fcm
 - **Documentation**: Date prefixes use YYYY.MM.DD format
 - **Research Documents**: Store in `src/rnd/` directory with date prefixes
 - **Configuration**: Follow parent Lupin project conventions where applicable
+- **Doc comments**: Follow `src/docs/docstring-standard.md`; rulings go in `src/docs/decisions/README.md`
 
 ## RAPID PROTOTYPING PRIORITIES
 1. **Voice Interface**: Primary user interaction method
