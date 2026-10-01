@@ -2,7 +2,7 @@
 ///
 /// Groups collapse and start collapsed. The collapse state belongs to the pane, see
 /// `HoldingAreaState.expanded`.
-/// Design: src/docs/decisions/README.md
+/// Design: src/docs/decisions/README.md (R-HA-accordion)
 library;
 
 import '../../../core/text/persona_label.dart';
@@ -20,8 +20,10 @@ class FilerGroup {
   /// The rows this filer filed, in the order the server returned them.
   final List<TaskRowModel> rows;
 
+  /// Creates a group from a filer name and that filer's rows.
   const FilerGroup( { required this.filer, required this.rows } );
 
+  /// Number of rows in the group.
   int get count => rows.length;
 
   /// The ids the group's batch controls act on, from the same rows as [count].
@@ -100,7 +102,7 @@ String batchLabel( String verb, int count ) => "$verb ($count)";
 // The approve-all confirm. Won't-fix-all has none: its required reason box is its gate.
 // The box must be visible and fillable before the press; the confirm interrupts a press
 // that needs no typing.
-// Design: src/docs/decisions/README.md
+// Design: src/docs/decisions/README.md (R-HA-confirm)
 
 /// Title of the approve-all confirm dialog.
 const String kHoldingApproveAllConfirmTitle = "Approve every held row?";

@@ -17,20 +17,26 @@ import '../data/holding_area_repository.dart';
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
+/// Base type of every event the Holding Area bloc handles.
 sealed class HoldingAreaEvent {
   const HoldingAreaEvent();
 }
 
 /// A poll tick, a pull-to-refresh, or a resume.
 class HoldingAreaRefreshRequested extends HoldingAreaEvent {
+  /// Token that cancels the fetch, or null for a refresh that cannot be cancelled.
   final CancelToken? cancelToken;
+  /// Creates a refresh request.
   const HoldingAreaRefreshRequested( { this.cancelToken } );
 }
 
 /// One row, one verb. The per-row control — the precise instrument.
 class HoldingAreaRowVerbPressed extends HoldingAreaEvent {
+  /// Id of the task the verb applies to.
   final String   id;
+  /// The verb to apply.
   final TaskVerb verb;
+  /// Creates a request to press [verb] on the task with id [id].
   const HoldingAreaRowVerbPressed( { required this.id, required this.verb } );
 }
 
@@ -39,14 +45,19 @@ class HoldingAreaRowVerbPressed extends HoldingAreaEvent {
 /// The confirm belongs to the pane: the operator has already answered it when this event
 /// is added. A bloc that opened its own dialog could not be tested without a widget tree.
 class HoldingAreaApproveAllPressed extends HoldingAreaEvent {
+  /// The persona whose held rows are approved.
   final String filer;
+  /// Creates an approve-all request for [filer].
   const HoldingAreaApproveAllPressed( this.filer );
 }
 
 /// Close every row one filer filed as won't-fix, under one reason.
 class HoldingAreaWontFixAllPressed extends HoldingAreaEvent {
+  /// The persona whose rows are closed.
   final String filer;
+  /// The justification applied to every row; a blank one is refused.
   final String reason;
+  /// Creates a won't-fix-all request for [filer].
   const HoldingAreaWontFixAllPressed( { required this.filer, required this.reason } );
 }
 
@@ -56,9 +67,13 @@ class HoldingAreaWontFixAllPressed extends HoldingAreaEvent {
 /// to `PATCH /api/tasks/{id}` and status goes to `POST /api/tasks/{id}/transition`.
 /// Sending a priority change to the transition endpoint would be silently ignored.
 class HoldingAreaFieldChanged extends HoldingAreaEvent {
+  /// Id of the task being changed.
   final String  id;
+  /// New priority, or null to leave it unchanged.
   final String? priority;
+  /// New owner persona, or null to leave it unchanged.
   final String? ownerPersona;
+  /// Creates a field change for the task with id [id].
   const HoldingAreaFieldChanged( {
     required this.id,
     this.priority,
@@ -71,6 +86,7 @@ class HoldingAreaFieldChanged extends HoldingAreaEvent {
 /// Every failure becomes an empty roster and none shows an error. An unreachable arbiter
 /// means the owner dropdown offers less, not that the Holding Area is broken.
 class HoldingAreaRosterRequested extends HoldingAreaEvent {
+  /// Creates a roster request.
   const HoldingAreaRosterRequested();
 }
 
@@ -79,6 +95,7 @@ class HoldingAreaRosterRequested extends HoldingAreaEvent {
 /// A separate event from the refresh because one sends the operator's work to the
 /// server and the other pulls the server's state back. A pull-to-refresh must never write.
 class HoldingAreaUnsentRetryRequested extends HoldingAreaEvent {
+  /// Creates a retry request.
   const HoldingAreaUnsentRetryRequested();
 }
 
@@ -87,26 +104,36 @@ class HoldingAreaUnsentRetryRequested extends HoldingAreaEvent {
 /// The event carries the persona, not an index. Group positions move under a poll, so an
 /// index could toggle a different persona by the time the tap lands.
 class HoldingAreaGroupToggled extends HoldingAreaEvent {
+  /// The persona whose group is toggled.
   final String filer;
+  /// Creates a toggle for the group of [filer].
   const HoldingAreaGroupToggled( this.filer );
 }
 
 /// The operator typed in one group's batch reason box.
 class HoldingAreaReasonChanged extends HoldingAreaEvent {
+  /// The persona whose reason box changed.
   final String filer;
+  /// The text now in the reason box.
   final String reason;
+  /// Creates a reason edit for the group of [filer].
   const HoldingAreaReasonChanged( { required this.filer, required this.reason } );
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
+/// What the Holding Area pane shows: held groups, notices and per-group control state.
 class HoldingAreaState extends Equatable {
+  /// Held rows grouped by filing persona, in persona order.
   final List<FilerGroup> groups;
+  /// True while a fetch is in flight.
   final bool loading;
+  /// Fetch error to show, or null.
   final String? error;
 
   /// True when the page is not the whole held set — surfaced as a visible banner.
   final bool incomplete;
+  /// Number of rows the server reports as held.
   final int total;
 
   /// Per-group batch reason text, keyed by filer.
@@ -142,7 +169,7 @@ class HoldingAreaState extends Equatable {
   ///
   /// It is not persisted, so leaving the pane and returning folds everything again. A poll
   /// replaces `groups` and leaves this set alone, so the group being read stays open.
-  /// Design: src/docs/decisions/README.md
+  /// Design: src/docs/decisions/README.md (R-HA-accordion)
   final Set<String> expanded;
 
   /// Writes the operator made that never reached the server, keyed by task id.
@@ -151,6 +178,7 @@ class HoldingAreaState extends Equatable {
   /// not land are the rows that carry the mark.
   final Map<String, UnsentWrite> unsent;
 
+  /// Creates a state; every field defaults to empty, folded and idle.
   const HoldingAreaState( {
     this.groups       = const <FilerGroup>[],
     this.loading      = false,
@@ -166,6 +194,10 @@ class HoldingAreaState extends Equatable {
     this.batchNotice,
   } );
 
+  /// Returns a copy with the given fields replaced.
+  ///
+  /// Passing null for `error` or `batchNotice` keeps the old value; use [clearError] or
+  /// [clearBatchNotice] to reset them to null.
   HoldingAreaState copyWith( {
     List<FilerGroup>? groups,
     bool? loading,
@@ -231,6 +263,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
+  /// Creates the bloc; [network] and [fleet] are optional.
   HoldingAreaBloc(
     this._repo,
     this._writes, {
