@@ -113,7 +113,7 @@ class AppInitialization {
     ));
   }
 
-  /// Update global context with user information
+  /// Sets the global logging context to the signed-in user and session.
   static void setUserContext(String userId, String? sessionId) {
     Logger.setGlobalContext(LogContext(
       userId: userId,
