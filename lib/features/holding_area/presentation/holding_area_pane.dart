@@ -12,11 +12,12 @@ import 'filer_group_header.dart';
 /// The Holding Area pane: held rows grouped by filing persona, folded until opened.
 ///
 /// See [FilerGroupHeader] for what stays visible while a group is folded.
-/// Design: src/docs/decisions/README.md
+/// Design: src/docs/decisions/README.md (R-HA-accordion)
 ///
 /// The route owns the visibility signal. It calls `onPaneVisible` and `onPaneHidden`, so
 /// the pane's poll timer runs only while the pane is on screen.
 class HoldingAreaPane extends StatefulWidget {
+  /// Creates the pane; it reads its bloc from the route's provider.
   const HoldingAreaPane( { super.key } );
 
   @override

@@ -10,6 +10,7 @@ import '../../task_list/data/task_list_repository.dart' show TaskListPage;
 class HoldingAreaRepository {
   final Dio _dio;
 
+  /// Creates a repository that reads through the given HTTP client.
   const HoldingAreaRepository( this._dio );
 
   /// Request path for the held set: `status=not_approved`, 500 rows, terse.
@@ -22,6 +23,12 @@ class HoldingAreaRepository {
       '/api/tasks?limit=500&unscoped_audit=true&status=not_approved'
       '&char_budget=0&terse=true';
 
+  /// Fetches the held set from [path].
+  ///
+  /// Ensures:
+  ///   - a cancelled request rethrows its [DioException] unchanged, so the caller can tell
+  ///     cancellation from failure
+  ///   - any other [DioException] is thrown as a [HoldingAreaFetchException]
   Future<TaskListPage> fetch( { CancelToken? cancelToken } ) async {
     final Response<Map<String, dynamic>> res;
     try {
@@ -37,10 +44,14 @@ class HoldingAreaRepository {
   }
 }
 
+/// Thrown when the held set cannot be fetched; wraps the transport error.
 class HoldingAreaFetchException implements Exception {
+  /// Short description of what failed.
   final String message;
+  /// The underlying error, or null.
   final Object? cause;
 
+  /// Creates the exception from a message and an optional cause.
   const HoldingAreaFetchException( this.message, { this.cause } );
 
   @override

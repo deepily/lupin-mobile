@@ -8,12 +8,13 @@ import '../../../shared/widgets/dictation_text_field.dart';
 ///
 /// Folding must not hide how much is held, so the persona, the count and both batch
 /// controls stay on screen while folded. The count is also in the semantic label.
-/// Design: src/docs/decisions/README.md
+/// Design: src/docs/decisions/README.md (R-HA-accordion)
 ///
 /// The reason box folds away with the rows. Won't-fix-all on a folded group sets a
 /// complaint on that hidden field, so the bloc unfolds the group (`_onWontFixAll`).
 /// Pane-specific behaviour lives here, not in `TaskRow`, which takes no pane flag.
 class FilerGroupHeader extends StatefulWidget {
+  /// The persona group this header controls.
   final FilerGroup group;
 
   /// Whether this persona's rows are on screen; the pane keeps the set, default folded.
@@ -31,11 +32,13 @@ class FilerGroupHeader extends StatefulWidget {
   /// True while this group's batch write is in flight; both batch buttons are disabled.
   final bool busy;
 
+  /// Called with the new text when the operator edits the reason box.
   final ValueChanged<String> onReasonChanged;
 
   /// Called only after the operator accepts the approve-all confirm.
   final VoidCallback onApproveAll;
 
+  /// Called when the operator presses won't-fix-all.
   final VoidCallback onWontFixAll;
 
   /// What a screen reader announces for the disclosure control, including the row count.
@@ -45,14 +48,15 @@ class FilerGroupHeader extends StatefulWidget {
   static String semanticLabel( String filer, int count ) =>
       '$filer, $count held ${count == 1 ? 'row' : 'rows'}';
 
-  /// Left inset of the persona label, in dp.
-  ///
-  /// Sum of the 16 dp gutter, 20 dp chevron and 8 dp gap, so it follows the three.
   static const double _gutter      = 16;
   static const double _chevronSize = 20;
   static const double _chevronGap  = 8;
+  /// Left inset of the persona label, in dp.
+  ///
+  /// Sum of the 16 dp gutter, 20 dp chevron and 8 dp gap, so it follows the three.
   static const double textInset    = _gutter + _chevronSize + _chevronGap;
 
+  /// Creates a header for [group]; it is folded unless [expanded] is true.
   const FilerGroupHeader( {
     super.key,
     required this.group,
@@ -223,7 +227,7 @@ class _FilerGroupHeaderState extends State<FilerGroupHeader> {
 
   // Approve-all, behind a confirm. Won't-fix-all is gated by its required reason box,
   // approve-all needs no typing, and its blast radius is every held row in the group.
-  // Design: src/docs/decisions/README.md
+  // Design: src/docs/decisions/README.md (R-HA-confirm)
   Widget _approveAll( BuildContext context ) {
     return _named(
       hint  : holdingApproveAllHint( group.filer ),
