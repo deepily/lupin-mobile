@@ -36,29 +36,25 @@ class HoldingAreaRowVerbPressed extends HoldingAreaEvent {
 
 /// Approve every row one filer filed.
 ///
-/// The CONFIRM is the pane's, not the bloc's: by the time this event is added the
-/// operator has already answered it. A bloc that popped its own dialog could not be
-/// tested without a widget tree, and a pane that dispatched before confirming would put
-/// the gate somewhere a later hand can skip.
+/// The confirm belongs to the pane: the operator has already answered it when this event
+/// is added. A bloc that opened its own dialog could not be tested without a widget tree.
 class HoldingAreaApproveAllPressed extends HoldingAreaEvent {
   final String filer;
   const HoldingAreaApproveAllPressed( this.filer );
 }
 
-/// Close every row one filer filed as won't-fix, under ONE reason.
+/// Close every row one filer filed as won't-fix, under one reason.
 class HoldingAreaWontFixAllPressed extends HoldingAreaEvent {
   final String filer;
   final String reason;
   const HoldingAreaWontFixAllPressed( { required this.filer, required this.reason } );
 }
 
-/// An operator changed a held row's priority or owner. Goes through the FIELD door.
+/// An operator changed a held row's priority or owner, through the field door.
 ///
-/// 🔴 A SEPARATE EVENT FROM [HoldingAreaRowVerbPressed], BECAUSE THEY ARE SEPARATE
-/// SERVER DOORS. Fields go to `PATCH /api/tasks/{id}`; status goes to
-/// `POST /api/tasks/{id}/transition`. Routing a priority change through the verb event
-/// would post it to the transition endpoint, which is the plan's §4.2 failure read
-/// backwards.
+/// Separate from [HoldingAreaRowVerbPressed] because the server doors differ: fields go
+/// to `PATCH /api/tasks/{id}` and status goes to `POST /api/tasks/{id}/transition`.
+/// Sending a priority change to the transition endpoint would be silently ignored.
 class HoldingAreaFieldChanged extends HoldingAreaEvent {
   final String  id;
   final String? priority;
@@ -72,29 +68,24 @@ class HoldingAreaFieldChanged extends HoldingAreaEvent {
 
 /// Fetch the live persona roster the owner control offers.
 ///
-/// ⚠️ A COURTESY READ ON A PANE ABOUT TASKS. Every failure collapses to an empty roster
-/// and none of them paints an error — an arbiter the phone cannot reach is a reason the
-/// owner dropdown offers less, not a reason to tell the operator the holding area is
-/// broken.
+/// Every failure becomes an empty roster and none shows an error. An unreachable arbiter
+/// means the owner dropdown offers less, not that the Holding Area is broken.
 class HoldingAreaRosterRequested extends HoldingAreaEvent {
   const HoldingAreaRosterRequested();
 }
 
-/// The operator folded or unfolded one persona's group.
+/// The connection came back: resend what the network dropped.
 ///
-/// 🔴 THE EVENT CARRIES THE PERSONA, NOT AN INDEX. Group positions move under a poll —
-/// a persona whose last held row is approved away disappears and every group below it
-/// shifts up — so an index captured at build time can toggle a DIFFERENT persona by the
-/// time the tap lands. The Task List's toggle keys on its label for the same reason.
-/// The connection came back — resend what the network ate.
-///
-/// ⚠️ ITS OWN EVENT RATHER THAN A LIMB OF THE REFRESH: one sends the operator's work TO
-/// the server, the other pulls the server's state back. Folding them together would make
-/// "refresh" mean "also write", which is not a thing a pull-to-refresh should ever do.
+/// A separate event from the refresh because one sends the operator's work to the
+/// server and the other pulls the server's state back. A pull-to-refresh must never write.
 class HoldingAreaUnsentRetryRequested extends HoldingAreaEvent {
   const HoldingAreaUnsentRetryRequested();
 }
 
+/// The operator folded or unfolded one persona's group.
+///
+/// The event carries the persona, not an index. Group positions move under a poll, so an
+/// index could toggle a different persona by the time the tap lands.
 class HoldingAreaGroupToggled extends HoldingAreaEvent {
   final String filer;
   const HoldingAreaGroupToggled( this.filer );
@@ -118,65 +109,46 @@ class HoldingAreaState extends Equatable {
   final bool incomplete;
   final int total;
 
-  /// Per-group batch reason text, keyed by filer. The OPERATOR's typing, so it survives
-  /// a poll — a refresh that blanked a half-typed justification every sixty seconds
-  /// would make the batch control unusable on exactly the groups big enough to need it.
+  /// Per-group batch reason text, keyed by filer.
+  ///
+  /// It is the operator's typing and survives a poll, so a refresh never blanks a
+  /// half-typed justification.
   final Map<String, String> reasons;
 
-  /// Per-group validation complaint, keyed by filer. Set when won't-fix-all is pressed
-  /// with an empty box, cleared as soon as the operator types.
+  /// Per-group complaint, keyed by filer, for an empty won't-fix-all reason.
+  ///
+  /// Set when won't-fix-all is pressed with an empty box, cleared when the operator types.
   final Map<String, String> reasonErrors;
 
-  /// What the last batch actually did.
+  /// What the last batch or failed write did, shown above the rows.
   ///
-  /// 🔴 A SEPARATE FIELD FROM [error], BECAUSE THE TWO HAVE DIFFERENT LIFETIMES AND THE
-  /// SHORTER ONE WAS EATING THE LONGER. A batch ends by refetching, the refetch clears
-  /// the fetch error, and a partial-batch report parked in `error` was therefore wiped
-  /// about eighty milliseconds after it appeared — the operator saw nothing, in the one
-  /// case where some of their rows moved and some did not. A fetch error is answered by
-  /// the next fetch; a report about what a press DID is answered only by the operator
-  /// reading it.
+  /// Kept apart from [error]. A batch ends with a refetch, which clears the fetch error
+  /// and would wipe a partial-batch report almost at once.
   final String? batchNotice;
 
-  /// Filers whose batch write is in flight. The pane disables both batch controls for
-  /// that group — a second press while N transitions are still landing would double the
+  /// Filers whose batch write is in flight.
+  ///
+  /// The pane disables both batch controls for them. A second press would double the
   /// writes without doubling the count the operator read.
   final Set<String> busyFilers;
 
-  /// The personas a held row may be reassigned to — the LIVE fleet, from the arbiter.
+  /// The personas a held row may be reassigned to, from the live fleet roster.
   ///
-  /// ⚠️ NOT THE OWNERS THE BOARD ALREADY SHOWS. That set is smaller by definition: it
-  /// carries only personas who already hold a row, so it cannot hand work to a seat that
-  /// owns none yet. Empty when the arbiter is unreachable, which degrades the control
-  /// rather than the pane.
+  /// Not the owners the board already shows, because that set omits seats that own no row.
+  /// Empty when the arbiter is unreachable, which degrades the control, not the pane.
   final List<String> reassignTargets;
 
-  /// Personas the operator has UNFOLDED.
+  /// Personas the operator has unfolded; the empty set means every group is folded.
   ///
-  /// 🔴 AN `expanded` SET, NOT THE TASK LIST'S `collapsed` SET, AND THE INVERSION IS THE
-  /// WHOLE FEATURE. Rick asked for *"folded by default so that we can do progressive
-  /// disclosure"*. Tracking what is collapsed makes EXPANDED the default, which is the
-  /// state he was complaining about; the empty set has to mean "everything is folded" or
-  /// the default arrives wrong and no test of the toggle would notice.
-  ///
-  /// ⚠️ NOT PERSISTED, AND NOT RESTORED ACROSS A VISIT (N2c). The bloc is route-scoped,
-  /// so leaving the pane and coming back folds everything again. That is the specified
-  /// behaviour; if Rick wants it remembered it is a ruling, because it means choosing
-  /// where to remember it.
-  ///
-  /// ⚠️ IT SURVIVES A POLL, WHICH IS NOT THE SAME THING. A refresh that re-folded the
-  /// group the operator is reading — every 60 or 180 seconds, mid-scroll — would make
-  /// the pane unusable on exactly the personas big enough to need folding. The refresh
-  /// handler replaces `groups` and leaves this alone.
+  /// It is not persisted, so leaving the pane and returning folds everything again. A poll
+  /// replaces `groups` and leaves this set alone, so the group being read stays open.
+  /// Design: src/docs/decisions/README.md
   final Set<String> expanded;
 
   /// Writes the operator made that never reached the server, keyed by task id.
   ///
-  /// 🔴 PER ROW, EVEN FOR A BATCH, AND THAT IS THE HALF A GROUP-LEVEL NOTICE CANNOT DO.
-  /// Approve-all writes N rows in one press and they fail INDEPENDENTLY — the existing
-  /// `batchNotice` already reports "one did not, the rest did", which is the right
-  /// sentence and still leaves the operator scanning the group to find WHICH one. Keying
-  /// the marks by task id means the rows that did not land are the rows wearing a mark.
+  /// Keyed per row even for a batch. Batch rows fail independently, so the rows that did
+  /// not land are the rows that carry the mark.
   final Map<String, UnsentWrite> unsent;
 
   const HoldingAreaState( {
@@ -242,11 +214,10 @@ class HoldingAreaState extends Equatable {
 
 // ─── Bloc ────────────────────────────────────────────────────────────────────
 
-/// The Holding Area pane's bloc.
+/// State and events for the Holding Area pane.
 ///
-/// ⚠️ ROUTE-SCOPED, NOT AN APP-ROOT SINGLETON, for the reason the Task List's bloc
-/// records: a pane bloc registered at the app root outlives its route and its poll timer
-/// then runs against whichever destination is showing. See [PanePollingMixin].
+/// Register it per route, not at the app root. A root-level bloc outlives its route, and
+/// its poll timer then runs against whichever screen is showing. See [PanePollingMixin].
 class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     with PaneVisibilityMixin<HoldingAreaEvent, HoldingAreaState>,
         PanePollingMixin<HoldingAreaEvent, HoldingAreaState> {
@@ -254,9 +225,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   final TaskWriteRepository   _writes;
   final NetworkConnectivityService _network;
 
-  /// ⚠️ OPTIONAL, AND THE REASSIGNMENT ROSTER IS ALL IT IS FOR. Passed rather than
-  /// required so the pane still renders — and still shows held work — when the arbiter
-  /// is unreachable or when a test does not care about the owner control.
+  // Optional and used only for the reassignment roster, so the pane still shows held work
+  // when the arbiter is unreachable or a test does not need the owner control.
   final FleetRepository? _fleet;
 
   StreamSubscription<NetworkState>? _connectivitySub;
@@ -280,14 +250,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     on<HoldingAreaUnsentRetryRequested>( _onRetryUnsent );
   }
 
-  /// The poll interval reads the connection, same measurement as the Task List: a full
-  /// page is ~2.1 MB and a terse one ~107 KB, so sixty seconds on a metered connection is
-  /// rude even terse.
-  ///
-  /// ⚠️ THE INTERVAL ITSELF IS `PanePollingMixin.pollInterval` NOW. This pane's copy was
-  /// identical to the Task List's, and the two were one edit away from disagreeing. All
-  /// that is overridden here is WHICH network service answers, because this bloc holds an
-  /// injected one its tests fake.
+  // Reports whether the connection is metered, from the injected network service so tests
+  // can fake it. The interval itself comes from `PanePollingMixin.pollInterval`.
   @override
   bool get isMeteredConnection => _network.isMobile;
 
@@ -296,15 +260,10 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     add( HoldingAreaRefreshRequested( cancelToken: token ) );
   }
 
-  /// The connection came back: resend what the network ate, once each.
-  ///
-  /// 🔴 ONE ATTEMPT PER WRITE PER EDGE, and the retry goes out BEFORE the refetch — a
-  /// refetch landing first repaints the pane from a server that does not yet have the
-  /// operator's write, so the row flickers back to held and only then leaves.
-  ///
-  /// ⚠️ A RETRY THAT MEETS A REFUSAL STOPS BEING UNSENT: the connection is plainly fine,
-  /// so the mark would never clear. The record is dropped and the SERVER'S OWN WORDS go
-  /// to `batchNotice`, which is the field that survives the refetch this pane schedules.
+  // Resends each unsent write once per connection-restored edge, before the refetch. A
+  // refetch first would repaint from a server that lacks the write and the row would flicker
+  // back to held. A write the server refuses is dropped from `unsent` and the server's words
+  // go to `batchNotice`, which survives the refetch.
   Future<void> _onRetryUnsent(
     HoldingAreaUnsentRetryRequested event,
     Emitter<HoldingAreaState> emit,
@@ -320,11 +279,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     ) );
   }
 
-  /// Send one remembered write back through the door it came from.
-  ///
-  /// ⚠️ THE DOOR IS DECIDED BY WHAT THE WRITE CHANGES, exactly as §4.2 requires of a
-  /// fresh one. A retry that guessed the other door would be the same silent failure the
-  /// field door is famous for: a PATCH carrying a status is ignored without complaint.
+  // Sends one remembered write through the door it came from. The door follows what the
+  // write changes: a PATCH carrying a status is ignored without complaint.
   Future<void> _send( UnsentWrite write ) {
     final verb = write.verb;
     if ( verb != null ) {
@@ -340,12 +296,14 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
       <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
 
-  /// Refresh on the connectivity-RESTORED edge only. Firing on every state change would
-  /// refetch on the way down too, which is a request into a connection that just failed.
+  /// Refreshes on the connectivity-restored edge only, after retrying unsent writes.
+  ///
+  /// Firing on every state change would also refetch on the way down, into a connection
+  /// that just failed.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
       if ( state != NetworkState.connected ) return;
-      // The retry goes FIRST — see [_onRetryUnsent].
+      // The retry goes first; see `_onRetryUnsent`.
       add( const HoldingAreaUnsentRetryRequested() );
       add( const HoldingAreaRefreshRequested() );
     } );
@@ -365,7 +323,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
         total      : page.total,
       ) );
     } on DioException catch ( e ) {
-      // A cancelled poll is the lifecycle rule working, NOT an error to paint.
+      // A cancelled poll is the lifecycle rule working, not an error to show.
       if ( CancelToken.isCancel( e ) ) {
         emit( state.copyWith( loading: false ) );
         return;
@@ -383,9 +341,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     try {
       await _writes.transition( id: event.id, verb: event.verb );
     } on Object catch ( e ) {
-      // 🔴 G6: THE NOTICE SAYS IT FAILED; THE MARK SAYS WHICH ROW AND WHAT WAS DONE TO
-      // IT. Only a transport failure is kept — a server that answered and refused is an
-      // error with its own words, and a mark for it would never clear.
+      // The notice says the write failed and the mark says which row. Only a transport
+      // failure is kept: a refusal from the server has its own words and would never clear.
       emit( state.copyWith(
         batchNotice : _writeError( e ),
         unsent      : isTransportFailure( e )
@@ -402,9 +359,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     if ( state.unsent.containsKey( event.id ) ) {
       emit( state.copyWith( unsent: { ...state.unsent }..remove( event.id ) ) );
     }
-    // 🔴 REFETCH RATHER THAN DROP THE ROW LOCALLY. An approved row leaves this pane, and
-    // removing it here would paint a write as applied that the server may have only
-    // queued — the 202 case. The fetch is what proves it left.
+    // Refetch rather than drop the row locally: an approved row leaves this pane, and the
+    // server may have only queued it (a 202). The fetch proves the row left.
     add( const HoldingAreaRefreshRequested() );
   }
 
@@ -423,22 +379,14 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     HoldingAreaWontFixAllPressed event,
     Emitter<HoldingAreaState> emit,
   ) async {
-    // 🔴 THE BLANK CHECK IS HERE AS WELL AS IN THE PANE, AND THE DUPLICATION IS THE
-    // POINT. The pane's check is what the operator sees; this one is what makes the rule
-    // true. A batch dispatched from anywhere else — a test, a later caller, a keyboard
-    // shortcut nobody wired to the button — would otherwise send N transitions the
-    // server answers with N identical 422s.
+    // The blank check is repeated here, not only in the pane. The pane's check is what the
+    // operator sees; this one holds for any other caller, which would otherwise send N
+    // transitions that the server answers with N identical 422s.
     if ( event.reason.trim().isEmpty ) {
-      // 🔴 THE COMPLAINT UNFOLDS THE GROUP, BECAUSE THE BOX IT IS ABOUT IS HIDDEN WHILE
-      // FOLDED. Collapsing by default took the reason box off screen while leaving both
-      // batch buttons on it — deliberately, since the header must still show what the
-      // batch would act on. Without this line, pressing won't-fix-all on a folded group
-      // sets a complaint the operator cannot see, about a field they cannot reach, and
-      // the pane's only feedback is that nothing happened.
-      //
-      // ⚠️ IT UNFOLDS RATHER THAN REFUSING TO FIRE. Making the button inert while folded
-      // would be the other way to close the hole and is worse: an inert control explains
-      // nothing, and the operator's next move is to press it again.
+      // The complaint unfolds the group, because its reason box is hidden while folded.
+      // Without this, pressing won't-fix-all on a folded group would set a complaint the
+      // operator cannot see. Unfolding is chosen over disabling the button, which would
+      // explain nothing.
       emit( state.copyWith(
         reasonErrors : { ...state.reasonErrors, event.filer: kHoldingWontFixReasonMissing },
         expanded     : { ...state.expanded, event.filer },
@@ -453,18 +401,10 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     );
   }
 
-  /// Run one verb over every row in a group.
-  ///
-  /// ⚠️ SEQUENTIAL, NOT `Future.wait`. Fifty concurrent transitions against one store is
-  /// a self-inflicted thundering herd, and the first failure in a `Future.wait` discards
-  /// the outcomes of everything racing alongside it — the operator would learn that
-  /// "something failed" with no way to know which rows moved.
-  ///
-  /// 🔴 A PARTIAL BATCH IS REPORTED AS PARTIAL. The loop does not stop at the first
-  /// failure and does not pretend the rest succeeded: it counts, then says how many of
-  /// how many landed. A batch that silently half-applied is the failure this pane can
-  /// least afford, because the pane it half-applied in is the one the operator uses to
-  /// see what is still held.
+  // Runs one verb over every row in a group, one row at a time. Sequential, not
+  // `Future.wait`: fifty concurrent transitions strain one store, and the first failure in
+  // a `Future.wait` hides the outcome of the rest. The loop does not stop at the first
+  // failure; it counts and reports how many of how many landed.
   Future<void> _batch( {
     required String filer,
     required Emitter<HoldingAreaState> emit,
@@ -484,9 +424,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     var   applied  = 0;
     Object? firstFailure;
 
-    // 🔴 THE ROWS THAT DID NOT LAND ARE THE ROWS THAT WEAR A MARK. "One of fourteen did
-    // not move" is the right sentence and still leaves the operator scanning the group to
-    // find which one. A batch fails per row, so it is recorded per row.
+    // Rows that did not land carry a mark, because a batch fails per row.
     final marks = <String, UnsentWrite>{ ...state.unsent };
 
     for ( final id in ids ) {
@@ -511,8 +449,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
 
     emit( state.copyWith(
       busyFilers       : next,
-      // ⚠️ THE NOTICE SURVIVES THE REFETCH BELOW. Parking it in `error` would have it
-      // cleared by the very refresh this batch schedules.
+      // Kept in `batchNotice` because `error` is cleared by the refresh this batch schedules.
       batchNotice      : complete
           ? null
           : '${ids.length - applied} of ${ids.length} rows did not move '
@@ -527,11 +464,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     add( const HoldingAreaRefreshRequested() );
   }
 
-  /// The FIELD door — priority and owner only, never status. Status is [_onRowVerb].
-  ///
-  /// 🔴 REFETCH RATHER THAN REPAINT LOCALLY, for the reason [_onRowVerb] already gives:
-  /// a priority the server refused, or accepted only as a 202, would otherwise sit on
-  /// screen looking applied.
+  // The field door: priority and owner only, never status (see `_onRowVerb`). It refetches
+  // for the same reason as `_onRowVerb`: a refused or queued change must not look applied.
   Future<void> _onField(
     HoldingAreaFieldChanged event,
     Emitter<HoldingAreaState> emit,
@@ -543,15 +477,9 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
         ownerPersona : event.ownerPersona,
       );
     } on Object catch ( e ) {
-      // ⚠️ THE SAME CHANNEL A FAILED ROW VERB USES, AND DELIBERATELY NOT `error`. A
-      // fetch error is answered by the next fetch — which this handler is about to
-      // schedule — so a field failure parked there would be wiped before the operator
-      // read it. That is the bug `batchNotice` was split out for.
-      //
-      // 🔴 AND THE FIELD DOOR IS REMEMBERED TOO (G6). A priority edit lost to a dropped
-      // signal is the operator's act exactly as a verb is. This handler arrived with
-      // Chloé's half of the pane while this row was in flight, so it is wired here
-      // rather than left as the one write on either task pane that forgets.
+      // Uses `batchNotice`, as a failed row verb does, because the refetch about to be
+      // scheduled would clear `error` before the operator read it. A field edit lost to a
+      // dropped connection is remembered in `unsent` like a verb.
       emit( state.copyWith(
         batchNotice : _writeError( e ),
         unsent      : isTransportFailure( e )
@@ -571,16 +499,9 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     add( const HoldingAreaRefreshRequested() );
   }
 
-  /// The live persona roster for the owner control.
-  ///
-  /// 🔴 EVERY FAILURE COLLAPSES TO AN EMPTY ROSTER AND NONE OF THEM PAINTS AN ERROR.
-  /// This is a courtesy read on a pane about held work: an arbiter that cannot be
-  /// reached is a reason the owner dropdown offers only the current owner, not a reason
-  /// to tell the operator their holding area is broken.
-  ///
-  /// ⚠️ AND IT MUST NOT THROW PAST THE HANDLER EITHER. An unhandled error inside a bloc
-  /// handler surfaces through `onError` and can take the bloc down — turning "the
-  /// arbiter is unreachable" into "the Holding Area stopped polling".
+  // Loads the persona roster for the owner control. Every failure leaves the roster empty
+  // and shows no error. It must not throw: an unhandled error in a handler can stop the
+  // bloc, turning an unreachable arbiter into a pane that stopped polling.
   Future<void> _onRoster(
     HoldingAreaRosterRequested event,
     Emitter<HoldingAreaState> emit,
@@ -598,12 +519,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     }
   }
 
-  /// Fold or unfold one persona's rows.
-  ///
-  /// ⚠️ ONE GROUP AT A TIME, AND OPENING ONE DOES NOT CLOSE THE OTHERS. An accordion that
-  /// allows a single open section is a different control, and it would make comparing two
-  /// personas' held work impossible without scrolling back and forth. Rick asked to
-  /// *"toggle or collapse each individual persona's items"* — each, independently.
+  // Folds or unfolds one persona's rows. Opening one group does not close the others, so
+  // two personas' held work can be compared without scrolling back and forth.
   void _onGroupToggled( HoldingAreaGroupToggled event, Emitter<HoldingAreaState> emit ) {
     final next = Set<String>.from( state.expanded );
     if ( !next.remove( event.filer ) ) next.add( event.filer );
@@ -619,13 +536,8 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
     ) );
   }
 
-  /// The operator-facing text for a failed write.
-  ///
-  /// 🔴 THE 202 CASE GETS ITS OWN SENTENCE, AND IT MUST NOT SAY "FAILED".
-  /// [TaskAwaitingApprovalException] means the server ACCEPTED the request and did not
-  /// apply it. Reporting that as a failure would be wrong in the one direction that
-  /// causes harm: the natural response to a failure is to press again, and pressing
-  /// again files a second approval ticket for a change already waiting on one.
+  // Operator-facing text for a failed write. The 202 case never says "failed": the server
+  // accepted the request, and pressing again would file a second approval ticket.
   String _writeError( Object e ) {
     if ( e is TaskAwaitingApprovalException ) {
       return 'awaiting human approval — the request was accepted, the change has not '
