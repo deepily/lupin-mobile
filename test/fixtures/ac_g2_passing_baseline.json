@@ -1037,7 +1037,7 @@
     "test/unit/queue/job_lifecycle_test.dart::AC-S1.1 \u2014 rank + terminal, the fold's two other primitives isTerminal mirrors the server TERMINAL_STATES frozenset exactly",
     "test/unit/queue/job_lifecycle_test.dart::AC-S1.1 \u2014 rank + terminal, the fold's two other primitives rank is monotonic along the real transition path",
     "test/unit/queue/lane_vocabulary_test.dart::AC-S1.10 \u2014 lane vocabulary disposition JobLane is the wire vocabulary: exactly the four server lane names",
-    "test/unit/queue/lane_vocabulary_test.dart::AC-S1.10 \u2014 lane vocabulary disposition JobStatus carries its disposition AT ITS DEFINITION, not somewhere in the file",
+    "test/unit/queue/lane_vocabulary_test.dart::AC-S1.10 \u2014 lane vocabulary disposition JobStatus disposition (kept, not superseded by JobLane) is on record in the decisions file",
     "test/unit/queue/lane_vocabulary_test.dart::AC-S1.10 \u2014 lane vocabulary disposition _queueNames DERIVES from JobLane.values \u2014 no parallel string literal",
     "test/unit/queue/lane_vocabulary_test.dart::AC-S1.10 \u2014 lane vocabulary disposition the two enums really do disagree \u2014 2 of 4 members differ",
     "test/unit/queue/queue_bloc_test.dart::QueueBloc QueueCancelJob emits ActionComplete when server returns 200",
