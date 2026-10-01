@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 const _kRetiredBannerYellow  = Color( 0xFFFFF3CD );
 const _kRetiredBannerAccent  = Color( 0xFFFF9800 );
 
-/// Retired 2026-05-05 — INTERACTIVE Claude Code controls (inject / interrupt /
-/// end_session) were eliminated alongside the dispatch endpoint cluster.
-/// Returns when parent's ClaudeCodeJob gains those methods.
+/// A banner-only screen standing in for the retired interactive chat.
 ///
-/// Preserved as a banner-only screen so any leftover navigation surfaces the
-/// retirement notice instead of crashing.
+/// Interactive controls (inject, interrupt, end session) are not offered, so
+/// any leftover navigation shows the retirement notice instead of crashing.
 class ChatScreen extends StatelessWidget {
+  /// Creates the screen.
   const ChatScreen( { super.key } );
 
   @override
