@@ -294,70 +294,91 @@ class UseCaseRegistry {
 /// Extension methods for easier use case access
 extension UseCaseAccess on GetIt {
   // Voice use cases
+  /// The start voice recording use case from the registry.
   StartVoiceRecordingUseCase get startVoiceRecording => 
       UseCaseRegistry.getUseCase<StartVoiceRecordingUseCase>();
   
+  /// The stop voice recording use case from the registry.
   StopVoiceRecordingUseCase get stopVoiceRecording => 
       UseCaseRegistry.getUseCase<StopVoiceRecordingUseCase>();
   
+  /// The process voice input use case from the registry.
   ProcessVoiceInputUseCase get processVoiceInput => 
       UseCaseRegistry.getUseCase<ProcessVoiceInputUseCase>();
   
+  /// The watch voice processing progress use case from the registry.
   WatchVoiceProcessingProgressUseCase get watchVoiceProgress => 
       UseCaseRegistry.getUseCase<WatchVoiceProcessingProgressUseCase>();
 
   // Session use cases
+  /// The create session use case from the registry.
   CreateSessionUseCase get createSession => 
       UseCaseRegistry.getUseCase<CreateSessionUseCase>();
   
+  /// The validate session use case from the registry.
   ValidateSessionUseCase get validateSession => 
       UseCaseRegistry.getUseCase<ValidateSessionUseCase>();
   
+  /// The terminate session use case from the registry.
   TerminateSessionUseCase get terminateSession => 
       UseCaseRegistry.getUseCase<TerminateSessionUseCase>();
 
   // Audio use cases
+  /// The Generate TTS Audio use case from the registry.
   GenerateTTSAudioUseCase get generateTTSAudio => 
       UseCaseRegistry.getUseCase<GenerateTTSAudioUseCase>();
   
+  /// The play audio use case from the registry.
   PlayAudioUseCase get playAudio => 
       UseCaseRegistry.getUseCase<PlayAudioUseCase>();
   
+  /// The stop audio use case from the registry.
   StopAudioUseCase get stopAudio => 
       UseCaseRegistry.getUseCase<StopAudioUseCase>();
   
+  /// The watch audio generation progress use case from the registry.
   WatchAudioGenerationProgressUseCase get watchAudioProgress => 
       UseCaseRegistry.getUseCase<WatchAudioGenerationProgressUseCase>();
 
   // Composite use cases
+  /// The voice interaction orchestrator use case from the registry.
   VoiceInteractionOrchestrator get voiceInteractionOrchestrator => 
       UseCaseRegistry.getUseCase<VoiceInteractionOrchestrator>();
   
+  /// The quick voice interaction use case from the registry.
   QuickVoiceInteractionUseCase get quickVoiceInteraction => 
       UseCaseRegistry.getUseCase<QuickVoiceInteractionUseCase>();
 
   // Settings use cases
+  /// The update settings use case from the registry.
   UpdateSettingsUseCase get updateSettings => 
       UseCaseRegistry.getUseCase<UpdateSettingsUseCase>();
   
+  /// The apply settings preset use case from the registry.
   ApplySettingsPresetUseCase get applySettingsPreset => 
       UseCaseRegistry.getUseCase<ApplySettingsPresetUseCase>();
   
+  /// The get settings by category use case from the registry.
   GetSettingsByCategoryUseCase get getSettingsByCategory => 
       UseCaseRegistry.getUseCase<GetSettingsByCategoryUseCase>();
   
+  /// The validate settings use case from the registry.
   ValidateSettingsUseCase get validateSettings => 
       UseCaseRegistry.getUseCase<ValidateSettingsUseCase>();
   
+  /// The import settings use case from the registry.
   ImportSettingsUseCase get importSettings => 
       UseCaseRegistry.getUseCase<ImportSettingsUseCase>();
   
+  /// The export settings use case from the registry.
   ExportSettingsUseCase get exportSettings => 
       UseCaseRegistry.getUseCase<ExportSettingsUseCase>();
   
+  /// The reset settings use case from the registry.
   ResetSettingsUseCase get resetSettings => 
       UseCaseRegistry.getUseCase<ResetSettingsUseCase>();
   
+  /// The watch settings changes use case from the registry.
   WatchSettingsChangesUseCase get watchSettingsChanges => 
       UseCaseRegistry.getUseCase<WatchSettingsChangesUseCase>();
 }

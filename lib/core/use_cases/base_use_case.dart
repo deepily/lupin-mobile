@@ -34,10 +34,10 @@ abstract class UseCase<Type, Params> {
   ///   - All exceptions are caught and converted to UseCaseResult.failure
   ///   - Execution is logged with appropriate detail level
   ///   - Returns consistent UseCaseResult regardless of execution outcome
-  ///   - Performance and success metrics are tracked
+  ///   - success and failure are logged
   /// 
   /// Raises:
-  ///   - No exceptions propagate (all are caught and wrapped)
+  ///   - nothing propagates; every exception is caught and wrapped
   Future<UseCaseResult<Type>> execute(Params params) async {
     try {
       _logger.debug('Executing ${runtimeType} with params: $params');
@@ -69,8 +69,11 @@ abstract class UseCase<Type, Params> {
 
 /// Use case result wrapper
 class UseCaseResult<T> {
+  /// The result data; set only on success.
   final T? data;
+  /// The failure; set only on failure.
   final AppError? error;
+  /// True for a success result.
   final bool isSuccess;
 
   const UseCaseResult._({
@@ -131,6 +134,7 @@ abstract class NoParamsUseCase<Type> extends UseCase<Type, NoParams> {}
 
 /// Empty parameters class
 class NoParams {
+  /// Creates the empty parameters.
   const NoParams();
   
   @override
@@ -153,7 +157,7 @@ abstract class ParameterizedUseCase<Type, Params> extends UseCase<Type, Params> 
   ///   - Validation is performed before expensive business logic
   /// 
   /// Raises:
-  ///   - No exceptions are raised (returns error instead)
+  ///   - nothing is raised; a validation failure is returned as an error
   AppError? validateParams(Params params) => null;
 
   @override
