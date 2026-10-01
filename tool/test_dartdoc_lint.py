@@ -63,3 +63,12 @@ def test_strict_exit_code( tmp_path ):
     subprocess.run( [ "git", "-C", str( repo ), "init", "-q" ], check=True )
     subprocess.run( [ "git", "-C", str( repo ), "add", "." ], check=True )
     assert main( [ "--strict", "--repo-root", str( repo ) ], io.StringIO() ) == 1
+
+
+def test_marker_baseline_buckets():
+    """build_marker_baseline files paths under the same buckets as doc_coverage_baseline."""
+    import build_marker_baseline as bm
+    assert bm.bucket( "lib/features/queue/a.dart" ) == ( "features", "features/queue" )
+    assert bm.bucket( "lib/main.dart" ) == ( "(lib root)", None )
+    assert bm.bucket( "test/unit/a_test.dart" ) == ( "test", None )
+    assert bm.bucket( "integration_test/a.dart" ) == ( "(other)", None )
