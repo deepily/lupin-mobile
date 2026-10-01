@@ -7,12 +7,11 @@ import '../data/new_ticket.dart';
 import '../data/task_lookup.dart';
 import 'new_ticket_sheet.dart';
 
-/// The top of the Task List: the count headline, the new-task stub and the lookup box
-/// (walk-through items M1, M4 and M3 — Rick, emulator, 2026-09-22).
+/// The top of the Task List: the count headline, the New task button and the lookup box.
 ///
-/// ⚠️ THE LOOKUP STATE LIVES HERE, NOT IN THE BLOC. The answer is one ticket that is
-/// usually NOT on the board — held, parked or finished — so it must never be folded into
-/// board state, where a held row would read as owed work.
+/// The lookup state lives here, not in the bloc. The answer is one ticket that is usually
+/// not on the board, being held, parked or finished. It must never be folded into board
+/// state, where a held row would read as owed work.
 class TaskListHeader extends StatefulWidget {
   /// The headline text from `taskListCountLabel`, or null before the first page lands.
   final String? countLabel;
@@ -20,13 +19,15 @@ class TaskListHeader extends StatefulWidget {
   /// Performs the GET for a path built by `taskLookupPath`.
   final Future<TaskRowModel> Function( String path ) lookup;
 
-  /// Files one ticket from the New Ticket card (M4, row b31a9ed9).
+  /// Files one ticket from the New Ticket card.
   final Future<NewTicketOutcome> Function( Map<String, String> payload ) createTicket;
 
-  /// The names the card offers under "Assigned to", read when the card OPENS so the
-  /// roster is current.
+  /// The names the card offers under "Assigned to", read when the card opens.
+  ///
+  /// Reading then keeps the roster current.
   final List<String> Function() assignees;
 
+  /// Creates the header.
   const TaskListHeader( {
     super.key,
     required this.countLabel,
@@ -42,13 +43,13 @@ class TaskListHeader extends StatefulWidget {
 class _TaskListHeaderState extends State<TaskListHeader> {
   final _controller = TextEditingController();
 
-  /// The sentence under the box: a refusal, "Looking up…", or a failure.
+  // The sentence under the box: a refusal, "Looking up...", or a failure.
   String? _message;
 
-  /// The ticket found, shown as a card.
+  // The ticket found, shown as a card.
   TaskRowModel? _found;
 
-  /// Guards against an older lookup landing after a newer one or after a clear.
+  // Guards against an older lookup landing after a newer one or after a clear.
   int _generation = 0;
 
   @override
@@ -76,7 +77,7 @@ class _TaskListHeaderState extends State<TaskListHeader> {
       if ( !mounted || gen != _generation ) return;
       setState( () => _message = describeLookupFailure( typed, e ) );
     } catch ( _ ) {
-      // A row the model cannot parse. Say so rather than sit on "Looking up…" forever.
+      // A row the model cannot parse: say so instead of sitting on "Looking up..." forever.
       if ( !mounted || gen != _generation ) return;
       setState( () => _message = taskLookupUnreachableMessage );
     }
@@ -119,8 +120,7 @@ class _TaskListHeaderState extends State<TaskListHeader> {
                   style : theme.textTheme.titleSmall,
                 ),
               ),
-              // M4: the New Ticket card. It was a disabled stub until Rick said build it
-              // (2026-09-26); the card is the web's, field for field.
+              // The New Ticket card, the web's field for field.
               OutlinedButton.icon(
                 key       : const Key( TestKeys.taskListNewTask ),
                 onPressed : _openNewTicket,
@@ -171,12 +171,10 @@ class _TaskListHeaderState extends State<TaskListHeader> {
     );
   }
 
-  /// The found ticket, as a card rather than a scroll-to-row: the rows Rick looks up are
-  /// usually not on the board, so there is nothing to scroll to.
-  ///
-  /// 🔴 THE STATUS IS PART OF THE ANSWER, NOT DECORATION. A held row without its status
-  /// reads as an ordinary queued ticket, and "it is sitting in your holding area" is
-  /// usually the whole reason he asked.
+  // The found ticket, as a card rather than a scroll-to-row, because looked-up rows are
+  // usually not on the board and there is nothing to scroll to. The status is part of the
+  // answer: a held row without its status reads as an ordinary queued ticket, and "it is
+  // sitting in the holding area" is usually why the operator asked.
   Widget _resultCard( BuildContext context, TaskRowModel row ) {
     return Card(
       key    : const Key( TestKeys.taskLookupResultCard ),

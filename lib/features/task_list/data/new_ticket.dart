@@ -1,48 +1,55 @@
-/// Rick's New Ticket card, the phone's half (row b31a9ed9, walk-through item M4).
+/// The phone's New Ticket card: file a ticket without asking someone else to file it.
 ///
-/// A port of the web's `shared/task-create.js`, which both web clients render. Rick,
-/// 2026-09-10 (row c9895403): *"create a card that allows me to manually create a new
-/// ticket without you having to file it for me … it needs all of the other editor fields
-/// like who it's assigned to, priority, approved/disapproved by default approved."*
-///
-/// 🔴 THE RULES ARE THE WEB'S, WORD FOR WORD WHERE A WORD IS SHOWN. The fields, the
-/// defaults, the validation and the outcome sentences all come from that file, so a
-/// ticket filed from the phone and one filed from a browser cannot differ. Where the
-/// phone's wording differs it is because the web's names a thing a phone does not have
-/// (a page to refresh), and each such line says so.
-///
-/// ⚠️ A 2xx IS NOT ALWAYS "CREATED". A caller without the operator's login who asks for
-/// P0 gets a 201 carrying a `petition` field: the row exists at P1 in the holding area
-/// and nothing was granted. That is its own outcome, never "created".
+/// This ports the web's `shared/task-create.js`, which both web clients render. The
+/// fields, defaults, validation and outcome sentences come from that file. A ticket filed
+/// from the phone and one from a browser therefore cannot differ. Where the wording
+/// differs, the web's names something a phone lacks, such as a page to refresh.
+/// A 2xx is not always "created": a caller without the operator's login who asks for P0
+/// gets a 201 with a `petition` field. The row exists at P1 in the holding area and
+/// nothing was granted, which is its own outcome.
+/// Design: src/docs/decisions/README.md (R-TL-new-ticket-card)
 library;
 
+/// The priorities a new ticket may take.
 const newTicketPriorities = [ 'P0', 'P1', 'P2', 'P3', 'P4', 'P5' ];
+
+/// The ticket types a new ticket may take.
 const newTicketTypes      = [ 'task', 'bug', 'decision' ];
 
-/// Rick's defaults, by keypress 2026-09-10: P2, approved (live board).
-///
-/// ⚠️ The epic key default is the STORE's, not his: a create with no `correlation_key`
-/// answers 422 "no epic key", and that refusal names `epic:unassigned` as the deliberate
-/// answer. So the card pre-fills it, visibly and editably.
+// The card's defaults are P2 and approved, so a new ticket lands on the live board. The
+// epic key default is the store's: a create with no `correlation_key` answers 422 "no epic
+// key", and that refusal names `epic:unassigned`, so the card pre-fills it, visibly and
+// editably.
+
+/// The default priority.
 const newTicketDefaultPriority       = 'P2';
+
+/// Whether a new ticket is approved by default.
 const newTicketDefaultApproved       = true;
+
+/// The default ticket type.
 const newTicketDefaultType           = 'task';
+
+/// The default project.
 const newTicketDefaultProject        = 'lupin';
+
+/// The default epic key, which the store accepts as "no epic".
 const newTicketDefaultCorrelationKey = 'epic:unassigned';
 
-/// The declared creator. The server records the validated login whatever this says.
+/// The declared creator; the server records the validated login whatever this says.
 ///
-/// ⚠️ JUST "rick", ON PURPOSE. A row filed with no owner defaults its owner from
-/// `created_by` with only a trailing session hex stripped, so a door name here would
-/// become the OWNER — a persona nobody is.
+/// It is just "rick". A row filed with no owner takes its owner from `created_by`, with
+/// only a trailing session hex stripped. A door name here would become the owner, a
+/// persona nobody is.
 const newTicketCreatedBy = 'rick';
 
+/// Shown when the title is blank.
 const newTicketTitleRequiredMessage = 'A title is required.';
 
-/// No answer is not a no: a POST can time out AFTER the store saved the row.
+/// Shown when nothing answered the POST.
 ///
-/// ⚠️ The web says "Search Find for its title"; the phone's find box takes an id, so this
-/// points at the board instead.
+/// No answer is not a no: a POST can time out after the store saved the row. The web
+/// points to Find; the phone's find box takes an id, so this points at the board.
 const newTicketNoAnswerMessage =
     'The store did not answer, so this ticket may already be saved. '
     'Check the Task List for its title before you try again.';
@@ -52,16 +59,34 @@ const newTicketAuthRequiredMessage = 'Signed out — sign back in to create tick
 
 /// What the form holds, before any rule is applied.
 class NewTicketFields {
+  /// The ticket title.
   final String title;
+
+  /// The free-text details, sent as the row `body`.
   final String details;
+
+  /// The assignee; blank leaves the server's default owner.
   final String ownerPersona;
+
+  /// The accountable manager; blank leaves the server's default.
   final String accountableManager;
+
+  /// The requested priority.
   final String priority;
+
+  /// Whether the ticket is filed approved (`queued`) or held (`not_approved`).
   final bool approved;
+
+  /// The ticket type, sent as `item_class`.
   final String itemClass;
+
+  /// The epic key, sent as `correlation_key`.
   final String correlationKey;
+
+  /// The project.
   final String project;
 
+  /// Creates the form state; every field has the card's default.
   const NewTicketFields( {
     this.title              = '',
     this.details            = '',
@@ -77,26 +102,32 @@ class NewTicketFields {
 
 /// Either the POST body or the reason it cannot be sent. Exactly one is non-null.
 class NewTicketBuild {
+  /// The POST body, or null when refused.
   final Map<String, String>? payload;
+
+  /// Why the ticket cannot be sent, or null when it can.
   final String? error;
 
+  /// A buildable ticket.
   const NewTicketBuild.ok( Map<String, String> this.payload ) : error = null;
+
+  /// A refused ticket, with the sentence to show.
   const NewTicketBuild.refused( String this.error ) : payload = null;
 
+  /// True when [payload] is present.
   bool get ok => payload != null;
 }
 
-/// Turn what the form holds into the POST body, or say why it cannot be sent.
+/// Turns what the form holds into the POST body, or says why it cannot be sent.
 ///
 /// Ensures:
-///   - a blank title → refused, and no payload at all
-///   - an unknown priority or type → refused, naming the value
-///   - otherwise a payload where:
-///       · `status` is "queued" when approved, "not_approved" when not
-///       · `body` carries Details; it and the two people fields are OMITTED when blank,
-///         so the server's own defaults apply rather than an empty string
-///       · a blank project or epic key falls back to its default — the epic key is never
-///         omitted, because the store refuses a create without one
+///   - a blank title is refused, with no payload at all
+///   - an unknown priority or type is refused, naming the value
+///   - `status` is "queued" when approved and "not_approved" when not
+///   - `body` carries Details; it and the two people fields are omitted when blank, so
+///     the server's own defaults apply instead of an empty string
+///   - a blank project or epic key falls back to its default; the epic key is never
+///     omitted, because the store refuses a create without one
 ///   - pure; never throws
 NewTicketBuild buildNewTicketPayload( NewTicketFields f ) {
   final title = f.title.trim();
@@ -134,8 +165,8 @@ NewTicketBuild buildNewTicketPayload( NewTicketFields f ) {
 /// The server's `detail`, from a body that may be a map, JSON-ish text, or nothing.
 ///
 /// Ensures:
-///   - a string `detail` passes through verbatim — the refusals on this door name the
-///     rule that fired, and are written to be read
+///   - a string `detail` passes through verbatim, because refusals on this door name the
+///     rule that fired and are written to be read
 ///   - a pydantic list of errors becomes their `msg` fields joined with "; "
 ///   - plain text comes back trimmed; anything else comes back ""
 ///   - never throws
@@ -152,27 +183,54 @@ String newTicketDetailFrom( Object? body ) {
   return '';
 }
 
-enum NewTicketState { created, petition, authRequired, refused, invalid, unreachable, failed }
+/// The outcomes a create can produce.
+enum NewTicketState {
+  /// The ticket was created.
+  created,
+
+  /// The row exists in the holding area at P1 and its priority was not granted.
+  petition,
+
+  /// The caller is signed out (401).
+  authRequired,
+
+  /// The store refused the ticket (403).
+  refused,
+
+  /// The store rejected the fields (422).
+  invalid,
+
+  /// Nothing answered; the ticket may already exist.
+  unreachable,
+
+  /// Any other failure.
+  failed
+}
 
 /// Which outcome a create produced, and the sentence to show.
 class NewTicketOutcome {
+  /// The outcome kind.
   final NewTicketState state;
+
+  /// The sentence to show the operator.
   final String text;
 
-  /// The row the store created, on [NewTicketState.created] and
-  /// [NewTicketState.petition]; null otherwise.
+  /// The row the store created; null except for created and petition outcomes.
   final Map<String, dynamic>? row;
 
+  /// Creates an outcome.
   const NewTicketOutcome( this.state, this.text, { this.row } );
 }
 
+/// Words the result of a create POST.
+///
 /// Ensures:
-///   - 2xx with a `petition` field → petition: the row exists but is NOT on the board and
-///     was NOT granted its priority
-///   - any other 2xx → created, naming the short id and which pile the row landed in
-///   - 401 → authRequired · 403 → refused · 422 → invalid, each with the server's detail
-///   - status 0 (nothing answered) → unreachable, warning the row may already exist
-///   - anything else → failed, naming the status and the server's own words, so a real
+///   - 2xx with a `petition` field is petition: the row exists but is not on the board
+///     and was not granted its priority
+///   - any other 2xx is created, naming the short id and which pile the row landed in
+///   - 401 is authRequired, 403 refused and 422 invalid, each with the server's detail
+///   - status 0 (nothing answered) is unreachable, warning the row may already exist
+///   - anything else is failed, naming the status and the server's own words, so a real
 ///     cause is never replaced by "try again"
 NewTicketOutcome describeNewTicketResult( int status, Object? body ) {
   if ( status >= 200 && status < 300 ) {
@@ -216,8 +274,7 @@ NewTicketOutcome describeNewTicketResult( int status, Object? body ) {
   );
 }
 
-/// The names offered under "Assigned to": every non-blank name across [lists], once
-/// each, sorted.
+/// The names offered under "Assigned to": every non-blank name across [lists], once, sorted.
 List<String> newTicketAssigneeOptions( Iterable<Iterable<String?>> lists ) {
   final seen = <String>{};
   for ( final list in lists ) {
@@ -231,8 +288,12 @@ List<String> newTicketAssigneeOptions( Iterable<Iterable<String?>> lists ) {
 
 /// What the POST came back with: a status (0 when nothing answered) and a body.
 class NewTicketResponse {
+  /// The HTTP status, or 0 when nothing answered.
   final int status;
+
+  /// The decoded response body, if any.
   final Object? body;
 
+  /// Creates a response.
   const NewTicketResponse( this.status, this.body );
 }
