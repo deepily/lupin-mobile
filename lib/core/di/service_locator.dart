@@ -152,16 +152,15 @@ class ServiceLocator {
     _isInitialized = true;
   }
 
-  /// PRODUCTION construction of [FocusChatBloc], extracted from its
-  /// registration so a test can exercise the real wiring without booting the
-  /// whole locator — [init] needs `path_provider` platform channels, which is
-  /// why the DI suite is quarantined and why bug 9adff476 survived so long
-  /// unseen. This is the ONLY place `isQuickAskJob` is supplied.
+  /// Builds the [FocusChatBloc] that the locator registers.
+  ///
+  /// Split out so a test can exercise the real wiring without booting [init], which
+  /// needs platform channels. This is the only place `isQuickAskJob` is supplied.
   ///
   /// Requires:
   ///   - NotificationRepository, TtsOrchestrator and NotificationStopList are
-  ///     registered; QuickAskBloc is registered before the returned bloc's
-  ///     probe is CALLED (not before it is built)
+  ///     registered
+  ///   - QuickAskBloc is registered before the probe is called
   ///
   /// Ensures:
   ///   - returns a FocusChatBloc whose `isQuickAskJob` probe is non-null
@@ -173,27 +172,25 @@ class ServiceLocator {
     // tests construct the bloc without one so pumpAndSettle can settle.
     tickInterval : const Duration( seconds: 30 ),
     stopList     : _getIt<NotificationStopList>(),
-    // Setter 1 of the two-setter verbatim contract (rnd 2026.08.29 §71).
-    // Without it `_isQuickAskJob` is null, shouldSpeakVerbatim short-circuits
-    // at speech_intent.dart:83, and the answer the user ASKED for is cut to
-    // `ttsFraction` — or, with `speakSystemSenders` off, never spoken at all.
-    // Resolved through a closure, NOT a tear-off: QuickAskBloc is registered
-    // AFTER this one, so the lookup must defer to call time.
+    // Setter 1 of the two-setter verbatim contract. Without it `_isQuickAskJob`
+    // is null, shouldSpeakVerbatim short-circuits at speech_intent.dart:83, and the
+    // answer the user asked for is cut to `ttsFraction`, or never spoken at all
+    // when `speakSystemSenders` is off. It is a closure, not a tear-off, because
+    // QuickAskBloc is registered after this bloc, so the lookup must wait for call time.
     isQuickAskJob : ( jobId ) => _getIt<QuickAskBloc>().isQuickAskJob( jobId ),
   );
 
-  /// PRODUCTION construction of [NotificationAudioService] (row d9bc6f6c).
+  /// Builds the [NotificationAudioService] with the notification-tap callback.
   ///
-  /// 🔴 EXTRACTED SO A TEST CAN SEE THE TAP CALLBACK GO IN, for the same reason
-  /// [buildFocusChatBloc] was: `ServiceLocator.init()` needs `path_provider`
-  /// platform channels and cannot run under test, so an uninjected seam in here
-  /// is invisible to the suite (bug 9adff476, exactly this shape).
+  /// Split out so a test can see the callback go in, since [init] cannot run under test.
+  /// The plugin is a singleton, so a service built without the callback clears the one
+  /// `main()` installed, and taps stop working after the first notification.
   ///
-  /// And this seam MUST be watched. The plugin is a singleton whose
-  /// `initialize()` assigns the tap handler, so a service constructed without the
-  /// callback does not merely fail to add one — it CLEARS the one `main()`
-  /// installed, on its first lazy init. Taps would work until the first
-  /// notification arrived and then stop.
+  /// Requires:
+  ///   - NotificationPreferences and NotificationTapRouter are registered
+  ///
+  /// Ensures:
+  ///   - returns a service wired to the tap router
   @visibleForTesting
   static NotificationAudioService buildNotificationAudioService() =>
       NotificationAudioService(
@@ -201,52 +198,44 @@ class ServiceLocator {
         onNotificationTap : notificationTapSink( _getIt<NotificationTapRouter>() ),
       );
 
-  /// PRODUCTION construction of [FleetStatusBloc] — a NEW bloc every call, and
-  /// that is the point.
+  /// Builds a new [FleetStatusBloc] on every call; it is never a singleton.
   ///
-  /// 🔴 DELIBERATELY NOT REGISTERED AS A SINGLETON, unlike every sibling bloc
-  /// in [_initializeBLoCs]. A pane bloc registered at the app root outlives its
-  /// route and keeps its 60-second poller running against a destination nobody
-  /// is looking at; five panes built that way means five timers at once, and
-  /// the obvious test — *"polling stops when backgrounded"* — passes with all
-  /// five running. Route-scoping IS the zero-request guard: a pane the operator
-  /// has not opened has no bloc and cannot issue a request, and a pane they
-  /// left is disposed, which cancels the timer AND the in-flight request.
+  /// An app-root pane bloc outlives its route and keeps polling a screen nobody
+  /// is looking at. Scoping the bloc to its route is what stops the requests.
   ///
   /// Requires:
   ///   - FleetRepository is registered
   ///
   /// Ensures:
-  ///   - returns a fresh FleetStatusBloc over the registered repository
-  ///   - the caller owns closing it (the route's BlocProvider does)
+  ///   - returns a fresh bloc over the registered repository
+  ///   - the caller closes it, which the route's BlocProvider does
   ///
-  /// NOT `@visibleForTesting`, unlike [buildFocusChatBloc]: that one is called
-  /// from inside this file and exposed only so a test can see it, while this one
-  /// is PRODUCTION's construction path — the home screen's route calls it.
+  /// Unlike [buildFocusChatBloc], this is not test-only: the home screen route calls it.
+  // Not a registered singleton, unlike the other blocs in [_initializeBLoCs]. Five
+  // app-root pane blocs would run five 60-second timers at once, and a test that
+  // asks whether polling stops when backgrounded passes with all five running.
+  // A route-scoped bloc is disposed on leaving, which cancels the timer and the
+  // in-flight request, and an unopened pane cannot issue a request at all.
   static FleetStatusBloc buildFleetStatusBloc() =>
       FleetStatusBloc( _getIt<FleetRepository>() );
 
-  /// PRODUCTION construction of one seat's Live Console bloc — a NEW bloc every call.
+  /// Builds a new Live Console bloc for one seat on every call.
   ///
-  /// 🔴 ROUTE-SCOPED FOR A SHARPER REASON THAN THE POLLING PANES, and this is the one to
-  /// read if you only read one. The pane blocs are route-scoped so they stop POLLING; this
-  /// one is route-scoped so it stops WATCHING — it holds a server-side subscription, and an
-  /// app-root instance would keep the server streaming a seat's console to a phone whose
-  /// operator walked away ten minutes ago. Worse, the obvious test — *"the console stops
-  /// when you leave it"* — PASSES with the watch still open, because nothing on screen is
-  /// asking. C5.11 is the row written to fail that build: pop the route, emit a frame, and
-  /// assert the router dropped it.
+  /// It is route-scoped because it holds a server-side watch, not just a poller. An
+  /// app-root instance would keep the server streaming a seat's console to a phone
+  /// nobody is using.
   ///
   /// Requires:
   ///   - TranscriptRepository, TranscriptFrameRouter and WebSocketService are registered
-  ///   - ccSessionId is the seat's FULL `stable_session_id`, never the 8-hex form
+  ///   - [ccSessionId] is the seat's full stable session id, not the 8-hex form
   ///
   /// Ensures:
   ///   - returns a fresh bloc bound to that one seat
-  ///   - watch and unwatch go over the LIVE `WebSocketService.sendMessage` — no new
-  ///     transport, and the "enhanced" service stays untouched (§5, F6)
-  ///   - the caller owns closing it (the route's BlocProvider does), and closing is what
-  ///     sends `cc_transcript_unwatch`
+  ///   - watch and unwatch go over the live WebSocketService.sendMessage
+  ///   - closing the bloc sends the unwatch frame
+  // Pop the route, emit a frame, and the router must drop it: that is the check
+  // that fails when the watch stays open, because nothing on screen asks for it.
+  // No new transport is added, and the enhanced WebSocket service stays untouched.
   static TranscriptStreamBloc buildTranscriptStreamBloc( String ccSessionId ) =>
       TranscriptStreamBloc(
         ccSessionId : ccSessionId,
@@ -255,39 +244,49 @@ class ServiceLocator {
         send        : _getIt<WebSocketService>().sendMessage,
       );
 
-  /// PRODUCTION construction of the three remaining pane blocs — a NEW bloc every
-  /// call, for the same reason [buildFleetStatusBloc] is.
+  /// Builds a new [TaskListBloc] on every call, like [buildFleetStatusBloc].
   ///
-  /// 🔴 ROUTE-SCOPED BECAUSE THEY POLL. `TaskListBloc` and `HoldingAreaBloc` carry
-  /// `PanePollingMixin`; an app-root instance keeps its timer running against a
-  /// destination nobody is looking at, and five panes built that way means five
-  /// timers at once. Route-scoping IS the zero-request guard.
+  /// Pane blocs that poll are route-scoped, so an unopened pane has no timer.
+  /// [BroadcastBloc] is the exception. It has no poller, and only the app root
+  /// can route the socket frame that carries its acks.
   ///
-  /// ⚠️ NOTE THE CONTRAST WITH [BroadcastBloc], which IS app-root. That is not an
-  /// inconsistency: Broadcast has no poller, and its acks arrive on a socket frame
-  /// that only `app.dart` can route — so it must exist for `app.dart` to see, and
-  /// its tally must survive leaving the pane. The rule is "scope a pane bloc to its
-  /// route unless something outside the route must reach it", not "always route-scope".
-  // ⚠️ `fleet` IS THE REASSIGNMENT ROSTER AND NOTHING ELSE. The owner control needs the
-  // LIVE personas, which only the arbiter knows; the board's own read carries the owners
-  // that HAVE rows, which is a different and smaller set — it cannot hand work to a seat
-  // that owns none yet. Passed here rather than made required, so the pane still renders
-  // when the arbiter is unreachable.
+  /// Requires:
+  ///   - TaskListRepository, TaskWriteRepository and FleetRepository are registered
+  ///
+  /// Ensures:
+  ///   - returns a fresh bloc; the caller closes it
+  // `fleet` is the reassignment roster and nothing else. The owner control needs the
+  // live personas, which only the arbiter knows. The board's own read lists only the
+  // owners that already have rows, so it cannot hand work to a seat that owns none yet.
+  // It is optional so the pane still renders when the arbiter is unreachable.
   static TaskListBloc buildTaskListBloc() => TaskListBloc(
     _getIt<TaskListRepository>(),
     _getIt<TaskWriteRepository>(),
     fleet : _getIt<FleetRepository>(),
   );
 
-  // ⚠️ `fleet` IS THE REASSIGNMENT ROSTER HERE TOO, for the reason spelled out above
-  // [buildTaskListBloc]: the owner control needs the LIVE personas, which only the
-  // arbiter knows. Both task panes offer the control, so both need the read.
+  /// Builds a new [HoldingAreaBloc] on every call, like [buildTaskListBloc].
+  ///
+  /// Requires:
+  ///   - HoldingAreaRepository, TaskWriteRepository and FleetRepository are registered
+  ///
+  /// Ensures:
+  ///   - returns a fresh bloc; the caller closes it
+  // `fleet` is the reassignment roster here too, for the reason given on
+  // [buildTaskListBloc]. Both task panes offer the owner control, so both need it.
   static HoldingAreaBloc buildHoldingAreaBloc() => HoldingAreaBloc(
     _getIt<HoldingAreaRepository>(),
     _getIt<TaskWriteRepository>(),
     fleet : _getIt<FleetRepository>(),
   );
 
+  /// Builds a new [FinishedTasksBloc] on every call, like the other pane blocs.
+  ///
+  /// Requires:
+  ///   - FinishedTasksRepository is registered
+  ///
+  /// Ensures:
+  ///   - returns a fresh bloc; the caller closes it
   static FinishedTasksBloc buildFinishedTasksBloc() =>
       FinishedTasksBloc( _getIt<FinishedTasksRepository>() );
 
@@ -342,32 +341,24 @@ class ServiceLocator {
     registerSharedDio(serverContext);
   }
 
-  /// PRODUCTION construction + registration of the shared [Dio], extracted
-  /// so a test can exercise the real wiring without booting the whole
-  /// locator (see [buildFocusChatBloc] for why).
+  /// Creates the shared [Dio], registers it, and keeps its base URL current.
   ///
-  /// HttpService stamps `options.baseUrl` once at start-up and AuthRepository
-  /// posts relative paths ("/auth/login"), so without this listener a switch
-  /// to LAN DEV would keep signing in against the old host while WebSocket
-  /// code (reading AppConstants) followed the new one.
-  ///
-  /// The baseUrl is ALSO stamped here, at start-up. Waiting for HttpService's
-  /// constructor to do it leaves this Dio on an empty baseUrl for the whole
-  /// stretch of `_initializeServices` where AuthRepository and AuthInterceptor
-  /// are already holding it — a relative "/auth/login" posted in that window
-  /// goes nowhere. Cold start with LAN DEV saved must reach the LAN host
-  /// without depending on registration order.
+  /// Split out so a test can exercise the real wiring without booting [init].
+  /// The base URL is set here because HttpService sets it only later.
+  /// A listener follows every later server switch.
   ///
   /// Requires:
   ///   - no Dio is registered yet
   ///
   /// Ensures:
   ///   - a Dio is registered in GetIt and returned
-  ///   - its `options.baseUrl` is the SAVED context's baseUrl before this
-  ///     method returns
-  ///   - its `options.baseUrl` is the new context's baseUrl after every
+  ///   - its baseUrl is the saved context's baseUrl before this method returns
+  ///   - its baseUrl is the new context's baseUrl after every
   ///     [ServerContextService.setActive] switch
   @visibleForTesting
+  // AuthRepository posts relative paths such as "/auth/login". Without the base URL
+  // set here, the Dio has an empty one while _initializeServices builds the auth
+  // classes, and a switch to LAN DEV would keep signing in against the old host.
   static Dio registerSharedDio(ServerContextService serverContext) {
     final dio = Dio();
     dio.options.baseUrl = serverContext.baseUrl;
@@ -551,8 +542,10 @@ class ServiceLocator {
     );
   }
 
-  /// Initialize repositories (legacy user/session/job/voice/audio stack is
-  /// disabled — see note on removed imports above).
+  /// Registers repositories; the legacy stack is disabled, so there is nothing to do.
+  ///
+  /// The active repositories are registered in [_initializeServices] next to the Dio
+  /// they depend on.
   static Future<void> _initializeRepositories() async {
     // Tier 1-4 repositories are registered in _initializeServices() alongside
     // the Dio they depend on. Nothing left to do here.
@@ -663,15 +656,11 @@ class ServiceLocator {
     );
   }
 
-  /// Row a1c12c6e (review MED): hand a capture transition to the TTS
-  /// orchestrator and HANDLE its future.
+  /// Hands a capture transition to the TTS orchestrator and observes its future.
   ///
-  /// `AsrService.onCapturingChanged` is typed `void Function( bool )`, so the
-  /// future `setCaptureHold` returns used to be dropped on the floor: a throw
-  /// from the player or the `flutter_tts` fallback became an unhandled async
-  /// error with nowhere to surface. Ordering between overlapping transitions
-  /// is the orchestrator's own job (it serializes them); this seam owns the
-  /// error handling.
+  /// `AsrService.onCapturingChanged` returns void, so the future from `setCaptureHold`
+  /// used to be dropped, and a player error became an unhandled async error. The
+  /// orchestrator orders overlapping transitions; this method handles the error.
   ///
   /// Requires:
   ///   - nothing; a missing [TtsOrchestrator] registration is a no-op
@@ -704,18 +693,14 @@ class ServiceLocator {
   ///   - InitializationException if service locator not initialized
   static T get<T extends Object>() => _getIt<T>();
 
-  /// Checks whether service of specified type is registered.
-  /// 
+  /// Checks whether a service of type T is registered.
+  ///
   /// Requires:
-  ///   - Type T must be a valid object type
-  /// 
+  ///   - Type T is a valid object type
+  ///
   /// Ensures:
-  ///   - Returns true if service is registered, false otherwise
-  ///   - Check is performed without side effects
-  ///   - No exceptions are thrown for unregistered types
-  /// 
-  /// Raises:
-  ///   - No exceptions are raised (always returns boolean)
+  ///   - returns true if registered, false otherwise
+  ///   - has no side effects and never throws for unregistered types
   static bool isRegistered<T extends Object>() => _getIt.isRegistered<T>();
 
   /// Resets all registered dependencies for testing or reinitialization.
@@ -736,19 +721,14 @@ class ServiceLocator {
     _isInitialized = false;
   }
 
-  /// Retrieves comprehensive status of all registered services.
-  /// 
+  /// Reports the registration status of the core and network services.
+  ///
   /// Requires:
-  ///   - Service locator must be accessible (initialization not required)
-  /// 
+  ///   - the locator is accessible; initialization is not required
+  ///
   /// Ensures:
-  ///   - Returns map of service names to registration status
-  ///   - Includes core services, network services, repositories, and BLoCs
-  ///   - Status accurately reflects current registration state
-  ///   - Useful for debugging and health monitoring
-  /// 
-  /// Raises:
-  ///   - No exceptions are raised (always returns valid map)
+  ///   - returns a map of service names to a status string
+  ///   - the status reflects the current registration state
   static Map<String, String> getRegisteredServices() {
     final services = <String, String>{};
     

@@ -1,5 +1,4 @@
-/// Examples of how to use the dependency injection system
-/// This file demonstrates various patterns for accessing services and repositories
+/// Examples of the dependency injection patterns for services and repositories.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +11,7 @@ import '../../shared/models/models.dart';
 
 /// Example 1: Basic service access in a widget
 class BasicServiceExample extends StatelessWidget {
+  /// Creates the example.
   const BasicServiceExample({super.key});
 
   @override
@@ -41,6 +41,7 @@ class BasicServiceExample extends StatelessWidget {
 
 /// Example 2: Using repository mixin in a stateful widget
 class RepositoryMixinExample extends StatefulWidget {
+  /// Creates the example.
   const RepositoryMixinExample({super.key});
 
   @override
@@ -82,6 +83,7 @@ class _RepositoryMixinExampleState extends State<RepositoryMixinExample>
 
 /// Example 3: Using Repositories helper class
 class RepositoriesHelperExample extends StatelessWidget {
+  /// Creates the example.
   const RepositoriesHelperExample({super.key});
 
   @override
@@ -122,6 +124,7 @@ class UserManagementBloc extends Bloc<UserManagementEvent, UserManagementState> 
   final SessionRepository _sessionRepository;
   final OfflineManager _offlineManager;
 
+  /// Creates the bloc from explicitly passed dependencies.
   UserManagementBloc({
     required UserRepository userRepository,
     required SessionRepository sessionRepository,
@@ -135,6 +138,7 @@ class UserManagementBloc extends Bloc<UserManagementEvent, UserManagementState> 
   }
 
   // Factory constructor using ServiceLocator
+  /// Creates the bloc with dependencies taken from the service locator.
   factory UserManagementBloc.create() {
     return UserManagementBloc(
       userRepository: ServiceLocator.get<UserRepository>(),
@@ -184,6 +188,7 @@ class UserManagementBloc extends Bloc<UserManagementEvent, UserManagementState> 
 
 /// Example 5: Service integration
 class TtsIntegrationExample extends StatelessWidget {
+  /// Creates the example.
   const TtsIntegrationExample({super.key});
 
   @override
@@ -256,6 +261,7 @@ class TtsIntegrationExample extends StatelessWidget {
 
 /// Example 6: Cache management
 class CacheManagementExample extends StatelessWidget {
+  /// Creates the example.
   const CacheManagementExample({super.key});
 
   @override
@@ -302,36 +308,56 @@ class CacheManagementExample extends StatelessWidget {
 }
 
 // BLoC events and states for the example
+/// Base type of the events the example bloc handles.
 abstract class UserManagementEvent {}
 
+/// Asks the bloc to load one user.
 class LoadUserEvent extends UserManagementEvent {
+  /// Id of the user to load.
   final String userId;
+  /// Creates the event for [userId].
   LoadUserEvent(this.userId);
 }
 
+/// Asks the bloc to create a session for a user.
 class CreateSessionEvent extends UserManagementEvent {
+  /// Id of the user the session is for.
   final String userId;
+  /// Token the session is created with.
   final String token;
+  /// Creates the event for [userId] and [token].
   CreateSessionEvent(this.userId, this.token);
 }
 
+/// Base type of the states the example bloc emits.
 abstract class UserManagementState {}
 
+/// State before any event has been handled.
 class UserManagementInitial extends UserManagementState {}
 
+/// State while a user is being loaded.
 class UserManagementLoading extends UserManagementState {}
 
+/// State holding the loaded user.
 class UserManagementLoaded extends UserManagementState {
+  /// The loaded user.
   final User user;
+  /// Creates the state holding [user].
   UserManagementLoaded(this.user);
 }
 
+/// State holding the newly created session.
 class SessionCreated extends UserManagementState {
+  /// The created session.
   final Session session;
+  /// Creates the state holding [session].
   SessionCreated(this.session);
 }
 
+/// State holding an error message.
 class UserManagementError extends UserManagementState {
+  /// Description of what went wrong.
   final String message;
+  /// Creates the state holding [message].
   UserManagementError(this.message);
 }

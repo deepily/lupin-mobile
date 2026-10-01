@@ -3,14 +3,23 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'service_locator.dart';
 import '../repositories/repositories.dart';
 
-/// Provider for easy access to repositories in widgets
+/// Exposes the five repositories to widgets through the widget tree.
+///
+/// Widgets read it with [RepositoryProvider.of]. It never notifies
+/// dependents, because the repositories are fixed for its lifetime.
 class RepositoryProvider extends InheritedWidget {
+  /// Repository for user accounts.
   final UserRepository userRepository;
+  /// Repository for sessions.
   final SessionRepository sessionRepository;
+  /// Repository for jobs.
   final JobRepository jobRepository;
+  /// Repository for voice requests.
   final VoiceRepository voiceRepository;
+  /// Repository for audio data.
   final AudioRepository audioRepository;
 
+  /// Creates a provider that holds the given repositories for [child].
   const RepositoryProvider({
     super.key,
     required super.child,
@@ -21,23 +30,31 @@ class RepositoryProvider extends InheritedWidget {
     required this.audioRepository,
   });
 
+  /// Returns the nearest provider above [context], or null if there is none.
   static RepositoryProvider? of(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<RepositoryProvider>();
   }
 
+  /// Always false: the held repositories never change.
   @override
   bool updateShouldNotify(RepositoryProvider oldWidget) => false;
 }
 
-/// Widget that provides repositories to its children
+/// Wraps [child] in a [RepositoryProvider] filled from the service locator.
+///
+/// Requires:
+///   - the repositories are registered in [ServiceLocator]
 class RepositoryContainer extends StatelessWidget {
+  /// The subtree that receives the repositories.
   final Widget child;
 
+  /// Creates a container around [child].
   const RepositoryContainer({
     super.key,
     required this.child,
   });
 
+  /// Builds the provider with every repository fetched from the locator.
   @override
   Widget build(BuildContext context) {
     return RepositoryProvider(
@@ -51,33 +68,48 @@ class RepositoryContainer extends StatelessWidget {
   }
 }
 
-/// Mixin for easy repository access in widgets
+/// Gives a widget [State] a getter for each repository from the locator.
 mixin RepositoryMixin<T extends StatefulWidget> on State<T> {
+  /// The repository for user accounts.
   UserRepository get userRepository => ServiceLocator.get<UserRepository>();
+  /// The repository for sessions.
   SessionRepository get sessionRepository => ServiceLocator.get<SessionRepository>();
+  /// The repository for jobs.
   JobRepository get jobRepository => ServiceLocator.get<JobRepository>();
+  /// The repository for voice requests.
   VoiceRepository get voiceRepository => ServiceLocator.get<VoiceRepository>();
+  /// The repository for audio data.
   AudioRepository get audioRepository => ServiceLocator.get<AudioRepository>();
 }
 
-/// Extension for easy repository access in BLoCs
+/// Gives every bloc a getter for each repository from the locator.
 extension RepositoryExtension on BlocBase {
+  /// The repository for user accounts.
   UserRepository get userRepository => ServiceLocator.get<UserRepository>();
+  /// The repository for sessions.
   SessionRepository get sessionRepository => ServiceLocator.get<SessionRepository>();
+  /// The repository for jobs.
   JobRepository get jobRepository => ServiceLocator.get<JobRepository>();
+  /// The repository for voice requests.
   VoiceRepository get voiceRepository => ServiceLocator.get<VoiceRepository>();
+  /// The repository for audio data.
   AudioRepository get audioRepository => ServiceLocator.get<AudioRepository>();
 }
 
-/// Repository access helper class
+/// Static shortcuts to the repositories held by the service locator.
 class Repositories {
+  /// The repository for user accounts.
   static UserRepository get user => ServiceLocator.get<UserRepository>();
+  /// The repository for sessions.
   static SessionRepository get session => ServiceLocator.get<SessionRepository>();
+  /// The repository for jobs.
   static JobRepository get job => ServiceLocator.get<JobRepository>();
+  /// The repository for voice requests.
   static VoiceRepository get voice => ServiceLocator.get<VoiceRepository>();
+  /// The repository for audio data.
   static AudioRepository get audio => ServiceLocator.get<AudioRepository>();
   
-  /// Get all repositories as a map
+  /// Returns every repository in a map keyed by short name.
   static Map<String, dynamic> getAll() {
     return {
       'user': user,
@@ -88,7 +120,7 @@ class Repositories {
     };
   }
   
-  /// Check if all repositories are available
+  /// True when every repository can be fetched from the locator.
   static bool get areAvailable {
     try {
       getAll();
