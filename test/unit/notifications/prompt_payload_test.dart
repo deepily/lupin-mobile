@@ -17,6 +17,7 @@ import 'package:lupin_mobile/features/notifications/presentation/interactive_pro
 import 'package:lupin_mobile/shared/widgets/prompt_bodies.dart';
 
 import '../../_harness/test_app.dart';
+import '../../_helpers/source_text.dart';
 
 /// A canonical `ask_multiple_choice` payload as the server actually emits
 /// it: questions NESTED under `response_options.questions[]`, each with its
@@ -156,8 +157,8 @@ void main() {
   } );
 
   group( 'AC-S4.16 — the body was MOVED, not duplicated', () {
-    final sheet  = File( 'lib/features/notifications/presentation/interactive_prompt_sheet.dart' )
-        .readAsStringSync();
+    final sheet  = stripComments( File( 'lib/features/notifications/presentation/interactive_prompt_sheet.dart' )
+        .readAsStringSync() );
     final bodies = File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync();
 
     test( 'the private copy is GONE from the sheet', () {
@@ -205,7 +206,7 @@ void main() {
     // `required`, which broke every call site: red, but red from the COMPILER,
     // which proves only that the mutant cannot exist. A source check is
     // falsified by a mutant the compiler accepts.
-    final src = File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync();
+    final src = stripComments( File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync() );
 
     test( 'no repository import, and neither endpoint is named', () {
       expect( src.contains( 'repository' ), isFalse );

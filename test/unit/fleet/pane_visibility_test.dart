@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/features/fleet/domain/pane_visibility_mixin.dart';
+import '../../_helpers/source_text.dart';
 
 /// One recorded call of the hook, so a test can assert the arguments rather than infer
 /// them from a side effect.
@@ -429,7 +430,7 @@ void _orderTests() {
 
   for ( final path in hosts ) {
     test( "${path.split( '/' ).last} names PaneVisibilityMixin first", () {
-      final src = File( path ).readAsStringSync();
+      final src = stripComments( File( path ).readAsStringSync() );
 
       final visibilityAt = src.indexOf( 'with PaneVisibilityMixin' );
       final pollingAt    = src.indexOf( 'PanePollingMixin<' );
