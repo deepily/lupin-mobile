@@ -7,14 +7,18 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../../core/constants/app_constants.dart';
 
-/// Test seam — wraps the methods of `audioplayers.AudioPlayer` we use so
-/// that `StreamingTtsPlayer` can be unit-tested without the platform
-/// channels `audioplayers` requires. Production uses
-/// [_RealStreamingTtsAudioPlayer]; tests pass a Mocktail implementation.
+/// Test seam over the `audioplayers.AudioPlayer` methods that `StreamingTtsPlayer` uses.
+///
+/// It lets the player be unit-tested without the platform channels `audioplayers` requires.
+/// Production uses [_RealStreamingTtsAudioPlayer]; tests pass a Mocktail implementation.
 abstract class StreamingTtsAudioPlayer {
+  /// Emits when the current playback finishes.
   Stream<void> get onComplete;
+  /// Plays [wavBytes], a complete WAV file.
   Future<void> play( Uint8List wavBytes );
+  /// Stops playback.
   Future<void> stop();
+  /// Releases the player.
   Future<void> dispose();
 }
 
@@ -39,44 +43,34 @@ class _RealStreamingTtsAudioPlayer implements StreamingTtsAudioPlayer {
 
 /// Slim ElevenLabs TTS client for Lupin Mobile.
 ///
-/// Purpose-built alternative to the legacy `EnhancedTTSService` (which
-/// remains tree-shaken on disk with 2.7K lines of adaptive-strategy
-/// infrastructure we don't need yet). This player:
+/// It is a purpose-built alternative to the legacy `EnhancedTTSService`, which stays on disk, tree-shaken,
+/// with 2.7K lines of adaptive-strategy infrastructure that is not needed yet. This player:
+///   1. Sends `speak(text)` to the backend `/api/get-speech-elevenlabs` through the shared Dio, whose auth
+///      interceptor injects the Bearer token.
+///   2. Consumes WebSocket events fed in by `app.dart _dispatchWsEvent`: status updates, binary audio chunks,
+///      completion and error signals.
+///   3. Plays the audio with `audioplayers` as a single PCM blob once the stream completes. Streaming while
+///      receiving is a later optimization; ElevenLabs Flash latency and 1-2 s texts make waiting imperceptible.
 ///
-///   1. Sends `speak(text)` requests to the backend `/api/get-speech-elevenlabs`
-///      endpoint via the shared Dio (auth interceptor injects Bearer token).
-///   2. Consumes WS events fed in by the top-level dispatcher
-///      (`app.dart _dispatchWsEvent`) — status updates, binary audio
-///      chunks, completion and error signals.
-///   3. Plays audio via `audioplayers` as a single PCM blob once the stream
-///      completes. (Streaming-while-receiving is a later optimization; for
-///      now we accumulate and play — ElevenLabs Flash latency + ~1-2s
-///      text lengths make this imperceptible.)
-///
-/// The `TtsCompleteEvent` broadcast fires ONLY after audio playback has
-/// actually finished (not when the WS stream signals done). The
-/// `TtsOrchestrator` treats complete as "safe to advance FIFO" — firing
-/// it before playback ends causes the next utterance's `play()` call to
-/// preempt the current one mid-sentence (audioplayers is a single voice).
+/// `TtsCompleteEvent` fires only after playback has actually finished, not when the WebSocket stream signals done.
+/// `TtsOrchestrator` treats complete as "safe to advance the FIFO". Firing it earlier makes the next `play()`
+/// preempt the current utterance mid-sentence, because `audioplayers` has a single voice.
 ///
 /// Event contract (matches backend `src/cosa/rest/routers/speech.py`):
-///   - `audio_streaming_status`  — `{status: "loading"|"streaming", text}`
-///   - `audio_streaming_chunk`   — binary PCM (wrapped by WebSocketService
-///                                 into `{type, data: List<int>}`)
-///   - `audio_streaming_complete` — `{status: "success", text}`
-///   - `tts_error`               — `{error_code: "quota_exceeded"|...,
-///                                   text, details}`
+///   - `audio_streaming_status`: `{status: "loading"|"streaming", text}`
+///   - `audio_streaming_chunk`: binary PCM, wrapped by WebSocketService into `{type, data: List<int>}`
+///   - `audio_streaming_complete`: `{status: "success", text}`
+///   - `tts_error`: `{error_code: "quota_exceeded"|..., text, details}`
 class StreamingTtsPlayer {
   final Dio                      _dio;
   final StreamingTtsAudioPlayer  _player;
 
-  /// Dev-only: when true, `speak()` includes `debug_simulate_error: true`
-  /// in the POST body. Backend (`/api/get-speech-elevenlabs`) sees the flag
-  /// and emits a `tts_error` WS event with `error_code=quota_exceeded`
-  /// instead of calling ElevenLabs. Used to verify the orchestrator's
-  /// quota-fallback path on-device without needing an exhausted account.
-  /// Sourced from the `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define and
-  /// gated on `kDebugMode`; forced off in release builds.
+  /// Dev-only: when true, `speak()` sends `debug_simulate_error: true` in the POST body.
+  ///
+  /// The backend (`/api/get-speech-elevenlabs`) then emits a `tts_error` WebSocket event with
+  /// `error_code=quota_exceeded` instead of calling ElevenLabs. That checks the orchestrator's quota-fallback
+  /// path on a device without an exhausted account. It comes from the `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define,
+  /// is gated on `kDebugMode`, and is forced off in release builds.
   final bool _simulateTtsError;
 
   final StreamController<TtsStatusEvent>   _statusCtrl   = StreamController.broadcast();
@@ -90,8 +84,10 @@ class StreamingTtsPlayer {
   bool            _isPlaying           = false;  // true while audio is actually playing
   Completer<void>? _activePlaybackCompleter;     // signals end of current playback
 
-  /// Tests pass [simulateTtsError] explicitly; production reads the
-  /// `LUPIN_DEV_SIMULATE_TTS_ERROR` dart-define and requires `kDebugMode`.
+  /// Creates a player that sends requests through [_dio].
+  ///
+  /// Tests pass [simulateTtsError] explicitly; production reads the `LUPIN_DEV_SIMULATE_TTS_ERROR`
+  /// dart-define and requires `kDebugMode`.
   StreamingTtsPlayer(
     this._dio, {
     StreamingTtsAudioPlayer? player,
@@ -110,30 +106,28 @@ class StreamingTtsPlayer {
     } );
   }
 
+  /// Emits status updates for the current request.
   Stream<TtsStatusEvent>   get statusStream   => _statusCtrl.stream;
+  /// Emits once when playback of the current utterance has finished.
   Stream<TtsCompleteEvent> get completeStream => _completeCtrl.stream;
+  /// Emits when the request or the playback fails.
   Stream<TtsErrorEvent>    get errorStream    => _errorCtrl.stream;
 
-  /// True while either (a) we've sent a speak request and haven't seen
-  /// completion/error yet, OR (b) audio is actively playing out of the
-  /// player. The orchestrator uses this to decide when to advance the
-  /// FIFO queue.
+  /// True while a speak request is pending or audio is playing.
+  ///
+  /// Pending means a speak request was sent and no completion or error has arrived. The orchestrator uses this
+  /// to decide when to advance the FIFO queue.
   bool get isPlaying => _isActive || _isPlaying;
 
-  /// Send a TTS request. Returns when the HTTP POST is acknowledged
-  /// (backend will then start streaming audio chunks on the WS). Throws
-  /// [DioException] on HTTP failure — caller (orchestrator) decides
-  /// whether to fall back.
+  /// Sends a TTS request and returns when the HTTP POST is acknowledged.
   ///
-  /// **`voiceId` is the persona pipe-through path** (per `Q3` of the
-  /// 2026-04-28 voice-persona milestone — see
-  /// `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/03-decisions.md`).
-  /// When provided, the body's `voice_id` key tells the backend which
-  /// per-session persona voice to render the utterance with. When `null`
-  /// (or omitted), the backend falls back to the default Sam voice — the
-  /// pre-2026-04-28 behavior. The body wiring at the `voice_id` insertion
-  /// site below intentionally OMITS the key when null (rather than sending
-  /// `null`) so the server's "absent → Sam" fallback contract is preserved.
+  /// The backend then streams audio chunks on the WebSocket. Throws [DioException] on HTTP failure,
+  /// and the orchestrator decides whether to fall back.
+  ///
+  /// [voiceId] is the persona pass-through. The body's `voice_id` tells the backend which per-session
+  /// persona voice to render with. When null the key is omitted, not sent as null, so the server's
+  /// "absent means the default voice" fallback holds.
+  /// Design: src/docs/decisions/README.md (R-TTS-voice-id)
   Future<void> speak( {
     required String text,
     required String sessionId,
@@ -159,16 +153,15 @@ class StreamingTtsPlayer {
     }
   }
 
-  /// Stop any in-flight playback and clear buffered audio. Called by the
-  /// orchestrator's urgent-preempt path. A stopped utterance does NOT
-  /// fire `TtsCompleteEvent` — the caller invoked this precisely to
-  /// abandon it, so advancing the FIFO on its behalf would be wrong.
+  /// Stops any in-flight playback and clears buffered audio.
+  ///
+  /// The orchestrator calls it on urgent-preempt. A stopped utterance does not fire `TtsCompleteEvent`,
+  /// because advancing the FIFO on behalf of an abandoned utterance would be wrong.
   Future<void> stop() async {
     _isActive = false;
     _pcmBuffer.clear();
-    // Clear the field BEFORE awakening the hung completer; the identity
-    // check inside `_playPcmBuffer` will then see the field is no longer
-    // its completer and skip the complete emission.
+    // Clear the field before waking the hung completer. The identity check inside `_playPcmBuffer`
+    // then sees the field is no longer its completer and skips the complete emission.
     final stale = _activePlaybackCompleter;
     _activePlaybackCompleter = null;
     await _player.stop();
@@ -176,9 +169,10 @@ class StreamingTtsPlayer {
     if ( stale != null && !stale.isCompleted ) stale.complete();
   }
 
-  /// Called by `app.dart _dispatchWsEvent` when any of the four relevant
-  /// event types arrive. Consumer does NOT need to type-check — the
-  /// player filters by [type] internally.
+  /// Handles one of the four relevant WebSocket event types.
+  ///
+  /// `app.dart _dispatchWsEvent` calls it, and the caller need not type-check: the player filters by [type].
+  /// Events other than a status update are ignored when no speak request is active.
   void handleWsEvent( String type, Map<String, dynamic> payload ) {
     if ( !_isActive && type != AppConstants.eventAudioStreamingStatus ) {
       // Ignore stray events if we didn't initiate a speak request.
@@ -198,11 +192,9 @@ class StreamingTtsPlayer {
         break;
 
       case AppConstants.eventAudioStreamingComplete:
-        // Play the accumulated PCM buffer. Backend sends PCM 24kHz; wrap
-        // a minimal WAV header so audioplayers can interpret it.
-        // `_playPcmBuffer` fires `_completeCtrl` itself AFTER playback
-        // actually finishes — firing here would advance the orchestrator's
-        // FIFO while audio was still playing, causing overlap.
+        // Play the accumulated PCM buffer. The backend sends 24 kHz PCM, so a minimal WAV header is wrapped
+        // on for `audioplayers`. `_playPcmBuffer` fires `_completeCtrl` itself after playback finishes; firing here
+        // would advance the orchestrator's FIFO while audio was still playing, causing overlap.
         _isActive = false;
         _playPcmBuffer();
         break;
@@ -219,8 +211,7 @@ class StreamingTtsPlayer {
 
   Future<void> _playPcmBuffer() async {
     if ( _pcmBuffer.isEmpty ) {
-      // Defensive: no audio arrived but we got WS complete. Still signal
-      // complete so the orchestrator advances its FIFO.
+      // Defensive: no audio arrived but the WebSocket sent complete. Still signal complete so the orchestrator advances its FIFO.
       _completeCtrl.add( const TtsCompleteEvent() );
       return;
     }
@@ -233,11 +224,9 @@ class StreamingTtsPlayer {
 
     try {
       await _player.play( wav );
-      // Wait for the onComplete listener (in the constructor) to fire
-      // `myCompleter.complete()` after audio actually finishes. Without
-      // this gate, TtsCompleteEvent would fire while audio was still
-      // playing, causing the orchestrator to start the next utterance
-      // and preempt the current one mid-sentence.
+      // Wait for the onComplete listener (in the constructor) to complete `myCompleter` after audio finishes.
+      // Without this gate, TtsCompleteEvent would fire during playback, the orchestrator would start the next
+      // utterance and preempt the current one mid-sentence.
       await myCompleter.future;
       // Identity check: if `stop()` ran while we were awaiting, it cleared
       // the field (or a later speak replaced it). Only emit complete if
@@ -256,9 +245,9 @@ class StreamingTtsPlayer {
     }
   }
 
-  /// Wrap raw 16-bit mono PCM at 24kHz with a minimal RIFF/WAVE header
-  /// so `audioplayers` can decode it. ElevenLabs `output_format=pcm_24000`
-  /// returns exactly this shape.
+  /// Wraps raw 16-bit mono 24 kHz PCM in a minimal WAV header so `audioplayers` can decode it.
+  ///
+  /// ElevenLabs `output_format=pcm_24000` returns exactly this shape.
   Uint8List _wrapPcm24kAsWav( Uint8List pcm ) {
     const sampleRate  = 24000;
     const channels    = 1;
@@ -298,6 +287,7 @@ class StreamingTtsPlayer {
     ( v >> 24 ) & 0xff,
   ];
 
+  /// Cancels the player subscription and closes the player and all three streams.
   Future<void> dispose() async {
     await _playerCompleteSub?.cancel();
     await _player.dispose();
@@ -307,25 +297,34 @@ class StreamingTtsPlayer {
   }
 }
 
-/// Status event — either 'loading' (TTS request received by backend,
-/// ElevenLabs handshake in progress) or 'streaming' (audio chunks are
-/// flowing). Non-terminal.
+/// Non-terminal status event: `loading` or `streaming`.
+///
+/// `loading` means the backend received the request and the ElevenLabs handshake is in progress. `streaming`
+/// means audio chunks are flowing.
 class TtsStatusEvent {
+  /// `loading` or `streaming`; `unknown` when the payload has none.
   final String  status;
+  /// The text being synthesized, when the backend sends it.
   final String? detail;
+  /// Creates a status event.
   const TtsStatusEvent( { required this.status, this.detail } );
 }
 
-/// Terminal event — TTS stream finished cleanly.
+/// Terminal event: the TTS stream finished cleanly.
 class TtsCompleteEvent {
+  /// Creates the event.
   const TtsCompleteEvent();
 }
 
-/// Terminal event — TTS stream failed. `errorCode` is one of the backend's
-/// documented codes: `quota_exceeded`, `rate_limit`, `auth_error`,
-/// `unknown`, or `playback_failed` (client-side).
+/// Terminal event: the TTS stream failed.
+///
+/// `errorCode` is one of the backend's codes `quota_exceeded`, `rate_limit`, `auth_error` or `unknown`,
+/// or `playback_failed`, which is raised on the client.
 class TtsErrorEvent {
+  /// Machine-readable cause; see the class doc for the values.
   final String  errorCode;
+  /// Human-readable detail, or null.
   final String? message;
+  /// Creates an error event.
   const TtsErrorEvent( { required this.errorCode, this.message } );
 }

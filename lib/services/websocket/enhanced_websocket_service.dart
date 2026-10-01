@@ -8,11 +8,10 @@ import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 import '../auth/auth_token_provider.dart';
 
-/// Enhanced WebSocket service with improved message handling, queuing, and resilience.
-/// 
-/// Provides robust WebSocket connectivity with automatic reconnection, message queuing,
-/// priority handling, health monitoring, and comprehensive error recovery.
-/// Supports both text and binary message types with intelligent routing.
+/// WebSocket client for the queue and audio channels, with queuing and reconnection.
+///
+/// Reconnects automatically, queues messages while disconnected (a separate queue for high and critical
+/// priority), pings and health-checks the connection, and routes text and binary messages.
 class EnhancedWebSocketService {
   final Dio _dio;
   WebSocketChannel? _queueChannel;
@@ -53,13 +52,21 @@ class EnhancedWebSocketService {
   bool _isReconnecting = false;
   
   // Configuration
+  /// Reconnect attempts before giving up.
   static const int maxReconnectAttempts = 10;
+  /// Wait before the first reconnect attempt.
   static const Duration initialReconnectDelay = Duration(seconds: 2);
+  /// Longest wait between reconnect attempts.
   static const Duration maxReconnectDelay = Duration(seconds: 60);
+  /// Interval between keepalive pings.
   static const Duration pingInterval = Duration(seconds: 30);
+  /// Interval between connection health checks.
   static const Duration healthCheckInterval = Duration(seconds: 10);
+  /// Default time to wait for a response to a request.
   static const Duration requestTimeout = Duration(seconds: 30);
+  /// Largest size of the normal message queue.
   static const int maxQueueSize = 1000;
+  /// Largest size of the high and critical priority queue.
   static const int maxPriorityQueueSize = 100;
   
   // Session management
@@ -71,23 +78,37 @@ class EnhancedWebSocketService {
   final WebSocketMetrics _metrics = WebSocketMetrics();
   
   // Public getters
+  /// True when the queue channel is connected.
   bool get isConnected => _queueConnectionState == WebSocketConnectionState.connected;
+  /// True when the audio channel is connected.
   bool get isAudioConnected => _audioConnectionState == WebSocketConnectionState.connected;
+  /// True when either channel is connecting.
   bool get isConnecting => _queueConnectionState == WebSocketConnectionState.connecting || _audioConnectionState == WebSocketConnectionState.connecting;
+  /// True when both channels are connected.
   bool get isBothConnected => isConnected && isAudioConnected;
+  /// State of the queue channel.
   WebSocketConnectionState get queueConnectionState => _queueConnectionState;
+  /// State of the audio channel.
   WebSocketConnectionState get audioConnectionState => _audioConnectionState;
+  /// Current session id, or null when not set.
   String? get sessionId => _sessionId;
+  /// Current user id, or null when not set.
   String? get userId => _userId;
+  /// Emits each message received.
   Stream<WebSocketMessage> get messageStream => _messageController.stream;
+  /// Emits connection and error events for monitoring.
   Stream<WebSocketEvent> get eventStream => _eventController.stream;
+  /// Counters of connections, messages and errors.
   WebSocketMetrics get metrics => _metrics;
+  /// Number of messages waiting in the normal queue.
   int get queueSize => _messageQueue.length;
+  /// Number of messages waiting in the priority queue.
   int get priorityQueueSize => _priorityQueue.length;
   
   // Base URL for WebSocket connections
   String _baseUrl = 'ws://localhost:7999';
   
+  /// Creates the service and starts the health check and queue processor.
   EnhancedWebSocketService(this._dio) {
     _startHealthCheck();
     _startQueueProcessor();
@@ -472,7 +493,7 @@ class EnhancedWebSocketService {
   /// 
   /// Raises:
   ///   - WebSocketException if direct send fails and skipQueue is true
-  ///   - No exceptions for queued messages (handled asynchronously)
+  ///   - nothing is raised for queued messages; they are handled asynchronously
   Future<void> sendMessage(
     WebSocketMessage message, {
     MessagePriority priority = MessagePriority.normal,
@@ -903,8 +924,6 @@ class EnhancedWebSocketService {
     }
   }
   
-  /// Removed _waitForConnectionAck method as connection handling is now integrated directly into _connectToQueue and _connectToAudio
-  
   /// Send authentication message
   void _sendAuthenticationMessage(WebSocketChannel channel, String type) {
     final authMessage = {
@@ -1232,7 +1251,7 @@ class EnhancedWebSocketService {
   ///   - Statistics reflect real-time service state
   /// 
   /// Raises:
-  ///   - No exceptions are raised (always returns valid stats)
+  ///   - nothing is raised; always returns valid stats
   Map<String, dynamic> getConnectionStats() {
     return {
       'state': _queueConnectionState.toString(),
@@ -1261,7 +1280,7 @@ class EnhancedWebSocketService {
   ///   - Reconnection attempts are disabled
   /// 
   /// Raises:
-  ///   - No exceptions propagate (cleanup errors are suppressed)
+  ///   - nothing propagates; cleanup errors are suppressed
   Future<void> disconnect({bool clearQueue = true}) async {
     _shouldReconnect = false;
     
@@ -1303,8 +1322,7 @@ class EnhancedWebSocketService {
     _eventController.add(WebSocketEvent.disconnected());
   }
   
-  /// Dispose resources
-  /// Configure service parameters
+  /// Sets the base URL, session id and user id; null arguments leave the current value.
   void configure({
     String? baseUrl,
     String? sessionId,
@@ -1334,6 +1352,7 @@ class EnhancedWebSocketService {
     }
   }
   
+  /// Disconnects, clears the queues and closes both streams.
   void dispose() {
     disconnect(clearQueue: true);
     _messageController.close();
@@ -1343,27 +1362,40 @@ class EnhancedWebSocketService {
 
 /// WebSocket connection states
 enum WebSocketConnectionState {
+  /// Not connected.
   disconnected,
+  /// A connection attempt is in progress.
   connecting,
+  /// Connected.
   connected,
+  /// The last connection attempt failed.
   error,
 }
 
 /// Message priorities for queuing
 enum MessagePriority {
+  /// Sent after everything else.
   low,
+  /// Default priority; uses the normal queue.
   normal,
+  /// Uses the priority queue.
   high,
+  /// Uses the priority queue.
   critical,
 }
 
 /// Queued message wrapper
 class QueuedMessage {
+  /// The message waiting to be sent.
   final WebSocketMessage message;
+  /// Priority that decides which queue holds it.
   final MessagePriority priority;
+  /// When the message was queued.
   final DateTime timestamp;
+  /// Number of failed send attempts so far.
   int retryCount;
   
+  /// Creates a queued message; every field is required.
   QueuedMessage({
     required this.message,
     required this.priority,
@@ -1374,10 +1406,14 @@ class QueuedMessage {
 
 /// Pending request tracking
 class PendingRequest {
+  /// Completes with the response, or with an error on timeout.
   final Completer<WebSocketMessage> completer;
+  /// When the request was sent.
   final DateTime timestamp;
+  /// How long to wait for the response.
   final Duration timeout;
   
+  /// Creates a pending request; every field is required.
   PendingRequest({
     required this.completer,
     required this.timestamp,
@@ -1387,23 +1423,40 @@ class PendingRequest {
 
 /// WebSocket performance metrics
 class WebSocketMetrics {
+  /// Connection attempts made.
   int connectionAttempts = 0;
+  /// Connection attempts that succeeded.
   int successfulConnections = 0;
+  /// Connection attempts that failed.
   int failedConnections = 0;
+  /// Errors raised on an open connection.
   int connectionErrors = 0;
+  /// Messages received, text and binary.
   int messagesReceived = 0;
+  /// Messages sent, text and binary.
   int messagesSent = 0;
+  /// Text messages received.
   int textMessagesReceived = 0;
+  /// Text messages sent.
   int textMessagesSent = 0;
+  /// Binary messages received.
   int binaryMessagesReceived = 0;
+  /// Binary messages sent.
   int binaryMessagesSent = 0;
+  /// Received messages that could not be parsed.
   int messageParsingErrors = 0;
+  /// Messages that failed to send.
   int messageSendErrors = 0;
+  /// Queued messages sent successfully.
   int queuedMessagesProcessed = 0;
+  /// Queued messages that failed to send.
   int queuedMessagesFailed = 0;
+  /// Messages dropped because a queue was full.
   int queueOverflows = 0;
+  /// When the last pong arrived, or null if none has.
   DateTime? lastPongReceived;
   
+  /// Serializes the counters with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'connection_attempts': connectionAttempts,
@@ -1428,13 +1481,20 @@ class WebSocketMetrics {
 
 /// Enhanced WebSocket message with better type safety
 class WebSocketMessage {
+  /// Message type, for example `auth`, `ping` or `audio_chunk`.
   final String type;
+  /// JSON payload, or null.
   final Map<String, dynamic>? data;
+  /// Binary payload, or null.
   final Uint8List? binaryData;
+  /// Extra JSON describing the message, or null.
   final Map<String, dynamic>? metadata;
+  /// Id that pairs a response with its request, or null.
   final String? requestId;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message; only [type] and [timestamp] are required.
   const WebSocketMessage({
     required this.type,
     this.data,
@@ -1444,6 +1504,7 @@ class WebSocketMessage {
     required this.timestamp,
   });
   
+  /// Reads a message from JSON; a missing timestamp becomes now.
   factory WebSocketMessage.fromJson(Map<String, dynamic> json) {
     return WebSocketMessage(
       type: json['type'] as String,
@@ -1456,6 +1517,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Builds an `auth` message carrying the token, session id and user id.
   factory WebSocketMessage.authentication({
     required String token,
     required String sessionId,
@@ -1474,6 +1536,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Builds a `binary` message around [data].
   factory WebSocketMessage.binaryData({
     required Uint8List data,
     Map<String, dynamic>? metadata,
@@ -1486,6 +1549,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Builds a `ping` message stamped with [timestamp], or now.
   factory WebSocketMessage.ping({DateTime? timestamp}) {
     return WebSocketMessage(
       type: 'ping',
@@ -1494,6 +1558,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Builds a `pong` message stamped with [timestamp], or now.
   factory WebSocketMessage.pong({DateTime? timestamp}) {
     return WebSocketMessage(
       type: 'pong',
@@ -1502,6 +1567,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Wraps [rawData] in a `raw` message.
   factory WebSocketMessage.raw(dynamic rawData) {
     return WebSocketMessage(
       type: 'raw',
@@ -1510,6 +1576,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Builds a message of any [type].
   factory WebSocketMessage.custom({
     required String type,
     Map<String, dynamic>? data,
@@ -1528,6 +1595,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Builds an `audio_chunk` message around [audioData].
   factory WebSocketMessage.audioBinary(Uint8List audioData) {
     return WebSocketMessage(
       type: 'audio_chunk',
@@ -1536,6 +1604,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Copy with the given fields replaced.
   WebSocketMessage copyWith({
     String? type,
     Map<String, dynamic>? data,
@@ -1554,6 +1623,7 @@ class WebSocketMessage {
     );
   }
   
+  /// Serializes the message; null fields are omitted and binary data is not included.
   Map<String, dynamic> toJson() {
     return {
       'type': type,
@@ -1567,211 +1637,349 @@ class WebSocketMessage {
 
 /// WebSocket events for external monitoring
 abstract class WebSocketEvent {
+  /// When the event was created.
   final DateTime timestamp;
   
+  /// Base constructor; stamps the event with the current time.
   WebSocketEvent() : timestamp = DateTime.now();
   
+  /// The socket is connecting to [url].
   factory WebSocketEvent.connecting(String url) = WebSocketConnectingEvent;
+  /// The socket connected with [sessionId].
   factory WebSocketEvent.connected(String sessionId) = WebSocketConnectedEvent;
+  /// The server authenticated [userId].
   factory WebSocketEvent.authenticated(String userId) = WebSocketAuthenticatedEvent;
+  /// The connection attempt failed with [error].
   factory WebSocketEvent.connectionFailed(String error) = WebSocketConnectionFailedEvent;
+  /// An open connection raised [error].
   factory WebSocketEvent.connectionError(String error) = WebSocketConnectionErrorEvent;
+  /// Authentication failed with [error].
   factory WebSocketEvent.authenticationFailed(String error) = WebSocketAuthenticationFailedEvent;
+  /// The socket disconnected.
   factory WebSocketEvent.disconnected() = WebSocketDisconnectedEvent;
+  /// A reconnect is scheduled as attempt [attempt] after [delay].
   factory WebSocketEvent.reconnectScheduled(int attempt, Duration delay) = WebSocketReconnectScheduledEvent;
+  /// Reconnecting stopped after [totalAttempts] attempts.
   factory WebSocketEvent.reconnectGiveUp(int totalAttempts) = WebSocketReconnectGiveUpEvent;
+  /// The connection state changed from [from] to [to].
   factory WebSocketEvent.stateChanged(WebSocketConnectionState from, WebSocketConnectionState to) = WebSocketStateChangedEvent;
+  /// A received message could not be parsed: [error].
   factory WebSocketEvent.messageParsingError(String error) = WebSocketMessageParsingErrorEvent;
+  /// Sending a message failed: [error].
   factory WebSocketEvent.messageSendFailed(String error) = WebSocketMessageSendFailedEvent;
+  /// A queued message of [messageType] failed to send: [error].
   factory WebSocketEvent.queuedMessageFailed(String messageType, String error) = WebSocketQueuedMessageFailedEvent;
+  /// An audio chunk arrived.
   factory WebSocketEvent.audioChunkReceived({Uint8List? data, Map<String, dynamic>? metadata}) = WebSocketAudioChunkReceivedEvent;
+  /// The audio stream for [sessionId] finished.
   factory WebSocketEvent.audioComplete(String sessionId) = WebSocketAudioCompleteEvent;
+  /// The server reported a TTS [status].
   factory WebSocketEvent.ttsStatus({required String status, Map<String, dynamic>? details}) = WebSocketTTSStatusEvent;
+  /// The server reported an error.
   factory WebSocketEvent.serverError({required String error, String? code}) = WebSocketServerErrorEvent;
+  /// The server reported a [status].
   factory WebSocketEvent.serverStatus({required String status, Map<String, dynamic>? details}) = WebSocketServerStatusEvent;
+  /// The server rate-limited the client; [retryAfter] is the wait.
   factory WebSocketEvent.rateLimited({int? retryAfter, Map<String, dynamic>? details}) = WebSocketRateLimitedEvent;
+  /// The health check raised [warning].
   factory WebSocketEvent.healthCheckWarning(String warning) = WebSocketHealthCheckWarningEvent;
+  /// A keepalive ping failed: [error].
   factory WebSocketEvent.pingFailed(String error) = WebSocketPingFailedEvent;
+  /// The queue channel connected.
   factory WebSocketEvent.queueConnected() = WebSocketQueueConnectedEvent;
+  /// The audio channel connected.
   factory WebSocketEvent.audioConnected() = WebSocketAudioConnectedEvent;
+  /// The queue channel failed to connect: [error].
   factory WebSocketEvent.queueConnectionFailed(String error) = WebSocketQueueConnectionFailedEvent;
+  /// The audio channel failed to connect: [error].
   factory WebSocketEvent.audioConnectionFailed(String error) = WebSocketAudioConnectionFailedEvent;
+  /// The queue channel disconnected.
   factory WebSocketEvent.queueDisconnected() = WebSocketQueueDisconnectedEvent;
+  /// The audio channel disconnected.
   factory WebSocketEvent.audioDisconnected() = WebSocketAudioDisconnectedEvent;
+  /// Both channels are connected.
   factory WebSocketEvent.fullyConnected() = WebSocketFullyConnectedEvent;
+  /// A reconnection is scheduled as attempt [attempt] after [delay].
   factory WebSocketEvent.reconnectionScheduled(int attempt, Duration delay) = WebSocketReconnectionScheduledEvent;
+  /// Reconnection attempt [attempt] started.
   factory WebSocketEvent.reconnectionAttempt(int attempt) = WebSocketReconnectionAttemptEvent;
+  /// Reconnection stopped after [totalAttempts] attempts.
   factory WebSocketEvent.reconnectionGiveUp(int totalAttempts) = WebSocketReconnectionGiveUpEvent;
+  /// No message arrived for [timeSinceLastMessage].
   factory WebSocketEvent.connectionStale(Duration timeSinceLastMessage) = WebSocketConnectionStaleEvent;
+  /// A message arrived on [channel] with [content].
   factory WebSocketEvent.messageReceived(String channel, String content) = WebSocketMessageReceivedEvent;
 }
 
 // Event implementations
+/// The socket is connecting.
 class WebSocketConnectingEvent extends WebSocketEvent {
+  /// URL being connected to.
   final String url;
+  /// Creates the event.
   WebSocketConnectingEvent(this.url) : super();
 }
 
+/// The socket connected.
 class WebSocketConnectedEvent extends WebSocketEvent {
+  /// Session id of the connection.
   final String sessionId;
+  /// Creates the event.
   WebSocketConnectedEvent(this.sessionId) : super();
 }
 
+/// The server authenticated the user.
 class WebSocketAuthenticatedEvent extends WebSocketEvent {
+  /// The authenticated user's id.
   final String userId;
+  /// Creates the event.
   WebSocketAuthenticatedEvent(this.userId) : super();
 }
 
+/// A connection attempt failed.
 class WebSocketConnectionFailedEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketConnectionFailedEvent(this.error) : super();
 }
 
+/// An open connection raised an error.
 class WebSocketConnectionErrorEvent extends WebSocketEvent {
+  /// Description of the error.
   final String error;
+  /// Creates the event.
   WebSocketConnectionErrorEvent(this.error) : super();
 }
 
+/// Authentication failed.
 class WebSocketAuthenticationFailedEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketAuthenticationFailedEvent(this.error) : super();
 }
 
+/// The socket disconnected.
 class WebSocketDisconnectedEvent extends WebSocketEvent {
+  /// Creates the event.
   WebSocketDisconnectedEvent() : super();
 }
 
+/// A reconnect was scheduled.
 class WebSocketReconnectScheduledEvent extends WebSocketEvent {
+  /// Attempt number.
   final int attempt;
+  /// Wait before the attempt.
   final Duration delay;
+  /// Creates the event.
   WebSocketReconnectScheduledEvent(this.attempt, this.delay) : super();
 }
 
+/// Reconnecting stopped.
 class WebSocketReconnectGiveUpEvent extends WebSocketEvent {
+  /// Attempts made.
   final int totalAttempts;
+  /// Creates the event.
   WebSocketReconnectGiveUpEvent(this.totalAttempts) : super();
 }
 
+/// The connection state changed.
 class WebSocketStateChangedEvent extends WebSocketEvent {
+  /// State before the change.
   final WebSocketConnectionState from;
+  /// State after the change.
   final WebSocketConnectionState to;
+  /// Creates the event.
   WebSocketStateChangedEvent(this.from, this.to) : super();
 }
 
+/// A received message could not be parsed.
 class WebSocketMessageParsingErrorEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketMessageParsingErrorEvent(this.error) : super();
 }
 
+/// Sending a message failed.
 class WebSocketMessageSendFailedEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketMessageSendFailedEvent(this.error) : super();
 }
 
+/// A queued message failed to send.
 class WebSocketQueuedMessageFailedEvent extends WebSocketEvent {
+  /// Type of the message.
   final String messageType;
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketQueuedMessageFailedEvent(this.messageType, this.error) : super();
 }
 
+/// An audio chunk arrived.
 class WebSocketAudioChunkReceivedEvent extends WebSocketEvent {
+  /// Audio bytes, or null.
   final Uint8List? data;
+  /// Chunk metadata, or null.
   final Map<String, dynamic>? metadata;
+  /// Creates the event.
   WebSocketAudioChunkReceivedEvent({this.data, this.metadata}) : super();
 }
 
+/// An audio stream finished.
 class WebSocketAudioCompleteEvent extends WebSocketEvent {
+  /// Session id of the stream.
   final String sessionId;
+  /// Creates the event.
   WebSocketAudioCompleteEvent(this.sessionId) : super();
 }
 
+/// The server reported a TTS status.
 class WebSocketTTSStatusEvent extends WebSocketEvent {
+  /// Status text.
   final String status;
+  /// Extra detail, or null.
   final Map<String, dynamic>? details;
+  /// Creates the event.
   WebSocketTTSStatusEvent({required this.status, this.details}) : super();
 }
 
+/// The server reported an error.
 class WebSocketServerErrorEvent extends WebSocketEvent {
+  /// Error text.
   final String error;
+  /// Server error code, or null.
   final String? code;
+  /// Creates the event.
   WebSocketServerErrorEvent({required this.error, this.code}) : super();
 }
 
+/// The server reported a status.
 class WebSocketServerStatusEvent extends WebSocketEvent {
+  /// Status text.
   final String status;
+  /// Extra detail, or null.
   final Map<String, dynamic>? details;
+  /// Creates the event.
   WebSocketServerStatusEvent({required this.status, this.details}) : super();
 }
 
+/// The server rate-limited the client.
 class WebSocketRateLimitedEvent extends WebSocketEvent {
+  /// Seconds to wait, or null.
   final int? retryAfter;
+  /// Extra detail, or null.
   final Map<String, dynamic>? details;
+  /// Creates the event.
   WebSocketRateLimitedEvent({this.retryAfter, this.details}) : super();
 }
 
+/// The health check raised a warning.
 class WebSocketHealthCheckWarningEvent extends WebSocketEvent {
+  /// Warning text.
   final String warning;
+  /// Creates the event.
   WebSocketHealthCheckWarningEvent(this.warning) : super();
 }
 
+/// A keepalive ping failed.
 class WebSocketPingFailedEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketPingFailedEvent(this.error) : super();
 }
 
+/// The queue channel connected.
 class WebSocketQueueConnectedEvent extends WebSocketEvent {
+  /// Creates the event.
   WebSocketQueueConnectedEvent() : super();
 }
 
+/// The audio channel connected.
 class WebSocketAudioConnectedEvent extends WebSocketEvent {
+  /// Creates the event.
   WebSocketAudioConnectedEvent() : super();
 }
 
+/// The queue channel failed to connect.
 class WebSocketQueueConnectionFailedEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketQueueConnectionFailedEvent(this.error) : super();
 }
 
+/// The audio channel failed to connect.
 class WebSocketAudioConnectionFailedEvent extends WebSocketEvent {
+  /// Description of the failure.
   final String error;
+  /// Creates the event.
   WebSocketAudioConnectionFailedEvent(this.error) : super();
 }
 
+/// The queue channel disconnected.
 class WebSocketQueueDisconnectedEvent extends WebSocketEvent {
+  /// Creates the event.
   WebSocketQueueDisconnectedEvent() : super();
 }
 
+/// The audio channel disconnected.
 class WebSocketAudioDisconnectedEvent extends WebSocketEvent {
+  /// Creates the event.
   WebSocketAudioDisconnectedEvent() : super();
 }
 
+/// Both channels are connected.
 class WebSocketFullyConnectedEvent extends WebSocketEvent {
+  /// Creates the event.
   WebSocketFullyConnectedEvent() : super();
 }
 
+/// A reconnection was scheduled.
 class WebSocketReconnectionScheduledEvent extends WebSocketEvent {
+  /// Attempt number.
   final int attempt;
+  /// Wait before the attempt.
   final Duration delay;
+  /// Creates the event.
   WebSocketReconnectionScheduledEvent(this.attempt, this.delay) : super();
 }
 
+/// A reconnection attempt started.
 class WebSocketReconnectionAttemptEvent extends WebSocketEvent {
+  /// Attempt number.
   final int attempt;
+  /// Creates the event.
   WebSocketReconnectionAttemptEvent(this.attempt) : super();
 }
 
+/// Reconnection stopped.
 class WebSocketReconnectionGiveUpEvent extends WebSocketEvent {
+  /// Attempts made.
   final int totalAttempts;
+  /// Creates the event.
   WebSocketReconnectionGiveUpEvent(this.totalAttempts) : super();
 }
 
+/// No message arrived for a long time.
 class WebSocketConnectionStaleEvent extends WebSocketEvent {
+  /// Time since the last message.
   final Duration timeSinceLastMessage;
+  /// Creates the event.
   WebSocketConnectionStaleEvent(this.timeSinceLastMessage) : super();
 }
 
+/// A message arrived on a channel.
 class WebSocketMessageReceivedEvent extends WebSocketEvent {
+  /// Channel name.
   final String channel;
+  /// Message content.
   final String content;
+  /// Creates the event.
   WebSocketMessageReceivedEvent(this.channel, this.content) : super();
 }

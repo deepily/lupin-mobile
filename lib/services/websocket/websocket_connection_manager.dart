@@ -5,11 +5,10 @@ import 'websocket_message_router.dart';
 import 'websocket_subscription_manager.dart';
 import 'websocket_dynamic_subscription_controller.dart';
 
-/// Comprehensive WebSocket connection manager that coordinates all WebSocket functionality.
-/// 
-/// Provides a high-level interface for WebSocket operations, message routing,
-/// connection monitoring, health checks, and automatic error handling.
-/// Coordinates between EnhancedWebSocketService and WebSocketMessageRouter.
+/// Coordinates the WebSocket service, router and subscription managers as one interface.
+///
+/// Offers connection state, message streams, health checks and error handling for the WebSocket
+/// connections. It sits between [EnhancedWebSocketService] and [WebSocketMessageRouter].
 class WebSocketConnectionManager {
   final EnhancedWebSocketService _webSocketService;
   final WebSocketMessageRouter _messageRouter;
@@ -30,6 +29,7 @@ class WebSocketConnectionManager {
   // Configuration
   final ConnectionManagerConfig _config;
   
+  /// Creates a manager over [webSocketService] and [messageRouter]; the rest default sensibly.
   WebSocketConnectionManager({
     required EnhancedWebSocketService webSocketService,
     required WebSocketMessageRouter messageRouter,
@@ -43,36 +43,59 @@ class WebSocketConnectionManager {
   }
   
   // Public getters
+  /// True when the queue connection is up.
   bool get isConnected => _webSocketService.isConnected;
+  /// True when the audio connection is up.
   bool get isAudioConnected => _webSocketService.isAudioConnected;
+  /// True while a connection attempt is in progress.
   bool get isConnecting => _webSocketService.isConnecting;
+  /// True when both the queue and audio connections are up.
   bool get isBothConnected => _webSocketService.isBothConnected;
+  /// State of the queue connection.
   WebSocketConnectionState get queueConnectionState => _webSocketService.queueConnectionState;
+  /// State of the audio connection.
   WebSocketConnectionState get audioConnectionState => _webSocketService.audioConnectionState;
+  /// Session id of the connection, or null.
   String? get sessionId => _webSocketService.sessionId;
+  /// User id of the connection, or null.
   String? get userId => _webSocketService.userId;
+  /// Connection metrics from the underlying service.
   WebSocketMetrics get metrics => _webSocketService.metrics;
   
   // Message routing streams
+  /// Audio chunk messages.
   Stream<AudioChunkMessage> get audioChunks => _messageRouter.audioChunks;
+  /// TTS status messages.
   Stream<TTSStatusMessage> get ttsStatus => _messageRouter.ttsStatus;
+  /// Voice input messages.
   Stream<VoiceInputMessage> get voiceInput => _messageRouter.voiceInput;
+  /// Error messages.
   Stream<ErrorMessage> get errors => _messageRouter.errors;
   
   // New event streams
+  /// Queue update messages.
   Stream<QueueUpdateMessage> get queueUpdates => _messageRouter.queueUpdates;
+  /// Notification messages.
   Stream<NotificationMessage> get notifications => _messageRouter.notifications;
+  /// System messages.
   Stream<SystemMessage> get systemMessages => _messageRouter.systemMessages;
+  /// Authentication messages.
   Stream<AuthMessage> get authMessages => _messageRouter.authMessages;
   
   // Subscription management
+  /// The subscription manager in use.
   WebSocketSubscriptionManager get subscriptionManager => _subscriptionManager;
+  /// Emits each change to the event subscriptions.
   Stream<SubscriptionChange> get subscriptionChanges => _subscriptionManager.subscriptionChanges;
+  /// Emits the result of each event filter decision.
   Stream<EventFilterResult> get filterResults => _subscriptionManager.filterResults;
   
   // Dynamic subscription management
+  /// The controller that adjusts subscriptions dynamically.
   WebSocketDynamicSubscriptionController get dynamicController => _dynamicController;
+  /// Emits subscription changes the dynamic controller recommends.
   Stream<SubscriptionRecommendation> get subscriptionRecommendations => _dynamicController.recommendations;
+  /// Emits subscription optimizations the dynamic controller applied.
   Stream<SubscriptionOptimization> get subscriptionOptimizations => _dynamicController.optimizations;
   
   /// Initialize the connection manager
@@ -475,20 +498,17 @@ class WebSocketConnectionManager {
     };
   }
   
-  /// Performs comprehensive health check of WebSocket connection and services.
-  /// 
+  /// Performs a health check of the WebSocket connection and services.
+  ///
   /// Requires:
-  ///   - Connection manager must be initialized
-  ///   - Access to underlying service metrics
-  /// 
+  ///   - the connection manager is initialized
+  ///   - the underlying service metrics are accessible
+  ///
   /// Ensures:
-  ///   - Returns detailed health status including connection state
-  ///   - Identifies specific issues with connection or message flow
-  ///   - Provides actionable statistics for troubleshooting
-  ///   - Health status reflects real-time service condition
-  /// 
-  /// Raises:
-  ///   - No exceptions are raised (returns health status with issues)
+  ///   - returns detailed health status including connection state
+  ///   - identifies specific issues with connection or message flow
+  ///   - provides statistics for troubleshooting
+  ///   - nothing is raised; problems are reported as issues in the result
   Future<HealthCheckResult> performHealthCheck() async {
     final stats = _webSocketService.getConnectionStats();
     final metrics = _webSocketService.metrics;
@@ -737,17 +757,19 @@ class WebSocketConnectionManager {
     return _subscriptionManager.getEventCategories();
   }
   
-  /// Quick setup for common subscription patterns
+  /// Subscribes to the event categories every client needs: `auth`, `system` and `audio`.
   Future<void> setupBasicSubscriptions() async {
     // Subscribe to essential events for basic functionality
     await subscribeToEventCategories({'auth', 'system', 'audio'});
   }
   
+  /// Subscribes to all events, for debugging and development.
   Future<void> setupDevelopmentSubscriptions() async {
     // Subscribe to all events for debugging/development
     await subscribeToAllEvents();
   }
   
+  /// Subscribes to the minimal categories for production: `auth`, `audio` and `notifications`.
   Future<void> setupProductionSubscriptions() async {
     // Subscribe to minimal events for production efficiency
     await subscribeToEventCategories({'auth', 'audio', 'notifications'});
@@ -834,20 +856,16 @@ class WebSocketConnectionManager {
     print('[ConnectionManager] Intelligent subscriptions configured for app state: $initialAppState');
   }
   
-  /// Disposes all resources and cleanly shuts down connection manager.
-  /// 
+  /// Disposes all resources and shuts down the connection manager.
+  ///
   /// Requires:
-  ///   - Connection manager must be instantiated (state irrelevant)
-  /// 
+  ///   - the connection manager is instantiated, in any state
+  ///
   /// Ensures:
-  ///   - All timers and periodic tasks are cancelled
-  ///   - All stream subscriptions are closed
-  ///   - Message subscriptions are cleaned up
-  ///   - Underlying services are properly disposed
-  ///   - Memory leaks are prevented
-  /// 
-  /// Raises:
-  ///   - No exceptions propagate (cleanup errors are suppressed)
+  ///   - all timers and periodic tasks are cancelled
+  ///   - all stream subscriptions are closed and message subscriptions are cleaned up
+  ///   - the underlying services are disposed
+  ///   - nothing propagates; cleanup errors are suppressed
   void dispose() {
     _connectionMonitorTimer?.cancel();
     _messageSubscription?.cancel();
@@ -867,18 +885,28 @@ class WebSocketConnectionManager {
   }
 }
 
-/// Connection manager configuration
+/// Settings for [WebSocketConnectionManager].
 class ConnectionManagerConfig {
+  /// Whether messages and events are logged.
   final bool enableLogging;
+  /// Whether message analytics are collected.
   final bool enableAnalytics;
+  /// Whether the message rate limit applies.
   final bool enableRateLimit;
+  /// Whether messages are validated.
   final bool enableValidation;
+  /// Whether periodic health checks run.
   final bool enableHealthChecks;
+  /// Whether binary messages are logged.
   final bool logBinaryMessages;
+  /// Largest binary payload logged, in bytes.
   final int maxBinaryLogSize;
+  /// Message rate limit per minute.
   final int maxMessagesPerMinute;
+  /// Interval between connection checks.
   final Duration connectionCheckInterval;
   
+  /// Creates a config; the defaults suit development.
   const ConnectionManagerConfig({
     this.enableLogging = true,
     this.enableAnalytics = true,
@@ -891,10 +919,12 @@ class ConnectionManagerConfig {
     this.connectionCheckInterval = const Duration(minutes: 1),
   });
   
+  /// Builds the default config.
   factory ConnectionManagerConfig.defaultConfig() {
     return const ConnectionManagerConfig();
   }
   
+  /// Builds the production config: logging off, health checks on.
   factory ConnectionManagerConfig.production() {
     return const ConnectionManagerConfig(
       enableLogging: false,
@@ -903,6 +933,7 @@ class ConnectionManagerConfig {
     );
   }
   
+  /// Builds the development config: logging on, binary messages logged up to 200 bytes.
   factory ConnectionManagerConfig.development() {
     return const ConnectionManagerConfig(
       enableLogging: true,
@@ -911,6 +942,7 @@ class ConnectionManagerConfig {
     );
   }
   
+  /// Serializes the config with snake_case keys; the interval is in milliseconds.
   Map<String, dynamic> toJson() {
     return {
       'enable_logging': enableLogging,
@@ -926,13 +958,18 @@ class ConnectionManagerConfig {
   }
 }
 
-/// Connection state change notification
+/// One change of a WebSocket connection's state, with the time it was observed.
 class ConnectionStateChange {
+  /// State before the change.
   final WebSocketConnectionState from;
+  /// State after the change.
   final WebSocketConnectionState to;
+  /// Extra detail about the change, or null.
   final Map<String, dynamic>? details;
+  /// When the change was observed.
   final DateTime timestamp;
   
+  /// Creates a change; [timestamp] is set to now.
   ConnectionStateChange({
     required this.from,
     required this.to,
@@ -940,16 +977,21 @@ class ConnectionStateChange {
   }) : timestamp = DateTime.now();
 }
 
-/// Connection state listener function type
+/// Callback that receives each [ConnectionStateChange].
 typedef ConnectionStateListener = void Function(ConnectionStateChange change);
 
-/// Health check result
+/// Outcome of a connection health check.
 class HealthCheckResult {
+  /// True when no issues were found.
   final bool isHealthy;
+  /// Descriptions of the problems found.
   final List<String> issues;
+  /// Statistics gathered for troubleshooting.
   final Map<String, dynamic> stats;
+  /// When the check ran.
   final DateTime timestamp;
   
+  /// Creates a result; every field is required.
   const HealthCheckResult({
     required this.isHealthy,
     required this.issues,
@@ -958,13 +1000,18 @@ class HealthCheckResult {
   });
 }
 
-/// Server notification
+/// A notification pushed by the server over the WebSocket.
 class ServerNotification {
+  /// Notification type, or `unknown`.
   final String type;
+  /// Notification text.
   final String message;
+  /// Full message data, or null.
   final Map<String, dynamic>? data;
+  /// When the notification was sent.
   final DateTime timestamp;
   
+  /// Creates a notification.
   const ServerNotification({
     required this.type,
     required this.message,
@@ -972,6 +1019,7 @@ class ServerNotification {
     required this.timestamp,
   });
   
+  /// Builds a notification from a WebSocket [message].
   factory ServerNotification.fromMessage(WebSocketMessage message) {
     return ServerNotification(
       type: message.data?['type'] ?? 'unknown',

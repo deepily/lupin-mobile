@@ -1,37 +1,39 @@
-/// FcmWakeupService — S5 §3.2 token lifecycle against the S6 contract
-/// (§3.1, OSQ-6 RATIFIED-AS-AMENDED, POST-unregister amendment 2026-06-12):
+/// Registers the device's FCM token with the Lupin server and keeps it registered.
 ///
-///   - `POST /api/fcm/register-token`   `{token, platform:"android", user_email}` → `{"status":"ok"}`
-///   - `POST /api/fcm/unregister-token` `{token}`                                 → `{"status":"ok"}`
+/// The server contract is two calls:
+///   - `POST /api/fcm/register-token` with `{token, platform:"android", user_email}` answers `{"status":"ok"}`.
+///   - `POST /api/fcm/unregister-token` with `{token}` answers `{"status":"ok"}`.
 ///
-/// Registration is an IDEMPOTENT UPSERT keyed on token (parent-side
-/// durable store, AC-S6.1) — so the THREE writers are all safe to fire
-/// liberally: (1) auth-state AUTHENTICATED transition (the same signal
-/// AuthGate renders on — seam per Arnold residual #1), (2) `onTokenRefresh`
-/// (Google rotated the token), (3) EVERY WS reconnect (F-S6-S2-1(b) — the
-/// one cheap call that covers parent-restart registry loss, which
-/// `onTokenRefresh` can never see: the token didn't change and Google
-/// doesn't know Lupin restarted).
+/// Registration is an idempotent upsert keyed on the token, in the parent's durable store.
+/// That makes the three writers safe to fire liberally:
+///   1. the auth-state authenticated transition, the same signal AuthGate renders on
+///   2. `onTokenRefresh`, when Google rotated the token
+///   3. every WebSocket reconnect, the one cheap call that covers parent-restart registry loss
+///      (`onTokenRefresh` cannot see it, because the token did not change)
 ///
-/// The [dio] is the app's SHARED auth-wired instance — the JWT bearer
-/// rides for free (this service runs in the MAIN isolate only; the
-/// background handler has its own bootstrap, see `fcm_wake_chain.dart`).
+/// [dio] is the app's shared auth-wired instance, so the JWT bearer rides along.
+/// This service runs in the main isolate only. The background handler has its own bootstrap in `fcm_wake_chain.dart`.
 library;
 
 import 'dart:async';
 
 import 'package:dio/dio.dart';
 
-/// Seam over FirebaseMessaging so token-lifecycle unit tests need no
-/// platform channels (AC-S5.1/S5.2). The real adapter lives in
-/// `fcm_bootstrap.dart` behind the ENABLE_FCM flag.
+/// Seam over FirebaseMessaging, so token-lifecycle unit tests need no platform channels.
+///
+/// The real adapter lives in `fcm_bootstrap.dart`, behind the ENABLE_FCM flag.
 abstract class FcmTokenSource {
+  /// Returns the current FCM token, or null when none is available.
   Future<String?> getToken();
+  /// Emits each token Google rotates in.
   Stream<String> get onTokenRefresh;
 }
 
+/// Registers and unregisters the FCM token; see the library note.
 class FcmWakeupService {
+  /// Server path that registers a token.
   static const String registerPath   = '/api/fcm/register-token';
+  /// Server path that unregisters a token.
   static const String unregisterPath = '/api/fcm/unregister-token';
 
   final FcmTokenSource _tokens;
@@ -42,6 +44,7 @@ class FcmWakeupService {
   String? _userEmail;
   StreamSubscription<String>? _refreshSub;
 
+  /// Creates the service on [tokenSource] and [dio]; [log] defaults to print.
   FcmWakeupService( {
     required FcmTokenSource tokenSource,
     required Dio dio,
@@ -50,8 +53,9 @@ class FcmWakeupService {
         _dio    = dio,
         _log    = log ?? print;
 
-  /// Login hook (auth-state AUTHENTICATED transition): obtain the FCM
-  /// token, register it, and start listening for rotations.
+  /// Login hook: obtains the FCM token, registers it and starts listening for rotations.
+  ///
+  /// Call it on the authenticated transition.
   Future<void> onAuthenticated( String userEmail ) async {
     _userEmail = userEmail;
     final token = await _tokens.getToken();
@@ -70,8 +74,9 @@ class FcmWakeupService {
     } );
   }
 
-  /// WS-reconnect hook (F-S6-S2-1(b)): re-register the CURRENT token —
-  /// idempotent upsert; covers parent-restart registry loss.
+  /// WebSocket-reconnect hook: re-registers the current token.
+  ///
+  /// The upsert is idempotent, and the call covers parent-restart registry loss.
   Future<void> onWsReconnected() async {
     final token = _currentToken;
     final email = _userEmail;
@@ -79,8 +84,9 @@ class FcmWakeupService {
     await _register( token, email );
   }
 
-  /// Logout hook: best-effort unregister (POST shape per the OSQ-6
-  /// amendment — the DELETE-with-body proxy fragility is discharged).
+  /// Logout hook: best-effort unregister of the token.
+  ///
+  /// A failure is logged and ignored.
   Future<void> onLoggedOut() async {
     final token = _currentToken;
     _userEmail = null;
@@ -113,6 +119,7 @@ class FcmWakeupService {
     }
   }
 
+  /// Cancels the token-refresh subscription.
   Future<void> dispose() async {
     await _refreshSub?.cancel();
     _refreshSub = null;

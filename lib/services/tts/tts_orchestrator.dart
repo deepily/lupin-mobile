@@ -8,50 +8,30 @@ import 'tts_preview_truncator.dart';
 import '../websocket/websocket_service.dart';
 import 'streaming_tts_player.dart';
 
-/// FIFO queue + priority gate + urgent-preempt + quota-fallback in front
-/// of the TTS pipeline. One instance holds all in-flight + pending
-/// utterances and serializes them so only one voice ever plays at a time.
+/// Serializes speech through a FIFO queue, so only one voice plays at a time.
 ///
-/// Two entry points feed the queue (F-S1-1, USER-RULED 2026-06-12):
-///   - [enqueueIfSpeakable] — LEGACY gated path (priority policy below).
-///     Unchanged for parity; its urgent branch is pause-EXEMPT by design
-///     (F-S1-S2-2).
-///   - [enqueueAlways] — focus-surface UNGATED path: every notification
-///     enqueues and speaks regardless of priority or mute prefs (Q6).
-///     `FocusChatBloc` is the sole production caller (sole TTS dispatcher;
-///     legacy dispatch is withdrawn at the DI seam, not here).
-///
-/// Priority policy (LEGACY path only, aligned to Lupin web client
-/// `notifications.js:5421`):
-///   - `low`    / `medium` → never spoken
-///   - `high`   → spoken iff `prefs.speakOnHigh`
-///   - `urgent` → spoken iff `prefs.speakOnUrgent`;
-///                preempts any current utterance, flushes pending queue
-///
-/// Pause/hold semantics (Q6 + OSQ-5, cascade-ratified 2026-06-12):
-///   - [pause] is a HOLD, not a mute: nothing is dropped; the in-flight
-///     utterance finishes naturally (utterance-boundary — never cut
-///     mid-sentence); arrivals keep accumulating.
-///   - [resume] drains the accumulated queue in arrival order.
-///   - Pause gates ONLY the focus path and legacy non-urgent dispatch;
-///     the legacy urgent branch dispatches directly and is pause-exempt.
-///
-/// Fallback policy:
-///   - Default path: `StreamingTtsPlayer` (ElevenLabs).
-///   - On `tts_error` with `error_code == "quota_exceeded"`, disable
-///     ElevenLabs for 5 minutes; speak the current utterance and any
-///     subsequent ones via `NotificationAudioService.flutterTtsSpeak(text)`.
-///     After the window, retry ElevenLabs on the next utterance. The
-///     window clock is orthogonal to pause: pausing does not stop it, and
-///     resumed utterances route per whatever the window says at dequeue.
+/// It adds a priority gate, urgent preempt and quota fallback. Two entry points feed the queue:
+///   - [enqueueIfSpeakable] is the legacy gated path, kept for parity; its urgent branch ignores pause.
+///   - [enqueueAlways] is the focus-surface ungated path, used only by `FocusChatBloc`. It speaks every
+///     notification whatever its priority or the mute preferences. Legacy dispatch is withdrawn at the DI seam.
+/// The legacy priority policy follows the web client (`notifications.js:5421`):
+///   - low and medium are never spoken
+///   - high is spoken if `prefs.speakOnHigh`
+///   - urgent is spoken if `prefs.speakOnUrgent`, and flushes the queue
+/// [pause] is a hold, not a mute. Nothing is dropped, the in-flight utterance finishes and arrivals accumulate.
+/// [resume] drains the queue in arrival order. Pause gates the focus path and legacy non-urgent dispatch only.
+/// Fallback: `StreamingTtsPlayer` (ElevenLabs) by default. A `quota_exceeded` error disables it for 5 minutes.
+/// Utterances then go to `NotificationAudioService.flutterTtsSpeak(text)`. The window ignores pause.
+/// Design: src/docs/decisions/README.md (R-TTS-ungated-focus, R-TTS-pause-hold)
 class TtsOrchestrator {
   final StreamingTtsPlayer        _player;
   final NotificationAudioService  _fallback;
   final NotificationPreferences   _prefs;
   final WebSocketService          _ws;
-  /// User stop-list (plan 2026.08.21 §3): a matched message is MUTED on
-  /// BOTH entry points — including the ungated focus path — because a
-  /// checked pattern means "hide AND mute". Null ⇒ no filtering.
+  /// User stop-list; null means no filtering.
+  ///
+  /// A matched message is muted on both entry points, including the ungated focus path, because a checked
+  /// pattern means hide and mute.
   final NotificationStopList?     _stopList;
 
   final Queue<_Utterance> _fifo    = Queue();
@@ -60,9 +40,11 @@ class TtsOrchestrator {
 
   bool _paused = false;
 
-  /// Row a1c12c6e (Rick 2026-09-26): true while the microphone is recording.
-  /// Kept apart from [_paused] because it is not the user's toggle: the mic
-  /// releasing must never un-pause a hold the user set by hand.
+  /// True while the microphone is recording.
+  ///
+  /// Kept apart from [_paused] because it is not the user's toggle: the mic releasing must never un-pause a
+  /// hold the user set by hand.
+  /// Design: src/docs/decisions/README.md (R-TTS-capture-hold)
   bool _captureHeld = false;
 
   /// Tail of the serialized hold-transition chain (see [setCaptureHold]).
@@ -71,14 +53,11 @@ class TtsOrchestrator {
   /// Either hold stops anything new from starting.
   bool get _held => _paused || _captureHeld;
 
-  /// Utterance-epoch re-entry guard (F-S1-S3-1): incremented on every
-  /// dispatch and every preempt-stop; the completion/error handlers no-op
-  /// when the epoch they were armed under is stale. The real
-  /// `StreamingTtsPlayer.stop()` emits NOTHING on `completeStream`
-  /// (documented contract `streaming_tts_player.dart:162-165`; enforced by
-  /// the completer-identity mechanism `:169-176` + `:242-249`), so no
-  /// completion-driven double-advance exists at parity — this guard is
-  /// robustness against future player changes.
+  /// Utterance-epoch re-entry guard, incremented on every dispatch and every preempt-stop.
+  ///
+  /// The completion and error handlers do nothing when the epoch they were armed under is stale.
+  /// The real `StreamingTtsPlayer.stop()` emits nothing on `completeStream`, so no completion-driven
+  /// double-advance exists today. The guard is robustness against future player changes.
   int _epoch         = 0;
   int _inFlightEpoch = 0;
 
@@ -93,6 +72,7 @@ class TtsOrchestrator {
   StreamSubscription<TtsCompleteEvent>? _completeSub;
   StreamSubscription<TtsErrorEvent>?    _errorSub;
 
+  /// Creates an orchestrator and subscribes to the player's completion and error streams.
   TtsOrchestrator( {
     required StreamingTtsPlayer       player,
     required NotificationAudioService fallback,
@@ -108,48 +88,36 @@ class TtsOrchestrator {
     _errorSub    = _player.errorStream   .listen( _onElevenLabsError );
   }
 
-  /// True when either an utterance is in-flight (sent to backend, audio
-  /// pending) OR audio is actively playing OR a fallback `flutter_tts`
-  /// speak is in progress. Callers use this to suppress other speech.
+  /// True while an utterance is in flight, audio is playing or a fallback speak runs.
+  ///
+  /// The fallback is a `flutter_tts` speak. Callers use this to suppress other speech.
   bool get isPlaying => _current != null || _player.isPlaying;
 
+  /// Number of pending utterances, not counting the in-flight one.
   int get queueDepth => _fifo.length;
 
-  /// True while the queue is held (Q6 pause toggle). Synchronous read;
-  /// UI listens on [pausedStream] for changes.
+  /// True while the queue is held by the user's pause toggle.
+  ///
+  /// A synchronous read; the UI listens on [pausedStream] for changes.
   bool get isPaused => _paused;
 
-  /// Emits on every pause-state TRANSITION (idempotent [pause]/[resume]
-  /// calls do not re-emit), and REPLAYS THE CURRENT VALUE ON SUBSCRIBE.
+  /// Emits on every pause-state transition, and replays the current value on subscribe.
   ///
-  /// 🔴 The replay is the fix for store row `a3fdb6ad`. A plain broadcast
-  /// controller tells a new listener nothing until the next transition, so a
-  /// control mounted while speech is ALREADY held renders "not paused" over a
-  /// queue that really is held — and stays wrong until somebody toggles. The
-  /// hold is global and Quick Ask mounts its own controls, so arriving at a
-  /// screen mid-hold is the ordinary case, not an edge one.
-  ///
-  /// Every consumer seeds from the synchronous [isPaused] getter via
-  /// `initialData` today, which is why nothing is visibly broken. That is a
-  /// convention each new consumer has to know; this puts it in the stream's
-  /// own contract, where forgetting is not possible.
-  ///
-  /// ⚠️ KEEP the `initialData` seeding anyway. `initialData` paints the FIRST
-  /// frame; the replay lands one microtask later. Dropping it trades a silent
-  /// wrong state for a one-frame flash — smaller, still wrong.
-  ///
-  /// Mirrors `websocket_service.dart` `connectionStream`, which documents the
-  /// same three properties and calls out `pausedStream` by name for lacking
-  /// this one. The two are now the same shape and are worth extracting into
-  /// one helper by whoever next owns both files — not as a drive-by on a file
-  /// another seat may be holding.
+  /// Idempotent [pause] and [resume] calls do not re-emit. A plain broadcast controller tells a new listener
+  /// nothing until the next transition. A control mounted while speech is already held would then show
+  /// "not paused" over a held queue until somebody toggles. The hold is global and Quick Ask mounts its own controls, so
+  /// arriving mid-hold is the ordinary case.
+  /// Consumers also seed from the synchronous [isPaused] getter through `initialData`. Keep that.
+  /// `initialData` paints the first frame and the replay lands one microtask later. Dropping it trades
+  /// a silent wrong state for a one-frame flash.
+  /// It mirrors `connectionStream` in `websocket_service.dart`, which has the same three properties. The two are
+  /// the same shape and could share one helper, to be extracted by whoever next owns both files.
   Stream<bool> get pausedStream {
     late StreamController<bool> out;
     StreamSubscription<bool>?   sub;
     out = StreamController<bool>(
       onListen: () {
-        // Replay, then follow, in ONE synchronous block — no transition can
-        // slip between the two and be missed.
+        // Replay, then follow, in one synchronous block, so no transition can slip between the two and be missed.
         out.add( _paused );
         sub = _pausedCtrl.stream.listen( out.add, onError: out.addError );
       },
@@ -161,32 +129,25 @@ class TtsOrchestrator {
     return out.stream;
   }
 
-  /// Emits whenever the stop-list (gate 1) suppresses an item on the
-  /// [enqueueAlways] path — AC-S3.7. **The point is that suppression is
-  /// OBSERVABLE**: an early `return` with no signal is indistinguishable
-  /// from a hang, and for a `response_requested` question the server is
-  /// blocked while the user hears nothing and is shown nothing.
+  /// Emits whenever the stop-list (gate 1) suppresses an item on the [enqueueAlways] path.
   ///
-  /// Carries the matched rule so a caller can name it, and enough of the
-  /// original call to re-issue it via [speakAnyway] on one tap. The UI
-  /// claims live where a widget test can see them (AC-S4.14 / AC-S4.15);
-  /// this stream is the seam between the two halves.
-  ///
-  /// NOT emitted on the legacy [enqueueIfSpeakable] path: AC-S3.3 pins
-  /// that path byte-identical, its production dispatch is withdrawn at
-  /// the DI seam, and no answer or question the user must act on arrives
-  /// through it.
+  /// Suppression is observable: an early return with no signal looks like a hang. For a `response_requested`
+  /// question the server is blocked while the user hears and sees nothing. The event carries the matched rule,
+  /// so a caller can name it. It also carries enough of the original call to re-issue it through [speakAnyway].
+  /// It is not emitted on the legacy [enqueueIfSpeakable] path. That path is pinned byte-identical, its production
+  /// dispatch is withdrawn at the DI seam, and nothing the user must act on arrives through it.
   Stream<TtsSuppression> get suppressedStream => _suppressedCtrl.stream;
 
-  /// Emits the new depth on EVERY enqueue and dequeue (and on the
-  /// destructive clears: legacy urgent flush, [stopAll]) — the live
-  /// held-count signal for S3's paused banner (F-S1-S2-3). The
-  /// synchronous [queueDepth] getter stays for one-shot reads.
+  /// Emits the new queue depth on every enqueue and dequeue, and on the destructive clears.
+  ///
+  /// The destructive clears are the legacy urgent flush and [stopAll]. It is the live held-count signal for the
+  /// paused banner. The synchronous [queueDepth] getter stays for one-shot reads.
   Stream<int> get queueDepthStream => _depthCtrl.stream;
 
-  /// Queue viewer feed (Rick 2026-08-21, web `#tts-queue-section` parity):
-  /// the in-flight utterance first (flagged), then pending in play order.
-  /// Emits on every change (enqueue, dequeue, clear, skip, current change).
+  /// Queue viewer feed: the in-flight utterance first, flagged, then the pending ones.
+  ///
+  /// The order is play order, and it matches the web `#tts-queue-section`. It emits on every change:
+  /// enqueue, dequeue, clear, skip and a change of the current utterance.
   Stream<List<TtsQueueItem>> get queueStream => _queueCtrl.stream;
 
   /// One-shot read of what [queueStream] would emit now.
@@ -195,9 +156,10 @@ class TtsOrchestrator {
     ..._fifo.map( ( u ) => u.toItem( isCurrent: false ) ),
   ];
 
-  /// Viewer "skip": stop the in-flight utterance and advance (parks at the
-  /// pause gate when held). No-op when nothing is playing. Destructive for
-  /// THAT utterance only — the queue is untouched.
+  /// Viewer skip: stops the in-flight utterance and advances.
+  ///
+  /// It parks at the pause gate when held, and does nothing when nothing is playing. It is destructive for
+  /// that utterance only; the queue is untouched.
   Future<void> skipCurrent() async {
     if ( _current == null ) return;
     ++_epoch;   // stale-guard the stopped utterance's completion/error events
@@ -208,8 +170,9 @@ class TtsOrchestrator {
     await _tryStartNext();
   }
 
-  /// Viewer "delete": drop one PENDING utterance by id. The in-flight one
-  /// is not removable here — use [skipCurrent]. Returns whether it existed.
+  /// Viewer delete: drops one pending utterance by [id] and returns whether it existed.
+  ///
+  /// The in-flight utterance is not removable here; use [skipCurrent].
   bool removeQueued( int id ) {
     final before = _fifo.length;
     _fifo.removeWhere( ( u ) => u.id == id );
@@ -218,51 +181,47 @@ class TtsOrchestrator {
     return removed;
   }
 
-  /// Viewer "clear queue": drop every PENDING utterance; the in-flight one
-  /// finishes (use [stopAll] to cut it too).
+  /// Viewer clear queue: drops every pending utterance.
+  ///
+  /// The in-flight utterance finishes; use [stopAll] to cut it too.
   void clearQueued() {
     if ( _fifo.isEmpty ) return;
     _fifo.clear();
     _emitQueueDepth();
   }
 
-  /// HOLD the queue (Q6; OSQ-5 utterance-boundary semantics): the
-  /// in-flight utterance finishes naturally — never cut mid-sentence —
-  /// and nothing further dequeues until [resume]. Not a mute: arrivals
-  /// keep accumulating.
+  /// Holds the queue until [resume]; nothing further dequeues.
+  ///
+  /// The in-flight utterance finishes naturally and is never cut mid-sentence. This is not a mute:
+  /// arrivals keep accumulating.
   void pause() {
     if ( _paused ) return;
     _paused = true;
     _pausedCtrl.add( true );
   }
 
-  /// Row a1c12c6e: hold speech while the microphone records, so an incoming
-  /// notification neither talks over the user nor lands in the recording.
+  /// Holds speech while the microphone records, so notifications do not land in the recording.
   ///
-  /// Wired from `AsrService`'s capture transitions, so every composer that
-  /// records is covered. Taking the hold stops an utterance already playing
-  /// and puts it back at the head of the queue to replay from the start
-  /// (the same non-destructive move an urgent preempt makes). Releasing it
-  /// drains the queue in arrival order, unless the user's own [pause] is
-  /// still on. Nothing is dropped either way.
-  /// Review MED (2026-09-27): transitions are SERIALIZED. `AsrService`
-  /// reports capture start and end synchronously and the production callback
-  /// cannot await, so a release can arrive while the hold it undoes is still
-  /// awaiting `_player.stop()` / `stopFallbackSpeech()`. Unordered, the
-  /// release's `_tryStartNext()` dispatches the requeued utterance and the
-  /// late stop then cuts the speech that has only just started. Chaining each
-  /// transition onto the previous one closes that window for EVERY caller,
-  /// not only the one that remembers to await.
+  /// `AsrService`'s capture transitions call it, so every composer that records is covered.
+  /// Taking the hold requeues a playing utterance at the head; releasing drains the queue in arrival order.
+  /// Design: src/docs/decisions/README.md (R-TTS-capture-hold)
+  ///
+  /// Ensures:
+  ///   - transitions are serialized: `AsrService` reports capture start and end synchronously and the production
+  ///     callback cannot await, so a release could otherwise arrive while the hold it undoes is still awaiting
+  ///     `_player.stop()`. Its `_tryStartNext()` would dispatch the requeued utterance and the late stop would
+  ///     cut it. Chaining each transition onto the previous one closes that window for every caller
+  ///   - releasing does not drain while the user's own [pause] is on, and nothing is dropped either way
+  ///   - the flag moves synchronously, because `enqueueAlways` and `enqueueIfSpeakable` read it on the same turn
+  ///   - the returned future carries any error from the transition; the chain itself never carries one forward
   Future<void> setCaptureHold( bool capturing ) {
     if ( capturing == _captureHeld ) return _holdChain;
-    // The FLAG moves synchronously, exactly as before: `enqueueAlways` and
-    // `enqueueIfSpeakable` read it on the same turn as the mic transition.
-    // Only the stop/drain side-effects queue up behind their predecessor.
+    // The flag moves synchronously: `enqueueAlways` and `enqueueIfSpeakable` read it on the same turn as
+    // the mic transition. Only the stop and drain side-effects queue up behind their predecessor.
     _captureHeld = capturing;
     final next   = _holdChain.then( ( _ ) => _applyCaptureHold( capturing ) );
-    // The chain itself must never carry an error forward — one failed
-    // transition would wedge every later hold. The caller still sees it on
-    // `next`, and the production call site logs it.
+    // The chain itself must never carry an error forward, or one failed transition would wedge every later
+    // hold. The caller still sees it on `next`, and the production call site logs it.
     _holdChain   = next.catchError( ( Object _ ) {} );
     return next;
   }
@@ -284,10 +243,10 @@ class TtsOrchestrator {
     await _fallback.stopFallbackSpeech();
   }
 
-  /// True while the microphone hold ([setCaptureHold]) is on.
+  /// True while the microphone hold from [setCaptureHold] is on.
   bool get isCaptureHeld => _captureHeld;
 
-  /// Clear the hold and drain the accumulated queue in arrival order.
+  /// Clears the user's hold and drains the accumulated queue in arrival order.
   void resume() {
     if ( !_paused ) return;
     _paused = false;
@@ -295,26 +254,17 @@ class TtsOrchestrator {
     _tryStartNext();
   }
 
-  /// Hot path — called by `NotificationBloc._onExternalUpdate` on every
-  /// incoming notification. Gate, enqueue, dispatch if idle.
+  /// Legacy gated entry point: gates, enqueues and dispatches if idle.
   ///
-  /// LEGACY gated path — unchanged for parity (F-S1-1: the focus surface
-  /// uses [enqueueAlways]; this path's production dispatch is withdrawn
-  /// at the DI seam, the gates here stay verbatim). Its urgent branch
-  /// routes through `_preemptForUrgent()`, which dispatches DIRECTLY and
-  /// never passes the `_tryStartNext()` pause gate — the legacy path is
-  /// pause-EXEMPT BY DESIGN (F-S1-S2-2); its non-urgent dispatch-if-idle
-  /// step parks under pause like any other `_tryStartNext()` caller.
-  ///
-  /// [suppressDing] mirrors the web client: it silences the ding only,
-  /// NOT the speech (see notifications.js:5408). So we ignore it here.
-  ///
-  /// [voiceId] is the per-session persona voice ID that routes through
-  /// `StreamingTtsPlayer.speak()` to the backend `voice_id` body key (per
-  /// `Q3` of the voice-persona milestone). Bloc passes
-  /// `notification.voicePersona?.voiceId`; null routes to the server's
-  /// default Sam voice. NOT piped through to `flutter_tts` fallback per
-  /// `Q4` (different voice space — see [_speakViaFallback] comment).
+  /// `NotificationBloc._onExternalUpdate` calls it for every incoming notification. It is kept for parity,
+  /// since the focus surface uses [enqueueAlways] and its production dispatch is withdrawn at the DI seam.
+  /// Its urgent branch goes through `_preemptForUrgent()`, which dispatches directly. That never passes
+  /// the `_tryStartNext()` pause gate, so the path ignores pause. The non-urgent step parks under pause.
+  /// The [suppressDing] flag mirrors the web client: it silences the ding only, not speech, so it is ignored here.
+  /// The [voiceId] is the persona voice id routed through `StreamingTtsPlayer.speak()` to the backend `voice_id` body key.
+  /// The bloc passes `notification.voicePersona?.voiceId`, and null routes to the server's default voice.
+  /// It is not piped to the `flutter_tts` fallback, which has a different voice space (see [_speakViaFallback]).
+  /// Design: src/docs/decisions/README.md (R-TTS-voice-id)
   void enqueueIfSpeakable( {
     required String priority,
     required String message,
@@ -323,9 +273,9 @@ class TtsOrchestrator {
     TtsSender?      sender,
   } ) {
     if ( _prefs.masterMute ) return;
-    if ( _sliderAtZero ) return;                            // Rick 2026-09-18: 0% is silence
+    if ( _sliderAtZero ) return;                            // 0% is silence
     if ( _stopList?.matches( message ) ?? false ) return;   // stop-list: muted
-    if ( _systemSenderMuted( sender ) ) return;             // Rick 2026-08-21
+    if ( _systemSenderMuted( sender ) ) return;             // system senders muted as a class
     if ( !_isSpeakable( priority ) ) return;
 
     final utter = _Utterance(
@@ -338,7 +288,7 @@ class TtsOrchestrator {
     if ( priority == 'urgent' && !_captureHeld ) {
       _preemptForUrgent( utter );
     } else if ( priority == 'urgent' ) {
-      // Recording (row a1c12c6e): queue at the front instead of speaking.
+      // Recording: queue at the front instead of speaking.
       _insertBehindLeadingUrgents( utter );
     } else {
       _fifo.add( utter );
@@ -347,43 +297,22 @@ class TtsOrchestrator {
     }
   }
 
-  /// Focus-surface UNGATED entry point (F-S1-1, USER-RULED "ungated path
-  /// + sole dispatcher"): bypasses BOTH `masterMute` and the priority
-  /// gate — every notification enqueues and speaks (Q6). `FocusChatBloc`
-  /// calls this for EVERY inbound notification.
+  /// Focus-surface ungated entry point: every notification speaks.
   ///
-  /// Urgent semantics on this path (all non-destructive — nothing is
-  /// ever dropped):
-  ///   - urgent while PAUSED (F-S1-S2-1a): NO audio preempt — pause is
-  ///     absolute (OSQ-5); the urgent inserts behind any leading urgents
+  /// It bypasses `masterMute` and the priority gate. `FocusChatBloc` calls it for every inbound notification.
+  /// Urgent items are non-destructive here, and nothing is ever dropped:
+  ///   - Urgent while paused: no audio preempt, because pause is absolute. It inserts behind any leading urgents,
   ///     so the urgent block stays arrival-ordered ahead of non-urgents.
-  ///   - urgent while UNPAUSED over a NON-urgent (F-S1-2): non-destructive
-  ///     preempt — current playback stops, the interrupted utterance
-  ///     re-queues immediately behind the urgent and REPLAYS FROM THE
-  ///     START on its next turn.
-  ///   - urgent while UNPAUSED over an URGENT (F-S1-S2-1b): no preempt —
-  ///     the newcomer queues behind earlier urgents and plays when the
-  ///     in-flight one finishes.
-  /// [verbatim] (Rick's ruling 4, plan 2026.08.29 §6): the item is one the
-  /// user is EXPECTED TO ACT ON — an answer they deliberately asked for,
-  /// or a question something is blocked waiting on — so the two
-  /// *preference* gates are overridden. It skips gate 2
-  /// ([_systemSenderMuted], a class preference about persona-less chatter)
-  /// and gate 3 ([_formatSpeech]'s fraction cut, a preview preference).
-  ///
-  /// 🔴 **`verbatim` does NOT bypass gate 1, the stop-list** (OSQ3, CLOSED
-  /// by Rick 2026-08-29). Gates 2 and 3 are preferences about chatter the
-  /// user did not ask for; the stop-list is a specific "never speak this"
-  /// the user typed, and silently overriding it would be worse than the
-  /// bug. Suppression is made VISIBLE instead — see [suppressedStream].
-  /// Returns the [TtsSuppression] when gate 1 refused the item, else null.
-  ///
-  /// Same object the stream carries — one source, two deliveries: the
-  /// stream is for OBSERVERS, this return is for the CALLER that caused
-  /// it. A caller needs the object to offer speak-anyway later, and
-  /// correlating a stream event back to the item that produced it means
-  /// guessing on message text. Returning it removes the guess without
-  /// putting state in the orchestrator.
+  ///   - Urgent while unpaused over a non-urgent: playback stops and the interrupted utterance re-queues
+  ///     immediately behind the urgent. It replays from the start on its next turn.
+  ///   - Urgent while unpaused over an urgent: no preempt. The newcomer queues behind earlier urgents.
+  /// [verbatim] marks an item the user is expected to act on. It skips gate 2 ([_systemSenderMuted], a class
+  /// preference about persona-less chatter) and gate 3 ([_formatSpeech]'s fraction cut), which are preferences.
+  /// It does not bypass gate 1, the stop-list. The stop-list is a specific "never speak this" the user typed.
+  /// Suppression is made visible through [suppressedStream] instead.
+  /// Design: src/docs/decisions/README.md (R-TTS-verbatim-stoplist)
+  /// Returns the [TtsSuppression] when gate 1 refused the item, else null. The stream carries the same object:
+  /// the stream is for observers and the return is for the caller. A caller needs it to offer speak-anyway later.
   TtsSuppression? enqueueAlways( {
     required String priority,
     required String message,
@@ -393,23 +322,18 @@ class TtsOrchestrator {
     bool            verbatim = false,
     String?         senderKey,
   } ) {
-    // Gate M — the master switches (Rick 2026-09-29, row ea716d77: "off
-    // means off"). Outranks `verbatim` and the stop-list, like gate 0: an item
-    // the switches silence is neither spoken nor offered as speak-anyway.
+    // Gate M, the master switches ("off means off"): it outranks `verbatim` and the stop-list, like gate 0.
+    // An item the switches silence is neither spoken nor offered as speak-anyway.
+    // Design: src/docs/decisions/README.md (R-TTS-master-off)
     if ( _masterSilenced( priority: priority, senderKey: senderKey ) ) return null;
 
-    // Gate 0 — the slider at 0% (Rick 2026-09-18: "0% playback. That is
-    // nothing."). It outranks `verbatim` and runs before the stop-list, so a
-    // silenced item is neither spoken nor offered back as speak-anyway.
+    // Gate 0, the slider at 0%: it outranks `verbatim` and runs before the stop-list, so a silenced item
+    // is neither spoken nor offered back as speak-anyway.
     if ( _sliderAtZero ) return null;
 
-    // The ONLY gates on this path (F-S1-1 keeps it ungated by priority and
-    // master-mute) are the user's explicit "never speak this" rulings: a
-    // checked stop-list pattern, and — since 2026-08-21 — the
-    // speak-system-senders switch (persona-less senders muted as a class).
-    //
-    // Gate 1 fires FIRST and is never bypassed; it reports instead of
-    // returning silently (AC-S3.7).
+    // The only other gates on this path are the user's explicit "never speak this" rulings: a checked stop-list
+    // pattern and the speak-system-senders switch, which mutes persona-less senders as a class.
+    // Gate 1 fires first and is never bypassed; it reports instead of returning silently.
     final rule = _stopList?.matchFor( message );
     if ( rule != null ) {
       final suppression = TtsSuppression(
@@ -438,18 +362,14 @@ class TtsOrchestrator {
     return null;
   }
 
-  /// The one-tap escape from a stop-list suppression (AC-S3.7 / AC-S4.14):
-  /// speak [s] after all, exactly as it would have been spoken had no rule
-  /// matched.
+  /// One-tap escape from a stop-list suppression: speaks [s] after all.
   ///
-  /// Bypasses gates 1 AND 2 — this is an explicit user action on an item
-  /// they can see, so re-applying either would drop it a second time with
-  /// no signal, which is the very failure the notice exists to remove.
-  /// Gate 3 is honored per the ORIGINAL call's [TtsSuppression.verbatim],
-  /// so the preview-fraction preference still governs ordinary chatter the
-  /// user chose to unmute.
+  /// It speaks as if no rule had matched, and bypasses gates 1 and 2. This is an explicit user action on an item
+  /// they can see. Re-applying either gate would drop it again with no signal, which is the failure the notice
+  /// exists to remove. Gate 3 follows the original call's [TtsSuppression.verbatim], so the preview-fraction
+  /// preference still governs ordinary chatter the user chose to unmute.
   void speakAnyway( TtsSuppression s ) {
-    if ( _sliderAtZero ) return;   // 0% is silence, even on a tap (Rick 2026-09-18)
+    if ( _sliderAtZero ) return;   // 0% is silence, even on a tap
     if ( _masterSilenced( priority: s.priority, senderKey: s.senderKey ) ) return;   // off means off, even on a tap
     _enqueueUngated(
       priority : s.priority,
@@ -459,23 +379,17 @@ class TtsOrchestrator {
     );
   }
 
-  /// Replay an already-delivered utterance from the START (Rick's ruling 2;
-  /// AC-S3.4 / AC-S3.4b / AC-S3.9).
+  /// Replays an already-delivered utterance from the start.
   ///
-  /// 🔴 **Replay implies RESUME, and that is the whole point.** An urgent
-  /// enqueue only preempts when `!_paused` (see [enqueueAlways]); while
-  /// held it falls through to the queue and [_tryStartNext]'s own pause
-  /// gate, so a replay tapped while paused would enqueue and play
-  /// NOTHING. Rick's gesture is *pause, then rewind* — exactly the
-  /// sequence that is silent today — so [resume] is called first.
+  /// Replay implies resume. An urgent enqueue only preempts when not paused (see [enqueueAlways]). While held it
+  /// falls through to the queue and [_tryStartNext]'s pause gate, so a replay tapped while paused would enqueue
+  /// and play nothing. The gesture is pause, then rewind, so [resume] is called first.
+  /// Design: src/docs/decisions/README.md (R-TTS-replay-resume)
   ///
-  /// ⚠️ [resume] is GLOBAL: replaying one answer un-holds everything the
-  /// pause was holding, across every screen (AC-S3.9). Ratified and
-  /// deliberate — one hold, one truth, and nothing was ever dropped, so
-  /// the backlog drains rather than disappears.
-  ///
-  /// [sender] defaults to a NAMED sender so `isPersona` is true and the
-  /// replay survives `speakSystemSenders` being off (AC-S3.4).
+  /// [resume] is global: replaying one answer un-holds everything the pause was holding, on every screen.
+  /// That is deliberate: nothing was dropped, so the backlog drains and does not disappear.
+  /// [sender] defaults to a named sender. `isPersona` is then true, and the replay survives
+  /// `speakSystemSenders` being off.
   void replay( {
     required String message,
     String?         title,
@@ -493,8 +407,9 @@ class TtsOrchestrator {
     );
   }
 
-  /// Shared enqueue tail for the ungated path: urgent-preempt semantics,
-  /// else FIFO append, then dispatch if idle. Callers own the gates.
+  /// Shared enqueue tail for the ungated path.
+  ///
+  /// It applies urgent-preempt semantics, else appends to the FIFO, then dispatches if idle. Callers own the gates.
   void _enqueueUngated( {
     required String priority,
     required String text,
@@ -529,8 +444,9 @@ class TtsOrchestrator {
     if ( !_suppressedCtrl.isClosed ) _suppressedCtrl.add( s );
   }
 
-  /// User-invoked cancel (e.g. from a future "stop speaking" button).
-  /// The only DESTRUCTIVE queue control (Q6: pause never drops).
+  /// User-invoked cancel, for example from a future "stop speaking" button.
+  ///
+  /// It is the only destructive queue control; pause never drops.
   Future<void> stopAll() async {
     ++_epoch;   // stale-guard any in-flight completion/error events
     _fifo.clear();
@@ -541,6 +457,7 @@ class TtsOrchestrator {
     await _fallback.stopFallbackSpeech();
   }
 
+  /// Cancels the player subscriptions and closes the streams.
   Future<void> dispose() async {
     await _completeSub?.cancel();
     await _errorSub?.cancel();
@@ -552,9 +469,9 @@ class TtsOrchestrator {
 
   // ---------- private ----------
 
-  /// System-sender gate: a sender with NO persona is muted when the
-  /// `speakSystemSenders` pref is off. Unknown sender (null) counts as
-  /// system — the legacy path that passes nothing gets the same ruling.
+  /// System-sender gate: mutes a persona-less sender when `speakSystemSenders` is off.
+  ///
+  /// An unknown sender (null) counts as system, so the legacy path that passes nothing gets the same ruling.
   bool _systemSenderMuted( TtsSender? sender ) =>
       !_prefs.speakSystemSenders && !( sender?.isPersona ?? false );
 
@@ -566,26 +483,18 @@ class TtsOrchestrator {
     }
   }
 
-  /// Title is spoken whole (it is short); the MESSAGE is cut to the user's
-  /// TTS preview fraction (`prefs.ttsFraction`, slider at the top of the
-  /// focus pane -- web `#cc-tts-fraction-slider` parity, Rick 2026-08-21).
-  /// Applied HERE, at enqueue time: the queue holds text, not audio, and the
-  /// player synthesizes one utterance at a time when it reaches the head --
-  /// so the cut is upstream of any TTS spend.
+  /// The text to speak: the title whole, then the message cut to the preview fraction.
   ///
-  /// [verbatim] skips the cut ONLY (ruling 4) — the title still leads, as
-  /// it always has, because it was never the truncated part.
-  /// The TTS slider is at 0%: nothing is spoken on any path.
+  /// The fraction is `prefs.ttsFraction`, set by the slider at the top of the focus pane (web
+  /// `#cc-tts-fraction-slider` parity). The cut happens at enqueue time. The queue holds text, not audio.
+  /// The player synthesizes one utterance at a time when it reaches the head. The cut is therefore
+  /// upstream of any TTS spend. [verbatim] skips the cut only. The title still leads, because it was never the truncated part.
   bool get _sliderAtZero => TtsPreviewTruncator.silences( _prefs.ttsFraction );
 
-  /// The Focus path's master switches, same rules and urgent bypasses as
-  /// `NotificationDeliveryPolicy.allows` minus the surface and per-priority
-  /// checkboxes (Focus stays ungated by priority, F-S1-1).
+  /// The focus path's master switches, which follow `NotificationDeliveryPolicy.allows`.
   ///
-  /// Ensures:
-  ///     - true when Notifications is off, Master mute is on, the sender is
-  ///       muted (unless urgent and the mute bypass is on), or now is inside
-  ///       quiet hours (unless urgent and the quiet bypass is on)
+  /// The urgent bypasses are the same. The surface and per-priority checkboxes do not apply, because the focus
+  /// path stays ungated by priority.
   bool _masterSilenced( { required String priority, String? senderKey } ) {
     if ( !_prefs.enabled || _prefs.masterMute ) return true;
     final urgent = priority == 'urgent';
@@ -611,9 +520,9 @@ class TtsOrchestrator {
     if ( !_queueCtrl.isClosed ) _queueCtrl.add( queueSnapshot );
   }
 
-  /// Insert [utter] behind the contiguous block of urgents at the queue
-  /// front, keeping the urgent block arrival-ordered ahead of non-urgents
-  /// (F-S1-S2-1a — no `addFirst` LIFO inversion).
+  /// Inserts [utter] behind the contiguous block of urgents at the queue front.
+  ///
+  /// That keeps the urgent block arrival-ordered ahead of non-urgents, with no `addFirst` LIFO inversion.
   void _insertBehindLeadingUrgents( _Utterance utter ) {
     final items    = _fifo.toList();
     var   insertAt = 0;
@@ -627,10 +536,10 @@ class TtsOrchestrator {
     _emitQueueDepth();
   }
 
-  /// LEGACY urgent preempt — DESTRUCTIVE flush, verbatim parity pinned by
-  /// AC-S1.9: pending queue cleared, current playback stopped, urgent
-  /// dispatched immediately. Dispatches DIRECTLY (never passes the
-  /// `_tryStartNext()` pause gate) — pause-EXEMPT BY DESIGN (F-S1-S2-2).
+  /// Legacy urgent preempt: a destructive flush.
+  ///
+  /// The pending queue is cleared, current playback stops and the urgent dispatches immediately. It dispatches directly,
+  /// never passing the `_tryStartNext()` pause gate, so it is exempt from pause. Behavior is pinned to the original.
   Future<void> _preemptForUrgent( _Utterance urgent ) async {
     ++_epoch;   // preempt-stop: stale-guard the stopped utterance's events
     _fifo.clear();
@@ -642,19 +551,17 @@ class TtsOrchestrator {
     await _dispatchCurrent();
   }
 
-  /// Focus-path urgent preempt (F-S1-2) — NON-destructive: stop current
-  /// playback, re-queue the interrupted utterance at the queue front
-  /// (immediately behind the urgent), dispatch the urgent. The interrupted
-  /// utterance REPLAYS FROM THE START on its next turn —
-  /// `StreamingTtsPlayer` exposes no mid-utterance position, so
-  /// utterance-level replay is the only implementable granularity (OSQ-5).
+  /// Focus-path urgent preempt, non-destructive.
+  ///
+  /// It stops current playback, re-queues the interrupted utterance at the queue front, immediately behind the
+  /// urgent, and dispatches the urgent. The interrupted utterance replays from the start on its next turn:
+  /// `StreamingTtsPlayer` exposes no mid-utterance position, so utterance-level replay is the only granularity.
   Future<void> _preemptNonDestructive( _Utterance urgent ) async {
     final interrupted = _current;
     ++_epoch;   // preempt-stop: stale-guard the stopped utterance's events
-    // Claim the slot BEFORE the awaits (F-S1-IMPL-1): an enqueue arriving
-    // during the stop() window must see a busy orchestrator — a nulled
-    // `_current` here would let it idle-dispatch the queue head and break
-    // one-voice-at-a-time with a second concurrent speak.
+    // Claim the slot before the awaits. An enqueue arriving during the stop() window must see a busy orchestrator.
+    // A nulled `_current` here would let it idle-dispatch the queue head and break one-voice-at-a-time with a
+    // second concurrent speak.
     _current = urgent;
     _emitQueue();
     await _player.stop();
@@ -667,9 +574,8 @@ class TtsOrchestrator {
   }
 
   Future<void> _tryStartNext() async {
-    // Pause gate (F-S1-4): the single choke point — covers utterance
-    // completion, error continuation, and the dispatch-if-idle step in
-    // both enqueue entry points.
+    // Pause gate: the single choke point. It covers utterance completion, error continuation and the
+    // dispatch-if-idle step in both enqueue entry points.
     if ( _held ) return;
     if ( _current != null ) return;
     if ( _fifo.isEmpty ) return;
@@ -682,7 +588,7 @@ class TtsOrchestrator {
     final utter = _current;
     if ( utter == null ) return;
 
-    _inFlightEpoch = ++_epoch;   // arm the completion/error handlers (F-S1-S3-1)
+    _inFlightEpoch = ++_epoch;   // arm the completion/error handlers
 
     final sessionId = _ws.sessionId;
     if ( sessionId == null ) {
@@ -716,16 +622,12 @@ class TtsOrchestrator {
   }
 
   Future<void> _speakViaFallback( String text ) async {
-    // INTENTIONAL: `voiceId` is NOT piped through to the `flutter_tts`
-    // fallback per `Q4` (FROZEN 2026-05-06 — see
-    // `src/rnd/v0.1.7/2026.05.06-mobile-port-plans/voice-persona/03-decisions.md`).
-    // ElevenLabs voice IDs (`pNInz6obpgDQGcFmaJgB` etc) live in a different
-    // voice space than the on-device `flutter_tts` engine voices; mapping
-    // would require a translation table that doesn't exist and isn't part
-    // of this milestone. Fallback uses the device default voice — the
-    // narration still happens, just without the per-session persona match.
-    // Future maintainer: if you're tempted to "fix" this by passing
-    // `voiceId` here, please check the milestone docs first.
+    // Intentional: `voiceId` is not piped through to the `flutter_tts` fallback.
+    // ElevenLabs voice ids live in a different voice space than the on-device `flutter_tts` engine voices, and mapping
+    // them would need a translation table that does not exist. The fallback uses the device default voice, so the
+    // narration still happens without the per-session persona match. Before "fixing" this by passing `voiceId`
+    // here, read the decision record.
+    // Design: src/docs/decisions/README.md (R-TTS-voice-id)
     await _fallback.flutterTtsSpeak( text );
   }
 
@@ -740,7 +642,7 @@ class TtsOrchestrator {
   }
 
   void _onElevenLabsError( TtsErrorEvent event ) {
-    if ( _inFlightEpoch != _epoch ) return;   // stale event (F-S1-S3-1)
+    if ( _inFlightEpoch != _epoch ) return;   // stale event
 
     final wasCurrent = _current;
     _current = null;
@@ -750,7 +652,7 @@ class TtsOrchestrator {
       _elevenLabsDisabledUntil = DateTime.now().add( _quotaFallbackWindow );
       // Re-speak the current utterance via fallback, then continue.
       // (Under pause this re-speak still runs — it is the in-flight
-      // utterance finishing, OSQ-5; the continuation then parks at the
+      // utterance finishing; the continuation then parks at the
       // `_tryStartNext()` gate.)
       if ( wasCurrent != null ) {
         _speakViaFallback( wasCurrent.text ).then( ( _ ) => _tryStartNext() );
@@ -758,31 +660,35 @@ class TtsOrchestrator {
       }
     }
     // Any other error: skip this utterance, continue queue (parks at the
-    // pause gate when held — AC-S1.10).
+    // pause gate when held).
     _tryStartNext();
   }
 
   void _onUtteranceFinished() {
-    if ( _inFlightEpoch != _epoch ) return;   // stale event (F-S1-S3-1)
+    if ( _inFlightEpoch != _epoch ) return;   // stale event
     _current = null;
     _emitQueue();
     _tryStartNext();
   }
 }
 
-/// Who a queued utterance comes from — for the queue viewer and the
-/// system-sender gate (Rick 2026-08-21). `name`/`icon` come from the
-/// voice persona; both null ⇒ a SYSTEM sender (no persona).
+/// Who a queued utterance comes from, for the queue viewer and the system-sender gate.
+///
+/// `name` and `icon` come from the voice persona; both null means a system sender with no persona.
 class TtsSender {
+  /// Sender id, such as `email#hash`, or null.
   final String? senderId;
+  /// Persona name, or null for a system sender.
   final String? name;
+  /// Persona icon, or null for a system sender.
   final String? icon;
+  /// Creates a sender; all fields are optional.
   const TtsSender( { this.senderId, this.name, this.icon } );
 
+  /// True when the sender has a persona name or icon.
   bool get isPersona => ( name ?? '' ).isNotEmpty || ( icon ?? '' ).isNotEmpty;
 
-  /// Short label for the viewer: persona name, else the sender-id local
-  /// part before `@`/`#`, else "system".
+  /// Short label for the viewer: persona name, else sender id before `@` or `#`, else "system".
   String get label {
     final n = ( name ?? '' ).trim();
     if ( n.isNotEmpty ) return n;
@@ -791,33 +697,35 @@ class TtsSender {
   }
 }
 
-/// An item the stop-list (gate 1) refused to speak, reported rather than
-/// dropped in silence (AC-S3.7).
+/// An item the stop-list (gate 1) refused to speak, reported rather than dropped in silence.
 ///
-/// Carries [rule] — the pattern that matched, so the UI can name it
-/// ("not spoken — matches 'Done: Bash'") — plus enough of the original
-/// call for [TtsOrchestrator.speakAnyway] to re-issue it verbatim on one
-/// tap. It is a plain value: the orchestrator decides to suppress, the UI
-/// decides how to show it, and neither knows the other's shape.
+/// [rule] is the pattern that matched, so the UI can name it ("not spoken, matches 'Done: Bash'").
+/// The rest is enough of the original call for [TtsOrchestrator.speakAnyway] to re-issue it on one tap.
+/// It is a plain value: the orchestrator decides to suppress and the UI decides how to show it.
 class TtsSuppression {
+  /// Server priority: `low`, `medium`, `high` or `urgent`.
   final String    priority;
+  /// Message text as received, before any cut.
   final String    message;
+  /// Title spoken before the message, or null.
   final String?   title;
+  /// Persona voice id for ElevenLabs, or null for the default voice.
   final String?   voiceId;
+  /// Who the item came from.
   final TtsSender sender;
 
-  /// The matching stop-list pattern, verbatim as the user typed it.
+  /// The matching stop-list pattern, exactly as the user typed it.
   final String    rule;
 
-  /// Whether the suppressed call had asked for [TtsOrchestrator]'s
-  /// `verbatim` treatment — preserved so speak-anyway reproduces the
-  /// original intent rather than guessing.
+  /// Whether the suppressed call had asked for the `verbatim` treatment.
+  ///
+  /// Kept so speak-anyway reproduces the original intent and does not guess.
   final bool      verbatim;
 
-  /// `notificationSenderKey` of the suppressed item, so speak-anyway can
-  /// re-check sender mute.
+  /// `notificationSenderKey` of the suppressed item, so speak-anyway can re-check the mute.
   final String?   senderKey;
 
+  /// Creates a suppression record.
   const TtsSuppression( {
     required this.priority,
     required this.message,
@@ -830,15 +738,21 @@ class TtsSuppression {
   } );
 }
 
-/// One row of the TTS queue viewer (web `#tts-queue-section` parity):
-/// the in-flight utterance first (`isCurrent`), then the pending ones in
-/// play order. `id` is the handle for [TtsOrchestrator.removeQueued].
+/// One row of the TTS queue viewer, in play order with the in-flight utterance first.
+///
+/// It matches the web `#tts-queue-section`. `id` is the handle for [TtsOrchestrator.removeQueued].
 class TtsQueueItem {
+  /// Handle for [TtsOrchestrator.removeQueued].
   final int       id;
+  /// Server priority of the utterance.
   final String    priority;
+  /// The text that will be spoken, after the title and any cut.
   final String    text;
+  /// Who the utterance came from.
   final TtsSender sender;
+  /// True for the in-flight utterance.
   final bool      isCurrent;
+  /// Creates a row; every field is required.
   const TtsQueueItem( {
     required this.id,
     required this.priority,

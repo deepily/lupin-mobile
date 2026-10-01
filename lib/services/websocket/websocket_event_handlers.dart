@@ -5,10 +5,9 @@ import '../../core/constants/app_constants.dart';
 import 'websocket_message_router.dart';
 import 'websocket_connection_manager.dart';
 
-/// Comprehensive event handler system for WebSocket events.
-/// 
-/// Provides specialized handlers for different types of server events,
-/// with built-in UI integration, state management, and error handling.
+/// Routes WebSocket events to queue, audio, notification, system and auth handlers.
+///
+/// Each handler exposes its own stream for the UI. With error recovery on, a connection-related error triggers a reconnect.
 class WebSocketEventHandlerSystem {
   final WebSocketConnectionManager _connectionManager;
   
@@ -25,6 +24,7 @@ class WebSocketEventHandlerSystem {
   // Configuration
   final EventHandlerConfig _config;
   
+  /// Creates the system on [connectionManager] and subscribes the handlers to its streams.
   WebSocketEventHandlerSystem({
     required WebSocketConnectionManager connectionManager,
     EventHandlerConfig? config,
@@ -99,10 +99,15 @@ class WebSocketEventHandlerSystem {
   }
   
   // Getter methods for individual handlers
+  /// The queue event handler.
   QueueEventHandler get queueHandler => _queueHandler;
+  /// The audio event handler.
   AudioEventHandler get audioHandler => _audioHandler;
+  /// The notification event handler.
   NotificationEventHandler get notificationHandler => _notificationHandler;
+  /// The system event handler.
   SystemEventHandler get systemHandler => _systemHandler;
+  /// The auth event handler.
   AuthEventHandler get authHandler => _authHandler;
   
   /// Dispose all handlers and subscriptions
@@ -139,9 +144,12 @@ class QueueEventHandler {
       StreamController<QueueNotification>.broadcast();
   
   // Public streams
+  /// Emits the state of a queue each time it changes.
   Stream<QueueStateUpdate> get stateUpdates => _stateController.stream;
+  /// Emits notices about important queue changes.
   Stream<QueueNotification> get notifications => _notificationController.stream;
   
+  /// Creates a handler with [_config].
   QueueEventHandler(this._config);
   
   /// Handle queue update messages
@@ -219,6 +227,7 @@ class QueueEventHandler {
     };
   }
   
+  /// Closes the stream controllers.
   void dispose() {
     _stateController.close();
     _notificationController.close();
@@ -241,9 +250,12 @@ class AudioEventHandler {
       StreamController<AudioPlaybackEvent>.broadcast();
   
   // Public streams
+  /// Emits progress of audio streams.
   Stream<AudioStreamProgress> get streamProgress => _progressController.stream;
+  /// Emits playback lifecycle events.
   Stream<AudioPlaybackEvent> get playbackEvents => _playbackController.stream;
   
+  /// Creates a handler with [_config].
   AudioEventHandler(this._config);
   
   /// Handle audio chunk messages
@@ -387,6 +399,7 @@ class AudioEventHandler {
     };
   }
   
+  /// Closes the stream controllers.
   void dispose() {
     _progressController.close();
     _playbackController.close();
@@ -404,8 +417,10 @@ class NotificationEventHandler {
       StreamController<UserNotification>.broadcast();
   
   // Public streams
+  /// Emits notifications for the user.
   Stream<UserNotification> get notifications => _notificationController.stream;
   
+  /// Creates a handler with [_config].
   NotificationEventHandler(this._config);
   
   /// Handle notification messages
@@ -474,6 +489,7 @@ class NotificationEventHandler {
     return 'notif_${DateTime.now().millisecondsSinceEpoch}';
   }
   
+  /// Closes the stream controllers.
   void dispose() {
     _notificationController.close();
   }
@@ -493,8 +509,10 @@ class SystemEventHandler {
       StreamController<SystemStatus>.broadcast();
   
   // Public streams
+  /// Emits system status updates.
   Stream<SystemStatus> get statusUpdates => _statusController.stream;
   
+  /// Creates a handler with [_config].
   SystemEventHandler(this._config);
   
   /// Handle system messages
@@ -565,6 +583,7 @@ class SystemEventHandler {
     };
   }
   
+  /// Closes the stream controllers.
   void dispose() {
     _statusController.close();
   }
@@ -584,8 +603,10 @@ class AuthEventHandler {
       StreamController<AuthStatus>.broadcast();
   
   // Public streams
+  /// Emits authentication status changes.
   Stream<AuthStatus> get authUpdates => _authController.stream;
   
+  /// Creates a handler with [_config].
   AuthEventHandler(this._config);
   
   /// Handle auth messages
@@ -666,6 +687,7 @@ class AuthEventHandler {
     };
   }
   
+  /// Closes the stream controllers.
   void dispose() {
     _authController.close();
   }
@@ -675,14 +697,22 @@ class AuthEventHandler {
 // Configuration Classes
 // ============================================================================
 
+/// Tuning for [WebSocketEventHandlerSystem]: one config per handler, and error recovery.
 class EventHandlerConfig {
+  /// Config of the queue handler.
   final QueueEventConfig queueConfig;
+  /// Config of the audio handler.
   final AudioEventConfig audioConfig;
+  /// Config of the notification handler.
   final NotificationEventConfig notificationConfig;
+  /// Config of the system handler.
   final SystemEventConfig systemConfig;
+  /// Config of the auth handler.
   final AuthEventConfig authConfig;
+  /// Whether a connection-related error triggers a reconnect.
   final bool enableErrorRecovery;
   
+  /// Creates a config; each part defaults to its own default.
   const EventHandlerConfig({
     this.queueConfig = const QueueEventConfig(),
     this.audioConfig = const AudioEventConfig(),
@@ -692,16 +722,22 @@ class EventHandlerConfig {
     this.enableErrorRecovery = true,
   });
   
+  /// The default config.
   factory EventHandlerConfig.defaultConfig() {
     return const EventHandlerConfig();
   }
 }
 
+/// Tuning for [QueueEventHandler].
 class QueueEventConfig {
+  /// A running task older than this raises a long-running notice.
   final Duration longRunningThreshold;
+  /// Whether queue state is tracked; the handler does not read it yet.
   final bool enableStateTracking;
+  /// Whether queue notices are emitted; the handler does not read it yet.
   final bool enableNotifications;
   
+  /// Creates a config with the defaults of a five-minute threshold and both switches on.
   const QueueEventConfig({
     this.longRunningThreshold = const Duration(minutes: 5),
     this.enableStateTracking = true,
@@ -709,11 +745,16 @@ class QueueEventConfig {
   });
 }
 
+/// Tuning for [AudioEventHandler].
 class AudioEventConfig {
+  /// Whether a completed stream triggers auto-play; off by default.
   final bool enableAutoPlay;
+  /// Whether audio is buffered; the handler does not read it yet.
   final bool enableBuffering;
+  /// Largest audio buffer in bytes (1 MB by default); the handler does not read it yet.
   final int maxBufferSize;
   
+  /// Creates a config.
   const AudioEventConfig({
     this.enableAutoPlay = false,
     this.enableBuffering = true,
@@ -721,12 +762,18 @@ class AudioEventConfig {
   });
 }
 
+/// Tuning for [NotificationEventHandler].
 class NotificationEventConfig {
+  /// Whether queue notifications hide themselves.
   final bool autoHideQueueNotifications;
+  /// Whether generic notifications hide themselves.
   final bool autoHideGenericNotifications;
+  /// How long a queue notification stays before hiding.
   final Duration queueNotificationDelay;
+  /// How long a generic notification stays before hiding.
   final Duration genericNotificationDelay;
   
+  /// Creates a config with 5 s and 3 s hide delays by default.
   const NotificationEventConfig({
     this.autoHideQueueNotifications = true,
     this.autoHideGenericNotifications = true,
@@ -735,20 +782,28 @@ class NotificationEventConfig {
   });
 }
 
+/// Tuning for [SystemEventHandler].
 class SystemEventConfig {
+  /// Whether latency is tracked; the handler does not read it yet.
   final bool enableLatencyTracking;
+  /// Whether time sync is handled; the handler does not read it yet.
   final bool enableTimeSync;
   
+  /// Creates a config with both switches on.
   const SystemEventConfig({
     this.enableLatencyTracking = true,
     this.enableTimeSync = true,
   });
 }
 
+/// Tuning for [AuthEventHandler].
 class AuthEventConfig {
+  /// Whether re-authentication is automatic; the handler does not read it yet.
   final bool enableAutoReauth;
+  /// Age of a login after which re-authentication is due; the handler does not read it yet.
   final Duration reauthThreshold;
   
+  /// Creates a config with auto-reauth on and a one-hour threshold.
   const AuthEventConfig({
     this.enableAutoReauth = true,
     this.reauthThreshold = const Duration(hours: 1),
@@ -759,12 +814,18 @@ class AuthEventConfig {
 // Data Classes
 // ============================================================================
 
+/// The state of one queue after an update.
 class QueueStateUpdate {
+  /// Queue name: `todo`, `running`, `done` or `dead`.
   final String queueType;
+  /// The items in the queue.
   final List<Map<String, dynamic>> items;
+  /// Number of items in the queue.
   final int totalCount;
+  /// When the update was handled.
   final DateTime timestamp;
   
+  /// Creates an update; every field is required.
   const QueueStateUpdate({
     required this.queueType,
     required this.items,
@@ -773,12 +834,18 @@ class QueueStateUpdate {
   });
 }
 
+/// A notice about an important queue change.
 class QueueNotification {
+  /// Kind of change.
   final QueueNotificationType type;
+  /// Text for the user.
   final String message;
+  /// Queue the notice is about.
   final String queueType;
+  /// When the notice was raised.
   final DateTime timestamp;
   
+  /// Creates a notice; every field is required.
   const QueueNotification({
     required this.type,
     required this.message,
@@ -787,23 +854,37 @@ class QueueNotification {
   });
 }
 
+/// What kind of queue change a notice reports.
 enum QueueNotificationType {
+  /// A task completed.
   taskCompleted,
+  /// A task failed.
   taskFailed,
+  /// A task has run longer than the threshold.
   longRunningTask,
+  /// The queue became empty.
   queueEmpty,
+  /// The queue is full.
   queueFull,
 }
 
+/// Mutable receive state of one audio stream.
 class AudioStreamState {
+  /// TTS provider streaming the audio.
   final String provider;
+  /// Bytes received so far.
   int bytesReceived = 0;
+  /// Chunks received so far.
   int chunksReceived = 0;
+  /// Whether the stream finished.
   bool isComplete = false;
+  /// When the last chunk arrived, or null before the first.
   DateTime? lastChunkTime;
   
+  /// Creates the state for [provider].
   AudioStreamState({required this.provider});
   
+  /// Serializes the state with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
@@ -815,13 +896,20 @@ class AudioStreamState {
   }
 }
 
+/// A snapshot of an audio stream's progress.
 class AudioStreamProgress {
+  /// TTS provider streaming the audio.
   final String provider;
+  /// Bytes received so far.
   final int bytesReceived;
+  /// Chunks received so far.
   final int chunksReceived;
+  /// Whether the stream finished.
   final bool isComplete;
+  /// When the snapshot was taken.
   final DateTime timestamp;
   
+  /// Creates a snapshot; every field is required.
   const AudioStreamProgress({
     required this.provider,
     required this.bytesReceived,
@@ -831,12 +919,18 @@ class AudioStreamProgress {
   });
 }
 
+/// A playback lifecycle event for one provider.
 class AudioPlaybackEvent {
+  /// Kind of event.
   final AudioPlaybackEventType type;
+  /// TTS provider concerned.
   final String provider;
+  /// Detail text.
   final String message;
+  /// When the event happened.
   final DateTime timestamp;
   
+  /// Creates an event; every field is required.
   const AudioPlaybackEvent({
     required this.type,
     required this.provider,
@@ -845,24 +939,40 @@ class AudioPlaybackEvent {
   });
 }
 
+/// What kind of playback event happened.
 enum AudioPlaybackEventType {
+  /// Playback started.
   started,
+  /// Playback completed.
   completed,
+  /// Playback failed.
   error,
+  /// A completed stream triggered auto-play.
   autoPlayTriggered,
 }
 
+/// A notification to show the user.
 class UserNotification {
+  /// Unique id.
   final String id;
+  /// Short title.
   final String title;
+  /// Body text.
   final String message;
+  /// Kind of notification.
   final UserNotificationType type;
+  /// Importance of the notification.
   final NotificationPriority priority;
+  /// When it was created.
   final DateTime timestamp;
+  /// Whether it hides itself.
   final bool autoHide;
+  /// How long it stays before hiding.
   final Duration hideDelay;
+  /// Extra payload, or null.
   final Map<String, dynamic>? data;
   
+  /// Creates a notification.
   const UserNotification({
     required this.id,
     required this.title,
@@ -876,29 +986,48 @@ class UserNotification {
   });
 }
 
+/// What kind of user notification this is.
 enum UserNotificationType {
+  /// Information.
   info,
+  /// A warning.
   warning,
+  /// An error.
   error,
+  /// A success.
   success,
+  /// An audio event.
   audio,
+  /// A system event.
   system,
 }
 
+/// How important a user notification is.
 enum NotificationPriority {
+  /// Least important.
   low,
+  /// Normal importance.
   medium,
+  /// Important.
   high,
+  /// Most important.
   critical,
 }
 
+/// A system-level status update.
 class SystemStatus {
+  /// Kind of status.
   final SystemStatusType type;
+  /// Detail text.
   final String message;
+  /// Measured latency, or null when not a latency update.
   final Duration? latency;
+  /// Extra payload, or null.
   final Map<String, dynamic>? data;
+  /// When the status was handled.
   final DateTime timestamp;
   
+  /// Creates a status.
   const SystemStatus({
     required this.type,
     required this.message,
@@ -908,21 +1037,34 @@ class SystemStatus {
   });
 }
 
+/// What kind of system status this is.
 enum SystemStatusType {
+  /// A latency measurement.
   latencyUpdate,
+  /// A server time update.
   timeSync,
+  /// A health check result.
   healthCheck,
+  /// A connection status change.
   connectionStatus,
 }
 
+/// The current authentication state.
 class AuthStatus {
+  /// Whether the socket is authenticated.
   final bool isAuthenticated;
+  /// Authenticated user id, or null.
   final String? userId;
+  /// Session id, or null.
   final String? sessionId;
+  /// Detail text.
   final String message;
+  /// When the state was reported.
   final DateTime timestamp;
+  /// Failure description, or null.
   final String? error;
   
+  /// Creates a status.
   const AuthStatus({
     required this.isAuthenticated,
     this.userId,

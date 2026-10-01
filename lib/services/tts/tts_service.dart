@@ -7,7 +7,9 @@ import '../../core/constants/app_constants.dart';
 
 /// Available TTS providers supported by the service.
 enum TTSProvider {
+  /// OpenAI text-to-speech.
   openai,
+  /// ElevenLabs text-to-speech; the default.
   elevenlabs,
 }
 
@@ -27,8 +29,11 @@ class TTSService {
   TTSProvider _currentProvider = TTSProvider.elevenlabs;
 
   // Public getters
+  /// True once the service finished initializing.
   bool get isInitialized => _isInitialized;
+  /// Emits status words such as `generating`, `requested`, `complete` or `error: ...`.
   Stream<String> get statusStream => _statusController?.stream ?? const Stream.empty();
+  /// Emits each audio chunk as it is played.
   Stream<Uint8List> get audioChunkStream => _audioChunkController?.stream ?? const Stream.empty();
 
   /// Creates a new TTS service instance.
@@ -241,6 +246,7 @@ class TTSService {
     }
   }
 
+  /// Stops playback.
   Future<void> stopSpeaking() async {
     try {
       await _audioPlayer.stop();
@@ -251,6 +257,7 @@ class TTSService {
     }
   }
 
+  /// Pauses playback.
   Future<void> pauseSpeaking() async {
     try {
       await _audioPlayer.pause();
@@ -261,6 +268,7 @@ class TTSService {
     }
   }
 
+  /// Resumes paused playback.
   Future<void> resumeSpeaking() async {
     try {
       await _audioPlayer.resume();
@@ -271,15 +279,18 @@ class TTSService {
     }
   }
 
+  /// Sets the provider used when [speak] is given none.
   void setProvider(TTSProvider provider) {
     _currentProvider = provider;
     print('[TTS] Provider set to: ${provider.name}');
   }
 
+  /// The provider used when [speak] is given none.
   TTSProvider getCurrentProvider() {
     return _currentProvider;
   }
 
+  /// Disposes the audio player and closes the streams.
   void dispose() {
     _audioPlayer.dispose();
     _statusController?.close();

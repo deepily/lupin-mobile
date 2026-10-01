@@ -5,11 +5,9 @@ import 'websocket_connection_manager.dart';
 import 'websocket_message_router.dart';
 import '../../core/constants/app_constants.dart';
 
-/// Dynamic subscription controller that automatically adjusts event subscriptions
-/// based on application state, user behavior, and server recommendations.
-/// 
-/// Provides intelligent subscription management that optimizes bandwidth usage
-/// while ensuring critical events are never missed.
+/// Adjusts event subscriptions from app state, observed usage and server recommendations.
+///
+/// It aims to cut bandwidth while making sure critical events are never missed.
 class WebSocketDynamicSubscriptionController {
   final WebSocketConnectionManager _connectionManager;
   final WebSocketSubscriptionManager _subscriptionManager;
@@ -38,9 +36,14 @@ class WebSocketDynamicSubscriptionController {
       StreamController<SubscriptionOptimization>.broadcast();
   
   // Public streams
+  /// Emits the recommendations the adaptive analysis produces.
   Stream<SubscriptionRecommendation> get recommendations => _recommendationController.stream;
+  /// Emits the result of each optimization pass.
   Stream<SubscriptionOptimization> get optimizations => _optimizationController.stream;
   
+  /// Creates a controller on [connectionManager] and starts its periodic tasks.
+  ///
+  /// [config] defaults to [DynamicSubscriptionConfig.defaultConfig].
   WebSocketDynamicSubscriptionController({
     required WebSocketConnectionManager connectionManager,
     DynamicSubscriptionConfig? config,
@@ -50,7 +53,7 @@ class WebSocketDynamicSubscriptionController {
     _initialize();
   }
   
-  /// Initialize the dynamic subscription controller
+  /// Sets default event priorities, wires listeners and starts the periodic tasks.
   void _initialize() {
     _initializeEventPriorities();
     _setupEventListeners();
@@ -468,22 +471,36 @@ class WebSocketDynamicSubscriptionController {
   }
 }
 
-/// Configuration for dynamic subscription controller
+/// Tuning for [WebSocketDynamicSubscriptionController]: which analyses run, and thresholds.
 class DynamicSubscriptionConfig {
+  /// Whether the adaptive analysis adjusts event priorities from usage.
   final bool enableAdaptiveLearning;
+  /// Whether the periodic optimization pass runs.
   final bool enableSubscriptionOptimization;
+  /// Whether usage reports are produced.
   final bool enableUsageReporting;
+  /// Whether an optimization pass applies its changes itself.
+  ///
+  /// When false it only reports them.
   final bool enableAutoOptimization;
   
+  /// Time between adaptive analyses.
   final Duration adaptiveAnalysisInterval;
+  /// Time between optimization passes.
   final Duration optimizationInterval;
+  /// Time between usage reports.
   final Duration usageReportInterval;
+  /// An event not received for this long counts as unused.
   final Duration unusedEventThreshold;
   
+  /// Events in the last hour above which an event counts as high-frequency.
   final double highFrequencyThreshold;
+  /// Events in the last hour below which an event counts as low-frequency.
   final double lowFrequencyThreshold;
+  /// Event count above which an event counts as heavily used.
   final int heavyUsageThreshold;
   
+  /// Creates a config; the defaults match [DynamicSubscriptionConfig.defaultConfig].
   const DynamicSubscriptionConfig({
     this.enableAdaptiveLearning = true,
     this.enableSubscriptionOptimization = true,
@@ -498,10 +515,12 @@ class DynamicSubscriptionConfig {
     this.heavyUsageThreshold = 50,
   });
   
+  /// The default config: all analyses on, auto-optimization off.
   factory DynamicSubscriptionConfig.defaultConfig() {
     return const DynamicSubscriptionConfig();
   }
   
+  /// Auto-optimization on, with shorter intervals and lower frequency thresholds.
   factory DynamicSubscriptionConfig.aggressive() {
     return const DynamicSubscriptionConfig(
       enableAutoOptimization: true,
@@ -512,6 +531,7 @@ class DynamicSubscriptionConfig {
     );
   }
   
+  /// Auto-optimization off, with longer intervals and higher frequency thresholds.
   factory DynamicSubscriptionConfig.conservative() {
     return const DynamicSubscriptionConfig(
       enableAutoOptimization: false,
@@ -523,15 +543,22 @@ class DynamicSubscriptionConfig {
   }
 }
 
-/// Subscription context for contextual subscriptions
+/// A named group of event types, filters and a priority that can be switched on together.
 class SubscriptionContext {
+  /// Name of the context.
   final String name;
+  /// Event types the context subscribes to.
   final Set<String> eventTypes;
+  /// Importance of the context.
   final SubscriptionPriority priority;
+  /// Filters applied to the context's events, by name.
   final Map<String, EventFilter> filters;
+  /// Free-form data attached to the context.
   final Map<String, dynamic> metadata;
+  /// Whether the context is currently switched on.
   bool isActive;
   
+  /// Creates a context; it starts inactive.
   SubscriptionContext({
     required this.name,
     required this.eventTypes,
@@ -541,6 +568,7 @@ class SubscriptionContext {
     this.isActive = false,
   });
   
+  /// Serializes the context with snake_case keys; filters are reported only as a count.
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -553,30 +581,44 @@ class SubscriptionContext {
   }
 }
 
-/// App state for subscription adjustments
+/// App states that drive subscription adjustments.
 enum AppState {
+  /// Speech is being played.
   ttsActive,
+  /// The microphone is recording.
   voiceInput,
+  /// The user is watching the queue.
   queueMonitoring,
+  /// The app is in the background.
   background,
+  /// The app is in the foreground.
   foreground,
 }
 
-/// Subscription priority levels
+/// How important a subscription context is.
 enum SubscriptionPriority {
+  /// Least important.
   low,
+  /// Normal importance.
   medium,
+  /// Important.
   high,
+  /// Never to be dropped.
   critical,
 }
 
-/// Subscription recommendation
+/// A suggestion from the adaptive analysis, with how confident it is.
 class SubscriptionRecommendation {
+  /// Human-readable recommendations.
   final List<String> recommendations;
+  /// Which analysis produced them.
   final String analysisType;
+  /// Confidence in the recommendations, from 0 to 1.
   final double confidence;
+  /// When the analysis ran.
   final DateTime timestamp;
   
+  /// Creates a recommendation; every field is required.
   SubscriptionRecommendation({
     required this.recommendations,
     required this.analysisType,
@@ -585,13 +627,18 @@ class SubscriptionRecommendation {
   });
 }
 
-/// Subscription optimization result
+/// The outcome of one optimization pass over unused and heavily used events.
 class SubscriptionOptimization {
+  /// Human-readable descriptions of the changes found.
   final List<String> optimizations;
+  /// Number of events counted as unused.
   final int unusedEventCount;
+  /// Number of events counted as heavily used.
   final int heavyEventCount;
+  /// When the pass ran.
   final DateTime timestamp;
   
+  /// Creates a result; every field is required.
   SubscriptionOptimization({
     required this.optimizations,
     required this.unusedEventCount,
