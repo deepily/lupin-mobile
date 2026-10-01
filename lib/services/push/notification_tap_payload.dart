@@ -1,55 +1,48 @@
-/// What a posted Android notification carries so a TAP can be routed back to
-/// the message it was about (row d9bc6f6c).
+/// What a posted Android notification carries so a tap can be routed back to its message.
 ///
-/// 🔴 THIS CROSSES A PROCESS BOUNDARY, SO IT IS UNTRUSTED INPUT ON THE WAY BACK.
-/// The string is written by the background isolate (or by a build of the app
-/// that is no longer installed), stored by the Android system inside the
-/// notification's intent, and read by a FRESH main isolate — possibly days
-/// later, possibly after an app upgrade. Nothing guarantees the shape survives
-/// that trip, and [decode] is therefore total: every malformed, empty, legacy
-/// or truncated payload returns null rather than throwing. A tap that cannot be
-/// decoded degrades to a plain app launch, which is exactly the behaviour this
-/// row is replacing — so the failure mode of the fix is the status quo, never a
-/// crash on the launch path.
+/// The payload crosses a process boundary, so it is untrusted input on the way back.
+/// The background isolate, or a build no longer installed, writes the string.
+/// Android stores it in the notification's intent, and a fresh main isolate reads it, possibly days later.
+/// Nothing guarantees the shape survives, so [decode] is total: every malformed, empty, legacy or
+/// truncated payload returns null instead of throwing.
+/// A tap that cannot be decoded degrades to a plain app launch, never a crash on the launch path.
 library;
 
 import 'dart:convert';
 
-/// The two identifiers a tap needs: WHICH message, and WHOSE conversation.
+/// The two identifiers a tap needs: which message, and whose conversation.
 ///
-/// `senderId` is nullable because the wake path posts notifications that
-/// genuinely belong to nobody — the `ws_wake` fallbacks ("New activity. Open
-/// Lupin to see it.") are posted when the fetch returned nothing or failed, so
-/// there is no sender to select. Those tap through to Focus mode unchanged.
+/// `senderId` is nullable because the wake path posts notifications that belong to nobody. The `ws_wake`
+/// fallbacks ("New activity. Open Lupin to see it.") go out when the fetch returned nothing or failed, so there
+/// is no sender to select. Those tap through to Focus mode unchanged.
 class NotificationTapPayload {
-  /// The backend `NotificationItem.id` of the message that was SHOWN.
+  /// The backend `NotificationItem.id` of the message that was shown.
   ///
-  /// ⚠️ Not the id of whatever triggered the wake. `GET /api/notifications/
-  /// {user_id}/next` returns the OLDEST unplayed item, which need not be the
-  /// one that caused the push (Tiffany, 2026-09-28). The payload is built from
-  /// the item the notification actually displays, so the tap lands on the
-  /// message the user read on their lock screen.
+  /// It is not the id of whatever triggered the wake.
+  /// `GET /api/notifications/{user_id}/next` returns the oldest unplayed item, which need not have caused the push.
+  /// The payload is built from the item the notification displays, so the tap lands on the message
+  /// the user read on the lock screen.
   final String  notificationId;
 
-  /// The `sender_id` of that item — the rail's key (`email#hash`), and the
-  /// argument [FocusSenderSelected] takes. Null ⇒ nothing to select.
+  /// The `sender_id` of that item: the rail's key (`email#hash`).
+  ///
+  /// [FocusSenderSelected] takes it as its argument. Null means there is nothing to select.
   final String? senderId;
 
+  /// Creates a payload.
   const NotificationTapPayload( {
     required this.notificationId,
     this.senderId,
   } );
 
-  /// Build from the raw `notification` map the wake chain fetched, or null when
-  /// that map carries no usable id.
+  /// Builds a payload from the fetched `notification` map, or null when it has no usable id.
   ///
   /// Requires:
   ///   - item is the server's `notification` object, or null
   ///
   /// Ensures:
-  ///   - returns null when item is null or its `id` is absent/blank — a payload
-  ///     with no notification id can route nothing, and an empty-string id
-  ///     would defeat the handle-once dedupe in [NotificationTapRouter]
+  ///   - returns null when item is null or its `id` is absent or blank: a payload with no notification id can
+  ///     route nothing, and an empty-string id would defeat the handle-once dedupe in [NotificationTapRouter]
   ///   - a blank or absent `sender_id` becomes null, never the string ""
   static NotificationTapPayload? fromNotification( Map<String, dynamic>? item ) {
     if ( item == null ) return null;
@@ -62,17 +55,17 @@ class NotificationTapPayload {
     );
   }
 
-  /// The string handed to `FlutterLocalNotificationsPlugin.show( payload: … )`.
+  /// The string handed to `FlutterLocalNotificationsPlugin.show( payload: ... )`.
   String encode() => jsonEncode( <String, dynamic>{
     'notification_id' : notificationId,
     if ( senderId != null ) 'sender_id' : senderId,
   } );
 
-  /// Read a payload back off a tap. TOTAL — see the library note.
+  /// Reads a payload back off a tap; total, see the library note.
   ///
   /// Ensures:
-  ///   - null for null, empty, non-JSON, non-object, or id-less input
-  ///   - never throws, for any input whatsoever
+  ///   - null for null, empty, non-JSON, non-object or id-less input
+  ///   - never throws, for any input
   static NotificationTapPayload? decode( String? raw ) {
     if ( raw == null || raw.trim().isEmpty ) return null;
     try {
@@ -86,8 +79,7 @@ class NotificationTapPayload {
         senderId       : sender.isEmpty ? null : sender,
       );
     } catch ( _ ) {
-      // A payload written by an older build, or a truncated one. The tap still
-      // opens the app; it just cannot say where to go.
+      // A payload written by an older build, or a truncated one. The tap still opens the app; it cannot say where to go.
       return null;
     }
   }
