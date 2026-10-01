@@ -7,20 +7,15 @@ import '../domain/finished_tasks_bloc.dart';
 import '../domain/finished_tasks_event.dart';
 import '../domain/finished_tasks_state.dart';
 
-/// The Finished Tasks pane — what just got done, by whom, and why it closed.
+/// The Finished Tasks pane: what just got done, by whom, and why it closed.
 ///
-/// 🔴 THIS PANE BUILDS ITS OWN ROW AND MUST KEEP DOING SO. Its rows are
-/// `task_events`: they carry no `priority`, no `blocked`, no `accountable` and no
-/// `actions`, so the shared `TaskRow` would render ten fields this data does not
-/// have. The web source is structural about it — `finishedTasksTable.ts` imports
-/// neither `rowSchema` nor `rowDisclosure`.
-///
-/// ⚠️ IF YOU ARE HERE TO TIDY AN INCONSISTENCY, READ THIS FIRST. §7.1 of the plan
-/// says "Do not give this pane a row of its own" — that sentence is about the HOLDING
-/// AREA, under a heading called "The shared row", and taken cold it reads as a
-/// mandate to unify. It is not. The widget test asserts the absence of `TaskRow`
-/// NEGATIVELY so that unifying them fails ON the refactor rather than after it.
+/// The pane builds its own row and must keep doing so.
+/// Its rows are `task_events`, which carry no priority, blocked state, accountable
+/// manager or actions, so the shared `TaskRow` would render fields this data lacks.
+/// The rule against a row of its own applies to the Holding Area, not to this pane.
+/// The widget test asserts the absence of `TaskRow`, so unifying fails at the refactor.
 class FinishedTasksScreen extends StatefulWidget {
+  /// Creates the screen.
   const FinishedTasksScreen( { super.key } );
 
   @override
@@ -28,52 +23,25 @@ class FinishedTasksScreen extends StatefulWidget {
 }
 
 class _FinishedTasksScreenState extends State<FinishedTasksScreen> {
-  /// 🔴 THE FIRST LOAD. Without this the pane is a spinner forever.
+  /// The bloc, held rather than looked up in `dispose()`.
   ///
-  /// Found on hardware 2026-09-22 (Rick, emulator walk-through item 7): open the pane and
-  /// it shows nothing but a `CircularProgressIndicator`, and the logcat carries **no
-  /// request to `/api/tasks/events` at all** — the absence was the evidence.
-  ///
-  /// This screen was a `StatelessWidget` whose `BlocBuilder` renders a spinner for
-  /// `FinishedTasksInitial`, and every dispatcher of `FinishedTasksRequested` was
-  /// user-initiated: the refresh button, the error view's retry, pull-to-refresh, and the
-  /// window slider. Nothing fired on mount — not the screen, not the `BlocProvider`'s
-  /// `create:`, not `ServiceLocator.buildFinishedTasksBloc()`. The bloc's own class comment
-  /// lists "first load" among the triggers it refetches on; **nobody was sending it.**
-  ///
-  /// ⚠️ And 15 widget tests passed the whole time, because each one seeds the state it
-  /// wants to render. A test that hands the bloc a `FinishedTasksLoaded` proves the table
-  /// draws; it cannot prove anyone asked for the data. Same shape as the orphan panes and
-  /// the ack dispatch — the trigger and the render are different things.
-  ///
-  /// Matches the idiom the other fleet panes already use (`task_list_pane.dart:38`):
-  /// route-scoped, so it is on screen the moment it is built.
-  /// 🔴 HELD, NOT LOOKED UP IN `dispose()`. `context.read` walks the element tree, and by
-  /// the time `dispose` runs that element is being torn down — the lookup can throw, and a
-  /// throw there SKIPS the rest of dispose. The timer then outlives the pane that owned
-  /// it: a poll firing against a screen nobody is looking at, for the life of the process.
-  ///
-  /// ⚠️ That bug is almost unattributable in the field — it costs battery and data with no
-  /// visible symptom, on a pane the user has already left. Found by Chloé in Phase 1 and
-  /// carried by every pane that polls; this one joins them.
+  /// By the time `dispose` runs, the element is being torn down and `context.read` can
+  /// throw, which would skip the rest of dispose.
+  /// The timer would then outlive the pane, polling a screen nobody is looking at.
   late final FinishedTasksBloc _bloc;
 
   @override
   void initState() {
     super.initState();
     _bloc = context.read<FinishedTasksBloc>()..startPolling();
-    // 🔴 `onPaneVisible()` IS THE FIRST LOAD, AND THERE IS DELIBERATELY NO SECOND
-    // TRIGGER BESIDE IT. The mixin refreshes immediately when a pane appears, so a
-    // `FinishedTasksRequested` here as well would make mounting this pane issue TWO
-    // window fetches — six HTTP calls, since the window is one request per status — and
+    // `onPaneVisible()` is the first load, and no second trigger sits beside it.
+    // The mixin refreshes immediately when a pane appears, so a `FinishedTasksRequested`
+    // here as well would issue two window fetches, six HTTP calls, and
     // `finished_tasks_first_load_test.dart` asserts exactly one.
-    //
-    // ⚠️ THE HARDWARE BUG THAT TEST GUARDS IS STILL GUARDED. Rick's symptom was a
-    // spinner forever with no request on the wire; what fixed it was the pane asking for
-    // its own data on mount, not the particular event it asked with. It still asks —
-    // `FinishedTasksInitial` renders the spinner until the answer lands, and a FAILED
-    // first load still paints the error view, because the poll path stays silent only
-    // once there are rows to keep. See `FinishedTasksBloc._onPolled`.
+    // The pane still asks for its own data on mount: `FinishedTasksInitial` renders the
+    // spinner until the answer lands, and a failed first load paints the error view,
+    // because the poll path stays silent only once there are rows to keep.
+    // See `FinishedTasksBloc._onPolled`.
     _bloc.onPaneVisible();
   }
 
@@ -89,11 +57,9 @@ class _FinishedTasksScreenState extends State<FinishedTasksScreen> {
       appBar: AppBar(
         title: const Text( "Finished Tasks" ),
         actions: [
-          // ⚠️ A REFRESH BUTTON, NOT ONLY PULL-TO-REFRESH. `RefreshIndicator` has no
-          // semantic action that a screen reader can invoke — its only accessibility
-          // parameters describe the spinner once a refresh is already running — and
-          // the pull itself is a drag TalkBack does not pass through. Without this
-          // button, refreshing this pane is a verb a screen-reader user cannot reach.
+          // A refresh button, not only pull-to-refresh: `RefreshIndicator` has no semantic
+          // action a screen reader can invoke, and TalkBack does not pass the pull drag
+          // through, so without this button that user cannot refresh the pane.
           IconButton(
             key     : const Key( TestKeys.finishedRefreshButton ),
             tooltip : "Refresh",
@@ -139,10 +105,9 @@ class _FinishedTasksScreenState extends State<FinishedTasksScreen> {
 
 /// The three status pills.
 ///
-/// ⚠️ A PILL'S COUNT DOES NOT DEPEND ON WHETHER IT IS LIT. An unlit status withholds
-/// its rows from the table and still shows how many it has — otherwise the only way
-/// to discover that eleven rows were closed as won't-fix is to light the pill, which
-/// is the discovery this pane exists to make unnecessary.
+/// A pill's count does not depend on whether it is lit.
+/// An unlit status withholds its rows but still shows its count.
+/// The user then learns that rows were closed as won't-fix without lighting the pill.
 class _FilterPills extends StatelessWidget {
   final FinishedTasksLoaded state;
   const _FilterPills( { required this.state } );
@@ -163,11 +128,9 @@ class _FilterPills extends StatelessWidget {
             key      : Key( "${TestKeys.finishedStatusPillPrefix}$status" ),
             selected : lit,
             tooltip  : face.description,
-            // ⚠️ THE PILL'S EMOJI IS EXCLUDED FROM THE SPOKEN LABEL for the same
-            // reason the row's glyph is: the status is already in the words beside
-            // it, so TalkBack saying "white heavy check mark" is noise, not access.
-            // `semanticsLabel` replaces the whole string for a screen reader while
-            // the sighted label keeps its glyph.
+            // The emoji is left out of the spoken label because the status is already in
+            // the words beside it; `semanticsLabel` replaces the string for a screen
+            // reader while the sighted label keeps its glyph.
             label    : Text(
               "${face.icon} ${face.label} ($countLabel)",
               semanticsLabel: "${face.label}, $countLabel",
@@ -182,7 +145,7 @@ class _FilterPills extends StatelessWidget {
   }
 }
 
-/// The window control — carried, not just its default.
+/// The window slider and its day label.
 class _WindowControl extends StatelessWidget {
   final int days;
   const _WindowControl( { required this.days } );
@@ -203,8 +166,7 @@ class _WindowControl extends StatelessWidget {
               max       : kFinishedWindowMaxDays.toDouble(),
               divisions : kFinishedWindowMaxDays - kFinishedWindowMinDays,
               label     : days == 1 ? "1 day" : "$days days",
-              // Dragging previews; releasing refetches. One request per gesture
-              // rather than one per frame.
+              // Dragging previews; releasing refetches, so one request per gesture.
               onChanged      : ( v ) => bloc.add( FinishedTasksWindowPreviewed( v.round() ) ),
               onChangeEnd    : ( v ) => bloc.add( FinishedTasksWindowChanged( v.round() ) ),
             ),
@@ -224,8 +186,7 @@ class _WindowControl extends StatelessWidget {
   }
 }
 
-/// Says out loud that part of the window is missing, rather than rendering a failed
-/// fetch as "nothing was closed".
+/// Says part of the window is missing, so a failed fetch is not read as "nothing closed".
 class _PartialBanner extends StatelessWidget {
   final dynamic result;
   const _PartialBanner( { required this.result } );
@@ -248,6 +209,7 @@ class _PartialBanner extends StatelessWidget {
   }
 }
 
+/// The list of finished rows, or the empty state.
 class _RowList extends StatelessWidget {
   final List<FinishedTaskEvent> rows;
   const _RowList( { required this.rows } );
@@ -256,8 +218,7 @@ class _RowList extends StatelessWidget {
   Widget build( BuildContext context ) {
     if ( rows.isEmpty ) {
       return ListView(
-        // Must stay scrollable, or pull-to-refresh cannot be started from an
-        // empty pane — the one state a user most wants to refresh.
+        // Must stay scrollable, or pull-to-refresh cannot start from an empty pane.
         physics  : const AlwaysScrollableScrollPhysics(),
         children : const [
           SizedBox( height: 64 ),
@@ -279,30 +240,26 @@ class _RowList extends StatelessWidget {
   }
 }
 
-/// One finished-work row: **four cells**, and it is not the shared `TaskRow`.
+/// One finished-work row of four cells; it is not the shared `TaskRow`.
 ///
-/// 🔴 THE GLYPH IS A PREFIX INSIDE THE WHEN CELL AND NEVER A FIFTH COLUMN, and that
-/// is load-bearing rather than cosmetic. In a done-only view every glyph is an
-/// identical ✅ and the tempting move is to hide it until a second filter is lit —
-/// rejected, because a grid that changes shape when you click a filter makes the
-/// reader re-find every column, which costs more than one redundant character. A
-/// prefix costs no horizontal space, so the layout holds across all seven filter
-/// combinations and the row stays at four cells.
+/// The status glyph is a prefix inside the When cell and never a fifth column.
+/// Hiding it in a done-only view would make the grid change shape when a filter is lit.
+/// A prefix costs no horizontal space, so the layout holds across all seven filter
+/// combinations.
 ///
-/// ⚠️ THE GLYPH IS HIDDEN FROM THE SCREEN READER, and that is access rather than
-/// neglect: the status is already announced in words by the row's own semantic
-/// label, so speaking the emoji as well is noise. `ExcludeSemantics` is the Flutter
-/// spelling of the web's `aria-hidden`.
+/// The glyph is hidden from the screen reader because the row's semantic label already
+/// announces the status in words.
 ///
-/// ⚠️ FOUR CELLS, TWO LINES — deliberately not four across. At 360 dp, four columns
-/// plus a status prefix leave roughly 90 dp for the title, which truncates every row
-/// in this fleet to the same `[LUPIN-MOBILE] Phase…` prefix. The cell COUNT is what
-/// the source makes load-bearing (the shape must not change when a filter is lit);
-/// the arrangement is ours, and it is stable across all seven combinations.
+/// The four cells sit on two lines, not four across.
+/// At 360 dp, four columns leave roughly 90 dp for the title, which would truncate
+/// every row to the same `[LUPIN-MOBILE] Phase…` prefix.
 class FinishedTaskRow extends StatelessWidget {
+  /// The event to render.
   final FinishedTaskEvent event;
+  /// The instant ages are measured against.
   final DateTime          now;
 
+  /// Creates a row for [event], aged against [now].
   const FinishedTaskRow( {
     super.key,
     required this.event,
@@ -321,8 +278,8 @@ class FinishedTaskRow extends StatelessWidget {
         : event.reason!.trim();
 
     return Semantics(
-      // The status reaches a screen reader HERE, in words, which is what lets the
-      // glyph itself be excluded below.
+      // The status reaches a screen reader here, in words, which is what lets the glyph
+      // be excluded below.
       label: "${face?.label ?? status}, $age ago, by $who",
       child: Padding(
         padding: const EdgeInsets.symmetric( horizontal: 12, vertical: 10 ),
@@ -400,6 +357,7 @@ class FinishedTaskRow extends StatelessWidget {
   }
 }
 
+/// The full-pane error with a Retry button.
 class _ErrorView extends StatelessWidget {
   final String        message;
   final VoidCallback  onRetry;
