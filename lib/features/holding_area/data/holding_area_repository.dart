@@ -4,34 +4,20 @@ import '../../task_list/data/task_list_repository.dart' show TaskListPage;
 
 /// Reads the Holding Area page.
 ///
-/// ⚠️ WRITES ARE NOT HERE. Both task panes press the same seven verbs through the same
-/// two doors, and they live once in the shared `TaskWriteRepository`. A per-pane copy of
-/// the 202 check is the one defect that is completely silent — the pane paints a row
-/// approved that the server only queued.
-///
-/// ⚠️ THE ENVELOPE TYPE IS IMPORTED FROM THE TASK LIST RATHER THAN COPIED, and that
-/// import is the lesser of two wrongs. Reading `truncated` / `total` / `has_more` is not
-/// pane-specific, and a second reader of the same four keys is exactly how one of them
-/// later stops reading `truncated`. [TaskListPage] belongs in `fleet/data/` as shared
-/// plumbing beside the row model and the write door — it is Sam's file, so that move is
-/// reported to the manager rather than made here.
+/// Writes are not here: both task panes use the shared `TaskWriteRepository`, which
+/// checks the 202 response once. The envelope type [TaskListPage] comes from the Task
+/// List, so one reader owns the `truncated`, `total` and `has_more` keys.
 class HoldingAreaRepository {
   final Dio _dio;
 
   const HoldingAreaRepository( this._dio );
 
-  /// 🔴 `status=not_approved` IS THE WHOLE PANE. The Holding Area is not a filter over
-  /// the board — it IS the held set, work awaiting an approver. Rows here are neither
-  /// terminal nor abandoned, and the store's own query defaults exclude them, which is
-  /// why the pane has to name the status rather than inherit it.
+  /// Request path for the held set: `status=not_approved`, 500 rows, terse.
   ///
-  /// `char_budget=0` and `terse=true` carry over from the Task List for the reason
-  /// measured there: dropping `char_budget=0` does not trim rows gently, it applies the
-  /// default 100,000-char budget against ~4,242-char rows and admits about 23 of 500.
-  /// `terse=true` is the lever that makes rows SMALLER rather than FEWER.
-  ///
-  /// ⚠️ `hide_parked` is deliberately absent. It is meaningful only when the query spans
-  /// statuses; here the status is pinned and a parked row is by definition not held.
+  /// The pane is the held set, not a filter over the board. The store's default query
+  /// excludes held rows, so the status is named here. `char_budget=0` is needed: the
+  /// default 100,000-character budget admits about 23 of 500 rows of ~4,242 characters. `terse=true` makes rows smaller instead of fewer. `hide_parked` is
+  /// absent because the status is pinned and a parked row is not held.
   static const path =
       '/api/tasks?limit=500&unscoped_audit=true&status=not_approved'
       '&char_budget=0&terse=true';
