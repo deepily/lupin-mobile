@@ -5,37 +5,29 @@ import '../data/task_verbs.dart';
 import '../data/task_write_repository.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
-/// The ONE reason surface for per-row verbs. Task List and Holding Area both open this
-/// and get the same sheet.
+/// The one reason sheet for per-row verbs, shared by Task List and Holding Area.
 ///
-/// 🔴 THERE IS NO PANE PARAMETER, FOR THE SAME REASON `TaskRow` HAS NONE. "Build one
-/// widget" is an instruction, not a mechanism: `VerbReasonSheet( verb: v, pane:
-/// Pane.holdingArea )` satisfies every word of it and is one enum case away from two
-/// divergent sheets. This constructor takes a verb and a row title and nothing that can
-/// tell it which pane opened it, so drift requires changing the constructor — which is
-/// visible in review.
+/// It has no pane parameter, for the reason `TaskRow` has none. The constructor takes a
+/// verb and a row title and nothing that says which pane opened it. Drift then needs a
+/// constructor change, which shows up in review. It is a bottom sheet, not a dialog,
+/// opened from the row's verb with the reason box and the verb's own complaint text. It
+/// carries the row title, so the row being closed is on screen with the justification.
+/// The Holding Area batch box is not a modal, because the operator reads the group while
+/// typing.
 ///
-/// 🔴 A SHEET, NOT A DIALOG, AND THAT IS §3a's PROPOSAL RATHER THAN A PREFERENCE.
-/// The gap analysis asked where a phone user types a per-row reason and answered: *"a
-/// bottom sheet opened from the row's verb, with the reason box and each verb's own
-/// complaint text."* The batch box on the Holding Area is deliberately NOT a modal for a
-/// reason that does not carry here — the operator must read the group WHILE typing — but
-/// a per-row reason names ONE row, and the sheet carries that row's title at the top so
-/// the thing being closed is on screen with the justification for closing it.
-///
-/// ⚠️ THE SHEET IS NOT THE CONFIRM. The terminal verbs still arm in the row before this
-/// ever opens (§7.4), with the live-region announcement that makes arming mean something
-/// under TalkBack. This sheet is where the operator supplies what the verb needs and
-/// sees what will be recorded; it is not a second-guessing step bolted on in front of it.
+/// The sheet is not the confirm. Terminal verbs arm in the row, with a live-region
+/// announcement for TalkBack, before this opens. The sheet is where the operator supplies
+/// what the verb needs and sees what will be recorded.
 class VerbReasonSheet extends StatefulWidget {
-  /// The verb being filled in. Data, not a discriminator — both panes pass verb names
-  /// from the same table.
+  /// The verb being filled in; data from the shared verb table, not a pane discriminator.
   final VerbNeeds needs;
 
-  /// The title of the row this verb will be applied to, so the operator can see WHAT
-  /// they are about to park or close while they justify it.
+  /// The title of the row this verb applies to, shown above the reason box.
+  ///
+  /// It tells the operator which row they are about to park or close.
   final String rowTitle;
 
+  /// Creates the sheet for one verb on one row.
   const VerbReasonSheet( {
     super.key,
     required this.needs,
@@ -51,9 +43,8 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
 
   DateTime? _chaseTs;
 
-  /// The complaints currently shown. Null until the operator presses Submit — a sheet
-  /// that opened already complaining would be scolding someone who has not done anything
-  /// yet.
+  // The complaints currently shown; null until the operator presses Submit, so the sheet
+  // does not open already complaining.
   String? _reasonError;
   String? _dateError;
 
@@ -65,9 +56,9 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
 
   @override
   Widget build( BuildContext context ) {
-    // ⚠️ `viewInsets`, OR THE KEYBOARD EATS THE SUBMIT BUTTON. A bottom sheet with a text
-    // field sits exactly where the soft keyboard opens, and at 360×800 the control the
-    // operator must reach next is the first thing to go under it.
+    // The `viewInsets` padding keeps the soft keyboard off the Submit button. A bottom
+    // sheet with a text field sits where the keyboard opens, and at 360x800 the next
+    // control the operator must reach is the first to go under it.
     return Padding(
       key     : const Key( TestKeys.reasonSheet ),
       padding : EdgeInsets.only(
@@ -94,12 +85,9 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
     );
   }
 
-  /// The verb and the row it will be applied to, in one sentence.
-  ///
-  /// ⚠️ THE ROW TITLE IS HERE BECAUSE THE SHEET COVERS THE ROW. A modal that hides the
-  /// thing it is about asks the operator to justify a decision from memory, and on a
-  /// grouped board every title shares a prefix — "the third one down" is not an
-  /// identification.
+  // The verb and the row it applies to. The sheet covers the row, so the title is shown
+  // here; otherwise the operator would justify a decision from memory, and on a grouped
+  // board every title shares a prefix.
   Widget _title( BuildContext context ) {
     return Column(
       crossAxisAlignment : CrossAxisAlignment.start,
@@ -119,18 +107,11 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
     );
   }
 
-  /// The reason box, wearing THIS verb's prompt and THIS verb's complaint.
-  ///
-  /// 🔴 ONE BOX, SEVEN VERBS, AND NOT ONE SENTENCE BETWEEN THEM. *"'A reason is required'
-  /// is true of four of them and teaches none of them"* (`taskVerbs.ts:160-165`). The
-  /// hint comes from the verb's own table entry and the complaint from
-  /// [verbReasonComplaint], so adding verb number eight cannot accidentally inherit
-  /// park's wording.
-  ///
-  /// ⚠️ `errorText` RATHER THAN A KEYED `Text` BELOW THE FIELD — the same call the
-  /// Holding Area's batch box made. It is what Flutter wires into the field's OWN
-  /// semantics, so TalkBack reads the complaint as part of the box instead of as a stray
-  /// sentence the user has to go find.
+  // The reason box with this verb's prompt and complaint. The hint comes from the verb's
+  // table entry and the complaint from [verbReasonComplaint], so a new verb cannot
+  // inherit park's wording. The complaint is `errorText`, not a separate `Text` below the
+  // field, so Flutter wires it into the field's own semantics and TalkBack reads it as
+  // part of the box.
   Widget _reasonBox( BuildContext context ) {
     return DictationTextField(
       fieldKey   : const Key( TestKeys.reasonSheetReason ),
@@ -139,8 +120,8 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
       minLines   : 2,
       maxLines   : 4,
       onChanged  : ( _ ) {
-        // Clear the complaint the moment the operator answers it. A refusal that stays
-        // on screen while the box now holds a reason is a refusal that is lying.
+        // Clear the complaint as soon as the operator answers it; a stale refusal would
+        // be wrong.
         if ( _reasonError != null ) setState( () => _reasonError = null );
       },
       decoration : InputDecoration(
@@ -153,13 +134,9 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
     );
   }
 
-  /// What the sheet says for the verbs that ask for no reason.
-  ///
-  /// 🔴 THIS IS THE `fixed` BRANCH, AND IT IS THE HALF OF THIS SHEET THAT IS NOT A TEXT
-  /// BOX. Fixed sends `receipt_refs.operator_attestation` and no reason at all; the
-  /// server refuses a `->done` with an empty receipt and then REPLACES the string with
-  /// the validated login identity. So there is nothing for the operator to type — but
-  /// there IS something for them to read, because this press closes the row for good.
+  // What the sheet says for verbs that ask for no reason, chiefly `fixed`. It sends
+  // `receipt_refs.operator_attestation` and no reason, so there is nothing to type, but
+  // the operator still reads what will be recorded because the press closes the row.
   Widget _noReasonNotice( BuildContext context ) {
     final terminal = widget.needs.terminal;
     return Text(
@@ -172,17 +149,10 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
     );
   }
 
-  /// The chase / triage date, for the two verbs that are BOUNDED.
-  ///
-  /// 🔴 A PARK WITHOUT A DATE IS NOT A PARK WITH NO DATE — IT IS A PARK THAT CLEARS ONE.
-  /// `TaskVerb.park` always puts `next_chase_ts` in the body, and §4.3 note 2 is explicit
-  /// that *"'send nothing' and 'send null' are different requests and only one of them
-  /// clears"*. A sheet with no date field would therefore send the CLEARING value on
-  /// every park, silently, which is why this is required rather than optional.
-  ///
-  /// ⚠️ THE LABEL NAMES THE QUESTION, NOT THE FIELD. Rick on the web control: *"I really
-  /// have no idea what the date chooser is for."* Park asks "Chase me again on"; demote
-  /// asks "Triage this by".
+  // The chase or triage date, for the two bounded verbs. It is required, not optional:
+  // `TaskVerb.park` always puts `next_chase_ts` in the body, and a null there clears the
+  // date, so a sheet without a date field would clear it on every park. The label names
+  // the question: park asks "Chase me again on" and demote asks "Triage this by".
   Widget _dateField( BuildContext context ) {
     final chosen = _chaseTs;
     return Column(
@@ -204,9 +174,9 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
         if ( _dateError != null )
           Padding(
             padding : const EdgeInsets.only( top: 4 ),
-            // A live region: the complaint appears in response to a press, and a TalkBack
-            // user whose focus is still on Submit is told nothing otherwise. The reason
-            // box gets this for free through `errorText`; a button does not.
+            // A live region: the complaint appears after a press, and a TalkBack user whose
+            // focus is still on Submit would otherwise hear nothing. The reason box gets
+            // this through `errorText`; a button does not.
             child   : Semantics(
               liveRegion : true,
               child      : Text(
@@ -220,7 +190,7 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
     );
   }
 
-  /// `yyyy-mm-dd`, which is unambiguous in every locale this app can land in.
+  // `yyyy-mm-dd`, which is unambiguous in every locale.
   static String _dayLabel( DateTime d ) =>
       '${d.year.toString().padLeft( 4, '0' )}-'
       '${d.month.toString().padLeft( 2, '0' )}-'
@@ -231,8 +201,7 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
     final picked = await showDatePicker(
       context     : context,
       initialDate : _chaseTs ?? now.add( const Duration( days: 7 ) ),
-      // A chase date in the past is a chase that has already lapsed, which is the one
-      // thing a bounded park must not be.
+      // A chase date in the past has already lapsed, which a bounded park must not be.
       firstDate   : now,
       lastDate    : now.add( const Duration( days: 365 * 2 ) ),
     );
@@ -259,24 +228,22 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
           style     : FilledButton.styleFrom(
             minimumSize : const Size( 0, kMinInteractiveDimension ),
           ),
-          // The verb, not "OK". The button still reads correctly when it is the only
-          // thing focus lands on.
+          // The verb, not "OK", so the button reads correctly when it is the only thing
+          // focus lands on.
           child : Text( widget.needs.label ),
         ),
       ],
     );
   }
 
-  /// Refuse client-side, then build the payload.
+  /// Refuses a blank required field on the client, then pops the built verb.
   ///
-  /// 🔴 THE CLIENT-SIDE REFUSAL EXISTS SO THE SERVER DOES NOT HAVE TO SAY IT. The web's
-  /// reasoning, carried: the alternative is a 422 the operator must read to learn a
-  /// single fact they could have been told before the round trip — and on a phone that
+  /// The client-side refusal saves a 422 round trip to learn one fact. On a phone that
   /// round trip may not come back at all.
   ///
   /// Ensures:
-  ///   - a blank required reason pops nothing and shows THIS verb's complaint
-  ///   - a missing required date pops nothing and shows THIS verb's date complaint
+  ///   - a blank required reason pops nothing and shows this verb's complaint
+  ///   - a missing required date pops nothing and shows this verb's date complaint
   ///   - otherwise pops the built [TaskVerb], reason trimmed
   void _submit() {
     final needs = widget.needs;
@@ -299,12 +266,11 @@ class _VerbReasonSheetState extends State<VerbReasonSheet> {
   }
 }
 
-/// Open the shared sheet for [needs] and return the verb the operator built, or null if
-/// they backed out.
+/// Opens the shared sheet for [needs]; returns the verb the operator built, or null.
 ///
-/// ⚠️ `isScrollControlled: true` OR THE KEYBOARD COVERS THE SHEET. The default bottom
-/// sheet is capped at half the screen and does not move for `viewInsets`, so at 360×800
-/// the reason box and the Submit button end up under the soft keyboard together.
+/// It sets `isScrollControlled: true`. The default bottom sheet is capped at half the
+/// screen and ignores `viewInsets`. At 360x800 the reason box and Submit would end up
+/// under the soft keyboard.
 ///
 /// Requires:
 ///   - needs is a verb whose [VerbNeeds.needsSheet] is true

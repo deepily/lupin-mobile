@@ -2,17 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 
-/// The two FIELD-door controls: priority and owner.
+/// The two field-door controls: priority and owner.
 ///
-/// 🔴 THESE ARE THE OTHER DOOR, AND CONFUSING THEM IS §4.2's NAMED FAILURE. Priority and
-/// owner go through `PATCH /api/tasks/{id}` — exactly two keys, and `status` is not one
-/// of them. A builder implementing a status change here would get a field door that
-/// SILENTLY IGNORES the unknown key: a control that looks wired and changes nothing.
-/// `TaskWriteRepository.patchFields` physically cannot send `status`, and this widget
-/// physically cannot ask it to — it reports a priority and an owner, never a status.
-///
-/// ⚠️ NO PANE PARAMETER, for the third time in this feature and for the same reason. The
-/// roster and the current values arrive as DATA; both task panes may pass the same ones.
+/// Both go through `PATCH /api/tasks/{id}`, which addresses exactly two keys and not
+/// `status`; a status change sent there is silently ignored. This widget reports a
+/// priority and an owner, never a status, and
+/// `TaskWriteRepository.patchFields` cannot send one. It takes no pane parameter: the
+/// roster and the current values arrive as data, so both task panes may pass the same ones.
 class TaskFieldControls extends StatefulWidget {
   /// The row's painted priority, or null when it carries none.
   final String? priority;
@@ -20,13 +16,15 @@ class TaskFieldControls extends StatefulWidget {
   /// The row's painted owner, or null when unassigned.
   final String? ownerPersona;
 
-  /// The personas this row may be reassigned to. Empty is a legitimate state — see
-  /// `activeReassignTargets`: the phone cannot always see the fleet.
+  /// The personas this row may be reassigned to; empty when the phone cannot see the fleet.
+  ///
+  /// See `activeReassignTargets`.
   final List<String> ownerOptions;
 
-  /// Fired when the operator commits a change. Exactly one of the two is non-null.
+  /// Called when the operator commits a change; exactly one argument is non-null.
   final void Function( { String? priority, String? ownerPersona } ) onFieldChanged;
 
+  /// Creates the controls for one row.
   const TaskFieldControls( {
     super.key,
     required this.onFieldChanged,
@@ -39,23 +37,21 @@ class TaskFieldControls extends StatefulWidget {
   State<TaskFieldControls> createState() => _TaskFieldControlsState();
 }
 
-/// The priorities an operator may choose, in rank order (`taskListModel.ts:159`).
+/// The priorities an operator may choose, in rank order.
 const List<String> kEditablePriorities = <String>[ 'P0', 'P1', 'P2', 'P3', 'P4', 'P5' ];
 
 class _TaskFieldControlsState extends State<TaskFieldControls> {
-  /// The priority the operator has CHOSEN but not yet sent. Null means "same as
-  /// painted".
+  // The priority the operator has chosen but not yet sent; null means same as painted.
   String? _stagedPriority;
 
   @override
   void didUpdateWidget( TaskFieldControls old ) {
     super.didUpdateWidget( old );
-    // 🔴 A POLL THAT REPAINTS THE ROW MUST NOT STRAND A STAGED EDIT AS A PHANTOM. If the
-    // painted priority has caught up with what the operator staged — their own Update
-    // landed, or somebody else made the same change — the staging is spent and Update
-    // goes back to disabled. Comparing against the PAINTED value is the web's rule
-    // (`data-original`) for exactly this reason: the row survives the repaint, in-widget
-    // memory of "what it used to be" does not.
+    // A poll that repaints the row must not strand a staged edit. When the painted
+    // priority catches up with the staged one, because the operator's own Update landed or
+    // someone made the same change, the staging is spent and Update goes disabled again.
+    // The comparison is against the painted value, because the row survives a repaint and
+    // in-widget memory of the old value does not.
     if ( old.priority != widget.priority && _stagedPriority == widget.priority ) {
       _stagedPriority = null;
     }
@@ -63,18 +59,16 @@ class _TaskFieldControlsState extends State<TaskFieldControls> {
 
   String? get _chosenPriority => _stagedPriority ?? widget.priority;
 
-  /// 🔴 UPDATE STAYS DISABLED UNTIL THE VALUE ACTUALLY MOVES. Rick, on the classic page:
-  /// *"the update button would only be enabled if I had chosen a different value to
-  /// update."* A live Update on an untouched row is a button whose press asserts nothing
-  /// and still burns a round trip — and, on a metered phone connection, one the operator
-  /// paid for.
+  // The Update button stays disabled until the chosen value differs from the painted one,
+  // because a live button on an untouched row would assert nothing and still cost a round
+  // trip. Design: src/docs/decisions/README.md (R-TF-update-gated)
   bool get _priorityMoved =>
       _stagedPriority != null && _stagedPriority != widget.priority;
 
   @override
   Widget build( BuildContext context ) {
-    // `Wrap`, not `Row`. At 360 dp two dropdowns and a button do not share a line with
-    // 16 dp gutters, and an overflow here clips the control rather than wrapping it.
+    // A `Wrap`, not a `Row`: at 360 dp two dropdowns and a button do not share a line with
+    // 16 dp gutters, and an overflow would clip the control instead of wrapping it.
     return Wrap(
       spacing    : 12,
       runSpacing : 8,
@@ -87,12 +81,9 @@ class _TaskFieldControlsState extends State<TaskFieldControls> {
     );
   }
 
-  /// The priority choices: the editable ranks, plus the row's own value when the store
-  /// holds something this list does not know.
-  ///
-  /// ⚠️ AN UNRECOGNISED STORED PRIORITY GETS ITS OWN ENTRY RATHER THAN BEING SHOWN AS
-  /// SOMETHING IT IS NOT. A row carrying `P9` rendered as `P0` is a lie the operator
-  /// cannot see through, and pressing Update would then "correct" a value nobody chose.
+  // The editable ranks, plus the row's own value when the store holds one this list does
+  // not know. An unrecognised priority such as `P9` gets its own entry; showing it as `P0`
+  // would mislead the operator, and Update would then change a value nobody chose.
   List<String> get _priorityChoices {
     final current = ( widget.priority ?? '' ).trim();
     if ( current.isEmpty || kEditablePriorities.contains( current ) ) {
@@ -106,8 +97,6 @@ class _TaskFieldControlsState extends State<TaskFieldControls> {
       key   : const Key( TestKeys.taskFieldPriority ),
       value : _chosenPriority,
       hint  : const Text( '—' ),
-      // The accessible name, because a bare dropdown announces only its value and a row
-      // carries two of them.
       items : _priorityChoices
           .map( ( p ) => DropdownMenuItem<String>( value: p, child: Text( p ) ) )
           .toList( growable: false ),
@@ -125,10 +114,9 @@ class _TaskFieldControlsState extends State<TaskFieldControls> {
         onPressed : _priorityMoved
             ? () {
                 widget.onFieldChanged( priority: _stagedPriority );
-                // The staging is spent. It is NOT cleared to null here — the poll that
-                // follows the write repaints the row, and `didUpdateWidget` retires it
-                // once the server agrees. Clearing it now would snap the dropdown back
-                // to the old value for the second or two before the refetch lands.
+                // The staging is not cleared here. The poll after the write repaints the
+                // row and `didUpdateWidget` retires it once the server agrees. Clearing it
+                // now would snap the dropdown back to the old value until the refetch lands.
               }
             : null,
         style : OutlinedButton.styleFrom(
@@ -139,18 +127,11 @@ class _TaskFieldControlsState extends State<TaskFieldControls> {
     );
   }
 
-  /// The owner control.
-  ///
-  /// 🔴 OWNER COMMITS ON CHANGE; PRIORITY DOES NOT. That asymmetry is the web's, carried
-  /// rather than tidied (`taskRowController.ts:218-222` — *"The owner select is NOT
-  /// staged: it has no Update button on either client's row, and commits on change as it
-  /// always has."*). Normalising the two would make this client disagree with every
-  /// other one about what a control does.
-  ///
-  /// ⚠️ THE CURRENT OWNER IS ALWAYS AN ENTRY, EVEN WHEN THEY ARE NOT A LIVE TARGET. A
-  /// dropdown whose value is missing from its own items throws in Flutter, and the case
-  /// is ordinary rather than exotic: a row owned by a persona who has since gone offline.
-  /// So the select reflects reality first and offers the roster second.
+  // The owner control. Owner commits on change and priority does not; the web client has
+  // the same asymmetry, and making them match would change what a control does here.
+  // The current owner is always an entry, even when not a live target, because a Flutter
+  // dropdown whose value is missing from its items throws, and a row owned by a persona
+  // who has gone offline is ordinary.
   Widget _ownerDropdown( BuildContext context ) {
     final current = ( widget.ownerPersona ?? '' ).trim();
     final options = <String>[
@@ -165,9 +146,7 @@ class _TaskFieldControlsState extends State<TaskFieldControls> {
       items : options
           .map( ( p ) => DropdownMenuItem<String>( value: p, child: Text( p ) ) )
           .toList( growable: false ),
-      // A dropdown with nothing to move to is disabled rather than an empty menu that
-      // opens onto nothing — which reads as broken rather than as "the phone cannot see
-      // the fleet".
+      // With nothing to move to the dropdown is disabled; an empty menu would read as broken.
       onChanged : options.length < 2
           ? null
           : ( chosen ) {
