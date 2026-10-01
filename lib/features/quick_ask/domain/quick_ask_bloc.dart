@@ -27,60 +27,68 @@ class _BufferedFrame {
 
 /// Quick Ask's state engine.
 ///
-/// A DEDICATED bloc, not an extension of `QueueBloc`: `QueueBloc`'s state is a
-/// single-slot discriminated union whose members clobber each other, and its
-/// `_onExternalUpdate` early-returns unless the dashboard is loaded — an
-/// in-flight ask would be wiped by any dashboard refresh.
+/// It is a dedicated bloc, not an extension of `QueueBloc`.
+/// `QueueBloc`'s state is a single-slot union whose members clobber each other.
+/// Its external-update handler returns early unless the dashboard is loaded,
+/// so any dashboard refresh would wipe an in-flight ask.
 ///
-/// Correlation is a rank-monotonic reducer with a pre-attribution buffer and a
-/// silence watchdog. The three mechanisms answer three different findings and
-/// are kept separate on purpose.
+/// Correlation is a rank-monotonic reducer with a pre-attribution buffer and a silence watchdog.
+/// The three mechanisms answer three different problems and are kept separate.
 class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
-  /// The `type` discriminator carried by an in-flight milestone
-  /// (`notification_models.dart:56` — task | progress | alert | custom | ...).
-  /// Named rather than inlined because the belt channel's correctness turns
-  /// on it: see the guard in [_onNotification] and bug 1829eb26.
+  /// The `type` of a notification that reports an in-flight milestone.
+  ///
+  /// It is named rather than inlined because the completion channel's correctness turns on it.
+  /// See the guard in [_onNotification].
   static const String progressNotificationType = 'progress';
 
   final QueueRepository  _repo;
   final AsrService       _asr;
   final WebSocketService _ws;
 
-  /// The OTHER door. Door C's confirm is a notification, so it is answered on
-  /// `POST /api/notify/response` — never on `/api/v2/resume`, which belongs to
-  /// the interview. Two doors, two repositories, one screen (AC-S4.6).
+  /// The second channel: a near-match confirm is a notification.
+  ///
+  /// It is answered on `POST /api/notify/response`, never on `/api/v2/resume`, which belongs
+  /// to the interview. Two endpoints, two repositories, one screen.
   final NotificationRepository _notifications;
 
-  /// Our identity, used as the buffer's insert-time filter keys. `userEmail`
-  /// is the one that CLOSES the admin fan-out hole rather than narrowing it.
+  /// The user's email, one of the buffer's insert-time filter keys.
+  ///
+  /// It closes the admin fan-out hole rather than narrowing it.
   final String? _userEmail;
 
-  // ── Buffer sizing ────────────────────────────────────────────────────────
-  // A memory bound, NOT the correctness mechanism. After insert-time filtering
-  // our own job contributes at most three frames, so the cap is slack.
+  /// The most frames the pre-attribution buffer holds.
+  ///
+  /// It is a memory bound, not the correctness mechanism.
+  /// After insert-time filtering the ask's own job contributes at most three frames, so the cap is slack.
   static const int      bufferCap = 32;
+
+  /// How long a buffered frame stays eligible for replay.
   static const Duration bufferTtl = Duration( seconds: 60 );
 
-  // ── Watchdog cadence ─────────────────────────────────────────────────────
-  /// Probe cadence, not a verdict deadline. A probe is one cheap queue listing
-  /// whose worst outcome is a single strike and whose best outcome resets the
-  /// ladder, so probing early is nearly free. It sits BELOW the server's own
-  /// 120s stall threshold deliberately — we want to notice a silent job sooner
-  /// than the server does.
+  /// The watchdog's probe delays, in order.
+  ///
+  /// This is a probe cadence, not a verdict deadline.
+  /// A probe is one cheap queue listing.
+  /// Its worst outcome is a single strike and its best outcome resets the ladder,
+  /// so probing early is nearly free.
+  /// The ladder starts below the server's own 120 s stall threshold to notice a silent job
+  /// sooner than the server does.
   static const List<Duration> watchdogLadder = [
     Duration( seconds: 45 ),
     Duration( seconds: 90 ),
     Duration( seconds: 180 ),
   ];
 
-  /// `lost` is floored by the SERVER's own patience, not by a number we picked:
-  /// `cj flow consumer stall threshold seconds` (`lupin-app.ini:1061`). Never
-  /// tell the user a job is lost while the server still considers it healthy.
+  /// The server's own stall threshold, the floor for declaring a job lost.
+  ///
+  /// It mirrors the server setting `cj flow consumer stall threshold seconds`.
+  /// The user is never told a job is lost while the server still considers it healthy.
   static const Duration serverStallThreshold = Duration( seconds: 120 );
 
-  /// Consecutive found-nowhere probes required for `lost`. BOUNDED — a
-  /// watchdog that can never terminate spins the UI forever, which is worse
-  /// than resolving wrongly.
+  /// The consecutive found-nowhere probes required to declare a job lost.
+  ///
+  /// The count is bounded because a watchdog that never terminates spins the UI forever,
+  /// which is worse than resolving wrongly.
   static const int lostAfterStrikes = 3;
 
   final List<_BufferedFrame> _buffer = [];
@@ -95,18 +103,22 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   /// Injectable clock so the TTL is testable without wall time.
   final DateTime Function() _now;
 
-  /// AC-S2.7 — the mic permission REQUESTER, not a check. `AsrService` only
-  /// checks and throws; without an actual request a first-run user is refused
-  /// having never been asked, and the screen does not work at all on a fresh
-  /// install. Shared with `VoiceReplyField` rather than copied — this would
-  /// have been the third private copy in the tree.
+  /// The microphone permission requester, not a check.
+  ///
+  /// `AsrService` only checks and throws.
+  /// Without a real request, a first-run user is refused without ever being asked,
+  /// and the screen does not work at all on a fresh install.
+  /// It is shared with `VoiceReplyField` rather than copied.
   final mic.MicPermissionRequester _requestMic;
 
-  /// Review first or send immediately (plan §3.1, CC5). A constructor
-  /// dependency, not a locator lookup, so the unit harness can build the bloc
-  /// without DI. Read at RELEASE time, never cached (J-ABS-2 / C-J1).
+  /// Review first or send immediately.
+  ///
+  /// It is a constructor dependency, not a locator lookup, so the unit harness can build the bloc
+  /// without dependency injection.
+  /// It is read at release time and never cached.
   final QuickAskPreferences _prefs;
 
+  /// Creates the bloc; the clock and microphone requester default to the real ones.
   QuickAskBloc(
     this._repo, {
     required AsrService          asr,
@@ -143,24 +155,24 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     on<QuickAskSendModeChanged>( _onSendModeChanged );
     on<QuickAskSpokenEventArrived>( _onSpokenEventArrived );
 
-    // Seeded by the stream's replay-on-subscribe (AC-S1.8), so a bloc
-    // constructed while already disconnected knows it immediately.
+    // The stream replays its last value on subscribe, so a bloc constructed
+    // while already disconnected knows it immediately.
     _connSub = _ws.connectionStream.listen( ( c ) => add( QuickAskConnectionChanged( c ) ) );
   }
 
-  /// Read-only probe for `FocusChatBloc`'s verbatim-speech decision (§6): does
-  /// this notification belong to a live Quick Ask job? Keeps the enqueue in one
-  /// place rather than giving a second bloc a reason to speak.
+  /// Whether [jobId] is the live Quick Ask job.
+  ///
+  /// `FocusChatBloc` probes it to decide on verbatim speech.
+  /// That keeps the speech enqueue in one place rather than giving a second bloc a reason to speak.
   bool isQuickAskJob( String? jobId ) =>
       jobId != null && jobId.isNotEmpty && jobId == state.liveJobId;
 
-  /// The shared record → transcribe core (row 0b40272e). This bloc used to
-  /// hold its own copy of the permission request, the cancel epoch and the
-  /// blank-transcript guard, and `VoiceReplyField` held a second copy that had
-  /// drifted. Both now call the one session, so the cancel guard that makes
-  /// "exactly one submit, including when cancelled mid-press" true is a single
-  /// implementation. The epoch is still read here, because the spoken-stream
-  /// maps below are keyed by it.
+  /// The shared record-then-transcribe core.
+  ///
+  /// This bloc and `VoiceReplyField` both call the one session.
+  /// So the cancel guard behind "exactly one submit, including when cancelled mid-press"
+  /// is a single implementation.
+  /// The epoch is still read here, because the spoken-stream maps below are keyed by it.
   late final VoiceCaptureSession _session = VoiceCaptureSession(
     asr               : _asr,
     requestPermission : _requestMic,
@@ -168,20 +180,16 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
   int get _opEpoch => _session.epoch;
 
-  // ── Capture ──────────────────────────────────────────────────────────────
-
   Future<void> _onRecordPressed( QuickAskRecordPressed e, Emitter<QuickAskState> emit ) async {
-    // Re-entrancy guard. `canRecord` stays TRUE while the button is held —
-    // it describes whether the control is live, and the control is live
-    // precisely because a capture is running. The guard against a SECOND
-    // start therefore belongs here, not in the predicate.
+    // Re-entrancy guard. `canRecord` stays true while a capture runs,
+    // because it describes whether the control is live.
+    // The guard against a second start therefore belongs here, not in the predicate.
     if ( state.phase == QuickAskPhase.recording ) return;
     if ( !state.canRecord ) return;
 
-    // AC-S2.7 — the session REQUESTS the microphone before capturing.
-    // `AsrService.startRecording()` only checks `hasPermission()` and throws;
-    // on a fresh install that produces "Microphone permission denied" for a
-    // user who was never asked.
+    // The session requests the microphone before capturing.
+    // `AsrService.startRecording()` only checks permission and throws,
+    // which on a fresh install would refuse a user who was never asked.
     final start = await _session.start();
     if ( start.isStale ) return;
     if ( !start.started ) {
@@ -199,24 +207,23 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     ) );
   }
 
-  /// Second tap: stop, transcribe, and HOLD. The submit that used to live at
-  /// the end of this method now lives behind the send button.
+  /// Second tap: stop, transcribe and hold the draft.
+  ///
+  /// The submit lives behind the send button, not here.
   Future<void> _onRecordReleased( QuickAskRecordReleased e, Emitter<QuickAskState> emit ) async {
     if ( state.phase != QuickAskPhase.recording ) return;
     final epoch = _opEpoch;
     emit( state.copyWith( phase: QuickAskPhase.transcribing ) );
 
-    // 🔴 The PREFERENCE, read now — never `state.sendImmediately`, never a
-    // value cached at construction. The bloc lives for the whole app session,
-    // so a cached mode would ignore a flip until restart (C-J1 / J-ABS-2).
+    // Read the preference now, never `state.sendImmediately` and never a value cached at construction.
+    // The bloc lives for the whole app session, so a cached mode would ignore a flip until restart.
     if ( _prefs.sendImmediately ) {
       await _releaseSpoken( epoch, emit );
       return;
     }
 
-    // The session handles the recorder's error, the cancel-in-flight drop and
-    // the blank transcript — the last of which a held draft must never be,
-    // since it would put a live send button in front of nothing.
+    // The session handles the recorder's error, the cancel-in-flight drop and the blank transcript.
+    // A held draft must never be blank, since that would put a live send button in front of nothing.
     final capture = await _session.stopAndTranscribe();
     if ( capture.isStale ) return;
     if ( !capture.wasHeard ) {
@@ -236,62 +243,62 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     ) );
   }
 
-  // ── Send immediately: one request, a two-line reply (plan §3.3) ───────────
-
   /// Open spoken streams, keyed by the epoch they were released under.
   ///
-  /// 🔴 A MAP, never one shared handle (CC2). Cancel does not stop a read, and
-  /// `canRecord` is true again straight after a cancel, so a second press can
-  /// start a second stream while the first is unresolved. Each terminal event
-  /// removes ITS OWN key; nulling a single field removed the live one.
+  /// It is a map, never one shared handle.
+  /// Cancel does not stop a read, and `canRecord` is true again straight after a cancel.
+  /// So a second press can start a second stream while the first is unresolved.
+  /// Each terminal event removes its own key. Nulling a single field would remove the live one.
   final Map<int, StreamSubscription<SpokenAskEvent>> _spokenSubs = {};
 
-  /// Each spoken stream's recording, keyed by the same epoch (rev-15 ruling
-  /// C2-A). One shared path would let stream A's ending delete stream B's
-  /// file after a cancel-then-press.
+  /// Each spoken stream's recording, keyed by the same epoch.
+  ///
+  /// One shared path would let stream A's ending delete stream B's file after a cancel-then-press.
   final Map<int, String> _spokenPaths = {};
 
-  /// The live-epoch keys of the open spoken streams (§3.3 step 7, C-J2). The
-  /// map is library-private, so without this a test has no way to see that
-  /// two streams are tracked and that each terminal removes only its own.
+  /// The epoch keys of the open spoken streams, for tests.
+  ///
+  /// The map is library-private.
+  /// Without this a test cannot see that two streams are tracked and that each terminal removes only its own.
   @visibleForTesting
   Set<int> get liveSpokenEpochs => Set.unmodifiable( _spokenSubs.keys );
 
-  /// How many frames the pre-attribution buffer holds (FC-1). The
-  /// subscribe-time clear is NOT observable through behaviour: past
-  /// `bufferCap`, `_insertBuffered` evicts oldest-first, so a later stream's
-  /// frames survive or not by how many frames arrive AFTER them, whatever an
-  /// earlier stream left behind. Its guard is therefore on the buffer itself.
+  /// How many frames the pre-attribution buffer holds, for tests.
+  ///
+  /// The subscribe-time clear is not observable through behaviour.
+  /// Past `bufferCap`, `_insertBuffered` evicts oldest-first,
+  /// so a later stream's frames survive by how many frames arrive after them,
+  /// whatever an earlier stream left behind.
+  /// Its guard is therefore on the buffer itself.
   @visibleForTesting
   int get bufferedFrameCount => _buffer.length;
 
-  /// Stop, post the audio, and subscribe. Everything after this re-enters
-  /// through [QuickAskSpokenEventArrived].
+  /// Stops, posts the audio and subscribes.
+  ///
+  /// Everything after this re-enters through [QuickAskSpokenEventArrived].
   Future<void> _releaseSpoken( int epoch, Emitter<QuickAskState> emit ) async {
-    // 🔴 A `catch`, NOT a `finally` (J-ABS-1). `.listen()` returns as soon as
-    // the subscription exists, so a `finally` would run while the upload is
-    // still in flight and delete the recording out from under it. The catch
-    // is the never-subscribed path, and it adds no key to the map.
+    // This is a `catch`, not a `finally`.
+    // `.listen()` returns as soon as the subscription exists, so a `finally` would run
+    // while the upload is still in flight and delete the recording out from under it.
+    // The catch is the never-subscribed path, and it adds no key to the map.
     try {
       // Throws `AsrException` with nothing retained, so a throw here has no
       // recording to discard and no path is recorded.
       final path = await _asr.stopToFile();
       _spokenPaths[ epoch ] = path;
 
-      // Cancelled while the recorder was stopping: nothing has been sent, so
-      // send nothing. Same rule as `_onRecordReleased`'s stale-transcript drop.
+      // Cancelled while the recorder was stopped: nothing has been sent, so send nothing.
+      // This is the same rule as the stale-transcript drop in `_onRecordReleased`.
       if ( epoch != _opEpoch ) {
         _discardRecording( epoch );
         return;
       }
 
-      // N-C3 (measured): `connected` only goes true after the session id is
-      // validated (`WebSocketService._establishConnection`), but
-      // `WebSocketService.disconnect()` nulls it without stopping a capture
-      // already under way. Sending
-      // then would put an empty websocket_id on the query string, and the
-      // server would route the answer to api-<uid8>, where nobody listens —
-      // the silent CB1 failure by another road. Send nothing and say so.
+      // `connected` only goes true after the session id is validated,
+      // but `WebSocketService.disconnect()` nulls the id without stopping a capture under way.
+      // Sending then would put an empty websocket_id on the query string,
+      // and the server would route the answer to an address where nobody listens.
+      // Send nothing and say so.
       final sessionId = _ws.sessionId;
       if ( sessionId == null || sessionId.isEmpty ) {
         _discardRecording( epoch );
@@ -303,13 +310,12 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         return;
       }
 
-      // CC1 — ARM THE BUFFER HERE, at subscribe time. D4 starts the ask before
-      // line 1 leaves the server, so its first transitions can land before the
-      // transcript does; `_shouldBuffer` keys on a live spoken stream for that
-      // window. This is the spoken twin of `_submit`'s clear-BEFORE-the-call.
-      // 🔴 Departure from rev 14 §3.3 step 2, ruled by Mr. Radio 2026-09-14
-      // 16:35: the Transcript arm does NOT clear. Clearing there would drop
-      // exactly the pre-transcript frames this arming exists to keep.
+      // Arm the buffer here, at subscribe time.
+      // The server starts the ask before the first reply line leaves it,
+      // so the ask's first transitions can land before the transcript does.
+      // `_shouldBuffer` keys on a live spoken stream for that window.
+      // This is the spoken twin of `_submit` clearing before the call.
+      // The transcript arm does not clear: that would drop the pre-transcript frames this arming keeps.
       _buffer.clear();
 
       _spokenSubs[ epoch ] = _repo
@@ -329,17 +335,16 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   Future<void> _onSpokenEventArrived( QuickAskSpokenEventArrived e, Emitter<QuickAskState> emit ) async {
     final ev = e.event;
 
-    // Step 6 + step 8, on EVERY terminal, current epoch or stale (rev-15
-    // ruling C2-B): forget this stream's own key and release its own
-    // recording BEFORE the stale return below, never after it.
+    // On every terminal, current epoch or stale, forget this stream's own key
+    // and release its own recording before the stale return below, never after it.
     if ( ev.isTerminal ) {
       _spokenSubs.remove( e.epoch );
       _discardRecording( e.epoch );
     }
 
-    // ── Stale: a cancel, a clear or a new press happened after release ──
-    // Rick's ruling 3: the server already started this work, so a Result that
-    // names a job is cancelled on arrival. No card, no state change.
+    // Stale: a cancel, a clear or a new press happened after release.
+    // The server already started this work, so a result that names a job is cancelled on arrival.
+    // No card, no state change.
     if ( e.epoch != _opEpoch ) {
       if ( ev is SpokenAskResult ) {
         final jobId = ev.response.jobId;
@@ -359,9 +364,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         ) );
 
       case SpokenAskResult():
-        // CC4 — the transcript arrived on a DIFFERENT event; its carrier is
-        // `liveQuestion`, which the Transcript arm wrote. A cancel in between
-        // clears it, but that path is stale and never reaches here.
+        // The transcript arrived on a different event; `liveQuestion` carries it,
+        // written by the transcript arm.
+        // A cancel in between clears it, but that path is stale and never reaches here.
         await _applyResolvedAsk( ev.response, state.liveQuestion ?? '', emit );
 
       case SpokenAskFailed():
@@ -373,9 +378,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         ) );
 
       case SpokenAskCutOff():
-        // The question WAS asked (D4) and its answer may still arrive as a
-        // notification, but without a job id there is nothing to track or
-        // cancel. Say exactly that.
+        // The question was asked and its answer may still arrive as a notification.
+        // Without a job id there is nothing to track or cancel, so the card says exactly that.
         emit( state.copyWith(
           phase   : QuickAskPhase.idle,
           entries : [ ...state.entries, QuickAskEntry(
@@ -401,14 +405,15 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   /// The card text for a reply that stopped after the transcript.
   static const String cutOffMessage = 'Sent, but the reply was cut off. The answer may still arrive.';
 
-  /// §3.3 step 8 — `AsrService` owns the recording; the bloc is the caller
-  /// that tells it when to let go, naming THIS epoch's file (C2-A).
+  /// Tells `AsrService` to let go of the recording belonging to [epoch].
+  ///
+  /// `AsrService` owns the recording. The bloc only names this epoch's file.
   void _discardRecording( int epoch ) {
     final path = _spokenPaths.remove( epoch );
     if ( path != null ) _asr.discardPendingUpload( path );
   }
 
-  /// The send button — the ONLY route from a held transcript to the server.
+  /// The send button, the only route from a held transcript to the server.
   Future<void> _onDraftSent( QuickAskDraftSent e, Emitter<QuickAskState> emit ) async {
     final transcript = state.draftTranscript;
     if ( state.phase != QuickAskPhase.review || transcript == null ) return;
@@ -422,7 +427,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     await _submit( transcript, emit );
   }
 
-  /// The clear button — throw the held transcript away.
+  /// The clear button: throws the held transcript away.
   Future<void> _onDraftCleared( QuickAskDraftCleared e, Emitter<QuickAskState> emit ) async {
     _session.invalidate();            // anything still in flight is now stale
     emit( state.copyWith(
@@ -444,21 +449,19 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     ) );
   }
 
-  /// The X on a question card. Takes the card off the list, and CANCELS the
-  /// job first when it is still running.
+  /// The X on a question card: cancels the job if it is still running, then removes the card.
   ///
-  /// 🔴 The cancel is not optional politeness. A dismissed card whose job keeps
-  /// running would still hold `liveJobId` — blocking the record button — and
-  /// would still speak its answer on arrival. Clearing `liveJobId` here is also
-  /// what makes late frames for that job DROP rather than resurrect the card:
-  /// `_onTransition` returns early when `liveEntry` is null, and
-  /// `_replaceEntry` only ever replaces a row it can already find.
+  /// The cancel is required.
+  /// A dismissed card whose job keeps running would still hold `liveJobId`, blocking the record button,
+  /// and would still speak its answer on arrival.
+  /// Clearing `liveJobId` here also makes late frames for that job drop instead of resurrecting the card.
+  /// `_onTransition` returns early when `liveEntry` is null,
+  /// and `_replaceEntry` only replaces a row it can already find.
   Future<void> _onEntryDismissed( QuickAskEntryDismissed e, Emitter<QuickAskState> emit ) async {
     final match = _findEntry( e.jobId );
     if ( match == null ) return;
 
-    // Cancel BEFORE dropping it locally: if the call throws we have not yet
-    // told the user it is gone.
+    // Cancel before dropping the card locally: if the call throws, the user has not yet been told it is gone.
     if ( !match.isTerminal && match.jobId != null && match.jobId!.isNotEmpty ) {
       try {
         await _repo.cancelJob( match.jobId! );
@@ -477,8 +480,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
     emit( state.copyWith(
       entries           : remaining,
-      // Only the LIVE card's removal frees the button; dismissing an old
-      // answered card must not disturb a question currently in flight.
+      // Only the live card's removal frees the button.
+      // Dismissing an old answered card must not disturb a question in flight.
       phase             : wasLive ? QuickAskPhase.idle : state.phase,
       clearLiveJobId    : wasLive,
       clearLiveQuestion : wasLive,
@@ -486,8 +489,10 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     ) );
   }
 
-  /// Newest-first match on [jobId]. A null id addresses the one card that has
-  /// no job yet — the pre-attribution question — so it stays dismissible.
+  /// Finds the newest entry matching [jobId].
+  ///
+  /// A null id addresses the one card with no job yet, the pre-attribution question,
+  /// so that card stays dismissible.
   QuickAskEntry? _findEntry( String? jobId ) {
     for ( final e in state.entries.reversed ) {
       if ( jobId == null ) {
@@ -499,13 +504,12 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     return null;
   }
 
-  // ── Submission ───────────────────────────────────────────────────────────
-
   Future<void> _submit( String transcript, Emitter<QuickAskState> emit ) async {
-    // Arm the buffer BEFORE the call: the `pending → queued` frame is emitted
-    // synchronously inside `push()` and is on the wire before FastAPI has
-    // serialized the response body. A client that starts listening after it
-    // learns the job id routinely misses frames, and can miss the whole job.
+    // Arm the buffer before the call.
+    // The `pending` to `queued` frame is emitted synchronously inside `push()`
+    // and is on the wire before the server has serialized the response body.
+    // A client that starts listening after it learns the job id routinely misses frames,
+    // and can miss the whole job.
     _buffer.clear();
 
     AskResponse res;
@@ -526,19 +530,19 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     await _applyResolvedAsk( res, transcript, emit );
   }
 
-  /// The six-outcome status table, applied to an ask OR a resume outcome —
-  /// one implementation, so the second turn of an interview cannot drift from
+  /// Applies the six-outcome status table to an ask outcome or a resume outcome.
+  ///
+  /// There is one implementation, so the second turn of an interview cannot drift from
   /// the first turn of an ask.
   Future<void> _applyResolvedAsk( AskResponse res, String transcript, Emitter<QuickAskState> emit ) async {
 
-    // ── Branch on STATUS, never on which id happens to be present ────────
-    // (María's ruling). There is a third case with NO id at all, and sniffing
-    // for one would offer an answer box with nowhere to send it.
+    // Branch on status, never on which id happens to be present.
+    // A third case has no id at all, and sniffing for one would offer an answer box with nowhere to send it.
     if ( _applyStatusBranch( res, transcript, emit ) ) return;
 
     if ( res.isDone ) {
-      // Served from cache or inline — the answer is already here, no
-      // correlation needed and no watchdog to arm.
+      // Served from cache or inline: the answer is already here,
+      // so there is no correlation to do and no watchdog to arm.
       emit( state.copyWith(
         phase   : QuickAskPhase.idle,
         entries : [ ...state.entries, QuickAskEntry(
@@ -602,17 +606,17 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     }
   }
 
-  /// The arms of the status table that resolve WITHOUT correlation:
-  /// `parked`, `expired`, `rejected`, `needs_input`. Returns true when it has
-  /// fully handled the response; `done`, `failed` and `waiting` are the
-  /// caller's. Branching is on STATUS, never on which id happens to be
-  /// present (AC-S4.1).
+  /// Handles the status arms that resolve without correlation.
   ///
-  /// 🔴 `parked` and `needs_input` are NOT the same thing wearing different
-  /// ids. `parked` means the server is ASKING and is holding a `pending_id`
-  /// open for the reply. `needs_input` means the server is TELLING: the submit
-  /// path hard-codes `interactive=False` so it never parks, there is no id,
-  /// and nothing exists to answer to (AC-S4.2).
+  /// Those are `parked`, `expired`, `rejected` and `needs_input`.
+  ///
+  /// Returns true when it has fully handled the response; `done`, `failed` and `waiting` are the caller's.
+  /// Branching is on status, never on which id happens to be present.
+  ///
+  /// `parked` and `needs_input` are different things, not one thing with different ids.
+  /// `parked` means the server is asking and holds a `pending_id` open for the reply.
+  /// `needs_input` means the server is telling: the submit path never parks, there is no id,
+  /// and nothing exists to answer to.
   bool _applyStatusBranch( AskResponse res, String transcript, Emitter<QuickAskState> emit ) {
 
     if ( res.status == 'parked' ) {
@@ -631,17 +635,12 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       return true;
     }
 
-    // 🔴 AC-S4.13 — the RESUME door's two endings, owned BY NAME. Both arrive
-    // as `status: expired` (verified in the server source, `flow.py:698` and
-    // `:727`, which `_emit` with `status="expired"` either way); the thing that
-    // tells them apart is `route_reason`. They mean DIFFERENT things to the
-    // user — the question timed out and should be asked again, versus you
-    // already answered this turn, possibly on another device — so one shared
-    // "something went wrong" card satisfies "routes correctly" and still tells
-    // the user nothing they can act on.
-    //
-    // Before this arm existed `expired` matched no branch, fell through to the
-    // no-job-id case, and the turn vanished in silence.
+    // The resume endpoint has two endings, and both arrive as `status: expired`.
+    // Only `route_reason` tells them apart.
+    // They mean different things to the user: the question timed out and should be asked again,
+    // or the turn was already answered, possibly on another device.
+    // One shared "something went wrong" card would tell the user nothing they can act on.
+    // Without this arm, `expired` would fall through to the no-job-id case and the turn would vanish in silence.
     if ( res.isExpired ) {
       final resolution = classifyResumeStatus( res.routeReason );
       emit( state.copyWith(
@@ -664,12 +663,11 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       return true;
     }
 
-    // `rejected` is the FITNESS GATE, before the cache, the router or the
-    // expeditor sees the question (`flow.py:178`). It is a seventh status the
-    // response model's own docstring does not list, and it carries the refusal
-    // sentence in `answer` — the same sentence the server speaks. Showing a
-    // generic "Request failed" here throws away the one thing that tells the
-    // user why, and makes a refusal indistinguishable from a crash.
+    // `rejected` is the fitness gate, applied before the cache, the router or the expeditor sees the question.
+    // It is a status the response model's own docstring does not list.
+    // It carries the refusal sentence in `answer`, the same sentence the server speaks.
+    // A generic "Request failed" would throw away the one thing that tells the user why
+    // and make a refusal indistinguishable from a crash.
     if ( res.status == 'rejected' ) {
       emit( state.copyWith(
         phase   : QuickAskPhase.idle,
@@ -692,9 +690,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     }
 
     if ( res.status == 'needs_input' ) {
-      // A TERMINAL card naming what was missing, and NO answer affordance —
-      // there is nothing to answer to. The entry is `failed` so it renders in
-      // the dead lane, which is already the lane with no reply controls.
+      // A terminal card naming what was missing, with no answer control, because there is nothing to answer.
+      // The entry is `failed` so it renders in the dead lane, which has no reply controls.
       emit( state.copyWith(
         phase   : QuickAskPhase.idle,
         entries : [ ...state.entries, QuickAskEntry(
@@ -720,8 +717,6 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     return false;
   }
 
-  // ── Door B/C: the question channel that runs ALONGSIDE an ask ────────────
-
   Future<void> _onPromptAnswered( QuickAskPromptAnswered e, Emitter<QuickAskState> emit ) =>
       _respondToPrompt( e.answer, emit );
 
@@ -731,10 +726,12 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     return _respondToPrompt( prompt.defaultAnswer, emit );
   }
 
-  /// 🔴 THE INTERLOCK. Every emit here clears the prompt and NOTHING ELSE:
-  /// no phase change, no entry rewrite, no `liveJobId` touch, no watchdog
-  /// call. The ask this confirm is blocking is still in flight on its own
-  /// 240s socket, and disturbing it is exactly the failure AC-S4.6 names.
+  /// Posts the answer to a prompt that arrived alongside an ask.
+  ///
+  /// Every emit here clears the prompt and nothing else:
+  /// no phase change, no entry rewrite, no `liveJobId` change and no watchdog call.
+  /// The ask this prompt is blocking is still in flight on its own 240 s socket,
+  /// and disturbing it would break that ask.
   Future<void> _respondToPrompt( String answer, Emitter<QuickAskState> emit ) async {
     final prompt = state.pendingPrompt;
     if ( prompt == null ) return;
@@ -745,10 +742,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         responseValue  : answer,
       ) );
     } on NotificationApiException catch ( ex ) {
-      // AC-S4.9's vocabulary, on this door too: "already responded" and
-      // "grace period exceeded" are ENDINGS, not errors — another device
-      // answered, or the window closed. Either way the prompt is finished
-      // and holding it open would block recording forever.
+      // "Already responded" and "grace period exceeded" are endings, not errors:
+      // another device answered, or the window closed.
+      // Either way the prompt is finished, and holding it open would block recording forever.
       final resolution = classifyRespondFailure( ex.message );
       emit( resolution.isResolved
           ? state.copyWith( clearPendingPrompt: true )
@@ -768,8 +764,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     AskResponse res;
     try {
       res = await _repo.resume( ResumeRequest(
-        // 🔴 The SAME pending_id, every turn. The server holds one id open for
-        // the whole interview and re-asks the next argument on it.
+        // The same pending id every turn: the server holds one id open for the whole interview
+        // and re-asks the next argument on it.
         pendingId   : live.pendingId,
         answer      : e.answer,
         websocketId : _ws.sessionId,
@@ -779,8 +775,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       return;
     }
 
-    // A SECOND `parked` loops BACK to the prompt — it does not terminate.
-    // Treating the first resume as terminal is ruling 5 half-implemented.
+    // A second `parked` loops back to the prompt and does not terminate.
+    // Treating the first resume as final would implement the interview by half.
     if ( res.status == 'parked' && ( res.pendingId?.isNotEmpty ?? false ) ) {
       emit( state.copyWith(
         phase     : QuickAskPhase.idle,
@@ -807,34 +803,31 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     ) );
   }
 
-  // ── Buffer ───────────────────────────────────────────────────────────────
-
-  /// 🔴 FILTER ON INSERT, not only on drain.
+  /// Whether [frame] belongs to the ask in flight and should enter the buffer.
   ///
-  /// A drain-time-only filter loses frames SILENTLY: the ring evicts on insert,
-  /// so a burst of foreign frames can evict our own before the `jobId` filter
-  /// is ever applied. Sizing the cap cannot fix that — transitions go out via
-  /// `emit_to_user_and_admins_sync`, so on an admin account the fan-out is
-  /// every other user's jobs, which is not a number any cap can be sized
-  /// against.
+  /// The filter runs on insert, not only on drain.
+  /// A drain-time filter loses frames silently, because the buffer evicts on insert.
+  /// A burst of foreign frames can evict the ask's own before the job id filter is applied.
+  /// Sizing the cap cannot fix that.
+  /// Transitions go out to the user and to admins.
+  /// On an admin account the fan-out is every other user's jobs, which no cap can be sized against.
   ///
-  /// The `jobId` is unknowable here by construction — the buffer exists
-  /// BECAUSE we do not have it yet — so the filter keys on what IS on all
-  /// three frames: `user_email`, plus `question_text` or `session_id`.
+  /// The job id is unknown here, since the buffer exists because it is not yet known.
+  /// So the filter keys on what every frame carries: `user_email`, plus `question_text` or `session_id`.
   bool _shouldBuffer( Map<String, dynamic> frame ) {
     final live = state.liveQuestion;
-    // CC1 — a send-immediately stream is a submission in flight BEFORE its
-    // transcript exists, and D4 means its frames can arrive in that window.
-    // Only the session branch below can match then, which needs no text.
+    // A send-immediately stream is a submission in flight before its transcript exists,
+    // and its frames can arrive in that window.
+    // Only the session branch below can match then, and it needs no text.
     final spokenLive = _spokenSubs.containsKey( _opEpoch );
     if ( ( live == null || live.isEmpty ) && !spokenLive ) return false;   // no submission in flight
 
     final rawMeta = frame[ 'metadata' ];
     final meta    = rawMeta is Map ? Map<String, dynamic>.from( rawMeta ) : <String, dynamic>{};
 
-    // The email key eliminates the identical-question-from-another-user case
-    // outright. Round 1's one-live-question guard closes the remainder; round 2
-    // lifts that guard and must re-open this question.
+    // The email key rules out the same question asked by another user.
+    // The one-live-question guard closes the remainder.
+    // Allowing several live questions would have to re-open this.
     final email = meta[ 'user_email' ] as String?;
     if ( _userEmail != null && email != null && email != _userEmail ) return false;
 
@@ -845,6 +838,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     return mine;
   }
 
+  /// Adds [frame] to the buffer, dropping expired frames.
+  ///
+  /// The oldest frames beyond the cap are evicted.
   void _insertBuffered( Map<String, dynamic> frame ) {
     final now = _now();
     _buffer.removeWhere( ( b ) => now.difference( b.at ) > bufferTtl );
@@ -854,6 +850,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     }
   }
 
+  /// Empties the buffer and returns the unexpired frames for [jobId], in lifecycle rank order.
   List<Map<String, dynamic>> _drainBufferFor( String jobId ) {
     final now  = _now();
     final mine = _buffer
@@ -863,9 +860,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         .toList();
     _buffer.clear();
 
-    // Fold in RANK order, not arrival order: the wire can reorder, and the
-    // fold's monotonic guard would otherwise drop a late-arriving earlier
-    // frame that carried metadata we want.
+    // Fold in rank order, not arrival order.
+    // The wire can reorder, and the fold's monotonic guard would otherwise drop
+    // a late-arriving earlier frame that carried metadata we want.
     mine.sort( ( a, b ) {
       final ra = JobLifecycleState.parse( a[ 'to_state' ] as String? )?.rank ?? -1;
       final rb = JobLifecycleState.parse( b[ 'to_state' ] as String? )?.rank ?? -1;
@@ -874,18 +871,17 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     return mine;
   }
 
-  // ── Fold ─────────────────────────────────────────────────────────────────
-
-  /// Rank-monotonic: apply a frame only when it outranks the current state.
-  /// Terminals always apply. Duplicates and reorders become no-ops; a missed
-  /// `running` is repaired by `completed` landing directly.
+  /// Applies [incoming] to [current] only when it outranks the current state.
+  ///
+  /// Terminal states always apply.
+  /// Duplicates and reorders become no-ops, and a missed `running` is repaired by `completed` landing directly.
   QuickAskEntry _fold( QuickAskEntry current, QuickAskEntry incoming ) {
     if ( current.isTerminal ) return current;
     final advances = incoming.isTerminal || incoming.state.rank > current.state.rank;
     if ( !advances ) return current;
     return incoming.copyWith(
-      // Keep the transcript we submitted; a frame's own question_text is the
-      // server's echo and can be null on some paths.
+      // Keep the transcript that was submitted.
+      // A frame's own question_text is the server's echo and can be null on some paths.
       questionText : current.questionText.isNotEmpty ? current.questionText : incoming.questionText,
     );
   }
@@ -899,7 +895,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       if ( _shouldBuffer( frame ) ) _insertBuffered( frame );
       return;
     }
-    if ( jobId != live ) return;      // another user's job, or another of ours
+    if ( jobId != live ) return;      // another user's job, or another of this user's
 
     final incoming = QuickAskEntry.fromTransition( frame, questionText: state.liveQuestion ?? '' );
     if ( incoming == null ) return;   // unknown to_state ⇒ drop the frame
@@ -909,7 +905,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
     final folded = _fold( current, incoming );
     if ( identical( folded, current ) ) {
-      // No advance — still proof of life, so the ladder resets.
+      // No advance, but it is still proof of life, so the ladder resets.
       _armWatchdog( reset: true );
       return;
     }
@@ -923,6 +919,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     }
   }
 
+  /// Returns the state with [updated] replacing its entry.
+  ///
+  /// A terminal [updated] also releases the live job.
   QuickAskState _replaceEntry( QuickAskEntry updated ) {
     final list = [ ...state.entries ];
     for ( var i = list.length - 1; i >= 0; i-- ) {
@@ -937,20 +936,18 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     );
   }
 
-  // ── Notifications: the belt channel + the watchdog reset ─────────────────
-
   Future<void> _onNotification( QuickAskNotificationReceived e, Emitter<QuickAskState> emit ) async {
     final n = e.notification;
 
-    // AC-S1.4b — a question the server is waiting on is PROOF OF LIFE, and it
-    // is the one thing that arrives in the window where no job id exists yet.
-    // A watchdog armed at submission would fire into that silence with nothing
-    // to reconcile: no job_id to look up, every probe "not found", and the UI
-    // declaring `lost` on a request that is alive and waiting for the user.
+    // A question the server is waiting on is proof of life,
+    // and it is the one thing that arrives in the window where no job id exists yet.
+    // A watchdog armed at submission would fire into that silence with nothing to reconcile:
+    // no job id to look up, every probe "not found",
+    // and the UI declaring `lost` on a request that is alive and waiting for the user.
     if ( n.responseRequested ) {
-      // AC-S4.6 — held WHOLE, so it can actually be rendered and answered.
-      // Holding the id alone blocked the record button on a question the user
-      // was never shown, and Door C then timed out to its "no".
+      // Held whole, so it can be rendered and answered.
+      // Holding the id alone blocked the record button on a question the user was never shown,
+      // and the near-match confirm then timed out to its "no".
       emit( state.copyWith( pendingPrompt: QuickAskPrompt(
         id              : n.id,
         question        : n.message,
@@ -962,28 +959,26 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       return;
     }
 
-    // Belt channel — independent completion evidence whose `message` IS the
-    // answer. One extra line rather than a second mechanism.
+    // Completion channel: independent evidence whose `message` is the answer.
+    // It is one extra line rather than a second mechanism.
     final live = state.liveJobId;
     if ( live == null || n.jobId != live ) return;
 
     final current = state.liveEntry;
     if ( current == null || current.isTerminal ) return;
 
-    // 🔴 bug 1829eb26 — the belt channel's premise is "this message IS the
-    // answer", and that premise is FALSE for a progress frame. Without this
-    // guard a long-running job's FIRST milestone marked the card completed,
-    // rendered "Fetching sources…" where the answer belongs, cleared
-    // liveJobId and cancelled the watchdog — so the real answer, arriving
-    // minutes later, was dropped by the `n.jobId != live` test above. Silent,
-    // and it produced a WRONG answer rather than an error.
+    // The completion channel assumes "this message is the answer", which is false for a progress frame.
+    // Without this guard a long-running job's first milestone would mark the card completed,
+    // show "Fetching sources..." where the answer belongs, clear `liveJobId` and cancel the watchdog.
+    // The real answer, arriving minutes later, would then be dropped by the test above.
+    // That fails silently and shows a wrong answer rather than an error.
     //
-    // Rick's ruling (2026-09-04): keep the card OPEN and show the milestone
-    // as a status line, so a 15-minute job visibly breathes. The progress
-    // text is stored BESIDE the answer, never in it.
+    // Instead the card stays open and shows the milestone as a status line.
+    // The progress text is stored beside the answer, never in it.
+    // Design: src/docs/decisions/README.md (R-QA-progress-status-line)
     if ( n.type == progressNotificationType ) {
       emit( _replaceEntry( current.copyWith( progressText: n.message ) ) );
-      // Progress is proof of life: an alive job must not age toward `lost`.
+      // Progress is proof of life: a live job must not age toward `lost`.
       _armWatchdog( reset: true );
       return;
     }
@@ -1001,8 +996,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     _cancelWatchdog();
   }
 
-  // ── Watchdog ─────────────────────────────────────────────────────────────
-
+  /// Schedules the next watchdog probe, resetting the ladder first when [reset] is true.
   void _armWatchdog( { bool reset = false } ) {
     if ( reset ) {
       _ladderStep    = 0;
@@ -1014,6 +1008,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     _watchdog  = Timer( watchdogLadder[ step ], () => add( const QuickAskWatchdogFired() ) );
   }
 
+  /// Stops the watchdog and clears its ladder and strike count.
   void _cancelWatchdog() {
     _watchdog?.cancel();
     _watchdog      = null;
@@ -1026,14 +1021,13 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     final jobId = state.liveJobId;
     if ( jobId == null ) return;
 
-    // 🔴 `getJobHistoryEntry` is the WRONG door and will 404: PostgreSQL
-    // persistence is gated on `is_agentic_job_type()` against a 10-entry
-    // allowlist, and a plain question is not an agentic type — no row is ever
-    // written. The queue listings are the working door.
+    // The job-history endpoint is the wrong one and would answer 404.
+    // The server persists only agentic job types, and a plain question is not one, so no row is ever written.
+    // The queue listings are the endpoint that works.
     final found = await _reconcile( jobId );
 
     if ( found == null ) {
-      // ── found NOWHERE: decrement toward `lost` ──
+      // Found nowhere: count a strike toward `lost`.
       _strikes    += 1;
       _firstStrikeAt ??= _now();
       _ladderStep  = ( _ladderStep + 1 ).clamp( 0, watchdogLadder.length - 1 );
@@ -1046,38 +1040,37 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
         emit( state.copyWith( lost: true, phase: QuickAskPhase.idle ) );
         return;
       }
-      _armWatchdog();          // back off, rearm — NOT a reset
+      _armWatchdog();          // back off and rearm, without a reset
       return;
     }
 
-    // ── found ALIVE or TERMINAL ──
+    // Found alive or terminal.
     final current = state.liveEntry;
 
     if ( !found.isTerminal ) {
-      // 🔴 POSITIVE PROOF OF LIFE. The server can SEE the job, so this RESETS
-      // the ladder and clears the strike count. Running found-alive and
-      // found-nowhere down one shared rearm path would declare a plainly
-      // running job `lost` — they are opposite signals and cannot share a
-      // branch.
+      // Positive proof of life: the server can see the job, so this resets the ladder
+      // and clears the strike count.
+      // Found-alive and found-nowhere are opposite signals and cannot share one rearm path,
+      // or a plainly running job would be declared `lost`.
       //
-      // And a non-terminal reconcile NEVER overrides a terminal folded state:
-      // a `completed` frame we actually received is not undone by a listing
-      // that has not caught up.
+      // A non-terminal reconcile never overrides a terminal folded state.
+      // A `completed` frame that was actually received is not undone by a listing that has not caught up.
       if ( current != null && !current.isTerminal ) emit( _replaceEntry( _fold( current, found ) ) );
       _armWatchdog( reset: true );
       return;
     }
 
-    // A TERMINAL reconcile result WINS over a non-terminal folded state — the
-    // listing is the server's own record, and we are only here because frames
-    // went missing.
+    // A terminal reconcile result wins over a non-terminal folded state.
+    // The listing is the server's own record, and the watchdog only runs because frames went missing.
     if ( current != null && !current.isTerminal ) {
       emit( _replaceEntry( found.copyWith( questionText: current.questionText ) ) );
     }
     _cancelWatchdog();
   }
 
-  /// done → dead → run → todo, stopping at the first hit.
+  /// Looks for [jobId] in the done, dead, run and todo queues, in that order.
+  ///
+  /// It stops at the first hit.
   Future<QuickAskEntry?> _reconcile( String jobId ) async {
     for ( final queue in const [ 'done', 'dead', 'run', 'todo' ] ) {
       try {
@@ -1088,15 +1081,13 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
           }
         }
       } on QueueApiException {
-        // A listing that errors tells us nothing either way — it is not
-        // evidence of absence, so it must not become a strike here. Move on.
+        // A listing that errors says nothing either way.
+        // It is not evidence of absence, so it must not become a strike. Move on.
         continue;
       }
     }
     return null;
   }
-
-  // ── Misc ─────────────────────────────────────────────────────────────────
 
   Future<void> _onConnectionChanged( QuickAskConnectionChanged e, Emitter<QuickAskState> emit ) async {
     emit( state.copyWith( connected: e.connected ) );
@@ -1106,9 +1097,12 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     emit( state.copyWith( clearError: true ) );
   }
 
-  /// The send-mode control's one writer (J-ABS-2): persist FIRST, then emit
-  /// the render-only state field. The release path reads the preference, so
-  /// the write is what changes behaviour; the emit only redraws the control.
+  /// The send-mode control's only writer.
+  ///
+  /// It persists first, then emits the render-only state field.
+  ///
+  /// The release path reads the preference, so the write is what changes behaviour.
+  /// The emit only redraws the control.
   Future<void> _onSendModeChanged( QuickAskSendModeChanged e, Emitter<QuickAskState> emit ) async {
     await _prefs.setSendImmediately( e.sendImmediately );
     emit( state.copyWith( sendImmediately: e.sendImmediately ) );
@@ -1118,10 +1112,11 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   Future<void> close() {
     _watchdog?.cancel();
     _connSub?.cancel();
-    // App teardown only (the bloc is an app-root singleton). A job whose line
-    // 2 was still in flight runs uncancelled and its answer still arrives as a
-    // notification — accepted, there is no card left to attach it to. Its
-    // recording stays in temp, also accepted (rev-15 ruling C2-D).
+    // This runs at app teardown only, since the bloc is an app-root singleton.
+    // A job whose second reply line was still in flight runs uncancelled,
+    // and its answer still arrives as a notification with no card left to attach it to.
+    // Its recording stays in the temp directory.
+    // Both are accepted.
     for ( final sub in _spokenSubs.values ) {
       sub.cancel();
     }

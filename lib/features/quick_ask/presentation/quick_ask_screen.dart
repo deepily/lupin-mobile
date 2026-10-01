@@ -12,26 +12,22 @@ import '../domain/quick_ask_bloc.dart';
 import '../domain/quick_ask_event.dart';
 import '../domain/quick_ask_state.dart';
 
-/// Quick Ask — tap the button, speak a question, tap again to stop, then send
-/// it deliberately and get an answer back, with an honest status indicator in
-/// between.
+/// Quick Ask: tap, speak a question, tap again to stop, send it, and read the answer.
 ///
-/// 🔴 The button is a TAP TOGGLE, not a hold. Holding meant a stumble that
-/// broke the press sent a half-finished question; now stopping only parks the
-/// transcript, and the small send button under the mic is the only thing that
-/// puts it on the wire.
+/// The button is a tap toggle, not a hold.
+/// Stopping only parks the transcript, and the small send button under the microphone
+/// is the only thing that puts it on the wire.
 ///
-/// Layout per Rick's ruling 3: the record button is a FIXED HEADER (not list
-/// item 0, so the list below can become round 2's grouped card view untouched),
-/// with the scrollback below it and the newest pair on top.
+/// The record button is a fixed header, not the first list item, so the list below stays a plain scrollback.
+/// The scrollback sits below it with the newest pair on top.
 class QuickAskScreen extends StatelessWidget {
+  /// Creates the screen.
   const QuickAskScreen( { super.key } );
 
   @override
   Widget build( BuildContext context ) {
-    // AC-S3.5c — MOUNT seat B's shared control; do not re-implement it. A
-    // third `StreamBuilder` over `pausedStream` in this file is the defect
-    // that AC exists to prevent, so this screen owns only the mounting.
+    // Mount the shared pause control instead of re-implementing it.
+    // A third stream builder over `pausedStream` in this file would be the defect that sharing prevents.
     final tts = ServiceLocator.get<TtsOrchestrator>();
 
     return Scaffold(
@@ -46,24 +42,21 @@ class QuickAskScreen extends StatelessWidget {
         builder: ( context, state ) {
           return Column(
             children: [
-              // A user who paused in focus mode arrives here to a STATED
-              // reason rather than a bare icon — the user-visible half of
-              // AC-S3.5c. The banner renders nothing when speech is not held.
+              // A user who paused in focus mode arrives here to a stated reason, not a bare icon.
+              // The banner renders nothing when speech is not held.
               TtsPausedBanner(
                 tts       : tts,
                 bannerKey : const Key( TestKeys.quickAskPausedBanner ),
                 reason    : 'Tap replay on an answer to resume.',
               ),
               _RecordHeader( state: state ),
-              // Bug 9cddb791 — EVERYTHING below the fixed header scrolls
-              // together. The interlock surfaces used to be fixed children of
-              // this Column, so on a 320×568 phone the header plus a Door C
-              // prompt was already 10px taller than the body, and a prompt
-              // plus an error 114px taller: a `Column` cannot shrink a
-              // non-flexible child, so it overflowed rather than scrolled.
-              // They are now the LEADING ITEMS of the scrollback list (see
-              // `_Scrollback`), which is the only arrangement that cannot
-              // overflow whatever combination of them is live.
+              // Everything below the fixed header scrolls together.
+              // The interlock surfaces were once fixed children of this column.
+              // On a 320x568 phone the header plus a confirm prompt was already 10 px taller than the body,
+              // and a prompt plus an error was 114 px taller.
+              // A `Column` cannot shrink a non-flexible child, so it overflowed instead of scrolling.
+              // They are now the leading items of the scrollback list, the only arrangement that cannot overflow
+              // whatever combination of them is live.
               Expanded( child: _Scrollback( state: state, tts: tts ) ),
             ],
           );
@@ -81,24 +74,24 @@ class _RecordHeader extends StatelessWidget {
   Widget build( BuildContext context ) {
     final bloc      = context.read<QuickAskBloc>();
     final recording = state.phase == QuickAskPhase.recording;
-    // `canRecord` already goes false while a draft is held, so the mic cannot
-    // be tapped out from under a question the user has spoken but not sent.
+    // `canRecord` already goes false while a draft is held,
+    // so the microphone cannot be tapped out from under a question that was spoken but not sent.
     final enabled   = state.canRecord;
     final hasDraft  = state.hasDraft;
-    // Bug 9cddb791 — while a Door C prompt or an interview turn is live AND
-    // the mic is actually inert, a 128px circle is 128px of screen spent on a
-    // control that cannot be pressed, taken from the question that is holding
-    // the ask open. Shrink it in exactly those states: on a 320×568 phone that
-    // is the difference between the whole prompt being on screen and its
-    // answer buttons sitting under the fold.
+    // While a confirm prompt or an interview turn is live and the microphone is inert,
+    // a 128 px circle is 128 px of screen spent on a control that cannot be pressed,
+    // taken from the question that holds the ask open.
+    // The circle shrinks in exactly those states.
+    // On a 320x568 phone that is the difference between the whole prompt being on screen
+    // and its answer buttons sitting under the fold.
     //
-    // 🔴 `!enabled` is LOAD-BEARING, not belt-and-braces. `canRecord` has a
-    // `phase == recording` escape hatch (`quick_ask_state.dart:225-226`), and
-    // `_onNotification` (`quick_ask_bloc.dart:962-973`) sets `pendingPrompt`
-    // with NO phase guard — so a `response_requested` that arrives mid-capture
-    // lands on a screen whose mic is the live "tap to stop" control. Shrinking
-    // that by a third under a recording user's thumb is a moving target for a
-    // gesture already in progress. It stays 128 until the capture ends.
+    // `!enabled` is required, not belt and braces.
+    // `canRecord` has an escape hatch for `phase == recording`,
+    // and the bloc's notification handler sets `pendingPrompt` with no phase guard.
+    // So a `response_requested` can arrive mid-capture, on a screen whose microphone is the live
+    // "tap to stop" control.
+    // Shrinking that under a recording user's thumb is a moving target for a gesture already in progress.
+    // It stays 128 until the capture ends.
     final blocked   = ( state.pendingPrompt != null || state.interview != null ) && !enabled;
     final micSize   = blocked ?  84.0 : 128.0;
     final micIcon   = blocked ?  40.0 :  60.0;
@@ -111,22 +104,18 @@ class _RecordHeader extends StatelessWidget {
         padding : EdgeInsets.symmetric( vertical: padTall, horizontal: 12 ),
         child   : Column(
           children: [
-            // Rick's ruling (§6 row 2): the send-mode control lives HERE, above
-            // the record button. Widget shape from the SegmentedButton in
-            // `_ServerContextToggleState.build` (server_context_toggle.dart);
-            // the mode itself comes from state, not widget-local state, and a
-            // pick goes back through the bloc (J-ABS-2).
+            // The send-mode control lives here, above the record button.
+            // The widget is shaped like the SegmentedButton in `_ServerContextToggleState.build`.
+            // The mode comes from state, not widget-local state, and a pick goes back through the bloc.
             //
-            // COMPACT on purpose, and HIDDEN while a Door C prompt or an
-            // interview is live: the header is fixed, so every pixel it gains
-            // comes out of the column below, and those surfaces must stay on
-            // screen (a prompt plus its error overflowed 800×600 by 29px even
-            // at compact density). Nothing NEW can be recorded until they are
-            // answered, so there is no send mode left to pick. The one gap is
-            // a capture already running when the prompt arrived, which keeps
-            // whatever mode it started under — this control is render-only
-            // (J-ABS-2) and the release path reads `QuickAskPreferences`, so
-            // hiding it cannot change that capture's outcome.
+            // It is compact, and hidden while a confirm prompt or an interview is live.
+            // The header is fixed, so every pixel it gains comes out of the column below,
+            // and those surfaces must stay on screen.
+            // Nothing new can be recorded until they are answered, so there is no send mode left to pick.
+            // The one gap is a capture already running when the prompt arrived,
+            // which keeps the mode it started under.
+            // This control is render-only and the release path reads `QuickAskPreferences`,
+            // so hiding it cannot change that capture's outcome.
             if ( state.pendingPrompt == null && state.interview == null ) Padding(
               padding : const EdgeInsets.only( bottom: 4 ),
               child   : SegmentedButton<bool>(
@@ -145,8 +134,8 @@ class _RecordHeader extends StatelessWidget {
               ),
             ),
             SizedBox(
-              // The WIDTH is unchanged so the clear/send buttons keep their
-              // corners clear of the circle even at the smaller mic size.
+              // The width is unchanged so the clear and send buttons keep their corners clear of the circle
+              // even at the smaller microphone size.
               width  : 232,
               height : stackTall,
               child  : Stack(
@@ -154,8 +143,8 @@ class _RecordHeader extends StatelessWidget {
                 children  : [
                   GestureDetector(
                     key     : const Key( TestKeys.quickAskRecordButton ),
-                    // One tap starts, the next stops. `onTap` and not a long
-                    // press: the whole point is that no finger stays down.
+                    // One tap starts and the next stops.
+                    // It is `onTap` and not a long press, so no finger has to stay down.
                     onTap   : enabled
                         ? () => bloc.add( recording
                             ? const QuickAskRecordReleased()
@@ -199,8 +188,8 @@ class _RecordHeader extends StatelessWidget {
             ),
             const SizedBox( height: 8 ),
             Text( _headline( state ), style: Theme.of( context ).textTheme.bodyMedium ),
-            // What the send button will actually send. Without it "ready to
-            // send" asks the user to trust a transcript they have not seen.
+            // What the send button will actually send.
+            // Without it, "ready to send" asks the user to trust a transcript they have not seen.
             if ( hasDraft )
               Padding(
                 padding : const EdgeInsets.only( top: 4, left: 16, right: 16 ),
@@ -238,9 +227,9 @@ class _RecordHeader extends StatelessWidget {
   }
 }
 
-/// One of the two small controls flanking the microphone: clear on the lower
-/// left, send on the lower right. Deliberately much smaller than the mic — the
-/// mic is the thing you aim at, these are the things you confirm with.
+/// A small control beside the microphone: clear on the lower left, send on the lower right.
+///
+/// They are much smaller than the microphone: the microphone is aimed at, these are confirmed with.
 class _DraftAction extends StatelessWidget {
   final Key           actionKey;
   final IconData      icon;
@@ -342,16 +331,14 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
   }
 }
 
-/// The Door B/C question — a `response_requested` notification that arrived
-/// over the WebSocket, rendered while our own ask is still in flight.
+/// A `response_requested` notification from the WebSocket, shown while the ask is in flight.
 ///
-/// 🔴 Door C's confirm BLOCKS the ask it belongs to (`_user_confirms` holds
-/// the HTTP thread, ~210s worst case) and defaults to **"no"** when nobody
-/// replies. Before this surface existed the id was recorded, the record button
-/// was disabled by it, and the question itself was never shown — so the
-/// confirm always expired to "no" and the user saw a mysterious pause. The
-/// bodies are the SHARED, door-agnostic ones (AC-S4.11); this host picks the
-/// door.
+/// The near-match confirm blocks the ask it belongs to, for about 210 s worst case,
+/// and defaults to "no" when nobody replies.
+/// Recording the id without showing the question disabled the record button,
+/// so the confirm always expired to "no" and the user saw a mysterious pause.
+/// The bodies are the shared ones, which do not know which endpoint they post to.
+/// This host picks the endpoint.
 class _PendingPrompt extends StatelessWidget {
   final QuickAskPrompt prompt;
   const _PendingPrompt( { required this.prompt } );
@@ -384,17 +371,17 @@ class _PendingPrompt extends StatelessWidget {
               IconButton(
                 key       : const Key( TestKeys.quickAskPromptDismiss ),
                 icon      : const Icon( Icons.close ),
-                // NOT a local hide — dismissing POSTS the default, so the
-                // blocked ask stops waiting instead of burning its ladder.
+                // Not a local hide: dismissing posts the default,
+                // so the blocked ask stops waiting instead of running out its retry ladder.
                 tooltip   : 'Dismiss (answers "${prompt.defaultAnswer}")',
                 onPressed : () => context.read<QuickAskBloc>()
                     .add( const QuickAskPromptDismissed() ),
               ),
             ],
           ),
-          // Door C is always yes/no. Anything else on this channel gets a
-          // free-text box rather than a dead end — a string is a valid
-          // `response_value` on the notification door for every type.
+          // The near-match confirm is always yes or no.
+          // Anything else on this channel gets a free-text box rather than a dead end,
+          // because a string is a valid `response_value` for every type.
           if ( prompt.isYesNo )
             YesNoPromptBody( onRespond: respond, dictate: false )
           else
@@ -405,15 +392,13 @@ class _PendingPrompt extends StatelessWidget {
   }
 }
 
-/// The Door-A interview turn — the server is ASKING, and is holding a
-/// `pending_id` open for the reply.
+/// The interview turn: the server is asking and holds a `pending_id` open for the reply.
 ///
-/// 🔴 The body is the SHARED `OpenEndedPromptBody`, status-blind and
-/// door-agnostic. It takes its own data plus an `onRespond` callback and knows
-/// nothing about endpoints; the HOST decides — after branching on `status` —
-/// whether the value goes to `/api/notify/response`, `/api/v2/resume`, or
-/// nowhere. Passing a `status`, an endpoint, or a door into a body is the
-/// shape fracturing, which is what AC-S4.11 exists to prevent.
+/// The body is the shared `OpenEndedPromptBody`, which is status-blind and knows no endpoint.
+/// It takes its own data plus an `onRespond` callback.
+/// The host decides, after branching on `status`, whether the value goes to
+/// `/api/notify/response`, `/api/v2/resume` or nowhere.
+/// Passing a status, an endpoint or a door into a body would fracture that shared shape.
 class _InterviewPrompt extends StatelessWidget {
   final QuickAskInterview interview;
   const _InterviewPrompt( { required this.interview } );
@@ -449,12 +434,11 @@ class _InterviewPrompt extends StatelessWidget {
               ),
             ],
           ),
-          // 🔴 KEYED BY TURN. `OpenEndedPromptBody` owns a
-          // `TextEditingController` in its State, and the interview re-renders
-          // IN PLACE on the same `pending_id` — so without a key that changes,
-          // Flutter reuses the State and turn 2 opens with turn 1's answer
-          // still in the field. "Which day?" pre-filled with "Washington",
-          // one Submit away from being posted as the day.
+          // Keyed by turn.
+          // `OpenEndedPromptBody` owns a `TextEditingController` in its state,
+          // and the interview re-renders in place on the same `pending_id`.
+          // Without a key that changes, Flutter reuses the state and turn 2 opens with turn 1's answer
+          // still in the field: "Which day?" pre-filled with "Washington", one Submit from being posted.
           OpenEndedPromptBody(
             key       : ValueKey( '${interview.pendingId}:${interview.turn}' ),
             dictate   : false,   // the bloc owns Quick Ask's recorder (plan §3)
@@ -502,8 +486,8 @@ class _LostBanner extends StatelessWidget {
       width   : double.infinity,
       color   : Theme.of( context ).colorScheme.errorContainer,
       padding : const EdgeInsets.all( 12 ),
-      // Said plainly: we stopped hearing about it and the server no longer
-      // lists it anywhere. Not "an error occurred".
+      // Said plainly: updates stopped arriving and the server no longer lists the job anywhere.
+      // It does not say "an error occurred".
       child   : const Text( 'Lost track of that question — the server no longer lists it. Try asking again.' ),
     );
   }
@@ -519,26 +503,28 @@ class _Scrollback extends StatefulWidget {
 }
 
 class _ScrollbackState extends State<_Scrollback> {
-  /// Owned here so a newly-arrived interlock surface can be scrolled back
-  /// into view. Without a controller the list has no way to move itself, and
-  /// a prepended item silently lands above whatever the user was reading.
+  /// The scroll controller, owned here so a new interlock surface can be scrolled into view.
+  ///
+  /// Without a controller the list cannot move itself.
+  /// A prepended item then lands above whatever the user was reading.
   final ScrollController _scroll = ScrollController();
 
-  /// How many frames the re-anchor is allowed to keep trying for. Bounded so
-  /// it can never loop: see [_anchorTop].
+  /// How many frames the re-anchor may keep trying for.
+  ///
+  /// The bound stops it looping; see [_anchorTop].
   static const int _anchorAttempts = 5;
 
-  /// The interlock band as identity TAGS, in render order — the same order
-  /// and the same conditions as the widgets built in [build]. Widgets cannot
-  /// be compared across builds, so the decision to re-anchor is taken on
-  /// these instead.
+  /// The interlock band as identity tags, in render order.
   ///
-  /// Every tag carries the IDENTITY of what it stands for, not merely that
-  /// the slot is occupied: the interview because turn 2 is a new question on
-  /// the same `pending_id`, and the error because error B replacing error A
-  /// in a band that is already live and off screen is new text the user has
-  /// not seen. `lost` is the one true boolean — there is only one way to be
-  /// lost, and the banner says the same sentence every time.
+  /// The order and conditions match the widgets built in [build].
+  /// Widgets cannot be compared across builds, so the decision to re-anchor is taken on these tags.
+  ///
+  /// Each tag carries the identity of what it stands for, not merely that the slot is occupied.
+  /// The interview tag does because turn 2 is a new question on the same `pending_id`.
+  /// The error tag does because error B replacing error A is new text the user has not seen.
+  /// That holds even when the band is already live and off screen.
+  /// `lost` is the one true boolean.
+  /// There is one way to be lost, and the banner says the same sentence every time.
   static List<String> _leadingTags( QuickAskState s ) => <String>[
     if ( s.pendingPrompt != null ) 'prompt:${s.pendingPrompt!.id}',
     if ( s.interview != null )     'interview:${s.interview!.pendingId}:${s.interview!.turn}',
@@ -549,59 +535,41 @@ class _ScrollbackState extends State<_Scrollback> {
   @override
   void didUpdateWidget( covariant _Scrollback old ) {
     super.didUpdateWidget( old );
-    // Bug 9cddb791 — an interlock surface is PREPENDED at index 0, and a
-    // `ListView` keeps its pixel offset when that happens, so on a list the
-    // user has scrolled the new surface lands entirely above the viewport.
-    // The record button then goes inert with "Answer the question above
-    // first" pointing at a question that is nowhere on screen, and Door C
-    // times out to its "no" — the very failure `_onNotification` says it
-    // fixed by holding the prompt whole rather than by its id. AC-S4.6 asks
-    // for an ANSWERABLE question, and answerability cannot depend on where
-    // the user happened to leave the scroll.
+    // An interlock surface is prepended at index 0, and a `ListView` keeps its pixel offset when that happens.
+    // On a list the user has scrolled, the new surface lands entirely above the viewport.
+    // The record button then goes inert with "Answer the question above first"
+    // pointing at a question that is nowhere on screen, and the confirm times out to its "no".
+    // The question must be answerable, and that cannot depend on where the user left the scroll.
     final was = _leadingTags( old.state );
     final now = _leadingTags( widget.state );
-    // Anything NEW in the band — a first surface, a second one beside it, or
-    // a fresh question in a slot that was already occupied. Dismissing one
-    // removes a tag and moves nothing, so answering a prompt does not yank
-    // the list out from under the user.
+    // Anything new in the band: a first surface, a second one beside it,
+    // or a fresh question in a slot that was already occupied.
+    // Dismissing one removes a tag and moves nothing,
+    // so answering a prompt does not yank the list out from under the user.
     if ( now.any( ( t ) => !was.contains( t ) ) ) _anchorTop();
   }
 
-  /// 🔴 `jumpTo`, not `animateTo`. An animation is a race the user can win:
-  /// a fling already in flight cancels it and leaves the question off screen
-  /// again, which is the exact bug. Door C is on a timeout ladder, so the
-  /// question has to be readable the frame it arrives, not 300ms later. The
-  /// arriving surface is a full-width coloured band, so the jump is legible
-  /// as "something appeared" without needing the travel to say so.
+  /// Scrolls to the top so a new interlock surface is visible, retrying for a few frames.
   ///
-  /// 🔴 ONE JUMP IS NOT ENOUGH, and which shapes it fails on is decided by the
-  /// scrollback's content rather than by anything in this file. When items are
-  /// prepended to a scrolled list, `RenderSliverList` issues a
-  /// `scrollOffsetCorrection` during the NEXT layout — it has just measured the
-  /// new leading child and is compensating so the old content does not appear
-  /// to leap. That correction lands after this callback and undoes it. Measured
-  /// at 320x568, dragged up 600px, then a Door C prompt emitted:
+  /// It uses `jumpTo`, not `animateTo`.
+  /// An animation is a race the user can win: a fling in flight cancels it and leaves the question off screen.
+  /// The confirm is on a timeout ladder, so the question must be readable the frame it arrives.
+  /// The arriving surface is a full-width band, so a jump reads as "something appeared".
   ///
-  ///     long question, no answer   frames=[0, 0, 0, …]    settles at 0    ✔
-  ///     short question + answer    frames=[0, 96, 96, …]  settles at 96   ✘
-  ///     short question, no answer  frames=[0, 172, 172, …] settles at 172 ✘
+  /// One jump is not enough.
+  /// Prepending to a scrolled list makes `RenderSliverList` issue a `scrollOffsetCorrection` at the next layout.
+  /// That correction lands after this callback and undoes it.
+  /// At 320x568, after dragging up 600 px, a long question settles at 0, which is correct.
+  /// A short question settles at 96 with an answer or 172 without, which clips it.
+  /// The correction is sized by child extent, so short cards break it, not long lists.
+  /// At those offsets the default hard clip hides the question while Yes and No stay tappable.
+  /// The user could then answer a question they cannot read.
   ///
-  /// The correction is sized by child extent, so it is the same 96 for 6, 12
-  /// and 20 cards — short cards, not long lists, are what break it. At 96 the
-  /// band's top sits at y=170 with the viewport starting at 266, so `ListView`'s
-  /// default hard clip eats the question while leaving Yes and No visible and
-  /// tappable. On a door whose dismissal POSTS the default, that is a user
-  /// answering a question they cannot read — the same harm as the bug this
-  /// re-anchor exists to fix, one layer down.
-  ///
-  /// So the anchor is re-checked each frame until it holds, capped at
-  /// [_anchorAttempts] frames. It stops the moment the list is at the top, and
-  /// the cap means a shape that somehow never settles costs five frames and
-  /// then gives up rather than spinning forever.
+  /// So the anchor is re-checked each frame until it holds, capped at [_anchorAttempts] frames.
+  /// It stops the moment the list is at the top, and a shape that never settles gives up after five frames.
   void _anchorTop( { int attempt = 0 } ) {
-    // After the frame: the new item has not been laid out yet when
-    // `didUpdateWidget` runs, and a list that has never been scrolled has no
-    // attached position to move.
+    // After the frame: the new item has not been laid out yet when `didUpdateWidget` runs,
+    // and a list that was never scrolled has no attached position to move.
     WidgetsBinding.instance.addPostFrameCallback( ( _ ) {
       if ( !mounted || !_scroll.hasClients ) return;
       final position = _scroll.position;
@@ -622,15 +590,14 @@ class _ScrollbackState extends State<_Scrollback> {
   Widget build( BuildContext context ) {
     final state = widget.state;
 
-    // The interlock surfaces ride ABOVE the cards, in the same scrollable.
+    // The interlock surfaces ride above the cards, in the same scrollable.
     //
-    // AC-S4.6 — the Door C interlock. This surface stays LIVE while an ask is
-    // in flight (the record button does not), because the ask is blocked on
-    // exactly this question. Scrolling is what keeps it reachable on a small
-    // screen; being a fixed child is what used to push it off one.
+    // The confirm prompt stays live while an ask is in flight, though the record button does not,
+    // because the ask is blocked on exactly this question.
+    // Scrolling keeps it reachable on a small screen, where a fixed child used to push it off.
     //
-    // 🔴 Kept in lockstep with `_leadingTags` above — same conditions, same
-    // order. The tags drive the re-anchor; these draw it.
+    // Keep these in lockstep with `_leadingTags` above: same conditions, same order.
+    // The tags drive the re-anchor and these draw it.
     final leading = <Widget>[
       if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
       if ( state.interview != null )     _InterviewPrompt( interview: state.interview! ),
@@ -638,10 +605,9 @@ class _ScrollbackState extends State<_Scrollback> {
       if ( state.lost )                  const _LostBanner(),
     ];
 
-    // NEWEST AT THE TOP (Rick's ruling 3), by the established `.reversed`
-    // mechanism — NOT `reverse: true`, which anchors scroll to the BOTTOM and
-    // would fight the pinned header above. Same convention as
-    // `focus_chat_pane.dart:172-178`; `reverse: true` has zero uses in `lib/`.
+    // Newest at the top, by the established `.reversed` mechanism and not `reverse: true`.
+    // `reverse: true` anchors scroll to the bottom and would fight the pinned header above.
+    // `focus_chat_pane.dart` uses the same convention, and nothing in `lib/` uses `reverse: true`.
     final ordered   = state.entries.reversed.toList( growable: false );
     final showEmpty = ordered.isEmpty && state.liveQuestion == null;
     final bodyCount = showEmpty ? 1 : ordered.length;
@@ -650,9 +616,9 @@ class _ScrollbackState extends State<_Scrollback> {
       builder : ( context, constraints ) => ListView.builder(
         key         : const Key( TestKeys.quickAskList ),
         controller  : _scroll,
-        // Zero, not `all( 8 )`: the interlock surfaces are full-bleed colour
-        // bands and an inset would break them into floating blocks. The cards
-        // carry the horizontal inset themselves, below.
+        // Zero, not `all( 8 )`: the interlock surfaces are full-bleed colour bands
+        // and an inset would break them into floating blocks.
+        // The cards carry the horizontal inset themselves, below.
         padding     : EdgeInsets.zero,
         itemCount   : leading.length + bodyCount,
         itemBuilder : ( context, i ) {
@@ -660,10 +626,9 @@ class _ScrollbackState extends State<_Scrollback> {
 
           if ( showEmpty ) {
             return SizedBox(
-              // With nothing above it the placeholder still owns the whole
-              // area and sits dead centre, exactly as it did before. With a
-              // prompt above it, it takes only the room it needs rather than
-              // pushing the question it belongs under off the screen.
+              // With nothing above it, the placeholder owns the whole area and sits dead centre.
+              // With a prompt above it, it takes only the room it needs
+              // rather than pushing the question it belongs under off the screen.
               height : leading.isEmpty ? constraints.maxHeight : null,
               child  : const Padding(
                 padding : EdgeInsets.all( 24 ),
@@ -675,14 +640,12 @@ class _ScrollbackState extends State<_Scrollback> {
             );
           }
 
-          // `_QuickAskCard` carries `margin: vertical 6`, and the list padding
-          // is now zero, so the first card sits 6px under the header where it
-          // used to sit 14 — the 8 came from the list's old `all( 8 )`. Put
-          // those 8 back on the first card ONLY, and only when no full-bleed
-          // band precedes it: a band is meant to be flush with the header, and
-          // the empty-state placeholder sizes itself to `constraints.maxHeight`,
-          // so list-level padding would push the idle screen into a needless
-          // scroll.
+          // `_QuickAskCard` carries a vertical margin of 6 and the list padding is zero,
+          // so the first card sits 6 px under the header.
+          // Put 8 px back on the first card only, and only when no full-bleed band precedes it.
+          // A band is meant to be flush with the header,
+          // and the empty-state placeholder sizes itself to `constraints.maxHeight`,
+          // so list-level padding would push the idle screen into a needless scroll.
           final firstCard = i == leading.length && leading.isEmpty;
           return Padding(
             padding : EdgeInsets.only( left: 8, right: 8, top: firstCard ? 8 : 0 ),
@@ -713,9 +676,9 @@ class _QuickAskCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Upper-left X. On a card whose job is still running this
-                // CANCELS it as well as removing it — see the tooltip, which
-                // says which of the two the user is about to get.
+                // Upper-left X.
+                // On a card whose job is still running it cancels the job as well as removing the card.
+                // The tooltip says which of the two the user is about to get.
                 IconButton(
                   key           : Key( '${TestKeys.quickAskCardDismissPrefix}${entry.jobId ?? "pending"}' ),
                   icon          : const Icon( Icons.close, size: 18 ),
@@ -736,10 +699,9 @@ class _QuickAskCard extends StatelessWidget {
             if ( isDead ) ...[
               const SizedBox( height: 8 ),
               Text(
-                // A `needs_input` outcome is TERMINAL and carries no id: the
-                // server is telling, not asking, so this card names what was
-                // missing and offers NO answer affordance — there is nothing
-                // to answer to (AC-S4.2).
+                // A `needs_input` outcome is terminal and carries no id:
+                // the server is telling, not asking.
+                // So this card names what was missing and offers no answer control, because there is nothing to answer.
                 key   : Key( ( entry.jobId == null || entry.jobId!.isEmpty )
                     ? TestKeys.quickAskNeedsInputCard
                     : '${TestKeys.quickAskErrorCardPrefix}${entry.jobId}' ),
@@ -754,10 +716,10 @@ class _QuickAskCard extends StatelessWidget {
               ),
               Align(
                 alignment : Alignment.centerRight,
-                // Replay goes through the orchestrator's own `replay()`, which
-                // calls `resume()` FIRST. An urgent enqueue only preempts when
-                // not paused, so a bare enqueue here would play nothing while
-                // held — and pause-then-rewind is the natural gesture.
+                // Replay goes through the orchestrator's own `replay()`, which calls `resume()` first.
+                // An urgent enqueue only preempts when not paused,
+                // so a bare enqueue here would play nothing while held,
+                // and pause-then-rewind is the natural gesture.
                 child     : TextButton.icon(
                   key       : Key( '${TestKeys.quickAskReplayPrefix}${entry.jobId ?? "pending"}' ),
                   icon      : const Icon( Icons.replay, size: 18 ),
@@ -766,12 +728,11 @@ class _QuickAskCard extends StatelessWidget {
                 ),
               ),
             ] else if ( entry.progressText != null ) ...[
-              // Bug 1829eb26, Rick's ruling: a long-running job's milestone is
-              // shown so the card visibly breathes — but as a STATUS LINE, in
-              // the muted style with a spinner, never in the answer's slot and
-              // never styled like one. It is deliberately the LAST branch: an
-              // answer or an error always outranks it, so the moment the real
-              // result lands this disappears rather than competing with it.
+              // A long-running job's milestone is shown so the card visibly breathes.
+              // It is a status line in the muted style with a spinner,
+              // never in the answer's slot and never styled like an answer.
+              // It is the last branch on purpose: an answer or an error always outranks it,
+              // so the moment the real result lands this disappears instead of competing with it.
               const SizedBox( height: 8 ),
               Row(
                 crossAxisAlignment : CrossAxisAlignment.center,
@@ -802,9 +763,10 @@ class _QuickAskCard extends StatelessWidget {
   }
 }
 
-/// The status chip is a PURE PROJECTION of [JobLane] — no fourth concept is
-/// introduced, so round 2's grouping is `groupBy( entries, (e) => e.state.lane )`
-/// with zero rework here.
+/// The status chip, a pure projection of [JobLane].
+///
+/// It introduces no fourth concept, so a grouped view is `groupBy( entries, (e) => e.state.lane )`
+/// with no rework here.
 class _LaneChip extends StatelessWidget {
   final JobLane lane;
   const _LaneChip( { required this.lane } );
