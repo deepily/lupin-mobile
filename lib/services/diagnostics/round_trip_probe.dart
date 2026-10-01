@@ -18,7 +18,7 @@ abstract class ProbeSink {
   /// Where the lines end up, shown to the user (a file path for the real sink).
   String get path;
 
-  /// Append one line (no trailing newline in [line]).
+  /// Appends one line; [line] has no trailing newline.
   Future<void> writeLine( String line );
 
   /// Flush and release the destination.
@@ -30,6 +30,7 @@ class FileProbeSink implements ProbeSink {
   final File    _file;
   final IOSink  _out;
 
+  /// Opens [file] for writing.
   FileProbeSink( File file ) : _file = file, _out = file.openWrite();
 
   @override
@@ -49,23 +50,17 @@ class FileProbeSink implements ProbeSink {
 const String probeLogPullHint =
     'adb exec-out run-as ai.deepily.lupin_mobile cat files/<name>.jsonl > <name>.jsonl';
 
-/// Open the probe's JSONL file for a run starting at [now].
+/// Opens the probe's JSONL file for a run starting at [now], in internal storage.
 ///
-/// Why INTERNAL storage (row 7ef8f124). This used to write to
-/// `getExternalStorageDirectory()`, i.e. `/sdcard/Android/data/<package>/files/`,
-/// on the belief that it was pullable. Since Android 11 it is not: `adb pull`
-/// and `adb exec-out run-as … cat` are both refused there. Measured
-/// 2026-09-16 for kept recordings (row 4be8fe63), which lived in the same
-/// place. The app support directory (`/data/user/0/<package>/files/` on
-/// Android) is readable by `run-as` on any debuggable build, and run-as starts
-/// in the app data directory, so [probeLogPullHint] works as written.
+/// It is not `getExternalStorageDirectory()`: since Android 11, `adb pull` and `adb exec-out run-as`
+/// cannot read the external app directory. `run-as` reads the app support directory on any
+/// debuggable build and starts in the app data directory, so [probeLogPullHint] works as written.
 ///
 /// Requires:
 ///   - baseDir, when given, resolves to an existing directory
 ///
 /// Ensures:
-///   - the file lives directly in baseDir, which defaults to the app support
-///     directory (internal storage)
+///   - the file lives directly in baseDir, which defaults to the app support directory
 ///   - the file is named round-trip-probe-<yyyyMMdd-HHmmss>.jsonl
 Future<FileProbeSink> openProbeFileSink(
   DateTime now, {
@@ -94,15 +89,24 @@ Future<String> connectivityNetworkType() async =>
 
 /// One measured request.
 class ProbeSample {
+  /// When the request started.
   final DateTime timestamp;
-  final String   kind;          // 'health' | 'upload'
-  final int?     sampleRate;    // uploads only
+  /// Request kind: `health` or `upload`.
+  final String   kind;
+  /// Sample rate of the uploaded clip; set for uploads only.
+  final int?     sampleRate;
+  /// Network type when the request started: `wifi`, `mobile`, `other` or `none`.
   final String   networkType;
+  /// Time from sending the request to the end of the response, in milliseconds.
   final double   totalMs;
+  /// HTTP status, or null when no response arrived.
   final int?     status;
+  /// Description of the failure, or null when the request did not fail.
   final String?  error;
-  final int?     bytes;         // uploads only: WAV size
-  final double?  sendMs;        // uploads only: until the body finished sending
+  /// Size of the uploaded WAV in bytes; set for uploads only.
+  final int?     bytes;
+  /// Milliseconds until the body finished sending; set for uploads only.
+  final double?  sendMs;
 
   /// Uploads only, and only when [sendMs] is null: why it could not be timed.
   final String?  sendMsNullReason;
@@ -113,6 +117,7 @@ class ProbeSample {
   /// Send progress never reached the body's full length (e.g. the request failed mid-send).
   static const String sendNullNotFullySent  = 'not_fully_sent';
 
+  /// Creates a sample; the upload-only fields are null for a health request.
   const ProbeSample( {
     required this.timestamp,
     required this.kind,
@@ -152,13 +157,20 @@ class ProbeSample {
 
 /// Latency summary for one group of samples.
 class ProbeGroupSummary {
+  /// Group name: `health` or `upload <rate> kHz`.
   final String  label;
+  /// Number of samples in the group, failed ones included.
   final int     n;
+  /// Median of the ok samples' total time in milliseconds, or null when there are none.
   final double? p50;
+  /// 90th percentile of the ok samples' total time, in milliseconds, or null.
   final double? p90;
+  /// Largest ok total time in milliseconds, or null when there are none.
   final double? max;
+  /// Number of samples that did not succeed.
   final int     failures;
 
+  /// Creates a summary; every field is required.
   const ProbeGroupSummary( {
     required this.label,
     required this.n,
@@ -171,14 +183,19 @@ class ProbeGroupSummary {
 
 /// What a finished run produced.
 class ProbeResult {
+  /// Every recorded sample, in the order taken.
   final List<ProbeSample>       samples;
+  /// One summary for health, then one per upload sample rate.
   final List<ProbeGroupSummary> groups;
+  /// Network types seen across the samples.
   final Set<String>             networkTypes;
+  /// Where the samples were written, as reported by the sink.
   final String                  outputPath;
 
   /// True when the run was cancelled before every request was made.
   final bool                    cancelled;
 
+  /// Creates a result; [cancelled] defaults to false.
   const ProbeResult( {
     required this.samples,
     required this.groups,
@@ -190,17 +207,19 @@ class ProbeResult {
 
 /// Measures how long real requests take through the app's own HTTP stack.
 ///
-/// Runs [healthCount] sequential `GET /health` calls, then [uploadRepeats]
-/// timed WAV uploads at each of [uploadSampleRates] (interleaved), all on
-/// the injected [Dio] — which in the app is the SHARED instance, so the auth
-/// interceptor and HttpService interceptors are part of what is measured.
-///
-/// The upload goes to [AsrService.endpointPath], the transcription endpoint
-/// the app's own speech-to-text path uses; it does not submit a job.
+/// Runs [healthCount] sequential `GET /health` calls, then [uploadRepeats] timed WAV uploads at each of
+/// [uploadSampleRates], interleaved, all on the injected [Dio]. In the app that is the shared instance,
+/// so the auth interceptor and the HttpService interceptors are part of what is measured.
+/// The upload goes to [AsrService.endpointPath], the transcription endpoint the app's own
+/// speech-to-text path uses; it does not submit a job.
 class RoundTripProbe {
+  /// Path of the health request.
   static const String healthPath         = '/health';
+  /// Number of health requests in one run.
   static const int    healthCount        = 20;
+  /// Uploads per sample rate in one run.
   static const int    uploadRepeats      = 3;
+  /// Sample rates, in hertz, of the uploaded clips.
   static const List<int> uploadSampleRates = [ 44100, 16000 ];
 
   final Dio                      _dio;
@@ -209,6 +228,8 @@ class RoundTripProbe {
   final DateTime Function()      _now;
   final Future<Uint8List> Function( int sampleRate ) _clipFor;
 
+  /// Creates a probe on [dio].
+  ///
   /// [clipFor] builds the upload clip for a sample rate; the default builds
   /// the 30 s sweep on a background isolate.
   RoundTripProbe( {
