@@ -26,11 +26,11 @@ class HttpService {
     _configureDio();
   }
   
-  /// Marker stored on the Dio's `options.extra` so a single shared Dio (e.g.
-  /// the DI singleton consumed by both `HttpService` and `CachedHttpService`)
-  /// is configured exactly once. Without this guard each subclass ctor would
-  /// re-add the logging interceptors, producing 2× log output per request
-  /// (and confusing any reader into thinking the request was dispatched twice).
+  /// Marker in the Dio's `options.extra` that makes a shared Dio configure only once.
+  ///
+  /// The DI singleton is shared by `HttpService` and `CachedHttpService`. Without the marker each
+  /// constructor re-adds the logging interceptors. That doubles the log output per request and
+  /// makes a reader think the request was sent twice.
   static const String _configuredMarker = '_lupin_http_configured';
 
   void _configureDio() {
@@ -185,33 +185,19 @@ class HttpService {
     }
   }
   
-  /// Uploads an audio file and requests transcription.
-  /// 
-  /// Requires:
-  ///   - filePath must point to a valid, readable audio file
-  ///   - sessionId must be a valid session identifier
-  ///   - File must be in a supported audio format (MP3, WAV, M4A)
-  ///   - File size must be within backend limits
-  /// 
-  /// Ensures:
-  ///   - Audio file is uploaded to the backend
-  ///   - Transcription is processed and returned
-  ///   - Returns transcription text with confidence scores
-  /// 
-  /// Raises:
-  ///   - DioException if upload or transcription fails
-  ///   - FileSystemException if file cannot be read
-  ///   - ArgumentError if file format is unsupported
+  /// Uploads an audio file to `/api/upload-and-transcribe-mp3`; deprecated for chat replies.
   ///
-  /// ⚠️ MP3-ENDPOINT TRAP (F-S4-2, focus-mode-voice-chat 2026-06-12): this
-  /// method POSTs to `/api/upload-and-transcribe-mp3`, which QUEUES A
-  /// MULTIMODAL JOB on the parent — it does NOT return a chat-reply
-  /// transcript, despite the WAV mention in the docstring above. For
-  /// voice-reply transcription use `AsrService`
-  /// (`lib/services/asr/asr_service.dart`), which POSTs to the synchronous
-  /// `/api/upload-and-transcribe-wav` endpoint. Deprecated for new callers;
-  /// kept for the legacy voice stack (zero active callers at annotation
-  /// time).
+  /// That endpoint queues a multimodal job on the parent and does not return a chat-reply transcript.
+  /// For voice-reply transcription use [AsrService] (`lib/services/asr/asr_service.dart`), which posts to the
+  /// synchronous `/api/upload-and-transcribe-wav` endpoint. This method is kept for the legacy voice stack.
+  ///
+  /// Requires:
+  ///   - filePath names a readable audio file in a supported format, within the backend's size limit
+  ///   - sessionId is a valid session identifier
+  ///
+  /// Raises:
+  ///   - DioException if the upload fails
+  ///   - FileSystemException if the file cannot be read
   @Deprecated( 'Wrong tool for chat replies — queues a multimodal job. '
       'Use AsrService (/api/upload-and-transcribe-wav) instead. F-S4-2.' )
   Future<Map<String, dynamic>> uploadAndTranscribe({
@@ -237,17 +223,14 @@ class HttpService {
   }
   
   /// Performs a health check on the backend server.
-  /// 
+  ///
   /// Requires:
-  ///   - Network connectivity must be available
-  /// 
+  ///   - network connectivity is available
+  ///
   /// Ensures:
-  ///   - Returns true if server is healthy and responsive
-  ///   - Returns false if server is unreachable or unhealthy
-  ///   - Does not throw exceptions for network failures
-  /// 
-  /// Raises:
-  ///   - No exceptions are raised (all errors are caught and return false)
+  ///   - returns true if the server is healthy and responsive
+  ///   - returns false if the server is unreachable or unhealthy
+  ///   - nothing is raised for network failures; every error is caught and returns false
   Future<bool> checkHealth() async {
     try {
       final response = await _dio.get('/health');

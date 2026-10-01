@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-/// Network connectivity monitoring service for mobile apps.
-/// 
-/// Provides real-time network state monitoring, adaptive behavior based on
-/// connection type, and intelligent reconnection strategies for WebSocket services.
-/// Integrates with app lifecycle to optimize connectivity management.
+/// Watches network connectivity and quality to drive WebSocket reconnection decisions.
+///
+/// App-wide singleton. It tracks the connection type, tests real reachability, keeps a history of latency
+/// and reachability, and maps the resulting quality to a [WebSocketConnectionStrategy].
 class NetworkConnectivityService {
   static final NetworkConnectivityService _instance = NetworkConnectivityService._internal();
+  /// Returns the shared instance.
   factory NetworkConnectivityService() => _instance;
   NetworkConnectivityService._internal();
 
@@ -36,20 +36,33 @@ class NetworkConnectivityService {
   DateTime? _lastQualityTest;
   
   // Configuration
+  /// Time between connection quality tests.
   static const Duration qualityTestInterval = Duration(minutes: 2);
+  /// Time between periodic connectivity checks.
   static const Duration periodicCheckInterval = Duration(seconds: 30);
+  /// Number of latency samples kept.
   static const int latencyHistorySize = 10;
+  /// Number of reachability results kept.
   static const int reachabilityHistorySize = 20;
-  static const int goodLatencyThreshold = 100; // ms
-  static const int poorLatencyThreshold = 500; // ms
+  /// Latency at or below this counts as good, in milliseconds.
+  static const int goodLatencyThreshold = 100;
+  /// Latency at or above this counts as poor, in milliseconds.
+  static const int poorLatencyThreshold = 500;
   
   // Public getters
+  /// Latest network state.
   NetworkState get currentState => _currentState;
+  /// Latest connection quality.
   ConnectionQuality get currentQuality => _currentQuality;
+  /// Emits each change of [currentState].
   Stream<NetworkState> get networkStateStream => _networkStateController.stream;
+  /// Emits each change of [currentQuality].
   Stream<ConnectionQuality> get connectionQualityStream => _connectionQualityController.stream;
+  /// True when [currentState] is connected.
   bool get isConnected => _currentState == NetworkState.connected;
+  /// True when the last connectivity result was Wi-Fi.
   bool get isWifi => _lastConnectivityResult == ConnectivityResult.wifi;
+  /// True when the last connectivity result was mobile data.
   bool get isMobile => _lastConnectivityResult == ConnectivityResult.mobile;
   
   /// Initialize network monitoring service
@@ -371,33 +384,58 @@ class NetworkConnectivityService {
   }
 }
 
-/// Network connectivity states
+/// Whether the device can reach the internet.
 enum NetworkState {
-  unknown,     // Initial or error state
-  disconnected, // No network connectivity
-  limited,     // Network interface available but no internet
-  connected,   // Full internet connectivity
+  /// Initial state, or the state after an error.
+  unknown,
+
+  /// No network connectivity.
+  disconnected,
+
+  /// A network interface is up but there is no internet.
+  limited,
+
+  /// Full internet connectivity.
+  connected,
 }
 
-/// Connection quality levels
+/// How good the connection is, judged from latency and reachability.
 enum ConnectionQuality {
-  unknown,   // Quality not yet determined
-  offline,   // No connection
-  poor,      // High latency, unreliable
-  fair,      // Moderate latency, mostly reliable
-  good,      // Low latency, reliable
-  excellent, // Very low latency, highly reliable
+  /// Quality not determined yet.
+  unknown,
+
+  /// No connection.
+  offline,
+
+  /// High latency and unreliable.
+  poor,
+
+  /// Moderate latency, mostly reliable.
+  fair,
+
+  /// Low latency and reliable.
+  good,
+
+  /// Very low latency and highly reliable.
+  excellent,
 }
 
-/// WebSocket connection strategy based on network quality
+/// WebSocket connection settings chosen for one [ConnectionQuality].
 class WebSocketConnectionStrategy {
+  /// Wait before the first reconnect attempt.
   final Duration reconnectDelay;
+  /// Reconnect attempts before giving up.
   final int maxReconnectAttempts;
+  /// Interval between keepalive pings.
   final Duration pingInterval;
+  /// Whether keepalive pings are sent.
   final bool enableKeepalive;
+  /// Buffer size in bytes.
   final int bufferSize;
+  /// Whether messages are compressed.
   final bool enableCompression;
   
+  /// Creates a strategy; every field is required.
   const WebSocketConnectionStrategy({
     required this.reconnectDelay,
     required this.maxReconnectAttempts,

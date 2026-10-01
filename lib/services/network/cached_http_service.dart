@@ -356,7 +356,7 @@ class CachedHttpService extends HttpService {
   ///   - Never throws exceptions (returns false on failure)
   /// 
   /// Raises:
-  ///   - No exceptions are raised (all errors result in false)
+  ///   - nothing is raised; every error results in false
   @override
   Future<bool> checkHealth() async {
     await _ensureInitialized();
@@ -385,7 +385,7 @@ class CachedHttpService extends HttpService {
   ///   - Cache statistics are updated to reflect removal
   /// 
   /// Raises:
-  ///   - No exceptions are raised (operation is always safe)
+  ///   - nothing is raised; the operation is always safe
   Future<void> clearCacheForUrl(String urlPattern) async {
     await _ensureInitialized();
     await _networkCache.invalidateUrl(urlPattern);
@@ -402,7 +402,7 @@ class CachedHttpService extends HttpService {
   ///   - Memory and disk cache are both cleared
   /// 
   /// Raises:
-  ///   - No exceptions are raised (operation is always safe)
+  ///   - nothing is raised; the operation is always safe
   Future<void> clearAllCache() async {
     await _ensureInitialized();
     await _networkCache.clearAll();
@@ -419,7 +419,7 @@ class CachedHttpService extends HttpService {
   ///   - Statistics reflect current cache state accurately
   /// 
   /// Raises:
-  ///   - No exceptions are raised (returns empty stats on error)
+  ///   - nothing is raised; an error returns empty stats
   Future<Map<String, dynamic>> getCacheStats() async {
     await _ensureInitialized();
     final stats = await _networkCache.getStats();
@@ -439,7 +439,7 @@ class CachedHttpService extends HttpService {
   /// 
   /// Raises:
   ///   - Individual request failures are logged but don't stop processing
-  ///   - No exceptions propagate from this method
+  ///   - nothing propagates out of this method
   Future<void> processQueuedRequests() async {
     await _ensureInitialized();
     
