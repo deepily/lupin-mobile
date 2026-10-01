@@ -9,9 +9,10 @@ import '../../../shared/widgets/dictation_text_field.dart';
 
 enum _VoiceReplyPhase { idle, recording, transcribing, review }
 
-/// Rick 2026-09-17: the composer row was too thin to hit reliably with a
-/// thumb. Every phase row is 25% taller than a stock 48 dp IconButton row,
-/// and its buttons grow to match so the whole height is a tap target.
+/// Minimum height of every composer phase row, in logical pixels.
+///
+/// It is 25% taller than a stock 48 dp icon-button row so a thumb hits it reliably.
+/// The buttons grow to match, so the whole height is a tap target.
 const double kVoiceReplyRowHeight = 60.0;   // 48 × 1.25
 const double _kIconSize           = 30.0;   // 24 × 1.25
 const BoxConstraints _kButtonConstraints = BoxConstraints(
@@ -19,33 +20,34 @@ const BoxConstraints _kButtonConstraints = BoxConstraints(
   minHeight : kVoiceReplyRowHeight,
 );
 
-/// Self-contained record→transcribe→edit→send composer (S4 §4.2). The
-/// widget NEVER dispatches responses itself (F-S3-2): Send invokes the
-/// injected [onSubmit] EXACTLY ONCE with the edited text and resets to
-/// idle — S3 wires `onSubmit` to
-/// `FocusChatBloc.add( FocusRespondRequested(...) )`, and send-failure
-/// surfacing belongs to S2/S3 bloc state, not this widget (the `sending`
-/// state was dropped, F-S4-S2-1b).
+/// Self-contained record, transcribe, edit and send composer.
 ///
-/// State machine: idle → recording (toggle, elapsed indicator) →
-/// transcribing (spinner, CANCELABLE — a cellular timeout must never
-/// spinner-trap) → review (editable transcript + Send/Cancel) → idle.
-/// Any [AsrException] renders the inline error affordance
-/// (`TestKeys.voiceReplyError`) and returns to idle — visible feedback,
-/// never a vanishing spinner (F-S4-S2-1a).
+/// The widget never dispatches responses itself: Send calls [onSubmit] once with the edited
+/// text and resets to idle. The parent wires `onSubmit` to the bloc, and send-failure
+/// surfacing belongs to the bloc state, not to this widget.
 ///
-/// Composer AVAILABILITY (the no-pending-prompt gate) is S3's job, off
-/// S2's `pendingPromptFor` signal (F-S2-S2-3) — this widget renders
-/// wherever embedded.
+/// The phases run idle, recording (toggle, elapsed indicator), transcribing, review, then
+/// idle again.
+/// Transcribing shows a spinner and is cancelable, so a cellular timeout never traps the
+/// user. Review shows an editable transcript with Send and Cancel.
+/// Any `AsrException` renders the inline error (`TestKeys.voiceReplyError`) and returns to
+/// idle, so a failure is never a vanishing spinner.
+///
+/// Whether the composer is available at all (the no-pending-prompt gate) is the parent's
+/// job. This widget renders wherever it is embedded.
 class VoiceReplyField extends StatefulWidget {
+  /// The speech-recognition service that records and transcribes.
   final AsrService asr;
+
+  /// Called once with the trimmed, edited text when the user taps Send.
   final void Function( String text ) onSubmit;
 
-  /// Test seam for the runtime mic-permission request (AC-S4.5). Default
-  /// routes through the existing `permission_handler` (F-S4-3 — the
-  /// manifest already declares RECORD_AUDIO).
+  /// Test seam for the runtime microphone-permission request.
+  ///
+  /// The default goes through the existing `permission_handler` plugin.
   final Future<bool> Function()? requestMicPermission;
 
+  /// Creates the composer for [asr], delivering sent text to [onSubmit].
   const VoiceReplyField( {
     super.key,
     required this.asr,
@@ -65,14 +67,16 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   Timer? _elapsedTimer;
   int    _elapsedSeconds = 0;
 
-  /// Where the review box's append mic stands (row c67f9781). The mic itself is a
-  /// [DictationTextField], which owns its recorder session and its dispose-cancel;
-  /// this widget only needs the phase, to hide Send while a chunk records.
+  /// Where the review box's append mic stands.
+  ///
+  /// The mic itself is a [DictationTextField], which owns its recorder session and its
+  /// dispose-cancel. This widget only needs the phase, to hide Send while a chunk records.
   DictationPhase _dictation = DictationPhase.idle;
 
-  /// Row 0b40272e: permission, the cancel epoch, the error strings and the
-  /// blank-transcript guard are no longer this widget's own — they live in the
-  /// shared session, so Quick Ask and this composer cannot drift again.
+  /// The shared capture session.
+  ///
+  /// Permission, the cancel epoch, the error strings and the blank-transcript guard live
+  /// there, so Quick Ask and this composer behave identically.
   late final VoiceCaptureSession _session = VoiceCaptureSession(
     asr                : widget.asr,
     requestPermission  : widget.requestMicPermission,
@@ -105,8 +109,7 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
           _controller.text = capture.transcript!;
           _phase           = _VoiceReplyPhase.review;
         } else {
-          // Including a capture that heard NOTHING, which used to open an
-          // empty review box with a live Send button behind it.
+          // A capture that heard nothing lands here too, so no empty review box opens.
           _error = capture.errorMessage;
           _phase = _VoiceReplyPhase.idle;
         }
@@ -114,10 +117,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     }
   }
 
-  /// Row 8cc964ec (Rick 2026-09-26): open the editor with nothing recorded,
-  /// so a message can be typed — or dictated with the keyboard's own mic.
-  /// It is the same review box a transcript lands in, so Send and discard
-  /// behave exactly as they do after a recording.
+  /// Opens the editor with nothing recorded, so a message can be typed or dictated.
+  ///
+  /// It is the same review box a transcript lands in, so Send and discard behave as they do
+  /// after a recording.
   void _onEditPressed() {
     setState( () {
       _error     = null;
@@ -129,12 +132,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
 
   void _onCancelPressed() {
     _elapsedTimer?.cancel();
-    // Row a1c12c6e (review LOW): the review box also opens from the edit
-    // button, with nothing ever recorded — `cancel()` would then call
-    // `cancelRecording()` on a recorder that is not running. `recording` is
-    // the only phase that still owns the recorder; everywhere else
-    // `invalidate()` bumps the SAME epoch, so an in-flight transcribe result
-    // is dropped just as before, and the recorder is left alone.
+    // The review box also opens from the edit button with nothing recorded, and `cancel()`
+    // would then cancel a recorder that is not running. Only `recording` owns the recorder.
+    // Every other phase calls `invalidate()`, which bumps the same epoch, so an in-flight
+    // transcribe result is still dropped and the recorder is left alone.
     if ( _phase == _VoiceReplyPhase.recording ) {
       _session.cancel();              // drops any in-flight transcribe result
     } else {
@@ -161,18 +162,14 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
   @override
   void dispose() {
     _elapsedTimer?.cancel();
-    // Row a1c12c6e (review FAIL): navigating away mid-recording used to
-    // ABANDON the capture rather than cancel it. `AsrService` is a singleton,
-    // so `_activePath` outlived this widget, TTS's capture hold stayed on for
-    // the rest of the app session with no indicator, and every later
-    // `startRecording()` threw 'A recording is already in progress'.
+    // Leaving mid-recording must cancel the capture, not abandon it. `AsrService` is a
+    // singleton, so an abandoned capture would keep TTS's capture hold on for the rest of
+    // the app session and make every later `startRecording()` throw.
     //
-    // Guarded on `recording` because that is the only phase where this widget
-    // still owns the recorder — the guard cannot cancel a Quick Ask capture
-    // running on the same shared service. Row 570c2fce added a SECOND place
-    // this widget owns it: the append mic on the open editor box, which records
-    // while `_phase` says `review`. Leaving mid-append has to release the hold
-    // for exactly the same reason.
+    // The guard is on `recording` because that is the only phase where this widget owns the
+    // recorder, so it cannot cancel a Quick Ask capture on the same shared service.
+    // The append mic on the open editor box is a second owner, and it records while
+    // `_phase` is `review`; leaving mid-append releases the hold the same way.
     if ( _phase == _VoiceReplyPhase.recording ) {
       _session.cancel();
     }
@@ -214,16 +211,14 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
 
   Widget _buildPhaseRow( BuildContext context ) {
     switch ( _phase ) {
-      // Row 3f2a7dab (Rick 2026-09-26): the buttons sat bottom-CENTRE, on the
-      // fold of his phone. Every phase now lines up on the RIGHT, and the
-      // mic/stop button keeps the same corner spot across phases, so the
-      // right thumb never has to move to stop a recording.
+      // Every phase lines up on the right, and the mic and stop button keeps the same corner
+      // spot across phases, so the right thumb never moves to stop a recording.
       case _VoiceReplyPhase.idle:
         return Row(
           key              : const Key( TestKeys.voiceReplyIdleRow ),
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            // Row 8cc964ec: type instead of dictate, right beside the mic.
+            // Type instead of dictate, right beside the mic.
             IconButton(
               key         : const Key( TestKeys.voiceReplyEdit ),
               icon        : const Icon( Icons.edit ),
@@ -287,10 +282,8 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
           ],
         );
       case _VoiceReplyPhase.review:
-        // Row 0b40272e: the transcript used to share ONE row with both
-        // buttons, four lines tall — a couple of spoken sentences ran out of
-        // room and read as truncated. It now gets the full width and grows to
-        // eight lines before scrolling, with the buttons underneath.
+        // The transcript gets the full width and grows to eight lines before scrolling, with
+        // the buttons underneath, so a couple of spoken sentences never read as truncated.
         return Column(
           crossAxisAlignment : CrossAxisAlignment.stretch,
           mainAxisSize       : MainAxisSize.min,
@@ -326,8 +319,10 @@ class _VoiceReplyFieldState extends State<VoiceReplyField> {
     }
   }
 
-  /// The row under the editor box. While a chunk is recording or transcribing it
-  /// is GONE: a thumb cannot send half a thought by accident.
+  /// The row under the editor box.
+  ///
+  /// While a chunk is recording or transcribing the row is hidden, so a thumb cannot send
+  /// half a thought by accident.
   Widget _buildReviewButtons() {
     if ( _dictation != DictationPhase.idle ) return const SizedBox.shrink();
     return Row(

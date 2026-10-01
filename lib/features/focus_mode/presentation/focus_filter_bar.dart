@@ -6,13 +6,15 @@ import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
 
-/// Slim toolbar above the rail+pane Row hosting the Live / 24h history
-/// `SegmentedButton` with per-band counts (plan 2026.06.25 §4.1 — the rail
-/// is 56px, too narrow for a horizontal control) and, beside it, the
-/// Personas / All sender-scope control (Rick 2026-08-21; rail only,
-/// default Personas). Filter = VISIBILITY: the bloc never prunes senders,
-/// this only moves the lens.
+/// Slim toolbar above the rail and pane with the Live and 24h lens controls.
+///
+/// A segmented button shows Live or 24h history with per-band counts. It lives here because
+/// the 56px rail is too narrow for a horizontal control. Beside it sits the Personas or All
+/// sender-scope control, which affects the rail only and defaults to Personas.
+/// The filter changes visibility only: the bloc never prunes senders.
+/// Design: src/docs/decisions/README.md (R-FM-filter-scope)
 class FocusFilterBar extends StatelessWidget {
+  /// Creates the toolbar.
   const FocusFilterBar( { super.key } );
 
   @override
