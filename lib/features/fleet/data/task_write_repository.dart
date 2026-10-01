@@ -1,81 +1,70 @@
 import 'package:dio/dio.dart';
 
-/// The shared write surface for the task panes. BOTH doors live here, once.
+/// The shared write surface for the task panes; both write doors live here.
 ///
-/// 🔴 THERE ARE TWO WRITE DOORS AND THEY ARE NOT INTERCHANGEABLE. Which door a control
-/// needs is decided by WHAT IT CHANGES, never by which pane it sits in.
+/// Which door a control uses depends on what it changes, not which pane it is in.
 ///
-///   Field door   PATCH /api/tasks/{id}              priority, owner_persona — NEVER status
+///   Field door   PATCH /api/tasks/{id}              priority, owner_persona; never status
 ///   Status door  POST  /api/tasks/{id}/transition   every status verb an operator presses
 ///
-/// Receipts: `tasks.py:2742` (field) · `tasks.py:1346` (transition) ·
-/// `TaskListStore.ts:76-79`, `:282`, `:301` · `HoldingAreaStore.ts:313`, `:335`.
+/// Approve is a status change. The field door silently ignores `PATCH {status: "queued"}`.
+/// That would leave a Holding Area that looks wired and changes nothing. [patchFields]
+/// takes two named parameters and no map, so it cannot send `status`.
 ///
-/// ⇒ APPROVE IS A STATUS CHANGE. A builder implementing approve as
-/// `PATCH {status: "queued"}` gets a field door that silently ignores an unknown key —
-/// a Holding Area that looks wired and changes nothing. The field door here physically
-/// cannot send `status`: [patchFields] takes two named parameters and no map.
-///
-/// ⚠️ 401 IS NOT HANDLED HERE, DELIBERATELY. The shared Dio already carries a global
-/// auth interceptor that refreshes on 401 (`auth_interceptor.dart:42`, registered at
-/// `service_locator.dart:243`). A repository that also handled it would give the app two
-/// refresh paths on one response — dead code at best, two racing refreshes on a flaky
-/// connection at worst.
+/// A 401 is not handled here. The shared Dio has a global auth interceptor that refreshes
+/// on 401 (`lib/services/auth/auth_interceptor.dart`), and a second refresh path would
+/// race it on a flaky connection.
 class TaskWriteRepository {
   final Dio _dio;
 
-  /// The authenticated user's email, resolved at CALL time rather than captured at
-  /// construction — a repository built before login, or surviving a re-login, would
-  /// otherwise stamp every write with a stale identity or none at all.
-  ///
-  /// Injected rather than read from an auth global so this layer stays testable and does
-  /// not reach across into `AuthBloc`'s state.
+  // The authenticated user's email, resolved at call time, not captured at construction:
+  // a repository built before login, or kept across a re-login, would stamp writes with a
+  // stale identity or none. It is injected so this layer stays testable and does not read
+  // `AuthBloc` state.
   final String? Function() _actorEmail;
 
+  /// Creates the repository over [_dio]; [actorEmail] supplies the signed-in email.
   const TaskWriteRepository( this._dio, { String? Function()? actorEmail } )
       : _actorEmail = actorEmail ?? _noActor;
 
   static String? _noActor() => null;
 
-  /// The audit `actor` for a UI-originated edit.
+  /// The audit `actor` for a UI-originated edit: the signed-in email plus `(mobile)`.
   ///
-  /// 🔴 DERIVED FROM THE AUTHENTICATED USER, NEVER A FIXED LITERAL — Rick's ruling,
-  /// 2026-06-23, implemented web-side as `deriveTaskActor()`
-  /// (`taskListModel.ts:449-452`).
-  ///
-  /// ⚠️ THE SURFACE TAG IS `(mobile)`, NOT `(multiplexer)`, AND COPYING THE WEB'S STRING
-  /// VERBATIM WOULD DEFEAT THE TAG'S ONLY PURPOSE. Its job is to record WHICH CLIENT made
-  /// the edit, so two edits by the same human from different clients can be told apart in
-  /// the audit trail (`authority` already carries provenance; the tag carries surface).
-  /// A phone stamping `(multiplexer)` would file its writes as desktop ones.
-  ///
-  /// The blank fallback mirrors the web's: an authenticated client always carries an
-  /// email claim, so `anonymous` is the pre-hydration / malformed-token safety net and
-  /// never a business literal.
+  /// It is derived from the authenticated user, never a fixed literal. The `(mobile)`
+  /// tag records which client made the edit. The audit trail can then tell two edits by
+  /// one person apart, and the web's `(multiplexer)` would file phone writes as desktop
+  /// ones. A blank email gives `anonymous (mobile)`, a safety net for a malformed token.
+  /// Design: src/docs/decisions/README.md (R-TW-actor-derived)
   static String deriveActor( String? email ) {
     final id = ( email ?? '' ).trim();
     return id.isEmpty ? 'anonymous (mobile)' : '$id (mobile)';
   }
 
-  /// The server's marker for "Rick has not been asked yet".
+  /// The `status` value the server returns when the human has not yet approved a write.
   ///
-  /// Pinned browser-side and server-side together (`HoldingAreaStore.ts:65`,
-  /// `task_store_tools.py:173`, `test_the_browser_202_marker_matches_the_server.py`).
+  /// The browser client and the server pin the same string.
   static const awaitingHumanApproval = 'awaiting_human_approval';
 
-  /// 🔴 URL-ENCODE THE ID ON BOTH DOORS. A raw `$id` and an encoded one are
-  /// byte-identical until the id carries `/`, `?` or `#` — at which point the request
-  /// silently lands on a DIFFERENT ROUTE. `TaskListStore.ts:275-280`; that store shipped
-  /// without it once. The test drives this with `a/b?c#d`.
+  /// URL-encodes a task id; both doors use it.
+  ///
+  /// A raw and an encoded id are identical until the id contains `/`, `?` or `#`, and
+  /// then the request lands on a different route. The test drives this with `a/b?c#d`.
   static String encodeId( String id ) => Uri.encodeComponent( id );
 
   // ─── Door 1: fields ──────────────────────────────────────────────────────────
   //
-  /// Change a row's FIELDS. Exactly two keys are addressable, and `status` is not one
-  /// of them — pass a status change to [transition] instead.
+  /// Changes a row's priority or owner; `status` is not addressable here.
   ///
-  /// Omitted parameters are not sent at all, so this never clobbers a field the caller
-  /// did not name.
+  /// Omitted parameters are not sent, so a field the caller did not name is never
+  /// clobbered. Pass status changes to [transition].
+  ///
+  /// Requires:
+  ///   - at least one of [priority] or [ownerPersona] is non-null
+  ///
+  /// Raises:
+  ///   - ArgumentError when nothing is to be changed, before any request is made
+  ///   - TaskWriteException when the request fails
   Future<void> patchFields( {
     required String id,
     String? priority,
@@ -87,8 +76,7 @@ class TaskWriteRepository {
       ..._provenance(),
     };
 
-    // Nothing to change is a caller bug, not a request. Sending it would burn a
-    // round-trip to assert nothing.
+    // Nothing to change is a caller bug, not a request.
     if ( priority == null && ownerPersona == null ) {
       throw ArgumentError( 'patchFields called with no field to change (id=$id)' );
     }
@@ -102,11 +90,14 @@ class TaskWriteRepository {
 
   // ─── Door 2: status ──────────────────────────────────────────────────────────
   //
-  /// Apply one status verb.
+  /// Applies one status verb.
   ///
-  /// Build the argument with a [TaskVerb] factory rather than by hand — the per-verb
-  /// extras are the part no summary carries, and four of them are invisible from the
-  /// endpoint alone.
+  /// Build [verb] with a [TaskVerb] factory, which carries the per-verb extras.
+  ///
+  /// Raises:
+  ///   - TaskWriteException when the request fails
+  ///   - TaskAwaitingApprovalException when the server accepts for review (202) without
+  ///     applying the change
   Future<void> transition( { required String id, required TaskVerb verb } ) async {
     final Response<Map<String, dynamic>> res;
     try {
@@ -121,20 +112,12 @@ class TaskWriteRepository {
     _rejectPendingApproval( res, id: id, verb: verb.name );
   }
 
-  /// 🔴 THE 202 TRAP — the one failure in this file that is completely silent.
-  ///
-  /// `POST …/transition` can answer **202** with
-  /// `{"status": "awaiting_human_approval", "ticket_id": …}`. That is a 2xx, and Dio
-  /// only throws on a non-2xx, so without this branch the answer arrives
-  /// indistinguishable from a real approval and the pane paints the row approved.
-  /// `HoldingAreaStore.ts:316-319` names it exactly: **a false FACT, not a false red.**
-  ///
-  /// ⚠️ TEST THE `status` FIELD, NEVER A SUBSTRING. A row whose own reason text happens
-  /// to mention the marker is an ordinary success; a payload-wide match would call it
-  /// pending (`HoldingAreaStore.ts:75-78`).
-  ///
-  /// Throwing is also what routes this into the optimistic-write rollback path, so the
-  /// pane un-paints the row it had already repainted (§4.6).
+  // Throws when a 2xx answer says the write is awaiting approval. `POST .../transition`
+  // can answer 202 with `{"status": "awaiting_human_approval", "ticket_id": ...}`. Dio
+  // throws only on non-2xx, so without this check the answer looks like a real approval
+  // and the pane paints the row approved. Only the `status` field is tested, not a
+  // substring: a row whose reason text mentions the marker is an ordinary success.
+  // Throwing also routes into the optimistic-write rollback, which un-paints the row.
   void _rejectPendingApproval(
     Response<Map<String, dynamic>> res, {
     required String id,
@@ -150,75 +133,61 @@ class TaskWriteRepository {
     }
   }
 
-  /// Provenance BOTH doors carry. §4.4: *"Both doors carry `actor` and `authority`."*
-  ///
-  /// `authority: "user_direct"` IS NOT DECORATION — the store's audit trail keys
-  /// provenance off it, and recording it as anything weaker would make an operator's
-  /// decision read as automation (`HoldingAreaStore.ts:302-305`). Every write this
-  /// repository makes is a control an operator pressed, so the value is constant here;
-  /// the day something automated writes through this class, it needs its own value and
-  /// not a default.
-  ///
-  /// 🔴 `actor` SHIPPED MISSING AND THAT WAS A REAL DEFECT, FOUND BY RACHEL BUILDING
-  /// PHASE 4 AGAINST THIS BASE. The two keys answer different questions — `authority`
-  /// says a human decided, `actor` says WHICH human and from where — so sending one
-  /// without the other yields an audit row that knows a person acted and cannot say who.
-  /// It is also the quietest possible failure: every write succeeds, every test that
-  /// checks `authority` passes, and the gap only surfaces when someone reads the trail
-  /// back and finds it anonymous.
-  ///
-  /// ⚠️ This file's own header quoted §4.4 while the implementation carried half of it —
-  /// which is the failure mode the cascade kept finding in the plan, reproduced in code.
+  // Provenance both doors carry: `authority` says a human decided and `actor` says which
+  // human and from where. `authority: "user_direct"` is constant here, because every
+  // write this class makes is a control an operator pressed; the store's audit trail keys
+  // provenance off it, so a weaker value would make a decision read as automation.
+  // Something automated writing through this class needs its own value. Sending only one
+  // key gives an audit row that knows a person acted and cannot say who.
   Map<String, dynamic> _provenance() => <String, dynamic>{
         'authority' : 'user_direct',
         'actor'     : deriveActor( _actorEmail() ),
       };
 }
 
-/// The seven status verbs and the extras each MUST send.
+/// The seven status verbs and the extras each must send.
 ///
-/// Source: `taskVerbs.ts:97-129` and `:292-320`. Four of these are invisible from any
-/// summary of the endpoint, and each has drawn blood:
-///
-///  1. `park` sends **`park_reason`**, not `reason` — one verb out of five uses a
-///     different key for the same text box (`taskVerbs.ts:301`).
-///  2. `unpark` sends an **explicit null** `next_chase_ts`. Omitting the key is a
-///     DIFFERENT REQUEST and only one of them clears (`taskVerbs.ts:304-313`). Rick
-///     ruled this (row `03d3bf78`): a surviving chase date re-chases him about a row
-///     already back on his board.
-///  3. `fixed` is **refused without a receipt** (`taskVerbs.ts:315-319`). The multiplexer
-///     shipped this exact bug once — picked the verb up in `709128d4` without the
-///     receipt and every press was refused. The value is not trusted; the server
-///     replaces it with the validated login identity. What matters is that the key is
-///     present.
-///  4. Five verbs share one reason box and **must not share one complaint** —
-///     *"'A reason is required' is true of four of them and teaches none of them"*
-///     (`taskVerbs.ts:160-165`). See [reasonPrompt].
+/// Four are invisible from the endpoint summary:
+///  - `park` sends `park_reason`, not `reason`; the other verbs use `reason`.
+///  - `unpark` sends an explicit null `next_chase_ts`. Omitting the key is a different
+///    request and only the explicit null clears it. A surviving chase date would
+///    re-chase the operator about a row already back on their board.
+///  - `fixed` is refused without a receipt. The server replaces the value with the
+///    validated login identity, but the key must be present.
+///  - The verbs that need a reason share one box and must not share one complaint; see [reasonPrompt].
 class TaskVerb {
+  /// The verb name, as listed in `kTaskVerbs`.
   final String name;
+
+  /// The request body to send, before provenance is added.
   final Map<String, dynamic> payload;
 
-  /// True for verbs a mis-tap cannot undo. The row arms these before firing (§7.4).
+  /// True for verbs a mis-tap cannot undo; the row arms these before firing.
   final bool terminal;
 
   const TaskVerb._( this.name, this.payload, { this.terminal = false } );
 
+  /// Moves a held row to `queued`.
   factory TaskVerb.approve() =>
       const TaskVerb._( 'approve', <String, dynamic>{ 'to_status' : 'queued' } );
 
-  /// Sends `next_chase_ts: null` EXPLICITLY. Do not "simplify" this to an omitted key.
+  /// Moves a parked row to `queued`, sending `next_chase_ts: null` explicitly.
+  ///
+  /// An omitted key would not clear the chase date.
   factory TaskVerb.unpark() => const TaskVerb._( 'unpark', <String, dynamic>{
         'to_status'     : 'queued',
         'next_chase_ts' : null,
       } );
 
+  /// Parks a row until [nextChaseTs], with the reason under `park_reason`.
   factory TaskVerb.park( { required String parkReason, String? nextChaseTs } ) =>
       TaskVerb._( 'park', <String, dynamic>{
         'to_status'     : 'parked',
-        'park_reason'   : parkReason,     // NOT `reason` — see note 1
+        'park_reason'   : parkReason,     // not `reason`: park uses its own key
         'next_chase_ts' : nextChaseTs,
       } );
 
+  /// Sends a row back to `not_approved` until [nextChaseTs].
   factory TaskVerb.demote( { required String reason, String? nextChaseTs } ) =>
       TaskVerb._( 'demote', <String, dynamic>{
         'to_status'     : 'not_approved',
@@ -226,19 +195,21 @@ class TaskVerb {
         'next_chase_ts' : nextChaseTs,
       } );
 
+  /// Drops a row with a reason.
   factory TaskVerb.drop( { required String reason } ) =>
       TaskVerb._( 'drop', <String, dynamic>{
         'to_status' : 'dropped',
         'reason'    : reason,
       } );
 
+  /// Closes a row as `wont_fix` with a reason; terminal.
   factory TaskVerb.wontFix( { required String reason } ) =>
       TaskVerb._( 'wont_fix', <String, dynamic>{
         'to_status' : 'wont_fix',
         'reason'    : reason,
       }, terminal: true );
 
-  /// Requires a receipt and sends NO reason.
+  /// Closes a row as `done` with an operator receipt and no reason; terminal.
   factory TaskVerb.fixed( { required String operatorAttestation } ) =>
       TaskVerb._( 'fixed', <String, dynamic>{
         'to_status'    : 'done',
@@ -247,9 +218,8 @@ class TaskVerb {
 
   /// The prompt for the shared reason box, per verb.
   ///
-  /// 🔴 ONE STRING FOR ALL OF THEM TEACHES NONE OF THEM. Four verbs require a reason and
-  /// a single "A reason is required" tells an operator which box to fill and nothing
-  /// about what belongs in it.
+  /// Each reason-requiring verb gets its own wording. A generic "A reason is required"
+  /// says which box to fill and nothing about what belongs in it.
   static String reasonPrompt( String verb ) {
     switch ( verb ) {
       case 'park'     : return 'Why is this not-now? The reason is kept with the row.';
@@ -263,9 +233,13 @@ class TaskVerb {
 
 /// A write that did not land.
 class TaskWriteException implements Exception {
+  /// A short description naming the operation and the row.
   final String message;
+
+  /// The underlying error, usually a `DioException`.
   final Object? cause;
 
+  /// Creates the exception.
   const TaskWriteException( this.message, { this.cause } );
 
   @override
@@ -273,16 +247,22 @@ class TaskWriteException implements Exception {
       '${cause == null ? '' : ' (caused by $cause)'}';
 }
 
-/// The 202 answer: accepted for review, NOT applied.
+/// The 202 answer: accepted for review, not applied.
 ///
-/// A distinct type rather than a flag, so a caller cannot treat it as an ordinary
-/// failure and retry it — the request succeeded, the change did not happen, and pressing
-/// again just files a second ticket.
+/// It is its own type so a caller cannot treat it as an ordinary failure and retry it.
+/// The request succeeded and the change did not happen; pressing again files a second
+/// ticket.
 class TaskAwaitingApprovalException implements Exception {
+  /// The row the write was made against.
   final String  taskId;
+
+  /// The verb that was held for approval.
   final String  verb;
+
+  /// The ticket the server filed for the approval, when it returned one.
   final String? ticketId;
 
+  /// Creates the exception.
   const TaskAwaitingApprovalException( {
     required this.taskId,
     required this.verb,

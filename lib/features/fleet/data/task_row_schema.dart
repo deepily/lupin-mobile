@@ -1,56 +1,40 @@
-/// The ONE row schema shared by the task panes.
+/// The one row schema shared by the task panes.
 ///
-/// Port of `multiplexer/render/rowSchema.ts:27-31`. Two mobile panes render this
-/// row — Task List and Holding Area — and cell-for-cell identity between them is a
-/// behavioural requirement Rick asked for, not a convenience
-/// (`holdingAreaTable.ts:20-22`).
-///
-/// 🔴 FINISHED TASKS IS NOT ONE OF THEM, AND THE PRE-CASCADE PLAN SAID IT WAS.
-/// On web the third sharer is the Epic Board (`notifications.js:14873`), which is not
-/// a mobile destination. `finishedTasksTable.ts` imports neither `rowSchema` nor
-/// `rowDisclosure` and builds its own four-column table, because its rows come from
-/// `task_events` and carry no `priority`, no `blocked`, no `accountable` and no
-/// `actions`. A guard test pins that apart — see
-/// `test/widget/fleet/finished_tasks_does_not_use_task_row_test.dart`.
+/// Task List and Holding Area render this row, and their cells must be identical,
+/// cell for cell. Finished Tasks does not use it: its rows come from `task_events` and
+/// carry no priority, blocked, accountable or actions cells. A guard test keeps them
+/// apart, see `test/widget/fleet/finished_tasks_does_not_use_task_row_test.dart`.
 library;
 
 /// One cell of the shared row.
-///
-/// `key` is the stable identifier a test selects on. It is deliberately NOT the
-/// human label: labels are copy and copy churns, and a selector that tracks copy
-/// breaks on an i18n pass.
 class RowCell {
+  /// The stable identifier tests select on; not the label, which is copy and changes.
   final String key;
+
+  /// The human label shown for the cell.
   final String label;
 
+  /// Creates a cell from its key and label.
   const RowCell( this.key, this.label );
 }
 
-/// The schema, three lines, in order.
+/// The schema: three lines of cells, in render order.
 ///
-/// ⚠️ ORDER IS PART OF THE CONTRACT. The cell-identity test asserts the ORDERED key
-/// list produced by each pane, so a reorder here is a deliberate, visible act rather
-/// than something a pane can do to itself.
-///
-/// 🔴 LINE 1 IS NOT THE WEB'S LINE 1, AND THAT IS MEASURED, NOT PREFERENCE.
-/// The web packs `id · title · class · status · priority` onto line 1. At 360 dp —
-/// ordinary Android portrait — 16 dp gutters and a 48 dp ellipsis target
-/// (`kMinInteractiveDimension`) leave about 86 dp for the title, roughly twelve
-/// characters. Every title in this fleet shares a `[LUPIN-MOBILE] Phase N:` prefix, so
-/// all of them truncate to the SAME string and the pane cannot be read at all. With
-/// the OS font scale raised — the app applies no text-scale clamp, correctly — that
-/// falls to about six characters.
-///
-/// ⇒ Line 1 on a phone is the title and the disclosure control, full stop. The other
-/// four line-1 fields move to line 2. The three-line model survives; the
-/// five-on-line-1 packing does not.
+/// Order is part of the contract: the cell-identity test asserts the ordered key list
+/// each pane produces. Line 1 holds only the title and its disclosure control, unlike
+/// the web, which packs five fields there. At 360 dp, with 16 dp gutters and a 48 dp
+/// control, the title gets about 86 dp, roughly twelve characters. Every fleet title
+/// shares the same prefix, so they would all truncate to one string. The app applies no
+/// text-scale clamp, so a larger font scale cuts it to about six characters. The other four fields moved to line 2.
 class RowSchema {
   RowSchema._();
 
+  /// Line 1: the title only.
   static const line1 = <RowCell>[
     RowCell( 'title', 'Title' ),
   ];
 
+  /// Line 2: identity, state and ownership cells.
   static const line2 = <RowCell>[
     RowCell( 'id',          'ID' ),
     RowCell( 'class',       'Class' ),
@@ -63,20 +47,20 @@ class RowSchema {
     RowCell( 'project',     'Project' ),
   ];
 
+  /// Line 3: the detail and the action controls.
   static const line3 = <RowCell>[
     RowCell( 'detail',  'Detail' ),
     RowCell( 'actions', 'Actions' ),
   ];
 
-  /// Every cell, in render order. The panes iterate THIS, never a hand-written list.
+  /// Every cell, in render order. The panes iterate this, never a hand-written list.
   static const all = <RowCell>[ ...line1, ...line2, ...line3 ];
 
-  /// The ordered key list. The cell-identity guard compares this against what each
-  /// pane actually rendered.
+  /// The ordered key list the cell-identity guard compares against each pane's render.
   static List<String> get keys => all.map( ( c ) => c.key ).toList( growable: false );
 
-  /// 🔴 DERIVED, NEVER HAND-WRITTEN — carrying `rowWidth()`'s lesson from
-  /// `rowSchema.ts:57-71`: *"a stale colspan does not look broken."* A count typed as a
-  /// literal goes wrong silently the first time someone adds a cell.
+  /// The number of cells, derived from [all].
+  ///
+  /// A literal count would go stale without any visible error when a cell is added.
   static int get cellCount => all.length;
 }

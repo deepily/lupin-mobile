@@ -1,44 +1,32 @@
-/// The verb table — which verbs exist, what each asks the operator for, and which of
-/// them a row in a given status may legally take.
+/// The verb table: which verbs exist, what each asks for, and which a row may take.
 ///
-/// 🔴 PORTED FROM `taskVerbs.ts`, NOT RE-DERIVED. The payload shapes are SETTLED and a
-/// second derivation is a second chance to get `park_reason` wrong. This file is the
-/// pure half — no widgets, no Dio — exactly as its web twin is (no DOM, no store, no
-/// fetch). [TaskVerb] in `task_write_repository.dart` already carries the payloads; this
-/// adds the three things the panes need and the payload factories cannot answer:
-/// what a verb ASKS FOR before it can be built, what it says when the operator leaves
-/// that blank, and whether a row in a given status may take it at all.
+/// This is the pure half, with no widgets and no Dio, mirroring the web's `taskVerbs.ts`.
+/// [TaskVerb] in `task_write_repository.dart` carries the payloads. This file adds what a
+/// verb asks for before it can be built. It also holds what it says when that is blank,
+/// and whether a row in a given status may take the verb at all.
 ///
-/// ⚠️ `isOpenStatus` IS IMPORTED, NOT RE-SPELLED. The web file's own header says it in
-/// as many words — *"DO NOT HAND-MAINTAIN THIS AGAINST THE MODULE. Two hand-written
-/// copies of one vocabulary is what produced this row AND the un-park row … the same
-/// defect in both directions inside one week."* A local `{ 'done', 'dropped',
-/// 'wont_fix' }` here would be that second copy, and verb number eight would land on one
-/// side only.
+/// `isOpenStatus` is imported, not re-spelled. Two hand-written copies of one status
+/// vocabulary drift apart, and a new verb would land on one side only.
 library;
 
 import '../../task_list/data/task_list_model.dart' show isOpenStatus;
 import 'task_write_repository.dart';
 
-/// The verbs, in the fixed order they render in — the SHARED MODULE's order
-/// (`taskVerbs.ts:97`).
+/// The verbs, in the fixed order they render in, which is the shared module's order.
 ///
-/// ⚠️ THE ORDER IS NOT ALPHABETICAL AND NOT ARBITRARY. `fixed` sits between `wont_fix`
-/// and `unpark` because that is where the shared module puts it; re-sorting this list
-/// would make the mobile row offer the same seven verbs in a different order from every
-/// other client, which reads to an operator as a different board.
+/// The order is not alphabetical: `fixed` sits between `wont_fix` and `unpark`. Re-sorting
+/// it would offer the same seven verbs in a different order from every other client. To an
+/// operator that reads as a different board.
 const List<String> kTaskVerbs = <String>[
   'park', 'drop', 'demote', 'wont_fix', 'fixed', 'unpark', 'approve',
 ];
 
 /// What one verb asks the operator for before it can be built.
 ///
-/// 🔴 THIS TABLE IS THE POINT. Seven verbs share one sheet and they do NOT share one
-/// obligation: four require a reason, two require a date, one requires a receipt and
-/// nothing else, and two require nothing at all. A sheet that asked every verb for the
-/// same thing would be a sheet that is wrong for six of them.
+/// The seven verbs share one sheet but not one obligation. Four require a reason and two
+/// require a date. One requires a receipt and nothing else. Two require nothing.
 class VerbNeeds {
-  /// The `to_status` the transition endpoint is asked for.
+  /// The verb name, which is also the `to_status` the transition endpoint is asked for.
   final String name;
 
   /// The human name, for a button or a sheet title.
@@ -50,21 +38,22 @@ class VerbNeeds {
   /// True when a chase / triage date is required.
   final bool date;
 
-  /// The label the date field announces itself with; '' when there is no date.
+  /// The label the date field announces itself with; empty when there is no date.
   ///
-  /// ⚠️ IT NAMES THE QUESTION, NOT THE FIELD THE SERVER STORES IT IN. Rick, on the web
-  /// control: *"I really have no idea what the date chooser is for."* A control whose
-  /// purpose the operator cannot infer is a defect in the control, so park asks
-  /// "Chase me again on" rather than announcing itself as `next_chase_ts`.
+  /// It names the question the operator is answering, not the field the server stores:
+  /// park asks "Chase me again on", not `next_chase_ts`.
+  /// Design: src/docs/decisions/README.md (R-VN-date-label)
   final String dateLabel;
 
   /// The reason box's hint while this verb is chosen.
   final String placeholder;
 
-  /// True when the verb closes the row for good and earns the arm-then-confirm step
-  /// (`taskVerbs.ts:116-117` — `terminal: true` is the shared module's `armsTwice`).
+  /// True when the verb closes the row for good and earns the arm-then-confirm step.
+  ///
+  /// This is the shared web module's `armsTwice`.
   final bool terminal;
 
+  /// Creates one verb's obligations.
   const VerbNeeds( {
     required this.name,
     required this.label,
@@ -75,13 +64,11 @@ class VerbNeeds {
     required this.terminal,
   } );
 
-  /// True when this verb needs the operator to supply or acknowledge something before
-  /// it can be sent — i.e. when pressing it must open the reason sheet.
+  /// True when pressing the verb must open the reason sheet.
   ///
-  /// ⚠️ `fixed` REACHES HERE WITH `reason: false` AND STILL OPENS THE SHEET. It carries
-  /// a receipt the operator is closing a row on, and a terminal write whose only visible
-  /// step is a button is a terminal write nobody read. The sheet is where it says what
-  /// will be recorded.
+  /// That is when the operator must supply or acknowledge something first. `fixed` has
+  /// `reason: false` and still opens the sheet. It closes the row on a receipt, and the
+  /// sheet shows what will be recorded.
   bool get needsSheet => reason || date || terminal;
 }
 
@@ -122,9 +109,8 @@ const Map<String, VerbNeeds> _needs = <String, VerbNeeds>{
     placeholder : 'why this will not be done…',
     terminal    : true,
   ),
-  // FIXED. `reason: false` — a fix explains itself, and the shared module rejected a
-  // mandatory note here as friction on the exact path Rick called too slow.
-  // `terminal: true` because `done` is append-only and a misclick cannot be undone.
+  // Fixed needs no reason: a fix explains itself, and a mandatory note would slow the
+  // fastest path. It is terminal because `done` is append-only and cannot be undone.
   'fixed' : VerbNeeds(
     name        : 'fixed',
     label       : 'Fixed',
@@ -154,14 +140,13 @@ const Map<String, VerbNeeds> _needs = <String, VerbNeeds>{
   ),
 };
 
-/// Look up one verb's obligations.
+/// Looks up one verb's obligations.
 ///
 /// Requires:
 ///   - verb is a verb name, or null
 ///
 /// Ensures:
-///   - an unknown verb (including '' and null) returns null — never a partially
-///     populated record, and never a throw
+///   - an unknown verb, including '' and null, returns null, never a partial record
 ///   - a known verb returns its full obligation record
 VerbNeeds? verbNeeds( String? verb ) {
   if ( verb == null || verb.isEmpty ) return null;
@@ -175,13 +160,11 @@ String verbLabel( String verb ) => _needs[ verb ]?.label ?? verb;
 
 /// The refusal each verb earns when its reason is blank.
 ///
-/// 🔴 FOUR VERBS SHARE ONE BOX AND MUST NOT SHARE ONE COMPLAINT. *"'A reason is
-/// required' is true of four of them and teaches none of them"* (`taskVerbs.ts:160-165`):
-/// park needs a QUOTE, demote must say why a row goes back to triage, and won't-fix is a
-/// refusal whose justification is the only thing distinguishing it from work that got
-/// forgotten.
+/// The four reason-requiring verbs get separate complaints, because "A reason is
+/// required" teaches none of them. Park needs a quote. Demote must say why the row goes
+/// back to triage. A won't-fix reason is all that separates it from forgotten work.
 ///
-/// Ensures: a verb-specific sentence for each of the four verbs that require a reason.
+/// Ensures: a verb-specific sentence for each verb that requires a reason.
 String verbReasonComplaint( String verb ) {
   switch ( verb ) {
     case 'drop'     : return 'A drop reason is required.';
@@ -196,8 +179,8 @@ String verbReasonComplaint( String verb ) {
 
 /// The refusal a verb earns when its required date is blank.
 ///
-/// Park and demote are the only two that reach here, and they mean different things by a
-/// date, so they say different things (`taskVerbs.ts:170-175`).
+/// Only park and demote reach here. They mean different things by a date, so they say
+/// different things.
 String verbDateComplaint( String verb ) => verb == 'park'
     ? 'A chase date is required — a park is bounded, never indefinite.'
     : 'A triage-by date is required — a held row is bounded, never indefinite. '
@@ -205,14 +188,22 @@ String verbDateComplaint( String verb ) => verb == 'park'
 
 /// One verb's standing on one row: may it be chosen, and if not, why not.
 class VerbLegality {
+  /// The verb name.
   final String    verb;
+
+  /// The human name for the control.
   final String    label;
+
+  /// True when the verb may be chosen on this row.
   final bool      enabled;
+
+  /// What the verb asks the operator for.
   final VerbNeeds needs;
 
   /// Empty when enabled; otherwise the sentence the disabled control carries.
   final String why;
 
+  /// Creates one verb's standing on one row.
   const VerbLegality( {
     required this.verb,
     required this.label,
@@ -224,26 +215,22 @@ class VerbLegality {
 
 /// Which verbs a row in [status] may legally take.
 ///
-/// 🔴 A TERMINAL ROW OFFERS NOTHING. `done` / `dropped` / `wont_fix` are append-only —
-/// the server's `validate_transition` refuses every edge out of them.
-///
-/// ⚠️ APPROVE AND DEMOTE ARE OPPOSITE ENDS OF ONE DOOR, so exactly one of them is ever
-/// live on a row. Approve is the holding area's exit (`not_approved → queued`); demote
-/// is its entrance. Offering both hands the operator a move that is a no-op in one
-/// direction, which the store rejects as a FAILURE rather than as nothing happening.
+/// A terminal row offers nothing: the server refuses every transition out of `done`,
+/// `dropped` and `wont_fix`. Approve exits the holding area and demote enters it, so only
+/// one is live on a row. Offering both would give a no-op, which the store rejects.
 ///
 /// Requires:
 ///   - status is the row's status string, or null
 ///
 /// Ensures:
 ///   - returns exactly [kTaskVerbs].length entries, in [kTaskVerbs] order
-///   - a terminal row returns every entry disabled, each carrying the same append-only
-///     sentence naming the row's own status
-///   - park is enabled ONLY from queued / in_progress
-///   - approve is enabled ONLY on a not_approved row; demote on every OTHER non-terminal
-///     row
+///   - a terminal row returns every entry disabled, each with the same append-only
+///     sentence naming the row's status
+///   - park is enabled only from queued or in_progress
+///   - approve is enabled only on a not_approved row
+///   - demote is enabled on every other non-terminal row
 ///   - drop, won't-fix and fixed are enabled on every non-terminal row
-///   - un-park is enabled ONLY on a parked row
+///   - un-park is enabled only on a parked row
 List<VerbLegality> verbLegality( String? status ) {
   final s          = ( status ?? '' ).toLowerCase();
   final isTerminal = !isOpenStatus( s.isEmpty ? null : s );
@@ -254,9 +241,8 @@ List<VerbLegality> verbLegality( String? status ) {
 
   final parkLegal = !isTerminal && ( s == 'queued' || s == 'in_progress' );
 
-  // Keyed on the STORED status. An EXPIRED park still reads `parked` here — expiry is
-  // computed at read time by the store and never rewrites the row — so an expired park
-  // is offered the verb too, which is the case Rick raised (row 49b87212).
+  // Keyed on the stored status. The store computes park expiry at read time and never
+  // rewrites the row, so an expired park still reads `parked` and is offered un-park.
   final isParked    = s == 'parked';
   final demoteLegal = !isTerminal && !isHeld;
 
@@ -276,10 +262,9 @@ List<VerbLegality> verbLegality( String? status ) {
     entry( 'drop',     !isTerminal, dead ),
     entry( 'demote',   demoteLegal, isTerminal ? dead : 'this row is already in the holding area' ),
     entry( 'wont_fix', !isTerminal, dead ),
-    // Legal from every non-terminal status, exactly as drop and won't-fix are: the
-    // shared module's spec carries `legalFrom: null, illegalFrom: null`, so nothing
-    // narrows it. Marking a held row fixed is a real move — work can land before anyone
-    // gets round to approving the ticket for it.
+    // Legal from every non-terminal status, as drop and won't-fix are: the shared module
+    // narrows it nowhere. Marking a held row fixed is real, because work can land before
+    // anyone approves its ticket.
     entry( 'fixed',    !isTerminal, dead ),
     entry( 'unpark',   isParked,    isTerminal ? dead : 'only a parked row can be un-parked' ),
     entry( 'approve',  isHeld,      isTerminal ? dead : 'only a row in the holding area can be approved' ),
@@ -288,39 +273,31 @@ List<VerbLegality> verbLegality( String? status ) {
 
 /// What this client sends as Fixed's operator attestation.
 ///
-/// 🔴 THE VALUE IS NOT TRUSTED. The server refuses a `->done` with an empty receipt, then
-/// REPLACES this string with the identity on the validated login before recording it
-/// (`routers/tasks.py` `_resolved_operator_attestation`). THE KEY BEING PRESENT IS WHAT
-/// MATTERS — the multiplexer picked the verb up in `709128d4` without it and every Fixed
-/// press was refused by the server.
-///
-/// ⚠️ `(mobile)`, NOT `(multiplexer)`. The tag's only job is to record WHICH CLIENT made
-/// the edit; a phone stamping `(multiplexer)` would file its writes as desktop ones —
-/// the same reason [TaskWriteRepository.deriveActor] carries `(mobile)`.
+/// The value is not trusted. The server refuses a `->done` with an empty receipt, then
+/// replaces this string with the identity on the validated login before recording it. The
+/// key must be present. The tag is `(mobile)`, not `(multiplexer)`, so a phone's writes
+/// are not filed as desktop ones, as in [TaskWriteRepository.deriveActor].
 const String kMobileOperatorAttestation = 'operator (mobile)';
 
-/// Build the [TaskVerb] payload for [verb] from what the operator supplied.
+/// Builds the [TaskVerb] payload for [verb] from what the operator supplied.
 ///
-/// 🔴 THE ONE PLACE A SHEET'S TEXT BECOMES A PAYLOAD. Every caller routes through here
-/// rather than reaching for a factory directly, so `park_reason` versus `reason` is
-/// decided once (note 1 of §4.3) and the explicit-null on un-park cannot be "simplified"
-/// away by a caller who never read note 2.
+/// Every caller routes through here, so `park_reason` versus `reason` is decided once and
+/// the explicit null on un-park cannot be simplified away.
 ///
 /// Requires:
 ///   - verb is one of [kTaskVerbs]
-///   - reason is the TRIMMED reason text, or null when the verb takes none
+///   - reason is the trimmed reason text, or null when the verb takes none
 ///   - chaseTs is the chosen instant, or null when the verb takes no date
 ///
 /// Ensures:
 ///   - park's reason lands under `park_reason`; every other verb's under `reason`
 ///   - park and demote carry `next_chase_ts` as an ISO-8601 UTC instant
-///   - fixed carries `receipt_refs.operator_attestation` and NO reason
-///   - un-park carries an EXPLICIT null `next_chase_ts`
+///   - fixed carries `receipt_refs.operator_attestation` and no reason
+///   - un-park carries an explicit null `next_chase_ts`
 ///
 /// Raises:
 ///   - ArgumentError when verb is unknown, or when a verb that requires a reason or a
-///     date is given a blank one — a caller that reaches the wire with an empty required
-///     field has already lost the operator's edit
+///     date is given a blank one
 TaskVerb buildTaskVerb( String verb, { String? reason, DateTime? chaseTs } ) {
   final needs = verbNeeds( verb );
   if ( needs == null ) throw ArgumentError( 'unknown verb: $verb' );
@@ -333,10 +310,8 @@ TaskVerb buildTaskVerb( String verb, { String? reason, DateTime? chaseTs } ) {
     throw ArgumentError( '$verb requires a chase date' );
   }
 
-  // ⚠️ UTC AND ISO-8601, BECAUSE THE PHONE'S ZONE IS NOT THE SERVER'S. `DateTime.now()`
-  // on a handset in Madrid and one in Boston serialise the same wall-clock differently,
-  // and a chase date filed in local time re-chases at the wrong hour — or, across a date
-  // boundary, on the wrong day.
+  // UTC and ISO-8601, because the phone's zone is not the server's. A chase date filed in
+  // local time re-chases at the wrong hour, or across a date boundary on the wrong day.
   final chaseIso = chaseTs?.toUtc().toIso8601String();
 
   switch ( verb ) {
@@ -348,6 +323,6 @@ TaskVerb buildTaskVerb( String verb, { String? reason, DateTime? chaseTs } ) {
     case 'wont_fix' : return TaskVerb.wontFix( reason: text );
     case 'fixed'    : return TaskVerb.fixed( operatorAttestation: kMobileOperatorAttestation );
   }
-  // Unreachable: `verbNeeds` already refused anything outside kTaskVerbs.
+  // Unreachable: verbNeeds already refused anything outside kTaskVerbs.
   throw ArgumentError( 'unknown verb: $verb' );
 }

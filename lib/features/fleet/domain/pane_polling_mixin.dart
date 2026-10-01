@@ -6,99 +6,68 @@ import 'package:flutter/widgets.dart';
 import '../../../services/network/network_connectivity_service.dart';
 import 'pane_visibility_mixin.dart';
 
-/// Lifecycle-aware, foreground-pane-only polling. ONE copy, mixed into each pane's
-/// bloc — not five copies of a timer.
+/// Polls while the pane is visible and the app is foregrounded; one copy for every pane.
 ///
-/// 🔴 THIS IS NOW THE TIMER HALF ONLY. The visibility machine — `_paneVisible`,
-/// `_appForeground`, `_started`, the lifecycle subscription, the single in-flight request
-/// slot and their teardown — lives in [PaneVisibilityMixin], because the Live Console
-/// needs all of it and needs no timer at all: a WebSocket pushes to it. What is left here
-/// is the `Timer.periodic`, the metered interval, and [pollOnce].
-///
-/// ⚠️ MIXIN ORDER IS LOAD-BEARING AND THE `on` CLAUSE IS WHAT ENFORCES IT:
+/// This is the timer half. The visibility machine (flags, lifecycle subscription, the
+/// single in-flight request slot and its teardown) is in [PaneVisibilityMixin], which the
+/// Live Console uses without a timer. What is left here is the periodic timer, the
+/// metered interval and [pollOnce]. Order matters: declare it last, so [close] stops the
+/// timer and then reaches the visibility teardown through `super.close()`.
 ///
 /// ```dart
 /// class XBloc extends Bloc<E, S> with PaneVisibilityMixin<E, S>, PanePollingMixin<E, S>
 /// ```
 ///
-/// This mixin declares `on PaneVisibilityMixin<E, S>`, so the wrong order does not
-/// compile — a rule that cannot fail is not a rule. It goes **last** so it is the
-/// most-derived: [close] stops the timer and then calls `super.close()`, which reaches
-/// the visibility teardown.
-///
-/// "Poll only the foreground pane" is not a rule until something implements it, and this
-/// app's architecture makes the wrong outcome the default — see [PaneVisibilityMixin]'s
-/// header for the two obligations that fall on the host, and why a test of this feature
-/// passes without it.
-///
-/// The host bloc implements [pollOnce] and calls [startPolling] once it has a route to be
-/// visible in.
+/// The `on PaneVisibilityMixin<E, S>` clause makes the wrong order a compile error. The
+/// host implements [pollOnce] and calls [startPolling] once it has a route to be visible
+/// in. See [PaneVisibilityMixin] for the two obligations the host carries.
 mixin PanePollingMixin<E, S> on PaneVisibilityMixin<E, S> {
   Timer? _timer;
 
-  /// One poll. The token is cancelled when the pane goes away mid-request — honour it by
-  /// handing it to the Dio call, or the cancellation buys nothing.
+  /// Performs one poll.
+  ///
+  /// The token is cancelled when the pane goes away mid-request. Pass it to the Dio call,
+  /// or the cancellation has no effect.
   Future<void> pollOnce( CancelToken token );
 
   /// Wi-Fi, or any connection this phone does not pay by the megabyte for.
   static const Duration wifiInterval = Duration( seconds: 60 );
 
-  /// Mobile data. Plan §6.5's number.
+  /// Mobile data.
   static const Duration mobileInterval = Duration( seconds: 180 );
 
-  /// Test seam, and the same shape `lifecycleStream` uses for the same reason:
-  /// `NetworkConnectivityService` is a hard singleton (`factory … => _instance`), so it
-  /// cannot be faked. What the interval needs from it is one boolean, so that is what is
-  /// injectable — not the service.
+  /// Whether the connection is metered; a test seam.
+  ///
+  /// [NetworkConnectivityService] is a singleton and cannot be faked, and the interval
+  /// needs one boolean from it, so tests override this getter instead.
   @protected
   bool get isMeteredConnection => NetworkConnectivityService().isMobile;
 
-  /// How often to poll while visible and foregrounded.
+  /// How often to poll while visible and foregrounded: 60 s on Wi-Fi, 180 s on mobile data.
   ///
-  /// ⚠️ SIXTY SECONDS IS THE WEB'S NUMBER AND A PHONE IS NOT A BROWSER TAB. Measured
-  /// per poll: ~2.1 MB for 500 full rows, ~107 KB terse (`tasks.py:739`). At 60 s that
-  /// is ~125 MB or ~6.4 MB per foreground hour on ONE pane. The panes pull terse, which
-  /// is most of the difference; a pane on a metered connection also slows down —
-  /// `network_connectivity_service.dart:52-53` exposes `isWifi`/`isMobile`.
-  ///
-  /// 🔴 THIS DEFAULT IS NOW NETWORK-AWARE, AND IT MOVED HERE FROM THE PANES BECAUSE IT
-  /// WAS BECOMING A FOURTH COPY. Task List and Holding Area each carried a hand-written
-  /// `_network.isMobile ? 180 : 60`, character for character; Fleet Status carried none
-  /// and therefore polled every 60 s on mobile data (gap G8), and Finished Tasks did not
-  /// poll at all (G7). Adding the line to the two panes that were missing it would have
-  /// made four copies of one rule — and a rule copied four times is a rule that will
-  /// disagree with itself, exactly as the two hand-written verb lists did.
-  ///
-  /// ⚠️ THE INTERVAL IS READ WHEN THE TIMER IS CREATED, NOT ON EVERY TICK, so a phone
-  /// that moves from Wi-Fi to mobile data mid-poll keeps the faster period until the
-  /// timer is next rebuilt — which happens on every hide/show and every background/
-  /// foreground trip. That is pre-existing behaviour and is NOT changed here: reacting to
-  /// the connectivity stream would restart the timer from a third trigger, which is a
-  /// lifecycle change, and this row is not the place for one. Named rather than left for
-  /// the next reader to discover.
+  /// A poll costs about 2.1 MB for 500 full rows, or 107 KB terse. At 60 s that is about
+  /// 125 MB or 6.4 MB per foreground hour on one pane. So the panes pull terse and slow
+  /// down on a metered connection. The interval is read when the timer is created, not on
+  /// each tick. A change of network keeps the old period until the timer is rebuilt, on
+  /// the next hide/show or background/foreground trip.
   Duration get pollInterval => isMeteredConnection ? mobileInterval : wifiInterval;
 
-  /// The poll predicate, exposed so a test can assert the state rather than infer it from
-  /// request counts.
+  /// True while the timer exists; tests assert this instead of counting requests.
   ///
-  /// ⚠️ THIS IS THE TIMER, NOT THE VISIBILITY FLAGS. `isPolling` was `_timer != null`
-  /// before the extraction and stays `_timer != null` after it, so the four existing panes
-  /// and their tests see no change. [PaneVisibilityMixin.isPaneActive] is the other
-  /// question — *should* this pane be working — and the two are deliberately separate:
-  /// a pane can be active with no timer yet for exactly one synchronous moment.
+  /// This is the timer, not the visibility flags. [PaneVisibilityMixin.isPaneActive]
+  /// answers whether the pane should be working. The two differ for one synchronous
+  /// moment after the pane becomes active.
   bool get isPolling => _timer != null;
 
-  /// Begin observing. Idempotent — a rebuild must not start a second timer.
+  /// Begins observing visibility and polling; calling it twice starts one timer only.
   ///
-  /// An alias for [PaneVisibilityMixin.startVisibility], kept because four panes and
-  /// their tests call it by this name, and because "start polling" is what it means here.
+  /// Alias for [PaneVisibilityMixin.startVisibility], named for what it means here.
   void startPolling() => startVisibility();
 
-  /// The timer half of the visibility reaction.
+  /// Starts or stops the timer when the pane becomes active or inactive.
   ///
-  /// By the time this runs with `active: false`, the in-flight request has already been
-  /// cancelled by the mixin — so all that is left is the timer, which is the thing that
-  /// would otherwise keep firing.
+  /// When `active` is false the mixin has already cancelled the in-flight request, so
+  /// only the timer is left to stop.
   @override
   void onActiveChanged( { required bool active, required bool refreshNow } ) {
     if ( !active ) {
@@ -110,9 +79,8 @@ mixin PanePollingMixin<E, S> on PaneVisibilityMixin<E, S> {
     if ( refreshNow ) _fire();
   }
 
-  /// One guarded poll. A tick that lands while a poll is still outstanding does nothing —
-  /// [PaneVisibilityMixin.claimRequest] is the guard, and it is the same guard whether
-  /// the wake-up was a tick or a transition.
+  // One guarded poll: a tick that lands while a poll is outstanding does nothing.
+  // [PaneVisibilityMixin.claimRequest] is the guard for both ticks and transitions.
   void _fire() {
     final token = claimRequest();
     if ( token == null ) return;
@@ -124,10 +92,9 @@ mixin PanePollingMixin<E, S> on PaneVisibilityMixin<E, S> {
   Future<void> close() {
     _timer?.cancel();
     _timer = null;
-    // 🔴 CANCELLING A `Timer.periodic` DOES NOT CANCEL AN OUTSTANDING HTTP REQUEST.
-    // The response still arrives, still parses, still wakes a backgrounded app. The
-    // request half is cancelled by `PaneVisibilityMixin.close()`, which `super.close()`
-    // reaches — which is why this mixin must be the most-derived one.
+    // Cancelling the timer does not cancel an outstanding HTTP request; the response would
+    // still arrive and wake a backgrounded app. `PaneVisibilityMixin.close()` cancels the
+    // request, and `super.close()` reaches it because this mixin is the most-derived.
     return super.close();
   }
 }
