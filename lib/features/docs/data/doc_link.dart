@@ -1,24 +1,17 @@
-/// Pure parsing of doc-viewer links out of a notification `abstract`.
+/// Parses doc-viewer links out of a notification abstract and classifies them.
 ///
-/// Deliberately free of Flutter and IO imports so the whole classification
-/// surface is unit-testable without a widget harness.
-///
-/// The fleet convention (global CLAUDE.md, "DOCUMENT VIEWER LINKS") is that an
-/// abstract carries markdown links whose href is a Lupin SPA route:
-///
-///     [Open: <filename>](/app/docs?path=<project>/<rel>)
-///
-/// The mobile client does not load that SPA route. It maps the href onto the
-/// backend's raw-content endpoint and renders the bytes natively, which is why
-/// this file's job is classify-and-normalize rather than navigate.
+/// It imports neither Flutter nor IO, so the classification runs without a widget harness.
+/// An abstract carries markdown links whose href is a route of the Lupin web app, such as
+/// `[Open: <filename>](/app/docs?path=<project>/<rel>)`.
+/// The mobile client does not load that route. It maps the href onto the backend's
+/// raw-content endpoint and renders the bytes natively.
 
 library;
 
 /// What a parsed href turned out to be.
 ///
-/// `unknown` is a first-class outcome, not an error: an abstract is prose, and
-/// prose contains links we have no business following. An `unknown` link
-/// renders as inert text.
+/// An `unknown` link is a normal outcome, not an error: an abstract is prose, and prose
+/// contains links the app has no business following. It renders as inert text.
 enum DocLinkKind {
   /// A project documentation file, served by `GET /api/docs/file`.
   docs,
@@ -27,45 +20,48 @@ enum DocLinkKind {
   /// `GET /api/io/file`.
   io,
 
-  /// An absolute `http(s)` URL belonging to someone else. Handed to the system
-  /// browser behind a confirm, never opened in-app.
+  /// An absolute `http(s)` URL belonging to someone else.
+  ///
+  /// It is handed to the system browser behind a confirm, never opened in-app.
   external,
 
-  /// Anything we decline to follow — including the RETIRED `?scope=` form.
+  /// Anything the app declines to follow, including the retired `?scope=` form.
   unknown,
 }
 
-/// One link found in an abstract, classified and (for our own kinds) resolved
-/// to the API request that will fetch its bytes.
+/// One link found in an abstract, classified and resolved to the request that fetches it.
 class DocLink {
-  /// Classification. Drives both whether the link is tappable and what happens
-  /// on tap.
+  /// Classification, which decides whether the link is tappable and what a tap does.
   final DocLinkKind kind;
 
-  /// The href exactly as written in the abstract, never rewritten. Kept so the
-  /// UI can show the user what it is about to open, and so an `unknown` link
-  /// can be reported precisely.
+  /// The href exactly as written in the abstract, never rewritten.
+  ///
+  /// The UI shows it so the user sees what is about to open, and an `unknown` link is
+  /// reported by it.
   final String rawHref;
 
   /// The markdown link's display text.
   final String label;
 
-  /// Registered project/scope name — the first path segment. Null unless
-  /// [kind] is [DocLinkKind.docs].
+  /// Registered project name, the first path segment.
+  ///
+  /// It is null unless [kind] is [DocLinkKind.docs].
   final String? project;
 
-  /// Path within the project, no leading slash. Null unless [kind] is
-  /// [DocLinkKind.docs] or [DocLinkKind.io].
+  /// Path within the project, with no leading slash.
+  ///
+  /// It is null unless [kind] is [DocLinkKind.docs] or [DocLinkKind.io].
   final String? relPath;
 
-  /// Backend path to request. Empty for [DocLinkKind.external] and
-  /// [DocLinkKind.unknown].
+  /// Backend path to request, empty for [DocLinkKind.external] and [DocLinkKind.unknown].
   final String apiPath;
 
-  /// Query parameters for [apiPath], already percent-DECODED. Dio encodes on
-  /// the way out, so pre-encoding here would double-encode.
+  /// Query parameters for [apiPath], already percent-decoded.
+  ///
+  /// Dio encodes on the way out, so encoding here would encode twice.
   final Map<String, String> query;
 
+  /// Creates a classified link.
   const DocLink( {
     required this.kind,
     required this.rawHref,
@@ -79,12 +75,14 @@ class DocLink {
   /// True when tapping this link should do something in-app.
   bool get isFetchable => kind == DocLinkKind.docs || kind == DocLinkKind.io;
 
-  /// True when this link should be offered as a tap target at all — fetchable
-  /// links plus external URLs, which open in the system browser.
+  /// True when this link is a tap target at all.
+  ///
+  /// Fetchable links qualify, and so do external URLs, which open in the system browser.
   bool get isTappable => isFetchable || kind == DocLinkKind.external;
 
-  /// Filename of the target, for titles and share filenames. Falls back to the
-  /// link label when there is no path to take a basename from.
+  /// Filename of the target, for titles and share filenames.
+  ///
+  /// It falls back to the link label when there is no path to take a basename from.
   String get displayName {
     if ( relPath == null || relPath!.isEmpty ) return label;
     final segments = relPath!.split( "/" ).where( ( s ) => s.isNotEmpty );
@@ -97,9 +95,8 @@ class DocLink {
 
 /// Matches a markdown inline link: `[label](href)`.
 ///
-/// The label group is non-greedy and rejects nested brackets so that two links
-/// on one line do not merge into a single match. The href group stops at the
-/// first `)`, which is correct for the hrefs we emit (no parenthesized paths).
+/// The label group rejects nested brackets so that two links on one line do not merge.
+/// The href group stops at the first `)`, which fits the hrefs emitted (no parentheses in paths).
 final RegExp _markdownLink = RegExp( r'\[([^\]]*)\]\(([^)\s]+)\)' );
 
 /// Every link in [abstractText], in the order they appear.
@@ -110,7 +107,7 @@ final RegExp _markdownLink = RegExp( r'\[([^\]]*)\]\(([^)\s]+)\)' );
 /// Ensures:
 ///     - returns an empty list for null, empty, or link-free input
 ///     - returns one DocLink per markdown link, including `unknown` ones, so
-///       callers can distinguish "no links" from "links we won't follow"
+///       callers can tell "no links" from "links the app will not follow"
 ///     - never throws on malformed input; anything unparseable classifies as
 ///       DocLinkKind.unknown
 List<DocLink> parseDocLinks( String? abstractText ) {
@@ -126,11 +123,10 @@ List<DocLink> parseDocLinks( String? abstractText ) {
   return links;
 }
 
-/// True when [abstractText] carries at least one link we would actually fetch.
+/// True when [abstractText] carries at least one link the app would fetch.
 ///
-/// This is the predicate behind the card's document-icon badge: the badge
-/// promises "there is something here to open", so an abstract whose only links
-/// are external or unrecognized must NOT show it.
+/// The card's document-icon badge promises something to open, so an abstract whose only
+/// links are external or unrecognized must not show it.
 bool hasFetchableDocLink( String? abstractText ) =>
     parseDocLinks( abstractText ).any( ( l ) => l.isFetchable );
 
@@ -145,7 +141,7 @@ bool hasFetchableDocLink( String? abstractText ) =>
 ///     - `/api/docs/file?path=...` → DocLinkKind.docs, passed through
 ///     - `/api/io/file?path=...` → DocLinkKind.io, passed through
 ///     - `http://` or `https://` → DocLinkKind.external
-///     - a doc href carrying the RETIRED `scope` parameter → DocLinkKind.unknown
+///     - a doc href carrying the retired `scope` parameter → DocLinkKind.unknown
 ///     - anything else → DocLinkKind.unknown
 ///     - never throws; an unparseable href classifies as unknown
 DocLink classifyDocHref( String href, { String label = "" } ) {
@@ -174,18 +170,16 @@ DocLink classifyDocHref( String href, { String label = "" } ) {
     );
   }
 
-  // Only same-origin absolute paths are ours. A relative href ("./notes.md")
-  // has no project context, so we cannot resolve it and will not guess.
+  // Only same-origin absolute paths are ours. A relative href has no project context,
+  // so it cannot be resolved and is not guessed at.
   if ( !href.startsWith( "/" ) ) return unknown();
 
   // `queryParameters` percent-decodes for us, so `path` arrives usable.
   final path = uri.queryParameters[ "path" ];
 
-  // RETIRED `?scope=` form. Rick 2026-09-08: modern format only — we do not
-  // rewrite legacy links. The backend answers 400 on this parameter (aggressive
-  // -400 policy, 2026-05-21), so offering a tap here would offer a failure.
-  // Detected EXPLICITLY rather than by falling through, so this stays a
-  // decision someone can find and reverse.
+  // The retired `?scope=` form is not rewritten. The backend answers 400 on it, so a tap
+  // would offer a failure. It is detected explicitly so the rule stays easy to find.
+  // Design: src/docs/decisions/README.md (R-DOC-retired-scope)
   if ( uri.queryParameters.containsKey( "scope" ) ) return unknown();
 
   switch ( uri.path ) {
@@ -231,9 +225,10 @@ class _ProjectPath {
 
 /// Split `<project>/<rel>` into its two halves.
 ///
-/// Returns null when there is no project segment or no remainder — a bare
-/// `path=README.md` names no project and the backend cannot resolve it, so we
-/// decline rather than inventing one.
+/// Returns null when there is no project segment or no remainder.
+///
+/// A bare `path=README.md` names no project and the backend cannot resolve it, so the
+/// split declines rather than inventing one.
 _ProjectPath? _splitProjectPath( String path ) {
   final trimmed = path.startsWith( "/" ) ? path.substring( 1 ) : path;
   final slash   = trimmed.indexOf( "/" );
@@ -244,13 +239,11 @@ _ProjectPath? _splitProjectPath( String path ) {
 /// The scope name the io root answers to in listings.
 const ioScope = "io";
 
-/// The link that fetches [relPath] inside [scope], for browsing (row 61ecfb22).
+/// The link that fetches [relPath] inside [scope], for browsing.
 ///
-/// A listing names its entries by scope-relative path, so the browser builds
-/// its own links rather than following each entry's `view_url`.
-/// ⚠️ THAT IS DELIBERATE (Mr. Radio, 2026-09-24): in `io` the `view_url` of an
-/// .mp3 is the web audio PAGE and a .pdf's has no project segment — follow them
-/// blindly and a phone fetches a web page, or the wrong file.
+/// The browser builds its own links from each entry's scope-relative path and does not
+/// follow its `view_url`. In `io` an mp3's `view_url` is the web audio page and a pdf's
+/// has no project segment, so following it would fetch the wrong thing.
 ///
 /// Requires:
 ///   - [scope] is a registered doc scope, or [ioScope]
@@ -286,12 +279,13 @@ DocLink docLinkFor( String scope, String relPath, { String label = "" } ) {
   );
 }
 
+/// The parent directory of [rel], empty at the top level.
 String _dirname( String rel ) {
   final i = rel.lastIndexOf( "/" );
   return i <= 0 ? "" : rel.substring( 0, i );
 }
 
-/// The folder holding the file [link] points at — the 📁 Folder button.
+/// The folder holding the file [link] points at, for the Folder button.
 ///
 /// Ensures:
 ///   - null for a link that is not a docs or io link

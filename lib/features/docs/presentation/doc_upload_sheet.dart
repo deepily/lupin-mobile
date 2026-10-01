@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../data/doc_upload.dart';
 
-/// The phone's file chooser for ⬆ Upload: Android's own document browser, via
-/// the `file_picker` plugin (added 2026-09-24 on Rick's word — *"if it breaks our
-/// build process … we will remove reference to that plugin"*). Setting this to
-/// null hides Upload everywhere, which is the one-line retreat if it has to go.
+/// The phone's file chooser for Upload: Android's own document browser, via `file_picker`.
+///
+/// Setting this to null hides Upload everywhere, which is the one-line retreat if the
+/// plugin has to be removed.
 DocFilePicker? platformDocFilePicker = pickDocFileWithPlugin;
 
-/// Pick one file of any type and read it into memory.
+/// Picks one file of any type and reads it into memory.
 ///
 /// Ensures:
 ///   - null when the user backs out, or the platform returned no bytes
@@ -23,7 +23,7 @@ Future<PickedDocFile?> pickDocFileWithPlugin() async {
   return PickedDocFile( name: file.name, bytes: bytes );
 }
 
-/// Ask what to do about a taken name (the server's 409).
+/// Asks what to do about a taken name, after the server's 409.
 ///
 /// Ensures:
 ///   - Replace → [DocUploadConflictMode.replace]

@@ -8,34 +8,32 @@ import '../data/doc_repository.dart';
 import 'doc_panel.dart';
 import 'doc_viewer_screen.dart';
 
-/// A REAL split, not an overlay (rows 2416d2c5 / e0843a8a — Rick: "the
-/// notification bubbles are still covered up by the doc link document, when
-/// they should re-render in the leftmost 50%").
+/// A real split, not an overlay: the child and the open document share one layout.
 ///
-/// The first fix opened the document in a half-screen dialog. The document sat
-/// in the right half, but the conversation underneath was still laid out at
-/// full width, so the bubbles it was meant to keep readable ran on behind it.
-/// This host instead puts both in one layout: the child is given half the
-/// space and the document the other half, so the bubbles reflow into their
-/// half and nothing is occluded.
-///
-/// Placement follows [docPanelPlacementFor]: side by side at 600 logical
-/// pixels and up (an unfolded Fold), stacked on a phone-shaped screen.
+/// The child gets half the space and the document the other half, so the conversation's
+/// bubbles reflow into their half and nothing is covered. A dialog over a full-width
+/// layout would leave them running on behind the document.
+/// Placement follows [docPanelPlacementFor]: side by side at 600 logical pixels and up,
+/// stacked on a phone-shaped screen.
+/// Design: src/docs/decisions/README.md (R-DOC-split-reflow)
 class DocSplitHost extends StatefulWidget {
-  /// The surface that shares the screen with the document — the rail and the
-  /// conversation, in focus mode.
+  /// The surface that shares the screen with the document.
+  ///
+  /// In focus mode that is the rail and the conversation.
   final Widget child;
 
-  /// Repository handed to the viewer, resolved LAZILY — only when a document
-  /// is actually opened. A host that resolved it at build time would make
-  /// every screen that mounts one require a registered DocRepository, which
-  /// is a dependency the conversation itself does not have.
+  /// Repository handed to the viewer, resolved lazily when a document is opened.
+  ///
+  /// Resolving it at build time would make every screen that mounts a host require a
+  /// registered DocRepository, which the conversation itself does not need.
   final DocRepository Function() repository;
 
-  /// Where the beside/below choice is remembered. Null keeps it for this
-  /// screen's lifetime only (tests, and surfaces without preferences).
+  /// Where the beside-or-below choice is remembered.
+  ///
+  /// Null keeps it for this screen's lifetime only.
   final NotificationPreferences? prefs;
 
+  /// Creates a split host around [child].
   const DocSplitHost( {
     super.key,
     required this.child,
@@ -43,9 +41,10 @@ class DocSplitHost extends StatefulWidget {
     this.prefs,
   } );
 
-  /// The nearest host, or null when there is none. A surface with no host
-  /// (the legacy conversation screens) keeps opening documents full screen
-  /// or in the panel — nothing is forced to adopt the split.
+  /// The nearest host, or null when there is none.
+  ///
+  /// A surface with no host, such as the legacy conversation screens, keeps opening
+  /// documents full screen or in the panel.
   static DocSplitHostState? maybeOf( BuildContext context ) =>
       context.findAncestorStateOfType<DocSplitHostState>();
 
@@ -53,6 +52,7 @@ class DocSplitHost extends StatefulWidget {
   State<DocSplitHost> createState() => DocSplitHostState();
 }
 
+/// The state behind [DocSplitHost], which callers use to open and close documents.
 class DocSplitHostState extends State<DocSplitHost> {
   DocLink?    _link;
   bool        _rootsOpen = false;
@@ -60,22 +60,21 @@ class DocSplitHostState extends State<DocSplitHost> {
   String?     _textTitle;
   late bool   _belowWhenWide = widget.prefs?.docsBelowWhenWide ?? false;
 
-  // Rick 2026-09-18: flipping beside ⇄ below RE-FETCHED the document — over a
-  // cell network, for a layout change. Row and Column are different parents,
-  // so without a GlobalKey Flutter throws the viewer away and builds a new
-  // one, whose initState fetches again. A GlobalKey moves the SAME state to
-  // the new parent: no refetch, scroll position kept. The conversation gets
-  // one too, so opening or closing a document stops resetting its scroll and
-  // any half-typed reply.
+  // Flipping beside or below must not refetch the document over a cell network.
+  // Row and Column are different parents, so without a GlobalKey Flutter would discard
+  // the viewer and build a new one, whose initState fetches again. A GlobalKey moves the
+  // same state to the new parent, keeping the scroll position. The conversation gets one
+  // too, so opening or closing a document keeps its scroll and any half-typed reply.
   final GlobalKey _childKey = GlobalKey( debugLabel: 'doc-split-child' );
   GlobalKey       _docKey   = GlobalKey( debugLabel: 'doc-split-viewer' );
 
-  /// On a wide screen, does the document sit below the conversation?
+  /// True when, on a wide screen, the document sits below the conversation.
   bool get belowWhenWide => _belowWhenWide;
 
-  /// Flip beside ⇄ below, and remember it (Rick 2026-09-18: the viewer's
-  /// title-bar toggle). Narrow screens are always below; this changes them
-  /// nothing.
+  /// Flips between beside and below, and remembers the choice.
+  ///
+  /// The viewer's title-bar toggle calls it. Narrow screens are always below, so it
+  /// changes nothing there.
   void togglePlacement() {
     setState( () => _belowWhenWide = !_belowWhenWide );
     widget.prefs?.setDocsBelowWhenWide( _belowWhenWide );
@@ -87,7 +86,7 @@ class DocSplitHostState extends State<DocSplitHost> {
   /// True while in-hand text (an abstract), not a fetched document, is open.
   bool get showsText => _text != null;
 
-  /// Show [link] beside (or below) the child, replacing any open document.
+  /// Shows [link] beside or below the child, replacing any open document.
   void open( DocLink link ) {
     if ( !link.isFetchable ) return;
     setState( () {
@@ -99,9 +98,9 @@ class DocSplitHostState extends State<DocSplitHost> {
     } );
   }
 
-  /// Row 0534b50d: the global file-viewer button's landing — io's listing
-  /// with every root unfolded above it, so any scope is one tap away and
-  /// Upload is right there.
+  /// Shows io's listing with every root unfolded above it, for the global file-viewer button.
+  ///
+  /// Any scope is then one tap away, and Upload is right there.
   void openRoots() {
     setState( () {
       _link      = docLinkFor( ioScope, "" );
@@ -112,8 +111,9 @@ class DocSplitHostState extends State<DocSplitHost> {
     } );
   }
 
-  /// Show [markdown] the caller already has — a notification's abstract —
-  /// in the same half, replacing any open document (Rick 2026-09-18).
+  /// Shows [markdown] the caller already has, such as an abstract, in the same half.
+  ///
+  /// It replaces any open document.
   void openText( { required String title, required String markdown } ) {
     setState( () {
       _link      = null;
@@ -123,7 +123,7 @@ class DocSplitHostState extends State<DocSplitHost> {
     } );
   }
 
-  /// Close the document and give the child the whole screen back.
+  /// Closes the document and gives the child the whole screen back.
   void close() => setState( () {
     _link      = null;
     _text      = null;
@@ -157,9 +157,8 @@ class DocSplitHostState extends State<DocSplitHost> {
             ),
     );
 
-    // Equal halves, and a divider so the seam is visible on both themes.
-    // `Expanded` on both sides is what makes the child RE-LAY OUT rather than
-    // keep its full-width layout under a panel.
+    // Equal halves with a divider, so the seam shows on both themes.
+    // `Expanded` on both sides makes the child re-lay out and not keep its full width.
     return placement == DocPanelPlacement.rightHalf
       ? Row(
           key: const Key( TestKeys.docSplitRow ),
