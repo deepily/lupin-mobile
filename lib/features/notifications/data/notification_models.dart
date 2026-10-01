@@ -1,8 +1,6 @@
-/// Data models for the Lupin notifications API (17 endpoints).
+/// Data models for the Lupin notifications API.
 ///
-/// Field names match backend JSON exactly (snake_case) per
-/// `cosa/rest/routers/notifications.py` and
-/// `cosa/rest/notification_fifo_queue.NotificationItem.to_dict()`.
+/// Dart field names are camelCase forms of the snake_case keys the backend sends.
 library;
 
 import 'package:equatable/equatable.dart';
@@ -16,73 +14,93 @@ DateTime? _parseDt( dynamic v ) =>
 
 T? _as<T>( dynamic v ) => v is T ? v : null;
 
-/// Per-session speakerphone state record (Section B / Phase 2, 2026-05-23
-/// notif-client-sync). Stored in `NotificationBloc._speakerphoneBySession`
-/// keyed by `n.senderId`, mutated by the `speakerphone_changed` case in
-/// `_onExternalUpdate`. Diagnostic only — no UI surface (Q1 record-only
-/// resolution, plan §8.0).
+/// Speakerphone state of one session, kept for diagnostics only.
 ///
-/// `displaced` / `displacedBy` are stored verbatim from the wire payload
-/// (extracted via `n.raw["displaced"]` / `n.raw["displaced_by"]` per the
-/// OSQ B-1 resolution — `NotificationItem` has no typed accessor for these
-/// payload fields). They are NOT acted on by the bloc.
-///
-/// Extends `Equatable` so `Map<String, SpeakerphoneRecord>`-equality
-/// assertions in dispatch tests (AC-B3 idempotency: same payload injected
-/// twice → record equal) work via value-equality rather than identity.
+/// `NotificationBloc` stores one per `senderId` and updates it on `speakerphone_changed`.
+/// No UI reads it, and the bloc never acts on `displaced` or `displacedBy`.
+/// Value equality lets tests compare record maps directly.
 class SpeakerphoneRecord extends Equatable {
+  /// Whether the session's speakerphone is on.
   final bool    on;
+  /// Wire value of `displaced`, stored verbatim and never acted on.
   final String? displaced;
+  /// Wire value of `displaced_by`, stored verbatim and never acted on.
   final String? displacedBy;
 
+  /// Builds a [SpeakerphoneRecord] from already-parsed fields.
   const SpeakerphoneRecord( {
     required this.on,
     this.displaced,
     this.displacedBy,
   } );
 
+  /// Fields that define value equality.
   @override
   List<Object?> get props => [ on, displaced, displacedBy ];
 }
 
-/// A single notification item — matches `NotificationItem.to_dict()`.
-/// Returned by `GET /api/notifications/{user_id}` and `/next`, and by
-/// `conversation` / `conversation-by-date` endpoints.
+/// One notification as returned by the item, next and conversation endpoints.
 class NotificationItem {
+  /// Server-assigned identifier.
   final String   id;
+  /// Short hash form of the identifier.
   final String?  idHash;
+  /// Text spoken or shown for the notification.
   final String   message;
+  /// Optional heading.
   final String?  title;
-  final String   type;       // task | progress | alert | custom | user_initiated_message | session_topic
-  final String   priority;   // low | medium | high | urgent
-  final String?  source;     // claude_code, etc.
+  /// Kind of item: task, progress, alert, custom, user_initiated_message or session_topic.
+  final String   type;
+  /// Urgency: low, medium, high or urgent.
+  final String   priority;
+  /// Originating system, such as `claude_code`.
+  final String?  source;
+  /// Recipient user id.
   final String?  userId;
+  /// When the server created the item.
   final DateTime timestamp;
+  /// Server-formatted time label.
   final String?  timeDisplay;
+  /// Whether the item has been played.
   final bool     played;
+  /// How many times the item has been played.
   final int      playCount;
+  /// When the item was last played.
   final DateTime? lastPlayed;
+  /// Whether the sender is waiting for an answer.
   final bool     responseRequested;
-  final String?  responseType;     // yes_no | open_ended | multiple_choice | open_ended_batch
+  /// Answer format: yes_no, open_ended, multiple_choice or open_ended_batch.
+  final String?  responseType;
+  /// Value the server substitutes when the ask times out.
   final String?  responseDefault;
+  /// Choices offered for a multiple-choice or batch ask.
   final Map<String, dynamic>? responseOptions;
+  /// Seconds the sender waits before using the default answer.
   final int?     timeoutSeconds;
+  /// Sending session key.
   final String?  senderId;
-  final String?  abstractText;     // "abstract" is reserved-ish in some IDEs
+  /// Longer detail shown in the card, from the wire field `abstract`.
+  final String?  abstractText;
+  /// Whether the chime is skipped.
   final bool     suppressDing;
+  /// Job the item belongs to.
   final String?  jobId;
-  final String?  queueName;        // run | todo | done
-  final String?  progressGroupId;  // pr-{8hex}-{N}
+  /// Queue the job is in: run, todo or done.
+  final String?  queueName;
+  /// Group key tying progress items together.
+  final String?  progressGroupId;
+  /// Server hint about the likely answer.
   final Map<String, dynamic>? predictionHint;
+  /// Whether the UI shows the qualifier widget.
   final bool     displayQualifierWidget;
+  /// Display name of the sending session.
   final String?  sessionName;
-  /// Per-session voice/persona allocation, server-stamped per Q1.
-  /// Null when the server did not stamp a persona (legacy envelopes,
-  /// pre-allocation events). Consumers null-check before use; absence flows
-  /// cleanly to Sam fallback per Q3.
+  /// Persona the server stamped on the item, or null when none was stamped.
   final VoicePersona? voicePersona;
+  /// The unparsed JSON map this object came from.
   final Map<String, dynamic> raw;
 
+  /// Builds a [NotificationItem] from already-parsed fields.
   const NotificationItem( {
     required this.id,
     this.idHash,
@@ -115,6 +133,7 @@ class NotificationItem {
     this.raw = const {},
   } );
 
+  /// Parses a [NotificationItem] from decoded JSON, tolerating missing fields.
   factory NotificationItem.fromJson( Map<String, dynamic> json ) {
     final personaRaw = json["voice_persona"];
     return NotificationItem(
@@ -153,30 +172,52 @@ class NotificationItem {
   }
 }
 
-/// Returned by `GET /api/notifications/conversation/{sender_id}/{user_email}` —
-/// a flatter shape than NotificationItem with extra delivery/state fields.
+/// One message from `GET /api/notifications/conversation/{sender_id}/{user_email}`.
+///
+/// Flatter than [NotificationItem], with extra delivery and state fields.
 class ConversationMessage {
+  /// Server-assigned identifier.
   final String   id;
+  /// Sending session key.
   final String?  senderId;
+  /// Message text.
   final String   message;
+  /// Optional heading.
   final String?  title;
+  /// Item kind.
   final String   type;
+  /// Urgency level.
   final String   priority;
-  final String?  state;       // pending | delivered | responded | expired
+  /// Delivery state: pending, delivered, responded or expired.
+  final String?  state;
+  /// Whether the user has hidden the message.
   final bool     isHidden;
+  /// Longer detail, from the wire field `abstract`.
   final String?  abstractText;
+  /// When the message was created.
   final DateTime? createdAt;
+  /// When the message was delivered.
   final DateTime? deliveredAt;
+  /// When the user responded.
   final DateTime? respondedAt;
+  /// Whether the sender is waiting for an answer.
   final bool     responseRequested;
+  /// Answer format requested.
   final String?  responseType;
+  /// The user's answer, when one exists.
   final dynamic  responseValue;
+  /// Job the message belongs to.
   final String?  jobId;
+  /// Group key for progress items.
   final String?  progressGroupId;
+  /// When the message occurred.
   final DateTime timestamp;
+  /// Server-formatted time label.
   final String?  timeDisplay;
+  /// The unparsed JSON map this object came from.
   final Map<String, dynamic> raw;
 
+  /// Builds a [ConversationMessage] from already-parsed fields.
   const ConversationMessage( {
     required this.id,
     this.senderId,
@@ -200,6 +241,7 @@ class ConversationMessage {
     this.raw = const {},
   } );
 
+  /// Parses a [ConversationMessage] from decoded JSON, tolerating missing fields.
   factory ConversationMessage.fromJson( Map<String, dynamic> json ) {
     return ConversationMessage(
       id                : json["id"].toString(),
@@ -226,16 +268,24 @@ class ConversationMessage {
   }
 }
 
-/// `GET /api/notifications/{user_id}` envelope.
+/// Envelope returned by `GET /api/notifications/{user_id}`.
 class NotificationListResponse {
+  /// Status string returned by the server.
   final String status;
+  /// Recipient user id.
   final String userId;
+  /// Number of notifications the server reports.
   final int    notificationCount;
+  /// Whether played items were included.
   final bool   includePlayed;
+  /// Maximum items requested.
   final int    limit;
+  /// The returned items.
   final List<NotificationItem> notifications;
+  /// When the server built the response.
   final DateTime timestamp;
 
+  /// Builds a [NotificationListResponse] from already-parsed fields.
   const NotificationListResponse( {
     required this.status,
     required this.userId,
@@ -246,6 +296,7 @@ class NotificationListResponse {
     required this.timestamp,
   } );
 
+  /// Parses a [NotificationListResponse] from decoded JSON, tolerating missing fields.
   factory NotificationListResponse.fromJson( Map<String, dynamic> json ) {
     final raw = ( json["notifications"] as List? ) ?? const [];
     return NotificationListResponse(
@@ -263,13 +314,18 @@ class NotificationListResponse {
   }
 }
 
-/// `GET /api/notifications/{user_id}/next` envelope.
+/// Envelope returned by `GET /api/notifications/{user_id}/next`.
 class NextNotificationResponse {
-  final String status;            // "found" | "none_available"
+  /// Lookup result: found or none_available.
+  final String status;
+  /// Recipient user id.
   final String userId;
+  /// The next item, or null when none is available.
   final NotificationItem? notification;
+  /// When the server built the response.
   final DateTime timestamp;
 
+  /// Builds a [NextNotificationResponse] from already-parsed fields.
   const NextNotificationResponse( {
     required this.status,
     required this.userId,
@@ -277,6 +333,7 @@ class NextNotificationResponse {
     required this.timestamp,
   } );
 
+  /// Parses a [NextNotificationResponse] from decoded JSON, tolerating missing fields.
   factory NextNotificationResponse.fromJson( Map<String, dynamic> json ) {
     final notif = json["notification"];
     return NextNotificationResponse(
@@ -290,14 +347,20 @@ class NextNotificationResponse {
   }
 }
 
-/// Generic ack envelope used by mark-played, single-delete, etc.
+/// Generic acknowledgement used by mark-played and single-delete calls.
 class StatusAckResponse {
+  /// Status string returned by the server.
   final String   status;
+  /// Optional detail from the server.
   final String?  message;
+  /// Id of the notification concerned.
   final String?  notificationId;
+  /// When the server built the response.
   final DateTime? timestamp;
+  /// The unparsed JSON map this object came from.
   final Map<String, dynamic> raw;
 
+  /// Builds a [StatusAckResponse] from already-parsed fields.
   const StatusAckResponse( {
     required this.status,
     this.message,
@@ -306,6 +369,7 @@ class StatusAckResponse {
     this.raw = const {},
   } );
 
+  /// Parses a [StatusAckResponse] from decoded JSON, tolerating missing fields.
   factory StatusAckResponse.fromJson( Map<String, dynamic> json ) {
     return StatusAckResponse(
       status         : ( json["status"] ?? "" ).toString(),
@@ -317,14 +381,20 @@ class StatusAckResponse {
   }
 }
 
-/// `DELETE /api/notifications/bulk/{user_email}` response.
+/// Response from `DELETE /api/notifications/bulk/{user_email}`.
 class BulkDeleteResponse {
+  /// Status string returned by the server.
   final String  status;
+  /// Email of the user the request concerned.
   final String  userEmail;
+  /// Age filter in hours, when one was applied.
   final int?    hoursFilter;
+  /// Whether the user's own jobs were kept.
   final bool    excludeOwnJobs;
+  /// Number of items deleted.
   final int     deletedCount;
 
+  /// Builds a [BulkDeleteResponse] from already-parsed fields.
   const BulkDeleteResponse( {
     required this.status,
     required this.userEmail,
@@ -333,6 +403,7 @@ class BulkDeleteResponse {
     required this.deletedCount,
   } );
 
+  /// Parses a [BulkDeleteResponse] from decoded JSON, tolerating missing fields.
   factory BulkDeleteResponse.fromJson( Map<String, dynamic> json ) {
     return BulkDeleteResponse(
       status         : ( json["status"] ?? "" ).toString(),
@@ -344,17 +415,24 @@ class BulkDeleteResponse {
   }
 }
 
-/// Matches each entry from `GET /api/notifications/senders/{user_email}`
-/// AND the `senders-visible` variant (which adds `new_count`).
+/// One entry from the senders endpoint, or its senders-visible variant.
+///
+/// Only the senders-visible variant carries `new_count` and the persona fields.
 class SenderSummary {
+  /// Sending session key.
   final String   senderId;
+  /// Time of the most recent activity.
   final DateTime? lastActivity;
+  /// Number of items from the sender.
   final int      count;
-  final int?     newCount;        // only present in senders-visible
-  final VoicePersona? voicePersona;    // senders-visible only: stamped from the
-                                       // session bridge for LIVE CC sessions
-  final VoicePersona? managerPersona;  // senders-visible only: spawning manager
+  /// Unplayed count, present only in the senders-visible variant.
+  final int?     newCount;
+  /// Persona stamped from the session bridge for live sessions, senders-visible variant only.
+  final VoicePersona? voicePersona;
+  /// Persona of the spawning manager, senders-visible variant only.
+  final VoicePersona? managerPersona;
 
+  /// Builds a [SenderSummary] from already-parsed fields.
   const SenderSummary( {
     required this.senderId,
     this.lastActivity,
@@ -367,6 +445,7 @@ class SenderSummary {
   static VoicePersona? _persona( dynamic v ) =>
       v is Map ? VoicePersona.fromJson( Map<String, dynamic>.from( v ) ) : null;
 
+  /// Parses a [SenderSummary] from decoded JSON, tolerating missing fields.
   factory SenderSummary.fromJson( Map<String, dynamic> json ) {
     return SenderSummary(
       senderId       : ( json["sender_id"] ?? "" ).toString(),
@@ -379,22 +458,24 @@ class SenderSummary {
   }
 }
 
-/// One live Claude Code seat from `GET /api/commons/active-sessions` — the
-/// roster the SESSION BRIDGES know about, not the one notifications imply.
-/// Rick 2026-09-17: a seat that has never notified him was invisible on the
-/// phone, so he had to start the conversation in the browser. The mux
-/// broadcast card reads the same endpoint for its recipient chips.
+/// One live Claude Code seat from `GET /api/commons/active-sessions`.
 ///
-/// `senderId` is the rail's key (`email#hash`). The server projected only
-/// `session_id` until 2026-09-17; it stays nullable so an older server
-/// degrades to "listed but not addressable" instead of throwing.
+/// Lists every seat the session bridges know, including seats that never notified.
+/// The mux broadcast card reads the same endpoint for its recipient chips.
+/// A null `senderId` means an older server, so the seat is listed but not addressable.
 class ActiveSession {
+  /// Bridge session id.
   final String        sessionId;
+  /// Rail key in `email#hash` form, or null from an older server.
   final String?       senderId;
+  /// Persona assembled from the flat persona fields, or null when unnamed.
   final VoicePersona? persona;
+  /// When the bridge last saw the session.
   final DateTime?     lastSeen;
+  /// Whether the session's speakerphone is on.
   final bool          speakerphoneOn;
 
+  /// Builds a [ActiveSession] from already-parsed fields.
   const ActiveSession( {
     required this.sessionId,
     this.senderId,
@@ -403,10 +484,10 @@ class ActiveSession {
     this.speakerphoneOn = false,
   } );
 
-  /// Liberal parse, like every other envelope here: the persona is assembled
-  /// from the FLAT `persona_*` fields this endpoint uses (not the nested
-  /// `voice_persona` block `senders-visible` returns), and a seat with no
-  /// persona name parses with a null persona rather than an empty badge.
+  /// Parses a seat, building the persona from the flat `persona_*` fields.
+  ///
+  /// This endpoint does not nest a `voice_persona` block.
+  /// A seat with no persona name gets a null persona, not an empty badge.
   factory ActiveSession.fromJson( Map<String, dynamic> json ) {
     final name = _as<String>( json["persona_name"] );
     return ActiveSession(
@@ -423,18 +504,23 @@ class ActiveSession {
   }
 }
 
-/// `GET /api/notifications/sender-dates/...` entry.
+/// One entry from `GET /api/notifications/sender-dates/...`.
 class DateSummary {
-  final String date;     // YYYY-MM-DD
+  /// Calendar date in YYYY-MM-DD form.
+  final String date;
+  /// Number of items on the date.
   final int    count;
+  /// Number of unplayed items on the date.
   final int    newCount;
 
+  /// Builds a [DateSummary] from already-parsed fields.
   const DateSummary( {
     required this.date,
     required this.count,
     required this.newCount,
   } );
 
+  /// Parses a [DateSummary] from decoded JSON, tolerating missing fields.
   factory DateSummary.fromJson( Map<String, dynamic> json ) {
     return DateSummary(
       date     : ( json["date"] ?? "" ).toString(),
@@ -444,13 +530,18 @@ class DateSummary {
   }
 }
 
-/// `DELETE /api/notifications/conversation/...` response.
+/// Response from `DELETE /api/notifications/conversation/...`.
 class ConversationDeleteResponse {
+  /// Status string returned by the server.
   final String status;
+  /// Sending session key.
   final String senderId;
+  /// Email of the user the request concerned.
   final String userEmail;
+  /// Number of items deleted.
   final int    deletedCount;
 
+  /// Builds a [ConversationDeleteResponse] from already-parsed fields.
   const ConversationDeleteResponse( {
     required this.status,
     required this.senderId,
@@ -458,6 +549,7 @@ class ConversationDeleteResponse {
     required this.deletedCount,
   } );
 
+  /// Parses a [ConversationDeleteResponse] from decoded JSON, tolerating missing fields.
   factory ConversationDeleteResponse.fromJson( Map<String, dynamic> json ) {
     return ConversationDeleteResponse(
       status       : ( json["status"] ?? "" ).toString(),
@@ -468,14 +560,20 @@ class ConversationDeleteResponse {
   }
 }
 
-/// `DELETE /api/notifications/date/...` response.
+/// Response from `DELETE /api/notifications/date/...`.
 class DateDeleteResponse {
+  /// Status string returned by the server.
   final String status;
+  /// Sending session key.
   final String senderId;
+  /// Email of the user the request concerned.
   final String userEmail;
+  /// Date whose items were hidden.
   final String date;
+  /// Number of items hidden.
   final int    hiddenCount;
 
+  /// Builds a [DateDeleteResponse] from already-parsed fields.
   const DateDeleteResponse( {
     required this.status,
     required this.senderId,
@@ -484,6 +582,7 @@ class DateDeleteResponse {
     required this.hiddenCount,
   } );
 
+  /// Parses a [DateDeleteResponse] from decoded JSON, tolerating missing fields.
   factory DateDeleteResponse.fromJson( Map<String, dynamic> json ) {
     return DateDeleteResponse(
       status      : ( json["status"] ?? "" ).toString(),
@@ -495,16 +594,20 @@ class DateDeleteResponse {
   }
 }
 
-/// `GET /api/notifications/active-conversation/...` response.
+/// Response from `GET /api/notifications/active-conversation/...`.
 class ActiveConversationResponse {
+  /// Sender id of the active conversation, if any.
   final String? activeSenderId;
+  /// Email of the user the request concerned.
   final String  userEmail;
 
+  /// Builds a [ActiveConversationResponse] from already-parsed fields.
   const ActiveConversationResponse( {
     this.activeSenderId,
     required this.userEmail,
   } );
 
+  /// Parses a [ActiveConversationResponse] from decoded JSON, tolerating missing fields.
   factory ActiveConversationResponse.fromJson( Map<String, dynamic> json ) {
     return ActiveConversationResponse(
       activeSenderId : _as<String>( json["active_sender_id"] ),
@@ -513,14 +616,20 @@ class ActiveConversationResponse {
   }
 }
 
-/// `GET /api/notifications/project-sessions/...` entry.
+/// One entry from `GET /api/notifications/project-sessions/...`.
 class ProjectSession {
+  /// Bridge session id.
   final String   sessionId;
+  /// Sending session key.
   final String   senderId;
+  /// Time of the most recent activity.
   final DateTime? lastActivity;
+  /// Number of items.
   final int      count;
+  /// Whether the session is currently active.
   final bool     isActive;
 
+  /// Builds a [ProjectSession] from already-parsed fields.
   const ProjectSession( {
     required this.sessionId,
     required this.senderId,
@@ -529,6 +638,7 @@ class ProjectSession {
     required this.isActive,
   } );
 
+  /// Parses a [ProjectSession] from decoded JSON, tolerating missing fields.
   factory ProjectSession.fromJson( Map<String, dynamic> json ) {
     return ProjectSession(
       sessionId    : ( json["session_id"] ?? "" ).toString(),
@@ -540,41 +650,56 @@ class ProjectSession {
   }
 }
 
-/// `POST /api/notifications/generate-gist` response.
+/// Response from `POST /api/notifications/generate-gist`.
 class GistResponse {
+  /// Generated summary text.
   final String gist;
+  /// Builds a [GistResponse] from the summary text.
   const GistResponse( { required this.gist } );
 
+  /// Parses a [GistResponse] from decoded JSON, tolerating missing fields.
   factory GistResponse.fromJson( Map<String, dynamic> json ) =>
       GistResponse( gist: ( json["gist"] ?? "" ).toString() );
 }
 
-/// `POST /api/notify/response` request payload.
+/// Request payload for `POST /api/notify/response`.
 class NotificationResponsePayload {
+  /// Id of the notification being answered.
   final String  notificationId;
+  /// The answer being submitted.
   final dynamic responseValue;
 
+  /// Builds a [NotificationResponsePayload] from already-parsed fields.
   const NotificationResponsePayload( {
     required this.notificationId,
     required this.responseValue,
   } );
 
+  /// Serializes to the request JSON.
   Map<String, dynamic> toJson() => {
     "notification_id": notificationId,
     "response_value": responseValue,
   };
 }
 
-/// `POST /api/notify/response` response.
+/// Response from `POST /api/notify/response`.
 class NotificationResponseAck {
+  /// Status string returned by the server.
   final String   status;
+  /// Optional detail from the server.
   final String?  message;
+  /// Id of the notification concerned.
   final String   notificationId;
+  /// The answer the server recorded.
   final dynamic  responseValue;
+  /// When the server recorded the answer.
   final DateTime? timestamp;
+  /// Server-formatted time label.
   final String?  timeDisplay;
+  /// Server-formatted date label.
   final String?  dateDisplay;
 
+  /// Builds a [NotificationResponseAck] from already-parsed fields.
   const NotificationResponseAck( {
     required this.status,
     this.message,
@@ -585,6 +710,7 @@ class NotificationResponseAck {
     this.dateDisplay,
   } );
 
+  /// Parses a [NotificationResponseAck] from decoded JSON, tolerating missing fields.
   factory NotificationResponseAck.fromJson( Map<String, dynamic> json ) {
     return NotificationResponseAck(
       status         : ( json["status"] ?? "" ).toString(),
@@ -598,14 +724,20 @@ class NotificationResponseAck {
   }
 }
 
-/// `POST /api/notify` (fire-and-forget) response.
+/// Response from the fire-and-forget `POST /api/notify`.
 class NotifyDispatchResponse {
-  final String  status;          // queued | user_not_available
+  /// Dispatch result: queued or user_not_available.
+  final String  status;
+  /// Optional detail from the server.
   final String? message;
+  /// User the notification is addressed to.
   final String  targetUser;
+  /// System the notification is routed to.
   final String? targetSystemId;
+  /// Number of live connections reached.
   final int     connectionCount;
 
+  /// Builds a [NotifyDispatchResponse] from already-parsed fields.
   const NotifyDispatchResponse( {
     required this.status,
     this.message,
@@ -614,6 +746,7 @@ class NotifyDispatchResponse {
     required this.connectionCount,
   } );
 
+  /// Parses a [NotifyDispatchResponse] from decoded JSON, tolerating missing fields.
   factory NotifyDispatchResponse.fromJson( Map<String, dynamic> json ) {
     return NotifyDispatchResponse(
       status          : ( json["status"] ?? "" ).toString(),
@@ -625,31 +758,54 @@ class NotifyDispatchResponse {
   }
 }
 
-/// Outbound `POST /api/notify` query-parameter bundle.
-/// All params are query-string per backend spec.
+/// Query-parameter bundle for the outbound `POST /api/notify`.
+///
+/// The backend reads every parameter from the query string.
 class NotifyRequest {
+  /// Text to deliver.
   final String  message;
+  /// User the notification is addressed to.
   final String  targetUser;
+  /// Item kind.
   final String? type;
-  final String? direction;         // human_to_ai for a user's message to a session
+  /// Message direction, `human_to_ai` for a user message to a session.
+  final String? direction;
+  /// Urgency level.
   final String? priority;
+  /// Whether to wait for an answer.
   final bool?   responseRequested;
+  /// Answer format requested.
   final String? responseType;
+  /// Seconds to wait before using the default answer.
   final int?    timeoutSeconds;
+  /// Default answer used on timeout.
   final String? responseDefault;
+  /// Optional heading.
   final String? title;
+  /// Sending session key.
   final String? senderId;
-  final String? responseOptions;   // JSON-encoded string per backend
+  /// Answer choices as a JSON-encoded string.
+  final String? responseOptions;
+  /// Longer detail, sent as `abstract`.
   final String? abstractText;
+  /// Job the item belongs to.
   final String? jobId;
+  /// Queue the job is in.
   final String? queueName;
+  /// Whether to skip the chime.
   final bool?   suppressDing;
+  /// Group key for progress items.
   final String? progressGroupId;
+  /// Overrides the server's prediction hint.
   final String? predictionHintOverride;
+  /// Whether the UI shows the qualifier widget.
   final bool?   displayQualifierWidget;
+  /// Display name of the sending session.
   final String? sessionName;
+  /// Key that lets the server drop duplicate submissions.
   final String? idempotencyKey;
 
+  /// Builds a [NotifyRequest] from already-parsed fields.
   const NotifyRequest( {
     required this.message,
     required this.targetUser,
@@ -674,6 +830,7 @@ class NotifyRequest {
     this.idempotencyKey,
   } );
 
+  /// Builds the query map, omitting every null field.
   Map<String, dynamic> toQuery() {
     final q = <String, dynamic>{
       "message"     : message,
@@ -703,12 +860,16 @@ class NotifyRequest {
   }
 }
 
-/// `POST /api/notifications/generate-gist` request body.
+/// Request body for `POST /api/notifications/generate-gist`.
 class GistRequest {
+  /// Message texts to summarize.
   final List<String> messages;
+  /// Abstract texts matching `messages`.
   final List<String> abstracts;
+  /// Builds a [GistRequest] from parallel message and abstract lists.
   const GistRequest( { required this.messages, required this.abstracts } );
 
+  /// Serializes to the request JSON.
   Map<String, dynamic> toJson() => {
     "messages"  : messages,
     "abstracts" : abstracts,

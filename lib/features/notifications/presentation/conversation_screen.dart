@@ -16,13 +16,24 @@ import 'message_stamp.dart';
 import 'persona_badge.dart';
 import 'sender_dates_screen.dart';
 
+/// Flat conversation with one sender, newest message first.
+///
+/// Stop-listed messages are hidden behind a chip, and bursts that share a
+/// progress group collapse into one card that expands in place.
 class ConversationScreen extends StatefulWidget {
+  /// Sender whose conversation is shown.
   final String senderId;
+
+  /// Email of the user the messages were addressed to.
   final String userEmail;
-  /// Stop-list seam (plan 2026.08.21 §3). Tests inject; production resolves
-  /// from the locator when registered; null ⇒ no filtering.
+
+  /// Stop-list that hides matching messages.
+  ///
+  /// Tests inject one. When null, the service locator supplies it if one is
+  /// registered; otherwise nothing is filtered.
   final NotificationStopList? stopList;
 
+  /// Creates the screen for [senderId] and [userEmail].
   const ConversationScreen( {
     super.key,
     required this.senderId,
@@ -62,22 +73,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if ( mounted ) setState( () {} );
   }
 
-  /// Plan §4 — a pending ask is never buried in a collapsed group.
+  // A message awaiting a response has no group key, so it is never collapsed.
   static String? _groupKey( ConversationMessage m ) =>
       m.responseRequested ? null : m.progressGroupId;
 
-  /// Hide-not-delete: the bloc state keeps every message; this lens drops
-  /// stop-listed ones unless the user taps the "N hidden" chip.
+  // Drops stop-listed messages unless the "N hidden" chip was tapped.
+  // The bloc state keeps every message.
   List<ConversationMessage> _visible( List<ConversationMessage> all ) {
     final sl = _stopList;
     if ( sl == null || _showHidden ) return all;
     return all.where( ( m ) => !sl.matches( m.message ) ).toList();
   }
 
-  /// Chronological (oldest→newest), STABLE on equal timestamps — the shape
-  /// the group collapse wants; the render then flips it so the NEWEST is at
-  /// the top (Rick 2026-08-21). Sorting ASC directly (not DESC-then-reverse)
-  /// keeps tied messages in wire order instead of flipping them.
+  // Sorts oldest first, keeping wire order on equal timestamps, because the
+  // group collapse needs chronological input. The render then reverses the
+  // result so the newest message is on top.
   static List<ConversationMessage> _oldestFirst( List<ConversationMessage> ms ) {
     final indexed = ms.asMap().entries.toList()
       ..sort( ( a, b ) {
@@ -343,8 +353,9 @@ class _MessageCard extends StatelessWidget {
   }
 }
 
-/// Collapsed burst of same-progress-group cards (plan 2026.08.21 §4):
-/// latest card + ×N chip; tap to expand in place.
+/// Collapsed burst of same-progress-group cards.
+///
+/// Shows the latest card and a count chip; tapping expands the burst in place.
 class _CollapsedCards extends StatefulWidget {
   final int          count;
   final Widget       summary;

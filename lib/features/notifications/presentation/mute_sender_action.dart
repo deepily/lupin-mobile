@@ -1,12 +1,10 @@
-/// Long-press "Mute <sender>" shortcut (row f1e80e67, plan §7.5).
+/// Long-press mute shortcut for a sender, offered where notifications are read.
 ///
-/// The annoyance happens where a notification is READ, so the fix lives there:
-/// long-press a Focus bubble or an Inbox sender row, and a small sheet offers
-/// "Mute <label>" (or "Unmute <label>" when that sender is already muted). The
-/// choice is confirmed with a SnackBar whose Undo puts things back.
-///
-/// The key and label come from `notification_sender_label.dart`, so a mute made
-/// here is the same mute the settings screen lists and the delivery policy reads.
+/// Long-pressing a focus bubble or an inbox sender row opens a small sheet.
+/// The sheet offers "Mute <label>", or "Unmute <label>" when already muted.
+/// A SnackBar confirms the choice and its Undo reverses it.
+/// The key and label come from `notification_sender_label.dart`, so the mute matches
+/// the one the settings screen lists and the delivery policy reads.
 library;
 
 import 'package:flutter/material.dart';

@@ -2,53 +2,66 @@ import 'package:equatable/equatable.dart';
 
 import '../data/notification_models.dart';
 
+/// Base class of every state of the notification bloc.
 abstract class NotificationState extends Equatable {
+  /// Creates a state.
   const NotificationState();
 
   @override
   List<Object?> get props => [];
 }
 
-/// Mixin shared by every loaded state — exposes the persona snapshot that the
-/// bloc keeps for header rendering across screens. Per Q1, this map is for
-/// rendering only; TTS dispatch reads persona straight from each notification.
+/// Persona snapshot that every loaded state carries for header rendering.
 ///
-/// `personaFor(senderId)` is the canonical accessor used by tests
-/// (Phase 1 Task 2.4 assertion shape) and by widget-tree consumers
-/// (Phase 3 PersonaBadge wiring sites).
+/// Speech does not read this map; it takes the persona from each notification.
 mixin PersonaSnapshotMixin {
+  /// Voice persona per sender id.
   Map<String, VoicePersona> get personasBySender;
+
+  /// Persona of [senderId], or null when none is allocated.
   VoicePersona? personaFor( String senderId ) => personasBySender[ senderId ];
 }
 
-/// Mixin shared by every loaded state — exposes the speakerphone snapshot
-/// the bloc keeps per Section B (Phase 2, 2026-05-23 notif-client-sync).
-/// Diagnostic only — no UI surface yet (Q1 record-only resolution, plan §8.0).
-/// `speakerphoneFor(sessionId)` mirrors `personaFor(senderId)` for symmetric
-/// ergonomics; future UI surfaces consume via the mixin.
+/// Speakerphone snapshot that every loaded state carries.
+///
+/// Diagnostic only; no screen reads it yet.
 mixin SpeakerphoneSnapshotMixin {
+  /// Speakerphone record per session id.
   Map<String, SpeakerphoneRecord> get speakerphoneBySession;
+
+  /// Speakerphone record of [sessionId], or null when none is known.
   SpeakerphoneRecord? speakerphoneFor( String sessionId ) =>
       speakerphoneBySession[ sessionId ];
 }
 
+/// Nothing has been loaded yet.
 class NotificationsInitial extends NotificationState {
+  /// Creates the initial state.
   const NotificationsInitial();
 }
 
+/// A load is in flight.
 class NotificationsLoading extends NotificationState {
+  /// Creates the loading state.
   const NotificationsLoading();
 }
 
+/// The inbox of senders is loaded.
 class NotificationsInboxLoaded extends NotificationState
     with PersonaSnapshotMixin, SpeakerphoneSnapshotMixin {
+  /// Senders to list in the inbox.
   final List<SenderSummary> senders;
+
+  /// Account the inbox belongs to.
   final String userEmail;
+
   @override
   final Map<String, VoicePersona> personasBySender;
+
   @override
   final Map<String, SpeakerphoneRecord> speakerphoneBySession;
 
+  /// Creates the loaded inbox state.
   const NotificationsInboxLoaded( {
     required this.senders,
     required this.userEmail,
@@ -60,16 +73,25 @@ class NotificationsInboxLoaded extends NotificationState
   List<Object?> get props => [ senders, userEmail, personasBySender, speakerphoneBySession ];
 }
 
+/// One sender's conversation is loaded.
 class NotificationsConversationLoaded extends NotificationState
     with PersonaSnapshotMixin, SpeakerphoneSnapshotMixin {
+  /// Sender whose conversation this is.
   final String                            senderId;
+
+  /// Account that owns the conversation.
   final String                            userEmail;
+
+  /// Messages of the conversation.
   final List<ConversationMessage>         messages;
+
   @override
   final Map<String, VoicePersona>         personasBySender;
+
   @override
   final Map<String, SpeakerphoneRecord>   speakerphoneBySession;
 
+  /// Creates the loaded conversation state.
   const NotificationsConversationLoaded( {
     required this.senderId,
     required this.userEmail,
@@ -82,57 +104,82 @@ class NotificationsConversationLoaded extends NotificationState
   List<Object?> get props => [ senderId, userEmail, messages, personasBySender, speakerphoneBySession ];
 }
 
+/// A response to a notification is being sent.
 class NotificationsResponding extends NotificationState {
+  /// Notification being answered.
   final String notificationId;
+
+  /// Creates the sending state for [notificationId].
   const NotificationsResponding( this.notificationId );
 
   @override
   List<Object?> get props => [ notificationId ];
 }
 
+/// The server acknowledged a response.
 class NotificationsResponseAcked extends NotificationState {
+  /// Server acknowledgement of the response.
   final NotificationResponseAck ack;
+
+  /// Creates the acknowledged state from [ack].
   const NotificationsResponseAcked( this.ack );
 
   @override
   List<Object?> get props => [ ack.notificationId, ack.status ];
 }
 
+/// A request failed.
 class NotificationsError extends NotificationState {
+  /// Message to show the user.
   final String message;
+
+  /// Creates an error state with [message].
   const NotificationsError( this.message );
 
   @override
   List<Object?> get props => [ message ];
 }
 
-/// Transient state: gist generation is in flight. Emitted in parallel with
-/// the underlying [NotificationsConversationLoaded] (the UI uses a listener,
-/// not a builder, so the conversation list stays visible).
+/// Gist generation is in flight.
+///
+/// The bloc restores the loaded conversation afterwards. The UI reacts with a
+/// listener rather than a builder, so the conversation list stays visible.
 class NotificationsGistLoading extends NotificationState {
+  /// Creates the gist-loading state.
   const NotificationsGistLoading();
 }
 
-/// Gist result — UI shows in a bottom sheet.
+/// A generated gist is ready; the UI shows it in a bottom sheet.
 class NotificationsGistReady extends NotificationState {
+  /// Summary text of the conversation.
   final String gist;
+
+  /// Creates the ready state with [gist].
   const NotificationsGistReady( this.gist );
 
   @override
   List<Object?> get props => [ gist ];
 }
 
-/// Date list for a single sender (YYYY-MM-DD entries with counts).
+/// The dates of one sender's conversation are loaded, each with a count.
 class NotificationsSenderDatesLoaded extends NotificationState
     with PersonaSnapshotMixin, SpeakerphoneSnapshotMixin {
+  /// Sender whose dates are listed.
   final String            senderId;
+
+  /// Account that owns the conversation.
   final String            userEmail;
+
+  /// One summary per date, keyed YYYY-MM-DD.
   final List<DateSummary> dates;
+
   @override
   final Map<String, VoicePersona> personasBySender;
+
   @override
   final Map<String, SpeakerphoneRecord> speakerphoneBySession;
 
+  /// Creates the loaded dates state.
   const NotificationsSenderDatesLoaded( {
     required this.senderId,
     required this.userEmail,
@@ -151,17 +198,25 @@ class NotificationsSenderDatesLoaded extends NotificationState
   ];
 }
 
-/// Conversation grouped by date (YYYY-MM-DD → list of NotificationItem).
+/// One sender's conversation is loaded and grouped by date.
 class NotificationsConversationByDateLoaded extends NotificationState
     with PersonaSnapshotMixin, SpeakerphoneSnapshotMixin {
+  /// Sender whose conversation this is.
   final String                              senderId;
+
+  /// Account that owns the conversation.
   final String                              userEmail;
+
+  /// Notifications per date, keyed YYYY-MM-DD.
   final Map<String, List<NotificationItem>> byDate;
+
   @override
   final Map<String, VoicePersona>           personasBySender;
+
   @override
   final Map<String, SpeakerphoneRecord>     speakerphoneBySession;
 
+  /// Creates the loaded by-date state.
   const NotificationsConversationByDateLoaded( {
     required this.senderId,
     required this.userEmail,
