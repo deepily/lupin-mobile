@@ -6,10 +6,16 @@ import '../../../shared/models/models.dart';
 
 /// Parameters for starting voice recording
 class StartVoiceRecordingParams {
+  /// The session the recording belongs to.
   final String sessionId;
+
+  /// The capture device, or null for the default one.
   final String? deviceId;
+
+  /// Extra data stored with the recording.
   final Map<String, dynamic>? metadata;
 
+  /// Creates parameters for [sessionId].
   const StartVoiceRecordingParams({
     required this.sessionId,
     this.deviceId,
@@ -25,6 +31,7 @@ class StartVoiceRecordingUseCase extends ParameterizedUseCase<VoiceInput, StartV
   final VoiceRepository _voiceRepository;
   final SessionRepository _sessionRepository;
 
+  /// Creates the use case over the voice and session repositories.
   StartVoiceRecordingUseCase(
     this._voiceRepository,
     this._sessionRepository,
