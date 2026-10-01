@@ -31,15 +31,23 @@ class WebSocketMessageRouter {
       StreamController<AuthMessage>.broadcast();
   
   // Public streams
+  /// Emits received audio chunks.
   Stream<AudioChunkMessage> get audioChunks => _audioChunkController.stream;
+  /// Emits TTS status messages.
   Stream<TTSStatusMessage> get ttsStatus => _ttsStatusController.stream;
+  /// Emits voice input messages.
   Stream<VoiceInputMessage> get voiceInput => _voiceInputController.stream;
+  /// Emits error messages.
   Stream<ErrorMessage> get errors => _errorController.stream;
   
   // New public streams for server events
+  /// Emits queue update messages.
   Stream<QueueUpdateMessage> get queueUpdates => _queueUpdateController.stream;
+  /// Emits notification messages.
   Stream<NotificationMessage> get notifications => _notificationController.stream;
+  /// Emits system messages.
   Stream<SystemMessage> get systemMessages => _systemController.stream;
+  /// Emits authentication messages.
   Stream<AuthMessage> get authMessages => _authController.stream;
   
   /// Register a message handler for a specific message type
@@ -324,11 +332,16 @@ typedef MessageMiddleware = Future<WebSocketMessage> Function(WebSocketMessage m
 
 /// Queue update message
 class QueueUpdateMessage {
-  final String queueType; // 'todo', 'running', 'done', 'dead'
+  /// Queue name: `todo`, `running`, `done` or `dead`.
+  final String queueType;
+  /// The queue contents as sent by the server.
   final Map<String, dynamic> queueData;
+  /// When the message was created.
   final DateTime timestamp;
+  /// Session the message belongs to, or null.
   final String? sessionId;
   
+  /// Creates a message; the session id is optional.
   QueueUpdateMessage({
     required this.queueType,
     required this.queueData,
@@ -336,6 +349,7 @@ class QueueUpdateMessage {
     this.sessionId,
   });
   
+  /// Builds the message from a raw [message].
   factory QueueUpdateMessage.fromWebSocketMessage(WebSocketMessage message) {
     final type = message.type;
     String queueType = 'unknown';
@@ -356,11 +370,16 @@ class QueueUpdateMessage {
 
 /// Notification message
 class NotificationMessage {
-  final String notificationType; // 'queue_update', 'play_sound'
+  /// Kind of notification: `queue_update` or `play_sound`.
+  final String notificationType;
+  /// Text, or null.
   final String? message;
+  /// Extra payload, or null.
   final Map<String, dynamic>? data;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message.
   NotificationMessage({
     required this.notificationType,
     this.message,
@@ -368,6 +387,7 @@ class NotificationMessage {
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory NotificationMessage.fromWebSocketMessage(WebSocketMessage message) {
     final type = message.type;
     String notificationType = 'unknown';
@@ -386,16 +406,21 @@ class NotificationMessage {
 
 /// System message
 class SystemMessage {
-  final String systemType; // 'time_update', 'ping', 'pong'
+  /// Kind of system message: `time_update`, `ping` or `pong`.
+  final String systemType;
+  /// Extra payload, or null.
   final Map<String, dynamic>? data;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message.
   SystemMessage({
     required this.systemType,
     this.data,
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory SystemMessage.fromWebSocketMessage(WebSocketMessage message) {
     final type = message.type;
     String systemType = 'unknown';
@@ -414,13 +439,20 @@ class SystemMessage {
 
 /// Authentication message
 class AuthMessage {
-  final String authType; // 'auth_request', 'auth_success', 'auth_error', 'connect'
+  /// Kind of auth message: `auth_request`, `auth_success`, `auth_error` or `connect`.
+  final String authType;
+  /// User id, or null.
   final String? userId;
+  /// Session id, or null.
   final String? sessionId;
+  /// Text, or null.
   final String? message;
+  /// Extra payload, or null.
   final Map<String, dynamic>? data;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message.
   AuthMessage({
     required this.authType,
     this.userId,
@@ -430,6 +462,7 @@ class AuthMessage {
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory AuthMessage.fromWebSocketMessage(WebSocketMessage message) {
     final type = message.type;
     String authType = 'unknown';
@@ -453,14 +486,18 @@ class AuthMessage {
 
 /// Message processor for processing messages before routing
 abstract class MessageProcessor {
+  /// Processes [message] and returns the message to route on.
   Future<WebSocketMessage> process(WebSocketMessage message);
 }
 
 /// Logging middleware
 class LoggingMiddleware extends MessageProcessor {
+  /// Whether binary messages are logged.
   final bool logBinary;
+  /// Largest binary message, in bytes, that is logged in full.
   final int maxBinaryLogSize;
   
+  /// Creates the middleware; binary logging is off by default.
   LoggingMiddleware({
     this.logBinary = false,
     this.maxBinaryLogSize = 100,
@@ -500,6 +537,7 @@ class AnalyticsMiddleware extends MessageProcessor {
     return message;
   }
   
+  /// Message counts, binary sizes and their totals, with snake_case keys.
   Map<String, dynamic> getAnalytics() {
     return {
       'message_counts': Map.from(_messageCounts),
@@ -509,6 +547,7 @@ class AnalyticsMiddleware extends MessageProcessor {
     };
   }
   
+  /// Clears the message counts and binary sizes.
   void resetAnalytics() {
     _messageCounts.clear();
     _binaryMessageSizes.clear();
@@ -518,9 +557,12 @@ class AnalyticsMiddleware extends MessageProcessor {
 /// Rate limiting middleware
 class RateLimitingMiddleware extends MessageProcessor {
   final Map<String, Queue<DateTime>> _messageTimestamps = {};
+  /// Messages of one type allowed per [timeWindow].
   final int maxMessagesPerMinute;
+  /// Window over which [maxMessagesPerMinute] is counted.
   final Duration timeWindow;
   
+  /// Creates the middleware with 60 messages per minute by default.
   RateLimitingMiddleware({
     this.maxMessagesPerMinute = 60,
     this.timeWindow = const Duration(minutes: 1),
@@ -554,6 +596,7 @@ class RateLimitingMiddleware extends MessageProcessor {
 class ValidationMiddleware extends MessageProcessor {
   final Map<String, MessageValidator> _validators = {};
   
+  /// Registers [validator] for messages of [messageType].
   void registerValidator(String messageType, MessageValidator validator) {
     _validators[messageType] = validator;
   }
@@ -574,15 +617,20 @@ class ValidationMiddleware extends MessageProcessor {
 
 /// Message validator
 abstract class MessageValidator {
+  /// Validates [message].
   Future<ValidationResult> validate(WebSocketMessage message);
 }
 
 /// Validation result
 class ValidationResult {
+  /// Whether the message passed.
   final bool isValid;
+  /// Why it failed, or null when valid.
   final String? error;
   
+  /// A passing result.
   const ValidationResult.valid() : isValid = true, error = null;
+  /// A failing result carrying [error].
   const ValidationResult.invalid(this.error) : isValid = false;
 }
 
@@ -616,13 +664,20 @@ class TTSRequestValidator extends MessageValidator {
 
 /// Specialized message types
 class AudioChunkMessage {
+  /// Raw audio bytes, or null.
   final Uint8List? audioData;
+  /// TTS provider that produced the chunk, or null.
   final String? provider;
+  /// Zero-based position of the chunk in its stream, or null.
   final int? sequenceNumber;
+  /// Number of chunks in the stream, or null when unknown.
   final int? totalChunks;
+  /// Extra data about the chunk, or null.
   final Map<String, dynamic>? metadata;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a chunk message.
   AudioChunkMessage({
     this.audioData,
     this.provider,
@@ -632,6 +687,7 @@ class AudioChunkMessage {
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory AudioChunkMessage.fromWebSocketMessage(WebSocketMessage message) {
     return AudioChunkMessage(
       audioData: message.binaryData,
@@ -643,20 +699,29 @@ class AudioChunkMessage {
     );
   }
   
+  /// True when the sequence number reaches the last of [totalChunks].
   bool get isLastChunk => 
       sequenceNumber != null && 
       totalChunks != null && 
       sequenceNumber! >= totalChunks! - 1;
 }
 
+/// A TTS status message from the server.
 class TTSStatusMessage {
+  /// Status name.
   final String status;
+  /// TTS provider, or null.
   final String? provider;
+  /// Session id, or null.
   final String? sessionId;
+  /// Text being synthesized, or null.
   final String? text;
+  /// Extra payload, or null.
   final Map<String, dynamic>? details;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message.
   TTSStatusMessage({
     required this.status,
     this.provider,
@@ -666,6 +731,7 @@ class TTSStatusMessage {
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory TTSStatusMessage.fromWebSocketMessage(WebSocketMessage message) {
     return TTSStatusMessage(
       status: message.type,
@@ -678,14 +744,22 @@ class TTSStatusMessage {
   }
 }
 
+/// A voice input message.
 class VoiceInputMessage {
+  /// What the message asks for or reports.
   final String action;
+  /// Raw audio bytes, or null.
   final Uint8List? audioData;
+  /// Transcript, or null.
   final String? transcription;
+  /// Transcript confidence, or null.
   final double? confidence;
+  /// Voice input settings, or null.
   final Map<String, dynamic>? settings;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message.
   VoiceInputMessage({
     required this.action,
     this.audioData,
@@ -695,6 +769,7 @@ class VoiceInputMessage {
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory VoiceInputMessage.fromWebSocketMessage(WebSocketMessage message) {
     return VoiceInputMessage(
       action: message.data?['action'] ?? message.type,
@@ -707,13 +782,20 @@ class VoiceInputMessage {
   }
 }
 
+/// An error message from the server.
 class ErrorMessage {
+  /// Error text.
   final String error;
+  /// Error code, or null.
   final String? code;
+  /// The message that caused the error, or null.
   final WebSocketMessage? originalMessage;
+  /// Extra payload, or null.
   final Map<String, dynamic>? details;
+  /// When the message was created.
   final DateTime timestamp;
   
+  /// Creates a message.
   ErrorMessage({
     required this.error,
     this.code,
@@ -722,6 +804,7 @@ class ErrorMessage {
     required this.timestamp,
   });
   
+  /// Builds the message from a raw [message].
   factory ErrorMessage.fromWebSocketMessage(WebSocketMessage message) {
     return ErrorMessage(
       error: message.data?['error'] ?? 'Unknown error',

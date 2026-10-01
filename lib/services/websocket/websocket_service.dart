@@ -7,10 +7,9 @@ import '../../core/constants/app_constants.dart';
 import '../auth/auth_token_provider.dart';
 import 'ws_resume_store.dart';
 
-/// WebSocket service for real-time communication with Lupin backend.
-/// 
-/// Manages WebSocket connections, reconnection logic, and message streaming.
-/// Follows the singleton pattern for consistent connection management.
+/// Singleton WebSocket service for real-time communication with the Lupin backend.
+///
+/// Manages the connection, reconnection logic and message streaming.
 class WebSocketService {
   final Dio _dio;
   WebSocketChannel? _channel;
@@ -21,20 +20,22 @@ class WebSocketService {
   bool _isConnected = false;
   bool _shouldReconnect = true;
 
-  /// AC-S1.8 — the observable behind [connectionStream].
+  /// The observable behind [connectionStream].
   ///
-  /// `isConnected` alone is a sync getter over a private bool, so any
-  /// predicate built on it goes STALE SILENTLY: the socket drops, a screen's
-  /// record button stays enabled, and nothing repaints to tell it otherwise.
+  /// `isConnected` alone is a sync getter over a private bool, so any predicate built on it goes stale silently.
+  /// The socket drops, a screen's record button stays enabled, and nothing repaints to say otherwise.
   final StreamController<bool> _connectionCtrl = StreamController<bool>.broadcast();
   int _reconnectAttempts = 0;
+  /// Reconnect attempts before giving up.
   static const int maxReconnectAttempts = 5;
+  /// Default wait before a reconnect attempt.
   static const Duration reconnectDelay = Duration(seconds: 5);
+  /// Interval between keepalive pings.
   static const Duration pingInterval = Duration(seconds: 30);
 
-  /// Close code the server sends when a NEWER socket claimed this device's
-  /// slot (row dc446601). Permanent: reconnecting would bump the newer socket
-  /// and start a loop between two sockets of one install.
+  /// Close code the server sends when a newer socket claimed this device's slot.
+  ///
+  /// It is permanent. Reconnecting would bump the newer socket and start a loop between two sockets of one install.
   static const int closeCodeSuperseded = 4004;
 
   final WsResumeStore?                _injectedStore;
@@ -42,9 +43,9 @@ class WebSocketService {
   final Duration                      _reconnectBaseDelay;
   WsResumeStore?                      _lazyStore;
 
-  /// The highest frame `seq` processed on this install (row 281a10d6). Loaded
-  /// from the store on every auth, set from `resume_complete.seq` and from
-  /// each live frame.
+  /// The highest frame `seq` processed on this install.
+  ///
+  /// Loaded from the store on every auth, then set from `resume_complete.seq` and from each live frame.
   int _lastSeq = 0;
 
   /// Lazily built so a service that never authenticates never touches prefs.
@@ -54,21 +55,15 @@ class WebSocketService {
   String? _userId;
 
   // Public getters
+  /// True while the socket is connected.
   bool get isConnected => _isConnected;
 
-  /// Connection state as a stream, with THREE properties AC-S1.8 requires and
-  /// which `pausedStream` (the nearest in-tree pattern) has only one of:
+  /// Connection state as a stream that emits on change and replays on subscribe.
   ///
-  ///   1. emits at ALL FIVE sites that mutate `_isConnected` — a stream wired
-  ///      at two of five is worse than no stream, because it LOOKS observable;
-  ///   2. distinct-until-changed, applied at the MUTATION site (the
-  ///      `pausedStream` pattern, `tts_orchestrator.dart:166,174`) — three of
-  ///      the five sites set `false`, so without it one disconnect emits
-  ///      `false` repeatedly;
-  ///   3. replays the CURRENT value on subscribe — a listener attached while
-  ///      already disconnected must learn immediately, not at the next
-  ///      transition. `pausedStream` does NOT do this; mirroring it literally
-  ///      would have shipped the bug this stream exists to remove.
+  /// It has three properties, of which `pausedStream` (the nearest in-tree pattern) has only the second:
+  ///   1. It emits at all five sites that mutate `_isConnected`. A stream wired at two of five is worse than none, because it looks observable.
+  ///   2. It is distinct-until-changed, applied at the mutation site (`tts_orchestrator.dart`). Three of the five sites set false, so otherwise one disconnect emits false repeatedly.
+  ///   3. It replays the current value on subscribe. A listener attached while already disconnected must learn at once, not at the next transition.
   Stream<bool> get connectionStream {
     late StreamController<bool> out;
     StreamSubscription<bool>?   sub;
@@ -87,18 +82,20 @@ class WebSocketService {
     return out.stream;
   }
 
-  /// The ONLY writer of `_isConnected`. Distinct-until-changed lives here, at
-  /// the mutation site, so every one of the five call sites gets it for free
-  /// and a sixth added later cannot forget it.
+  /// The only writer of `_isConnected`.
+  ///
+  /// Distinct-until-changed lives here, at the mutation site, so every call site gets it and a later one cannot forget it.
   void _setConnected( bool value ) {
     if ( _isConnected == value ) return;
     _isConnected = value;
     if ( !_connectionCtrl.isClosed ) _connectionCtrl.add( value );
   }
+  /// Session id obtained from the backend, or null before connecting.
   String? get sessionId => _sessionId;
+  /// Decoded incoming messages; empty before the service is built.
   Stream<dynamic> get stream => _messageController?.stream ?? const Stream.empty();
 
-  /// Requires: [dio] is the shared client. The named parameters exist for tests.
+  /// Creates the service on [dio], the shared client; the named parameters exist for tests.
   WebSocketService(
     this._dio, {
     WsResumeStore?                store,
@@ -218,14 +215,13 @@ class WebSocketService {
     }
   }
 
-  /// Builds the `auth_request` payload (extracted so AC-S5.5 can
-  /// fixture-pin the shape without a live socket).
+  /// Builds the `auth_request` payload; static so a test can pin its shape.
   ///
-  /// `client_type: "mobile"` is the F-S6-1 S5-side OBLIGATION: it lets the
-  /// parent distinguish this mobile WS from web sessions — the FCM wake
-  /// trigger fires on "no live MOBILE WS", so a desktop browser must not
-  /// suppress the phone's wake. Absent marker ⇒ parent treats the client
-  /// as web (backward-compatible); harmless in Stage-1 builds.
+  /// No live socket is needed.
+  ///
+  /// `client_type: "mobile"` lets the parent tell this mobile socket from web sessions. The FCM wake trigger fires
+  /// on "no live mobile WS", so a desktop browser must not suppress the phone's wake. An absent marker makes the
+  /// parent treat the client as web, which is backward-compatible.
   static Map<String, dynamic> buildAuthRequestMessage({
     required String bearerToken,
     required String? sessionId,
@@ -257,7 +253,7 @@ class WebSocketService {
   ///   - Bearer token is generated for the user
   ///   - Session ID is included in auth message
   ///   - Subscribed events array is included (empty = receive all events)
-  ///   - client_type "mobile" marker is included (F-S6-1, S5 §3.1)
+  ///   - client_type "mobile" marker is included
   Future<void> _authenticate(String userId) async {
     try {
       // Bearer auth token sourced from AuthBloc (set on login / refresh).
@@ -442,6 +438,9 @@ class WebSocketService {
     });
   }
 
+  /// Sends [message] as JSON.
+  ///
+  /// Throws when the socket is not connected or the send fails.
   Future<void> sendMessage(Map<String, dynamic> message) async {
     if (!_isConnected || _channel == null) {
       throw Exception('WebSocket not connected');
@@ -458,13 +457,15 @@ class WebSocketService {
 
   /// Persists the cursor and tells the server it may drop frames through [seq].
   ///
-  /// Ensures: a failed write or a dead socket is logged, never thrown into the
-  /// message handler.
+  /// A failed write or a dead socket is logged, never thrown into the message handler.
   void _persistAndAck( int seq ) {
     _store.setLastSeq( seq ).catchError( ( Object e ) => print('[WebSocket] last_seq persist failed: $e') );
     sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => print('[WebSocket] ack failed: $e') );
   }
 
+  /// Sends [data] as a binary frame.
+  ///
+  /// Throws when the socket is not connected or the send fails.
   Future<void> sendBinary(List<int> data) async {
     if (!_isConnected || _channel == null) {
       throw Exception('WebSocket not connected');
@@ -478,6 +479,7 @@ class WebSocketService {
     }
   }
 
+  /// Closes the socket, stops reconnection and clears the session id.
   Future<void> disconnect() async {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
@@ -494,6 +496,7 @@ class WebSocketService {
     print('[WebSocket] Disconnected');
   }
 
+  /// Disconnects and closes the message and connection streams.
   void dispose() {
     disconnect();
     _messageController?.close();

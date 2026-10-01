@@ -5,10 +5,10 @@ import 'websocket_connection_manager.dart';
 import 'websocket_event_handlers.dart';
 import '../../core/constants/app_constants.dart';
 
-/// Comprehensive debugging and monitoring system for WebSocket events.
-/// 
-/// Provides real-time monitoring, event logging, performance analysis,
-/// and diagnostic tools for troubleshooting WebSocket issues.
+/// Records WebSocket events and connection changes, and raises alerts for unhealthy patterns.
+///
+/// Keeps an event log, per-event statistics and performance metrics, and publishes them on [debugUpdates].
+/// Alerts go to [performanceAlerts] for event bursts, high error rates, connection flapping and a large log.
 class WebSocketDebugMonitor {
   final WebSocketConnectionManager _connectionManager;
   final WebSocketEventHandlerSystem? _eventHandlerSystem;
@@ -45,9 +45,12 @@ class WebSocketDebugMonitor {
   Timer? _logCleanupTimer;
   
   // Public streams
+  /// Emits each logged event, connection event, subscription event and statistics update.
   Stream<DebugUpdate> get debugUpdates => _debugUpdateController.stream;
+  /// Emits an alert when a performance check finds a problem.
   Stream<PerformanceAlert> get performanceAlerts => _performanceAlertController.stream;
   
+  /// Creates a monitor over [connectionManager]; [eventHandlerSystem] is optional.
   WebSocketDebugMonitor({
     required WebSocketConnectionManager connectionManager,
     WebSocketEventHandlerSystem? eventHandlerSystem,
@@ -269,7 +272,7 @@ class WebSocketDebugMonitor {
     ));
   }
   
-  /// Update event statistics
+  /// Adds [entry] to the statistics for [eventType].
   void _updateEventStats(String eventType, EventLogEntry entry) {
     _eventStats.putIfAbsent(eventType, () => EventStatistics(eventType: eventType));
     final stats = _eventStats[eventType]!;
@@ -359,7 +362,7 @@ class WebSocketDebugMonitor {
     }
   }
   
-  /// Update statistics
+  /// Recomputes each event's rate over the last 5 minutes and publishes it.
   void _updateStatistics() {
     for (final stats in _eventStats.values) {
       // Update frequency calculations
@@ -582,27 +585,40 @@ class WebSocketDebugMonitor {
   }
 }
 
-// ============================================================================
-// Configuration Classes
-// ============================================================================
+// Configuration classes.
 
+/// Settings for [WebSocketDebugMonitor].
 class DebugConfig {
+  /// Whether events are logged.
   final bool enableEventLogging;
+  /// Whether performance checks run.
   final bool enablePerformanceMonitoring;
+  /// Whether log lines are printed to the console.
   final bool enableConsoleLogging;
+  /// Whether performance alerts are published.
   final bool enablePerformanceAlerts;
+  /// Whether statistics are recomputed periodically.
   final bool enableStatsUpdates;
+  /// Whether old log entries are removed periodically.
   final bool enableLogCleanup;
   
+  /// Interval between statistics updates.
   final Duration statsUpdateInterval;
+  /// Interval between performance checks.
   final Duration performanceCheckInterval;
+  /// Interval between log cleanups.
   final Duration logCleanupInterval;
+  /// Age after which log entries are removed.
   final Duration logRetentionPeriod;
   
+  /// Event log size above which a memory-usage alert is raised.
   final int maxEventLogSize;
+  /// Events of one type within 30 seconds above which a burst alert is raised.
   final int eventBurstThreshold;
+  /// Connection events within 15 minutes above which a flapping alert is raised.
   final int connectionFlappingThreshold;
   
+  /// Creates a config; the defaults enable everything.
   const DebugConfig({
     this.enableEventLogging = true,
     this.enablePerformanceMonitoring = true,
@@ -619,10 +635,12 @@ class DebugConfig {
     this.connectionFlappingThreshold = 10,
   });
   
+  /// Builds the default config.
   factory DebugConfig.defaultConfig() {
     return const DebugConfig();
   }
   
+  /// Builds a config with only event logging and log cleanup, keeping 1,000 entries.
   factory DebugConfig.minimal() {
     return const DebugConfig(
       enableEventLogging: true,
@@ -635,6 +653,7 @@ class DebugConfig {
     );
   }
   
+  /// Builds a config with everything on, faster intervals and a 50,000-entry log.
   factory DebugConfig.verbose() {
     return const DebugConfig(
       enableEventLogging: true,
@@ -651,16 +670,20 @@ class DebugConfig {
   }
 }
 
-// ============================================================================
-// Data Classes
-// ============================================================================
+// Data classes.
 
+/// One logged WebSocket event.
 class EventLogEntry {
+  /// Type of the event.
   final String eventType;
+  /// When the event happened.
   final DateTime timestamp;
+  /// Event details.
   final Map<String, dynamic> details;
+  /// Whether the event was an error.
   final bool isError;
   
+  /// Creates an entry; [isError] defaults to false.
   EventLogEntry({
     required this.eventType,
     required this.timestamp,
@@ -668,6 +691,7 @@ class EventLogEntry {
     this.isError = false,
   });
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'event_type': eventType,
@@ -678,17 +702,27 @@ class EventLogEntry {
   }
 }
 
+/// Running counts and rates for one event type.
 class EventStatistics {
+  /// Event type the statistics are for.
   final String eventType;
+  /// Events seen.
   int totalCount = 0;
+  /// Error events seen.
   int errorCount = 0;
+  /// When the first event was seen, or null.
   DateTime? firstSeen;
+  /// When the latest event was seen, or null.
   DateTime? lastSeen;
+  /// Events per minute, averaged over the last 5 minutes.
   double frequencyPerMinute = 0.0;
+  /// Times of recent events, used for the frequency.
   final List<DateTime> recentEvents = [];
   
+  /// Creates empty statistics for [eventType].
   EventStatistics({required this.eventType});
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'event_type': eventType,
@@ -703,15 +737,23 @@ class EventStatistics {
   }
 }
 
+/// Burst and processing-time figures for one event type.
 class PerformanceMetrics {
+  /// Event type the figures are for.
   final String eventType;
+  /// Bursts detected.
   int burstCount = 0;
+  /// When the last burst was detected, or null.
   DateTime? lastBurst;
+  /// Average processing time, in milliseconds.
   double averageProcessingTime = 0.0;
+  /// Recorded processing times.
   final List<Duration> processingTimes = [];
   
+  /// Creates empty metrics for [eventType].
   PerformanceMetrics({required this.eventType});
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'event_type': eventType,
@@ -723,17 +765,23 @@ class PerformanceMetrics {
   }
 }
 
+/// One logged connection event.
 class ConnectionEvent {
+  /// Kind of connection event.
   final ConnectionEventType type;
+  /// When the event happened.
   final DateTime timestamp;
+  /// Event details, or null.
   final Map<String, dynamic>? details;
   
+  /// Creates an event.
   ConnectionEvent({
     required this.type,
     required this.timestamp,
     this.details,
   });
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'type': type.toString(),
@@ -743,19 +791,30 @@ class ConnectionEvent {
   }
 }
 
+/// Kinds of connection event.
 enum ConnectionEventType {
+  /// The connection state changed.
   stateChange,
+  /// The connection reported an error.
   error,
+  /// The connection reconnected.
   reconnect,
+  /// The connection timed out.
   timeout,
 }
 
+/// One logged change to the event subscriptions.
 class SubscriptionEvent {
+  /// Kind of subscription change.
   final String type;
+  /// When the change happened.
   final DateTime timestamp;
+  /// Number of events affected.
   final int eventCount;
+  /// Names of the events affected.
   final List<String> events;
   
+  /// Creates an event; every field is required.
   SubscriptionEvent({
     required this.type,
     required this.timestamp,
@@ -763,6 +822,7 @@ class SubscriptionEvent {
     required this.events,
   });
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'type': type,
@@ -773,11 +833,16 @@ class SubscriptionEvent {
   }
 }
 
+/// One item published on [WebSocketDebugMonitor.debugUpdates].
 class DebugUpdate {
+  /// Kind of update.
   final DebugUpdateType type;
+  /// When the update was made.
   final DateTime timestamp;
+  /// Payload of the update.
   final Map<String, dynamic> data;
   
+  /// Creates an update; every field is required.
   DebugUpdate({
     required this.type,
     required this.timestamp,
@@ -785,22 +850,36 @@ class DebugUpdate {
   });
 }
 
+/// Kinds of debug update.
 enum DebugUpdateType {
+  /// An event was logged.
   eventLogged,
+  /// A connection event was logged.
   connectionEvent,
+  /// A subscription event was logged.
   subscriptionEvent,
+  /// Statistics were recomputed.
   statsUpdate,
+  /// A performance alert was raised.
   performanceAlert,
 }
 
+/// One alert published on [WebSocketDebugMonitor.performanceAlerts].
 class PerformanceAlert {
+  /// Kind of alert.
   final PerformanceAlertType type;
+  /// Event type the alert is about, or a pseudo-type such as `connection`.
   final String eventType;
+  /// Alert text.
   final String message;
+  /// How serious the alert is.
   final AlertSeverity severity;
+  /// When the alert was raised.
   final DateTime timestamp;
+  /// Alert details, or null.
   final Map<String, dynamic>? details;
   
+  /// Creates an alert.
   PerformanceAlert({
     required this.type,
     required this.eventType,
@@ -811,17 +890,28 @@ class PerformanceAlert {
   });
 }
 
+/// Kinds of performance alert.
 enum PerformanceAlertType {
+  /// Too many events of one type in 30 seconds.
   eventBurst,
+  /// More than 20% of an event type's events failed, after at least 10 events.
   highErrorRate,
+  /// Too many connection events in 15 minutes.
   connectionFlapping,
+  /// The event log grew past its size limit.
   memoryUsage,
+  /// Event processing is slow.
   processingDelay,
 }
 
+/// How serious an alert is.
 enum AlertSeverity {
+  /// Informational.
   info,
+  /// Worth attention.
   warning,
+  /// A failure.
   error,
+  /// Needs immediate attention.
   critical,
 }

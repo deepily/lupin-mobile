@@ -6,10 +6,9 @@ import 'websocket_debug_monitor.dart';
 import 'enhanced_websocket_service.dart';
 import '../../core/constants/app_constants.dart';
 
-/// Utility functions for WebSocket debugging and testing.
-/// 
-/// Provides helper methods for testing connections, generating mock data,
-/// analyzing performance, and troubleshooting common issues.
+/// Static helpers for testing WebSocket connections and diagnosing problems.
+///
+/// Covers connection tests, mock event generation, performance analysis and a diagnostic report.
 class WebSocketDebugUtils {
   static const String _tag = '[WebSocketDebugUtils]';
   
@@ -460,19 +459,26 @@ class WebSocketDebugUtils {
   }
 }
 
-// ============================================================================
-// Data Classes
-// ============================================================================
+// Data classes.
 
+/// Outcome of [WebSocketDebugUtils.testConnection].
 class ConnectionTestResult {
+  /// The steps run, in order.
   List<TestStep> steps = [];
+  /// True when the queue connection was up.
   bool queueConnectionWorking = false;
+  /// True when the audio connection was up.
   bool audioConnectionWorking = false;
+  /// True when authentication succeeded within 5 seconds.
   bool authenticationWorking = false;
+  /// True when any message arrived within 10 seconds.
   bool messageFlowWorking = false;
+  /// True when all four checks passed.
   bool overallSuccess = false;
+  /// Total test time, or null until the test ends.
   Duration? totalDuration;
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'steps': steps.map((s) => s.toJson()).toList(),
@@ -486,14 +492,21 @@ class ConnectionTestResult {
   }
 }
 
+/// One step of a connection test.
 class TestStep {
+  /// What the step does.
   String name;
+  /// Progress of the step.
   TestStepStatus status;
+  /// How long the step took, if measured.
   Duration? duration;
+  /// Why the step failed, or null.
   String? error;
   
+  /// Creates a step with its [name] and [status].
   TestStep(this.name, this.status);
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -504,22 +517,36 @@ class TestStep {
   }
 }
 
+/// Progress of a [TestStep].
 enum TestStepStatus {
+  /// Not started.
   pending,
+  /// In progress.
   running,
+  /// Passed.
   completed,
+  /// Failed.
   failed,
 }
 
+/// Result of [WebSocketDebugUtils.analyzePerformance] over a time window.
 class PerformanceAnalysis {
+  /// Event counts by event type.
   Map<String, int> eventFrequency = {};
+  /// Events in the window.
   int totalEvents = 0;
+  /// Events per minute over the window.
   double eventsPerMinute = 0.0;
+  /// Share of events that were errors, from 0 to 1.
   double errorRate = 0.0;
+  /// Median time between events, or null when there are none.
   Duration? medianEventInterval;
+  /// Average time between events, or null when there are none.
   Duration? averageEventInterval;
+  /// Suggested follow-ups, in words.
   List<String> recommendations = [];
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'event_frequency': eventFrequency,
@@ -533,11 +560,16 @@ class PerformanceAnalysis {
   }
 }
 
+/// Result of [WebSocketDebugUtils.diagnoseIssues].
 class DiagnosisResult {
+  /// The checks run.
   List<DiagnosticCheck> checks = [];
+  /// Worst outcome across the checks.
   DiagnosticStatus overallStatus = DiagnosticStatus.unknown;
+  /// When the diagnosis finished.
   DateTime? timestamp;
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'checks': checks.map((c) => c.toJson()).toList(),
@@ -547,19 +579,27 @@ class DiagnosisResult {
   }
 }
 
+/// One diagnostic check and its outcome.
 class DiagnosticCheck {
+  /// Name of the check.
   String name;
+  /// What the check verifies.
   String description;
+  /// How serious a failure of this check is.
   DiagnosticSeverity severity;
+  /// Outcome of the check.
   DiagnosticStatus status = DiagnosticStatus.unknown;
+  /// Detail about the outcome, or null.
   String? message;
   
+  /// Creates a check with an unknown status.
   DiagnosticCheck({
     required this.name,
     required this.description,
     required this.severity,
   });
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -571,17 +611,27 @@ class DiagnosticCheck {
   }
 }
 
+/// How serious a failed [DiagnosticCheck] is.
 enum DiagnosticSeverity {
+  /// Minor.
   low,
+  /// Worth fixing.
   medium,
+  /// Serious.
   high,
+  /// The connection is unusable.
   critical,
 }
 
+/// Outcome of a [DiagnosticCheck].
 enum DiagnosticStatus {
+  /// Not evaluated.
   unknown,
+  /// The check passed.
   pass,
+  /// The check found a concern.
   warning,
+  /// The check failed.
   fail,
 }
 

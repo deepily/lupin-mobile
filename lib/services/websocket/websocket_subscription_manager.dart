@@ -3,11 +3,9 @@ import 'dart:collection';
 import '../../core/constants/app_constants.dart';
 import 'enhanced_websocket_service.dart';
 
-/// Manages WebSocket event subscriptions with intelligent filtering and dynamic updates.
-/// 
-/// Provides fine-grained control over which server events the client receives,
-/// supporting both static subscription lists and dynamic subscription changes.
-/// Optimizes bandwidth usage by filtering events at the client level.
+/// Manages which server events the client subscribes to, and filters events on the client.
+///
+/// It supports static subscription lists and dynamic changes. Client-side filtering saves bandwidth.
 class WebSocketSubscriptionManager {
   final EnhancedWebSocketService _webSocketService;
   
@@ -31,12 +29,20 @@ class WebSocketSubscriptionManager {
   final SubscriptionManagerConfig _config;
   
   // Public getters
+  /// Unmodifiable view of the subscribed event types.
   Set<String> get subscribedEvents => Set.unmodifiable(_subscribedEvents);
+  /// Unmodifiable view of every event type the client knows.
   Set<String> get availableEvents => Set.unmodifiable(_allAvailableEvents);
+  /// True while subscribed to every event.
   bool get isSubscribedToAll => _subscribeToAll;
+  /// Emits each change to the subscription set.
   Stream<SubscriptionChange> get subscriptionChanges => _subscriptionController.stream;
+  /// Emits the outcome of each filtered event.
   Stream<EventFilterResult> get filterResults => _filterController.stream;
   
+  /// Creates a manager on [webSocketService].
+  ///
+  /// [config] defaults to [SubscriptionManagerConfig.defaultConfig].
   WebSocketSubscriptionManager({
     required EnhancedWebSocketService webSocketService,
     SubscriptionManagerConfig? config,
@@ -234,7 +240,7 @@ class WebSocketSubscriptionManager {
     return true;
   }
   
-  /// Update server subscriptions
+  /// Sends the current subscription set to the server; does nothing when not connected.
   Future<void> _updateServerSubscriptions() async {
     if (!_webSocketService.isConnected) {
       print('[SubscriptionManager] Cannot update subscriptions: not connected');
@@ -314,13 +320,18 @@ class WebSocketSubscriptionManager {
   }
 }
 
-/// Configuration for subscription manager
+/// Tuning for [WebSocketSubscriptionManager]; the manager stores it but does not read it yet.
 class SubscriptionManagerConfig {
+  /// Whether subscription changes are sent to the server automatically.
   final bool enableAutoUpdates;
+  /// Delay used to throttle server updates.
   final Duration updateThrottleDelay;
+  /// Whether filter outcomes are logged.
   final bool enableFilterLogging;
+  /// Number of filter results kept.
   final int maxFilterHistory;
   
+  /// Creates a config; the defaults match [SubscriptionManagerConfig.defaultConfig].
   const SubscriptionManagerConfig({
     this.enableAutoUpdates = true,
     this.updateThrottleDelay = const Duration(milliseconds: 500),
@@ -328,10 +339,12 @@ class SubscriptionManagerConfig {
     this.maxFilterHistory = 100,
   });
   
+  /// The default config: updates and logging on, 500 ms throttle, 100 results kept.
   factory SubscriptionManagerConfig.defaultConfig() {
     return const SubscriptionManagerConfig();
   }
   
+  /// Updates and logging off, 10 results kept.
   factory SubscriptionManagerConfig.minimal() {
     return const SubscriptionManagerConfig(
       enableAutoUpdates: false,
@@ -341,12 +354,16 @@ class SubscriptionManagerConfig {
   }
 }
 
-/// Subscription change notification
+/// Notice that the subscription set changed.
 class SubscriptionChange {
+  /// Kind of change.
   final SubscriptionChangeType type;
+  /// Events affected by the change.
   final Set<String> events;
+  /// When the change happened.
   final DateTime timestamp;
   
+  /// Creates a notice; every field is required.
   SubscriptionChange({
     required this.type,
     required this.events,
@@ -354,22 +371,32 @@ class SubscriptionChange {
   });
 }
 
-/// Types of subscription changes
+/// What kind of subscription change happened.
 enum SubscriptionChangeType {
+  /// Subscribed to every event.
   subscribeAll,
+  /// Subscribed to a specific set.
   subscribeSpecific,
+  /// Events were added.
   addEvents,
+  /// Events were removed.
   removeEvents,
+  /// A filter was changed.
   filterUpdate,
 }
 
-/// Event filter result
+/// The outcome of filtering one event.
 class EventFilterResult {
+  /// The event type that was filtered.
   final String eventType;
+  /// Whether the event was allowed through.
   final bool allowed;
+  /// Name of the filter that decided.
   final String filteredBy;
+  /// When the event was filtered.
   final DateTime timestamp;
   
+  /// Creates a result; every field is required.
   EventFilterResult({
     required this.eventType,
     required this.allowed,
@@ -378,15 +405,18 @@ class EventFilterResult {
   });
 }
 
-/// Abstract event filter
+/// Decides whether an event should be processed, from its data.
 abstract class EventFilter {
+  /// True when the event should be processed; [eventData] is the event payload.
   bool shouldProcess(Map<String, dynamic>? eventData);
 }
 
-/// Session-based event filter
+/// Passes events for one session, and events that name no session.
 class SessionEventFilter extends EventFilter {
+  /// Session whose events pass.
   final String targetSessionId;
   
+  /// Creates a filter for [targetSessionId].
   SessionEventFilter(this.targetSessionId);
   
   @override
@@ -397,10 +427,12 @@ class SessionEventFilter extends EventFilter {
   }
 }
 
-/// User-based event filter
+/// Passes events for one user, and events that name no user.
 class UserEventFilter extends EventFilter {
+  /// User whose events pass.
   final String targetUserId;
   
+  /// Creates a filter for [targetUserId].
   UserEventFilter(this.targetUserId);
   
   @override
@@ -411,10 +443,12 @@ class UserEventFilter extends EventFilter {
   }
 }
 
-/// Priority-based event filter
+/// Passes events whose priority is allowed, and events that carry none.
 class PriorityEventFilter extends EventFilter {
+  /// Priorities that pass.
   final Set<String> allowedPriorities;
   
+  /// Creates a filter for [allowedPriorities].
   PriorityEventFilter(this.allowedPriorities);
   
   @override
