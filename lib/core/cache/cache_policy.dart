@@ -23,6 +23,7 @@ class CachePolicy extends Equatable {
   /// Interval for automatic cleanup
   final Duration autoCleanupInterval;
 
+  /// Creates a [CachePolicy].
   const CachePolicy({
     this.maxAge = const Duration(days: 7),
     this.maxItems = 1000,
@@ -66,6 +67,7 @@ class CachePolicy extends Equatable {
     enableAutoCleanup: false,
   );
 
+  /// Returns a copy with the given fields replaced.
   CachePolicy copyWith({
     Duration? maxAge,
     int? maxItems,
@@ -118,14 +120,22 @@ enum CacheEvictionStrategy {
 
 /// Cache entry metadata
 class CacheEntry<T> extends Equatable {
+  /// Key identifying the entry.
   final String key;
+  /// The cached value.
   final T value;
+  /// When the entry was created.
   final DateTime createdAt;
+  /// When the entry was last read.
   final DateTime? lastAccessedAt;
+  /// Number of times the item was read, or null when unknown.
   final int accessCount;
+  /// Size in bytes.
   final int sizeBytes;
+  /// Extra metadata for the entry.
   final Map<String, dynamic>? metadata;
 
+  /// Creates a [CacheEntry].
   const CacheEntry({
     required this.key,
     required this.value,
@@ -136,10 +146,12 @@ class CacheEntry<T> extends Equatable {
     this.metadata,
   });
 
+  /// True when the entry is older than [maxAge].
   bool isExpired(Duration maxAge) {
     return DateTime.now().difference(createdAt) > maxAge;
   }
 
+  /// Returns a copy with the access count raised and the access time set to now.
   CacheEntry<T> withAccess() {
     return CacheEntry<T>(
       key: key,
@@ -152,6 +164,7 @@ class CacheEntry<T> extends Equatable {
     );
   }
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson(Map<String, dynamic> Function(T) valueToJson) {
     return {
       'key': key,
@@ -164,6 +177,7 @@ class CacheEntry<T> extends Equatable {
     };
   }
 
+  /// Reads a [CacheEntry] from the map [toJson] produces.
   factory CacheEntry.fromJson(
     Map<String, dynamic> json,
     T Function(Map<String, dynamic>) valueFromJson,

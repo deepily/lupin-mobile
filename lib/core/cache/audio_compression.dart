@@ -481,11 +481,16 @@ class AudioCompression {
 
 /// Compression settings
 class CompressionSettings {
+  /// Compression algorithm name.
   final String algorithm;
+  /// Compression quality setting.
   final double quality;
+  /// Whether variable bit rate is used.
   final bool enableVBR;
+  /// Target bit rate.
   final int targetBitrate;
   
+  /// Creates a [CompressionSettings].
   const CompressionSettings({
     required this.algorithm,
     required this.quality,
@@ -493,6 +498,7 @@ class CompressionSettings {
     required this.targetBitrate,
   });
   
+  /// Returns a copy with the given fields replaced.
   CompressionSettings copyWith({
     String? algorithm,
     double? quality,
@@ -510,14 +516,22 @@ class CompressionSettings {
 
 /// Compression metadata
 class CompressionMetadata {
+  /// Size before compression, in bytes.
   final int originalSize;
+  /// Size after compression, in bytes.
   final int compressedSize;
+  /// Compression algorithm name.
   final String algorithm;
+  /// Compression quality setting.
   final double quality;
+  /// Audio format name.
   final String format;
+  /// Compression ratio achieved.
   final double compressionRatio;
+  /// When the object was created.
   final DateTime timestamp;
   
+  /// Creates a [CompressionMetadata].
   const CompressionMetadata({
     required this.originalSize,
     required this.compressedSize,
@@ -528,6 +542,7 @@ class CompressionMetadata {
     required this.timestamp,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'original_size': originalSize,
@@ -540,6 +555,7 @@ class CompressionMetadata {
     };
   }
   
+  /// Reads a [CompressionMetadata] from the map [toJson] produces.
   factory CompressionMetadata.fromJson(Map<String, dynamic> json) {
     return CompressionMetadata(
       originalSize: json['original_size'],
@@ -555,9 +571,12 @@ class CompressionMetadata {
 
 /// Compression result
 class CompressionResult {
+  /// The data.
   final Uint8List data;
+  /// Extra metadata for the entry.
   final CompressionMetadata metadata;
   
+  /// Creates a [CompressionResult].
   const CompressionResult({
     required this.data,
     required this.metadata,
@@ -566,14 +585,22 @@ class CompressionResult {
 
 /// Compression statistics
 class CompressionStatistics {
+  /// Number of compressions performed.
   final int totalCompressions;
+  /// Number of decompressions performed.
   final int totalDecompressions;
+  /// Bytes fed to compression.
   final int totalBytesCompressed;
+  /// Bytes produced by decompression.
   final int totalBytesDecompressed;
+  /// Bytes saved by compression.
   final int totalBytesSaved;
+  /// Mean compression ratio.
   final double averageCompressionRatio;
+  /// Number of entries in the compression cache.
   final int cacheSize;
   
+  /// Creates a [CompressionStatistics].
   const CompressionStatistics({
     required this.totalCompressions,
     required this.totalDecompressions,
@@ -584,12 +611,14 @@ class CompressionStatistics {
     required this.cacheSize,
   });
   
+  /// Share of the original size saved by compression, as a percentage.
   double get spaceSavedPercentage {
     return totalBytesCompressed > 0 
         ? (totalBytesSaved / totalBytesCompressed) * 100
         : 0.0;
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'total_compressions': totalCompressions,
