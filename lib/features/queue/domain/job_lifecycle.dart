@@ -1,35 +1,65 @@
-/// Shared job-lifecycle vocabulary — a VERBATIM mirror of the server's own
-/// `STATE_TO_UI_CONTAINER` map (`src/cosa/rest/job_state.py:74`), not a
-/// hand-rolled re-derivation.
+/// Shared job-lifecycle vocabulary, a verbatim mirror of the server's state-to-lane map.
 ///
-/// Two things a hand-rolled map gets wrong and this one does not:
-///   * `stalled → todo`, NOT dead. A stalled job is resumable.
-///   * `interrupted → dead`. It is terminal even though nothing emits it
-///     over the wire (server-restart sweep only — `job_persistence.py`).
+/// A hand-rolled map would get two states wrong:
+///   - `stalled` belongs in the todo lane, not dead, because a stalled job is resumable.
+///   - `interrupted` belongs in the dead lane. It is terminal even though only the
+///     server-restart sweep produces it and nothing emits it over the wire.
 ///
-/// Lives in the *queue* feature's domain layer so both `QueueDashboardScreen`
-/// and Quick Ask import it without either depending on the other.
+/// It lives in the queue feature's domain layer so `QueueDashboardScreen` and Quick Ask
+/// can both import it without either depending on the other.
 library;
 
 /// The four UI containers the server groups job states into.
-enum JobLane { todo, run, done, dead }
+enum JobLane {
+  /// Waiting or resumable work.
+  todo,
+
+  /// Work that is running now.
+  run,
+
+  /// Work that finished successfully.
+  done,
+
+  /// Work that ended without success.
+  dead
+}
 
 /// Every `JobState` the server can name in a `job_state_transition` frame.
 enum JobLifecycleState {
+  /// Created and not yet queued.
   pending,
+
+  /// Waiting in the queue.
   queued,
+
+  /// Waiting for its scheduled time.
   scheduled,
+
+  /// Held by the user.
   paused,
+
+  /// Running now.
   running,
+
+  /// Finished successfully.
   completed,
+
+  /// Ended with an error.
   failed,
+
+  /// Ended by a server restart.
   interrupted,
+
+  /// Cancelled by the user.
   cancelled,
+
+  /// Stopped making progress; resumable.
   stalled;
 
-  /// Wire name → enum. Returns null for anything unrecognized so the caller
-  /// can DROP the frame rather than guess a lane for a state the server grew
-  /// after this build shipped.
+  /// Parses a wire name, returning null for anything unrecognized.
+  ///
+  /// The caller can then drop the frame instead of guessing a lane for a state
+  /// the server grew after this build shipped.
   static JobLifecycleState? parse( String? raw ) {
     if ( raw == null ) return null;
     for ( final s in JobLifecycleState.values ) {
@@ -38,14 +68,14 @@ enum JobLifecycleState {
     return null;
   }
 
-  /// Verbatim `STATE_TO_UI_CONTAINER`.
+  /// The lane this state belongs to, as the server maps it.
   JobLane get lane {
     switch ( this ) {
       case JobLifecycleState.pending:
       case JobLifecycleState.queued:
       case JobLifecycleState.scheduled:
       case JobLifecycleState.paused:
-      case JobLifecycleState.stalled:      // resumable, NOT dead
+      case JobLifecycleState.stalled:      // resumable, so not dead
         return JobLane.todo;
       case JobLifecycleState.running:
         return JobLane.run;
@@ -58,14 +88,13 @@ enum JobLifecycleState {
     }
   }
 
-  /// Monotonic ordering for the fold in `QuickAskBloc`: a frame is applied
-  /// only when its rank EXCEEDS the current state's, so duplicates and
-  /// out-of-order deliveries become no-ops. Terminals bypass the comparison
-  /// (see `QuickAskBloc`), so their relative ranks only order them against
-  /// non-terminals.
+  /// Monotonic ordering used by the fold in `QuickAskBloc`.
   ///
-  /// `stalled` outranks `running` deliberately: it is later in time than the
-  /// running state it replaces, even though its lane walks back to `todo`.
+  /// A frame is applied only when its rank exceeds the current state's,
+  /// so duplicate and out-of-order deliveries become no-ops.
+  /// Terminal states bypass the comparison, so their ranks only order them against non-terminals.
+  /// `stalled` outranks `running` because it is later in time than the state it replaces,
+  /// even though its lane goes back to todo.
   int get rank {
     switch ( this ) {
       case JobLifecycleState.pending:     return 0;
@@ -81,7 +110,7 @@ enum JobLifecycleState {
     }
   }
 
-  /// Mirrors the server's `TERMINAL_STATES` frozenset (`job_state.py:65`).
+  /// True for the four states the server treats as terminal.
   bool get isTerminal =>
       this == JobLifecycleState.completed ||
       this == JobLifecycleState.failed    ||

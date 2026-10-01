@@ -5,14 +5,16 @@ import '../data/queue_repository.dart';
 import 'queue_event.dart';
 import 'queue_state.dart';
 
-/// Repository-backed queue BLoC. Replaces the prior WS-only skeleton with
-/// real REST integration against the 14-endpoint CJ Flow queue API.
+/// Repository-backed queue bloc over the CJ Flow queue API.
+///
+/// It loads queue snapshots, history and interactions, and runs job actions.
 class QueueBloc extends Bloc<QueueEvent, QueueState> {
   final QueueRepository _repo;
 
-  // Track context so external updates can refresh the right view.
+  // Remembers the active queue so external updates refresh the right view.
   String? _activeQueueName;
 
+  /// Creates the bloc over a repository.
   QueueBloc( this._repo ) : super( const QueueInitial() ) {
     on<QueueLoadSnapshot>( _onLoadSnapshot );
     on<QueueLoadHistory>( _onLoadHistory );
@@ -75,8 +77,8 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     }
   }
 
-  /// WS-driven refresh — re-fetch without emitting a loading state so the
-  /// UI doesn't flash. No-op if no snapshot is currently active.
+  // Refreshes after a WebSocket update without a loading state, so the UI does not flash.
+  // It does nothing unless a snapshot is currently shown.
   Future<void> _onExternalUpdate(
     QueueExternalUpdate event,
     Emitter<QueueState> emit,
@@ -87,7 +89,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
       final snapshot = await _repo.getQueue( target );
       emit( QueueSnapshotLoaded( snapshot ) );
     } on QueueApiException catch ( _ ) {
-      // Keep last good state silently — refresh is best-effort.
+      // Keeps the last good state, because the refresh is best-effort.
     }
   }
 
