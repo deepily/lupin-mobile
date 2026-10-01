@@ -8,11 +8,10 @@ import '../../core/cache/audio_compression.dart';
 import '../../shared/models/models.dart';
 import '../tts/tts_service.dart';
 
-/// High-level audio cache management service coordinating multiple cache layers.
-/// 
-/// Provides unified interface for TTS response caching, voice recording storage,
-/// audio compression, cache analytics, and intelligent eviction management.
-/// Optimizes audio storage and retrieval across the entire application.
+/// Single entry point for caching TTS audio and voice recordings.
+///
+/// Coordinates the audio cache, the voice recording cache, compression, analytics and eviction.
+/// Call [initialize] before any other member, and [dispose] when done.
 class AudioCacheManager {
   final AudioCache _audioCache;
   final VoiceRecordingCache _voiceRecordingCache;
@@ -36,7 +35,9 @@ class AudioCacheManager {
   final _eventController = StreamController<AudioCacheManagerEvent>.broadcast();
   
   // Public streams
+  /// Emits each change of the manager's lifecycle status.
   Stream<AudioCacheStatus> get statusStream => _statusController.stream;
+  /// Emits an event for each cache operation and each error.
   Stream<AudioCacheManagerEvent> get eventStream => _eventController.stream;
   
   /// Creates a new audio cache manager with configurable components.
@@ -396,7 +397,10 @@ class AudioCacheManager {
     }
   }
   
-  /// Prefetch TTS for common phrases
+  /// Emits a prefetch-requested event for each common phrase with no cached TTS for [provider].
+  ///
+  /// Does nothing when prefetch is disabled or [ttsService] is null. It requests only: nothing
+  /// generates the audio yet.
   Future<void> prefetchCommonPhrases({
     required String provider,
     TTSService? ttsService,
@@ -441,7 +445,7 @@ class AudioCacheManager {
   ///   - Memory and storage usage are accurately calculated
   /// 
   /// Raises:
-  ///   - No exceptions are raised (returns empty stats on error)
+  ///   - Errors from the underlying caches propagate; nothing is caught here
   Future<AudioCacheStatistics> getStatistics() async {
     final audioStats = await _audioCache.getStats();
     final voiceStats = await _voiceRecordingCache.getStats();
@@ -567,21 +571,21 @@ class AudioCacheManager {
     }
   }
   
-  /// Get total cache size in bytes
+  /// Combined size of the TTS and voice recording caches, in bytes.
   Future<int> getTotalCacheSize() async {
     final audioStats = await _audioCache.getStats();
     final voiceStats = await _voiceRecordingCache.getStats();
     return audioStats.totalSizeBytes + voiceStats.totalSizeBytes;
   }
   
-  /// Get total item count
+  /// Combined number of TTS and voice recording entries.
   Future<int> getTotalItemCount() async {
     final audioStats = await _audioCache.getStats();
     final voiceStats = await _voiceRecordingCache.getStats();
     return audioStats.totalMetadata + voiceStats.itemCount;
   }
   
-  /// Dispose resources
+  /// Cancels the timers, closes both streams and disposes the three owned caches.
   void dispose() {
     _maintenanceTimer?.cancel();
     _analyticsTimer?.cancel();
@@ -644,28 +648,60 @@ class AudioCacheManager {
   ];
 }
 
-/// Audio cache status
+/// Lifecycle status of an [AudioCacheManager].
 enum AudioCacheStatus {
+  /// [AudioCacheManager.initialize] has not run.
   uninitialized,
+
+  /// Initialization is in progress.
   initializing,
+
+  /// Ready for use.
   ready,
+
+  /// An optimization pass is running.
   optimizing,
+
+  /// Initialization or optimization failed.
   error,
 }
 
-/// Audio cache statistics
+/// Snapshot of cache usage, hit rate and configuration.
 class AudioCacheStatistics {
+  /// Combined size of both caches, in megabytes.
   final double totalSizeMB;
+
+  /// Configured size limit, in megabytes.
   final int maxSizeMB;
+
+  /// Number of cached TTS entries.
   final int ttsItemCount;
+
+  /// Number of cached voice recordings.
   final int voiceRecordingCount;
+
+  /// TTS entries plus voice recordings.
   final int totalItemCount;
+
+  /// Overall cache hit rate reported by the analytics.
   final double hitRate;
+
+  /// Compression ratio reported by the analytics.
   final double compressionRatio;
+
+  /// Entry counts per TTS provider.
   final Map<String, int> providerStats;
+
+  /// When eviction last ran, or null if it has not.
   final DateTime? lastCleanup;
+
+  /// Whether compression is enabled.
   final bool isCompressed;
+
+  /// Whether prefetch is enabled.
   final bool isPrefetchEnabled;
+
+  /// Creates a snapshot; every field except [lastCleanup] is required.
   
   const AudioCacheStatistics({
     required this.totalSizeMB,
@@ -681,64 +717,84 @@ class AudioCacheStatistics {
     required this.isPrefetchEnabled,
   });
   
+  /// Used share of the size limit, from 0 to 100.
   double get utilizationPercent => (totalSizeMB / maxSizeMB) * 100;
+  /// True when [utilizationPercent] is above 85.
   bool get isNearCapacity => utilizationPercent > 85;
 }
 
-/// Audio cache manager events
+/// Base type of the events [AudioCacheManager.eventStream] emits.
 abstract class AudioCacheManagerEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
   
+  /// Base constructor for the event subclasses.
   const AudioCacheManagerEvent();
   
+  /// Builds an [AudioCacheInitializedEvent].
   factory AudioCacheManagerEvent.initialized({
     required int totalSize,
     required int itemCount,
   }) = AudioCacheInitializedEvent;
   
+  /// Builds a [TTSCachedEvent].
   factory AudioCacheManagerEvent.ttsCached({
     required String text,
     required String provider,
     required int chunkCount,
   }) = TTSCachedEvent;
   
+  /// Builds a [VoiceRecordingCachedEvent].
   factory AudioCacheManagerEvent.voiceRecordingCached({
     required String recordingId,
     Duration? duration,
   }) = VoiceRecordingCachedEvent;
   
+  /// Builds a [PrefetchRequestedEvent].
   factory AudioCacheManagerEvent.prefetchRequested({
     required String text,
     required String provider,
   }) = PrefetchRequestedEvent;
   
+  /// Builds a [CacheClearedEvent].
   factory AudioCacheManagerEvent.cacheCleared({
     required String type,
     required String details,
   }) = CacheClearedEvent;
   
+  /// Builds a [CacheOptimizedEvent].
   factory AudioCacheManagerEvent.optimized({
     required double freedSpaceMB,
   }) = CacheOptimizedEvent;
   
+  /// Builds an [AudioCacheErrorEvent].
   factory AudioCacheManagerEvent.error(String message) = AudioCacheErrorEvent;
 }
 
+/// Emitted once initialization finishes.
 class AudioCacheInitializedEvent extends AudioCacheManagerEvent {
+  /// Combined cache size in bytes at that moment.
   final int totalSize;
+  /// Combined entry count at that moment.
   final int itemCount;
   
+  /// Creates the event.
   const AudioCacheInitializedEvent({
     required this.totalSize,
     required this.itemCount,
   });
 }
 
+/// Emitted after a TTS response is stored.
 class TTSCachedEvent extends AudioCacheManagerEvent {
+  /// Text that was synthesized.
   final String text;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Number of audio chunks stored.
   final int chunkCount;
   
+  /// Creates the event.
   const TTSCachedEvent({
     required this.text,
     required this.provider,
@@ -746,46 +802,64 @@ class TTSCachedEvent extends AudioCacheManagerEvent {
   });
 }
 
+/// Emitted after a voice recording is stored.
 class VoiceRecordingCachedEvent extends AudioCacheManagerEvent {
+  /// Identifier of the stored recording.
   final String recordingId;
+  /// Length of the recording, or null when unknown.
   final Duration? duration;
   
+  /// Creates the event.
   const VoiceRecordingCachedEvent({
     required this.recordingId,
     this.duration,
   });
 }
 
+/// Emitted when a common phrase has no cached TTS and should be fetched.
 class PrefetchRequestedEvent extends AudioCacheManagerEvent {
+  /// Phrase to synthesize.
   final String text;
+  /// Provider to synthesize it with.
   final String provider;
   
+  /// Creates the event.
   const PrefetchRequestedEvent({
     required this.text,
     required this.provider,
   });
 }
 
+/// Emitted after a provider cache or all caches are cleared.
 class CacheClearedEvent extends AudioCacheManagerEvent {
+  /// Scope that was cleared: `provider` or `all`.
   final String type;
+  /// The provider name, or a short description for a full clear.
   final String details;
   
+  /// Creates the event.
   const CacheClearedEvent({
     required this.type,
     required this.details,
   });
 }
 
+/// Emitted after an optimization pass.
 class CacheOptimizedEvent extends AudioCacheManagerEvent {
+  /// Space freed, in megabytes; always 0 until the pass measures it.
   final double freedSpaceMB;
   
+  /// Creates the event.
   const CacheOptimizedEvent({
     required this.freedSpaceMB,
   });
 }
 
+/// Emitted when a cache operation fails.
 class AudioCacheErrorEvent extends AudioCacheManagerEvent {
+  /// Description of the failure.
   final String message;
   
+  /// Creates the event.
   const AudioCacheErrorEvent(this.message);
 }
