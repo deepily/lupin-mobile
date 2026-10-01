@@ -272,18 +272,23 @@ class StorageManager {
   }
 }
 
-/// Storage statistics
+/// Summary of what a [StorageManager] holds: key count, approximate size and keys per prefix.
 class StorageStats {
+  /// Number of stored keys.
   final int totalKeys;
+  /// Estimated size of the stored data, in bytes.
   final int approximateSize;
+  /// Number of keys under each key prefix.
   final Map<String, int> keysByPrefix;
   
+  /// Creates a statistics snapshot.
   const StorageStats({
     required this.totalKeys,
     required this.approximateSize,
     required this.keysByPrefix,
   });
   
+  /// Serializes with snake_case keys.
   Map<String, dynamic> toJson() {
     return {
       'total_keys': totalKeys,
