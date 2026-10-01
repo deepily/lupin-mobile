@@ -3,13 +3,13 @@ import 'dart:math';
 import '../network/network_connectivity_service.dart';
 import '../lifecycle/app_lifecycle_service.dart';
 
-/// Adaptive connection management that intelligently adjusts WebSocket behavior
-/// based on network conditions, app lifecycle state, and usage patterns.
-/// 
-/// Provides optimized connection strategies, resource management, and automatic
-/// recovery for mobile environments with varying connectivity and power constraints.
+/// Chooses WebSocket connection settings from network quality and app lifecycle state.
+///
+/// App-wide singleton. It listens to [NetworkConnectivityService] and [AppLifecycleService],
+/// recomputes a strategy and an optimization mode on each change, and publishes both on streams.
 class AdaptiveConnectionManager {
   static final AdaptiveConnectionManager _instance = AdaptiveConnectionManager._internal();
+  /// Returns the shared instance.
   factory AdaptiveConnectionManager() => _instance;
   AdaptiveConnectionManager._internal();
 
@@ -33,7 +33,9 @@ class AdaptiveConnectionManager {
   final Map<String, int> _strategyEffectiveness = {};
   
   // Configuration
+  /// Minimum time between strategy recomputations.
   static const Duration strategyUpdateCooldown = Duration(seconds: 30);
+  /// Number of adaptation events kept; the oldest is dropped past this.
   static const int adaptationHistorySize = 100;
   
   // Subscriptions
@@ -42,12 +44,16 @@ class AdaptiveConnectionManager {
   StreamSubscription<AppUsageState>? _lifecycleSubscription;
   
   // Public getters
+  /// Strategy currently in force.
   AdaptiveStrategy get currentStrategy => _currentStrategy;
+  /// Optimization mode currently in force.
   ConnectionOptimization get currentOptimization => _currentOptimization;
+  /// Emits each time [currentStrategy] changes.
   Stream<AdaptiveStrategy> get strategyStream => _strategyController.stream;
+  /// Emits each time [currentOptimization] changes.
   Stream<ConnectionOptimization> get optimizationStream => _optimizationController.stream;
   
-  /// Initialize adaptive connection management
+  /// Starts the dependent services, subscribes to their streams and sets the first strategy.
   Future<void> initialize() async {
     print('[AdaptiveManager] Initializing adaptive connection management');
     
@@ -87,7 +93,7 @@ class AdaptiveConnectionManager {
     _updateAdaptiveStrategy();
   }
   
-  /// Update adaptive strategy based on current conditions
+  /// Recomputes strategy and optimization, skipping changes inside [strategyUpdateCooldown].
   Future<void> _updateAdaptiveStrategy() async {
     // Prevent rapid strategy changes
     if (_lastStrategyUpdate != null) {
@@ -191,7 +197,7 @@ class AdaptiveConnectionManager {
     return ConnectionOptimization.balanced;
   }
   
-  /// Get comprehensive connection configuration
+  /// Combines the network, lifecycle and adaptive settings into one connection config.
   AdaptiveConnectionConfig getConnectionConfig() {
     final networkStrategy = _networkService.getConnectionStrategy();
     final appStrategy = _lifecycleService.getConnectionStrategy();
@@ -353,7 +359,7 @@ class AdaptiveConnectionManager {
     }
   }
   
-  /// Get adaptation analytics
+  /// Snapshot of current settings, recent event counts and the full event history.
   Map<String, dynamic> getAdaptationAnalytics() {
     final now = DateTime.now();
     final recentEvents = _adaptationHistory.where(
@@ -373,13 +379,13 @@ class AdaptiveConnectionManager {
     };
   }
   
-  /// Force strategy recalculation (for testing)
+  /// Recomputes the strategy immediately, ignoring the cooldown. Intended for tests.
   void forceStrategyUpdate() {
     _lastStrategyUpdate = null;
     _updateAdaptiveStrategy();
   }
   
-  /// Dispose of resources
+  /// Cancels the subscriptions, closes both streams and disposes both dependent services.
   void dispose() {
     print('[AdaptiveManager] Disposing adaptive connection manager');
     
@@ -395,41 +401,87 @@ class AdaptiveConnectionManager {
   }
 }
 
-/// Adaptive connection strategies
+/// How hard the app tries to keep the WebSocket connected.
 enum AdaptiveStrategy {
-  aggressive,   // Fast reconnection, high resource usage
-  performance,  // Optimized for speed and responsiveness
-  standard,     // Balanced approach
-  conservative, // Slower reconnection, reduced resource usage
-  background,   // Background-optimized behavior
-  powerSaver,   // Minimal resource usage
-  offline,      // No connection attempts
+  /// Fast reconnection at the cost of higher resource usage.
+  aggressive,
+
+  /// Optimized for speed and responsiveness.
+  performance,
+
+  /// Balanced approach.
+  standard,
+
+  /// Slower reconnection and reduced resource usage.
+  conservative,
+
+  /// Behavior tuned for the app being in the background.
+  background,
+
+  /// Minimal resource usage.
+  powerSaver,
+
+  /// No connection attempts.
+  offline,
 }
 
-/// Connection optimization modes
+/// What the connection settings trade off: speed, data use or battery.
 enum ConnectionOptimization {
-  performance,   // Maximum speed and responsiveness
-  balanced,      // Balance between performance and efficiency
-  dataSaver,     // Minimize data usage
-  batterySaver,  // Minimize battery consumption
+  /// Maximum speed and responsiveness.
+  performance,
+
+  /// Balance between performance and efficiency.
+  balanced,
+
+  /// Minimize data usage.
+  dataSaver,
+
+  /// Minimize battery consumption.
+  batterySaver,
 }
 
-/// Comprehensive adaptive connection configuration
+/// One computed set of WebSocket connection settings, with the strategy that produced it.
 class AdaptiveConnectionConfig {
+  /// Wait before the first reconnect attempt.
   final Duration reconnectDelay;
+
+  /// Reconnect attempts before giving up; zero means never reconnect.
   final int maxReconnectAttempts;
+
+  /// Interval between keepalive pings.
   final Duration pingInterval;
+
+  /// Whether keepalive pings are sent.
   final bool enableKeepalive;
+
+  /// Whether messages are compressed.
   final bool enableCompression;
+
+  /// Buffer size in bytes.
   final int bufferSize;
+
+  /// Whether the connection is kept open while the app is not in the foreground.
   final bool maintainConnection;
+
+  /// Whether audio is streamed over the connection.
   final bool enableAudioStreaming;
+
+  /// Whether audio is buffered while the app is in the background.
   final bool bufferAudioInBackground;
+
+  /// Upper bound on simultaneous connections.
   final int maxConcurrentConnections;
+
+  /// Strategy in force when this config was computed.
   final AdaptiveStrategy strategy;
+
+  /// Optimization mode in force when this config was computed.
   final ConnectionOptimization optimization;
+
+  /// When this config was computed.
   final DateTime adaptationTimestamp;
-  
+
+  /// Creates a config; every field is required.
   const AdaptiveConnectionConfig({
     required this.reconnectDelay,
     required this.maxReconnectAttempts,
@@ -458,17 +510,33 @@ class AdaptiveConnectionConfig {
   }
 }
 
-/// Adaptation event for learning and analytics
+/// One recorded input change, with the network, app and strategy state at that moment.
 class AdaptationEvent {
+  /// When the change was recorded.
   final DateTime timestamp;
+
+  /// Kind of change, for example `network_state_change` or `strategy_change`.
   final String type;
+
+  /// The new value, as text.
   final String value;
+
+  /// Network state at the time of the event.
   final NetworkState networkState;
+
+  /// Connection quality at the time of the event.
   final ConnectionQuality connectionQuality;
+
+  /// App usage state at the time of the event.
   final AppUsageState appState;
+
+  /// Strategy in force at the time of the event.
   final AdaptiveStrategy strategy;
+
+  /// Optimization mode in force at the time of the event.
   final ConnectionOptimization optimization;
-  
+
+  /// Creates an event; every field is required.
   const AdaptationEvent({
     required this.timestamp,
     required this.type,
@@ -480,6 +548,7 @@ class AdaptationEvent {
     required this.optimization,
   });
   
+  /// Serializes the event with snake_case keys and an ISO-8601 timestamp.
   Map<String, dynamic> toMap() {
     return {
       'timestamp': timestamp.toIso8601String(),

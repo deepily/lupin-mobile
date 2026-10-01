@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 
-/// App lifecycle management service for mobile applications.
-/// 
-/// Handles app state transitions (foreground/background/paused), provides
-/// adaptive behavior for WebSocket connections, and manages resource optimization
-/// based on app visibility and user interaction patterns.
+/// Tracks whether the app is foreground, inactive or backgrounded, and for how long.
+///
+/// App-wide singleton and [WidgetsBindingObserver]. It derives an [AppUsageState] from lifecycle
+/// transitions and user interaction, and maps that state to WebSocket connection settings.
 class AppLifecycleService with WidgetsBindingObserver {
   static final AppLifecycleService _instance = AppLifecycleService._internal();
+  /// Returns the shared instance.
   factory AppLifecycleService() => _instance;
   AppLifecycleService._internal();
 
@@ -31,8 +31,13 @@ class AppLifecycleService with WidgetsBindingObserver {
   Duration _currentSessionDuration = Duration.zero;
   
   // Configuration
+  /// Foreground time without user interaction before the state becomes inactive.
   static const Duration inactivityThreshold = Duration(minutes: 2);
+  /// Time in the background before the state becomes long-background.
+  ///
+  /// Resuming after more than this also counts as a short-background recovery.
   static const Duration backgroundThreshold = Duration(minutes: 5);
+  /// Background time past which resuming starts a full recovery and [isLongBackground] is true.
   static const Duration longBackgroundThreshold = Duration(minutes: 30);
   
   // Timers for state management
@@ -41,20 +46,30 @@ class AppLifecycleService with WidgetsBindingObserver {
   Timer? _sessionTimer;
   
   // Public getters
+  /// Latest framework lifecycle state.
   AppLifecycleState get currentLifecycleState => _currentLifecycleState;
+  /// Usage state derived from the lifecycle state and user interaction.
   AppUsageState get currentUsageState => _currentUsageState;
+  /// Emits every lifecycle transition.
   Stream<AppLifecycleState> get lifecycleStream => _lifecycleController.stream;
+  /// Emits [currentUsageState] each time it changes.
   Stream<AppUsageState> get usageStateStream => _usageStateController.stream;
+  /// Time since the app was last paused, or zero when it is not backgrounded.
   Duration get backgroundDuration => _backgroundTime != null ? 
       DateTime.now().difference(_backgroundTime!) : Duration.zero;
+  /// Time since the app last resumed, or zero when it is not in the foreground.
   Duration get foregroundDuration => _foregroundTime != null ?
       DateTime.now().difference(_foregroundTime!) : Duration.zero;
+  /// Whole minutes elapsed since [initialize]; updated once a minute.
   Duration get sessionDuration => _currentSessionDuration;
+  /// True for any lifecycle state other than resumed.
   bool get isInBackground => _currentLifecycleState != AppLifecycleState.resumed;
+  /// True when [backgroundDuration] exceeds [longBackgroundThreshold].
   bool get isLongBackground => backgroundDuration > longBackgroundThreshold;
+  /// True when the usage state is active.
   bool get isUserActive => _currentUsageState == AppUsageState.active;
   
-  /// Initialize app lifecycle monitoring
+  /// Registers as a lifecycle observer and starts the session and inactivity timers.
   void initialize() {
     print('[LifecycleService] Initializing app lifecycle monitoring');
     
@@ -77,6 +92,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     print('[LifecycleService] App lifecycle monitoring initialized');
   }
   
+  /// Totals the time spent in the previous state, then handles and broadcasts [state].
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('[LifecycleService] Lifecycle state changed: $_currentLifecycleState -> $state');
@@ -215,7 +231,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     });
   }
   
-  /// Record user interaction to reset inactivity timer
+  /// Marks the user as active and restarts the inactivity timer; call it on every user input.
   void recordUserInteraction() {
     _lastUserInteraction = DateTime.now();
     
@@ -230,7 +246,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     }
   }
   
-  /// Update usage state based on current conditions
+  /// Sets the usage state from the lifecycle state and the time since the last interaction.
   void _updateUsageState() {
     switch (_currentLifecycleState) {
       case AppLifecycleState.resumed:
@@ -289,7 +305,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     _setUsageState(AppUsageState.shutdown);
   }
   
-  /// Get connection strategy based on current app state
+  /// Connection settings for the current [AppUsageState].
   AppStateConnectionStrategy getConnectionStrategy() {
     switch (_currentUsageState) {
       case AppUsageState.active:
@@ -360,7 +376,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     }
   }
   
-  /// Get app usage statistics
+  /// Snapshot of states, accumulated durations and flags, with snake_case keys.
   Map<String, dynamic> getUsageStatistics() {
     final now = DateTime.now();
     
@@ -379,7 +395,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     };
   }
   
-  /// Dispose of resources
+  /// Unregisters the observer, cancels the timers and closes both streams.
   void dispose() {
     print('[LifecycleService] Disposing app lifecycle service');
     
@@ -394,25 +410,51 @@ class AppLifecycleService with WidgetsBindingObserver {
   }
 }
 
-/// App usage states for adaptive behavior
+/// How the app is being used, for choosing connection behavior.
 enum AppUsageState {
-  active,        // User actively using the app
-  inactive,      // App in foreground but user not interacting
-  background,    // App in background (short duration)
-  backgroundLong, // App in background for extended period
-  recovering,    // Recovering from background state
-  shutdown,      // App shutting down
+  /// The user is actively using the app.
+  active,
+
+  /// The app is in the foreground and the user is not interacting.
+  inactive,
+
+  /// The app has been in the background for a short time.
+  background,
+
+  /// The app has been in the background for an extended time.
+  backgroundLong,
+
+  /// The app is recovering from a long background stay.
+  recovering,
+
+  /// The app is shutting down.
+  shutdown,
 }
 
-/// Connection strategy based on app state
+/// WebSocket connection settings chosen for one [AppUsageState].
 class AppStateConnectionStrategy {
+  /// Whether the connection is kept open.
   final bool maintainConnection;
+
+  /// Whether heartbeat pings are sent.
   final bool enableHeartbeat;
+
+  /// Interval between heartbeat pings.
   final Duration heartbeatInterval;
+
+  /// Whether a dropped connection is retried without delay.
   final bool reconnectImmediately;
+
+  /// Upper bound on simultaneous connections; zero means none.
   final int maxConcurrentConnections;
+
+  /// Whether audio is streamed over the connection.
   final bool enableAudioStreaming;
+
+  /// Whether audio is buffered while the app is in the background.
   final bool bufferAudioInBackground;
+
+  /// Creates a strategy; every field is required.
   
   const AppStateConnectionStrategy({
     required this.maintainConnection,
