@@ -5,12 +5,18 @@ import '../logging/logger.dart';
 
 /// Base class for all application errors
 abstract class AppError implements Exception {
+  /// Stable machine-readable code, for example `TIMEOUT`.
   final String code;
+  /// Developer-facing description.
   final String message;
+  /// Text safe to show the user, or null.
   final String? userMessage;
+  /// Extra context for logging, or null.
   final Map<String, dynamic>? metadata;
+  /// When the error was created.
   final DateTime timestamp;
 
+  /// Creates an error; [timestamp] is set to now.
   AppError(
     this.code,
     this.message, {
@@ -21,6 +27,7 @@ abstract class AppError implements Exception {
   @override
   String toString() => 'AppError($code): $message';
 
+  /// Serializes the error, including its runtime type.
   Map<String, dynamic> toJson() {
     return {
       'code': code,
@@ -35,9 +42,12 @@ abstract class AppError implements Exception {
 
 /// Network-related errors
 class NetworkError extends AppError {
+  /// HTTP status, or null.
   final int? statusCode;
+  /// Endpoint that failed, or null.
   final String? endpoint;
 
+  /// Creates a network error; the default user message asks the user to check the connection.
   NetworkError(
     String code,
     String message, {
@@ -56,6 +66,7 @@ class NetworkError extends AppError {
          },
        );
 
+  /// Builds the error for no internet connection.
   factory NetworkError.noConnection() {
     return NetworkError(
       'NO_CONNECTION',
@@ -64,6 +75,7 @@ class NetworkError extends AppError {
     );
   }
 
+  /// Builds the error for a request that timed out.
   factory NetworkError.timeout() {
     return NetworkError(
       'TIMEOUT',
@@ -72,6 +84,7 @@ class NetworkError extends AppError {
     );
   }
 
+  /// Builds the error for an HTTP error response with [statusCode].
   factory NetworkError.serverError(int statusCode, String? endpoint) {
     return NetworkError(
       'SERVER_ERROR',
@@ -82,6 +95,7 @@ class NetworkError extends AppError {
     );
   }
 
+  /// Builds the error for a request the server rejected as bad.
   factory NetworkError.badRequest(String message, String? endpoint) {
     return NetworkError(
       'BAD_REQUEST',
@@ -94,9 +108,12 @@ class NetworkError extends AppError {
 
 /// Authentication and authorization errors
 class AuthError extends AppError {
+  /// Session involved, or null.
   final String? sessionId;
+  /// User involved, or null.
   final String? userId;
 
+  /// Creates an authentication or authorization error.
   AuthError(
     String code,
     String message, {
@@ -115,6 +132,7 @@ class AuthError extends AppError {
          },
        );
 
+  /// Builds the error for an expired session.
   factory AuthError.sessionExpired(String? sessionId) {
     return AuthError(
       'SESSION_EXPIRED',
@@ -124,6 +142,7 @@ class AuthError extends AppError {
     );
   }
 
+  /// Builds the error for an invalid token.
   factory AuthError.invalidToken(String? sessionId) {
     return AuthError(
       'INVALID_TOKEN',
@@ -133,6 +152,7 @@ class AuthError extends AppError {
     );
   }
 
+  /// Builds the error for a user denied access.
   factory AuthError.accessDenied(String? userId) {
     return AuthError(
       'ACCESS_DENIED',
@@ -145,9 +165,12 @@ class AuthError extends AppError {
 
 /// Voice processing errors
 class VoiceError extends AppError {
+  /// Voice input involved, or null.
   final String? voiceInputId;
+  /// Audio file involved, or null.
   final String? audioPath;
 
+  /// Creates a voice or audio error.
   VoiceError(
     String code,
     String message, {
@@ -166,6 +189,7 @@ class VoiceError extends AppError {
          },
        );
 
+  /// Builds the error for a recording that failed.
   factory VoiceError.recordingFailed() {
     return VoiceError(
       'RECORDING_FAILED',
@@ -174,6 +198,7 @@ class VoiceError extends AppError {
     );
   }
 
+  /// Builds the error for a transcription that failed.
   factory VoiceError.transcriptionFailed(String? voiceInputId) {
     return VoiceError(
       'TRANSCRIPTION_FAILED',
@@ -183,6 +208,7 @@ class VoiceError extends AppError {
     );
   }
 
+  /// Builds the error for text-to-speech generation that failed.
   factory VoiceError.ttsGenerationFailed(String? voiceInputId) {
     return VoiceError(
       'TTS_GENERATION_FAILED',
@@ -192,6 +218,7 @@ class VoiceError extends AppError {
     );
   }
 
+  /// Builds the error for audio playback that failed.
   factory VoiceError.audioPlaybackFailed(String? audioPath) {
     return VoiceError(
       'PLAYBACK_FAILED',
@@ -204,9 +231,12 @@ class VoiceError extends AppError {
 
 /// Storage and caching errors
 class StorageError extends AppError {
+  /// File involved, or null.
   final String? filePath;
+  /// Storage operation that failed, or null.
   final String? operation;
 
+  /// Creates a storage error.
   StorageError(
     String code,
     String message, {
@@ -225,6 +255,7 @@ class StorageError extends AppError {
          },
        );
 
+  /// Builds the error for a device out of storage space.
   factory StorageError.insufficientSpace() {
     return StorageError(
       'INSUFFICIENT_SPACE',
@@ -233,6 +264,7 @@ class StorageError extends AppError {
     );
   }
 
+  /// Builds the error for a file the app may not access.
   factory StorageError.accessDenied(String? filePath) {
     return StorageError(
       'STORAGE_ACCESS_DENIED',
@@ -242,6 +274,7 @@ class StorageError extends AppError {
     );
   }
 
+  /// Builds the error for stored data that cannot be read.
   factory StorageError.corruptedData(String? filePath) {
     return StorageError(
       'CORRUPTED_DATA',
@@ -254,9 +287,12 @@ class StorageError extends AppError {
 
 /// Validation errors
 class ValidationError extends AppError {
+  /// Field that failed validation, or null.
   final String? field;
+  /// The rejected value, or null.
   final dynamic value;
 
+  /// Creates a validation error.
   ValidationError(
     String code,
     String message, {
@@ -275,6 +311,7 @@ class ValidationError extends AppError {
          },
        );
 
+  /// Builds the error for a missing required [field].
   factory ValidationError.required(String field) {
     return ValidationError(
       'FIELD_REQUIRED',
@@ -284,6 +321,7 @@ class ValidationError extends AppError {
     );
   }
 
+  /// Builds the error for an invalid [value] in [field].
   factory ValidationError.invalid(String field, dynamic value) {
     return ValidationError(
       'INVALID_VALUE',
@@ -297,21 +335,32 @@ class ValidationError extends AppError {
 
 /// Error recovery strategies
 enum RecoveryStrategy {
+  /// Nothing can be done.
   none,
+  /// Try the operation again.
   retry,
+  /// Use a fallback path.
   fallback,
+  /// Refresh state or credentials.
   refresh,
+  /// Reconnect to the server.
   reconnect,
+  /// Clear cached data.
   clearCache,
+  /// Restart the app.
   restart,
 }
 
 /// Error recovery action
 class RecoveryAction {
+  /// Kind of recovery this action performs.
   final RecoveryStrategy strategy;
+  /// Text shown to the user for this action.
   final String label;
+  /// Runs the recovery.
   final Future<void> Function() action;
 
+  /// Creates a recovery action.
   RecoveryAction({
     required this.strategy,
     required this.label,
@@ -321,10 +370,14 @@ class RecoveryAction {
 
 /// Error handling result
 class ErrorHandlingResult {
+  /// Whether the error was handled.
   final bool handled;
+  /// Message for the user, or null.
   final String? message;
+  /// Actions the user or app can take.
   final List<RecoveryAction> recoveryActions;
 
+  /// Creates a result.
   ErrorHandlingResult({
     required this.handled,
     this.message,
@@ -339,6 +392,7 @@ class ErrorHandlingResult {
 /// Ensures application resilience and maintainable error management.
 class ErrorHandler {
   static ErrorHandler? _instance;
+  /// The shared handler.
   static ErrorHandler get instance => _instance ?? (_instance = ErrorHandler._());
 
   ErrorHandler._();
@@ -360,7 +414,7 @@ class ErrorHandler {
   ///   - Error reporting is configured for production environments
   /// 
   /// Raises:
-  ///   - No exceptions are raised (initialization is defensive)
+  ///   - nothing is raised; initialization is defensive
   static void initialize() {
     final handler = ErrorHandler.instance;
     
@@ -391,7 +445,7 @@ class ErrorHandler {
   ///   - Early interceptors can short-circuit error handling
   /// 
   /// Raises:
-  ///   - No exceptions are raised (registration is always safe)
+  ///   - nothing is raised; registration is always safe
   static void addInterceptor(ErrorInterceptor interceptor) {
     instance._interceptors.add(interceptor);
   }
@@ -409,7 +463,7 @@ class ErrorHandler {
   ///   - Custom recovery actions will be available for specific errors
   /// 
   /// Raises:
-  ///   - No exceptions are raised (registration is always safe)
+  ///   - nothing is raised; registration is always safe
   static void registerRecoveryProvider<T extends AppError>(
     ErrorRecoveryProvider provider,
   ) {
@@ -430,7 +484,7 @@ class ErrorHandler {
   ///   - User-friendly error messages are generated
   /// 
   /// Raises:
-  ///   - No exceptions propagate (error handler is defensive)
+  ///   - nothing propagates; the error handler is defensive
   ///   - Returns ErrorHandlingResult indicating success/failure
   static Future<ErrorHandlingResult> handleError(
     Object error, {
@@ -656,6 +710,7 @@ class ErrorHandler {
 
 /// Error interceptor interface
 abstract class ErrorInterceptor {
+  /// Inspects [error] and returns how it was handled.
   Future<ErrorHandlingResult> intercept(
     Object error, {
     StackTrace? stackTrace,
@@ -664,6 +719,7 @@ abstract class ErrorInterceptor {
 
 /// Error recovery provider interface
 abstract class ErrorRecoveryProvider {
+  /// Returns the recovery actions available for [error].
   List<RecoveryAction> getRecoveryActions(AppError error);
 }
 

@@ -458,26 +458,31 @@ class ErrorRecoveryUtils {
 class ErrorContextBuilder {
   final Map<String, dynamic> _context = {};
 
+  /// Sets the user id and returns this builder.
   ErrorContextBuilder withUser(String userId) {
     _context['userId'] = userId;
     return this;
   }
 
+  /// Sets the session id and returns this builder.
   ErrorContextBuilder withSession(String sessionId) {
     _context['sessionId'] = sessionId;
     return this;
   }
 
+  /// Sets the feature name and returns this builder.
   ErrorContextBuilder withFeature(String feature) {
     _context['feature'] = feature;
     return this;
   }
 
+  /// Adds a metadata entry under [key] and returns this builder.
   ErrorContextBuilder withMetadata(String key, dynamic value) {
     _context[key] = value;
     return this;
   }
 
+  /// Builds the log context from the values set so far.
   LogContext build() {
     return LogContext(
       userId: _context['userId'],
