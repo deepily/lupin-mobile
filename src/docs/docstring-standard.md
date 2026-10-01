@@ -88,7 +88,7 @@ After:
 ///
 /// The key is the persona with the session hash stripped, in display case, so
 /// "Krishna" and "krishna" share a group. Do not derive it with
-/// `split( " " ).first`: a persona can have two words (`persona_label.dart`).
+/// `split( " " ).first`: a persona can have two words (`lib/core/text/persona_label.dart`).
 /// Design: src/docs/decisions/README.md (R1=B)
 ///
 /// Ensures:
@@ -163,4 +163,4 @@ Most of the work in `lib/core`, `lib/services` and `lib/shared` is this kind: a 
 
 ## Tests that read doc text
 
-A test that asserts a phrase inside a `///` block makes that block's wording load-bearing. The census in M0 lists these tests and gives each one disposition: keep-and-update, convert-to-behaviour, or retire with a reason. No sweep touches such a block before its test has a disposition.
+A test that asserts a phrase inside a `///` block means the test fails when that block's wording changes. The census in M0 lists these tests and gives each one disposition: keep-and-update, convert-to-behaviour, or retire with a reason. No sweep touches such a block before its test has a disposition.
