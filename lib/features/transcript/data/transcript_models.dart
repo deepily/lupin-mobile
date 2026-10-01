@@ -1,43 +1,46 @@
-/// §3's wire contract, as Dart. One file, because the contract is one thing and a reader
-/// checking the client against the plan should not have to assemble it from four.
+/// The Live Console's wire contract, as Dart.
 ///
-/// 🔴 EVERY PARSE HERE IS TOTAL: a malformed frame yields a frame with nulls, never an
-/// exception. A socket frame arrives on a stream with no caller to catch for it, so a throw
-/// in a parser is a dead stream — and the surface whose whole job is to show everything
-/// would show nothing, silently. The same rule the fleet models already follow.
+/// It is one file because the contract is one thing, and a reader checking the client
+/// against the plan should not assemble it from four. Every parse here is total: a
+/// malformed frame yields a frame with nulls, never an exception. A socket frame arrives
+/// on a stream with no caller to catch for it. A throw in a parser would kill the stream,
+/// and the surface would silently show nothing. The fleet models follow the same rule.
 library;
 
 import 'dart:convert';
 
-/// What a block IS, which decides how it renders.
+/// What a block is, which decides how it renders.
 ///
-/// 🔴 THE MAPPER IS OPEN-ENDED BY DESIGN AND SO IS THIS ENUM'S USE. §2 item 1(a) says the
-/// server's kind mapper is deliberately extensible and OSQ-7 already added a fourth kind
-/// after the first three were written. So [unknown] is a real member, not an error state:
-/// §3's default-arm clause says a kind the client does not recognise "renders as plain
-/// text, never dropped and never thrown on", because a three-literal switch with no
-/// fallback would render nothing in the one surface whose whole job is to show everything.
+/// The server's kind mapper is open-ended, and a fourth kind was added after the first
+/// three were written. So [unknown] is a real member, not an error state. A kind the
+/// client does not recognise renders as plain text, never dropped and never thrown on. A
+/// three-literal switch with no fallback would render nothing on the one surface whose
+/// job is to show everything.
 enum TranscriptBlockKind {
-  /// Assistant prose. The ONLY kind that renders as markdown.
+  /// Assistant prose; the only kind that renders as markdown.
   text,
 
-  /// A tool invocation. Renders as a one-line collapsed chip (ruling Q2).
+  /// A tool invocation, rendered as a one-line collapsed chip.
   toolCall,
 
-  /// A tool's output. Collapsed and truncated, expandable (ruling Q2).
+  /// A tool's output; collapsed and truncated, and expandable.
   toolResult,
 
-  /// Model scratch text (OSQ-7, ruled 2026-09-27). Folded, expandable, monospace — never
-  /// markdown. **The fourth KNOWN kind, not the default arm**: a build that routed it
-  /// through the default would show it unfolded, which C5.22 fails on.
+  /// Model scratch text; folded, expandable and monospace, never markdown.
+  ///
+  /// It is the fourth known kind, not the default arm. A build that routed it through the
+  /// default would show it unfolded.
+  /// Design: src/docs/decisions/README.md (R-TR-thinking-kind)
   thinking,
 
-  /// Anything else the server sends. Plain text, always rendered.
+  /// Anything else the server sends; plain text, always rendered.
   unknown;
 
-  /// 🔴 THE WIRE NAMES, AND THEY ARE NOT THE DART NAMES. `tool_call` and `tool_result` are
-  /// snake_case on the wire (§3's table) and camelCase here, so the mapping is explicit
-  /// rather than a `.name` comparison that would silently stop matching.
+  /// Maps a wire kind to its enum member; anything unrecognised is [unknown].
+  ///
+  /// The wire names are not the Dart names: `tool_call` and `tool_result` are snake_case on
+  /// the wire and camelCase here. The mapping is explicit, because a `.name` comparison
+  /// would silently stop matching.
   static TranscriptBlockKind fromWire( Object? raw ) => switch ( raw ) {
         "text"        => TranscriptBlockKind.text,
         "tool_call"   => TranscriptBlockKind.toolCall,
@@ -46,15 +49,14 @@ enum TranscriptBlockKind {
         _             => TranscriptBlockKind.unknown,
       };
 
-  /// True for the kinds that must NEVER go through a markdown renderer.
+  /// True for the kinds that must never go through a markdown renderer.
   ///
-  /// ⚠️ THE CONCERN IS MANGLING, NOT INJECTION (§3, C4/B6 as one rule). A markdown renderer
-  /// turns a raw file dump into markup: `#` becomes a heading, `*` a list, indentation a
-  /// code block — so a diff or a config file renders wrong. Plain text is the safe arm
-  /// because it cannot mangle and cannot execute.
+  /// The concern is mangling, not injection. A markdown renderer turns a raw file dump into
+  /// markup. A `#` becomes a heading, `*` a list and indentation a code block, so a diff or
+  /// a config file renders wrong. Plain text cannot mangle and cannot execute.
   bool get isPlainText => this != TranscriptBlockKind.text;
 
-  /// True for the kinds that arrive COLLAPSED (ruling Q2 + OSQ-7).
+  /// True for the kinds that arrive collapsed: tool calls, tool results and thinking.
   bool get startsCollapsed =>
       this == TranscriptBlockKind.toolCall ||
       this == TranscriptBlockKind.toolResult ||
@@ -63,31 +65,35 @@ enum TranscriptBlockKind {
 
 /// One renderable unit of transcript.
 class TranscriptBlock {
+  /// How the block renders.
   final TranscriptBlockKind kind;
 
   /// The raw wire `kind`, kept even when it mapped to [TranscriptBlockKind.unknown].
   ///
-  /// ⚠️ KEPT SO AN UNKNOWN KIND CAN BE *NAMED* ON SCREEN AND IN A BUG REPORT. Dropping it
-  /// would leave the operator looking at text with no idea what the server called it, and
-  /// whoever adds the fifth kind with no way to see it already arriving.
+  /// It is kept so an unknown kind can be named on screen and in a bug report. Dropping it
+  /// would leave the operator with text and no idea what the server called it. It would
+  /// also give whoever adds the fifth kind no way to see it already arriving.
   final String? rawKind;
 
+  /// The block text; empty when the server sent none.
   final String text;
 
-  /// The server already cut this block at its budget (§2 item 7).
+  /// True when the server already cut this block at its budget.
   ///
-  /// 🔴 THE FULL TEXT IS THEN ONLY AVAILABLE OVER REST, NOT IN MEMORY. C5.19 is the row
-  /// that proves the client does not pretend otherwise: expanding a truncated block issues
-  /// exactly one REST fetch and renders THAT response.
+  /// The full text is then available only over REST, not in memory. Expanding a truncated
+  /// block issues exactly one REST fetch and renders that response.
   final bool truncated;
 
-  /// A tool block's name, when the server sent one — what the chip says.
+  /// A tool block's name, when the server sent one; it is what the chip says.
   final String? name;
 
-  /// This block's own byte offset in the source file, when the server supplies it. Used
-  /// only to fetch a truncated block's full text; the frame's offsets drive sequencing.
+  /// This block's own byte offset in the source file, when the server supplies it.
+  ///
+  /// It is used only to fetch a truncated block's full text; the frame's offsets drive
+  /// sequencing.
   final int? offset;
 
+  /// Creates a block.
   const TranscriptBlock( {
     required this.kind,
     required this.text,
@@ -97,13 +103,14 @@ class TranscriptBlock {
     this.offset,
   } );
 
-  /// Parse one block.
+  /// Parses one block.
   ///
   /// Ensures:
   ///     - never throws; a non-Map yields an empty [TranscriptBlockKind.unknown] block
-  ///     - an absent or non-String `text` becomes "", so a renderer always has a String
-  ///     - `truncated` is true only for a literal `true` — no coercion, for the same
-  ///       reason `transcript_watchable` refuses it: a changed type is a changed contract
+  ///     - an absent `text` becomes "", and structured `text` is rendered as JSON, so a
+  ///       renderer always has a String
+  ///     - `truncated` is true only for a literal `true`, with no coercion: a changed type
+  ///       is a changed contract
   factory TranscriptBlock.fromJson( Object? json ) {
     if ( json is! Map ) {
       return const TranscriptBlock( kind: TranscriptBlockKind.unknown, text: "" );
@@ -125,28 +132,28 @@ class TranscriptBlock {
     );
   }
 
-  /// A block whose text the server sent as structure rather than a string — a tool call's
-  /// arguments, most likely. Rendered as pretty JSON rather than as `Instance of '_Map'`.
+  // A block whose text the server sent as structure, most likely a tool call's arguments,
+  // is rendered as pretty JSON and not as `Instance of '_Map'`.
   static String _stringify( Object? raw ) {
     if ( raw == null ) return "";
     try {
       return const JsonEncoder.withIndent( "  " ).convert( raw );
     } on Object {
       // A cyclic or non-encodable value. `toString()` is worse than JSON and better than
-      // nothing, and this surface's rule is that everything renders.
+      // nothing, and everything on this surface renders.
       return raw.toString();
     }
   }
 
-  /// The block's size, for the ring buffer.
+  /// The block's size in bytes, for the ring buffer.
   ///
-  /// 🔴 ONE SIZE FUNCTION, SHARED WITH THE SERVER'S DEFINITION (C8, paired with A-T7): the
-  /// UTF-8 byte length of the text **after** server truncation. The server's cap and both
-  /// clients' rings use that same definition, so "never exceeds its cap" means the same
-  /// thing on each end. Counting Dart string length instead would under-count every
-  /// non-ASCII byte and let the ring exceed a cap it believed it was honouring.
+  /// It is the UTF-8 byte length of the text after server truncation, the server's own
+  /// definition. The server's cap and both clients' rings then mean the same thing by
+  /// "never exceeds its cap". Counting Dart string length would under-count every non-ASCII
+  /// byte and let the ring exceed a cap it believed it was honouring.
   int get sizeBytes => utf8.encode( text ).length;
 
+  /// Copies the block with new text and, optionally, a new truncated flag.
   TranscriptBlock withText( String newText, { bool? truncated } ) => TranscriptBlock(
     kind      : kind,
     text      : newText,
@@ -157,20 +164,30 @@ class TranscriptBlock {
   );
 }
 
-/// `cc_transcript_append` — the streamed chunk.
+/// The `cc_transcript_append` frame: one streamed chunk of blocks.
 class TranscriptAppend {
+  /// The full id of the session the chunk belongs to.
   final String? ccSessionId;
+
+  /// Identifies the current incarnation of the source file.
   final String? fileEpoch;
 
-  /// 🔴 `offset` IS THE SEQUENCE NUMBER. There is no separate `seq` (§3). It is the byte
-  /// offset in the source file, and [nextOffset] always lands at the end of a complete
-  /// line.
+  /// The chunk's start offset, which is its sequence number; there is no separate `seq`.
+  ///
+  /// It is the byte offset in the source file, and [nextOffset] always lands at the end of a
+  /// complete line.
   final int? offset;
+
+  /// The offset where the next chunk should start.
   final int? nextOffset;
 
+  /// The chunk's blocks, in file order.
   final List<TranscriptBlock> blocks;
+
+  /// The server's timestamp for the chunk.
   final String? ts;
 
+  /// Creates a chunk.
   const TranscriptAppend( {
     this.ccSessionId,
     this.fileEpoch,
@@ -180,6 +197,7 @@ class TranscriptAppend {
     this.ts,
   } );
 
+  /// Parses one frame; a non-Map yields an empty chunk.
   factory TranscriptAppend.fromJson( Object? json ) {
     if ( json is! Map ) return const TranscriptAppend();
 
@@ -198,32 +216,39 @@ class TranscriptAppend {
   }
 }
 
-/// The `state` values `cc_transcript_state` can carry (§3, plus `refused`).
+/// The `state` values `cc_transcript_state` can carry, plus `refused`.
 enum TranscriptStreamState {
+  /// The session is streaming.
   live,
+
+  /// The session has ended.
   ended,
+
+  /// The source file rotated.
   rotated,
 
   /// The watch named an epoch that is no longer current.
   ///
-  /// 🔴 NEVER SILENTLY REBASED. §3 (T15): the server does not start from 0 and does not
-  /// honour the offset, because a silent rebase "would hand the client the whole new file
-  /// labelled as its own continuation". The client clears and re-fetches.
+  /// The server never silently rebases. It does not start from 0 and does not honour the
+  /// offset. A rebase would hand the client the whole new file labelled as its own
+  /// continuation. The client clears and re-fetches.
   epochMismatch,
 
   /// The server refused the watch.
   ///
-  /// ⚠️ EXPECTED, NOT EXCEPTIONAL (§5, F-Clayton-C6). The button only hides a refusal; the
-  /// server is the gate. A stale roster, a role revoked between the poll and the tap, or a
-  /// deep link all reach here. §3 names the wire shape as proposed, so a server that has
-  /// not adopted it yet simply never sends this — and the REST 403 path covers the same
-  /// ground.
+  /// Refusal is expected, not exceptional: the button only hides a refusal and the server is
+  /// the gate. A stale roster, a role revoked between the poll and the tap, or a deep link
+  /// all reach here. The wire shape is proposed, so a server that has not adopted it never
+  /// sends this, and the REST 403 path covers the same ground.
   refused,
 
-  /// A state this client does not know. Treated as terminal-but-quiet: no retry, because
-  /// retrying against an unrecognised state is guessing.
+  /// A state this client does not know.
+  ///
+  /// It is terminal but quiet: no retry, because retrying against an unrecognised state is
+  /// guessing.
   unknown;
 
+  /// Maps a wire state to its enum member; anything unrecognised is [unknown].
   static TranscriptStreamState fromWire( Object? raw ) => switch ( raw ) {
         "live"           => TranscriptStreamState.live,
         "ended"          => TranscriptStreamState.ended,
@@ -234,17 +259,24 @@ enum TranscriptStreamState {
       };
 }
 
-/// `cc_transcript_state`.
+/// The `cc_transcript_state` frame.
 class TranscriptStateFrame {
+  /// The full id of the session the state is about.
   final String?               ccSessionId;
+
+  /// Identifies the current incarnation of the source file.
   final String?               fileEpoch;
+
+  /// The parsed state.
   final TranscriptStreamState state;
+
+  /// The raw wire state, kept even when it parsed to [TranscriptStreamState.unknown].
   final String?               rawState;
 
-  /// The server's own words, when it gave a reason. Shown on the refusal screen (§5: "with
-  /// the server's reason if one is given").
+  /// The server's own words, when it gave a reason; shown on the refusal screen.
   final String? reason;
 
+  /// Creates a state frame.
   const TranscriptStateFrame( {
     this.ccSessionId,
     this.fileEpoch,
@@ -253,6 +285,7 @@ class TranscriptStateFrame {
     this.reason,
   } );
 
+  /// Parses one frame; a non-Map yields an unknown state.
   factory TranscriptStateFrame.fromJson( Object? json ) {
     if ( json is! Map ) return const TranscriptStateFrame();
 
@@ -268,22 +301,31 @@ class TranscriptStateFrame {
   }
 }
 
-/// A REST read's body — the backlog, a gap repair, a backwards page, or one block's full
-/// text. One shape, because §3 gives them one shape.
+/// A REST read's body: the backlog, a gap repair, a backwards page or one block's full text.
+///
+/// The four reads share one shape, so they share one class.
 class TranscriptBacklog {
+  /// Identifies the current incarnation of the source file.
   final String? fileEpoch;
+
+  /// The offset where the returned blocks start.
   final int?    offset;
+
+  /// The offset where the next read should start.
   final int?    nextOffset;
+
+  /// The returned blocks, in file order.
   final List<TranscriptBlock> blocks;
 
-  /// True when the response reached the start of the current epoch, so "Load earlier" has
-  /// nothing left to fetch and hides itself (C-7).
+  /// True when the response reached the start of the current epoch.
   ///
-  /// ⚠️ A MISSING FIELD IS FALSE, WHICH KEEPS THE CONTROL VISIBLE. The alternative default
-  /// hides "Load earlier" against a server that never sends the field, making the rest of
-  /// the transcript unreachable — and hiding a control is the failure nobody reports.
+  /// "Load earlier" then has nothing left to fetch and hides itself. A missing field is
+  /// false, which keeps the control visible. The opposite default would hide it against a
+  /// server that never sends the field. The rest of the transcript would become
+  /// unreachable, and nobody reports a hidden control.
   final bool atStart;
 
+  /// Creates a backlog.
   const TranscriptBacklog( {
     this.fileEpoch,
     this.offset,
@@ -292,6 +334,7 @@ class TranscriptBacklog {
     this.atStart = false,
   } );
 
+  /// Parses one response body; a non-Map yields an empty backlog.
   factory TranscriptBacklog.fromJson( Object? json ) {
     if ( json is! Map ) return const TranscriptBacklog();
 
