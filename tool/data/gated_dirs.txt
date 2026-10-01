@@ -1,0 +1,15 @@
+# Directories the pre-commit hook and the CI step run `analyze --fatal-infos` on.
+# One shared list: tool/pre_commit_gate.py reads it for the hook and for `--list` (CI).
+# One path per line. Add a directory by moving its line out of "left out" below, after it passes.
+lib/features/artifacts
+lib/features/auth
+lib/features/holding_area
+lib/features/home
+
+# Swept but left out: each has non-doc errors or infos today, so `analyze --fatal-infos` fails.
+# Format: `# left out: <dir> <issue count> (measured at 7a2b3c9)`. Clearing them is Phase 5 Step 1.
+# left out: lib/core 374 (measured at 7a2b3c9)
+# left out: lib/services 324 (measured at 7a2b3c9)
+# left out: lib/features/audio 18 (measured at 7a2b3c9)
+# left out: lib/features/session 8 (measured at 7a2b3c9)
+# left out: lib/features/claude_code 4 (measured at 7a2b3c9)

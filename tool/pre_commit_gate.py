@@ -7,23 +7,26 @@
 Runs three checks and blocks the commit when any one fails:
   1. tool/lint_dart_docs.py --staged --strict   (Dart doc linter, staged lines only)
   2. tool/check_doc_ignores.py                  (ignore gate, whole of lib/)
-  3. flutter analyze --fatal-infos <dir>        (one run per swept directory the commit touches)
+  3. flutter analyze --fatal-infos <dir>        (one run per gated directory the commit touches)
 
-A swept directory is a lib/ directory that holds its own analysis_options.yaml. Set FLUTTER to
+The gated directories are listed in tool/data/gated_dirs.txt: the swept directories that pass
+analyze today. The swept ones left out are named there with their issue counts. Set FLUTTER to
 use another flutter binary; the default is `flutter` on PATH, then ./flutter.sh.
 Bypass with `git commit --no-verify`; the CI step in .github/workflows/flutter-ci.yml catches that.
 
 Exit 0 = every check passed · 1 = at least one check failed.
 """
-import argparse, os, shutil, subprocess, sys
+import argparse, os, re, shutil, subprocess, sys
 
 ROOT    = os.path.dirname( os.path.dirname( os.path.abspath( __file__ ) ) )
-OPTIONS = "analysis_options.yaml"
+OPTIONS    = "analysis_options.yaml"
+GATED_LIST = "tool/data/gated_dirs.txt"
+LEFT_OUT   = re.compile( r"#\s*left out:\s*(\S+)\s+(\d+)\b" )
 
 
-def swept_dirs( root=ROOT ):
+def all_swept_dirs( root=ROOT ):
     """
-    List the swept directories: every directory under lib/ with its own analysis_options.yaml.
+    List every swept directory: each directory under lib/ with its own analysis_options.yaml.
 
     Requires:
         - root is a directory that holds lib/
@@ -37,6 +40,39 @@ def swept_dirs( root=ROOT ):
         if OPTIONS in files and here != os.path.join( root, "lib" ):
             found.append( os.path.relpath( here, root ) )
     return sorted( found )
+
+
+def swept_dirs( root=ROOT ):
+    """
+    List the gated directories: the ones in tool/data/gated_dirs.txt, which pass analyze today.
+
+    Requires:
+        - root holds tool/data/gated_dirs.txt, one path per line, `#` starts a comment
+
+    Ensures:
+        - returns the listed paths in file order, blank and comment lines skipped
+    """
+    with open( os.path.join( root, GATED_LIST ), encoding="utf-8" ) as f:
+        lines = [ l.strip() for l in f ]
+    return [ l for l in lines if l and not l.startswith( "#" ) ]
+
+
+def left_out_dirs( root=ROOT ):
+    """
+    Read the `# left out: <dir> <count>` comments next to the gated list.
+
+    Requires:
+        - root holds tool/data/gated_dirs.txt
+
+    Ensures:
+        - returns { directory: issue count } for every left-out line
+    """
+    out = {}
+    with open( os.path.join( root, GATED_LIST ), encoding="utf-8" ) as f:
+        for l in f:
+            m = LEFT_OUT.match( l.strip() )
+            if m: out[m.group( 1 )] = int( m.group( 2 ) )
+    return out
 
 
 def touched_dirs( staged, swept ):
@@ -107,7 +143,7 @@ def main( argv=None, root=ROOT ):
         - runs every check even after one fails, so one commit attempt shows all failures
     """
     ap = argparse.ArgumentParser( description="Blocking pre-commit gate for the documentation standard." )
-    ap.add_argument( "--list", action="store_true", help="print the swept directories and stop" )
+    ap.add_argument( "--list", action="store_true", help="print the gated directories and stop" )
     args = ap.parse_args( argv )
     swept = swept_dirs( root )
     if args.list:

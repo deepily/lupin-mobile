@@ -18,11 +18,22 @@ def make_repo( files ):
 
 class PreCommitGateTest( unittest.TestCase ):
 
-    def test_swept_dirs_needs_own_options_file( self ):
+    def test_all_swept_dirs_needs_own_options_file( self ):
         root = make_repo( { "lib/analysis_options.yaml": "", "lib/core/analysis_options.yaml": "",
                             "lib/core/a.dart": "", "lib/features/auth/analysis_options.yaml": "",
                             "lib/features/home/h.dart": "" } )
-        self.assertEqual( gate.swept_dirs( root ), [ "lib/core", "lib/features/auth" ] )
+        self.assertEqual( gate.all_swept_dirs( root ), [ "lib/core", "lib/features/auth" ] )
+
+    def test_gated_list_skips_comments_and_reads_left_out_counts( self ):
+        root = make_repo( { "tool/data/gated_dirs.txt":
+                            "# header\nlib/features/auth\n\n# left out: lib/core 374 (measured at x)\n" } )
+        self.assertEqual( gate.swept_dirs( root ), [ "lib/features/auth" ] )
+        self.assertEqual( gate.left_out_dirs( root ), { "lib/core": 374 } )
+
+    def test_every_swept_dir_in_this_repo_is_gated_or_named_left_out( self ):
+        listed = set( gate.swept_dirs() ) | set( gate.left_out_dirs() )
+        self.assertEqual( set( gate.all_swept_dirs() ) - listed, set() )
+        self.assertEqual( set( gate.swept_dirs() ) & set( gate.left_out_dirs() ), set() )
 
     def test_touched_dirs_matches_whole_segments( self ):
         swept = [ "lib/core", "lib/features/auth" ]

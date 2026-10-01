@@ -46,9 +46,9 @@ jobs:
     - name: Analyze code
       run: flutter analyze --no-fatal-infos
 
-    - name: Analyze swept directories (fatal infos)
+    - name: Analyze gated directories (fatal infos)
       # Required: this is what catches a `git commit --no-verify` bypass of the pre-commit hook.
-      # A swept directory is any lib/ directory that holds its own analysis_options.yaml.
+      # The list is tool/data/gated_dirs.txt, shared with the hook: swept directories that pass today.
       run: |
         status=0
         for d in $(python3 tool/pre_commit_gate.py --list); do
