@@ -1,0 +1,37 @@
+{
+  "_captured_at_sha": "cf5be6f",
+  "rule": "public_member_api_docs",
+  "total": 4914,
+  "by_top": {
+    "(lib root)": 3,
+    "core": 1419,
+    "features": 1958,
+    "services": 1322,
+    "shared": 209,
+    "ui": 3
+  },
+  "by_feature": {
+    "features/agentic": 183,
+    "features/artifacts": 18,
+    "features/audio": 11,
+    "features/auth": 51,
+    "features/broadcast": 79,
+    "features/claude_code": 44,
+    "features/decision_proxy": 169,
+    "features/docs": 51,
+    "features/finished_tasks": 56,
+    "features/fleet": 51,
+    "features/fleet_status": 65,
+    "features/focus_mode": 91,
+    "features/holding_area": 45,
+    "features/home": 2,
+    "features/notifications": 327,
+    "features/queue": 273,
+    "features/quick_ask": 60,
+    "features/session": 11,
+    "features/settings": 111,
+    "features/task_list": 96,
+    "features/transcript": 68,
+    "features/voice": 96
+  }
+}
