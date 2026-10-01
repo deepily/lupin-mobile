@@ -9,28 +9,23 @@ import '../domain/broadcast_bloc.dart';
 
 /// Say something to the whole fleet at once.
 ///
-/// Compose row, one line: `[🎤] [textarea] [Send]`, with a "Sending to:" count and a ↻
-/// above it, and under that a row of MENTION CHIPS: `@all` plus one per live seat.
-///
-/// 🔴 A CHIP ADDRESSES NOBODY — IT TYPES. A broadcast always goes to EVERY live seat;
-/// each seat reads the `@Persona` mentions in the body to decide what applies to it
-/// (Rick, 2026-09-23: *"it carpet bombs everybody … it uses the at symbol so that all
-/// recipients know whether it pertains to them"*). So tapping a chip inserts `@Name ` at
-/// the caret, exactly as the web card does (`BroadcastCardRenderer.ts`
-/// `injectMentionAtCursor`), and no per-recipient field is ever sent — the server's
-/// request body has none, and would silently drop one.
-///
-/// 🔴 THE MIC IS THE POINT, AND IT HAS A RULING BEHIND IT. From `notifications.html`,
-/// verbatim: *"added 2026-05-13 because Lupin is a voice-first app — typing into the
-/// textarea was a regression from the established STT-button pattern used everywhere
-/// else."* That argument is strictly stronger on a phone.
+/// A chip addresses nobody: it types an `@Persona` mention at the caret, as on the web. A
+/// broadcast goes to every live seat, and each seat reads the mentions to decide what
+/// applies to it. The mic is there because Lupin is voice-first.
+/// Design: src/docs/decisions/README.md (R-BC-chips-type)
 class BroadcastPane extends StatefulWidget {
+  /// Creates the pane; it reads its [BroadcastBloc] from the route.
   const BroadcastPane( { super.key } );
 
   @override
   State<BroadcastPane> createState() => _BroadcastPaneState();
 }
 
+// The layout is a compose row `[mic] [textarea] [Send]`, a "Sending to:" count with a
+// refresh button above it, and a row of mention chips below: `@all` plus one per live seat.
+// No per-recipient field is ever sent, because the server's request body has none and would
+// silently drop one. Typing into a textarea alone would be a regression from the speech
+// button pattern used elsewhere, hence the mic.
 class _BroadcastPaneState extends State<BroadcastPane> {
   late final TextEditingController _controller;
 
@@ -38,9 +33,8 @@ class _BroadcastPaneState extends State<BroadcastPane> {
   void initState() {
     super.initState();
     _controller = TextEditingController( text: context.read<BroadcastBloc>().state.body );
-    // Only the roster is requested here. The history follows it from inside the bloc —
-    // see `_onRoster`, which explains both why they are sequenced and what happens when
-    // they are not.
+    // Only the roster is requested here. The history follows it from inside the bloc; see
+    // `_onRoster`, which explains why they are sequenced and what happens when they are not.
     context.read<BroadcastBloc>().add( const BroadcastRosterRequested() );
   }
 
@@ -53,10 +47,9 @@ class _BroadcastPaneState extends State<BroadcastPane> {
   @override
   Widget build( BuildContext context ) {
     return BlocConsumer<BroadcastBloc, BroadcastState>(
-      // The mic writes into the same box the operator types in, so the controller has to
-      // follow the bloc when — and only when — the bloc is the one that changed it.
-      // Assigning unconditionally would fight the keyboard and reset the caret on every
-      // keystroke.
+      // The mic writes into the same box the operator types in, so the controller follows
+      // the bloc only when the bloc is the one that changed it. Assigning unconditionally
+      // would fight the keyboard and reset the caret on every keystroke.
       listenWhen : ( prev, next ) => prev.body != next.body,
       listener   : ( context, state ) {
         if ( _controller.text != state.body ) {
@@ -90,7 +83,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     );
   }
 
-  /// "Sending to: N sessions  ↻" — a count and a refresh. Everyone receives it.
+  // "Sending to: N sessions" with a refresh button; everyone receives the broadcast.
   Widget _recipients( BuildContext context, BroadcastState state ) {
     return Row(
       children : [
@@ -114,8 +107,8 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     );
   }
 
-  /// `@all` plus one chip per live seat. Tapping one TYPES its mention — see the class
-  /// note: the broadcast still goes to everyone.
+  // `@all` plus one chip per live seat. Tapping one types its mention; the broadcast still
+  // goes to everyone.
   Widget _mentionChips( BuildContext context, BroadcastState state ) {
     final names = <String>[ 'all', for ( final s in state.roster.sessions ) s.label ];
     return Wrap(
@@ -128,8 +121,8 @@ class _BroadcastPaneState extends State<BroadcastPane> {
             key     : Key( '${TestKeys.broadcastMentionChipPrefix}${names[ i ]}' ),
             avatar  : Text( i == 0 ? '📣' : ( state.roster.sessions[ i - 1 ].personaIcon ?? '👤' ) ),
             label   : Text( names[ i ] ),
-            // The seat's own colour as the chip's outline, as on the web card; `@all`
-            // and a seat with no (or a malformed) colour keep the theme's outline.
+            // The seat's own colour as the chip's outline, as on the web card; `@all` and a
+            // seat with no or a malformed colour keep the theme's outline.
             side    : _seatSide( i == 0 ? null : state.roster.sessions[ i - 1 ].personaColor ),
             tooltip : 'Insert @${names[ i ]} into the message',
             onPressed : () => _insertMention( context, names[ i ] ),
@@ -143,17 +136,17 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     return color == null ? null : BorderSide( color: color, width: 2 );
   }
 
-  /// Insert `@<name> ` at the caret (or over the selection), then hand the new text to
-  /// the bloc. The controller changes FIRST, so the listener's `text != state.body`
-  /// check finds them equal and leaves the caret where this put it.
+  // Inserts `@<name> ` at the caret, or over the selection, then hands the new text to the
+  // bloc. The controller changes first, so the listener's `text != state.body` check finds
+  // them equal and leaves the caret where this put it.
   void _insertMention( BuildContext context, String name ) {
     final value  = _controller.value;
     final text   = value.text;
     final sel    = value.selection.isValid
         ? value.selection
         : TextSelection.collapsed( offset: text.length );
-    // One improvement on the web: a mention tapped straight after a word gets a space
-    // first, or "standup" + "@Tiffany" would run together as "standup@Tiffany".
+    // A mention tapped straight after a word gets a space first, an improvement on the web,
+    // or "standup" and "@Tiffany" would run together as "standup@Tiffany".
     final glued  = sel.start > 0 && text[ sel.start - 1 ].trim().isNotEmpty;
     final insert = '${glued ? ' ' : ''}@$name ';
     final next   = text.replaceRange( sel.start, sel.end, insert );
@@ -188,9 +181,9 @@ class _BroadcastPaneState extends State<BroadcastPane> {
             onChanged  : ( text ) => bloc.add( BroadcastBodyChanged( text ) ),
             decoration : const InputDecoration(
               border : OutlineInputBorder(),
-              // 🔴 THE PLACEHOLDER IS LOAD-BEARING DOCUMENTATION. It is the ONLY place a
-              // user learns the @PersonaName: convention exists. Shortening it to
-              // "Message" would delete the feature's discoverability.
+              // The placeholder is the only place a user learns the @PersonaName: convention
+              // exists, so shortening it to "Message" would delete the feature's
+              // discoverability.
               hintText : 'Use @PersonaName: lines for persona-specific directives. '
                          'Markdown supported.',
             ),
@@ -206,11 +199,10 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     );
   }
 
-  /// 🔴 A VISIBLE REASON, NOT A TOOLTIP.
-  ///
-  /// The web communicates this through `btn.title`. A phone has no hover, so a stale
-  /// `active-sessions` fetch on flaky LTE would leave Send permanently dead with no
-  /// reachable explanation — the operator holding a typed message and a grey button.
+  // A visible reason, not a tooltip. The web communicates this through `btn.title`, and a
+  // phone has no hover, so a stale `active-sessions` fetch on flaky LTE would leave Send
+  // dead with no reachable explanation: the operator holding a typed message and a grey
+  // button.
   Widget _disabledReason( BuildContext context, BroadcastState state ) {
     final reason = state.disabledReason;
     if ( reason == null ) return const SizedBox.shrink();
@@ -228,7 +220,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     );
   }
 
-  /// The compose preview renders markdown. The ack summary does NOT — see [_tally].
+  // The compose preview renders markdown; the ack summary does not, see `_tally`.
   List<Widget> _preview( BuildContext context, BroadcastState state ) {
     return [
       const SizedBox( height: 16 ),
@@ -245,13 +237,10 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     ];
   }
 
-  /// The ack tally.
-  ///
-  /// 🔴 THE ASYMMETRY WITH [_preview] IS A SAFETY PROPERTY, NOT AN INCONSISTENCY. The
-  /// compose preview is the operator's OWN text and renders markdown. Each ack's
-  /// `body_summary` is ANOTHER SESSION'S text and is rendered as a plain `Text` — the web
-  /// sets it via `textContent`, never `innerHTML`, for exactly this reason. Letting both
-  /// become a markdown widget would look tidier and would be the bug.
+  // The ack tally. The asymmetry with `_preview` is a safety property: the compose preview
+  // is the operator's own text and renders markdown, while each ack's `body_summary` is
+  // another session's text and is a plain `Text`. The web sets it via `textContent`, never
+  // `innerHTML`, for the same reason. Making both markdown would look tidier and be the bug.
   List<Widget> _tally( BuildContext context, AckAggregate agg ) {
     return [
       const SizedBox( height: 24 ),
@@ -269,17 +258,15 @@ class _BroadcastPaneState extends State<BroadcastPane> {
           dense    : true,
           leading  : Text( ack.personaIcon ?? '•' ),
           title    : Text( ack.label ),
-          // Plain Text. Not MarkdownBody. See the note above.
+          // Plain Text, not MarkdownBody; see the comment above.
           subtitle : ack.bodySummary.isEmpty ? null : Text( ack.bodySummary ),
         ),
     ];
   }
 
-  /// Recent broadcast activity (row a3ebeb18).
-  ///
-  /// 🔴 THREE ANSWERS, NEVER TWO. Switched off on the server, quiet, and a list are
-  /// different facts; the first used to render as the second. Entries are OTHER
-  /// sessions' words, so they are plain `Text` — the same rule as [_tally].
+  // Recent broadcast activity. It has three answers, never two: switched off on the server,
+  // quiet, and a list are different facts, and the first used to render as the second.
+  // Entries are other sessions' words, so they are plain `Text`, the same rule as `_tally`.
   List<Widget> _history( BuildContext context, BroadcastState state ) {
     final muted = Theme.of( context ).colorScheme.outline;
     return [
@@ -310,7 +297,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
             dense    : true,
             leading  : Text( state.history[ i ][ 'persona_icon' ]?.toString() ?? '•' ),
             title    : Text( _historyTitle( state.history[ i ] ) ),
-            // Plain Text. Not MarkdownBody. See the note above.
+            // Plain Text, not MarkdownBody; see `_tally`.
             subtitle : Text(
               state.history[ i ][ 'body' ]?.toString() ?? '',
               maxLines : 3,
@@ -320,7 +307,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
     ];
   }
 
-  /// `persona · HH:MM`, in the phone's local time.
+  // `persona · HH:MM`, in the phone's local time.
   String _historyTitle( Map<String, dynamic> entry ) {
     final who = entry[ 'persona_name' ]?.toString() ?? 'unknown';
     final ts  = DateTime.tryParse( entry[ 'ts' ]?.toString() ?? '' )?.toLocal();
@@ -358,13 +345,11 @@ class _BroadcastPaneState extends State<BroadcastPane> {
       ? 'Too many broadcasts — try again in $seconds seconds.'
       : 'Too many broadcasts — try again shortly.';
 
-  /// ✅ THE CONFIRM MODAL IS CARRIED FROM THE WEB, DELIBERATELY.
-  ///
-  /// `broadcast-panel.js` ships one and this pane keeps it. That is NOT in tension with
-  /// the batch-confirm ruling on the Holding Area: there the phone matches the web by
-  /// having NO confirm, and here it matches the web by HAVING one. The rule is "match the
-  /// web surface by surface", not "the phone never confirms" — and a broadcast interrupts
-  /// every live seat at once, which is the widest blast radius in the app.
+  // The confirm modal is carried from the web, where `broadcast-panel.js` ships one. That
+  // does not conflict with the Holding Area's batch confirm: the rule is "match the web
+  // surface by surface", not "the phone never confirms", and a broadcast interrupts every
+  // live seat at once, the widest blast radius in the app.
+  // Design: src/docs/decisions/README.md (R-BC-confirm-kept)
   Future<void> _confirmThenSend( BuildContext context, BroadcastState state ) async {
     final bloc = context.read<BroadcastBloc>();
 
@@ -386,7 +371,7 @@ class _BroadcastPaneState extends State<BroadcastPane> {
               ],
             ),
             const SizedBox( height: 12 ),
-            // The operator's own text, so markdown — same reasoning as the preview.
+            // The operator's own text, so markdown, as in the preview.
             MarkdownBody( data: state.body ),
           ],
         ),
