@@ -9,13 +9,13 @@ import '../websocket/enhanced_websocket_service.dart';
 import '../adaptive/adaptive_connection_manager.dart';
 import '../lifecycle/app_lifecycle_service.dart';
 
-/// Comprehensive voice input/output service for real-time audio processing.
-/// 
-/// Provides high-quality audio recording, streaming to server, TTS playback,
-/// voice activity detection, and adaptive behavior based on network conditions
-/// and app lifecycle state. Optimized for mobile environments.
+/// Records microphone audio, streams or uploads it to the server, and plays back TTS audio.
+///
+/// App-wide singleton. It also runs voice activity detection, and takes its recording settings
+/// from the adaptive connection config and the app lifecycle state.
 class VoiceInputOutputService {
   static final VoiceInputOutputService _instance = VoiceInputOutputService._internal();
+  /// Returns the shared instance.
   factory VoiceInputOutputService() => _instance;
   VoiceInputOutputService._internal();
 
@@ -59,16 +59,26 @@ class VoiceInputOutputService {
   VoiceConfig _currentConfig = VoiceConfig.standard();
   
   // Public getters
+  /// True while a recording is in progress.
   bool get isRecording => _isRecording;
+  /// True while TTS audio is playing.
   bool get isPlaying => _isPlaying;
+  /// True once [initialize] has succeeded.
   bool get isInitialized => _isInitialized;
+  /// True while voice activity detection hears speech.
   bool get voiceDetected => _voiceDetected;
+  /// Length of the current recording, in milliseconds.
   int get recordingDuration => _recordingDuration;
+  /// Emits recording lifecycle events.
   Stream<VoiceInputEvent> get voiceInputStream => _voiceInputController.stream;
+  /// Emits TTS playback events.
   Stream<VoiceOutputEvent> get voiceOutputStream => _voiceOutputController.stream;
+  /// Emits voice activity detection results during recording.
   Stream<VoiceActivityEvent> get activityStream => _activityController.stream;
   
-  /// Initialize voice input/output service
+  /// Requests the microphone permission, opens the recorder and player, and wires the services.
+  ///
+  /// Throws [VoiceServiceException] when initialization fails, including a denied permission.
   Future<void> initialize({
     EnhancedWebSocketService? webSocketService,
     AdaptiveConnectionManager? adaptiveManager,
@@ -200,7 +210,9 @@ class VoiceInputOutputService {
     }
   }
   
-  /// Start voice recording with streaming to server
+  /// Starts recording, streaming to the server when the current config allows it.
+  ///
+  /// Throws [VoiceServiceException] when the service is not ready, is already recording, or fails to start.
   Future<void> startRecording() async {
     if (!_isInitialized || _isRecording) {
       throw VoiceServiceException('Cannot start recording: service not ready or already recording');
@@ -250,7 +262,9 @@ class VoiceInputOutputService {
     }
   }
   
-  /// Stop voice recording
+  /// Stops recording and returns the recorded file path, or null when not recording.
+  ///
+  /// Throws [VoiceServiceException] when stopping fails.
   Future<String?> stopRecording() async {
     if (!_isRecording) {
       return null;
@@ -550,7 +564,7 @@ class VoiceInputOutputService {
     ));
   }
   
-  /// Update voice configuration based on adaptive conditions
+  /// Rebuilds the voice config from the adaptive connection config and the app state.
   void _updateVoiceConfig() {
     final adaptiveConfig = _adaptiveManager?.getConnectionConfig();
     final appState = _lifecycleService?.currentUsageState;
@@ -578,7 +592,7 @@ class VoiceInputOutputService {
     }
   }
   
-  /// Stop all audio playback
+  /// Stops playback and discards buffered TTS audio.
   Future<void> stopPlayback() async {
     try {
       _isPlaying = false;
@@ -598,7 +612,7 @@ class VoiceInputOutputService {
     }
   }
   
-  /// Get voice service statistics
+  /// Snapshot of recording, playback and detection state, with snake_case keys.
   Map<String, dynamic> getVoiceStatistics() {
     return {
       'is_initialized': _isInitialized,
@@ -613,7 +627,7 @@ class VoiceInputOutputService {
     };
   }
   
-  /// Dispose of resources
+  /// Stops any recording and playback and releases the recorder, player and streams.
   Future<void> dispose() async {
     print('[VoiceService] Disposing voice input/output service');
     
@@ -640,16 +654,26 @@ class VoiceInputOutputService {
   }
 }
 
-/// Voice service configuration based on adaptive conditions
+/// Recording and streaming settings for the voice service.
+///
+/// [VoiceConfig.fromAdaptiveConfig] picks them from the adaptive strategy.
 class VoiceConfig {
+  /// Audio codec used for recording.
   final Codec recordingCodec;
+  /// Sample rate, in hertz.
   final int sampleRate;
+  /// Bit rate, in bits per second.
   final int bitRate;
+  /// Whether audio is streamed to the server while recording.
   final bool enableStreaming;
+  /// Whether incoming TTS audio is buffered before playback.
   final bool enableBuffering;
+  /// Whether recordings are cached for offline use.
   final bool enableCaching;
+  /// Whether voice activity detection runs during recording.
   final bool enableVAD;
   
+  /// Creates a config; every field is required.
   const VoiceConfig({
     required this.recordingCodec,
     required this.sampleRate,
@@ -660,6 +684,7 @@ class VoiceConfig {
     required this.enableVAD,
   });
   
+  /// Builds the default: 16 kHz PCM WAV, with streaming, buffering, caching and detection on.
   factory VoiceConfig.standard() {
     return const VoiceConfig(
       recordingCodec: Codec.pcm16WAV,
@@ -672,6 +697,10 @@ class VoiceConfig {
     );
   }
   
+  /// Builds the config for an adaptive strategy.
+  ///
+  /// Performance raises the sample rate. Conservative and power saver switch to AAC at 8 kHz with streaming,
+  /// buffering and detection off. Background does the same and also turns caching off. Any other strategy gets [VoiceConfig.standard].
   factory VoiceConfig.fromAdaptiveConfig(
     AdaptiveConnectionConfig adaptiveConfig,
     AppUsageState? appState,
@@ -714,6 +743,7 @@ class VoiceConfig {
     }
   }
   
+  /// Serializes the config with snake_case keys.
   Map<String, dynamic> toMap() {
     return {
       'recording_codec': recordingCodec.toString(),
@@ -732,82 +762,122 @@ class VoiceConfig {
   }
 }
 
-/// Voice input events
+/// Base type of the events [VoiceInputOutputService.voiceInputStream] emits.
 abstract class VoiceInputEvent {
+  /// When the event happened.
   final DateTime timestamp;
   
+  /// Base constructor for the event subclasses.
   const VoiceInputEvent(this.timestamp);
   
+  /// Builds a [RecordingStartedEvent].
   factory VoiceInputEvent.recordingStarted(DateTime timestamp) = RecordingStartedEvent;
+  /// Builds a [RecordingStoppedEvent].
   factory VoiceInputEvent.recordingStopped(DateTime timestamp, Duration duration, String? filePath) = RecordingStoppedEvent;
+  /// Builds a [ProcessingStartedEvent].
   factory VoiceInputEvent.processingStarted(DateTime timestamp, String inputId) = ProcessingStartedEvent;
 }
 
+/// Emitted when recording starts.
 class RecordingStartedEvent extends VoiceInputEvent {
+  /// Creates the event.
   const RecordingStartedEvent(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when recording stops.
 class RecordingStoppedEvent extends VoiceInputEvent {
+  /// Length of the recording.
   final Duration duration;
+  /// Path of the recorded file, or null when none was kept.
   final String? filePath;
   
+  /// Creates the event.
   const RecordingStoppedEvent(DateTime timestamp, this.duration, this.filePath) : super(timestamp);
 }
 
+/// Emitted when the server starts processing a recording.
 class ProcessingStartedEvent extends VoiceInputEvent {
+  /// Server identifier of the voice input.
   final String inputId;
   
+  /// Creates the event.
   const ProcessingStartedEvent(DateTime timestamp, this.inputId) : super(timestamp);
 }
 
-/// Voice output events
+/// Base type of the events [VoiceInputOutputService.voiceOutputStream] emits.
 abstract class VoiceOutputEvent {
+  /// When the event happened.
   final DateTime timestamp;
   
+  /// Base constructor for the event subclasses.
   const VoiceOutputEvent(this.timestamp);
   
+  /// Builds a [TTSStartedEvent].
   factory VoiceOutputEvent.ttsStarted(DateTime timestamp, String text) = TTSStartedEvent;
+  /// Builds a [TTSCompletedEvent].
   factory VoiceOutputEvent.ttsCompleted(DateTime timestamp, String text) = TTSCompletedEvent;
+  /// Builds an [AudioChunkReceivedEvent].
   factory VoiceOutputEvent.audioChunkReceived(DateTime timestamp, int bytes) = AudioChunkReceivedEvent;
+  /// Builds an [AudioChunkPlayedEvent].
   factory VoiceOutputEvent.audioChunkPlayed(DateTime timestamp, int bytes) = AudioChunkPlayedEvent;
+  /// Builds a [PlaybackStoppedEvent].
   factory VoiceOutputEvent.playbackStopped(DateTime timestamp) = PlaybackStoppedEvent;
 }
 
+/// Emitted when the server starts speaking a text.
 class TTSStartedEvent extends VoiceOutputEvent {
+  /// Text being spoken.
   final String text;
   
+  /// Creates the event.
   const TTSStartedEvent(DateTime timestamp, this.text) : super(timestamp);
 }
 
+/// Emitted when the server finishes speaking a text.
 class TTSCompletedEvent extends VoiceOutputEvent {
+  /// Text that was spoken.
   final String text;
   
+  /// Creates the event.
   const TTSCompletedEvent(DateTime timestamp, this.text) : super(timestamp);
 }
 
+/// Emitted when a TTS audio chunk arrives.
 class AudioChunkReceivedEvent extends VoiceOutputEvent {
+  /// Size of the chunk, in bytes.
   final int bytes;
   
+  /// Creates the event.
   const AudioChunkReceivedEvent(DateTime timestamp, this.bytes) : super(timestamp);
 }
 
+/// Emitted when a TTS audio chunk is played.
 class AudioChunkPlayedEvent extends VoiceOutputEvent {
+  /// Size of the chunk, in bytes.
   final int bytes;
   
+  /// Creates the event.
   const AudioChunkPlayedEvent(DateTime timestamp, this.bytes) : super(timestamp);
 }
 
+/// Emitted when playback is stopped.
 class PlaybackStoppedEvent extends VoiceOutputEvent {
+  /// Creates the event.
   const PlaybackStoppedEvent(DateTime timestamp) : super(timestamp);
 }
 
-/// Voice activity detection event
+/// One voice activity detection result.
 class VoiceActivityEvent {
+  /// When the sample was taken.
   final DateTime timestamp;
+  /// Whether speech was detected.
   final bool voiceDetected;
+  /// Normalized signal amplitude.
   final double amplitude;
+  /// Detector confidence that the signal is speech.
   final double confidence;
   
+  /// Creates the event.
   const VoiceActivityEvent({
     required this.timestamp,
     required this.voiceDetected,
@@ -816,10 +886,12 @@ class VoiceActivityEvent {
   });
 }
 
-/// Voice service exception
+/// Failure raised by [VoiceInputOutputService].
 class VoiceServiceException implements Exception {
+  /// What failed.
   final String message;
   
+  /// Creates the exception with [message].
   const VoiceServiceException(this.message);
   
   @override
