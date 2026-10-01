@@ -6,9 +6,13 @@ import '../../../core/logging/logger.dart';
 
 /// Parameters for updating settings
 class UpdateSettingsParams {
+  /// The new values, keyed by setting key.
   final Map<String, dynamic> settings;
+
+  /// Whether to run the consistency check after writing, failing on any error found.
   final bool validateConsistency;
 
+  /// Creates the parameters; [validateConsistency] defaults to true.
   const UpdateSettingsParams({
     required this.settings,
     this.validateConsistency = true,
@@ -22,6 +26,7 @@ class UpdateSettingsParams {
 class UpdateSettingsUseCase extends ParameterizedUseCase<bool, UpdateSettingsParams> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   UpdateSettingsUseCase(this._settingsService);
 
   @override
@@ -85,9 +90,13 @@ class UpdateSettingsUseCase extends ParameterizedUseCase<bool, UpdateSettingsPar
 
 /// Parameters for applying settings preset
 class ApplySettingsPresetParams {
+  /// The preset to apply.
   final QuickSettingsPreset preset;
+
+  /// Whether to export the current settings first, to restore them if validation fails.
   final bool backup;
 
+  /// Creates the parameters; [backup] defaults to true.
   const ApplySettingsPresetParams({
     required this.preset,
     this.backup = true,
@@ -101,6 +110,7 @@ class ApplySettingsPresetParams {
 class ApplySettingsPresetUseCase extends ParameterizedUseCase<Map<String, dynamic>, ApplySettingsPresetParams> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   ApplySettingsPresetUseCase(this._settingsService);
 
   @override
@@ -163,6 +173,7 @@ class ApplySettingsPresetUseCase extends ParameterizedUseCase<Map<String, dynami
 class GetSettingsByCategoryUseCase extends ParameterizedUseCase<Map<String, dynamic>, SettingsCategory> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   GetSettingsByCategoryUseCase(this._settingsService);
 
   @override
@@ -195,6 +206,7 @@ class GetSettingsByCategoryUseCase extends ParameterizedUseCase<Map<String, dyna
 class ValidateSettingsUseCase extends NoParamsUseCase<List<SettingsValidationIssue>> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   ValidateSettingsUseCase(this._settingsService);
 
   @override
@@ -217,10 +229,16 @@ class ValidateSettingsUseCase extends NoParamsUseCase<List<SettingsValidationIss
 
 /// Parameters for importing settings
 class ImportSettingsParams {
+  /// The exported data to import; it needs a `settings` key.
   final Map<String, dynamic> settingsData;
+
+  /// Whether to validate after importing, restoring the backup on any error found.
   final bool validateAfterImport;
+
+  /// Whether to export the current settings first, as the restore point.
   final bool createBackup;
 
+  /// Creates the parameters; both flags default to true.
   const ImportSettingsParams({
     required this.settingsData,
     this.validateAfterImport = true,
@@ -235,6 +253,7 @@ class ImportSettingsParams {
 class ImportSettingsUseCase extends ParameterizedUseCase<Map<String, dynamic>, ImportSettingsParams> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   ImportSettingsUseCase(this._settingsService);
 
   @override
@@ -323,6 +342,7 @@ class ImportSettingsUseCase extends ParameterizedUseCase<Map<String, dynamic>, I
 class ExportSettingsUseCase extends NoParamsUseCase<Map<String, dynamic>> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   ExportSettingsUseCase(this._settingsService);
 
   @override
@@ -347,6 +367,7 @@ class ExportSettingsUseCase extends NoParamsUseCase<Map<String, dynamic>> {
 class ResetSettingsUseCase extends ParameterizedUseCase<bool, SettingsCategory?> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   ResetSettingsUseCase(this._settingsService);
 
   @override
@@ -380,6 +401,7 @@ class ResetSettingsUseCase extends ParameterizedUseCase<bool, SettingsCategory?>
 class WatchSettingsChangesUseCase extends StreamUseCase<SettingsChangedEvent, NoParams> {
   final SettingsService _settingsService;
 
+  /// Creates the use case over [_settingsService].
   WatchSettingsChangesUseCase(this._settingsService);
 
   @override

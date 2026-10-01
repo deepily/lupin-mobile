@@ -3,24 +3,26 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 
-/// The notification stop-list editor (plan 2026.08.21 §3). Each row is a
-/// message PREFIX; checked = hidden from every list AND muted from TTS
-/// (Rick 2026-08-21: one checkbox does both). "+" to add, overflow menu to reset
-/// to the seeded Claude Code tool-chatter patterns.
+/// The notification stop-list editor.
 ///
-/// THREE gestures on a row, per row f27a61f4 (Rick 2026-09-26: *"I don't see any
-/// easy way to delete them. I had a misspelling in one of them, and it's stuck in
-/// there."*):
-///  * the TRASH button deletes, with an Undo snackbar that puts the row back at
-///    its own index with its own checked state;
-///  * tapping the pattern TEXT opens it for editing in place;
-///  * the swipe stays, unchanged and untested-by-me-differently.
+/// Each row is a message prefix. A checked row is hidden from every list and muted from
+/// speech, with one checkbox doing both. The plus button adds a pattern, and the overflow
+/// menu resets to the seeded Claude Code tool-chatter patterns.
+/// A row has three gestures:
+///  * the trash button deletes, with an Undo snackbar that puts the row back at its own
+///    index with its own checked state;
+///  * tapping the pattern text opens it for editing in place;
+///  * swiping the row deletes it.
 ///
-/// ⚠️ NOT a `CheckboxListTile` any more. That widget toggles on a tap ANYWHERE in
-/// the row, which is the gesture the text now needs — so the box is its own
-/// `Checkbox` and it is the only thing that toggles (ruling R2).
+/// The checkbox is its own `Checkbox`, not a `CheckboxListTile`, and it is the only thing
+/// that toggles. A list tile toggles on a tap anywhere in the row, which is the gesture
+/// the text needs for editing.
+/// Design: src/docs/decisions/README.md (R-SET-stoplist-one-checkbox)
 class NotificationFilterSettingsScreen extends StatefulWidget {
+  /// The store of patterns this screen edits.
   final NotificationStopList stopList;
+
+  /// Creates the editor over [stopList].
   const NotificationFilterSettingsScreen( { super.key, required this.stopList } );
 
   @override
@@ -57,9 +59,10 @@ class _NotificationFilterSettingsScreenState extends State<NotificationFilterSet
     }
   }
 
-  /// Delete row [i], and offer the row back. The snackbar restores BOTH the
-  /// index and the checked state — a mis-tap has to be cheap to reverse, and an
-  /// undo that appended an enabled copy would not be the row the user lost.
+  /// Deletes row [i] and offers the row back.
+  ///
+  /// The snackbar restores both the index and the checked state. A mis-tap has to be
+  /// cheap to reverse, and an undo that appended an enabled copy would not be the row lost.
   Future<void> _delete( int i, StopPattern p ) async {
     await widget.stopList.removeAt( i );
     if ( !mounted ) return;
@@ -74,9 +77,10 @@ class _NotificationFilterSettingsScreenState extends State<NotificationFilterSet
       ) );
   }
 
-  /// Edit the pattern at [i] in place. A blank edit, or one that collides with
-  /// another row, is REFUSED by the store and reported here — the list is left
-  /// exactly as it was, keeping this row's checked state and position.
+  /// Edits the pattern at [i] in place.
+  ///
+  /// The store refuses a blank edit or one that collides with another row, and this
+  /// reports it. The list is then left as it was, keeping the row's checked state and position.
   Future<void> _edit( int i, StopPattern p ) async {
     final text = await showDialog<String>(
       context : context,
@@ -198,11 +202,11 @@ class _NotificationFilterSettingsScreenState extends State<NotificationFilterSet
   }
 }
 
-/// The edit-in-place dialog. A WIDGET, not a closure over a controller the caller
-/// disposes: the dialog's exit animation rebuilds its `TextField` after `pop`, so
-/// disposing the controller at the await's return point threw "A
-/// TextEditingController was used after being disposed" (measured, not guessed).
-/// Owning the controller here ties its life to the dialog's own.
+/// The edit-in-place dialog, a widget that owns its own text controller.
+///
+/// The dialog's exit animation rebuilds its `TextField` after `pop`. Disposing a
+/// caller-owned controller at the await's return point would use it after disposal, so
+/// the controller's life is tied to the dialog's own.
 class _EditPatternDialog extends StatefulWidget {
   final String initial;
   const _EditPatternDialog( { required this.initial } );

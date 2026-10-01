@@ -10,42 +10,32 @@ import '../../auth/domain/auth_event.dart';
 Color serverContextColor( String id ) =>
   id.endsWith( "dev" ) ? Colors.green : Colors.orange;
 
-/// A drop-in widget that switches between every server context listed in
-/// `server-contexts.json` (DEV, TEST, LAN DEV, LAN TEST, ...).
-/// Prompts for confirmation, then asks AuthBloc to log out of the current
-/// server and switch; the widget redraws when the service reports the switch.
+/// A drop-in widget that switches between the server contexts in `server-contexts.json`.
 ///
-/// Renders in EVERY build mode, release included, and deliberately so.
+/// It prompts for confirmation, then asks AuthBloc to log out of the current server and
+/// switch. The widget redraws when the service reports the switch.
 ///
-/// The login screen is this widget's only mount, and it is the only surface a
-/// phone sees before it has signed in: Settings lives behind AuthGate
-/// (auth_gate.dart:50-51 -> app.dart:272), which needs a reachable server to
-/// get past. `assets/config/server-contexts.json` ships "dev" as the default,
-/// which is 10.0.2.2 — the emulator's alias for the host, meaningless on a
-/// handset. So a release APK with no picker here boots pointing at an address
-/// it can never reach, with no screen anywhere that lets it point elsewhere.
-///
-/// That is not hypothetical: `.github/workflows/release.yml` attaches a
-/// release APK and AAB to every `v*.*.*` tag, and the `build-android` job in
-/// `.github/workflows/flutter-ci.yml` builds a release APK on every run
-/// (:144) and uploads it as an artifact (:152). Those are the builds people
-/// actually install on a phone.
-///
-/// A host picker on a sign-in screen does look like a development affordance,
-/// and gating it on `kReleaseMode` was tried (ca07b57) and reverted for the
-/// reason above — as would gating it on `kProfileMode`, `kDebugMode`, or
-/// `const bool.fromEnvironment( "dart.vm.product" )`, which is the same gate
-/// spelled differently. If it should ever be hidden from strangers, hide it
-/// behind something the app can still reach without a server — a long-press,
-/// a build-time --dart-define the build sets deliberately, a first-run setup
-/// step — never behind a build mode that leaves the phone with no way back.
+/// It renders in every build mode, release included, because it is the only way a phone
+/// can reach another server before it has signed in.
+/// The login screen is its only mount, and Settings sits behind the auth gate, which
+/// needs a reachable server. The shipped default context is the emulator's alias for the
+/// host, which is meaningless on a handset. A release APK without this picker would boot
+/// pointing at an address it can never reach.
+/// Release builds are the ones people install.
+/// Gating the picker on a build mode (release, profile, debug or the product flag)
+/// would leave the phone with no way back.
+/// To hide it from strangers, use something reachable without a server instead, such as
+/// a long-press, a build-time define or a first-run setup step.
 class ServerContextToggle extends StatefulWidget {
+  /// The service that lists the contexts and reports which one is active.
   final ServerContextService service;
 
-  /// Called after a confirmed switch, so a parent showing the active
-  /// context elsewhere (e.g. the login screen's badge) can rebuild.
+  /// Called after a confirmed switch, so a parent showing the active context can rebuild.
+  ///
+  /// The login screen's badge is one such parent.
   final ValueChanged<String>? onChanged;
 
+  /// Creates the picker over [service].
   const ServerContextToggle( {
     super.key,
     required this.service,
@@ -66,11 +56,11 @@ class _ServerContextToggleState extends State<ServerContextToggle> {
     widget.service.addListener( _onServiceSwitched );
   }
 
-  /// A parent that hands this widget a DIFFERENT service (a rebuild after
-  /// ServiceLocator.reset, a screen that swaps the service it was given)
-  /// keeps the same State object. Without this, the subscription would still
-  /// be on the old service: the new one's switches would never redraw the
-  /// segments, and the old one would keep calling a listener nobody wants.
+  /// Moves the listener when a parent hands this widget a different service.
+  ///
+  /// A rebuild after a service reset keeps the same State object. Without this, the
+  /// subscription would stay on the old service, so the new one's switches would never
+  /// redraw the segments.
   @override
   void didUpdateWidget( ServerContextToggle oldWidget ) {
     super.didUpdateWidget( oldWidget );
@@ -117,7 +107,7 @@ class _ServerContextToggleState extends State<ServerContextToggle> {
     );
     if ( confirmed != true || !mounted ) return;
 
-    // AuthBloc clears the CURRENT server's session, then switches; the
+    // AuthBloc clears the current server's session, then switches; the
     // service listener above redraws this widget once the switch lands.
     context.read<AuthBloc>().add( AuthServerContextSwitchRequested( id ) );
   }

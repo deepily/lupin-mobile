@@ -12,14 +12,21 @@ import 'notification_filter_settings_screen.dart';
 import 'notification_management_screen.dart';
 import 'round_trip_probe_screen.dart';
 
-/// User-facing toggles for notification ding + TTS speech behavior. Mirrors
-/// the Lupin web client's priority tiers: medium = ding only, high = ding +
-/// speech, urgent = distinct ding + speech. Master mute overrides all.
+/// User-facing toggles for notification ding and spoken-summary behaviour.
+///
+/// It follows the Lupin web client's priority tiers. Medium is a ding only, high is a
+/// ding plus speech, and urgent is a distinct ding plus speech.
+/// Master mute overrides all.
 class NotificationAudioSettingsScreen extends StatefulWidget {
+  /// The stored notification preferences this screen reads and writes.
   final NotificationPreferences prefs;
+
   /// Resolves the kept-recordings folder shown under the debug switch.
-  /// Injectable because path_provider has no platform channel in tests.
+  ///
+  /// It is injectable because path_provider has no platform channel in tests.
   final Future<Directory> Function() keptRecordingsDir;
+
+  /// Creates the screen over [prefs].
   const NotificationAudioSettingsScreen( {
     super.key,
     required this.prefs,
@@ -69,10 +76,10 @@ class _NotificationAudioSettingsScreenState
     if ( mounted ) setState( () => _keptDirPath = path );
   }
 
-  /// Flip local state immediately (for UI responsiveness + test determinism)
-  /// and fire the async write in parallel. SharedPreferences is eventually
-  /// consistent; a failed write would be surfaced by the next getter on
-  /// cold restart, which is an acceptable trade-off here.
+  /// The toggle handlers below flip local state at once and fire the write in parallel.
+  ///
+  /// SharedPreferences is eventually consistent. A failed write shows up at the next
+  /// getter on a cold restart, which is an acceptable trade-off here.
   void _toggleMasterMute(    bool v ) { setState( () => _masterMute    = v ); widget.prefs.setMasterMute(    v ); }
   void _toggleDingMedium(    bool v ) { setState( () => _dingOnMedium  = v ); widget.prefs.setDingOnMedium(  v ); }
   void _toggleDingHigh(      bool v ) { setState( () => _dingOnHigh    = v ); widget.prefs.setDingOnHigh(    v ); }

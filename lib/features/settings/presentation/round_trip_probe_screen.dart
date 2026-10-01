@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../services/diagnostics/round_trip_probe.dart';
 
-/// Debug screen for [RoundTripProbe]: 20 health calls plus timed WAV uploads
-/// on the app's shared Dio, with progress while running and a latency
-/// summary + JSONL path at the end. Nothing runs until the user taps Run.
+/// Debug screen for [RoundTripProbe]: health calls plus timed WAV uploads on the shared Dio.
+///
+/// It shows progress while running and a latency summary and JSONL path at the end.
+/// Nothing runs until the user taps Run.
 class RoundTripProbeScreen extends StatefulWidget {
+  /// The app's shared Dio, so the probe measures the same path real calls take.
   final Dio dio;
 
   /// Opens the JSONL destination for a run; defaults to [openProbeFileSink].
@@ -20,6 +22,7 @@ class RoundTripProbeScreen extends StatefulWidget {
   /// Upload clip builder; defaults to the probe's background-isolate sweep.
   final Future<Uint8List> Function( int sampleRate )? clipFor;
 
+  /// Creates the screen; only [dio] is required, the rest default as documented per field.
   const RoundTripProbeScreen( { super.key, required this.dio, this.openSink, this.networkType, this.clipFor } );
 
   @override
