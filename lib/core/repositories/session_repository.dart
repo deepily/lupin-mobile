@@ -29,7 +29,7 @@ abstract class SessionRepository extends BaseRepository<Session, String> {
     String? ipAddress,
   });
   
-  /// Update session activity
+  /// Records activity on a session
   Future<Session> updateActivity(String sessionId);
   
   /// Extend session expiration
@@ -59,14 +59,22 @@ abstract class SessionRepository extends BaseRepository<Session, String> {
 
 /// Session statistics
 class SessionStats {
+  /// Number of sessions.
   final int totalSessions;
+  /// Sessions that are still active.
   final int activeSessions;
+  /// Sessions that have expired.
   final int expiredSessions;
+  /// Mean session length.
   final Duration averageSessionDuration;
+  /// Session counts by device.
   final Map<String, int> sessionsByDevice;
+  /// Session counts by location.
   final Map<String, int> sessionsByLocation;
+  /// Time of the most recent activity, or null when there is none.
   final DateTime? lastActivity;
 
+  /// Creates the stats; every field is required.
   const SessionStats({
     required this.totalSessions,
     required this.activeSessions,
@@ -77,6 +85,7 @@ class SessionStats {
     this.lastActivity,
   });
 
+  /// Serializes the stats.
   Map<String, dynamic> toJson() {
     return {
       'total_sessions': totalSessions,

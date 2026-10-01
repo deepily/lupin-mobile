@@ -43,7 +43,7 @@ abstract class VoiceRepository extends BaseRepository<VoiceInput, String> {
   /// Get most common transcriptions
   Future<List<String>> getCommonTranscriptions({int limit = 10});
   
-  /// Update transcription for a voice input.
+  /// Stores the transcription of a voice input.
   /// 
   /// Requires:
   ///   - voiceInputId must exist in repository
@@ -94,15 +94,24 @@ abstract class VoiceRepository extends BaseRepository<VoiceInput, String> {
 
 /// Voice input statistics
 class VoiceStats {
+  /// Number of voice inputs.
   final int totalInputs;
+  /// Voice inputs that completed.
   final int completedInputs;
+  /// Voice inputs that failed.
   final int failedInputs;
+  /// Mean transcription confidence.
   final double averageConfidence;
+  /// Mean time an input took to process.
   final Duration averageProcessingTime;
+  /// Input counts by hour of day.
   final Map<String, int> inputsByHour;
+  /// Input counts by confidence range.
   final Map<String, int> inputsByConfidenceRange;
+  /// The most common transcriptions.
   final List<String> commonPhrases;
 
+  /// Creates the stats; every field is required.
   const VoiceStats({
     required this.totalInputs,
     required this.completedInputs,
@@ -114,9 +123,11 @@ class VoiceStats {
     this.commonPhrases = const [],
   });
 
+  /// Share of inputs that completed.
   double get successRate => 
       totalInputs > 0 ? completedInputs / totalInputs : 0.0;
 
+  /// Serializes the stats.
   Map<String, dynamic> toJson() {
     return {
       'total_inputs': totalInputs,

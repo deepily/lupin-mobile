@@ -13,6 +13,7 @@ abstract class SharedPreferencesRepository<T, ID>
   final String _allKeysKey;
   late final StorageManager _storage;
   
+  /// Creates a repository whose storage keys start with [_keyPrefix].
   SharedPreferencesRepository(this._keyPrefix) 
       : _counterKey = '${_keyPrefix}_counter',
         _allKeysKey = '${_keyPrefix}_all_keys' {
@@ -193,6 +194,7 @@ abstract class SharedPreferencesRepository<T, ID>
     return allEntities.where(predicate).toList();
   }
   
+  /// Returns the first entity that satisfies [predicate], or null.
   Future<T?> findFirstWhere(bool Function(T) predicate) async {
     final allEntities = await findAll();
     try {
@@ -202,6 +204,7 @@ abstract class SharedPreferencesRepository<T, ID>
     }
   }
   
+  /// Returns all entities ordered by [compare].
   Future<List<T>> findAllSorted(int Function(T, T) compare) async {
     final allEntities = await findAll();
     allEntities.sort(compare);

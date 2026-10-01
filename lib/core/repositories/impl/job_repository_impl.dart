@@ -4,12 +4,14 @@ import '../job_repository.dart';
 import '../base_repository.dart';
 import 'shared_preferences_repository.dart';
 
+/// Job repository backed by SharedPreferences, with a broadcast change stream.
 class JobRepositoryImpl extends SharedPreferencesRepository<Job, String> 
     implements JobRepository {
   
   final StreamController<List<Job>> _jobStreamController = 
       StreamController<List<Job>>.broadcast();
   
+  /// Creates the repository under the `job` key prefix.
   JobRepositoryImpl() : super('job');
   
   @override
@@ -400,6 +402,7 @@ class JobRepositoryImpl extends SharedPreferencesRepository<Job, String>
     _jobStreamController.add(allJobs);
   }
   
+  /// Closes the change stream.
   void dispose() {
     _jobStreamController.close();
   }
