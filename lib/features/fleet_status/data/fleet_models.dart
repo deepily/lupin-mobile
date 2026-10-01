@@ -1,36 +1,38 @@
-/// Fleet Status — the wire shapes of `GET /api/arbiter/fleet-state` and the
-/// pure formatters the eight columns render through.
+/// Fleet Status wire shapes for `GET /api/arbiter/fleet-state`, and the cell formatters.
 ///
-/// Ported from the web multiplexer's `render/fleetModel.ts` as OBSERVATIONAL
-/// EQUIVALENCE, not shared code: the two clients share nothing, so the rule is
-/// that the same payload produces the same cell text on both.
-///
-/// 🔴 THE UNREACHABLE ENVELOPE IS AN HTTP 200, NOT AN ERROR. When the :8001
-/// arbiter is down, `/api/arbiter/fleet-state` answers 200 with
-/// `{status: "unreachable", health_watcher: null, fleet_arbiter: null}` rather
-/// than a 5xx (`arbiter.py:168-176`) — the proxy is up, the upstream watcher is
-/// not. A client that dispatches on the HTTP status alone renders that as a
-/// fleet with zero seats, which reads as "nobody is working" when it means "we
-/// cannot see". [FleetComposite.isUnreachable] is the flag the pane must check.
-///
-/// ⚠️ `app_timezone` IS OMITTED ON THAT ENVELOPE BY DESIGN (`arbiter.py:158-162`),
-/// so it is nullable here and the caller falls back to the device zone. It is
-/// display-only for the last-updated stamp and must never block the table.
+/// This mirrors the web multiplexer's `fleetModel.ts` by observational equivalence, not
+/// shared code: the same payload must give the same cell text on both clients.
+/// When the `:8001` arbiter is down the endpoint still answers 200, with
+/// `{status: "unreachable", health_watcher: null, fleet_arbiter: null}`. Reading only the
+/// HTTP status would show a fleet with zero seats, so the pane checks
+/// [FleetComposite.isUnreachable]. That envelope omits `app_timezone`, which is nullable;
+/// the caller falls back to the device zone.
 library;
 
 /// The raw liveness ages plus the arbiter's verdict, per session.
 ///
-/// Every age is nullable because the tooltip renders "n/a" for a missing one
-/// rather than dropping the line — a gap the operator can see beats a row that
-/// silently shortens.
+/// Every age is nullable because the detail text shows "n/a" for a missing one. A visible
+/// gap beats a row that silently shortens.
 class FleetLiveness {
+  /// Seconds since the session bridge file was last touched.
   final int?    bridgeAgeS;
+
+  /// Seconds since the session's last event.
   final int?    eventAgeS;
+
+  /// Seconds since the session last posted to commons.
   final int?    commonsAgeS;
+
+  /// Seconds since the session's last idle prompt.
   final int?    idlePromptAgeS;
+
+  /// Seconds since the freshest of the signals above.
   final int?    freshestAgeS;
+
+  /// The arbiter's verdict, a free-form string such as `LIVE`, `quiet 3m` or `offline`.
   final String? verdict;
 
+  /// Creates a liveness record; every field defaults to unknown.
   const FleetLiveness( {
     this.bridgeAgeS,
     this.eventAgeS,
@@ -40,7 +42,7 @@ class FleetLiveness {
     this.verdict,
   } );
 
-  /// Parse one `liveness` object.
+  /// Parses one `liveness` object.
   ///
   /// Requires:
   ///     - json is the session's `liveness` value, or null when absent
@@ -64,21 +66,37 @@ class FleetLiveness {
     );
   }
 
-  /// The verdict word the row shows, never null.
+  /// The verdict word the row shows; "unknown" when there is none.
   String get verdictLabel => verdict ?? "unknown";
 }
 
 /// One row of the fleet table.
 class FleetSession {
+  /// The session id.
   final String?       sessionId;
+
+  /// The persona name; null for a session with no persona.
   final String?       persona;
+
+  /// The arbiter's state word for the seat.
   final String?       state;
+
+  /// What the seat is holding on, or null; the literal "none" means nothing.
   final String?       holdingOn;
+
+  /// True when the arbiter marked the seat stuck.
   final bool          stuck;
+
+  /// The seat's role; the table shows "worker" when absent.
   final String?       role;
+
+  /// The manager the seat reports to.
   final String?       manager;
+
+  /// The seat's liveness ages and verdict.
   final FleetLiveness liveness;
 
+  /// Creates one row; every field defaults to absent.
   const FleetSession( {
     this.sessionId,
     this.persona,
@@ -90,12 +108,12 @@ class FleetSession {
     this.liveness = const FleetLiveness(),
   } );
 
-  /// Parse one entry of `fleet_arbiter.sessions`.
+  /// Parses one entry of `fleet_arbiter.sessions`.
   ///
   /// Ensures:
-  ///     - a non-map input yields an empty session rather than throwing, so one
-  ///       malformed row cannot blank the whole pane
-  ///     - `stuck` is truthy-coerced the way the web reads it (`!!session.stuck`)
+  ///     - a non-map input yields an empty session, so one malformed row cannot blank
+  ///       the pane
+  ///     - `stuck` is true only for the boolean `true`
   factory FleetSession.fromJson( Object? json ) {
     if ( json is! Map ) return const FleetSession();
     String? str( String key ) => json[ key ] is String ? json[ key ] as String : null;
@@ -111,8 +129,7 @@ class FleetSession {
     );
   }
 
-  /// The "Who" cell: persona, else the session id's first 8 characters, else
-  /// "unknown". Ported from `fleetModel.ts:68-73`.
+  /// The "Who" cell: the persona, else the session id's first 8 characters, else "unknown".
   String get whoLabel {
     final p = persona;
     if ( p != null && p.isNotEmpty ) return p;
@@ -121,32 +138,30 @@ class FleetSession {
     return "unknown";
   }
 
-  /// The "Role" cell, defaulting to worker (`fleetStatusTable.ts:89`).
+  /// The "Role" cell, defaulting to "worker".
   String get roleLabel => ( role != null && role!.isNotEmpty ) ? role! : "worker";
 
-  /// The "State" cell (`fleetStatusTable.ts:90`).
+  /// The "State" cell, defaulting to "unknown".
   String get stateLabel => ( state != null && state!.isNotEmpty ) ? state! : "unknown";
 
-  /// The "Holding on" cell — the literal string "none" and an empty value both
-  /// render as an em dash (`fleetStatusTable.ts:75`, `:91-92`).
+  /// The "Holding on" cell; the literal "none" and an empty value both show an em dash.
   String get holdingLabel {
     final h = holdingOn;
     if ( h == null || h.isEmpty || h == "none" ) return "—";
     return h;
   }
 
-  /// The "Stuck" cell: a check when stuck, an em dash otherwise
-  /// (`fleetStatusTable.ts:75`).
+  /// The "Stuck" cell: a check when stuck, an em dash otherwise.
   String get stuckLabel => stuck ? "✓" : "—";
 
-  /// The raw-four-ages detail that the web hangs on a `title=` hover.
+  /// The raw liveness ages, which the web shows on hover and the phone shows on tap.
   ///
-  /// 🔴 A PHONE HAS NO HOVER, so this string is reached by TAP on the Liveness
-  /// cell rather than by pointing at it. The content is ported verbatim from
-  /// `fleetModel.ts:79-90`; only the gesture changes.
+  /// A phone has no hover, so the Liveness cell reveals this string on tap. The content
+  /// matches the web's; only the gesture differs.
   ///
   /// Ensures:
-  ///     - four " · "-joined segments, in the web's order
+  ///     - five " · "-joined segments in the web's order: bridge, event, commons,
+  ///       idle_prompt, freshest
   ///     - a null age renders "n/a", never a blank or a dropped segment
   String get livenessDetail {
     String fmt( int? v ) => v == null ? "n/a" : "${ v }s";
@@ -159,40 +174,32 @@ class FleetSession {
     ].join( " · " );
   }
 
-  /// Whether this seat is offline for the purposes of the offline toggle.
+  /// Whether the seat is offline, for the offline toggle.
   ///
-  /// 🔴 THE TEST IS `verdict == "offline"` EXACTLY, AND A ROW WITH NO VERDICT
-  /// STAYS LIVE. Ported from `fleetModel.ts:155`, `:161-162` — its own words:
-  /// "`liveness.verdict === "offline"`; rows without a verdict stay LIVE."
-  ///
-  /// ⚠️ THE VERDICT IS A FREE-FORM STRING, NOT AN ENUM, and that is what makes
-  /// a hand-rolled predicate here dangerous. Measured live 2026-09-19, the ten
-  /// seats reported `LIVE`, `quiet 3m` and `stale 21m` — a stale seat is not an
-  /// offline one, and hiding it would take a seat the operator needs to chase
-  /// off the screen. The web keys its COLOUR on the first whitespace-delimited
-  /// word lowercased (`fleetVerdictClass`, `:211-219`) but keys the TOGGLE on
-  /// the whole string, so this does too.
-  ///
-  /// The first cut of this getter treated a missing verdict, "DEAD" and
-  /// "OFFLINE" as offline and did not match the lowercase "offline" the server
-  /// actually sends. It would have hidden nothing in the live fleet while
-  /// silently hiding every row the arbiter had not yet judged.
+  /// True only when `verdict == "offline"` exactly; a row with no verdict stays live. The
+  /// verdict is free-form: the fleet reports `LIVE`, `quiet 3m` and `stale 21m`. A stale
+  /// seat is not offline, and hiding it would take a seat the operator must chase off the
+  /// screen. The web colours a row by the verdict's first word but keys the toggle on the
+  /// whole string, as this does. Matching "DEAD" or "OFFLINE" would hide nothing real.
   bool get isOffline => liveness.verdict == "offline";
 }
 
-/// The per-persona context-pressure record, for the "% Window" and "Window"
-/// columns.
+/// The per-persona context-pressure record, for the "% Window" and "Window" columns.
 class FleetContextRecord {
+  /// The percentage of the context window consumed, as the server rounded it.
   final double? consumptionPctOfWindow;
+
+  /// The context window size in tokens.
   final int?    windowSize;
 
+  /// Creates a record; both fields default to unmeasured.
   const FleetContextRecord( { this.consumptionPctOfWindow, this.windowSize } );
 
-  /// Parse one `context_pressure.personas` value.
+  /// Parses one `context_pressure.personas` value.
   ///
   /// Ensures:
-  ///     - a non-map input yields an all-null record — "unmeasured" is a real
-  ///       state the columns render as an em dash, not an error
+  ///     - a non-map input yields an all-null record; "unmeasured" is a real state the
+  ///       columns show as an em dash, not an error
   factory FleetContextRecord.fromJson( Object? json ) {
     if ( json is! Map ) return const FleetContextRecord();
     final pct = json[ "consumption_pct_of_window" ];
@@ -206,11 +213,19 @@ class FleetContextRecord {
 
 /// The whole `/api/arbiter/fleet-state` body.
 class FleetComposite {
+  /// The envelope status; "unreachable" when the arbiter could not be reached.
   final String?                           status;
+
+  /// The server's timezone for the last-updated stamp; null on the unreachable envelope.
   final String?                           appTimezone;
+
+  /// The fleet table rows.
   final List<FleetSession>                sessions;
+
+  /// Context records keyed by the persona string exactly as the server sent it.
   final Map<String, FleetContextRecord>   personas;
 
+  /// Creates a composite; everything defaults to empty.
   const FleetComposite( {
     this.status,
     this.appTimezone,
@@ -218,18 +233,17 @@ class FleetComposite {
     this.personas = const {},
   } );
 
-  /// Parse the composite.
+  /// Parses the composite.
   ///
   /// Requires:
   ///     - json is the decoded response body
   ///
   /// Ensures:
-  ///     - `status: "unreachable"` parses successfully with empty sessions —
-  ///       the envelope is a 200 and must not be read as a transport failure
+  ///     - `status: "unreachable"` parses with empty sessions; the envelope is a 200 and
+  ///       is not a transport failure
   ///     - a missing or malformed `fleet_arbiter.sessions` yields an empty list
-  ///       rather than throwing
-  ///     - `app_timezone` is null when the server omitted it (the unreachable
-  ///       envelope always omits it)
+  ///     - `app_timezone` is null when the server omitted it, as the unreachable
+  ///       envelope always does
   factory FleetComposite.fromJson( Object? json ) {
     if ( json is! Map ) return const FleetComposite();
 
@@ -256,31 +270,20 @@ class FleetComposite {
     );
   }
 
-  /// 🔴 The arbiter could not be reached, and the server said so in a 200.
+  /// True when the arbiter could not be reached and the server said so in a 200.
   ///
-  /// The pane must render this as "we cannot see the fleet", never as a fleet
-  /// with no seats in it.
+  /// The pane renders this as "we cannot see the fleet", never as a fleet with no seats.
   bool get isUnreachable => status == "unreachable";
 
-  /// The context record for one session, joined the way the web joins it.
+  /// The context record for one session, joined on the exact persona string.
   ///
-  /// ⚠️ THE JOIN IS EXACT-KEY ON THE PERSONA STRING, and that is a port rather
-  /// than an oversight (`fleetStatusTable.ts:96` —
-  /// `personas[ session.persona ] || {}`). The two maps are populated by
-  /// different producers and their keys are not case-normalised: measured live
-  /// 2026-09-19, `context_pressure.personas` carried
-  /// `Krishna · Rachel · Rio · Tiffany · chloe · maria · maya · mr radio · sam`
-  /// against sessions whose `persona` matched 9 of 10 exactly. The single miss
-  /// was a session with a NULL persona, which correctly falls back to the short
-  /// session id for "Who" and an em dash for both window columns.
-  ///
-  /// A case-insensitive or fuzzy join here would show numbers the web does not,
-  /// which breaks observational equivalence in the direction that is hardest to
-  /// notice — the phone would look MORE complete while disagreeing with the
-  /// desktop about the same fleet.
+  /// The join is exact-key, as on the web, because the two maps come from different
+  /// producers and their keys are not case-normalised. A case-insensitive join would show
+  /// numbers the web does not, so the phone would look more complete than the desktop.
   ///
   /// Ensures:
   ///     - an unmatched or null persona yields an all-null record, never null
+  ///     - the window columns then show an em dash
   FleetContextRecord contextFor( FleetSession session ) {
     final p = session.persona;
     if ( p == null || p.isEmpty ) return const FleetContextRecord();
@@ -289,11 +292,12 @@ class FleetComposite {
 }
 
 // ---------------------------------------------------------------------------
-// Formatters — ported cell-for-cell from fleetModel.ts:177-191
+// Formatters, matching the web cell for cell
 // ---------------------------------------------------------------------------
 
-/// Compact context-window size: exact-million → "<n>M", exact-thousand →
-/// "<n>K", else the integer. Pure.
+/// Formats a context-window size: exact million as "<n>M", exact thousand as "<n>K".
+///
+/// Anything else prints as the plain integer.
 ///
 /// Ensures:
 ///     - null, zero or negative → "—"
@@ -305,11 +309,10 @@ String formatWindowSize( int? windowSize ) {
   return "$windowSize";
 }
 
-/// "% of context window consumed". Pure.
+/// Formats the percentage of the context window consumed.
 ///
-/// ⚠️ THE BACKEND PRE-ROUNDS TO ONE DECIMAL and the web prints the number it
-/// was given (`fleetModel.ts:188-191`). Re-rounding here would make the two
-/// clients disagree on a value neither of them computed.
+/// The backend pre-rounds to one decimal and the web prints the number it was given.
+/// Re-rounding here would make the two clients disagree on a value neither computed.
 ///
 /// Ensures:
 ///     - null → "—"
@@ -321,32 +324,24 @@ String formatConsumptionPct( double? pct ) {
 }
 
 // ---------------------------------------------------------------------------
-// The reassignment roster — ported from taskListModel.ts:474
+// The reassignment roster
 // ---------------------------------------------------------------------------
 
-/// The personas a task may be reassigned TO: the LIVE fleet's personas, alpha-sorted.
+/// The personas a task may be reassigned to: the live fleet's personas, alpha-sorted.
 ///
-/// 🔴 LIVE SESSIONS ONLY, AND THAT IS THE POINT OF THE FILTER. Reassigning a row to an
-/// offline persona files work with nobody — the row moves, the board looks right, and
-/// the seat it now belongs to does not exist. The web applies the same "live" rule the
-/// fleet card shows by default (`splitFleetByLiveness`), which here is
-/// [FleetSession.isOffline]: a row WITHOUT a verdict stays live, because the arbiter
-/// says offline explicitly and silence is not a verdict.
-///
-/// ⚠️ DEGRADE-SAFE BY CONTRACT, NOT BY LUCK. Every way the fleet can fail to answer —
-/// pre-first-poll null, the `status: "unreachable"` envelope, a malformed `sessions` —
-/// collapses to an EMPTY roster rather than a throw. The owner control then offers only
-/// the row's current owner, which is honest: the phone cannot see the fleet, so it does
-/// not know who else exists.
+/// Only live sessions count, because reassigning a row to an offline persona files work
+/// with nobody. The rule matches the fleet card's default live view, [FleetSession.isOffline].
+/// A row without a verdict stays live, since the arbiter says offline explicitly.
 ///
 /// Requires:
 ///     - fleet is the composite the fleet pane caches, or null
 ///
 /// Ensures:
-///     - null or unreachable → []
+///     - null, unreachable, pre-first-poll or malformed `sessions` returns [], not a throw
+///       (the owner control then offers only the current owner, since the phone cannot
+///       see the fleet)
 ///     - only live sessions contribute; blank personas dropped; duplicates collapsed
 ///     - returned alpha-sorted, case-insensitively
-///     - never throws
 List<String> activeReassignTargets( FleetComposite? fleet ) {
   if ( fleet == null || fleet.isUnreachable ) return const <String>[];
 

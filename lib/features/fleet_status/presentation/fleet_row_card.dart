@@ -5,43 +5,31 @@ import '../data/fleet_models.dart';
 
 /// One seat, as a card rather than a table row.
 ///
-/// 🔴 EIGHT COLUMNS DO NOT FIT ON ONE LINE AT 360 dp, AND THAT IS ARITHMETIC
-/// RATHER THAN TASTE. The cascade measured it for the shared task row: 360 dp
-/// less 16 dp gutters less a 48 dp interactive target leaves ~86 dp — about
-/// twelve characters — once four short fields have taken their share. Fleet
-/// Status carries EIGHT fields, two of them free-form (`Who`, `Holding on`),
-/// so a horizontal port would truncate every row to the same prefix and the
-/// pane could not be read at all.
-///
-/// ⇒ The eight facts survive; the single-row packing does not. They are laid
-/// out in three bands, most-identifying first:
-///     1  Who · Role
-///     2  State · Holding on · Stuck
-///     3  Liveness · % Window · Window
-///
-/// ⚠️ NOTHING IS DROPPED. All eight are on screen without a scroll or a tap;
-/// only the Liveness DETAIL — the raw four ages the web hangs on a hover —
-/// lives behind a tap, because a phone has no hover to hang it on.
+/// Eight columns do not fit one line at 360 dp. Gutters and a 48 dp target leave about
+/// 86 dp, roughly twelve characters, and two fields (`Who`, `Holding on`) are free text.
+/// A horizontal layout would truncate every row to the same prefix. All eight facts stay
+/// on screen, in three bands: Who and Role; State, Holding on and Stuck; Liveness,
+/// % Window and Window. Only the raw liveness ages sit behind a tap.
 class FleetRowCard extends StatelessWidget {
+  /// The seat to show.
   final FleetSession       session;
+
+  /// The seat's context-window figures.
   final FleetContextRecord context;
+
+  /// Called when the Liveness cell is tapped, to show the raw ages.
   final VoidCallback?      onLivenessTap;
 
-  /// Open the Live Console for this seat. Null when this caller may not watch it.
+  /// Opens the Live Console for this seat; null when this caller may not watch it.
   ///
-  /// 🔴 NULL IS THE ONLY WAY THE BUTTON HIDES, AND THAT IS ON PURPOSE. The pane decides
-  /// watchability by joining the roster projection; this widget does not re-derive the
-  /// rule, does not read `transcript_watchable` itself, and has no opinion about admin.
-  /// One field, one decision point — §3 says both watch affordances in this system read
-  /// the server's single `transcript_watchable` so that neither client invents its own
-  /// answer, and a widget that also had a say would be a third answer.
-  ///
-  /// ⚠️ AND A HIDDEN BUTTON IS NOT A SECURITY BOUNDARY. §5: "a refused watch is expected,
-  /// not exceptional… the button only hides a refusal; the server is the gate." A stale
-  /// roster, an admin role revoked between the poll and the tap, or a deep link into the
-  /// route all still produce a refusal, which the console screen handles.
+  /// Null is the only way the button hides. The pane decides watchability by joining the
+  /// roster projection. This widget does not re-derive the rule or read
+  /// `transcript_watchable`, because a widget with its own say would be a third answer.
+  /// A hidden button is not a security boundary. A stale roster, a revoked admin role or
+  /// a deep link still produces a refusal, which the console screen handles.
   final VoidCallback?      onWatchTap;
 
+  /// Creates the card.
   const FleetRowCard( {
     super.key,
     required this.session,
@@ -73,7 +61,7 @@ class FleetRowCard extends StatelessWidget {
     );
   }
 
-  /// Band 1 — Who, and the role badge.
+  // Band 1: Who, and the role badge.
   Widget _bandOne( ThemeData theme ) {
     return Row(
       children: [
@@ -90,7 +78,7 @@ class FleetRowCard extends StatelessWidget {
     );
   }
 
-  /// Band 2 — State, Holding on, Stuck.
+  // Band 2: State, Holding on, Stuck.
   Widget _bandTwo( ThemeData theme ) {
     return Wrap(
       spacing     : 12,
@@ -103,15 +91,10 @@ class FleetRowCard extends StatelessWidget {
     );
   }
 
-  /// Band 3 — Liveness (tappable), % Window, Window.
-  ///
-  /// ⚠️ `% Window` AND `Window` ARE TWO FACTS, NOT ONE, and they disagree in
-  /// live data. Measured 2026-09-19 against the captured fixture: of ten seats,
-  /// seven were fully measured, ONE carried a window size with a null
-  /// percentage, one was an IDLE persona reporting null for both, and one had
-  /// no persona at all. Each cell therefore formats its own nullable and
-  /// neither may stand in for the other — a row legitimately shows "1M" beside
-  /// an em dash.
+  // Band 3: Liveness (tappable), % Window, Window. The two window cells are two facts
+  // that disagree in live data: a seat can have a window size with a null percentage, an
+  // idle persona reports null for both, and a row can have no persona. Each cell formats
+  // its own nullable, so a row can show "1M" beside an em dash.
   Widget _bandThree( BuildContext buildContext, ThemeData theme ) {
     return Wrap(
       spacing    : 12,
@@ -128,32 +111,22 @@ class FleetRowCard extends StatelessWidget {
           value : formatWindowSize( context.windowSize ),
           theme : theme,
         ),
-        // A SIBLING in this Wrap, after the Window field — see `_watchButton`'s docstring
-        // for why it cannot live inside `_livenessCell`.
+        // A sibling in this Wrap, after the Window field; see `_watchButton` for why it
+        // cannot live inside `_livenessCell`.
         if ( onWatchTap != null ) _watchButton( theme ),
       ],
     );
   }
 
-  /// Watch this seat's console. Ruling Q9's entry point, and the only one in v1.
-  ///
-  /// 🔴 IT IS A SIBLING IN BAND THREE, NOT A CHILD OF `_livenessCell`, AND AN EARLIER
-  /// DRAFT PUT IT THERE. That draft said "beside `Icons.info_outline`" — which is inside
-  /// [_livenessCell], whose wrapper is
-  /// `Semantics( button: true, label: "Liveness …", excludeSemantics: true )` around an
-  /// `InkWell` whose tap is `onLivenessTap`. Two things would have followed, both bad:
-  /// `excludeSemantics: true` **drops every descendant's semantics**, so a screen-reader
-  /// user would never have found the button at all; and it would have been inside the
-  /// liveness hit target, so tapping it could open the liveness sheet instead.
-  ///
-  /// ⇒ Its own `Semantics( button: true, label: "Watch console for <who>" )`, its own hit
-  /// target, its own key. C5.9's semantics arm asserts the node is **not** a descendant of
-  /// the liveness `Semantics` node, and names moving it back inside as the negative
-  /// control — so this is a decision with a test that fails if it is undone. (C-4.)
-  ///
-  /// The fleet row is the only entry point in v1: Focus-mode and Inbox headers are keyed
-  /// on `sender_id` (`#<8hex>`), which cannot supply the full `cc_session_id` the stream
-  /// needs, so they are out of v1 rather than half-designed (C-5).
+  // The Watch console button, the only entry point in v1. It is a sibling in band three,
+  // not a child of `_livenessCell`. That cell is wrapped in
+  // `Semantics( button: true, excludeSemantics: true )` around an `InkWell` whose tap is
+  // `onLivenessTap`. `excludeSemantics: true` drops every descendant's semantics, so a
+  // screen-reader user would never find a button placed there, and a tap on it could open
+  // the liveness sheet. So it has its own `Semantics`, hit target and key. The semantics
+  // test asserts the node is not a descendant of the liveness node. Focus-mode and Inbox
+  // headers are keyed on `sender_id` (`#<8hex>`), which cannot supply the full
+  // `cc_session_id` the stream needs, so they are not entry points in v1.
   Widget _watchButton( ThemeData theme ) {
     return Semantics(
       button : true,
@@ -163,9 +136,9 @@ class FleetRowCard extends StatelessWidget {
         icon      : const Icon( Icons.terminal, size: 20 ),
         tooltip   : "Watch console",
         onPressed : onWatchTap,
-        // The same 48 dp thumb floor the liveness cell takes: Android's minimum, and well
-        // above WCAG 2.2 SC 2.5.8's 24x24. `IconButton`'s own default is 48, stated here
-        // so a future `visualDensity` change cannot quietly shrink it.
+        // The same 48 dp thumb floor as the liveness cell: Android's minimum, well above
+        // WCAG 2.2 SC 2.5.8's 24x24. `IconButton` defaults to 48; stating it keeps a future
+        // `visualDensity` change from shrinking it.
         constraints : const BoxConstraints(
           minWidth  : kMinInteractiveDimension,
           minHeight : kMinInteractiveDimension,
@@ -176,18 +149,12 @@ class FleetRowCard extends StatelessWidget {
     );
   }
 
-  /// The Liveness cell — verdict visible, raw ages one tap away.
-  ///
-  /// 🔴 THE WEB PUTS THE FOUR RAW AGES ON A `title=` HOVER. A phone has no
-  /// hover, so the detail is reached by TAP and opens a sheet. A sheet rather
-  /// than an in-place expansion is deliberate: opening a route MOVES FOCUS, so
-  /// a screen-reader user is taken to the detail and hears it. An in-place
-  /// reveal changes the tree under a focus that does not move, which announces
-  /// nothing — the same failure mode the plan's arm-twice control has.
-  ///
-  /// The `Semantics` wrapper gives the target a name and a hint, because the
-  /// visible text is a bare verdict word like "LIVE" and a screen reader would
-  /// otherwise announce a button with no purpose.
+  // The Liveness cell: verdict visible, raw ages one tap away. The web shows the raw ages
+  // on a `title=` hover; a phone has no hover, so a tap opens a sheet. A sheet, not an
+  // in-place expansion, because opening a route moves focus, so a screen-reader user
+  // hears the detail. An in-place reveal changes the tree under a focus that does not
+  // move and announces nothing. The `Semantics` wrapper gives the target a name and a
+  // hint, because the visible text is a bare verdict word such as "LIVE".
   Widget _livenessCell( BuildContext buildContext, ThemeData theme ) {
     final verdict = session.liveness.verdictLabel;
 
@@ -199,9 +166,8 @@ class FleetRowCard extends StatelessWidget {
       child: InkWell(
         key         : Key( "${ TestKeys.fleetStatusLivenessPrefix }${ session.whoLabel }" ),
         onTap       : onLivenessTap,
-        // A 48 dp minimum target: Android's floor, and well above WCAG 2.2
-        // SC 2.5.8's 24x24. The web's cell is roughly 20 px, which is a mouse
-        // target rather than a thumb one.
+        // A 48 dp minimum target: Android's floor, well above WCAG 2.2 SC 2.5.8's 24x24.
+        // The web's cell is roughly 20 px, a mouse target and not a thumb one.
         child: ConstrainedBox(
           constraints : const BoxConstraints( minHeight: kMinInteractiveDimension ),
           child       : Row(
@@ -218,7 +184,7 @@ class FleetRowCard extends StatelessWidget {
   }
 }
 
-/// A label-over-value pair, so every figure carries the name of what it is.
+// A label-over-value pair, so every figure carries the name of what it is.
 class _Field extends StatelessWidget {
   final String    label;
   final String    value;
@@ -239,11 +205,8 @@ class _Field extends StatelessWidget {
   }
 }
 
-/// The role badge.
-///
-/// ⚠️ THE WORD IS THE SIGNAL, NOT THE COLOUR. The web's own note says colour is
-/// always redundant with the verdict word or the numeric percent (WCAG 1.4.1);
-/// this keeps the word and lets the container carry the tint.
+// The role badge. The word is the signal and the colour is only a tint: colour is always
+// redundant with the verdict word or the numeric percent (WCAG 1.4.1).
 class _Badge extends StatelessWidget {
   final String    label;
   final ThemeData theme;
