@@ -13,7 +13,9 @@ import '../data/fleet_watchable_models.dart';
 // Events
 // ---------------------------------------------------------------------------
 
+/// An input to [FleetStatusBloc].
 sealed class FleetStatusEvent extends Equatable {
+  /// Creates an event.
   const FleetStatusEvent();
   @override
   List<Object?> get props => const [];
@@ -21,23 +23,25 @@ sealed class FleetStatusEvent extends Equatable {
 
 /// A poll landed, or a manual refresh completed.
 class FleetStatusLoaded extends FleetStatusEvent {
+  /// The fleet table and envelope from this poll.
   final FleetComposite composite;
+
+  /// The fleet-size cap, or null when it could not be read.
   final int?           cap;
+
+  /// The server's ceiling for the cap, or null when unknown.
   final int?           capMaximum;
 
-  /// Which seats this caller may watch, or **null meaning "this event says nothing about
-  /// watchability, keep what you have"**.
+  /// Which seats this caller may watch, or null meaning "keep what you have".
   ///
-  /// 🔴 NULL AND `FleetWatchableRoster.none` ARE DIFFERENT ANSWERS, AND CONFLATING THEM
-  /// IS A BUG I WROTE AND CAUGHT. `none` means the projection was read and nothing is
-  /// watchable — every button hides. Null means this particular event is not a poll:
-  /// [FleetStatusBloc.setCap] re-emits `Loaded` to carry the server's re-read of the
-  /// dial, and with a non-nullable field defaulting to `none` that emit would have
-  /// **wiped every watch button off the pane on any cap change** — a control vanishing
-  /// because an unrelated number moved. A poll always supplies a roster, so a genuine
-  /// loss of admin still empties the set.
+  /// Null and `FleetWatchableRoster.none` are different answers. `none` means the
+  /// projection was read and nothing is watchable, so every button hides. Null means this
+  /// event is not a poll. The bloc's `setCap` re-emits `Loaded` for the dial, and a
+  /// default of `none` would wipe every watch button on any cap change. A poll always
+  /// supplies a roster, so a real loss of admin still empties the set.
   final FleetWatchableRoster? watchable;
 
+  /// Creates the event; [watchable] stays null when the event is not a poll.
   const FleetStatusLoaded(
     this.composite, {
     this.cap,
@@ -52,7 +56,10 @@ class FleetStatusLoaded extends FleetStatusEvent {
 
 /// A fetch failed. Distinct from the composite's own "unreachable".
 class FleetStatusFailed extends FleetStatusEvent {
+  /// The failure text to show.
   final String message;
+
+  /// Creates the event.
   const FleetStatusFailed( this.message );
   @override
   List<Object?> get props => [ message ];
@@ -60,6 +67,7 @@ class FleetStatusFailed extends FleetStatusEvent {
 
 /// The operator pulled to refresh.
 class FleetStatusRefreshRequested extends FleetStatusEvent {
+  /// Creates the event.
   const FleetStatusRefreshRequested();
 }
 
@@ -67,21 +75,31 @@ class FleetStatusRefreshRequested extends FleetStatusEvent {
 // State
 // ---------------------------------------------------------------------------
 
+/// The Fleet Status pane's state.
 class FleetStatusState extends Equatable {
+  /// The latest fleet composite, or null before the first poll lands.
   final FleetComposite? composite;
+
+  /// The fleet-size cap, or null when unknown.
   final int?            cap;
+
+  /// The server's ceiling for the cap, or null when unknown.
   final int?            capMaximum;
+
+  /// The latest failure text, or null.
   final String?         error;
+
+  /// True while a manual refresh is in flight.
   final bool            loading;
 
   /// The full session ids this caller may open a console on.
   ///
-  /// ⚠️ EMPTY IS THE DEFAULT AND EMPTY MEANS "NO BUTTONS", which is also what a 403, a
-  /// failed projection call, an unreachable arbiter and an older server all produce. The
-  /// pane cannot tell those apart and deliberately does not try: §5 says a refused watch
+  /// Empty means no buttons. A 403, a failed projection call, an unreachable arbiter and
+  /// an older server all produce it. The pane does not tell them apart: a refused watch
   /// shows no error and no dead button.
   final Set<String> watchableSessionIds;
 
+  /// Creates the state; everything defaults to empty.
   const FleetStatusState( {
     this.composite,
     this.cap,
@@ -91,6 +109,7 @@ class FleetStatusState extends Equatable {
     this.watchableSessionIds = const <String>{},
   } );
 
+  /// Copies the state with changes; [clearError] drops the error.
   FleetStatusState copyWith( {
     FleetComposite? composite,
     int?            cap,
@@ -119,26 +138,19 @@ class FleetStatusState extends Equatable {
 // Bloc
 // ---------------------------------------------------------------------------
 
-/// Fleet Status — the pane's poll loop and its one write.
+/// Fleet Status: the pane's poll loop and its one write.
 ///
-/// 🔴 THIS BLOC IS ROUTE-SCOPED, NOT AN APP-ROOT SINGLETON, and that is a
-/// deliberate departure from this app's convention rather than an oversight.
-/// `app.dart:248-278` registers its providers at the app root, so a pane bloc
-/// built that way outlives its route and keeps polling whichever destination
-/// happens to be showing. `PanePollingMixin` documents the same requirement
-/// from the other side: the route must call [onPaneVisible] / [onPaneHidden],
-/// and the guarding test is *with pane A on screen, pane B issues zero
-/// requests*.
-///
-/// ⚠️ THE POLL AND THE CAP READ ARE ONE REQUEST PAIR, NOT TWO LOOPS. The web
-/// makes the same choice — the dial rides the same refresh as the table
-/// (`FleetStatusStore.ts:14-17`) — so the dial cannot drift from the table by
-/// a poll interval.
+/// Register it per route, not at the app root. A root-level bloc outlives its route and
+/// keeps polling whichever destination is showing, which departs from the app's usual
+/// convention. The route must call [onPaneVisible] and [onPaneHidden], as
+/// [PanePollingMixin] requires. The poll and the cap read are one request pair, so the
+/// dial cannot drift from the table by a poll interval.
 class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
     with PaneVisibilityMixin<FleetStatusEvent, FleetStatusState>,
         PanePollingMixin<FleetStatusEvent, FleetStatusState> {
   final FleetRepository _repo;
 
+  /// Creates the bloc over [_repo].
   FleetStatusBloc( this._repo ) : super( const FleetStatusState() ) {
     on<FleetStatusLoaded>( ( event, emit ) => emit( state.copyWith(
       composite  : event.composite,
@@ -146,7 +158,7 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
       capMaximum : event.capMaximum,
       loading    : false,
       clearError : true,
-      // Null means "nothing to say" — keep the set the last poll established.
+      // Null means nothing to say: keep the set the last poll established.
       watchableSessionIds : event.watchable?.watchableSessionIds
                             ?? state.watchableSessionIds,
     ) ) );
@@ -162,31 +174,28 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
     } );
   }
 
-  /// One poll: the composite and the dial's numbers together.
+  /// Polls the composite and the dial's numbers together.
   ///
   /// Requires:
-  ///     - token is handed to every request, or the mixin's cancellation buys
-  ///       nothing when the pane goes away mid-flight
+  ///     - token is handed to every request, or cancellation does nothing when the pane
+  ///       goes away mid-flight
   ///
   /// Ensures:
-  ///     - adds [FleetStatusLoaded] on success, [FleetStatusFailed] otherwise
-  ///     - a cancelled COMPOSITE fetch adds NOTHING — there is no table to show,
-  ///       and the pane is going away
-  ///     - 🔴 a cancelled DIAL fetch still adds [FleetStatusLoaded] with the
-  ///       composite already in hand (B1a, 2026-09-23). It used to escape to the
-  ///       outer cancel-return, adding neither state while holding a good table:
-  ///       `composite == null && error == null` is the screen's spinner branch
-  ///     - every exit path prints ONE `[FleetStatus] poll:` line (B1b). Rick's
-  ///       09-22 spinner left no console output at all, so the next one has to
-  ///       name the path it took
+  ///     - adds [FleetStatusLoaded] on success and [FleetStatusFailed] otherwise
+  ///     - a cancelled composite fetch adds nothing, because there is no table to show
+  ///     - a cancelled dial fetch still adds [FleetStatusLoaded] with the composite in
+  ///       hand; otherwise `composite == null && error == null`, the screen's spinner
+  ///       branch, would show with a good table held
+  ///     - every exit path prints one `[FleetStatus] poll:` line, so a stuck spinner names
+  ///       the path it took
   ///     - never throws
   @override
   Future<void> pollOnce( CancelToken token ) async {
     try {
       final composite = await _repo.fetchState( cancelToken: token );
 
-      // ⚠️ A FAILED CAP READ MUST NOT BLANK THE TABLE. The dial is one control;
-      // the table is the pane. They are fetched together but they fail apart.
+      // A failed cap read must not blank the table: the dial is one control and the table
+      // is the pane, so they are fetched together but fail apart.
       int? cap;
       int? capMaximum;
       try {
@@ -197,38 +206,27 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
         capMaximum  = rawM is num ? rawM.toInt() : null;
         debugPrint( '[FleetStatus] poll: loaded, cap=$cap' );
       } on FleetApiException catch ( e ) {
-        // Leave the dial's last known numbers standing rather than zeroing a
-        // control the operator may be about to use.
+        // Keep the dial's last known numbers instead of zeroing a control in use.
         cap        = state.cap;
         capMaximum = state.capMaximum;
         debugPrint( '[FleetStatus] poll: loaded, dial failed (${e.message}) — kept cap=$cap' );
       } on DioException catch ( e ) {
-        // 🔴 THE DOOR THE COMMENT ABOVE DID NOT COVER. Only a CANCEL is caught
-        // here — the table is in hand, so fail apart exactly as for an API error.
-        // Anything else still falls through to the outer handler, unchanged.
+        // Only a cancel is caught here. The table is in hand, so it fails apart as for an
+        // API error. Anything else falls through to the outer handler.
         if ( e.type != DioExceptionType.cancel ) rethrow;
         cap        = state.cap;
         capMaximum = state.capMaximum;
         debugPrint( '[FleetStatus] poll: loaded, dial CANCELLED — kept cap=$cap' );
       }
 
-      // ⚠️ THE ROSTER FAILS APART FROM THE TABLE, for the same reason the dial does —
-      // and more so, because most callers are not admins and for them "unavailable" is
-      // the CORRECT answer rather than a fault. `fetchWatchable` already swallows
-      // everything but a cancellation, so this only has to handle the pane going away.
-      //
-      // 🔴 NULL, NOT `FleetWatchableRoster.none`, AND THE DIFFERENCE IS THE WHOLE BUG.
-      // `none` is an ANSWER — "the projection was read and nothing is watchable" — and the
-      // reducer's `??` cannot see past it, so a cancelled fetch wiped an established roster
-      // and every watch button vanished. Null means "this poll learned nothing about
-      // watchability", which is exactly what a cancellation is.
-      //
-      // I wrote the sibling of this bug into `setCap` and fixed it there, then left this
-      // door open: the fix was a nullable FIELD, but this local was still initialised to a
-      // legal value, so the conflation the field's own docstring forbids survived one level
-      // down. Found by Pocholo 📣 2026-09-27 with a probe, not by a test — good poll
-      // `{seat-alpha}`, then after a cancel `{}`. The lesson is that "nullable means
-      // unknown" has to hold at every assignment, not just at the declaration.
+      // The roster fails apart from the table, as the dial does; most callers are not
+      // admins, and for them "unavailable" is the correct answer. `fetchWatchable`
+      // swallows everything but a cancellation, so only the pane going away is handled
+      // here. The local stays null on a cancel, not `FleetWatchableRoster.none`. `none` is
+      // an answer, and the reducer's `??` cannot see past it, so a cancelled fetch would
+      // wipe an established roster and every watch button. Null means this poll learned
+      // nothing about watchability. "Nullable means unknown" must hold at every
+      // assignment, not only at the declaration.
       FleetWatchableRoster? watchable;
       try {
         watchable = await _repo.fetchWatchable( cancelToken: token );
@@ -253,8 +251,8 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
       if ( isClosed ) return;
       add( FleetStatusFailed( e.message ) );
     } on DioException catch ( e ) {
-      // A cancelled COMPOSITE fetch is the pane going away with nothing to show —
-      // returning is right here, and is the one path that adds no state (B1a′).
+      // A cancelled composite fetch is the pane going away with nothing to show; returning
+      // is right, and it is the one path that adds no state.
       if ( e.type == DioExceptionType.cancel ) {
         debugPrint( '[FleetStatus] poll: composite CANCELLED — no state added' );
         return;
@@ -265,19 +263,16 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
     }
   }
 
-  /// Set the fleet-size cap and adopt the SERVER'S answer.
+  /// Sets the fleet-size cap and adopts the server's answer.
   ///
-  /// 🔴 THE VALUE WRITTEN INTO STATE IS THE ONE THE SERVER RE-READ, NEVER THE
-  /// ONE POSTED (`FleetStatusStore.ts:185-188`). The spawn path reads the cap
-  /// fresh from disk, so a dial that echoed its own input would display a
-  /// number the fleet is not enforcing.
+  /// The value written into state is the one the server re-read, never the one posted.
+  /// The spawn path reads the cap fresh from disk, so a dial that echoed its input would
+  /// show a number the fleet is not enforcing.
   ///
   /// Ensures:
   ///     - on success, state carries the server's `cap`
-  ///     - on refusal, RE-READS live state so the handle snaps back to what is
-  ///       actually enforced rather than sitting on a number the operator never
-  ///       got (`FleetStatusStore.ts:203-206`), and rethrows so the dial can
-  ///       surface the server's words
+  ///     - on refusal, re-reads live state so the handle snaps back to what is enforced,
+  ///       and rethrows so the dial can show the server's words
   Future<void> setCap( int cap ) async {
     try {
       final answer   = await _repo.setSizeCap( cap );
@@ -290,9 +285,8 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
         capMaximum : rawM is num ? rawM.toInt() : state.capMaximum,
       ) );
     } catch ( _ ) {
-      // Re-read rather than guess. The mixin's token is not used here: this is
-      // an operator action, not a poll, and it should complete even if the pane
-      // is mid-transition.
+      // Re-read rather than guess. The mixin's token is not used: this is an operator
+      // action, not a poll, and it should complete even if the pane is mid-transition.
       await pollOnce( CancelToken() );
       rethrow;
     }

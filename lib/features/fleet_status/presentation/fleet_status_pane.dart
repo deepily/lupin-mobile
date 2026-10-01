@@ -5,35 +5,40 @@ import '../data/fleet_models.dart';
 import 'fleet_cap_dial.dart';
 import 'fleet_row_card.dart';
 
-/// Fleet Status — the eight facts per seat, the offline toggle, and the
-/// fleet-size cap dial.
+/// Fleet Status: eight facts per seat, the offline toggle and the fleet-size cap dial.
 ///
-/// This widget is deliberately state-in / callbacks-out: it takes a parsed
-/// [FleetComposite] and renders it. Fetching, polling and the write live in the
-/// repository and whatever drives it, so every branch below is reachable from a
-/// widget test without a socket or a server.
+/// State comes in and callbacks go out. The widget takes a parsed [FleetComposite] and
+/// renders it. Fetching, polling and the write live elsewhere. Every branch is therefore
+/// reachable from a widget test without a socket or a server.
 class FleetStatusPane extends StatefulWidget {
+  /// The parsed fleet to render.
   final FleetComposite            composite;
+
+  /// The fleet-size cap, or null when unknown.
   final int?                      cap;
+
+  /// The server's ceiling for the cap, or null.
   final int?                      capMaximum;
+
+  /// Applies a new cap; null hides the dial.
   final Future<void> Function( int cap )? onSetCap;
+
+  /// Called on pull-to-refresh.
   final Future<void> Function()?  onRefresh;
 
-  /// The full session ids this caller may open a console on — §3's roster projection,
-  /// joined to the fleet rows by `session_id`.
+  /// The full session ids this caller may open a console on, from the roster projection.
   ///
-  /// ⚠️ THE JOIN IS EXACT STRING EQUALITY AND THAT IS DELIBERATELY UNFORGIVING. §3 pins
-  /// `cc_session_id` to the seat's full `stable_session_id`, and three id widths circulate
-  /// in this fleet. A width mismatch therefore hides the button rather than offering a
-  /// watch keyed on a prefix the stream would not recognise. Phase 1's A3.6 is what
-  /// actually proves the two surfaces agree; this client cannot see the difference between
-  /// "not watchable" and "the ids disagree", which is safe for the operator and useless
-  /// for diagnosis — hence the server-side check.
+  /// The join to fleet rows by `session_id` is exact string equality. The stream is keyed
+  /// on the full `stable_session_id` and three id widths circulate. A width mismatch hides
+  /// the button instead of offering a watch on a prefix the stream would not recognise.
+  /// The client cannot tell "not watchable" from "the ids disagree". That is safe for the
+  /// operator but useless for diagnosis, so the server must check the surfaces agree.
   final Set<String> watchableSessionIds;
 
-  /// Open the Live Console for one seat. Null disables the affordance everywhere.
+  /// Opens the Live Console for one seat; null hides the affordance everywhere.
   final void Function( FleetSession session )? onWatch;
 
+  /// Creates the pane.
   const FleetStatusPane( {
     super.key,
     required this.composite,
@@ -50,20 +55,18 @@ class FleetStatusPane extends StatefulWidget {
 }
 
 class _FleetStatusPaneState extends State<FleetStatusPane> {
-  /// Offline seats hidden by default — the toggle is the difference between a
-  /// readable list and a wall of dead seats.
+  // Offline seats are hidden by default; the toggle is the difference between a readable
+  // list and a wall of dead seats.
   bool _showOffline = false;
 
   @override
   Widget build( BuildContext context ) {
     final composite = widget.composite;
 
-    // 🔴 THE UNREACHABLE CHECK COMES FIRST, AND IT IS NOT THE EMPTY CHECK.
-    // `/api/arbiter/fleet-state` answers `status: "unreachable"` with an HTTP
-    // 200 when the :8001 arbiter is down (arbiter.py:168-176). Both that and a
-    // genuinely idle fleet produce zero rows, but only one of them is a reason
-    // to go and restart something. Ordering this branch after the empty check
-    // would silently collapse the two.
+    // The unreachable check comes before the empty check. The endpoint answers
+    // `status: "unreachable"` with an HTTP 200 when the `:8001` arbiter is down. That and
+    // a genuinely idle fleet both produce zero rows, but only the first is a reason to
+    // restart something. Checking empty first would collapse the two.
     if ( composite.isUnreachable ) {
       return _notice(
         key     : TestKeys.fleetStatusUnreachable,
@@ -102,8 +105,8 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
     }
 
     if ( visible.isEmpty ) {
-      // Every seat is offline and the toggle is hiding them. Say so, rather
-      // than showing the same blank pane an empty fleet shows.
+      // Every seat is offline and the toggle hides them. Say so, instead of showing the
+      // blank pane an empty fleet shows.
       return _scrollable( _notice(
         key    : TestKeys.fleetStatusEmpty,
         icon   : Icons.visibility_off_outlined,
@@ -127,14 +130,11 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
     );
   }
 
-  /// The row's watch callback, or null when this seat is not watchable.
-  ///
-  /// 🔴 EVERY "NO" COLLAPSES TO NULL HERE, IN ONE PLACE. No handler wired by the caller,
-  /// a row with no session id, or a session id absent from the roster — all three hide the
-  /// button. That covers §5's whole list without the widget or the row card each keeping
-  /// its own opinion: an unreachable arbiter produces no roster rows, a 403 produces an
-  /// empty set, and an older server that has never heard of the projection produces the
-  /// same empty set. No error, no dead button (C-3).
+  // The row's watch callback, or null when this seat is not watchable. Every "no"
+  // collapses to null here, in one place: no handler from the caller, a row with no
+  // session id, or a session id absent from the roster. An unreachable arbiter produces no
+  // roster rows, a 403 produces an empty set, and an older server produces the same empty
+  // set. No error, no dead button.
   VoidCallback? _watchTapFor( FleetSession session ) {
     final onWatch = widget.onWatch;
     if ( onWatch == null ) return null;
@@ -162,8 +162,8 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
                   style: Theme.of( context ).textTheme.bodySmall,
                 ),
               ),
-              // The label is spoken as well as drawn, so the switch is not an
-              // unnamed control to a screen reader.
+              // The label is spoken as well as drawn, so a screen reader hears a named
+              // control.
               Semantics(
                 label : "Show offline seats",
                 child : Switch(
@@ -186,10 +186,8 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
     );
   }
 
-  /// The raw four ages, in a sheet.
-  ///
-  /// A sheet rather than an in-place expansion: opening a route moves focus, so
-  /// a screen-reader user is carried to the detail and hears it announced.
+  // The raw liveness ages, in a sheet rather than an in-place expansion: opening a route
+  // moves focus, so a screen-reader user is carried to the detail and hears it.
   void _showLiveness( BuildContext context, FleetSession session ) {
     showModalBottomSheet<void>(
       context : context,
@@ -205,8 +203,7 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
               style: Theme.of( sheetContext ).textTheme.titleMedium,
             ),
             const SizedBox( height: 12 ),
-            // Ported verbatim from the web's hover tooltip; only the gesture
-            // that reaches it has changed.
+            // The same text as the web's hover tooltip; only the gesture differs.
             Text( session.livenessDetail ),
           ],
         ),
@@ -214,13 +211,10 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
     );
   }
 
-  /// A full-pane notice. Scrollable so pull-to-refresh still works over it.
-  ///
-  /// ⚠️ THE HEIGHT IS A MINIMUM, NOT A FIXED BOX, and the first cut got that
-  /// wrong. A `SizedBox( height: 120 )` overflowed at 360 dp as soon as a title
-  /// wrapped to two lines — caught by the widget tests once they were moved off
-  /// the 800x600 default onto a real phone surface. A notice that overflows is
-  /// the pane telling the operator nothing at the moment it most needs to speak.
+  // A full-pane notice, scrollable so pull-to-refresh still works over it. Its height is
+  // a minimum, not a fixed box: a fixed `SizedBox( height: 120 )` overflowed at 360 dp when
+  // a title wrapped to two lines, and an overflowing notice says nothing when the operator
+  // most needs it.
   Widget _scrollable( Widget child ) => LayoutBuilder(
     builder: ( context, constraints ) => ListView(
       physics  : const AlwaysScrollableScrollPhysics(),

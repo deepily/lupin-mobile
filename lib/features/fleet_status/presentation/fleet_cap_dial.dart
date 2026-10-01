@@ -2,38 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 
-/// The fleet-size cap dial — the one write this pane owns.
+/// The fleet-size cap dial, the one write this pane owns.
 ///
-/// 🔴 THE PLAN CALLED THIS PANE READ-ONLY, IN TWO PLACES, AND IT IS NOT.
-/// `FleetStatusStore.setSizeCap()` issues `PUT /api/arbiter/fleet-size-cap`
-/// (`FleetStatusStore.ts:189`) wired to a live slider
-/// (`FleetStatusRenderer.ts:200-203`, `:315`). Shipping Fleet Status without
-/// the dial would drop the pane's only operator lever.
+/// The number on screen is the server's re-read, never the value posted. The spawn path
+/// reads the cap fresh from disk. A dial that echoed its input could show a number the
+/// fleet is not enforcing. The `onSetCap` callback resolves with the server's answer, and
+/// the widget renders whatever the parent hands back as `cap`.
 ///
-/// 🔴 THE NUMBER ON SCREEN IS THE SERVER'S RE-READ, NEVER THE VALUE POSTED
-/// (`FleetStatusStore.ts:185-188`). This was proven live on 2026-09-19: the cap
-/// sat at 5 with the fleet already at 6, so no reviewer could be spawned at
-/// all; it was moved to 9 and three spawns then succeeded. The spawn path reads
-/// the cap FRESH FROM DISK, so a dial move bites without restarting anything —
-/// and a dial that echoed what it sent would show a number the fleet is not
-/// enforcing. [onSetCap] must therefore resolve with the server's answer, and
-/// this widget renders whatever the parent then hands back as [cap].
-///
-/// ⚠️ THERE IS NO CLIENT-SIDE UPPER CLAMP, AND THAT IS DELIBERATE. The ceiling
-/// is `cc session fleet size cap maximum`, read at call time
-/// (`arbiter.py:236-239`), so a constant compiled into this app would drift
-/// from the value actually enforced and would refuse numbers the server would
-/// have accepted. [capMaximum] is the server's own reported ceiling when it
-/// supplied one, used only to size the slider; the server still gets the final
-/// word and a refusal is surfaced rather than pre-empted.
-///
-/// The floor IS enforced here, because it is in the body model rather than in
-/// config: `cap : int = Field( ge=1 )` (`arbiter.py:241`).
+/// There is no client-side upper clamp. The ceiling is the server's
+/// `cc session fleet size cap maximum` setting, read at call time, and a constant here
+/// would drift. The `capMaximum` value only sizes the slider. The floor of 1 is enforced
+/// here, because it is in the server's body model.
 class FleetCapDial extends StatefulWidget {
+  /// The server's enforced cap, or null when unknown.
   final int?                          cap;
+
+  /// The server's reported ceiling, or null; used only to size the slider.
   final int?                          capMaximum;
+
+  /// Applies a new cap; resolves once the parent holds the server's re-read.
   final Future<void> Function( int )  onSetCap;
 
+  /// Creates the dial.
   const FleetCapDial( {
     super.key,
     required this.cap,
@@ -50,8 +40,8 @@ class _FleetCapDialState extends State<FleetCapDial> {
   bool   _saving = false;
   String? _error;
 
-  /// The slider's ceiling. The server's reported maximum when it gave one,
-  /// else a display-only fallback — never a validation rule.
+  // The slider's ceiling: the server's reported maximum when given, else a display-only
+  // fallback that is never a validation rule.
   int get _max {
     final m = widget.capMaximum;
     if ( m != null && m >= 1 ) return m;
@@ -59,15 +49,15 @@ class _FleetCapDialState extends State<FleetCapDial> {
     return c < 20 ? 20 : c;
   }
 
-  /// What the handle sits on: the operator's un-applied drag, else the
-  /// server's number, else the floor.
+  // What the handle sits on: the operator's unapplied drag, else the server's number,
+  // else the floor.
   int get _handle => _pending ?? widget.cap ?? 1;
 
   @override
   void didUpdateWidget( FleetCapDial old ) {
     super.didUpdateWidget( old );
-    // The parent handed us a new server value — drop any stale drag so the
-    // handle snaps to what is actually enforced.
+    // The parent handed over a new server value: drop any stale drag so the handle snaps
+    // to what is enforced.
     if ( old.cap != widget.cap ) _pending = null;
   }
 
@@ -76,13 +66,12 @@ class _FleetCapDialState extends State<FleetCapDial> {
     setState( () { _saving = true; _error = null; } );
     try {
       await widget.onSetCap( target );
-      // Do NOT write `target` into local state. The parent re-reads and hands
-      // back the server's number; anything else would paint a value the fleet
-      // may not be enforcing.
+      // Do not write `target` into local state. The parent re-reads and hands back the
+      // server's number; anything else could paint a value the fleet is not enforcing.
       if ( mounted ) setState( () { _pending = null; } );
     } catch ( e ) {
-      // On a refusal the handle must snap back to the live value rather than
-      // sit on a number the operator never got (FleetStatusStore.ts:203-206).
+      // On a refusal the handle snaps back to the live value instead of sitting on a
+      // number the operator never got.
       if ( mounted ) setState( () { _pending = null; _error = "$e"; } );
     } finally {
       if ( mounted ) setState( () => _saving = false );
