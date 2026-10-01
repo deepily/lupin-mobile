@@ -1,6 +1,22 @@
 # TODO
 
-## ▶ START HERE — v0.2.2 branch handoff (2026-09-30, Tiffany 💍, Rick's broadcast `0375db54`)
+## ▶ START HERE — mobile docs track (2026-09-30 close, Tiffany 💍)
+
+**Live row `b707f92f` (P0)**, lupin plan 1 §10a. M1 standard merged `0fe024e`; M0 analyzer half merged `55266af`.
+
+| Next | Waits on |
+|---|---|
+| Confirm first-hand with Rick: M1 approved, drop the `dart format` gate, convert `lane_vocabulary_test` (relayed by María 21:50, unrecorded) | Rick |
+| Record those in `src/docs/decisions/README.md`; flip the standard's Status line; staff the test conversion | Rick's confirm |
+| M0 marker half (`dartdoc_lint.py --report`) | lupin Phase 1 |
+| M2 pilot on `lib/features/holding_area/` (45 hits) | lupin Phases 1–2 |
+
+### Decisions Log — 2026-09-30 (session `43b31a9d`, Tiffany)
+
+- **D8 = zero undocumented public members per swept directory** (Rick, via María).
+- **Seats commit on a detached HEAD; the manager lands by `merge --no-ff`.** A branch guard refuses branch creation in seats.
+
+## ▶ v0.2.2 branch handoff (2026-09-30, Tiffany 💍, Rick's broadcast `0375db54`)
 
 **Where we are.** `wip-v0.1.6-2026.04.16-tracking-lupin-work` is 445 commits ahead of `main`, all pushed; Rick merges it on the repo server. Last green suite: 2728 / 2 skipped / 0 failed at `bded008`; the `--fcm` APK was built there. No worktrees, no live crew.
 

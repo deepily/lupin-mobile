@@ -18,6 +18,14 @@ Most recent entries (2026-09-01 onward) are retained below.
 - Rick's broadcast `0375db54`: wip is being PR'd to `main`; next branch is `wip-v0.2.2-2026.09.30-tracking-lupin`.
 - TODO.md gained a START HERE handoff table (open threads, stale remote branches, post-merge steps).
 - Committed the deep-research response to the wake-socket problem statement, with frontmatter; removed an empty stray file `workers.`.
+- PR #3 merged (`cf5be6f`); Rick pushed `wip-v0.2.2-2026.09.30-tracking-lupin`.
+
+**Mobile docs track started** (María's plan 1 §10a, handed off 18:26 on Rick's go; row `b707f92f`, crew Clayton + John, reaped with mementos):
+- **M1** Dart doc-comment standard: `src/docs/docstring-standard.md`, `src/docs/decisions/README.md`, CLAUDE.md pointer. Merged `0fe024e`.
+- **M0 analyzer half**: `tool/doc_coverage.py` baseline (4,914 undocumented public members at `cf5be6f`), nested-options enforcement verified with controls, `tool/check_test_failures.py` known-failures gate (3 always, 1 sometimes), census of tests that read `lib/` text with 6 converted to strip comments. Merged `55266af`; gate NO_NEW_FAILURE.
+- Findings posted to María (commons `handoff-v022-mobile-docs`): `dart format` not viable (536/539 files, house style); `JobStatus` test vs rule 6.
+
+**RESUME HERE:** Rick's rulings relayed by María at 21:50 (M1 approved; drop the format gate; convert `lane_vocabulary_test`) are NOT recorded: auto mode refused a relayed ruling and his direct confirm timed out. Re-ask him first-hand, then record them in `src/docs/decisions/README.md` and staff the test conversion. Details on row `b707f92f`.
 
 ---
 
