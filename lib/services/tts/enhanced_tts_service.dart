@@ -8,13 +8,13 @@ import '../lifecycle/app_lifecycle_service.dart';
 import '../voice/voice_input_output_service.dart';
 import '../../core/constants/app_constants.dart';
 
-/// Enhanced Text-to-Speech service with adaptive behavior and voice integration.
-/// 
-/// Provides intelligent TTS with provider switching, quality adaptation,
-/// audio buffering, caching, and seamless integration with voice input/output
-/// for complete conversational AI experience.
+/// Legacy TTS service that adapts provider and quality to connection conditions.
+///
+/// App-wide singleton. It switches provider, picks a quality, buffers and caches audio, and works with
+/// the voice input/output service. The slimmer `StreamingTtsPlayer` is the client the app uses today.
 class EnhancedTTSService {
   static final EnhancedTTSService _instance = EnhancedTTSService._internal();
+  /// Returns the shared instance.
   factory EnhancedTTSService() => _instance;
   EnhancedTTSService._internal();
 
@@ -58,16 +58,26 @@ class EnhancedTTSService {
   DateTime? _requestStartTime;
   
   // Public getters
+  /// True once [initialize] has succeeded.
   bool get isInitialized => _isInitialized;
+  /// True while a speech request is in progress.
   bool get isGenerating => _isGenerating;
+  /// True while audio is playing.
   bool get isPlaying => _isPlaying;
+  /// Provider used for the current or next request.
   TTSProvider get currentProvider => _currentProvider;
+  /// Quality used for the current or next request.
   TTSQuality get currentQuality => _currentQuality;
+  /// Emits generation and playback events.
   Stream<TTSEvent> get eventStream => _ttsEventController.stream;
+  /// Emits status updates.
   Stream<TTSStatusUpdate> get statusStream => _statusController.stream;
+  /// Emits an event for each audio chunk added to the buffer.
   Stream<AudioBufferEvent> get bufferStream => _bufferController.stream;
   
-  /// Initialize enhanced TTS service
+  /// Stores the service references, opens the audio player and starts listening.
+  ///
+  /// Throws [TTSServiceException] when initialization fails.
   Future<void> initialize({
     EnhancedWebSocketService? webSocketService,
     AdaptiveConnectionManager? adaptiveManager,
@@ -187,7 +197,11 @@ class EnhancedTTSService {
     }
   }
   
-  /// Generate speech from text with adaptive optimization
+  /// Generates speech for [text], picking the provider and quality when none is given.
+  ///
+  /// Stops a request still in progress first; requests are not queued.
+  ///
+  /// Throws [TTSServiceException] when the service is not initialized.
   Future<void> speak(
     String text, {
     TTSProvider? provider,
@@ -565,7 +579,7 @@ class EnhancedTTSService {
     _isBuffering = false;
   }
   
-  /// Stop current speech generation and playback
+  /// Stops speech generation and playback.
   Future<void> stopSpeaking() async {
     try {
       print('[EnhancedTTS] Stopping TTS playback');
@@ -585,7 +599,7 @@ class EnhancedTTSService {
     }
   }
   
-  /// Pause current playback
+  /// Pauses playback.
   Future<void> pauseSpeaking() async {
     try {
       await _audioPlayer?.pause();
@@ -598,7 +612,7 @@ class EnhancedTTSService {
     }
   }
   
-  /// Resume paused playback
+  /// Resumes paused playback.
   Future<void> resumeSpeaking() async {
     try {
       await _audioPlayer?.resume();
@@ -634,7 +648,7 @@ class EnhancedTTSService {
     }
   }
   
-  /// Update TTS configuration based on adaptive conditions
+  /// Rebuilds the TTS configuration from the adaptive connection config and the app state.
   void _updateTTSConfig() {
     final adaptiveConfig = _adaptiveManager?.getConnectionConfig();
     final appState = _lifecycleService?.currentUsageState;
@@ -698,7 +712,7 @@ class EnhancedTTSService {
     print('[EnhancedTTS] Provider $provider error: $error');
   }
   
-  /// Get TTS service statistics
+  /// Snapshot of state, buffer sizes, the config and provider metrics, with snake_case keys.
   Map<String, dynamic> getTTSStatistics() {
     return {
       'is_initialized': _isInitialized,
@@ -781,7 +795,7 @@ class EnhancedTTSService {
     }
   }
   
-  /// Dispose of resources
+  /// Stops speech and releases the player, subscriptions and streams.
   Future<void> dispose() async {
     print('[EnhancedTTS] Disposing enhanced TTS service');
     
@@ -801,29 +815,42 @@ class EnhancedTTSService {
   }
 }
 
-/// TTS providers
+/// Text-to-speech providers.
 enum TTSProvider {
+  /// OpenAI text-to-speech.
   openai,
+  /// ElevenLabs text-to-speech.
   elevenlabs,
 }
 
-/// TTS quality levels
+/// Quality levels, which choose the voice, model and voice settings.
 enum TTSQuality {
+  /// Lowest quality, for poor connections and background use.
   low,
+  /// The default quality.
   standard,
+  /// Highest quality, for good connections.
   high,
 }
 
-/// TTS configuration based on adaptive conditions
+/// TTS settings chosen for the current adaptive strategy.
 class TTSConfig {
+  /// Request timeout, in seconds.
   final int requestTimeout;
+  /// Number of buffered chunks before playback starts.
   final int bufferThreshold;
+  /// Interval between playback ticks, in milliseconds.
   final int playbackInterval;
+  /// Whether audio is cached.
   final bool enableCaching;
+  /// Maximum number of cached entries.
   final int maxCacheSize;
+  /// Quality used when a request gives none.
   final TTSQuality defaultQuality;
+  /// Provider tried first.
   final TTSProvider preferredProvider;
   
+  /// Creates a config; every field is required.
   const TTSConfig({
     required this.requestTimeout,
     required this.bufferThreshold,
@@ -834,6 +861,7 @@ class TTSConfig {
     required this.preferredProvider,
   });
   
+  /// Builds the default config: ElevenLabs at standard quality with caching on.
   factory TTSConfig.standard() {
     return const TTSConfig(
       requestTimeout: 30,
@@ -846,6 +874,9 @@ class TTSConfig {
     );
   }
   
+  /// Builds the config for an adaptive strategy.
+  ///
+  /// Performance gets faster timeouts and high quality. Conservative and power saver, and background, switch to OpenAI at low quality with caching off. Any other strategy gets [TTSConfig.standard].
   factory TTSConfig.fromAdaptiveConfig(
     AdaptiveConnectionConfig adaptiveConfig,
     AppUsageState? appState,
@@ -887,6 +918,7 @@ class TTSConfig {
     }
   }
   
+  /// Serializes the config with snake_case keys.
   Map<String, dynamic> toMap() {
     return {
       'request_timeout': requestTimeout,
@@ -905,7 +937,7 @@ class TTSConfig {
   }
 }
 
-/// TTS provider performance metrics
+/// Rolling performance metrics for one TTS provider.
 class TTSMetrics {
   int _totalRequests = 0;
   int _successfulRequests = 0;
@@ -913,12 +945,16 @@ class TTSMetrics {
   final List<double> _qualityHistory = [];
   final List<String> _recentErrors = [];
   
+  /// Share of requests that succeeded; 0 when there are none.
   double get successRate => _totalRequests > 0 ? _successfulRequests / _totalRequests : 0.0;
+  /// Mean latency of the last 20 successes, in milliseconds.
   double get averageLatency => _latencyHistory.isEmpty ? 0.0 : 
       _latencyHistory.fold(0, (sum, latency) => sum + latency) / _latencyHistory.length;
+  /// Mean quality score of the last 20 successes.
   double get averageQuality => _qualityHistory.isEmpty ? 0.0 :
       _qualityHistory.fold(0.0, (sum, quality) => sum + quality) / _qualityHistory.length;
   
+  /// Records a success with its latency in milliseconds and a quality score from 0 to 1.
   void recordSuccess(int latency, [double quality = 1.0]) {
     _totalRequests++;
     _successfulRequests++;
@@ -930,6 +966,7 @@ class TTSMetrics {
     if (_qualityHistory.length > 20) _qualityHistory.removeAt(0);
   }
   
+  /// Records a failed request and keeps the last 10 error messages.
   void recordError(String error) {
     _totalRequests++;
     
@@ -937,6 +974,7 @@ class TTSMetrics {
     if (_recentErrors.length > 10) _recentErrors.removeAt(0);
   }
   
+  /// Serializes the totals, rates and recent errors with snake_case keys.
   Map<String, dynamic> toMap() {
     return {
       'total_requests': _totalRequests,
@@ -949,133 +987,201 @@ class TTSMetrics {
   }
 }
 
-/// TTS events for monitoring and UI updates
+/// Base type of the events [EnhancedTTSService.eventStream] emits for monitoring and UI.
 abstract class TTSEvent {
+  /// When the event happened.
   final DateTime timestamp;
   
+  /// Base constructor for the event subclasses.
   const TTSEvent(this.timestamp);
   
+  /// Builds a [GenerationStartedEvent].
   factory TTSEvent.generationStarted(DateTime timestamp, String text, TTSProvider provider, TTSQuality quality) = GenerationStartedEvent;
+  /// Builds a [GenerationCompletedEvent].
   factory TTSEvent.generationCompleted(DateTime timestamp, String text, int chunks) = GenerationCompletedEvent;
+  /// Builds a [PlaybackStartedEvent].
   factory TTSEvent.playbackStarted(DateTime timestamp) = PlaybackStartedEvent;
+  /// Builds a [PlaybackCompletedEvent].
   factory TTSEvent.playbackCompleted(DateTime timestamp) = PlaybackCompletedEvent;
+  /// Builds a [ChunkPlayedEvent].
   factory TTSEvent.chunkPlayed(DateTime timestamp, int bytes) = ChunkPlayedEvent;
+  /// Builds a [PausedEvent].
   factory TTSEvent.paused(DateTime timestamp) = PausedEvent;
+  /// Builds a [ResumedEvent].
   factory TTSEvent.resumed(DateTime timestamp) = ResumedEvent;
+  /// Builds a [StoppedEvent].
   factory TTSEvent.stopped(DateTime timestamp) = StoppedEvent;
+  /// Builds an [ErrorEvent].
   factory TTSEvent.error(DateTime timestamp, String error) = ErrorEvent;
+  /// Builds a [DurationChangedEvent].
   factory TTSEvent.durationChanged(DateTime timestamp, Duration duration) = DurationChangedEvent;
+  /// Builds a [PositionChangedEvent].
   factory TTSEvent.positionChanged(DateTime timestamp, Duration position) = PositionChangedEvent;
 }
 
+/// Emitted when speech generation starts.
 class GenerationStartedEvent extends TTSEvent {
+  /// Text being synthesized.
   final String text;
+  /// Provider generating the speech.
   final TTSProvider provider;
+  /// Quality of the generation.
   final TTSQuality quality;
   
+  /// Creates the event.
   const GenerationStartedEvent(DateTime timestamp, this.text, this.provider, this.quality) : super(timestamp);
 }
 
+/// Emitted when generation finishes.
 class GenerationCompletedEvent extends TTSEvent {
+  /// Text that was synthesized.
   final String text;
+  /// Number of audio chunks received.
   final int chunks;
   
+  /// Creates the event.
   const GenerationCompletedEvent(DateTime timestamp, this.text, this.chunks) : super(timestamp);
 }
 
+/// Emitted when playback starts.
 class PlaybackStartedEvent extends TTSEvent {
+  /// Creates the event.
   const PlaybackStartedEvent(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when playback finishes.
 class PlaybackCompletedEvent extends TTSEvent {
+  /// Creates the event.
   const PlaybackCompletedEvent(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when an audio chunk is played.
 class ChunkPlayedEvent extends TTSEvent {
+  /// Size of the chunk, in bytes.
   final int bytes;
   
+  /// Creates the event.
   const ChunkPlayedEvent(DateTime timestamp, this.bytes) : super(timestamp);
 }
 
+/// Emitted when playback is paused.
 class PausedEvent extends TTSEvent {
+  /// Creates the event.
   const PausedEvent(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when playback resumes.
 class ResumedEvent extends TTSEvent {
+  /// Creates the event.
   const ResumedEvent(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when speech is stopped.
 class StoppedEvent extends TTSEvent {
+  /// Creates the event.
   const StoppedEvent(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when generation or playback fails.
 class ErrorEvent extends TTSEvent {
+  /// Description of the failure.
   final String error;
   
+  /// Creates the event.
   const ErrorEvent(DateTime timestamp, this.error) : super(timestamp);
 }
 
+/// Emitted when the audio duration becomes known or changes.
 class DurationChangedEvent extends TTSEvent {
+  /// The new duration.
   final Duration duration;
   
+  /// Creates the event.
   const DurationChangedEvent(DateTime timestamp, this.duration) : super(timestamp);
 }
 
+/// Emitted when the playback position changes.
 class PositionChangedEvent extends TTSEvent {
+  /// The new position.
   final Duration position;
   
+  /// Creates the event.
   const PositionChangedEvent(DateTime timestamp, this.position) : super(timestamp);
 }
 
-/// TTS status updates
+/// Base type of the updates [EnhancedTTSService.statusStream] emits.
 abstract class TTSStatusUpdate {
+  /// When the update happened.
   final DateTime timestamp;
   
+  /// Base constructor for the update subclasses.
   const TTSStatusUpdate(this.timestamp);
   
+  /// Builds an [InitializedUpdate].
   factory TTSStatusUpdate.initialized(DateTime timestamp) = InitializedUpdate;
+  /// Builds a [RequestSentUpdate].
   factory TTSStatusUpdate.requestSent(DateTime timestamp, TTSProvider provider, int textLength) = RequestSentUpdate;
+  /// Builds a [StatusChangedUpdate].
   factory TTSStatusUpdate.statusChanged(DateTime timestamp, String status, Map<String, dynamic>? data) = StatusChangedUpdate;
 }
 
+/// Emitted once the service is initialized.
 class InitializedUpdate extends TTSStatusUpdate {
+  /// Creates the update.
   const InitializedUpdate(DateTime timestamp) : super(timestamp);
 }
 
+/// Emitted when a request is sent to the backend.
 class RequestSentUpdate extends TTSStatusUpdate {
+  /// Provider the request went to.
   final TTSProvider provider;
+  /// Length of the text, in characters.
   final int textLength;
   
+  /// Creates the update.
   const RequestSentUpdate(DateTime timestamp, this.provider, this.textLength) : super(timestamp);
 }
 
+/// Emitted when the backend reports a status.
 class StatusChangedUpdate extends TTSStatusUpdate {
+  /// Status reported by the backend.
   final String status;
+  /// Payload sent with the status, or null.
   final Map<String, dynamic>? data;
   
+  /// Creates the update.
   const StatusChangedUpdate(DateTime timestamp, this.status, this.data) : super(timestamp);
 }
 
-/// Audio buffer events
+/// Base type of the events [EnhancedTTSService.bufferStream] emits.
 abstract class AudioBufferEvent {
+  /// When the event happened.
   final DateTime timestamp;
   
+  /// Base constructor for the event subclasses.
   const AudioBufferEvent(this.timestamp);
   
+  /// Builds a [ChunkAddedEvent].
   factory AudioBufferEvent.chunkAdded(DateTime timestamp, int bytes, int totalChunks) = ChunkAddedEvent;
 }
 
+/// Emitted when a chunk is added to the buffer.
 class ChunkAddedEvent extends AudioBufferEvent {
+  /// Size of the chunk, in bytes.
   final int bytes;
+  /// Chunks in the buffer after this one was added.
   final int totalChunks;
   
+  /// Creates the event.
   const ChunkAddedEvent(DateTime timestamp, this.bytes, this.totalChunks) : super(timestamp);
 }
 
-/// TTS service exception
+/// Failure raised by [EnhancedTTSService].
 class TTSServiceException implements Exception {
+  /// What failed.
   final String message;
   
+  /// Creates the exception with [message].
   const TTSServiceException(this.message);
   
   @override
