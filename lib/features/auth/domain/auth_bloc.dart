@@ -8,12 +8,14 @@ import '../../../services/auth/server_context_service.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
+/// Runs login, logout, biometric unlock, session checks and server switching.
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository         _repo;
   final SecureCredentialStore  _store;
   final ServerContextService   _context;
   final BiometricGate          _biometric;
 
+  /// Creates the bloc over its four services, starting in [AuthInitial].
   AuthBloc( {
     required AuthRepository         repo,
     required SecureCredentialStore  store,
@@ -158,17 +160,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  /// Log out of the current server, clear ITS stored session, then switch.
-  ///
-  /// One handler on purpose: bloc runs handlers for different event types
-  /// concurrently, so a separate logout event raced the switch and cleared
-  /// the new server's session instead of the old one.
+  /// Logs out of the current server, clears its stored session, then switches.
   ///
   /// Ensures:
-  ///   - the server logout (best effort) goes to the OLD host, and the OLD
-  ///     context's refresh token and session ids are deleted
-  ///   - the NEW context's stored session is untouched
-  ///   - ends AuthUnauthenticated with the new context's last email
+  ///   - the best-effort server logout goes to the old host
+  ///   - the old context's refresh token and session ids are deleted
+  ///   - the new context's stored session is untouched
+  ///   - ends in [AuthUnauthenticated] with the new context's last email
+  //
+  // One handler, not a logout event plus a switch event: the bloc runs
+  // handlers for different event types concurrently, and a separate logout
+  // event could clear the new server's session instead of the old one's.
   Future<void> _onContextSwitchRequested(
     AuthServerContextSwitchRequested event,
     Emitter<AuthState> emit,
