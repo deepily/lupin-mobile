@@ -1,6 +1,6 @@
 # Dart doc-comment standard
 
-Status: draft for Rick's approval (D10). Applies to every `///` block and `//` comment in `lib/`. It adapts the eight rules of the lupin documentation rewrite plan to Effective Dart and `flutter_lints`.
+Status: approved by Rick on 2026-09-30 (D10; record `R5b-M1` in `src/docs/decisions/README.md`). Applies to every `///` block and `//` comment in `lib/`. It adapts the eight rules of the lupin documentation rewrite plan to Effective Dart and `flutter_lints`.
 
 ## Block shape
 

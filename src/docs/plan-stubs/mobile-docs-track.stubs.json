@@ -1,0 +1,247 @@
+{
+    "plan_ref"        : "lupin/src/rnd/v0.2.2/2026.09.30-lupin-af-documentation-rewrite-plan/2026.09.30-docs-rewrite-implementation-plan.md#10a",
+    "project"         : "lupin-mobile",
+    "prefix"          : "LUPIN-MOBILE",
+    "plan_number"     : 1,
+    "plan_name"       : "Docs rewrite, mobile track",
+    "correlation_key" : "epic:v0.2.2-documentation-update",
+    "owner_persona"   : "tiffany",
+    "phases"          : [
+        {
+            "phase" : 1,
+            "name"  : "M0 Measure",
+            "steps" : [
+                {
+                    "key"          : "m0-s1",
+                    "name"         : "Doc coverage baseline per directory",
+                    "item_class"   : "task",
+                    "priority"     : "P2",
+                    "acceptance"   : "tool/doc_coverage.py and its baseline JSON are committed with the sha they were measured at, covering every top-level lib/ directory and every feature directory",
+                    "owner_role"   : "implementer",
+                    "depends_on"   : [],
+                    "done_receipt" : "49d1537, merged 55266af: 4,914 undocumented public members at cf5be6f"
+                },
+                {
+                    "key"          : "m0-s2",
+                    "name"         : "Enforcement mechanism verified with two controls",
+                    "item_class"   : "task",
+                    "priority"     : "P2",
+                    "acceptance"   : "A nested analysis_options.yaml makes a directory with hits fail --fatal-infos and a clean directory pass, with both exit codes recorded",
+                    "owner_role"   : "implementer",
+                    "depends_on"   : [ "m0-s1" ],
+                    "done_receipt" : "c55a6d0, merged 55266af: mechanism (a) confirmed; a directory passes only with zero infos of any kind"
+                },
+                {
+                    "key"          : "m0-s3",
+                    "name"         : "Known-failures test gate",
+                    "item_class"   : "task",
+                    "priority"     : "P2",
+                    "acceptance"   : "Three serial full suite runs are recorded, split into always-fail and sometimes-fail, and tool/check_test_failures.py compares a new run against that set",
+                    "owner_role"   : "implementer",
+                    "depends_on"   : [],
+                    "done_receipt" : "d049f95, merged 55266af: 3 always-fail, 1 sometimes-fail; gate NO_NEW_FAILURE at 55266af"
+                },
+                {
+                    "key"          : "m0-s4",
+                    "name"         : "Record whether mobile is dart format clean",
+                    "item_class"   : "task",
+                    "priority"     : "P3",
+                    "acceptance"   : "The result of dart format --set-exit-if-changed is recorded, and the ruling on it is in src/docs/decisions/README.md",
+                    "owner_role"   : "implementer",
+                    "depends_on"   : [],
+                    "done_receipt" : "536 of 539 files fail because of the house style; ruling R5b-format drops it as a docs gate"
+                },
+                {
+                    "key"          : "m0-s5",
+                    "name"         : "Census of tests that read lib/ text",
+                    "item_class"   : "task",
+                    "priority"     : "P2",
+                    "acceptance"   : "Every test that reads lib/ source text is listed with one disposition (keep-and-update, convert-to-behaviour, retire-with-reason)",
+                    "owner_role"   : "implementer",
+                    "depends_on"   : [],
+                    "done_receipt" : "1dea834, merged 55266af: census written, 6 tests converted to strip comments"
+                },
+                {
+                    "key"        : "m0-s6",
+                    "name"       : "Convert lane_vocabulary_test off doc text",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "lane_vocabulary_test asserts behaviour or the existence of a decisions record, the JobStatus doc comment links the record instead of a bare AC-S1.10, and deleting the old disposition text reddens no test",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m0-s5", "m1-s3" ]
+                },
+                {
+                    "key"        : "m0-s7",
+                    "name"       : "Vendor the Dart doc linter into tool/",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "lupin's dartdoc_lint, its rule modules and its word list run from mobile's tool/ directory with no lupin checkout, with a test that has a positive control",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m0-s8",
+                    "name"       : "Marker baseline per directory",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "The linter's findings per top-level lib/ directory and per feature directory are committed with the sha they were measured at (scratch run on 2026-10-01 at a5637d6: 11,712 findings in 391 of 541 Dart files)",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m0-s7" ]
+                }
+            ]
+        },
+        {
+            "phase" : 2,
+            "name"  : "M1 Standard for Dart",
+            "steps" : [
+                {
+                    "key"          : "m1-s1",
+                    "name"         : "Draft the Dart doc-comment standard",
+                    "item_class"   : "task",
+                    "priority"     : "P2",
+                    "acceptance"   : "src/docs/docstring-standard.md adapts the eight rules to Effective Dart, src/docs/decisions/README.md exists, and CLAUDE.md points to both",
+                    "owner_role"   : "implementer",
+                    "depends_on"   : [],
+                    "done_receipt" : "9982951 and 9900adb, merged 0fe024e"
+                },
+                {
+                    "key"          : "m1-s2",
+                    "name"         : "Rick rules the coverage bar (D8)",
+                    "item_class"   : "decision",
+                    "priority"     : "P2",
+                    "acceptance"   : "D8 is recorded in src/docs/decisions/README.md",
+                    "owner_role"   : "operator",
+                    "depends_on"   : [],
+                    "done_receipt" : "Ruled 2026-09-30: zero undocumented public members per swept directory; recorded as D8"
+                },
+                {
+                    "key"          : "m1-s3",
+                    "name"         : "Rick approves the standard",
+                    "item_class"   : "decision",
+                    "priority"     : "P2",
+                    "acceptance"   : "Rick's approval is given first-hand, not relayed",
+                    "owner_role"   : "operator",
+                    "depends_on"   : [ "m1-s1" ],
+                    "done_receipt" : "Approved 2026-09-30 (lupin plan R.5b), confirmed first-hand on the yes/no card 2026-10-01"
+                },
+                {
+                    "key"        : "m1-s4",
+                    "name"       : "Record the rulings and mark the standard approved",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "The three R5b rulings are committed in src/docs/decisions/README.md and the standard's Status line reads approved",
+                    "owner_role" : "manager",
+                    "depends_on" : [ "m1-s3" ]
+                }
+            ]
+        },
+        {
+            "phase" : 3,
+            "name"  : "M2 Pilot",
+            "steps" : [
+                {
+                    "key"        : "m2-s1",
+                    "name"       : "Provisional nested options file in holding_area",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "lib/features/holding_area/analysis_options.yaml enables public_member_api_docs and the directory has zero infos of any other kind",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m0-s2" ]
+                },
+                {
+                    "key"        : "m2-s2",
+                    "name"       : "Rewrite the loud blocks in holding_area",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "The Dart doc linter reports zero findings in lib/features/holding_area/ (834 in the scratch run), including groupByFiler",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m0-s8", "m1-s4" ]
+                },
+                {
+                    "key"        : "m2-s3",
+                    "name"       : "Write the missing public docs in holding_area",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Zero public_member_api_docs hits in lib/features/holding_area/ (45 at cf5be6f) under the nested options file",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m2-s1", "m2-s2" ]
+                },
+                {
+                    "key"        : "m2-s4",
+                    "name"       : "Pilot gate: six checks and the suite",
+                    "item_class" : "gate",
+                    "priority"   : "P2",
+                    "acceptance" : "lupin's six checks pass on the pilot (they come from lupin Phases 1 and 2) and ./flutter.sh test shows no failure outside the recorded set",
+                    "owner_role" : "reviewer",
+                    "depends_on" : [ "m2-s3", "m0-s6" ]
+                },
+                {
+                    "key"        : "m2-s5",
+                    "name"       : "Pilot report with mobile's own time per 100 blocks",
+                    "item_class" : "task",
+                    "priority"   : "P3",
+                    "acceptance" : "The measured rate and the findings are sent to lupin's pilot owner for plan 1's Phase 3 pilot report",
+                    "owner_role" : "manager",
+                    "depends_on" : [ "m2-s4" ]
+                }
+            ]
+        },
+        {
+            "phase"          : 4,
+            "name"           : "M3 Sweep",
+            "steps"          : [],
+            "expand_trigger" : "M2 Pilot closes (the pilot's measured rate sets the batch size; 25 sweep units remain: 22 feature directories plus lib/core, lib/services and lib/shared, worst first)"
+        },
+        {
+            "phase" : 5,
+            "name"  : "M4 Ratchet",
+            "steps" : [
+                {
+                    "key"        : "m4-s1",
+                    "name"       : "Turn the docs lint on for swept directories",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "Each swept directory has a nested options file enabling public_member_api_docs and passes dart analyze --fatal-infos with zero infos of any kind",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m4-s2",
+                    "name"       : "Ignore checker script",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "A tool/ script rejects ignore_for_file: public_member_api_docs and any ignore without a same-line reason, reports ignores per directory, and has a test with a positive control",
+                    "owner_role" : "implementer",
+                    "depends_on" : []
+                },
+                {
+                    "key"        : "m4-s3",
+                    "name"       : "Blocking pre-commit hook and installer",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "The committed hook runs the Dart doc linter on changed lines, the ignore checker, and dart analyze --fatal-infos on each swept directory the commit touches, and blocks on any failure",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m4-s1", "m4-s2", "m0-s7" ]
+                },
+                {
+                    "key"        : "m4-s4",
+                    "name"       : "CI step per swept directory",
+                    "item_class" : "task",
+                    "priority"   : "P2",
+                    "acceptance" : "CI runs flutter analyze --fatal-infos lib/<directory> for every swept directory",
+                    "owner_role" : "implementer",
+                    "depends_on" : [ "m4-s1" ]
+                },
+                {
+                    "key"        : "m4-s5",
+                    "name"       : "Scratch-clone demonstration of the gates",
+                    "item_class" : "gate",
+                    "priority"   : "P2",
+                    "acceptance" : "In a scratch clone that is never pushed and is deleted afterwards, an undocumented public member added to a swept directory is refused by the hook and fails the CI command, both exit codes are recorded, and coverage has not regressed",
+                    "owner_role" : "reviewer",
+                    "depends_on" : [ "m4-s3", "m4-s4" ]
+                }
+            ]
+        }
+    ]
+}
