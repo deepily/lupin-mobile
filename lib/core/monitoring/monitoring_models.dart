@@ -2,19 +2,28 @@ import 'dart:collection';
 
 /// Performance alert levels
 enum AlertLevel {
+  /// The info level.
   info,
+  /// The warning level.
   warning,
+  /// The error level.
   error,
+  /// The critical level.
   critical,
 }
 
 /// Performance alert
 class PerformanceAlert {
+  /// Severity of the alert.
   final AlertLevel level;
+  /// What happened.
   final String message;
+  /// When it happened.
   final DateTime timestamp;
+  /// Extra structured detail, or null.
   final Map<String, dynamic>? details;
   
+  /// Creates an alert.
   PerformanceAlert({
     required this.level,
     required this.message,
@@ -22,6 +31,7 @@ class PerformanceAlert {
     this.details,
   }) : timestamp = timestamp ?? DateTime.now();
   
+  /// Builds the info variant.
   factory PerformanceAlert.info(String message, {Map<String, dynamic>? details}) {
     return PerformanceAlert(
       level: AlertLevel.info,
@@ -30,6 +40,7 @@ class PerformanceAlert {
     );
   }
   
+  /// Builds the warning variant.
   factory PerformanceAlert.warning(String message, {Map<String, dynamic>? details}) {
     return PerformanceAlert(
       level: AlertLevel.warning,
@@ -38,6 +49,7 @@ class PerformanceAlert {
     );
   }
   
+  /// Builds the error variant.
   factory PerformanceAlert.error(String message, {Map<String, dynamic>? details}) {
     return PerformanceAlert(
       level: AlertLevel.error,
@@ -46,6 +58,7 @@ class PerformanceAlert {
     );
   }
   
+  /// Builds the critical variant.
   factory PerformanceAlert.critical(String message, {Map<String, dynamic>? details}) {
     return PerformanceAlert(
       level: AlertLevel.critical,
@@ -54,6 +67,7 @@ class PerformanceAlert {
     );
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'level': level.name,
@@ -66,12 +80,18 @@ class PerformanceAlert {
 
 /// System snapshot for monitoring
 class SystemSnapshot {
+  /// When it happened.
   final DateTime timestamp;
+  /// Memory usage, in megabytes.
   final double memoryUsageMB;
+  /// Cpu usage, in percent.
   final double cpuUsagePercent;
+  /// Number of isolates running.
   final int activeIsolates;
+  /// Extra platform data, or null.
   final Map<String, dynamic>? additionalData;
   
+  /// Creates a system snapshot.
   const SystemSnapshot({
     required this.timestamp,
     required this.memoryUsageMB,
@@ -80,6 +100,7 @@ class SystemSnapshot {
     this.additionalData,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'timestamp': timestamp.toIso8601String(),
@@ -90,6 +111,7 @@ class SystemSnapshot {
     };
   }
   
+  /// Builds the from json variant.
   factory SystemSnapshot.fromJson(Map<String, dynamic> json) {
     return SystemSnapshot(
       timestamp: DateTime.parse(json['timestamp']),
@@ -103,20 +125,33 @@ class SystemSnapshot {
 
 /// Network request metrics
 class NetworkRequestMetrics {
+  /// Host the metrics are for.
   final String host;
+  /// Total requests.
   int totalRequests = 0;
+  /// Requests with a status from 200 to 399 and no error.
   int successfulRequests = 0;
+  /// Requests that failed: any other status, or an error.
   int failedRequests = 0;
+  /// Total bytes transferred.
   int totalBytes = 0;
+  /// Total duration, in milliseconds.
   double totalDurationMs = 0.0;
+  /// Shortest request or event duration, in milliseconds; infinite until one is recorded.
   double minDurationMs = double.infinity;
+  /// Max duration, in milliseconds.
   double maxDurationMs = 0.0;
+  /// Request count per HTTP status code.
   final Map<String, int> statusCodes = {};
+  /// Request count per HTTP method.
   final Map<String, int> methods = {};
+  /// The most recent error messages, up to ten.
   final List<String> recentErrors = [];
   
+  /// Creates metrics for [host].
   NetworkRequestMetrics({required this.host});
   
+  /// Records one request: counts, bytes, duration, status, method and any error.
   void addRequest({
     required String method,
     required int statusCode,
@@ -148,15 +183,19 @@ class NetworkRequestMetrics {
     methods[method] = (methods[method] ?? 0) + 1;
   }
   
+  /// Mean duration, in milliseconds.
   double get averageDurationMs => 
       totalRequests > 0 ? totalDurationMs / totalRequests : 0.0;
   
+  /// Share of requests that succeeded, from 0 to 1.
   double get successRate => 
       totalRequests > 0 ? successfulRequests / totalRequests : 0.0;
   
+  /// Mean bytes transferred per request.
   double get averageBytesPerRequest => 
       totalRequests > 0 ? totalBytes / totalRequests : 0.0;
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'host': host,
@@ -179,25 +218,35 @@ class NetworkRequestMetrics {
 
 /// Custom metric types
 enum MetricType {
+  /// The counter type.
   counter,
+  /// The gauge type.
   gauge,
+  /// The histogram type.
   histogram,
 }
 
 /// Custom metric
 class CustomMetric {
+  /// Name of the metric.
   final String name;
+  /// Kind of metric; it decides how values accumulate.
   final MetricType type;
+  /// Unit of the metric's values, or null.
   final String? unit;
   final Queue<MetricValue> _values = Queue();
   double _currentValue = 0.0;
   
+  /// Creates a metric; the type defaults to histogram.
   CustomMetric({
     required this.name,
     this.type = MetricType.histogram,
     this.unit,
   });
   
+  /// Records [value] and updates the current value by metric type.
+  ///
+  /// A counter adds it and a gauge replaces the current value. History keeps the last 1000 values.
   void addValue(double value) {
     final metricValue = MetricValue(
       value: value,
@@ -218,13 +267,18 @@ class CustomMetric {
     }
   }
   
+  /// Sets the current value to [value] and records it.
   void setValue(double value) {
     _currentValue = value;
     addValue(value);
   }
   
+  /// Current value of the metric.
   double get currentValue => _currentValue;
   
+  /// Summary of the metric: name, type, unit and current value.
+  ///
+  /// When values exist it also has count, min, max, average, p50 and p95.
   Map<String, dynamic> getSummary() {
     if (_values.isEmpty) {
       return {
@@ -253,6 +307,7 @@ class CustomMetric {
     };
   }
   
+  /// The summary plus further analytics over the recorded values.
   Map<String, dynamic> getAnalytics() {
     final summary = getSummary();
     
@@ -295,6 +350,7 @@ class CustomMetric {
     };
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -308,14 +364,18 @@ class CustomMetric {
 
 /// Metric value with timestamp
 class MetricValue {
+  /// The recorded value.
   final double value;
+  /// When it happened.
   final DateTime timestamp;
   
+  /// Creates a metric value.
   const MetricValue({
     required this.value,
     required this.timestamp,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'value': value,
@@ -326,11 +386,16 @@ class MetricValue {
 
 /// Network summary
 class NetworkSummary {
+  /// Total requests.
   final int totalRequests;
+  /// Failed requests.
   final int failedRequests;
+  /// Total bytes transferred.
   final int totalBytesTransferred;
+  /// Hosts that were contacted.
   final List<String> hosts;
   
+  /// Creates a network summary.
   const NetworkSummary({
     required this.totalRequests,
     required this.failedRequests,
@@ -338,10 +403,12 @@ class NetworkSummary {
     required this.hosts,
   });
   
+  /// Share of requests that succeeded, from 0 to 1.
   double get successRate => totalRequests > 0 
       ? (totalRequests - failedRequests) / totalRequests 
       : 0.0;
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'total_requests': totalRequests,
@@ -355,16 +422,26 @@ class NetworkSummary {
 
 /// Performance summary
 class PerformanceSummary {
+  /// Whether monitoring is running.
   final bool isMonitoring;
+  /// Time since monitoring started.
   final Duration uptime;
+  /// Number of events recorded.
   final int totalEvents;
+  /// Memory usage, in megabytes.
   final double memoryUsageMB;
+  /// Cpu usage, in percent.
   final double cpuUsagePercent;
+  /// Network request summary.
   final NetworkSummary networkRequests;
+  /// Mean event duration per category, in milliseconds.
   final Map<String, double> averageEventDurations;
+  /// Summaries of the custom metrics.
   final Map<String, dynamic> customMetrics;
+  /// Alerts raised.
   final List<PerformanceAlert> alerts;
   
+  /// Creates a performance summary.
   const PerformanceSummary({
     required this.isMonitoring,
     required this.uptime,
@@ -377,6 +454,7 @@ class PerformanceSummary {
     required this.alerts,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'is_monitoring': isMonitoring,
@@ -394,14 +472,22 @@ class PerformanceSummary {
 
 /// Event analysis
 class EventAnalysis {
+  /// Number of events recorded.
   final int totalEvents;
+  /// Mean event duration, in milliseconds.
   final double averageDurationMs;
+  /// Shortest event duration, in milliseconds.
   final double minDurationMs;
+  /// Longest event duration, in milliseconds.
   final double maxDurationMs;
+  /// Median event duration, in milliseconds.
   final double p50DurationMs;
+  /// 95th percentile event duration, in milliseconds.
   final double p95DurationMs;
+  /// Number of events that carried an error.
   final int errorCount;
   
+  /// Creates an event analysis.
   const EventAnalysis({
     required this.totalEvents,
     required this.averageDurationMs,
@@ -412,8 +498,10 @@ class EventAnalysis {
     required this.errorCount,
   });
   
+  /// Share of events with an error, from 0 to 1.
   double get errorRate => totalEvents > 0 ? errorCount / totalEvents : 0.0;
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'total_events': totalEvents,
@@ -430,12 +518,18 @@ class EventAnalysis {
 
 /// Network analytics
 class NetworkAnalytics {
+  /// Total requests.
   final int totalRequests;
+  /// Failed requests.
   final int failedRequests;
+  /// Share of requests that succeeded, from 0 to 1.
   final double successRate;
+  /// Total bytes transferred.
   final int totalBytesTransferred;
+  /// Metrics per host.
   final Map<String, NetworkRequestMetrics> hostMetrics;
   
+  /// Creates a network analytics.
   const NetworkAnalytics({
     required this.totalRequests,
     required this.failedRequests,
@@ -444,6 +538,7 @@ class NetworkAnalytics {
     required this.hostMetrics,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'total_requests': totalRequests,
@@ -458,12 +553,18 @@ class NetworkAnalytics {
 
 /// System analytics
 class SystemAnalytics {
+  /// Mean memory usage, in megabytes.
   final double averageMemoryUsageMB;
+  /// Peak memory usage, in megabytes.
   final double peakMemoryUsageMB;
+  /// Mean CPU usage, in percent.
   final double averageCpuUsagePercent;
+  /// Peak CPU usage, in percent.
   final double peakCpuUsagePercent;
+  /// Number of system snapshots the figures come from.
   final int systemSnapshots;
   
+  /// Creates a system analytics.
   const SystemAnalytics({
     required this.averageMemoryUsageMB,
     required this.peakMemoryUsageMB,
@@ -472,6 +573,7 @@ class SystemAnalytics {
     required this.systemSnapshots,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'average_memory_usage_mb': averageMemoryUsageMB,
@@ -485,14 +587,22 @@ class SystemAnalytics {
 
 /// Performance analytics
 class PerformanceAnalytics {
+  /// Window the analytics cover, or null for all recorded data.
   final Duration? timeWindow;
+  /// Event categories included.
   final List<String> categories;
+  /// Analysis per event category.
   final Map<String, EventAnalysis> eventBreakdown;
+  /// Network analytics.
   final NetworkAnalytics networkAnalytics;
+  /// System analytics.
   final SystemAnalytics systemAnalytics;
+  /// Summaries of the custom metrics.
   final Map<String, dynamic> customMetricsAnalytics;
+  /// Suggested actions.
   final List<String> recommendations;
   
+  /// Creates a performance analytics.
   const PerformanceAnalytics({
     this.timeWindow,
     required this.categories,
@@ -503,6 +613,7 @@ class PerformanceAnalytics {
     required this.recommendations,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'time_window_seconds': timeWindow?.inSeconds,
@@ -519,11 +630,16 @@ class PerformanceAnalytics {
 
 /// System stats
 class SystemStats {
+  /// Memory usage, in megabytes.
   final double memoryUsageMB;
+  /// Cpu usage, in percent.
   final double cpuUsagePercent;
+  /// When it happened.
   final DateTime timestamp;
+  /// Platform details.
   final Map<String, dynamic> platformInfo;
   
+  /// Creates a system stats.
   const SystemStats({
     required this.memoryUsageMB,
     required this.cpuUsagePercent,
@@ -531,6 +647,7 @@ class SystemStats {
     required this.platformInfo,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'memory_usage_mb': memoryUsageMB,
