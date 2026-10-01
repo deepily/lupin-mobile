@@ -24,82 +24,130 @@ class SettingsService {
   }
 
   // General Settings
+  /// True until [setFirstLaunchCompleted] has run.
   bool get isFirstLaunch => _settingsManager.getSetting<bool>('general.first_launch');
+  /// Marks the first launch as done.
   Future<void> setFirstLaunchCompleted() => _settingsManager.setSetting('general.first_launch', false);
 
+  /// Theme preference.
   String get theme => _settingsManager.getSetting<String>('general.theme');
+  /// Stores the theme preference.
   Future<void> setTheme(String theme) => _settingsManager.setSetting('general.theme', theme);
 
+  /// App language.
   String get language => _settingsManager.getSetting<String>('general.language');
+  /// Stores the app language.
   Future<void> setLanguage(String language) => _settingsManager.setSetting('general.language', language);
 
   // Voice Settings
+  /// Whether voice input is on.
   bool get isVoiceEnabled => _settingsManager.getSetting<bool>('voice.enabled');
+  /// Turns voice input on or off.
   Future<void> setVoiceEnabled(bool enabled) => _settingsManager.setSetting('voice.enabled', enabled);
 
+  /// Microphone sensitivity level.
   double get voiceSensitivity => _settingsManager.getSetting<double>('voice.sensitivity');
+  /// Stores the microphone sensitivity level.
   Future<void> setVoiceSensitivity(double sensitivity) => _settingsManager.setSetting('voice.sensitivity', sensitivity);
 
+  /// Longest recording allowed, in seconds.
   int get maxRecordingDuration => _settingsManager.getSetting<int>('voice.max_recording_duration');
+  /// Stores the longest recording allowed, in seconds.
   Future<void> setMaxRecordingDuration(int seconds) => _settingsManager.setSetting('voice.max_recording_duration', seconds);
 
+  /// Language used for voice recognition.
   String get voiceLanguage => _settingsManager.getSetting<String>('voice.language');
+  /// Stores the voice-recognition language.
   Future<void> setVoiceLanguage(String language) => _settingsManager.setSetting('voice.language', language);
 
   // Audio Settings
+  /// Whether audio responses are on.
   bool get isTTSEnabled => _settingsManager.getSetting<bool>('audio.tts_enabled');
+  /// Turns audio responses on or off.
   Future<void> setTTSEnabled(bool enabled) => _settingsManager.setSetting('audio.tts_enabled', enabled);
 
+  /// Text-to-speech playback speed.
   double get ttsSpeed => _settingsManager.getSetting<double>('audio.tts_speed');
+  /// Stores the text-to-speech playback speed.
   Future<void> setTTSSpeed(double speed) => _settingsManager.setSetting('audio.tts_speed', speed);
 
+  /// Text-to-speech pitch.
   double get ttsPitch => _settingsManager.getSetting<double>('audio.tts_pitch');
+  /// Stores the text-to-speech pitch.
   Future<void> setTTSPitch(double pitch) => _settingsManager.setSetting('audio.tts_pitch', pitch);
 
+  /// Default audio volume.
   double get audioVolume => _settingsManager.getSetting<double>('audio.volume');
+  /// Stores the default audio volume.
   Future<void> setAudioVolume(double volume) => _settingsManager.setSetting('audio.volume', volume);
 
+  /// Selected text-to-speech voice.
   String get ttsVoice => _settingsManager.getSetting<String>('audio.tts_voice');
+  /// Stores the selected text-to-speech voice.
   Future<void> setTTSVoice(String voice) => _settingsManager.setSetting('audio.tts_voice', voice);
 
   // Network Settings
+  /// Whether cached data is used where possible.
   bool get isOfflineMode => _settingsManager.getSetting<bool>('network.offline_mode');
+  /// Turns offline mode on or off.
   Future<void> setOfflineMode(bool enabled) => _settingsManager.setSetting('network.offline_mode', enabled);
 
+  /// Network request timeout, in seconds.
   int get networkTimeout => _settingsManager.getSetting<int>('network.timeout');
+  /// Stores the network request timeout, in seconds.
   Future<void> setNetworkTimeout(int seconds) => _settingsManager.setSetting('network.timeout', seconds);
 
+  /// Whether network requests use Wi-Fi only.
   bool get isWifiOnly => _settingsManager.getSetting<bool>('network.wifi_only');
+  /// Turns the Wi-Fi-only restriction on or off.
   Future<void> setWifiOnly(bool enabled) => _settingsManager.setSetting('network.wifi_only', enabled);
 
   // Privacy Settings
+  /// Whether anonymous usage analytics are allowed.
   bool get isAnalyticsEnabled => _settingsManager.getSetting<bool>('privacy.analytics_enabled');
+  /// Allows or blocks anonymous usage analytics.
   Future<void> setAnalyticsEnabled(bool enabled) => _settingsManager.setSetting('privacy.analytics_enabled', enabled);
 
+  /// Whether crash reports are sent.
   bool get isCrashReportingEnabled => _settingsManager.getSetting<bool>('privacy.crash_reporting');
+  /// Turns crash reporting on or off.
   Future<void> setCrashReportingEnabled(bool enabled) => _settingsManager.setSetting('privacy.crash_reporting', enabled);
 
+  /// Days local voice data is kept.
   int get dataRetentionDays => _settingsManager.getSetting<int>('privacy.data_retention_days');
+  /// Stores how many days local voice data is kept.
   Future<void> setDataRetentionDays(int days) => _settingsManager.setSetting('privacy.data_retention_days', days);
 
   // Accessibility Settings
+  /// Whether high-contrast colors are used.
   bool get isHighContrast => _settingsManager.getSetting<bool>('accessibility.high_contrast');
+  /// Turns high-contrast colors on or off.
   Future<void> setHighContrast(bool enabled) => _settingsManager.setSetting('accessibility.high_contrast', enabled);
 
+  /// Text size multiplier.
   double get fontScale => _settingsManager.getSetting<double>('accessibility.font_scale');
+  /// Stores the text size multiplier.
   Future<void> setFontScale(double scale) => _settingsManager.setSetting('accessibility.font_scale', scale);
 
+  /// Whether haptic feedback is on.
   bool get isVibrationEnabled => _settingsManager.getSetting<bool>('accessibility.vibration_enabled');
+  /// Turns haptic feedback on or off.
   Future<void> setVibrationEnabled(bool enabled) => _settingsManager.setSetting('accessibility.vibration_enabled', enabled);
 
   // Developer Settings
+  /// Whether debug features are on.
   bool get isDebugMode => _settingsManager.getSetting<bool>('developer.debug_mode');
+  /// Turns debug features on or off.
   Future<void> setDebugMode(bool enabled) => _settingsManager.setSetting('developer.debug_mode', enabled);
 
+  /// Whether detailed logging is on.
   bool get isVerboseLogging => _settingsManager.getSetting<bool>('developer.verbose_logging');
+  /// Turns detailed logging on or off.
   Future<void> setVerboseLogging(bool enabled) => _settingsManager.setSetting('developer.verbose_logging', enabled);
 
+  /// Custom API endpoint URL.
   String get apiEndpoint => _settingsManager.getSetting<String>('developer.api_endpoint');
+  /// Stores the custom API endpoint URL.
   Future<void> setApiEndpoint(String endpoint) => _settingsManager.setSetting('developer.api_endpoint', endpoint);
 
   /// Get voice recording configuration
@@ -133,7 +181,7 @@ class SettingsService {
     };
   }
 
-  /// Update voice configuration
+  /// Applies the given voice settings and leaves the rest unchanged
   Future<void> updateVoiceConfig({
     bool? enabled,
     double? sensitivity,
@@ -146,7 +194,7 @@ class SettingsService {
     if (language != null) await setVoiceLanguage(language);
   }
 
-  /// Update TTS configuration
+  /// Applies the given text-to-speech settings and leaves the rest unchanged
   Future<void> updateTTSConfig({
     bool? enabled,
     double? speed,
@@ -277,13 +325,19 @@ class SettingsService {
 
 /// Quick settings presets
 enum QuickSettingsPreset {
+  /// Favors battery life and performance.
   batteryOptimized,
+  /// Best voice and audio quality.
   highQuality,
+  /// Enhanced accessibility features.
   accessibility,
+  /// Maximum privacy and data protection.
   privacyFocused,
 }
 
+/// Display name and description of a [QuickSettingsPreset].
 extension QuickSettingsPresetExtension on QuickSettingsPreset {
+  /// Name shown to the user.
   String get name {
     switch (this) {
       case QuickSettingsPreset.batteryOptimized:
@@ -297,6 +351,7 @@ extension QuickSettingsPresetExtension on QuickSettingsPreset {
     }
   }
 
+  /// One-line description shown to the user.
   String get description {
     switch (this) {
       case QuickSettingsPreset.batteryOptimized:
@@ -313,11 +368,16 @@ extension QuickSettingsPresetExtension on QuickSettingsPreset {
 
 /// Settings validation issue
 class SettingsValidationIssue {
+  /// Severity of the issue.
   final SettingsValidationIssueType type;
+  /// What is wrong.
   final String message;
+  /// Keys of the settings involved.
   final List<String> affectedSettings;
+  /// Suggested fix, or null.
   final String? suggestion;
 
+  /// Creates an issue; [suggestion] is optional.
   const SettingsValidationIssue({
     required this.type,
     required this.message,
@@ -325,6 +385,7 @@ class SettingsValidationIssue {
     this.suggestion,
   });
 
+  /// Serializes the issue.
   Map<String, dynamic> toJson() {
     return {
       'type': type.name,
@@ -337,8 +398,12 @@ class SettingsValidationIssue {
 
 /// Settings validation issue types
 enum SettingsValidationIssueType {
+  /// A setting combination that is wrong.
   error,
+  /// A setting combination that may cause trouble.
   warning,
+  /// Information about the settings.
   info,
+  /// A suggested improvement.
   suggestion,
 }
