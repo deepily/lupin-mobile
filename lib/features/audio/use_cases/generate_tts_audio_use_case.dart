@@ -7,13 +7,20 @@ import '../../../shared/models/models.dart';
 
 /// Parameters for generating TTS audio
 class GenerateTTSAudioParams {
+  /// The id of the voice input the audio answers.
   final String voiceInputId;
+  /// The text to speak; at most 5000 characters.
   final String text;
+  /// The voice model to use; null leaves the repository default.
   final String? voiceModel;
+  /// The speaking speed; null leaves the default.
   final double? speed;
+  /// The voice pitch; null leaves the default.
   final double? pitch;
+  /// Extra settings passed through to speech generation.
   final Map<String, dynamic>? ttsSettings;
 
+  /// Creates the parameters; the voice input id and text are required.
   const GenerateTTSAudioParams({
     required this.voiceInputId,
     required this.text,
@@ -33,6 +40,7 @@ class GenerateTTSAudioUseCase extends ParameterizedUseCase<AudioChunk, GenerateT
   final JobRepository _jobRepository;
   final AudioRepository _audioRepository;
 
+  /// Creates the use case with the repositories it reads and writes.
   GenerateTTSAudioUseCase(
     this._voiceRepository,
     this._jobRepository,
@@ -164,6 +172,7 @@ class GenerateTTSAudioUseCase extends ParameterizedUseCase<AudioChunk, GenerateT
 class PlayAudioUseCase extends ParameterizedUseCase<bool, String> {
   final AudioRepository _audioRepository;
 
+  /// Creates the use case with the audio repository.
   PlayAudioUseCase(this._audioRepository);
 
   @override
@@ -226,6 +235,7 @@ class PlayAudioUseCase extends ParameterizedUseCase<bool, String> {
 class StopAudioUseCase extends ParameterizedUseCase<bool, String> {
   final AudioRepository _audioRepository;
 
+  /// Creates the use case with the audio repository.
   StopAudioUseCase(this._audioRepository);
 
   @override
@@ -277,6 +287,7 @@ class StopAudioUseCase extends ParameterizedUseCase<bool, String> {
 class WatchAudioGenerationProgressUseCase extends StreamUseCase<AudioChunk, String> {
   final AudioRepository _audioRepository;
 
+  /// Creates the use case with the audio repository.
   WatchAudioGenerationProgressUseCase(this._audioRepository);
 
   @override
