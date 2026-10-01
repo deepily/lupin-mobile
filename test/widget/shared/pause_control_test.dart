@@ -15,6 +15,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/shared/widgets/tts_pause_control.dart';
+import '../../_helpers/source_text.dart';
 
 class _MockTts extends Mock implements TtsOrchestrator {}
 
@@ -152,7 +153,7 @@ void main() {
         // third StreamBuilder this AC exists to prevent.
         if ( f.path.endsWith( 'services/tts/tts_orchestrator.dart' ) ) continue;
         if ( f.path.endsWith( 'shared/widgets/tts_pause_control.dart' ) ) continue;
-        final src = f.readAsStringSync();
+        final src = stripComments( f.readAsStringSync() );
         // A doc comment mentioning the stream is not a consumer; a
         // subscription is.
         final consumes = RegExp( r'(stream\s*:\s*[\w.]*\.?pausedStream|'
