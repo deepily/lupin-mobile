@@ -19,90 +19,118 @@ import '../data/task_list_repository.dart';
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
+/// An input to [TaskListBloc].
 sealed class TaskListEvent {
+  /// Creates an event.
   const TaskListEvent();
 }
 
 /// A poll tick, a pull-to-refresh, or a resume.
 class TaskListRefreshRequested extends TaskListEvent {
+  /// The poll's cancel token, or null for a manual refresh.
   final CancelToken? cancelToken;
+
+  /// Creates the event.
   const TaskListRefreshRequested( { this.cancelToken } );
 }
 
+/// The operator folded or unfolded a group.
 class TaskListGroupToggled extends TaskListEvent {
+  /// The label of the toggled group.
   final String groupLabel;
+
+  /// Creates the event.
   const TaskListGroupToggled( this.groupLabel );
 }
 
-/// An operator pressed a status verb on a row. Goes through the TRANSITION door.
+/// An operator pressed a status verb on a row; it goes through the transition door.
 class TaskListVerbPressed extends TaskListEvent {
+  /// The row the verb applies to.
   final String taskId;
+
+  /// The built verb payload.
   final TaskVerb verb;
+
+  /// Creates the event.
   const TaskListVerbPressed( { required this.taskId, required this.verb } );
 }
 
-/// The connection came back — resend what the network ate.
+/// The connection came back; resend what the network ate.
 ///
-/// ⚠️ ITS OWN EVENT RATHER THAN A LIMB OF THE REFRESH, because the two do opposite
-/// things: one sends the operator's work TO the server, the other pulls the server's
-/// state back. Folding them together would make "refresh" mean "also write", which is
-/// not a thing a pull-to-refresh should ever do.
+/// It is its own event, not a limb of the refresh, because the two do opposite things.
+/// One sends the operator's work to the server and the other pulls the server's state
+/// back. Folding them together would make a pull-to-refresh also write.
 class TaskListUnsentRetryRequested extends TaskListEvent {
+  /// Creates the event.
   const TaskListUnsentRetryRequested();
 }
 
-/// Read the live fleet, for the reassignment roster.
+/// Reads the live fleet, for the reassignment roster.
 ///
-/// ⚠️ ITS OWN EVENT RATHER THAN A LIMB OF THE POLL, BECAUSE IT IS A DIFFERENT SERVICE ON
-/// A DIFFERENT CADENCE. The board polls every 60 s on Wi-Fi and 180 s on mobile data; the
-/// roster changes when a seat is spawned or reaped, which is rare and is not worth a
-/// second request on every tick of the first one.
+/// It is its own event, not a limb of the poll, because it is a different service on a
+/// different cadence. The board polls every 60 s on Wi-Fi and 180 s on mobile data. The
+/// roster changes only when a seat is spawned or reaped, which is rare.
 class TaskListRosterRequested extends TaskListEvent {
+  /// Creates the event.
   const TaskListRosterRequested();
 }
 
-/// An operator changed a row's priority or owner. Goes through the FIELD door.
+/// An operator changed a row's priority or owner; it goes through the field door.
 class TaskListFieldChanged extends TaskListEvent {
+  /// The row that changed.
   final String taskId;
+
+  /// The new priority, or null when the owner changed.
   final String? priority;
+
+  /// The new owner, or null when the priority changed.
   final String? ownerPersona;
+
+  /// Creates the event.
   const TaskListFieldChanged( { required this.taskId, this.priority, this.ownerPersona } );
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
+/// The Task List pane's state.
 class TaskListState extends Equatable {
+  /// The grouped rows, or null before the first fetch lands.
   final TaskListModel? model;
+
+  /// True while a fetch is in flight.
   final bool loading;
+
+  /// The latest failure text, or null.
   final String? error;
 
-  /// True when the page is not the whole board — surfaced as a visible banner.
+  /// True when the page is not the whole board; surfaced as a visible banner.
   final bool incomplete;
+
+  /// The server's true row count for the query.
   final int total;
 
-  /// Group labels the operator has collapsed. Collapsed state is the OPERATOR's, so it
-  /// survives a refresh — a poll that silently re-expanded every group would undo their
-  /// work every sixty seconds.
+  /// Group labels the operator has collapsed.
+  ///
+  /// Collapsed state belongs to the operator and survives a refresh. A poll that
+  /// re-expanded every group would undo their work every sixty seconds.
   final Set<String> collapsed;
 
   /// Writes the operator made that never reached the server, keyed by task id.
   ///
-  /// 🔴 THE ROW IS ROLLED BACK AND THE ACT IS REMEMBERED. Those are two different things
-  /// and G6 is what happens when only the first is done: the row snaps back, a notice
-  /// appears somewhere, and what the operator DID is gone. Keyed by task id, so a second
-  /// write on the same row replaces the first rather than queueing behind it — there is
-  /// no ordering guarantee here and pretending otherwise would be worse than not having
-  /// one.
+  /// A failed transport write rolls the row back and also remembers the act, so the
+  /// operator does not lose what they did. A second write on the same row replaces the
+  /// first instead of queueing behind it, because there is no ordering guarantee.
   final Map<String, UnsentWrite> unsent;
 
-  /// The personas a row may be reassigned to — the LIVE fleet, alpha-sorted.
+  /// The personas a row may be reassigned to: the live fleet, alpha-sorted.
   ///
-  /// ⚠️ EMPTY IS A LEGITIMATE STATE, NOT A LOADING ONE. It means the phone cannot see
-  /// the fleet (pre-first-read, the arbiter unreachable, or nobody live), and the owner
-  /// control degrades to showing the row's current owner. Treating it as "not ready yet"
-  /// would hide the control forever on a handset that never reaches the arbiter.
+  /// Empty is a legitimate state, not a loading one. It means the phone cannot see the
+  /// fleet (pre-first-read, unreachable arbiter, or nobody live), and the owner control
+  /// shows only the row's current owner. Treating it as "not ready" would hide the control
+  /// forever on a handset that never reaches the arbiter.
   final List<String> reassignTargets;
 
+  /// Creates the state; everything defaults to empty.
   const TaskListState( {
     this.model,
     this.loading         = false,
@@ -117,6 +145,7 @@ class TaskListState extends Equatable {
   /// What the operator did to this row that has not landed, if anything.
   String? unsentLabelFor( String taskId ) => unsent[ taskId ]?.label;
 
+  /// Copies the state with changes; [clearError] drops the error.
   TaskListState copyWith( {
     TaskListModel? model,
     bool? loading,
@@ -148,11 +177,10 @@ class TaskListState extends Equatable {
 
 /// The Task List pane's bloc.
 ///
-/// ⚠️ THIS IS ROUTE-SCOPED, NOT AN APP-ROOT SINGLETON, AND THAT IS A DELIBERATE
-/// DEPARTURE. `app.dart:248-278` registers seven `BlocProvider`s at the app root, each a
-/// `ServiceLocator` singleton, so a pane's bloc would otherwise outlive its route and its
-/// timer would run whichever destination is showing. Foreground-pane-only polling has no
-/// mechanism unless the pane blocs are route-scoped — see [PanePollingMixin].
+/// Register it per route, not at the app root. Root-level blocs are `ServiceLocator`
+/// singletons that outlive their route, so the timer would run whichever destination is
+/// showing. Foreground-pane-only polling has no mechanism unless pane blocs are
+/// route-scoped; see [PanePollingMixin].
 class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     with PaneVisibilityMixin<TaskListEvent, TaskListState>,
         PanePollingMixin<TaskListEvent, TaskListState> {
@@ -160,16 +188,15 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   final TaskWriteRepository _writes;
   final NetworkConnectivityService _network;
 
-  /// The fleet read, for the reassignment roster ONLY.
-  ///
-  /// ⚠️ OPTIONAL, AND A NULL ONE IS NOT A BROKEN PANE. The Task List's job is tasks; the
-  /// roster is a courtesy the owner control degrades without. Making it required would
-  /// mean a pane that cannot render until a SECOND service answers, on a phone where the
-  /// second service is the one most likely not to.
+  // The fleet read, for the reassignment roster only. It is optional, and a null one is
+  // not a broken pane: the Task List's job is tasks, and the owner control degrades
+  // without the roster. Requiring it would stop the pane rendering until a second service
+  // answers, on a phone where that service is the likeliest to be unreachable.
   final FleetRepository? _fleet;
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
+  /// Creates the bloc; [fleet] feeds the reassignment roster and may be null.
   TaskListBloc(
     this._repo,
     this._writes, {
@@ -186,35 +213,25 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     on<TaskListUnsentRetryRequested>( _onRetryUnsent );
   }
 
-  /// 🔴 THE POLL INTERVAL READS THE CONNECTION, AND THE RULE NOW LIVES IN THE MIXIN.
-  ///
-  /// A full 500-row page is ~2.1 MB and a terse one ~107 KB (`tasks.py:739`). At 60 s
-  /// that is ~6.4 MB per foreground hour on ONE pane even terse — fine on Wi-Fi, rude on
-  /// a metered connection. Sixty seconds is the WEB's number and a phone is not a browser
-  /// tab.
-  ///
-  /// ⚠️ THE `pollInterval` OVERRIDE THAT STOOD HERE IS GONE, AND NOTHING ABOUT THIS
-  /// PANE'S BEHAVIOUR CHANGED. It was `_network.isMobile ? 180 : 60` — identical,
-  /// character for character, to the Holding Area's. Two panes needed the same line and
-  /// two more were about to, so the rule moved to `PanePollingMixin.pollInterval` and
-  /// what is overridden here is the one thing that is genuinely this bloc's: WHICH
-  /// network service to ask, because this bloc already holds an injected one for its
-  /// connectivity-restored trigger and its tests fake it.
+  // The poll interval reads the connection, and the rule lives in [PanePollingMixin]. A
+  // full 500-row page is about 2.1 MB and a terse one about 107 KB, so even terse at 60 s a
+  // foreground hour is about 6.4 MB on one pane: fine on Wi-Fi, rude on a metered
+  // connection. This bloc overrides only which network service to ask, because it already
+  // holds an injected one for its connectivity-restored trigger and its tests fake it.
   @override
   bool get isMeteredConnection => _network.isMobile;
 
-  /// Look up ONE ticket by a path from `taskLookupPath` (walk-through item M3).
+  /// Looks up one ticket by a path from `taskLookupPath`.
   ///
-  /// ⚠️ A PASS-THROUGH, NOT AN EVENT. The result belongs to the lookup box and never
-  /// touches the board: the hashes Rick pastes are usually for rows that are not on it,
-  /// so folding the answer into board state would make a held row look owed.
+  /// It is a pass-through, not an event. The result belongs to the lookup box and never
+  /// touches the board. Looked-up rows are usually not on it, and folding the answer into
+  /// board state would make a held row look owed.
   Future<TaskRowModel> lookupTask( String path ) => _repo.lookup( path );
 
-  /// File one ticket from the New Ticket card, then refresh the board.
+  /// Files one ticket from the New Ticket card, then refreshes the board.
   ///
-  /// ⚠️ A PASS-THROUGH, LIKE [lookupTask]: the outcome sentence belongs to the card. The
-  /// board refresh is the one thing the bloc owns, and it runs only on `created` — a
-  /// petition or a held row is not on the board, so a refresh would change nothing.
+  /// It is a pass-through like [lookupTask]: the outcome sentence belongs to the card. The
+  /// refresh runs only on `created`, because a petition or a held row is not on the board.
   Future<NewTicketOutcome> createTicket( Map<String, String> payload ) async {
     final res     = await _repo.createTicket( payload );
     final outcome = describeNewTicketResult( res.status, res.body );
@@ -224,38 +241,37 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     return outcome;
   }
 
-  /// Who the card offers under "Assigned to": the live fleet plus everyone who already
-  /// owns a row, read at the moment the card opens.
+  /// Who the card offers under "Assigned to", read when the card opens.
+  ///
+  /// That is the live fleet plus everyone who already owns a row.
   List<String> newTicketAssignees() => newTicketAssigneeOptions( [
     state.reassignTargets,
     ...( state.model?.groups ?? const <TaskGroup>[] ).map( ( g ) => [ g.ownerPersona ] ),
   ] );
 
-  /// The mixin's poll hook. The token is honoured all the way down to Dio, so a pane that
-  /// disappears mid-request cancels the request rather than only the timer.
+  /// The mixin's poll hook.
+  ///
+  /// The token reaches Dio, so a pane that disappears mid-request cancels the request and
+  /// not only the timer.
   @override
   Future<void> pollOnce( CancelToken token ) async {
     add( TaskListRefreshRequested( cancelToken: token ) );
   }
 
-  /// 🔴 THE NAMED RETRY TRIGGER, RATHER THAN A DEFERRED ONE.
+  /// Starts retrying unsent writes and refreshing when the connection is restored.
   ///
-  /// Commit `a8c30b3` is the SHAPE for an unsent write, not a reusable capability — it is
-  /// feature-local to `focus_chat_bloc.dart`. And its trigger does NOT carry: it fires on
-  /// WS re-auth, and this pane rides no socket at all. So the trigger has to be named
-  /// here, and it is connectivity-restored — `NetworkConnectivityService` already streams
-  /// it, so this is wiring rather than new capability.
+  /// The retry trigger is connectivity-restored, which `NetworkConnectivityService` already
+  /// streams. The focus chat bloc's unsent-write shape fires on WebSocket re-auth, and this
+  /// pane rides no socket, so its trigger does not carry over.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      // Only the RESTORED edge acts. Firing on every state change would also fire on the
-      // way DOWN, which is a request into a connection that just failed.
+      // Only the restored edge acts; firing on the way down would send a request into a
+      // connection that just failed.
       if ( state != NetworkState.connected ) return;
 
-      // 🔴 THE RETRY GOES FIRST, AND THE ORDER IS NOT COSMETIC. A refetch that lands
-      // before the retry repaints the board from the server — which still does not have
-      // the operator's write — so the row they are watching flickers back to its old
-      // value and only then changes again. Sending first means the refetch that follows
-      // reports the world including their action.
+      // The retry goes first. A refetch that lands before it repaints the board from the
+      // server, which lacks the operator's write, so the row flickers back to its old value
+      // and then changes again. Sending first makes the refetch include their action.
       add( const TaskListUnsentRetryRequested() );
       add( const TaskListRefreshRequested() );
     } );
@@ -275,9 +291,8 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
         total      : page.total,
       ) );
     } on DioException catch ( e ) {
-      // A cancelled poll is the lifecycle rule working, NOT an error to paint. Showing
-      // "request cancelled" every time the user leaves the pane would train them to
-      // ignore the error line that matters.
+      // A cancelled poll is the lifecycle rule working, not an error to paint; showing
+      // "request cancelled" on every exit would train users to ignore the error line.
       if ( CancelToken.isCancel( e ) ) {
         emit( state.copyWith( loading: false ) );
         return;
@@ -288,20 +303,14 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     }
   }
 
-  /// 🔴 WRITES ARE OPTIMISTIC WITH ROLLBACK (§4.6). The view repaints immediately and the
-  /// row goes back when the call rejects — `TaskListStore.ts:266-284` returns
-  /// `{restoreState, done}` for exactly this shape.
-  ///
-  /// ⚠️ AND THE 202 IS ROUTED INTO THE SAME ROLLBACK. `TaskAwaitingApprovalException` is a
-  /// DISTINCT type rather than a flag, so it cannot be caught as an ordinary failure and
-  /// retried: the request SUCCEEDED, the change did not happen, and pressing again only
-  /// files a second ticket. The operator is told the row is pending review — not that it
-  /// failed, and not that it worked.
-  ///
-  /// ⚠️ AN OPEN TARGET UPDATES IN PLACE; A TERMINAL ONE LEAVES THE VIEW. Removing a row
-  /// that merely moved would tell the operator their approved row had disappeared
-  /// (`TaskListStore.ts:293-299`) — so the refetch, not the optimistic drop, is what
-  /// settles the final shape.
+  // Writes are optimistic with rollback: the view repaints immediately and the row goes
+  // back when the call rejects. A 202 is routed into the same rollback.
+  // `TaskAwaitingApprovalException` is its own type, so it cannot be caught as an ordinary
+  // failure and retried; the request succeeded, the change did not happen, and pressing
+  // again files a second ticket. The operator is told the row is pending review, neither
+  // failed nor done. An open target updates in place and a terminal one leaves the view,
+  // because removing a row that only moved would suggest an approved row vanished; the
+  // refetch, not the optimistic drop, settles the final shape.
   Future<void> _onVerb( TaskListVerbPressed event, Emitter<TaskListState> emit ) async {
     final before = state.model;
     emit( state.copyWith( model: _withoutRow( before, event.taskId ), clearError: true ) );
@@ -316,10 +325,10 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
                 '${e.ticketId == null ? '' : ' (ticket ${e.ticketId})'}',
       ) );
     } on TaskWriteException catch ( e ) {
-      // 🔴 ROLL BACK *AND* REMEMBER — the two halves of G6. The row goes back because the
-      // change did not happen; the act is kept because the operator made it. Only a
-      // TRANSPORT failure is kept: a server that answered and refused is an error with
-      // its own words, and a mark for it would never clear however good the signal got.
+      // Roll back and remember. The row goes back because the change did not happen, and
+      // the act is kept because the operator made it. Only a transport failure is kept: a
+      // server that answered and refused is an error with its own words, and a mark for it
+      // would never clear.
       emit( state.copyWith(
         model  : before,
         error  : e.message,
@@ -334,18 +343,13 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     }
   }
 
-  /// Read the fleet once, for the roster.
-  ///
-  /// 🔴 EVERY FAILURE COLLAPSES TO AN EMPTY ROSTER, AND NONE OF THEM PAINTS AN ERROR.
-  /// This is a courtesy read on a pane about tasks: an arbiter that cannot be reached is
-  /// a reason the owner dropdown offers only the current owner, and it is NOT a reason to
-  /// tell the operator their task board is broken. Painting `state.error` here would put
-  /// a fleet problem's text on a board whose own read succeeded.
-  ///
-  /// ⚠️ AND IT MUST NOT THROW PAST THE HANDLER EITHER. An unhandled error inside a bloc
-  /// handler is not a silent no-op — it surfaces through `onError` and can take the bloc
-  /// down, which would turn "the arbiter is unreachable" into "the Task List stopped
-  /// polling".
+  // Reads the fleet once, for the roster. Every failure collapses to an empty roster and
+  // none paints an error: this is a courtesy read on a pane about tasks, and an
+  // unreachable arbiter means only that the owner dropdown offers the current owner.
+  // Painting `state.error` would put a fleet problem's text on a board whose own read
+  // succeeded. It must not throw past the handler either, because an unhandled error in a
+  // bloc handler surfaces through `onError` and can take the bloc down, turning "arbiter
+  // unreachable" into "the Task List stopped polling".
   Future<void> _onRoster( TaskListRosterRequested event, Emitter<TaskListState> emit ) async {
     final fleet = _fleet;
     if ( fleet == null ) return;
@@ -360,7 +364,7 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     }
   }
 
-  /// The FIELD door — priority and owner only, never status. Status is [_onVerb].
+  // The field door: priority and owner only, never status. Status goes through _onVerb.
   Future<void> _onField( TaskListFieldChanged event, Emitter<TaskListState> emit ) async {
     final before = state.model;
     try {
@@ -386,16 +390,12 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     }
   }
 
-  /// The connection came back: resend what the network ate, once each.
-  ///
-  /// 🔴 ONE ATTEMPT PER WRITE PER EDGE. Not a loop within this pass — a write that fails
-  /// on transport again is kept and left alone until the NEXT restored edge, which is a
-  /// genuine new signal rather than a guess that the second try will go better.
-  ///
-  /// ⚠️ A RETRY THAT MEETS A REFUSAL STOPS BEING UNSENT. The connection is plainly fine,
-  /// so the mark would never clear — the record is dropped and the SERVER'S OWN WORDS go
-  /// in front of the operator, which is Tiffany's ruling and the only honest answer: the
-  /// write will never succeed as written, and they are the only one who can change it.
+  // The connection came back: resend what the network ate, once each. One attempt per
+  // write per restored connection, not a loop within this pass. A write that fails on
+  // transport again is kept until the next restored edge. A retry that meets a refusal
+  // stops being unsent: the connection is fine, so the mark would never clear. The record
+  // is dropped and the server's own words go in front of the operator, who is the only one
+  // who can change a write that will never succeed as written.
   Future<void> _onRetryUnsent(
     TaskListUnsentRetryRequested event,
     Emitter<TaskListState> emit,
@@ -411,12 +411,9 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     ) );
   }
 
-  /// Send one remembered write back through the door it came from.
-  ///
-  /// ⚠️ THE DOOR IS DECIDED BY WHAT THE WRITE CHANGES, exactly as §4.2 requires of a
-  /// fresh write. A retry that guessed the other door would be the same silent failure —
-  /// a PATCH carrying a status is ignored, and a transition carrying a priority is not a
-  /// request the endpoint understands.
+  // Sends one remembered write back through the door it came from. The door is decided by
+  // what the write changes, as for a fresh write: a PATCH carrying a status is ignored, and
+  // a transition carrying a priority is not a request the endpoint understands.
   Future<void> _send( UnsentWrite write ) {
     final verb = write.verb;
     if ( verb != null ) {
@@ -432,7 +429,7 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
       <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
 
-  /// Drop one row from the rendered model without refetching — the optimistic half.
+  // Drops one row from the rendered model without refetching: the optimistic half.
   TaskListModel? _withoutRow( TaskListModel? model, String taskId ) {
     if ( model == null ) return null;
     final groups = model.groups
