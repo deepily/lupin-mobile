@@ -1,4 +1,4 @@
-/// AC-S1.10 — the job-lane vocabularies carry a WRITTEN disposition, and the
+/// AC-S1.10 — the job-lane vocabularies carry a disposition on record, and the
 /// dashboard's tab names derive from [JobLane] rather than a parallel literal.
 ///
 /// Three lane vocabularies exist in this tree. The AC does not demand they be
@@ -6,10 +6,10 @@
 /// be typed as `JobLane.values`. A disposition nobody asserts is a disposition
 /// that silently reverts — so this file asserts both halves.
 ///
-/// ⚠️ Two of these checks read SOURCE TEXT. Where the subject is code, comments
-/// are stripped first: the doc comment above `_queueNames` quotes the very
-/// literal it replaced, so an un-stripped scan would match the explanation and
-/// pass while the literal was back.
+/// ⚠️ One check reads SOURCE TEXT and one reads the decisions record. Where the
+/// subject is code, comments are stripped first: the doc comment above
+/// `_queueNames` quotes the very literal it replaced, so an un-stripped scan
+/// would match the explanation and pass while the literal was back.
 library;
 
 import 'dart:io';
@@ -61,36 +61,15 @@ void main() {
                   'nothing else would catch it' );
     } );
 
-    test( 'JobStatus carries its disposition AT ITS DEFINITION, not somewhere in the file', () {
-      const path = 'lib/shared/models/job.dart';
-      final raw  = File( path ).readAsStringSync();
-
-      final enumIdx = raw.indexOf( 'enum JobStatus' );
-      expect( enumIdx, greaterThan( -1 ), reason: 'enum JobStatus must exist in $path' );
-
-      // Only the contiguous doc-comment block immediately above the enum counts.
-      final preceding = raw.substring( 0, enumIdx ).split( '\n' ).reversed;
-      final block     = <String>[];
-      for ( final line in preceding ) {
-        final t = line.trimLeft();
-        if ( t.startsWith( '///' ) || t.startsWith( '//' ) ) {
-          block.add( t );
-        } else if ( t.isEmpty && block.isEmpty ) {
-          continue;
-        } else {
-          break;
-        }
-      }
-      final doc = block.reversed.join( '\n' );
-
-      expect( doc, contains( 'AC-S1.10' ),
-          reason: 'the disposition must be attached to the enum a reader is looking at' );
-      expect(
-        RegExp( r'superseded|LEFT ALONE|left alone|quarantined' ).hasMatch( doc ),
-        isTrue,
-        reason: 'AC-S1.10 requires one of the three words: superseded, left alone, '
-                'or quarantined — silence is what the clause forbids',
-      );
+    test( 'JobStatus disposition (kept, not superseded by JobLane) is on record in the decisions file', () {
+      // The disposition lives in the decisions record, not in a doc comment, so this
+      // asserts the record has a JobStatus-kept line that names the AC-S1.10 ruling.
+      final record = File( 'src/docs/decisions/README.md' );
+      expect( record.existsSync(), isTrue, reason: 'the decisions record must exist' );
+      final line = record.readAsLinesSync().firstWhere(
+          ( l ) => l.contains( ' · JobStatus-kept · ' ), orElse: () => '' );
+      expect( line, isNotEmpty, reason: 'the JobStatus-kept disposition must stay on record' );
+      expect( line, contains( 'AC-S1.10' ), reason: 'the record must name the ruling it carries' );
     } );
 
     test( 'the two enums really do disagree — 2 of 4 members differ', () {
