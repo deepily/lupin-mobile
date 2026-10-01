@@ -3,22 +3,28 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// One user-editable stop-list entry: a case-insensitive PREFIX matched
-/// against a notification's trimmed `message`. Checked (`enabled`) means
-/// the message is neither rendered nor spoken (Rick 2026-08-21: "one
-/// checkbox = hide + mute").
+/// One user-editable stop-list entry: a case-insensitive prefix of a trimmed `message`.
+///
+/// A checked entry (`enabled`) hides the message and mutes it, with one checkbox for both.
+/// Design: src/docs/decisions/README.md (R-NF-one-checkbox)
 @immutable
 class StopPattern {
+  /// Text a message must start with, compared case-insensitively.
   final String pattern;
+  /// Whether this entry suppresses messages.
   final bool   enabled;
 
+  /// Creates an entry that is enabled unless [enabled] is false.
   const StopPattern( { required this.pattern, this.enabled = true } );
 
+  /// Copy with the given fields replaced.
   StopPattern copyWith( { String? pattern, bool? enabled } ) =>
       StopPattern( pattern: pattern ?? this.pattern, enabled: enabled ?? this.enabled );
 
+  /// Serializes with `pattern` and `enabled` keys.
   Map<String, dynamic> toJson() => { 'pattern': pattern, 'enabled': enabled };
 
+  /// Reads an entry from JSON; a missing pattern is empty and a missing `enabled` is true.
   factory StopPattern.fromJson( Map<String, dynamic> j ) => StopPattern(
     pattern : ( j[ 'pattern' ] ?? '' ).toString(),
     enabled : j[ 'enabled' ] != false,
@@ -32,21 +38,23 @@ class StopPattern {
   String toString() => 'StopPattern($pattern, ${enabled ? "on" : "off"})';
 }
 
-/// The notification stop-list (plan 2026.08.21 §3): an ordered list of
-/// [StopPattern]s persisted as JSON under [prefsKey]. ONE predicate,
-/// [matches], applied at three seams — focus ingest/backfill
-/// (`FocusChatBloc`), the conversation list (`ConversationScreen`) and the
-/// TTS gate (`TtsOrchestrator`) — so "hidden" means hidden everywhere.
+/// Ordered [StopPattern]s that hide and mute matching notifications, persisted as JSON.
 ///
-/// Seeds target the Claude Code tool-call chatter emitted by
-/// `post_tool_use.py` (`"Done: <tool>"`), which the browser collapses into
-/// one DOM node and the phone cannot.
+/// One predicate, [matches], is applied in three places, so a hidden message is hidden everywhere.
+/// They are focus ingest and backfill (`FocusChatBloc`), the conversation list
+/// (`ConversationScreen`) and the TTS gate (`TtsOrchestrator`). The seeds target the tool-call chatter `post_tool_use.py` emits
+/// (`"Done: <tool>"`), which the browser collapses into one node and the phone cannot.
 class NotificationStopList extends ChangeNotifier {
+  /// Preference key holding the pattern list as JSON.
   static const String prefsKey         = 'notif_filter.stop_list';
-  /// Plan 2026.08.21 §4 — collapse consecutive same-`progress_group_id`
-  /// messages into one expandable row. Default ON (browser parity).
+  /// Preference key for collapsing same-`progress_group_id` messages into one row.
+  ///
+  /// The default is on, to match the browser.
   static const String collapseGroupsKey = 'notif_filter.collapse_groups';
 
+  /// Patterns seeded when nothing is stored.
+  ///
+  /// Each is `Done:` followed by mcp, Bash, ToolSearch, Read, Edit, Write, Grep or Glob.
   static const List<String> defaultPatterns = [
     'Done: mcp',
     'Done: Bash',
@@ -61,6 +69,7 @@ class NotificationStopList extends ChangeNotifier {
   final SharedPreferences _prefs;
   List<StopPattern>       _patterns;
 
+  /// Loads the stored list, falling back to [defaultPatterns] when nothing usable is stored.
   NotificationStopList( this._prefs ) : _patterns = const [] {
     _patterns = _load() ?? _seeded();
   }
@@ -88,31 +97,31 @@ class NotificationStopList extends ChangeNotifier {
     await _prefs.setString( prefsKey, jsonEncode( _patterns.map( ( p ) => p.toJson() ).toList() ) );
   }
 
-  /// Read-only view, in display order.
+  /// Read-only view of the patterns, in display order.
   List<StopPattern> get patterns => List.unmodifiable( _patterns );
 
+  /// Whether consecutive same-group messages collapse; true when unset.
   bool get collapseGroups => _prefs.getBool( collapseGroupsKey ) ?? true;
 
+  /// Stores the collapse preference and notifies listeners.
   Future<void> setCollapseGroups( bool v ) async {
     await _prefs.setBool( collapseGroupsKey, v );
     notifyListeners();
   }
 
-  /// Enabled patterns only (the ones that actually suppress).
+  /// The enabled patterns, which are the ones that suppress.
   Iterable<StopPattern> get active => _patterns.where( ( p ) => p.enabled );
 
-  /// THE predicate: true when [message] starts with any enabled pattern,
-  /// case-insensitively, after trimming both. Null/blank never matches.
+  /// True when [message] starts with any enabled pattern; null or blank never matches.
+  ///
+  /// Both sides are trimmed and compared case-insensitively.
   bool matches( String? message ) => matchFor( message ) != null;
 
-  /// WHICH rule matched, not merely THAT one did (AC-S3.7, plan
-  /// 2026.08.29 §6). A suppressed answer or question is rendered with the
-  /// rule named — "not spoken: matches 'Done: Bash'" — so suppression is
-  /// visible rather than indistinguishable from a hang. Returns the FIRST
-  /// enabled pattern [message] starts with, in display order, else null.
+  /// The first enabled pattern that [message] starts with, in display order, or null.
   ///
-  /// [matches] delegates here so the two can never disagree: one scan, one
-  /// answer, and the boolean is a projection of the rule.
+  /// The caller can name the rule that suppressed a message, for example
+  /// "not spoken: matches 'Done: Bash'". That way a suppressed answer or question is not mistaken
+  /// for a hang. [matches] delegates here, so the two cannot disagree.
   StopPattern? matchFor( String? message ) {
     if ( message == null ) return null;
     final m = message.trim().toLowerCase();
@@ -125,6 +134,7 @@ class NotificationStopList extends ChangeNotifier {
     return null;
   }
 
+  /// Checks or unchecks the entry at [index]; an out-of-range index is ignored.
   Future<void> setEnabled( int index, bool enabled ) async {
     if ( index < 0 || index >= _patterns.length ) return;
     _patterns = List.of( _patterns )..[ index ] = _patterns[ index ].copyWith( enabled: enabled );
@@ -132,8 +142,9 @@ class NotificationStopList extends ChangeNotifier {
     await _persist();
   }
 
-  /// Append a new enabled pattern; blank or duplicate (case-insensitive)
-  /// input is ignored and returns false.
+  /// Appends an enabled pattern and returns true.
+  ///
+  /// Returns false, changing nothing, when [pattern] is blank or already present, ignoring case.
   Future<bool> add( String pattern ) async {
     final p = pattern.trim();
     if ( p.isEmpty ) return false;
@@ -144,14 +155,14 @@ class NotificationStopList extends ChangeNotifier {
     return true;
   }
 
-  /// Replace the pattern TEXT at [index], keeping its checked state AND its
-  /// position (row f27a61f4: "fix the misspelling in place"). Returns false and
-  /// leaves the list UNCHANGED when the new text is blank, or when another row
-  /// already has it, case-insensitively (ruling R4, Tiffany 2026-09-28) —
-  /// re-saving a row's own current text succeeds as a no-op.
+  /// Replaces the text at [index], keeping its checked state and position.
   ///
-  /// ⚠️ NOT "duplicates cannot exist": [_load] still reads whatever is on the
-  /// phone, including a pair saved by an older build. This refuses to MINT one.
+  /// Returns false and leaves the list unchanged when the new text is blank or another row already has it,
+  /// ignoring case. Saving a row's own current text succeeds as a no-op.
+  /// Design: src/docs/decisions/README.md (R-NF-edit-no-duplicate)
+  ///
+  /// Ensures:
+  ///   - this call never creates a duplicate, but [_load] still reads duplicates saved by an older build
   Future<bool> editAt( int index, String pattern ) async {
     if ( index < 0 || index >= _patterns.length ) return false;
     final p = pattern.trim();
@@ -166,13 +177,12 @@ class NotificationStopList extends ChangeNotifier {
     return true;
   }
 
-  /// Put [entry] back at [index] — the undo half of a delete.
+  /// Puts [entry] back at [index], the undo half of a delete.
   ///
-  /// 🔴 IT TAKES A WHOLE [StopPattern], NOT A STRING, AND THAT IS THE POINT: an
-  /// undo routed through [add] would append the row at the END and force
-  /// `enabled: true`, losing both the position and the checked state the user
-  /// had. An out-of-range index is ignored rather than clamped, so a stale undo
-  /// cannot silently land somewhere else.
+  /// It takes a whole [StopPattern], not a string. Undoing through [add] would append at the end
+  /// and force
+  /// `enabled: true`, losing the position and checked state. An out-of-range index is ignored, not clamped,
+  /// so a stale undo cannot land somewhere else.
   Future<void> insertAt( int index, StopPattern entry ) async {
     if ( index < 0 || index > _patterns.length ) return;
     if ( entry.pattern.trim().isEmpty ) return;
@@ -181,6 +191,7 @@ class NotificationStopList extends ChangeNotifier {
     await _persist();
   }
 
+  /// Removes the entry at [index]; an out-of-range index is ignored.
   Future<void> removeAt( int index ) async {
     if ( index < 0 || index >= _patterns.length ) return;
     _patterns = List.of( _patterns )..removeAt( index );
@@ -188,6 +199,7 @@ class NotificationStopList extends ChangeNotifier {
     await _persist();
   }
 
+  /// Replaces the list with [defaultPatterns].
   Future<void> resetToDefaults() async {
     _patterns = _seeded();
     notifyListeners();
