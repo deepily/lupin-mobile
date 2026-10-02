@@ -13,6 +13,7 @@ lib/features/broadcast
 lib/features/finished_tasks
 lib/features/quick_ask
 lib/features/docs
+lib/shared
 
 # Swept but left out: each has non-doc errors or infos today, so `analyze --fatal-infos` fails.
 # Format: `# left out: <dir> <issue count> (measured at <sha>)`. Clearing them is Phase 5 Step 1.
@@ -20,7 +21,7 @@ lib/features/docs
 # left out: lib/features/focus_mode 8 (measured at 907a178)
 # left out: lib/features/notifications 6 (measured at 907a178)
 # left out: lib/features/queue 1 (measured at 907a178)
-# left out: lib/shared 11 (measured at 907a178)
+
 # left out: lib/features/agentic 4 (measured at 907a178)
 # left out: lib/features/settings 4 (measured at 907a178)
 # left out: lib/features/decision_proxy 2 (measured at 907a178)

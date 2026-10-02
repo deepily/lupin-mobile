@@ -1,43 +1,10 @@
-/// Shared interactive-prompt bodies (F-S3-1 extract-to-shared, 2026-06-12).
+/// Interactive-prompt bodies shared by the notification sheet and the focus pane.
 ///
-/// Extracted VERBATIM from the library-private bodies in
-/// `interactive_prompt_sheet.dart` (`_YesNoBody`, `_MultipleChoiceBody`,
-/// `_OpenEndedBody`) so TWO consumers compose the SAME widgets:
-///   - the legacy `InteractivePromptSheet` (wires `onRespond` to its
-///     existing `NotificationsRespond` dispatch — behavior-neutral,
-///     AC-S3.9), and
-///   - the focus-mode inline prompt bubbles (wire `onRespond` to
-///     `FocusRespondRequested`, F-S3-2).
-///
-/// 🔴 **That earlier decision is REVERSED — AC-S4.16, 2026-08-29.** This
-/// comment used to say the batch body was intentionally left behind under
-/// F-S3-S2-2(d), because it submitted a `Map<String, String>` and belonged
-/// with the legacy sheet. True and reasonable when written; false now, and
-/// left standing it is in-tree documentation arguing against the
-/// requirement — a citation for doing the wrong thing.
-///
-/// (The old wording is deliberately NOT reproduced verbatim here. A
-/// grep-able invariant that a quotation can satisfy is not an invariant —
-/// the test for this reversal greps for the retired phrase, and quoting it
-/// to be helpful is exactly how such a check goes quietly green.)
-///
-/// What changed: a canonical `ask_multiple_choice` payload nests its
-/// questions under `response_options.questions[]`, and the batch body was
-/// **already the only widget in the tree that reads that shape** and keys
-/// answers by `header`. The very `Map<String, String>` submission the old
-/// comment cited as the reason to leave it stranded is precisely what
-/// AC-S4.5 needs. So the rationale for keeping it private became the
-/// argument for promoting it. It is now [MultiQuestionPromptBody], below —
-/// a MOVE, not a copy: nothing question-shaped stayed behind in
-/// `interactive_prompt_sheet.dart`.
-///
-/// Callback typing: yes/no and open-ended are String end-to-end.
-/// Multiple-choice keeps the legacy `dynamic` callback because its
-/// MULTI-SELECT variant submits a `List` (legacy wire shape preserved —
-/// AC-S3.9 behavior-neutrality governs); the focus path composes this body
-/// ONLY for single-select asks (where the value is always a String) and
-/// routes multi-select asks to the same fallback affordance as batch —
-/// implementer call on the record, S3 §8.
+/// Each body takes its data and an `onRespond` callback. It knows nothing about
+/// endpoints or which screen hosts it; the host decides where the answer goes.
+/// Yes/no and open-ended answers are strings. Multiple choice keeps a `dynamic`
+/// callback because its multi-select form submits a `List`.
+/// Design: src/docs/decisions/README.md (R-prompt-bodies-shared)
 library;
 
 import 'package:flutter/material.dart';
@@ -49,13 +16,17 @@ import 'dictation_text_field.dart';
 
 // --- yes/no -----------------------------------------------------------------
 
+/// Yes, No and Neither buttons over an optional comment box.
 class YesNoPromptBody extends StatefulWidget {
+  /// Receives "yes", "no" or "neither", with ` [comment: …]` appended when a comment was typed.
   final void Function( String ) onRespond;
 
-  /// False for a plain comment box even inside the app's scope (Quick Ask, whose
-  /// bloc owns a recorder on the same screen; plan §3).
+  /// Whether the comment box offers dictation; false gives a plain text box.
+  ///
+  /// Quick Ask passes false, because its bloc owns a recorder on the same screen.
   final bool dictate;
 
+  /// Creates the body; [dictate] defaults to true.
   const YesNoPromptBody( { super.key, required this.onRespond, this.dictate = true } );
 
   @override
@@ -123,16 +94,20 @@ class _YesNoPromptBodyState extends State<YesNoPromptBody> {
 
 // --- multiple choice --------------------------------------------------------
 
+/// A list of options with an "Other" box and a Submit button.
 class MultipleChoicePromptBody extends StatefulWidget {
+  /// The options; each is a map with a `label`, or a bare value shown as text.
   final List<dynamic>            options;
+
+  /// Whether several options can be ticked; false gives radio buttons.
   final bool                     multi;
 
-  /// `dynamic` preserved from the legacy body: single-select submits a
-  /// String; MULTI-select submits a `List` (legacy wire shape — see the
-  /// library docstring). Focus-path consumers compose this only with
-  /// `multi: false`.
+  /// Receives a `String` for single-select and a `List` for multi-select.
+  ///
+  /// The focus pane composes this body only with [multi] false.
   final void Function( dynamic ) onRespond;
 
+  /// Creates the body over [options].
   const MultipleChoicePromptBody( {
     super.key,
     required this.options,
@@ -212,26 +187,27 @@ class _MultipleChoicePromptBodyState extends State<MultipleChoicePromptBody> {
 
 // --- open ended -------------------------------------------------------------
 
+/// A free-text answer box with dictation and a Submit button.
 class OpenEndedPromptBody extends StatefulWidget {
+  /// Receives the text of the box when Submit is tapped.
   final void Function( String ) onRespond;
 
-  /// The recorder SERVICE, or null to take it from the app's [DictationScope].
-  /// With neither there is no microphone at all, exactly the box that shipped
-  /// before (as on the web).
+  /// The recorder service, or null to take it from the app's [DictationScope].
   ///
-  /// The service goes in, never a session: the box builds and owns its own and
-  /// cancels it on dispose, so no ancestor has to remember to (the Focus pane
-  /// used to own one, correct only because Flutter disposes children first).
+  /// With neither there is no microphone. The box builds its own recording
+  /// session from the service and cancels it on dispose, so no ancestor owns one.
   final AsrService? asr;
 
   /// Test seam for the permission prompt.
   final MicPermissionRequester? requestMicPermission;
 
-  /// False for a plain box even inside the app's scope. Quick Ask's interview
-  /// answer passes false: its bloc owns a recorder of its own on the same screen
-  /// (plan §3, until that bloc registers with the recorder guard).
+  /// Whether the box offers dictation; false gives a plain text box.
+  ///
+  /// Quick Ask's interview answer passes false, because its bloc owns a
+  /// recorder on the same screen.
   final bool dictate;
 
+  /// Creates the body; [dictate] defaults to true.
   const OpenEndedPromptBody( {
     super.key,
     required this.onRespond,
@@ -279,9 +255,8 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
           ),
         ),
         const SizedBox( height: 12 ),
-        // While a chunk records or transcribes, Submit is GONE: a half-dictated
-        // answer cannot be sent by a stray thumb, and the prompt is answered
-        // exactly once.
+        // While a chunk records or transcribes, Submit is hidden, so a half-dictated
+        // answer cannot be sent by a stray tap and the prompt is answered once.
         if ( _phase == DictationPhase.idle )
           FilledButton(
             onPressed: () => widget.onRespond( _ctrl.text ),
@@ -292,40 +267,29 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
   }
 }
 
-// --- multi-question (PROMOTED from interactive_prompt_sheet.dart) ------------
+// --- multi-question ----------------------------------------------------------
 
-/// One prompt covering N questions — AC-S4.16, AC-S4.5.
+/// One prompt covering several questions, answered together with one Submit.
 ///
-/// **Moved, not rewritten.** This was `_OpenEndedBatchBody`, `_`-private to
-/// `interactive_prompt_sheet.dart`, where nobody could reuse it. It already
-/// read the canonical nested `response_options.questions[]` shape and
-/// already keyed each answer by its `header` — the exact behaviour AC-S4.5
-/// asks for. The plan originally said to build a one-question-at-a-time
-/// stepper; building one would have put a second widget in the tree for a
-/// payload shape this one already handled better.
-///
-/// The single addition on promotion: a question carrying its own
-/// `options` list renders as a CHOICE control rather than a text field.
-/// That is what a canonical `ask_multiple_choice` payload looks like, and
-/// what previously fell through to an empty option list one layer up. A
-/// question with no options is unchanged — a `TextField`, exactly as the
-/// `open_ended_batch` path has always rendered it.
-///
-/// 🔴 Status-blind and door-agnostic (AC-S4.11): it takes questions and a
-/// callback, and knows nothing about endpoints, `status`, or which of the
-/// four doors is asking. The HOST decides where the value goes.
+/// It reads the nested `response_options.questions[]` shape and keys each answer
+/// by the question's `header`. A question with its own `options` renders as a
+/// choice control; a question without options renders as a text box.
+/// It takes questions and a callback, and the host decides where the value goes.
+/// Design: src/docs/decisions/README.md (R-prompt-bodies-shared)
 class MultiQuestionPromptBody extends StatefulWidget {
-  /// The nested `response_options.questions[]` list. Each entry may carry
-  /// `question`, `header`, `options`, `multi_select`; a bare string is
-  /// treated as the question text.
+  /// The nested `response_options.questions[]` list.
+  ///
+  /// Each entry may carry `question`, `header`, `options` and `multi_select`.
+  /// A bare string is treated as the question text.
   final List<dynamic> questions;
 
-  /// Answers keyed by each question's `header` (falling back to `q_<i>`).
-  /// A value is a `String` for a text or single-select question, and a
-  /// `List<String>` for a multi-select one — the shape each question's own
-  /// payload asked for.
+  /// Receives the answers keyed by each question's `header`, or `q_<i>` without one.
+  ///
+  /// A value is a `String` for a text or single-select question and a
+  /// `List<String>` for a multi-select one.
   final void Function( Map<String, dynamic> ) onRespond;
 
+  /// Creates the body over [questions].
   const MultiQuestionPromptBody( {
     super.key,
     required this.questions,
@@ -366,9 +330,9 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
     return q.toString();
   }
 
-  /// The answer key: the server's own `header`, so the submitted map is
-  /// the `{header: value}` shape its parser expects rather than a bare
-  /// label. Positional fallback for a payload without one.
+  /// The answer key: the question's `header`, or `q_<i>` when it has none.
+  ///
+  /// The server's parser expects a `{header: value}` map.
   String _key( dynamic q, int i ) {
     if ( q is Map && q[ "header" ] != null ) return q[ "header" ].toString();
     return "q_$i";
@@ -386,8 +350,9 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
     return opt.toString();
   }
 
-  /// Rick 2026-09-26: the pros and cons of each option live in its
-  /// `description`, and the phone never showed them.
+  /// The option's `description` as a subtitle, or null when it has none.
+  ///
+  /// The description carries the pros and cons of the option.
   Widget? _subtitle( dynamic opt ) {
     if ( opt is! Map ) return null;
     final d = ( opt[ "description" ] ?? "" ).toString().trim();
