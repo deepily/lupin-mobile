@@ -21,11 +21,13 @@ void main() {
     blocTest<ClaudeCodeBloc, ClaudeCodeState>(
       'ClaudeCodeSubmit emits Submitting → Submitted',
       setUp: () {
-        adapter.handlers[ 'POST /api/claude-code/submit' ] = ( _ ) => jsonBody( {
-          'status'        : 'queued',
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) => jsonBody( {
+          'path'          : 'agent',
+          'status'        : 'waiting',
+          'route_reason'  : 'submit',
+          'trace_id'      : 't-1',
           'job_id'        : 'cc-1',
           'queue_position': 2,
-          'message'       : 'ok',
         } );
       },
       build : () => ClaudeCodeBloc( repo ),
@@ -43,7 +45,7 @@ void main() {
     blocTest<ClaudeCodeBloc, ClaudeCodeState>(
       'ClaudeCodeSubmit emits Submitting → Error on HTTP 500',
       setUp: () {
-        adapter.handlers[ 'POST /api/claude-code/submit' ] = ( _ ) =>
+        adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
             jsonBody( { 'detail': 'fail' }, status: 500 );
       },
       build : () => ClaudeCodeBloc( repo ),

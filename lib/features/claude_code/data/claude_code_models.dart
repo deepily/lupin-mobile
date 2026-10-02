@@ -1,15 +1,19 @@
-/// Data models for the Lupin Claude Code submission API.
+/// Data models for submitting a Claude Code job.
 ///
-/// Field names match backend JSON exactly per
-/// `cosa/rest/routers/claude_code_queue.py`.
-///
-/// Retired endpoints: see <lupin>/src/rnd/v0.1.7/2026.05.05-claude-code-dispatch-retirement/01-plan.md
-/// Mobile-side breadcrumbs: src/rnd/v0.1.6-migration/2026.04.15-{tier-3-queue-and-claude-code-plan,resync-mobile-with-lupin-api-v0.1.6}.md
-/// Canonical successor: POST /api/claude-code/submit (this file)
+/// Jobs go through `POST /api/v2/submit` with the Claude Code routing command.
+/// The job's own settings ride in `args`; queue directives stay top-level.
 library;
 
-/// Request body for POST /api/claude-code/submit.
+import '../../queue/data/queue_models.dart';
+
+/// One Claude Code job to queue.
 class ClaudeCodeSubmitRequest {
+  /// The routing command that names the Claude Code agent.
+  static const String submitCommand = "agent router go to claude code";
+
+  /// The longest question text the server accepts.
+  static const int maxQuestionLength = 4000;
+
   /// The task text sent to Claude Code.
   final String  prompt;
   /// The project the job runs in.
@@ -39,20 +43,31 @@ class ClaudeCodeSubmitRequest {
     this.monopolize  = false,
   } );
 
-  /// The request body, using the backend's snake_case field names.
-  Map<String, dynamic> toJson() => {
-    "prompt"     : prompt,
-    "project"    : project,
-    "task_type"  : taskType,
-    "max_turns"  : maxTurns,
-    if ( websocketId != null ) "websocket_id" : websocketId,
-    "dry_run"    : dryRun,
-    if ( scheduledAt != null ) "scheduled_at" : scheduledAt,
-    "monopolize" : monopolize,
-  };
+  /// The `/api/v2/submit` body for this job.
+  ///
+  /// Ensures:
+  ///   - `prompt`, `project`, `task_type`, `max_turns` and `dry_run` go in `args`
+  ///   - `websocket_id`, `scheduled_at` and `monopolize` stay top-level
+  ///   - `question` carries the prompt, cut to [maxQuestionLength] characters
+  SubmitRequest toSubmitRequest() => SubmitRequest(
+    command     : submitCommand,
+    args        : {
+      "prompt"    : prompt,
+      "project"   : project,
+      "task_type" : taskType,
+      "max_turns" : maxTurns,
+      "dry_run"   : dryRun,
+    },
+    question    : prompt.length > maxQuestionLength
+        ? prompt.substring( 0, maxQuestionLength )
+        : prompt,
+    websocketId : websocketId,
+    scheduledAt : scheduledAt,
+    monopolize  : monopolize ? true : null,
+  );
 }
 
-/// Response from POST /api/claude-code/submit.
+/// The job the server created for a submission.
 class ClaudeCodeSubmitResponse {
   /// The server's status word for the submission.
   final String status;
@@ -71,14 +86,33 @@ class ClaudeCodeSubmitResponse {
     required this.message,
   } );
 
-  /// Reads the response from the backend's JSON body.
-  factory ClaudeCodeSubmitResponse.fromJson( Map<String, dynamic> j ) =>
-      ClaudeCodeSubmitResponse(
-        status        : j[ "status" ]         as String,
-        jobId         : j[ "job_id" ]         as String,
+  /// Reads the `/api/v2/submit` answer.
+  ///
+  /// Ensures:
+  ///   - `message` is the server's `answer`, or empty when it gave none
+  ///   - `queuePosition` is the server's `queue_position`, or 0 when it gave none
+  ///
+  /// Raises:
+  ///   - [ClaudeCodeApiException] when the body carries no job id, or a status
+  ///     other than `waiting` or `done`; the message is the server's own words
+  factory ClaudeCodeSubmitResponse.fromAsk( Map<String, dynamic> j ) {
+    final ask   = AskResponse.fromJson( j );
+    final jobId = ask.jobId;
+    if ( jobId != null && jobId.isNotEmpty && ( ask.status == "waiting" || ask.status == "done" ) ) {
+      return ClaudeCodeSubmitResponse(
+        status        : ask.status,
+        jobId         : jobId,
         queuePosition : ( j[ "queue_position" ] as int? ) ?? 0,
-        message       : ( j[ "message" ] as String? ) ?? "",
+        message       : ask.answer ?? "",
       );
+    }
+    if ( ask.status == "needs_input" ) {
+      throw ClaudeCodeApiException( "Missing: ${ask.argsMissing.join( ", " )}" );
+    }
+    throw ClaudeCodeApiException(
+      ask.error ?? ask.answer ?? "No job was created (${ask.path}/${ask.status}: ${ask.routeReason})",
+    );
+  }
 }
 
 /// A failed call to the Claude Code API.
