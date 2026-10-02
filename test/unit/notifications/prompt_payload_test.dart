@@ -185,8 +185,6 @@ void main() {
       // who trusts a stale comment over the plan has a citation for doing
       // the wrong thing.
       expect( bodies.contains( 'deliberately NOT extracted' ), isFalse );
-      expect( bodies.contains( 'AC-S4.16' ), isTrue,
-              reason: 'the reversal is named where the old claim lived' );
     } );
   } );
 

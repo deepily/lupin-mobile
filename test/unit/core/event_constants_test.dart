@@ -1,18 +1,19 @@
-/// AC-S1.11 — the four proven-dead `eventQueue*Update` constants carry a
-/// DISPOSITION. The clause permits either action and forbids only silence:
+/// AC-S1.11: the four proven-dead `eventQueue*Update` constants carry a
+/// disposition. The clause permits either action and forbids only silence:
 /// delete them, or keep them with the reason stated. This file asserts
-/// whichever action the tree actually took, so the disposition cannot quietly
-/// revert to silence when someone adds a sixth event name.
+/// whichever action the tree actually took.
 ///
-/// ⚠️ Presence is measured on COMMENT-STRIPPED source. The disposition block in
-/// `app_constants.dart` names `eventJobStateTransition` in prose, so an
-/// un-stripped scan would find a "declaration" that is only an explanation.
+/// When they are kept, the reason lives in a decision record
+/// (`R-CORE-dead-queue-events` in `src/docs/decisions/README.md`), and that
+/// record is what is asserted. The wording of source comments is not asserted
+/// (Rick's ruling, row a1bbc3ef, same as R5b-AC-S1.10).
 ///
-/// ⚠️ The classifier is a pure function over source text, and BOTH of its other
-/// arms are exercised against synthetic sources below. A delete-disposition
-/// would be a ~40-site edit across three WebSocket services, so the deleted
-/// arm can never be reached by mutating this tree — an unexercised branch here
-/// would be a branch nobody had ever seen run.
+/// Presence is measured on comment-stripped source, so a name that appears
+/// only in an explanation is not counted as a declaration.
+///
+/// The classifier is a pure function over source text, and both of its other
+/// arms are exercised against synthetic sources below, because the deleted arm
+/// cannot be reached by mutating this tree.
 library;
 
 import 'dart:io';
@@ -64,6 +65,9 @@ String? _declLine( String source, String name ) {
   return hits.isEmpty ? null : hits.first;
 }
 
+const _decisions = 'src/docs/decisions/README.md';
+const _recordId  = 'R-CORE-dead-queue-events';
+
 void main() {
   const path = 'lib/core/constants/app_constants.dart';
 
@@ -97,21 +101,27 @@ void main() {
         return;
       }
 
-      // KEPT — every one of the four states WHY, on its own declaration line.
+      // Kept: every one of the four is declared, and the decisions file carries
+      // the record that says they are dead and why they stay. The record, not the
+      // wording of a source comment, is what this asserts (ruling a1bbc3ef).
       for ( final name in _deadNames ) {
-        final line = _declLine( raw, name );
-        expect( line, isNotNull, reason: '$name must be declared' );
-        expect( line, contains( 'DEAD' ),
-            reason: 'FALSIFIER: strip the reason comment from $name and this goes red — '
-                    'the app still builds and runs, which is why nothing else catches it' );
-        expect( line, contains( 'never emitted' ),
-            reason: '$name must say WHY it is dead, not merely that it is' );
+        expect( _declLine( raw, name ), isNotNull, reason: '$name must be declared' );
       }
 
-      expect( raw, contains( 'AC-S1.11' ),
-          reason: 'the disposition must cite the clause it discharges' );
-      expect( RegExp( r'\bKEPT\b|\bkept\b' ).hasMatch( raw ), isTrue,
-          reason: 'the chosen action must be named in words, not inferred from the code' );
+      final record = File( _decisions )
+          .readAsLinesSync()
+          .where( ( l ) => l.contains( '· $_recordId ·' ) )
+          .toList();
+      expect( record, hasLength( 1 ),
+          reason: 'exactly one decision record must carry the disposition' );
+      for ( final value in _deadValues.values ) {
+        expect( record.single, contains( value ),
+            reason: 'the record must name $value, or a reader cannot tell which events are dead' );
+      }
+      expect( record.single, contains( 'never emitted' ),
+          reason: 'the record must say why they are dead, not merely that they are' );
+      expect( record.single, contains( 'kept' ),
+          reason: 'the chosen action must be named in words' );
     } );
 
     test( 'the kept names still carry their original wire values (kept, not repurposed)', () {

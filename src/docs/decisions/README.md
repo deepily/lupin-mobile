@@ -8,6 +8,7 @@ Rules: add a line, never edit an old one; to reverse a ruling, add a new line th
 
 ## Records
 
+- 2026-10-02 · R-comment-text-tests · A test that asserts the wording of a source comment is converted to assert behaviour or a record here; this covers `event_constants_test` (now checks `R-CORE-dead-queue-events`) and `prompt_payload_test` (the bare-id assertion is dropped). · Rick (first-hand, multiple-choice ask) · row `a1bbc3ef` · `test/unit/core/event_constants_test.dart`, `test/unit/notifications/prompt_payload_test.dart`, `lib/core/constants/app_constants.dart`, `lib/shared/widgets/prompt_bodies.dart`
 - 2026-09-30 · R5b-M1 · The Dart doc-comment standard is approved as drafted at `0fe024e`. · Rick (relayed by María 21:50 EDT; confirmed first-hand 2026-10-01) · lupin `src/rnd/v0.2.2/2026.09.30-lupin-af-documentation-rewrite-plan/2026.09.30-docs-rewrite-implementation-plan.md` §R.5b, row `b707f92f` · `src/docs/docstring-standard.md`
 - 2026-09-30 · R5b-format · `dart format` is not a docs gate, because the house style (spaces inside parentheses and brackets) makes 536 of 539 files fail it; the house style stays. · Rick (confirmed first-hand 2026-10-01) · same plan, §R.5b · `lib/**`, `test/**`
 - 2026-09-30 · R5b-AC-S1.10 · `lane_vocabulary_test` stops asserting doc-comment text and asserts behaviour or the existence of a record here; the `JobStatus` doc comment drops the bare `AC-S1.10` and links the record. · Rick (confirmed first-hand 2026-10-01) · same plan, §R.5b · `test/unit/queue/lane_vocabulary_test.dart`, `lib/shared/models/job.dart`
