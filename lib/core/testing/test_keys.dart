@@ -419,6 +419,15 @@ class TestKeys {
   /// A null [minutes] gives the `open` choice, the "until I resume" chip.
   static String pushPauseDuration( int? minutes ) => 'pushPause.duration.${minutes ?? 'open'}';
 
+  /// Key of the heartbeat poke switch.
+  static const heartbeatPokeSwitch           = 'heartbeatPoke.switch';
+  /// Key of the heartbeat poke status.
+  static const heartbeatPokeStatus           = 'heartbeatPoke.status';
+  /// Key of the heartbeat poke admin only.
+  static const heartbeatPokeAdminOnly        = 'heartbeatPoke.adminOnly';
+  /// Key of the heartbeat poke error.
+  static const heartbeatPokeError            = 'heartbeatPoke.error';
+
   // A visible delete with undo, and tap-to-edit
   /// Key prefix of settings stop list delete. The suffix is pattern.
   static const settingsStopListDeletePrefix  = 'settings.stopList.delete.';

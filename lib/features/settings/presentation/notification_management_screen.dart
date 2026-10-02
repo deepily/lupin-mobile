@@ -5,8 +5,10 @@ import '../../../services/push/notification_sender_label.dart';
 import '../../notifications/data/notification_models.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
+import '../data/heartbeat_poke_repository.dart';
 import '../data/push_pause_repository.dart';
 import 'notification_audio_settings_screen.dart';
+import 'heartbeat_poke_section.dart';
 import 'push_pause_section.dart';
 import 'notification_filter_settings_screen.dart';
 
@@ -44,6 +46,9 @@ class NotificationManagementScreen extends StatefulWidget {
   /// The server push pause; null hides the section.
   final PushPauseRepository? pushPause;
 
+  /// The fleet's stop poke switch; null hides the section.
+  final HeartbeatPokeRepository? heartbeatPoke;
+
   /// Creates the screen over [prefs]; the other arguments switch sections on.
   const NotificationManagementScreen( {
     super.key,
@@ -51,6 +56,7 @@ class NotificationManagementScreen extends StatefulWidget {
     this.stopList,
     this.loadSenders,
     this.pushPause,
+    this.heartbeatPoke,
   } );
 
   @override
@@ -70,6 +76,8 @@ class _NotificationManagementScreenState
         children: [
           if ( widget.pushPause != null )
             PushPauseSection( repository: widget.pushPause! ),
+          if ( widget.heartbeatPoke != null )
+            HeartbeatPokeSection( repository: widget.heartbeatPoke! ),
           SwitchListTile(
             key       : const Key( TestKeys.notifMgmtMaster ),
             secondary : const Icon( Icons.notifications_outlined ),

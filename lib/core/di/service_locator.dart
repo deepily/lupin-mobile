@@ -25,6 +25,7 @@ import '../../features/auth/domain/auth_bloc.dart';
 // Tier 2 data layer
 import '../../features/docs/data/doc_repository.dart';
 import '../../features/notifications/data/notification_repository.dart';
+import '../../features/settings/data/heartbeat_poke_repository.dart';
 import '../../features/settings/data/push_pause_repository.dart';
 import '../../features/decision_proxy/data/decision_proxy_repository.dart';
 
@@ -414,6 +415,10 @@ class ServiceLocator {
 
     _getIt.registerSingleton<PushPauseRepository>(
       PushPauseRepository(_getIt<Dio>()),
+    );
+
+    _getIt.registerSingleton<HeartbeatPokeRepository>(
+      HeartbeatPokeRepository(_getIt<Dio>()),
     );
 
     // Doc-viewer fetches for links found in notification abstracts. Same shared

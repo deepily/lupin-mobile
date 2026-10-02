@@ -35,6 +35,7 @@ import '../../quick_ask/presentation/quick_ask_screen.dart';
 import '../../settings/presentation/notification_audio_settings_screen.dart';
 import '../../settings/presentation/notification_management_screen.dart';
 import '../../notifications/data/notification_repository.dart';
+import '../../settings/data/heartbeat_poke_repository.dart';
 import '../../settings/data/push_pause_repository.dart';
 import '../../settings/presentation/notification_filter_settings_screen.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
@@ -124,6 +125,12 @@ PushPauseRepository? pushPauseRepository() =>
         ? ServiceLocator.get<PushPauseRepository>()
         : null;
 
+/// The stop poke client, or null when none is registered (hides the section).
+HeartbeatPokeRepository? heartbeatPokeRepository() =>
+    ServiceLocator.isRegistered<HeartbeatPokeRepository>()
+        ? ServiceLocator.get<HeartbeatPokeRepository>()
+        : null;
+
 /// The drawer's settings block, listed after the Home-grid surfaces under their own divider.
 ///
 /// The stop-list entry is disabled when the service is not registered.
@@ -139,6 +146,7 @@ List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
             : null,
         loadSenders : muteRosterLoader( context ),
         pushPause   : pushPauseRepository(),
+        heartbeatPoke : heartbeatPokeRepository(),
       ),
     ),
     FocusDrawerSurface( Icons.settings, 'Settings', ( _ ) => NotificationAudioSettingsScreen(
@@ -553,6 +561,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
                   : null,
               loadSenders : muteRosterLoader( context ),
               pushPause   : pushPauseRepository(),
+              heartbeatPoke : heartbeatPokeRepository(),
             ) ),
           ),
           ListTile(
