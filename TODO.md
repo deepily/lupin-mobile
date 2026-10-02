@@ -2,11 +2,12 @@
 
 ## ▶ START HERE — mobile docs track (2026-10-01 close, Tiffany 💍)
 
-**Live row `b707f92f` (P0).** Merged tip `28a7307`. Two finished, **ungated** worker commits wait in locked worktrees: Krishna `2ccb028`, Clayton `907a178` (contents in `history.md`).
+**Live row `b707f92f` (P0).** Merged tip `96f3768`: the whole sweep and the Phase 5 tooling are in (batch b9 green at 23:07, run by Rick with `!`).
 
 | Next | Waits on |
 |---|---|
-| Gate and merge `2ccb028` + `907a178` in one batch | Rick: a Bash permission rule for the manager gate script, or run it with `!` (gate row `a6d3bd18`; the classifier denied it even after his yes) |
+| Close the sweep and Phase 5 Step 3/4 rows with receipts (`ed3a79c`, `96f3768`); remove the trial worktree `tiffany-trial-b9` and the two seat worktrees | next session (not done before lights out) |
+| A Bash permission rule for the manager gate script, so a re-spun manager can gate | Rick (gate row `a6d3bd18`) |
 | Two tests assert comment text, so `app_constants.dart` and `prompt_bodies.dart` are unswept | Rick, decision `a1bbc3ef` (recommend: convert the tests) |
 | `lib/features/voice` does not compile, looks unused | Rick, decision `32aedd1c` (recommend: delete after checking reachability) |
 | Phase 5 Step 1: 823 analyzer issues in 13 swept directories (code work); or hook fails on docs rules only | Rick, row `27a1d168` |
