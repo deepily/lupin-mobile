@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lupin_mobile/features/settings/data/heartbeat_poke_repository.dart';
 
+import '../../_helpers/fixture_loader.dart';
 import '../_helpers/stub_dio.dart';
 
 void main() {
@@ -108,6 +109,21 @@ void main() {
 
     test( 'an unparseable set_at reads as null', () {
       expect( HeartbeatPokeState.fromJson( { "muted": true, "set_at": "soon" } ).setAt, isNull );
+    } );
+  } );
+
+  group( 'against the recorded server answer', () {
+    // Recorded by Mr. Radio from the live server (GET with an API key, 200) on
+    // 2026-10-02, after the endpoint merged as lupin 49f987d75. No PUT answer is
+    // recorded yet: only an admin can make one.
+    test( 'the recorded GET body parses, and reads as poke on', () async {
+      final body = loadFixture( 'settings/heartbeat_poke_mute_get.json' );
+      expect( body.keys.toSet(), { 'muted', 'set_by', 'set_at' } );
+      stub( getKey, body: body );
+      final s = await repo.getState();
+      expect( s.muted, isFalse );
+      expect( s.setBy, isNull );
+      expect( s.setAt, isNull );
     } );
   } );
 }
