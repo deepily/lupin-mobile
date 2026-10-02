@@ -556,10 +556,9 @@ class ServiceLocator {
     // the Dio they depend on. Nothing left to do here.
   }
 
-  /// Initialize use cases (legacy UseCaseRegistry disabled — broken).
+  /// Registers use cases; there are none, so there is nothing to do.
   static Future<void> _initializeUseCases() async {
-    // No active use cases. Legacy voice/session use-cases stay on disk but
-    // are not compiled because nothing imports them.
+    // No active use cases. The legacy registry and the voice use cases were deleted.
   }
 
   /// Initialize BLoCs

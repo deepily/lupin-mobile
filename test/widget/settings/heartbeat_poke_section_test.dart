@@ -123,6 +123,31 @@ void main() {
       expect( status( t ), "On" );
     } );
 
+    testWidgets( 'after a 403, a later good read keeps the switch disabled', ( t ) async {
+      await open( t );
+      fake.failWrite = const HeartbeatPokeException( "no", statusCode: 403 );
+      await t.tap( sw() );
+      await t.pumpAndSettle();
+      t.binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
+      await t.pumpAndSettle();
+      expect( fake.calls, [ "get", "set:true", "get" ] );
+      expect( adminOnly(), findsOneWidget );
+      expect( tile( t ).onChanged, isNull,
+          reason: "a read succeeds for any user, so it must not re-enable a refused switch" );
+    } );
+
+    testWidgets( 'after a 403, a failed read does not re-enable the switch either', ( t ) async {
+      await open( t );
+      fake.failWrite = const HeartbeatPokeException( "no", statusCode: 403 );
+      await t.tap( sw() );
+      await t.pumpAndSettle();
+      fake.failRead = const HeartbeatPokeException( "boom", statusCode: 500 );
+      t.binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
+      await t.pumpAndSettle();
+      expect( adminOnly(), findsOneWidget );
+      expect( tile( t ).onChanged, isNull );
+    } );
+
     testWidgets( 'a 500 on the write shows the message and leaves the switch usable', ( t ) async {
       await open( t );
       fake.failWrite = const HeartbeatPokeException( "server exploded", statusCode: 500 );

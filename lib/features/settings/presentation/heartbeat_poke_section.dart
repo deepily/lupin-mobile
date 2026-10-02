@@ -55,15 +55,16 @@ class _HeartbeatPokeSectionState extends State<HeartbeatPokeSection>
   /// Runs [action] with busy, error and 403 handling in one place.
   ///
   /// No path can crash the screen, and a refused write leaves the last state the server reported.
+  /// Once a write is refused as admin-only, the switch stays disabled until the screen is reopened.
+  /// A read succeeds for every user, so a later good read says nothing about the account's role.
   Future<void> _run( Future<void> Function() action ) async {
     setState( () { _busy = true; _error = null; } );
     try {
       await action();
-      if ( mounted ) setState( () => _adminOnly = false );
     } on HeartbeatPokeException catch ( e ) {
       if ( !mounted ) return;
       setState( () {
-        _adminOnly = e.isAdminOnly;
+        _adminOnly = _adminOnly || e.isAdminOnly;
         _error     = e.isAdminOnly ? null : e.message;
       } );
     } catch ( e ) {
