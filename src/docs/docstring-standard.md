@@ -20,6 +20,7 @@ Status: approved by Rick on 2026-09-30 (D10; record `R5b-M1` in `src/docs/decisi
 - The summary is one sentence on one line, followed by a blank `///` line. The symbol index reads only that line.
 - The why section is optional and never longer than four lines.
 - `Design:` names a path that exists in this repo, with an anchor if needed. Omit the line when no design document or decision record exists.
+- To name one decision record, add its ID in parentheses after the path: `Design: src/docs/decisions/README.md (R-HA-accordion)`. This works for word-form IDs only. The doc linter reads an ID such as `R1=B` or `AC-S1.10` as a bare reference, so cite those records by path alone, and give every new record a word-form ID.
 - Write Dart doc references as `[Name]` only for symbols that resolve.
 
 ## The eight rules, in Dart
@@ -89,7 +90,7 @@ After:
 /// The key is the persona with the session hash stripped, in display case, so
 /// "Krishna" and "krishna" share a group. Do not derive it with
 /// `split( " " ).first`: a persona can have two words (`lib/core/text/persona_label.dart`).
-/// Design: src/docs/decisions/README.md (R1=B)
+/// Design: src/docs/decisions/README.md
 ///
 /// Ensures:
 ///   - groups are ordered by persona name, ignoring case
