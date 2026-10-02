@@ -7,24 +7,22 @@ import '../../../shared/widgets/prompt_bodies.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
 
-/// Bottom sheet for responding to interactive notifications. Variants:
-///   - yes_no            → two FilledButtons + optional comment
-///   - multiple_choice   → radio list (single) or checkbox list (multi)
-///   - open_ended        → multiline TextField
-///   - open_ended_batch  → list of TextFields (one per question)
+/// Bottom sheet for answering an interactive notification.
 ///
-/// EVERY body now lives in `lib/shared/widgets/prompt_bodies.dart` and is
-/// COMPOSED here, wiring `onRespond` to the existing `NotificationsRespond`
-/// dispatch. The three single-String bodies moved in F-S3-1 (2026-06-12);
-/// the batch body followed in AC-S4.16 (2026-08-29) as
-/// [MultiQuestionPromptBody] — it was the only widget in the tree that read
-/// the canonical nested `questions[]` shape, and being private is what kept
-/// anyone from reusing it.
+/// Picks a body from `lib/shared/widgets/prompt_bodies.dart` by response type.
+/// The types are yes_no, multiple_choice, open_ended and open_ended_batch.
+/// Each body's answer is sent as a `NotificationsRespond` event, then the sheet closes.
 class InteractivePromptSheet extends StatelessWidget {
+  /// Id of the notification being answered.
   final String                notificationId;
+
+  /// Response type that selects the body, such as `yes_no` or `multiple_choice`.
   final String                responseType;
+
+  /// Response options from the notification payload, or null when it has none.
   final Map<String, dynamic>? options;
 
+  /// Creates a sheet that answers [notificationId].
   const InteractivePromptSheet( {
     super.key,
     required this.notificationId,
@@ -32,6 +30,7 @@ class InteractivePromptSheet extends StatelessWidget {
     this.options,
   } );
 
+  /// Opens the sheet as a modal bottom sheet that shares the caller's bloc.
   static Future<void> show( {
     required BuildContext  context,
     required String        notificationId,
@@ -58,9 +57,9 @@ class InteractivePromptSheet extends StatelessWidget {
     );
   }
 
-  /// The canonical nested question list, or empty when the payload does
-  /// not carry one. ONE reader, so the two doors cannot disagree about
-  /// where questions live.
+  /// The nested question list, or empty when the payload carries none.
+  ///
+  /// Every caller reads questions here, so they agree on where questions live.
   static List<dynamic> _nestedQuestions( Map<String, dynamic>? options ) =>
       ( options?[ "questions" ] as List? )?.cast<dynamic>() ?? const [];
 
@@ -80,20 +79,13 @@ class InteractivePromptSheet extends StatelessWidget {
         body = YesNoPromptBody( onRespond: ( v ) => _submit( context, v ) );
         break;
       case "multiple_choice":
-        // 🔴 AC-S4.10b delta 3 / AC-S4.5. This read `options?["options"]`
-        // and `options?["multi_select"]` at the TOP level, but a canonical
-        // `ask_multiple_choice` payload nests its questions under
-        // `response_options.questions[]` — so the sheet rendered an EMPTY
-        // option list and submitted a bare label. It is the same defect the
-        // focus pane carries one layer up, and this sheet is where the
-        // pane's "Answer in full view…" fallback lands, so a canonical
-        // payload used to hit the wall twice.
+        // A payload with nested questions gets the multi-question body.
+        // Otherwise the top-level `options` and `multi_select` keys are read.
         final nested = _nestedQuestions( options );
         if ( nested.isNotEmpty ) {
           body = MultiQuestionPromptBody(
             questions : nested,
-            // The server parser wants {"answers": {header: value}}; the
-            // body stays door-agnostic and the HOST wraps (AC-S4.11).
+            // The server expects {"answers": {header: value}}, so the sheet wraps the map.
             onRespond : ( v ) => _submit( context, { "answers": v } ),
           );
         } else {
@@ -105,10 +97,7 @@ class InteractivePromptSheet extends StatelessWidget {
         }
         break;
       case "open_ended_batch":
-        // Unchanged shape: a batch question carries no `options`, so the
-        // promoted body renders the same text fields and submits the same
-        // {header: value} map it always did — unwrapped, as this door has
-        // always expected.
+        // A batch question carries no `options`. It submits the {header: value} map unwrapped.
         body = MultiQuestionPromptBody(
           questions : _nestedQuestions( options ),
           onRespond : ( v ) => _submit( context, v ),
@@ -116,10 +105,8 @@ class InteractivePromptSheet extends StatelessWidget {
         break;
       case "open_ended":
       default:
-        // Row 928c5808 ("Both" boxes, Rick 2026-09-28): the append mic. The
-        // SERVICE goes in, not a session — this sheet is stateless, so the body
-        // builds and owns its own session and cancels it on dispose. No
-        // registered recorder ⇒ no mic, exactly the box that shipped before.
+        // The append mic needs the ASR service, not a session. The body builds its own
+        // session and cancels it on dispose. Without a registered service there is no mic.
         body = OpenEndedPromptBody(
           onRespond : ( v ) => _submit( context, v ),
           asr       : ServiceLocator.isRegistered<AsrService>()

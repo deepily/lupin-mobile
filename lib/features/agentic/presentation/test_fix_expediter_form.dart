@@ -11,7 +11,11 @@ import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Form that resumes a test-fix-expediter job.
+///
+/// On success it shows the resumed job.
 class TestFixExpediterForm extends StatefulWidget {
+  /// Creates the form.
   const TestFixExpediterForm( { super.key } );
 
   @override

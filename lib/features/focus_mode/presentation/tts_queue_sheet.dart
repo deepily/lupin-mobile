@@ -3,18 +3,20 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 
-/// TTS queue viewer (Rick 2026-08-21: "a pop-up queued TTS message viewer
-/// that lets me delete / skip messages that are noisy" — web
-/// `#tts-queue-section` parity). Bottom sheet over the focus screen:
-/// the in-flight utterance first with **Skip**, then the pending ones in
-/// play order with a per-row delete, plus **Clear queue** (pending only)
-/// and **Stop all** (cuts the current one too). Live off
-/// [TtsOrchestrator.queueStream]; nothing here is a mute — what you delete
-/// is gone, what you leave still plays.
+/// Bottom sheet over the focus screen that lists the queued speech.
+///
+/// The in-flight utterance comes first with a Skip button. The pending ones follow in play
+/// order, each with a delete button. Clear queue drops the pending items only, and Stop all
+/// cuts the current one too. The list follows [TtsOrchestrator.queueStream] live.
+/// Nothing here is a mute: what the user deletes is gone, and what is left still plays.
 class TtsQueueSheet extends StatelessWidget {
+  /// The orchestrator whose queue is shown and edited.
   final TtsOrchestrator tts;
+
+  /// Creates the sheet over [tts].
   const TtsQueueSheet( { super.key, required this.tts } );
 
+  /// Opens the sheet as a modal bottom sheet over [context].
   static Future<void> show( BuildContext context, TtsOrchestrator tts ) =>
       showModalBottomSheet<void>(
         context     : context,

@@ -1,16 +1,23 @@
 import 'package:dio/dio.dart';
 
-/// The server's global push pause, as `GET /api/fcm/push-pause` reports it
-/// (row 67ee93b0; design: lupin `2026.09.29-mobile-push-kill-switch-design.md`).
+/// The server's global push pause, as `GET /api/fcm/push-pause` reports it.
 class PushPauseState {
+  /// Whether the server is currently holding back push notifications.
   final bool      paused;
 
-  /// Null while paused means "until resumed or the server restarts".
+  /// When the pause ends; null while paused means until resumed or the server restarts.
   final DateTime? resumesAt;
+
+  /// Who set the pause, as the server names them.
   final String?   setBy;
+
+  /// When the pause was set.
   final DateTime? setAt;
+
+  /// Whether the server has push enabled at all; null when the server does not say.
   final bool?     pushEnabled;
 
+  /// Creates a state; only [paused] is required.
   const PushPauseState( {
     required this.paused,
     this.resumesAt,
@@ -19,12 +26,14 @@ class PushPauseState {
     this.pushEnabled,
   } );
 
+  /// Reads the GET body into a state.
+  ///
   /// Requires:
-  ///     - json is the GET body; `resumes_at` / `set_at` are ISO-8601 or null
+  ///     - json is the GET body; `resumes_at` and `set_at` are ISO-8601 or null
   ///
   /// Ensures:
   ///     - timestamps come back in the phone's local time zone, so the screen
-  ///       shows the wall-clock time Rick will actually see
+  ///       shows the wall-clock time the user will see
   factory PushPauseState.fromJson( Map<String, dynamic> json ) => PushPauseState(
     paused      : json["paused"] == true,
     resumesAt   : _time( json["resumes_at"] ),
@@ -37,9 +46,15 @@ class PushPauseState {
       v is String ? DateTime.tryParse( v )?.toLocal() : null;
 }
 
+/// A failed push-pause call, carrying the server's message and HTTP status.
 class PushPauseException implements Exception {
+  /// The server's `detail` text, or a local fallback.
   final String message;
+
+  /// The HTTP status, or null when the request never got a response.
   final int?   statusCode;
+
+  /// Creates an exception for [message] with an optional [statusCode].
   const PushPauseException( this.message, { this.statusCode } );
 
   /// 403: the signed-in user is not an admin, so the controls cannot work.
@@ -51,18 +66,22 @@ class PushPauseException implements Exception {
 
 /// Pause and resume the server's push notifications to the phone.
 ///
-/// Uses the shared Dio (its auth interceptor supplies the Bearer token). The
-/// pause lives in server memory and a restart clears it, so callers must
-/// re-read [getState] rather than trust a cached value.
+/// It uses the shared Dio, whose auth interceptor supplies the Bearer token.
+/// The pause lives in server memory and a restart clears it, so callers re-read
+/// [getState] rather than trust a cached value.
 class PushPauseRepository {
+  /// The server path for reading and setting the pause.
   static const String path = "/api/fcm/push-pause";
 
-  /// The server refuses anything longer (400).
+  /// The longest pause in minutes; the server refuses anything longer with a 400.
   static const int maxMinutes = 1440;
 
   final Dio _dio;
+
+  /// Creates a repository over the shared [Dio].
   const PushPauseRepository( this._dio );
 
+  /// Reads the current pause state from the server.
   Future<PushPauseState> getState() async {
     try {
       final res = await _dio.get<Map<String, dynamic>>( path );
@@ -72,7 +91,7 @@ class PushPauseRepository {
     }
   }
 
-  /// Pause push. [minutes] null leaves the field out: paused until resumed.
+  /// Pauses push; a null [minutes] leaves the field out, so the pause lasts until resumed.
   Future<void> pause( { int? minutes } ) async {
     try {
       await _dio.post<dynamic>( path, data: <String, dynamic>{
@@ -84,6 +103,7 @@ class PushPauseRepository {
     }
   }
 
+  /// Lifts the pause.
   Future<void> resume() async {
     try {
       await _dio.post<dynamic>( path, data: <String, dynamic>{ "paused": false } );

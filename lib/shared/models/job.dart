@@ -10,22 +10,36 @@ import 'package:equatable/equatable.dart';
 /// Decision: src/docs/decisions/README.md (JobStatus-kept).
 /// Design: src/rnd/2026.06.11-focus-mode-voice-chat/10-section-s1-tts-pause-resume.md
 enum JobStatus {
+  /// Queued and not yet started.
   todo,
+  /// In progress.
   running,
+  /// Finished successfully.
   completed,
+  /// Abandoned after a failure and not retried.
   dead,
 }
 
+/// One locally stored job and its outcome.
 class Job extends Equatable {
+  /// Unique job identifier.
   final String id;
+  /// The request text the job carries.
   final String text;
+  /// Current lifecycle state.
   final JobStatus status;
+  /// When the job was created.
   final DateTime createdAt;
+  /// When the job last changed, or null if it never has.
   final DateTime? updatedAt;
+  /// The outcome text, or null until the job finishes.
   final String? result;
+  /// The failure message, or null when the job has not failed.
   final String? error;
+  /// Free-form extra fields, or null.
   final Map<String, dynamic>? metadata;
 
+  /// Creates a job.
   const Job({
     required this.id,
     required this.text,
@@ -37,6 +51,7 @@ class Job extends Equatable {
     this.metadata,
   });
 
+  /// Returns a copy with the given fields replaced.
   Job copyWith({
     String? id,
     String? text,
@@ -59,6 +74,7 @@ class Job extends Equatable {
     );
   }
 
+  /// Builds a job from its wire map; an unknown status becomes todo.
   factory Job.fromJson(Map<String, dynamic> json) {
     return Job(
       id: json['id'] as String,
@@ -77,6 +93,7 @@ class Job extends Equatable {
     );
   }
 
+  /// Returns the wire map for this job.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

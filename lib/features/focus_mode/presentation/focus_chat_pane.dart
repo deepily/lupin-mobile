@@ -23,33 +23,36 @@ import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
 import 'tts_fraction_bar.dart';
 
-/// The chat pane half of the focus surface (S3 §3.1): header (badge +
-/// sender name), the focused sender's last-7 window newest-at-bottom,
-/// inline prompts on the newest UNANSWERED ask (buried-ask rule via S2's
-/// `pendingPromptFor`, F-S3-S2-1), and the cold-start/hydration states
-/// (F-S3-S2-3 — empty-state hint, loading spinner, error retry banner).
+/// The chat half of the focus surface: header, the focused sender's window, inline prompts.
 ///
-/// All inline responses dispatch via `FocusRespondRequested` with an
-/// explicit typed `FocusPromptContext` (F-S3-2). Batch open-ended asks —
-/// and multi-select multiple-choice (same Map/List reasoning, implementer
-/// call S3 §8) — render a fallback affordance that opens the legacy
-/// `InteractivePromptSheet` (F-S3-S2-2(d)).
+/// The header shows the sender's badge and name. The window holds the last seven messages,
+/// newest at the top. Inline prompts attach to the newest unanswered ask only, through
+/// `pendingPromptFor`. Cold start shows an empty-state hint, a loading spinner or an error
+/// retry banner.
+///
+/// Inline responses dispatch `FocusRespondRequested` with an explicit typed
+/// `FocusPromptContext`. Batch open-ended asks and multi-select multiple-choice asks show a
+/// fallback button that opens the legacy `InteractivePromptSheet`.
 class FocusChatPane extends StatefulWidget {
-  /// Retry seam: the error banner re-dispatches `FocusColdStartRequested`,
-  /// which needs the authenticated email (provided by the screen).
+  /// Authenticated email that the error banner's retry needs for `FocusColdStartRequested`.
   final String? userEmail;
-  /// Filter prefs (collapse toggle). Tests inject; production resolves from
-  /// the locator when registered; null ⇒ collapse ON (browser parity).
+  /// Stop-list preferences, including the collapse toggle.
+  ///
+  /// Tests inject it, production resolves it from the locator when registered, and null
+  /// collapses groups, matching the browser.
   final NotificationStopList? stopList;
-  /// Audio prefs for the pinned TTS-fraction slider. Tests inject; production
-  /// resolves from the locator; null => no slider rendered.
+  /// Audio preferences for the pinned TTS-fraction slider.
+  ///
+  /// Tests inject it, production resolves it from the locator, and null renders no slider.
   final NotificationPreferences? prefs;
 
+  /// Creates the pane; [userEmail] feeds the retry banner.
   const FocusChatPane( { super.key, this.userEmail, this.stopList, this.prefs } );
 
-  /// Share of the pane's width a bubble may use (row 3681bd9e). A fixed
-  /// 320 px cap left bubbles at about half the width of an unfolded Pixel
-  /// Fold while the header spanned all of it; a fraction follows the screen.
+  /// Share of the pane's width a bubble may use.
+  ///
+  /// A fixed 320 px cap left bubbles at about half the width of an unfolded Pixel Fold.
+  /// The header spanned all of it, so the cap now follows the screen.
   static const double bubbleWidthFraction = 0.9;
 
   @override
@@ -61,29 +64,26 @@ class _FocusChatPaneState extends State<FocusChatPane> {
   NotificationPreferences? _prefs;
   String? get userEmail => widget.userEmail;
 
-  /// Attached to the message list so a notification tap can bring its message
-  /// into view (row d9bc6f6c). One controller for the pane, re-used across
-  /// sender switches — the list is rebuilt, the controller is not.
+  /// Attached to the message list so a notification tap can bring its message into view.
+  ///
+  /// One controller serves the pane across sender switches: the list is rebuilt, the
+  /// controller is not.
   final ScrollController _listScroll = ScrollController();
 
   /// The scroll anchor for the message a notification tap asked to reveal.
   ///
-  /// 🔴 ONE LONG-LIVED `GlobalKey`, NOT A `GlobalObjectKey` BUILT FROM THE ID.
-  /// `GlobalObjectKey` compares its value with `identical()`, not `==` — and two
-  /// separately interpolated strings with the same characters are equal but not
-  /// identical, because Dart canonicalises compile-time constants and not runtime
-  /// interpolations. So `GlobalObjectKey( 'focus.reveal.$id' )` built in the
-  /// build method and an equal-looking one built in the callback are DIFFERENT
-  /// keys, `currentContext` is null, and the scroll silently never happens.
-  /// Measured exactly that way on this file's first run.
-  ///
+  /// It is one long-lived `GlobalKey`, not a `GlobalObjectKey` built from the id.
+  /// A `GlobalObjectKey` compares its value with `identical()`, not `==`. Two separately
+  /// interpolated strings with the same characters are equal but not identical.
+  /// A key built in the build method and an equal-looking one built in the callback would
+  /// therefore differ. Then `currentContext` would be null and the scroll would never happen.
   /// One key is enough because there is at most one reveal target at a time.
   final GlobalKey _revealAnchor = GlobalKey();
 
-  /// The reveal target this pane has already acted on, so the scroll fires ONCE
-  /// per tap. Without it every unrelated rebuild — a new message, a persona
-  /// badge, the TTS slider moving — would scroll the list back again under a
-  /// user who has since scrolled somewhere else themselves.
+  /// The reveal target this pane has already acted on, so the scroll fires once per tap.
+  ///
+  /// Without it every unrelated rebuild would scroll the list back under a user who has
+  /// since scrolled elsewhere.
   String? _revealedId;
 
   @override
@@ -107,18 +107,11 @@ class _FocusChatPaneState extends State<FocusChatPane> {
     super.dispose();
   }
 
-  /// Bring the bubble keyed for [notificationId] into view, then tell the bloc
-  /// the reveal is spent.
+  /// Scrolls the bubble for [notificationId] into view, then tells the bloc it is done.
   ///
-  /// 🔴 THE TARGET MUST BE BUILT FOR THIS TO MEAN ANYTHING, AND IN A LAZY LIST
-  /// IT MIGHT NOT BE. `Scrollable.ensureVisible` needs an element, so it can
-  /// only ever reach a bubble the viewport (plus its cache extent) has already
-  /// built. The window is capped at 7 messages and the list renders newest-first,
-  /// so in practice the message a user just tapped is at or near the top and is
-  /// built — but "in practice" is not "always", which is why the miss is handled
-  /// explicitly rather than assumed away: an unbuilt or aged-out target consumes
-  /// the reveal and leaves the list where it is. The sender is still selected,
-  /// which is the half that fixes the reported complaint.
+  /// The list is a scroll view over a column, so every bubble in the window is built.
+  /// The target is found unless its message has left the window. In that case the reveal
+  /// is consumed and the list stays where it is. The sender is still selected.
   void _revealAfterFrame( String notificationId ) {
     WidgetsBinding.instance.addPostFrameCallback( ( _ ) async {
       if ( !mounted ) return;
@@ -153,8 +146,8 @@ class _FocusChatPaneState extends State<FocusChatPane> {
           key: const Key( TestKeys.focusChatPane ),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Pinned ABOVE everything else in the pane -- survives sender
-            // switches, loading and error states (Rick 2026-08-21).
+            // Pinned above everything else in the pane; it survives sender switches and
+            // the loading and error states.
             if ( _prefs != null ) TtsFractionBar( prefs: _prefs! ),
             if ( state.hydration == FocusHydration.error )
               _RetryBanner( userEmail: userEmail ),
@@ -171,7 +164,7 @@ class _FocusChatPaneState extends State<FocusChatPane> {
     }
     final focused = state.focusedSender;
     if ( focused == null ) {
-      // Cold-start empty state (Q4-LITERAL — no auto-focus, ever).
+      // Cold-start empty state: nothing is focused until the user taps a badge.
       return const Center(
         child: Padding(
           padding : EdgeInsets.all( 24 ),
@@ -189,31 +182,16 @@ class _FocusChatPaneState extends State<FocusChatPane> {
     final personaRaw   = ( persona?.displayName ?? persona?.name ?? '' ).trim();
     final personaLabel = personaRaw.isEmpty ? null : personaRaw;
 
-    // Stop-list RENDER lens (2026-08-21, Rick: "Done: Bash is checked yet
-    // still shows"): ingest suppression only catches NEW arrivals, so a
-    // pattern checked after a bubble landed left it on screen. Apply the
-    // same predicate here too — the window is retained (hide-not-delete),
-    // so unchecking reveals again instantly; the pane already re-renders on
-    // any stop-list change via [_onPrefsChanged]. User replies never hide.
-    //
-    // 🔴 AC-S4.15 — AND NEITHER DOES AN ACTIONABLE QUESTION. The bloc already
-    // exempts one at ingest ([_onInbound]: `rule != null && !actionable`), on
-    // Rick's AC-S3.8(2) ruling that such an item is *shown, muted, marked,
-    // playback available*. This lens is the SECOND enforcement point of that
-    // one rule and it had drifted: it exempted only user replies, so a
-    // question the bloc deliberately kept was filtered straight back out.
-    // The user was then muted AND marked AND NOT SHOWN — the one combination
-    // the ruling forbids, because they are being asked to act on something
-    // they cannot see, while the server blocks on a reply they cannot send.
-    //
-    // Measured by `test/service_integration/suppression_seam_test.dart` on its
-    // first run: gate 1 muted the question, the bloc stored it with its
-    // suppression retained, and the pane rendered neither the notice nor the
-    // answer controls — while AC-S3.7's and AC-S4.14's own tests stayed GREEN.
-    //
-    // [isActionableQuestion] is RE-USED, never re-implemented: one predicate,
-    // two enforcement points. A second copy here is exactly how the first
-    // divergence happened.
+    // Stop-list render lens: ingest suppression only catches new arrivals, so a pattern
+    // checked after a bubble landed would leave it on screen. The same predicate is
+    // applied here. The window is retained, so unchecking reveals again instantly, and the
+    // pane re-renders on any stop-list change through [_onPrefsChanged].
+    // User replies and actionable questions are never hidden. The bloc exempts an
+    // actionable question at ingest, and this lens is the second enforcement point of that
+    // rule. Hiding the question here would leave the user asked to act on something they
+    // cannot see, while the server blocks on a reply they cannot send.
+    // [isActionableQuestion] is reused, not re-implemented, so both points share one
+    // predicate.
     final sl      = _stopList;
     final window  = sl == null
         ? stored
@@ -227,10 +205,9 @@ class _FocusChatPaneState extends State<FocusChatPane> {
             ) ).toList();
     final hidden  = ( state.hiddenCountBySender[ focused ] ?? 0 ) + ( stored.length - window.length );
 
-    // 🔴 THE KEYBOARD CAN LEAVE THIS PANE LESS HEIGHT THAN ITS OWN HEADER. With
-    // the DM editor open (up to 8 lines) and the soft keyboard up at 360×800, the
-    // pane got ~35 dp against a 44 dp header and overflowed (measured 2026-09-23).
-    // Below this floor the chrome steps aside and the list alone takes the space.
+    // The keyboard can leave this pane less height than its own header: with the DM editor
+    // open and the soft keyboard up at 360x800, the pane gets about 35 dp against a 44 dp
+    // header. Below this floor the chrome steps aside and the list takes the space.
     return LayoutBuilder( builder: ( context, box ) {
       final roomy = box.maxHeight >= _kHeaderFloor;
       return Column(
@@ -244,9 +221,8 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                 if ( persona != null )
                   PersonaBadge( persona: persona, senderId: focused, diameter: 28 ),
                 if ( persona != null ) const SizedBox( width: 8 ),
-                // Row de12b7bc: the header named the e-mail and session but not
-                // WHO — basic information. Persona name first, bold; the sender
-                // id stays, italic and quieter, so both read at a glance.
+                // Persona name first and bold; the sender id stays, italic and quieter, so
+                // both read at a glance.
                 if ( personaLabel != null ) ...[
                   Text(
                     personaLabel,
@@ -287,37 +263,27 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                     ? 'No messages yet in this window.'
                     : 'Everything here is hidden by your stop-list.' ) )
                 : Builder( builder: ( context ) {
-                    // NEWEST AT THE TOP (Rick 2026-08-21): the window is stored
-                    // oldest→newest; group first (runs are contiguous either
-                    // way), then render the groups reversed. Inside an expanded
-                    // group the children are newest-first too.
+                    // Newest at the top: the window is stored oldest to newest. Group first,
+                    // since runs are contiguous either way, then render the groups reversed.
+                    // Inside an expanded group the children are newest first too.
                     final groups = collapseByProgressGroup<FocusMessage>(
                       window, _groupKey, enabled: _stopList?.collapseGroups ?? true )
                       .reversed.toList( growable: false );
 
-                    // A notification tap asked for one message (row d9bc6f6c).
-                    // Only honour it while the target is actually IN this
-                    // sender's window: a reveal pointing at a message that has
-                    // been evicted (cap 7) or filtered out by the stop-list has
-                    // nothing to scroll to, and must still be consumed so the
-                    // pane does not retry it on every rebuild.
+                    // A notification tap asks to reveal one message. Honour it only while the
+                    // target is in this sender's window: an evicted or stop-listed target has
+                    // nothing to scroll to, and must still be consumed so the pane does not
+                    // retry it on every rebuild.
                     final reveal = state.revealMessageId;
                     final inWindow = reveal != null &&
                         window.any( ( m ) => m.item.id == reveal );
-                    // Do not consume a reveal while the backfill is in flight:
-                    // on the cold start this row is about, the tap is routed
-                    // BEFORE the conversation fetch returns, and consuming on a
-                    // window that does not hold the target yet would throw the
-                    // reveal away one frame before its message arrives.
-                    //
-                    // [_body]'s loading branch already returns a spinner instead
-                    // of this list, so today that makes this a second line of
-                    // defence rather than the only one. It is kept because the
-                    // two guards protect different things — that one is about
-                    // what the user sees during a fetch, this one is about not
-                    // spending a one-shot instruction on an incomplete window —
-                    // and a later change to the loading branch should not
-                    // silently reintroduce the bug.
+                    // Do not consume a reveal while the backfill is in flight: on a cold start the
+                    // tap is routed before the conversation fetch returns, and consuming on a
+                    // window that lacks the target would discard the reveal one frame before its
+                    // message arrives. The loading branch of [_body] already shows a spinner
+                    // instead of this list, so this is a second guard. It protects a one-shot
+                    // instruction from being spent on an incomplete window, and a later change
+                    // to the loading branch should not reintroduce the bug.
                     final settled = state.hydration != FocusHydration.loading;
                     if ( reveal != null && settled && reveal != _revealedId ) {
                       _revealedId = reveal;
@@ -325,26 +291,13 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                     }
                     if ( reveal == null ) _revealedId = null;
 
-                    // 🔴 A SCROLL VIEW OVER A COLUMN, NOT A `ListView`, AND THE
-                    // REVEAL IS WHY (row d9bc6f6c). `Scrollable.ensureVisible` can
-                    // only reach an element that EXISTS, and BOTH `ListView` forms
-                    // are lazy — `ListView.builder` through
-                    // `SliverChildBuilderDelegate` and `ListView( children: )`
-                    // through `SliverChildListDelegate`, which still only creates
-                    // elements for the visible range plus the cache.
-                    //
-                    // Measured, 7-message window in a 320 dp viewport: exactly 5
-                    // bubbles ever entered the tree. Raising `cacheExtent` to 4000
-                    // changed nothing, and neither did handing the list its children
-                    // pre-built. The two that were missing were precisely the two
-                    // the scroll existed to reach, so the reveal resolved to no
-                    // element and silently did nothing — green tests, dead feature.
-                    //
-                    // This is cheap because the window is BOUNDED: the bloc caps it
-                    // at 7 messages per sender (Q8), so this lays out at most seven
-                    // bubbles rather than an unbounded conversation. That cap is the
-                    // entire justification, which is why it is named here rather
-                    // than assumed — if it rises materially, this needs revisiting.
+                    // A scroll view over a column, not a `ListView`, because the reveal needs
+                    // every bubble to exist. `Scrollable.ensureVisible` only reaches an element
+                    // that exists, and both `ListView` forms build only the visible range plus
+                    // the cache. In a 320 dp viewport a seven-message window put only five
+                    // bubbles in the tree, and raising `cacheExtent` or passing pre-built
+                    // children changed nothing. This is cheap because the bloc caps the window
+                    // at seven messages per sender; if that cap rises materially, revisit this.
                     return SingleChildScrollView(
                       controller  : _listScroll,
                       padding     : const EdgeInsets.all( 8 ),
@@ -365,10 +318,9 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                             persona        : persona,
                             prefs          : _prefs,
                           );
-                          // The scroll anchor rides a wrapper, not the bubble
-                          // itself: _MessageBubble already carries a Key of its
-                          // own (focus.bubble.<id>, which tests match on) and a
-                          // widget cannot hold two.
+                          // The scroll anchor rides a wrapper, not the bubble: the bubble
+                          // already carries its own key, which tests match on, and a widget
+                          // cannot hold two.
                           return holdsTarget
                               ? KeyedSubtree(
                                   key   : _revealAnchor,
@@ -378,8 +330,7 @@ class _FocusChatPaneState extends State<FocusChatPane> {
                         final group = _CollapsedGroup(
                           key      : Key( '${TestKeys.focusGroupPrefix}${g.key}-${g.latest.item.id}' ),
                           count    : g.count,
-                          // A buried target is un-buried, or ensureVisible has
-                          // no element to find.
+                          // A buried target is expanded, or ensureVisible has no element to find.
                           initiallyExpanded : holdsTarget,
                           summary  : _MessageBubble( msg: g.latest, senderId: focused,
                               personaColor: PersonaBadge.colorOf( persona ), isPendingPrompt: false,
@@ -405,8 +356,10 @@ class _FocusChatPaneState extends State<FocusChatPane> {
   }
 }
 
-/// Header (~44 dp) + divider + stop-list caption, rounded up: below this the
-/// pane shows its list alone. See the keyboard note in the pane's build.
+/// Height below which the pane shows its list alone, with no header.
+///
+/// It is the header (about 44 dp), divider and stop-list caption, rounded up. See the
+/// keyboard note in the pane's build.
 const double _kHeaderFloor = 96;
 
 class _RetryBanner extends StatelessWidget {
@@ -448,18 +401,11 @@ class _MessageBubble extends StatelessWidget {
   final Color?       personaColor;
   final bool         isPendingPrompt;
 
-  /// Who sent it, for the long-press "Mute <sender>" shortcut (row f1e80e67),
-  /// and the prefs that shortcut writes to. Null prefs fall back to the locator.
+  /// Who sent it, for the long-press "Mute <sender>" shortcut.
+  ///
+  /// The prefs are what that shortcut writes to; null falls back to the locator.
   final VoicePersona?            persona;
   final NotificationPreferences? prefs;
-
-  /// AC-S4.14's speak-anyway hook. Reaching the orchestrator's
-  /// `speakAnyway( TtsSuppression )` needs the ORIGINAL suppression object,
-  /// which is emitted at INGEST — long before this widget mounts — and is not
-  /// retained anywhere today. So the host injects the handler rather than this
-  /// widget reconstructing a `TtsSuppression`, which would guess `verbatim`
-  /// and `sender` and amount to a second source of truth for a stream that
-  /// already owns them.
 
   const _MessageBubble( {
     required this.msg,
@@ -470,11 +416,9 @@ class _MessageBubble extends StatelessWidget {
     this.prefs,
   } );
 
-  /// The SENDER's own colour (row de12b7bc). Rick: with Tiffany, María and Mr.
-  /// Radio on the rail in yellow, pink and orange, every bubble carried the
-  /// same orange — because the bar was keyed to PRIORITY, and `high` is
-  /// orange. It now says who sent it; the priority palette is the fallback for
-  /// a sender with no colour.
+  /// The accent colours by priority, used for a sender with no colour of its own.
+  ///
+  /// The bar normally names the sender, so each sender's bubbles differ.
   static const _priorityAccent = {
     'low'    : Colors.blueGrey,
     'medium' : Colors.blue,
@@ -496,10 +440,8 @@ class _MessageBubble extends StatelessWidget {
         if ( msg.item.title != null && msg.item.title!.isNotEmpty )
           Text( msg.item.title!, style: theme.textTheme.labelLarge ),
         Text( msg.item.message ),
-        // Row d7f56574: the abstract, where senders put doc links, was never
-        // rendered on this surface, so the links could not be tapped. The
-        // card renders nothing for an empty abstract, and the repository is
-        // only looked up when there is one to show.
+        // The abstract carries doc links. The card renders nothing for an empty abstract,
+        // and the repository is only looked up when there is one to show.
         if ( msg.item.abstractText?.isNotEmpty ?? false ) ...[
           const SizedBox( height: 6 ),
           AbstractBody(
@@ -507,12 +449,9 @@ class _MessageBubble extends StatelessWidget {
             repository   : ServiceLocator.instance<DocRepository>(),
           ),
         ],
-        // AC-S4.14 — a question the stop-list suppressed says so, names the
-        // rule, and offers speak-anyway. It renders HERE, above the prompt
-        // zone, so the normal answer controls below it stay intact: the user
-        // can answer silently, which is the whole point. Putting this notice
-        // in an answer card instead would tell the user something was muted
-        // and give them no way to act on it, while the server stays blocked.
+        // A question the stop-list suppressed says so, names the rule, and offers
+        // speak-anyway. It renders above the prompt zone so the normal answer controls
+        // stay intact and the user can still answer silently.
         if ( msg.suppressedRule != null )
           _SuppressedNotice( msg: msg ),
         if ( msg.item.responseRequested ) _promptZone( context ),
@@ -543,11 +482,9 @@ class _MessageBubble extends StatelessWidget {
                 : theme.colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular( 10 ),
           ),
-          // Rick 2026-09-26: this was IntrinsicHeight around a Row, and the
-          // intrinsic pass underestimated wrapped choice tiles at phone widths.
-          // The bubble then clipped its own bottom, and the Submit button of an
-          // inline multiple-choice ask was never shown. The content now sizes
-          // itself, and the accent bar is laid over its left edge.
+          // The content sizes itself and the accent bar is laid over its left edge. An
+          // `IntrinsicHeight` around a `Row` underestimated wrapped choice tiles at phone
+          // widths, which clipped the Submit button of an inline multiple-choice ask.
           child: Stack(
             children: [
               Padding(
@@ -566,8 +503,7 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _promptZone( BuildContext context ) {
-    // Row b00e076c (2026-09-18): an answer that never left the phone says so
-    // on its card, instead of vanishing.
+    // An answer that never left the phone says so on its card instead of vanishing.
     final unsent = msg.unsentAnswer;
     if ( unsent != null ) {
       final theme = Theme.of( context );
@@ -623,8 +559,8 @@ class _MessageBubble extends StatelessWidget {
       );
     }
     if ( !isPendingPrompt ) {
-      // Unanswered but NOT the newest unanswered ask — buttons attach only
-      // via pendingPromptFor (one ask actionable at a time, F-S3-S2-1).
+      // Unanswered but not the newest unanswered ask: buttons attach only through
+      // pendingPromptFor, so one ask is actionable at a time.
       return const SizedBox.shrink();
     }
 
@@ -643,31 +579,23 @@ class _MessageBubble extends StatelessWidget {
     final type  = msg.item.responseType;
     final opts  = msg.item.responseOptions;
     final multi = opts?[ 'multi_select' ] == true;
-    // BACKFILLED multiple_choice asks carry NULL options — the 19-field
-    // conversation wire never emits response_options (Phase-0 capture;
-    // F-S2-IMPL-2 heads-up). Chips can only render from a live payload.
+    // Backfilled multiple_choice asks carry null options, because the conversation wire
+    // never emits response_options. Chips can only render from a live payload.
     final optionsRenderable = opts?[ 'options' ] is List;
-    // 🔴 AC-S4.10b delta 1 / AC-S4.5: a CANONICAL `ask_multiple_choice`
-    // payload nests its questions under `response_options.questions[]`, so
-    // `optionsRenderable` was false for it and every canonical ask fell
-    // through to the "Answer in full view…" fallback below. It renders
-    // inline now, through the same promoted body the sheet uses.
+    // A canonical `ask_multiple_choice` payload nests its questions under
+    // `response_options.questions[]`, so `optionsRenderable` is false for it. It renders
+    // inline through the same promoted body the sheet uses.
     final nestedAll = ( opts?[ 'questions' ] as List? )?.cast<dynamic>() ?? const [];
-    // SCOPED TO multiple_choice ON PURPOSE. Delta 1 is about the canonical
-    // `ask_multiple_choice` payload; `open_ended_batch` keeps its existing
-    // route to the legacy sheet. Letting the inline path swallow batch asks
-    // too would be a FOURTH behavior change on this surface — a scope
-    // escape under AC-S4.10b, and the existing batch-fallback test in
-    // focus_mode_screen_test.dart catches it, which is what it is for.
+    // Scoped to multiple_choice: `open_ended_batch` keeps its route to the legacy sheet,
+    // and letting the inline path take batch asks would be a further behaviour change.
     final nested = type == 'multiple_choice' ? nestedAll : const [];
 
     if ( nested.isEmpty &&
         ( type == 'open_ended_batch' ||
         ( type == 'multiple_choice' && ( multi || !optionsRenderable ) ) ) ) {
-      // Map/List-valued asks stay String-free on the focus path, and
-      // option-less (backfilled) choice asks have nothing to chip: fallback
-      // affordance → legacy sheet (F-S3-S2-2(d); multi-select + null-options
-      // routing per the S3 §8 implementer calls).
+      // Map- and list-valued asks stay string-free on the focus path, and backfilled
+      // choice asks without options have nothing to chip. Both get the fallback button
+      // that opens the legacy sheet.
       return Padding(
         padding : const EdgeInsets.only( top: 6 ),
         child   : OutlinedButton.icon(
@@ -686,8 +614,8 @@ class _MessageBubble extends StatelessWidget {
 
     Widget body;
     if ( nested.isNotEmpty ) {
-      // The server parser wants {"answers": {header: value}}; the body
-      // stays door-agnostic and this host wraps (AC-S4.11).
+      // The server parser wants {"answers": {header: value}}; the body stays
+      // door-agnostic and this host wraps it.
       return Padding(
         padding : const EdgeInsets.only( top: 8 ),
         child   : MultiQuestionPromptBody(
@@ -706,8 +634,8 @@ class _MessageBubble extends StatelessWidget {
                   ?.cast<dynamic>() ??
               const [],
           multi     : false,
-          // Single-select value is always a String (see prompt_bodies.dart
-          // docstring) — safe on the String-typed focus path.
+          // A single-select value is always a String (see prompt_bodies.dart), so it is
+          // safe on the String-typed focus path.
           onRespond : ( v ) => respond( v.toString() ),
         );
         break;
@@ -722,18 +650,19 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-/// One expandable row standing in for a burst of same-progress-group
-/// messages (plan 2026.08.21 §4): the LATEST message as the summary, a
-/// ×N badge, tap to expand/collapse in place. Render-only state.
+/// One expandable row standing in for a burst of same-progress-group messages.
+///
+/// The latest message is the summary, a count badge sits beside it, and a tap expands or
+/// collapses in place. The state is render-only.
 class _CollapsedGroup extends StatefulWidget {
   final int          count;
   final Widget       summary;
   final List<Widget> children;
 
-  /// Start open because a NOTIFICATION TAP is pointing at a message inside this
-  /// group (row d9bc6f6c). Scrolling to a bubble that is not built resolves to
-  /// nothing, so a buried target has to be un-buried before it can be revealed;
-  /// the user keeps the toggle and can fold it again.
+  /// Starts open because a notification tap points at a message inside this group.
+  ///
+  /// Scrolling to a bubble that is not built resolves to nothing, so a buried target is
+  /// expanded first. The user keeps the toggle and can fold it again.
   final bool         initiallyExpanded;
 
   const _CollapsedGroup( { super.key, required this.count, required this.summary,
@@ -775,27 +704,18 @@ class _CollapsedGroupState extends State<_CollapsedGroup> {
   }
 }
 
-/// AC-S4.14 — the suppressed question's notice.
+/// The notice on a suppressed question: it names the matching rule and offers speak-anyway.
 ///
-/// 🔴 Rick's OSQ3 ruling: the stop-list HOLDS. `verbatim` bypasses gates 2 and
-/// 3 only, and a pattern the user typed is not overridden by a flag. But **a
-/// silently dropped question is indistinguishable from a hang** — the user
-/// asked for nothing, hears nothing, and something on the server is blocked
-/// waiting for them. So the suppression is made VISIBLE instead: the text is
-/// always on screen, the matching rule is named, and one tap speaks it anyway.
+/// The stop-list holds: `verbatim` bypasses the second and third gates only, and a flag does
+/// not override a pattern the user typed. A silently dropped question is indistinguishable
+/// from a hang, because the server blocks waiting for the user. So the suppression is made
+/// visible instead: the text is always on screen, the rule is named, and one tap speaks it.
 ///
-/// Rick's own framing lowers the stakes rather than raising them — his
-/// stop-list exists to stop repetitive event chatter rendering in the focus
-/// bar, so an overlap with a deliberately-asked question is *"astronomically
-/// unlikely"*. This is required for correctness and expected to fire
-/// approximately never. Cheap and correct beats thorough here.
+/// It is expected to fire rarely, since the stop-list targets repetitive event chatter,
+/// which seldom overlaps a question.
+/// Design: src/docs/decisions/README.md (R-FM-show-suppressed-ask)
 class _SuppressedNotice extends StatelessWidget {
   final FocusMessage msg;
-
-  /// Supplied by the host. NULL means no handler is wired yet, and the
-  /// speak-anyway affordance is then NOT rendered — a button that does
-  /// nothing is worse than no button, because it tells the user the
-  /// suppression is reversible and then is not.
 
   const _SuppressedNotice( { required this.msg } );
 
@@ -825,10 +745,9 @@ class _SuppressedNotice extends StatelessWidget {
               ),
             ],
           ),
-          // Offered only when the ORIGINAL suppression was retained — the
-          // object gate 1 produced, handed straight back, so what plays is
-          // what was refused rather than a reconstruction guessing `verbatim`
-          // and `sender`.
+          // Offered only when the original suppression was retained: it is the object the
+          // first gate produced, handed straight back, so what plays is what was refused
+          // and not a reconstruction guessing `verbatim` and `sender`.
           if ( msg.suppression != null )
             Align(
               alignment: Alignment.centerLeft,

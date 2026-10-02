@@ -12,18 +12,22 @@ import '../domain/notification_state.dart';
 import 'interactive_prompt_sheet.dart';
 import 'persona_badge.dart';
 
-/// Date-grouped view of a sender's conversation.
+/// Shows a sender's conversation grouped by date, newest date first.
 ///
 /// Backed by `GET /api/notifications/conversation-by-date/{sender}/{user}`,
-/// which returns `Map<String, List<NotificationItem>>` keyed by `YYYY-MM-DD`.
-/// Renders [_NotificationItemCard] for each item — a purpose-built renderer
-/// for `NotificationItem`'s field set (no delivery-state badge; that lives
-/// in the flat ConversationScreen which uses `ConversationMessage`).
+/// which returns a map from `YYYY-MM-DD` to that day's [NotificationItem]s.
+/// Items show no delivery-state badge; the flat conversation screen does.
 class ConversationByDateScreen extends StatefulWidget {
+  /// Sender whose conversation is shown.
   final String  senderId;
-  final String  userEmail;
-  final String? anchorDate;     // YYYY-MM-DD; passed when entering from a date tile.
 
+  /// Email of the user the messages were addressed to.
+  final String  userEmail;
+
+  /// Date (`YYYY-MM-DD`) passed on when entering from a date tile; null otherwise.
+  final String? anchorDate;
+
+  /// Creates the screen for [senderId] and [userEmail], optionally anchored.
   const ConversationByDateScreen( {
     super.key,
     required this.senderId,
@@ -129,13 +133,10 @@ class _ConversationByDateScreenState extends State<ConversationByDateScreen> {
   }
 }
 
-/// Renders a single [NotificationItem] for the date-grouped view.
+/// Renders one [NotificationItem] for the date-grouped view.
 ///
-/// Differs from `_MessageCard` (used by the flat `ConversationScreen`)
-/// because the by-date endpoint returns `NotificationItem` (44 fields,
-/// no `state`/`deliveredAt`/`respondedAt`/`responseValue`), while the
-/// flat endpoint returns `ConversationMessage` (20 fields, with delivery
-/// state). The two renderers intentionally cover different field sets.
+/// The by-date endpoint carries no delivery state or response value, so this
+/// card differs from the flat conversation screen's message card.
 class _NotificationItemCard extends StatelessWidget {
   final NotificationItem item;
   const _NotificationItemCard( { required this.item } );

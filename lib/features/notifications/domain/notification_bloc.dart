@@ -10,88 +10,71 @@ import '../data/notification_repository.dart';
 import 'notification_event.dart';
 import 'notification_state.dart';
 
-// ──────────────────────────────────────────────────────────────────────────
-// Section A (Phase 1) — Commons WS event-type constants
-// ──────────────────────────────────────────────────────────────────────────
-//
-// Server-defined notification.type strings for the new commons-* WS event
-// family. These constants MUST exact-match the cosa `valid_types` whitelist
-// (`cosa/rest/routers/notifications.py:359-364`) AND the original emit-site
-// commits (`799f4ce`, `d18cdf9`, `15599db`, `6136a88`, `fe352b8`).
-//
-// AC-A5 — the dispatch test in
-// `test/unit/notifications/notification_bloc_dispatch_test.dart` asserts the
-// wire-contract equality (mobile case-label constants ↔ cosa whitelist).
-// Wire-string equality is verified, not assumed (cascade Stage-2 finding
-// F-Krishna-A1, cluster-family fix).
+// Notification type strings of the commons event family. They must match the
+// server's `valid_types` whitelist in `cosa/rest/routers/notifications.py`.
+// `test/unit/notifications/notification_bloc_dispatch_test.dart` checks that.
+
+/// Notification type for an acknowledgement of a broadcast to peer sessions.
 const String kNotifTypeCommonsBroadcastAck     = "commons_broadcast_ack";
+
+/// Notification type for a direct question received from a peer session.
 const String kNotifTypeCommonsQuestionReceived = "commons_question_received";
+
+/// Notification type for an entry in the recent-activity stream.
 const String kNotifTypeCommonsActivity         = "commons_activity";
 
-/// Repository-backed inbox + conversation BLoC. Replaces the prior
-/// websocket-only skeleton with real REST integration against the
-/// 17-endpoint notifications API.
+/// Inbox and conversation bloc backed by the notifications REST API.
+///
+/// Also reacts to WebSocket queue updates: it plays audio for ordinary
+/// notifications and keeps per-session persona and speakerphone snapshots.
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final NotificationRepository        _repo;
   final NotificationAudioService?     _audio;
   final TtsOrchestrator?              _tts;
 
-  /// The FOREGROUND half of row 7cac3a17's gate. Null means "no policy wired",
-  /// which allows everything — the behaviour every caller had before this
-  /// existed, so a test that does not care about filtering need not know it is
-  /// there.
+  /// Foreground delivery gate for ding and speech.
+  ///
+  /// Null means no policy is wired, which allows everything.
   final NotificationDeliveryPolicy?   _policy;
 
-  // Track context so external updates can refresh the right view.
+  // Context that lets an external update refresh the view on screen.
   String? _activeUserEmail;
   String? _activeSenderId;
 
-  // Per-session persona snapshot keyed on senderId. Mutated from
-  // `voice_persona_assigned` / `voice_persona_released` events; rendered
-  // into every loaded state's `personasBySender` for header display
-  // (Phase 2 of the voice-persona milestone). Per Q1, this map is for
-  // header rendering only — TTS dispatch reads persona straight off the
-  // originating notification.
+  // Persona per sender id. Changed by persona assigned and released events and
+  // copied into every loaded state for header display. Speech does not read it.
   final Map<String, VoicePersona> _personasBySender = {};
 
-  /// Defensive snapshot of the persona map at every emit site.
-  /// `Map.unmodifiable` copies the current entries and freezes the result,
-  /// so a later mutation to `_personasBySender` cannot leak into a
-  /// previously-emitted state.
+  // Frozen copy of the persona map, so a later change cannot alter a state
+  // that was already emitted.
   Map<String, VoicePersona> _personasSnapshot() =>
       Map<String, VoicePersona>.unmodifiable( _personasBySender );
 
-  /// Test-only observation of `_personasBySender` (AC-A2 / F-Krishna-A2).
-  /// Used by the Section-A dispatch tests to verify the new no-op cases
-  /// (`commons_broadcast_ack`, `commons_question_received`, `commons_activity`)
-  /// do NOT mutate the persona map. Returns an unmodifiable view so a test
-  /// caller cannot accidentally mutate bloc state.
+  /// Read-only view of the persona map, for tests.
+  ///
+  /// Dispatch tests use it to check that the commons event types leave the map
+  /// unchanged.
   @visibleForTesting
   Map<String, VoicePersona> get personasBySenderForTesting =>
       Map<String, VoicePersona>.unmodifiable( _personasBySender );
 
-  /// Per-session speakerphone state, keyed by `n.senderId`. Mutated from
-  /// `speakerphone_changed` WS events (Section B / Phase 2,
-  /// 2026-05-23 notif-client-sync) and from the dedicated typed event
-  /// `NotificationsSpeakerphoneChanged`; rendered into every loaded state's
-  /// `speakerphoneBySession` snapshot. Diagnostic only — no UI surface yet
-  /// (Q1 record-only resolution, plan §8.0).
+  // Speakerphone record per sender id. Changed by `speakerphone_changed`
+  // notifications and by [NotificationsSpeakerphoneChanged], and copied into
+  // every loaded state. Diagnostic only; no screen shows it.
   final Map<String, SpeakerphoneRecord> _speakerphoneBySession = {};
 
-  /// Defensive snapshot of the speakerphone map at every emit site; mirrors
-  /// `_personasSnapshot()`.
+  // Frozen copy of the speakerphone map, like `_personasSnapshot`.
   Map<String, SpeakerphoneRecord> _speakerphoneSnapshot() =>
       Map<String, SpeakerphoneRecord>.unmodifiable( _speakerphoneBySession );
 
-  /// Test-only observation of `_speakerphoneBySession` (AC-B2–B6 — uniform
-  /// observation mechanism, F-Krishna-A2 forward-sweep). Used by the
-  /// Section-B dispatch tests to verify the new `speakerphone_changed`
-  /// case mutates / preserves the map as specified. Returns an unmodifiable
-  /// view so a test caller cannot accidentally mutate bloc state.
+  /// Read-only view of the speakerphone map, for tests.
+  ///
+  /// Dispatch tests use it to check how `speakerphone_changed` changes the map.
   @visibleForTesting
   Map<String, SpeakerphoneRecord> get speakerphoneBySessionForTesting =>
       Map<String, SpeakerphoneRecord>.unmodifiable( _speakerphoneBySession );
 
+  /// Creates the bloc; [audio], [tts] and [policy] are optional collaborators.
   NotificationBloc(
     this._repo, {
     NotificationAudioService?   audio,
@@ -171,7 +154,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   ) async {
     try {
       await _repo.markPlayed( event.notificationId );
-      // Re-emit current view so badges update.
+      // Refresh the current view so badges update.
       _refreshCurrent( emit );
     } on NotificationApiException catch ( e ) {
       emit( NotificationsError( e.message ) );
@@ -188,7 +171,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         notificationId : event.notificationId,
         responseValue  : event.responseValue,
       ) );
-      // Best-effort mark-played; backend already does it but keep idempotent.
+      // Best-effort: the backend already marks it played, and repeating is harmless.
       try { await _repo.markPlayed( event.notificationId ); } catch ( _ ) {}
       emit( NotificationsResponseAcked( ack ) );
       await _refreshCurrent( emit );
@@ -229,10 +212,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     NotificationsExternalUpdate event,
     Emitter<NotificationState> emit,
   ) async {
-    // Inner-type discriminator pivot (Phase 0 dispatch audit, 2026-05-06).
-    // Server `notification_queue_update` envelopes carry the real event in
-    // `notification.type`. Future feature ports (voice-persona, conversation-mode,
-    // session-switcher) add cases here without further dispatch-table edits.
+    // The real event type is in `notification.type`; route on it.
     final n = event.notification;
     if ( n != null ) {
       switch ( n.type ) {
@@ -242,36 +222,28 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         case "custom":
         case "user_initiated_message":
         case "session_topic":
-          // Ordinary user-facing notification. Ding via NotificationAudioService
-          // (OS channel); speech via TtsOrchestrator (ElevenLabs → flutter_tts).
-          // Both filter by priority + preferences internally too; the gate
-          // below is the coarser one sitting in front of them.
+          // Ordinary user-facing notification: ding through
+          // NotificationAudioService, speech through TtsOrchestrator. Both also
+          // filter by priority and preferences; the gate below is the coarser one.
           //
-          // 🔴 THE FOREGROUND GATE (Rick 2026-09-28, row 7cac3a17). When this
-          // priority is switched off for the foreground the phone stays quiet:
-          // no ding, no speech. What it does NOT do is drop the item —
-          // `_refreshCurrent` below still runs, so the notification lands in
-          // the list exactly as it always did and nothing is marked played.
-          // Same rule as the background path: suppression is silence, never
-          // deletion. Rick asked to stop being bombarded, not to stop being
-          // told.
+          // When the foreground gate switches this priority off, the phone stays
+          // quiet but the item is not dropped. `_refreshCurrent` below still runs,
+          // so it lands in the list and nothing is marked played.
           final mayRaise = _policy?.allows(
                 surface   : NotificationSurface.foreground,
                 priority  : n.priority,
-                senderKey : notificationSenderKey( n.raw ),   // row f1e80e67
+                senderKey : notificationSenderKey( n.raw ),
               ) ?? true;
           if ( mayRaise ) {
             _audio?.handleIncoming(
               priority     : n.priority,
               message      : n.message,
-              // 🔴 WHO, not what (Tiffany's ruling 2026-09-28, row d9bc6f6c). The
-              // SAME label the background wake path puts on its notifications, from
-              // the same function — the shade must not say "🌻 Maya" for a wake and
-              // something else for a foreground ding about the same sender.
+              // The title is the sender label. The background wake path builds its
+              // label with the same function, so one sender reads the same in both.
               title        : notificationSenderLabel( n.raw ),
               suppressDing : n.suppressDing,
-              // Row d9bc6f6c: so a tap on the foreground ding routes to the same
-              // conversation a tap on a background wake notification does.
+              // A tap on the foreground ding opens the same conversation as a tap
+              // on a background wake notification.
               notificationId : n.id,
               senderId       : n.senderId,
             );
@@ -289,10 +261,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           }
           break;
         case "voice_persona_assigned":
-          // Server allocated a voice persona for this senderId. Mutate the
-          // persona map; the upcoming _refreshCurrent() emit will snapshot it
-          // into the next loaded state. Per Q1, no separate mobile cache —
-          // this map is for header rendering only.
+          // The server allocated a persona for this sender. Update the map; the
+          // refresh below copies it into the next loaded state.
           final persona = n.voicePersona;
           final sid     = n.senderId;
           if ( persona != null && sid != null ) {
@@ -300,25 +270,16 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           }
           break;
         case "voice_persona_released":
-          // Server released the persona (SessionEnd cleared the bridge).
-          // Drop the entry; future renders see no persona for this senderId
-          // and fall back to no-badge behavior. Idempotent: removing a
-          // missing key is a no-op.
+          // The server released the persona when the session ended. Drop the
+          // entry so the header shows no badge; removing a missing key is a no-op.
           final sid = n.senderId;
           if ( sid != null ) _personasBySender.remove( sid );
           break;
         case "speakerphone_changed":
-          // Section B (Phase 2, 2026-05-23 notif-client-sync) — per-session
-          // speakerphone state record-only (Q1 resolution, plan §8.0). No UI
-          // surface; no TTS / audio-routing change. Diagnostic fields
-          // `displaced` / `displaced_by` stored verbatim for future use, not
-          // acted on (AC-B6).
-          //
-          // OSQ B-1 resolution: `NotificationItem` has no typed accessor for
-          // these payload fields — access path is `n.raw[...]`. Wire-contract
-          // grounding (type string + payload field names) verified by AC-B7
-          // against cosa commit `e420ec0` (read-only — no git operations on
-          // the cosa repo).
+          // Records the session's speakerphone state and nothing else: no screen
+          // and no audio routing use it. `displaced` and `displaced_by` are
+          // stored as received. `NotificationItem` has no typed accessor for
+          // them, so they are read from `n.raw`.
           final sid = n.senderId;
           if ( sid != null ) {
             final on        = n.raw[ "on" ] == true;
@@ -332,23 +293,19 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           }
           break;
         case kNotifTypeCommonsBroadcastAck:
-          // no-op stub — inter-session ack feedback for CC peer broadcasts; no mobile UI surface yet; real behavior parked per Q3 (plan §8.0)
+          // No-op: acknowledgement of a peer broadcast; the app has no screen for it.
           break;
         case kNotifTypeCommonsQuestionReceived:
-          // no-op stub — DM push for CC peer sessions; mobile is not a CC peer; real behavior parked per Q3 (plan §8.0)
+          // No-op: direct question for peer sessions; the app is not a peer session.
           break;
         case kNotifTypeCommonsActivity:
-          // no-op stub — Recent Activity stream for peer-traffic surfaces; no mobile panel to populate; real behavior parked per Q3 (plan §8.0)
+          // No-op: recent-activity stream; the app has no panel to fill.
           break;
         default:
-          // Unknown inner type — log so the gap is visible. Silent drop is
-          // the bug Phase 0 prevents. Future feature ports add cases above
-          // this default branch (focus_changed, etc.). The legacy name
-          // `conversation_mode_changed` (superseded by `speakerphone_changed`
-          // per Q2, plan §8.0) is intentionally NOT in the above future-cases
-          // list — the server's Path III bridge handles non-mobile clients,
-          // and mobile's smoke-test guard AC-B5 catches wire drift if the
-          // legacy name ever reappears.
+          // Unknown type: log it so the gap is visible instead of dropping it
+          // silently. New types get a case above this default. The old name
+          // `conversation_mode_changed` has no case; `speakerphone_changed`
+          // replaced it.
           // ignore: avoid_print
           print( "[NotificationBloc] Unknown notification.type: '${n.type}' (id=${n.id})" );
           break;
@@ -357,10 +314,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     await _refreshCurrent( emit );
   }
 
-  /// Handler for the dedicated `NotificationsVoicePersonaAssigned` event.
-  /// Used by tests + any future programmatic dispatcher. The WS path goes
-  /// through `_onExternalUpdate` directly and shares the same map mutation,
-  /// so behavior is identical regardless of entry point.
+  // Handles [NotificationsVoicePersonaAssigned]. The WebSocket path makes the
+  // same map change inside `_onExternalUpdate`.
   Future<void> _onVoicePersonaAssigned(
     NotificationsVoicePersonaAssigned event,
     Emitter<NotificationState> emit,
@@ -369,10 +324,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     _emitCurrentSnapshot( emit );
   }
 
-  /// Handler for the dedicated `NotificationsVoicePersonaReleased` event.
-  /// Idempotent: if the senderId has no current persona, the handler returns
-  /// without emitting (per Phase 2 test 2.4.4 — `expect: []` for unknown
-  /// release).
+  // Handles [NotificationsVoicePersonaReleased]; a sender with no persona emits
+  // nothing.
   Future<void> _onVoicePersonaReleased(
     NotificationsVoicePersonaReleased event,
     Emitter<NotificationState> emit,
@@ -382,12 +335,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     _emitCurrentSnapshot( emit );
   }
 
-  /// Handler for the dedicated `NotificationsSpeakerphoneChanged` typed event
-  /// (Section B / Phase 2). Used by tests + future programmatic dispatchers;
-  /// mirrors `_onVoicePersonaAssigned`. The typed event is 2-field
-  /// (senderId, on) so `displaced` / `displacedBy` are null on the resulting
-  /// `SpeakerphoneRecord` — the WS path in `_onExternalUpdate` populates
-  /// those diagnostic fields from raw payload.
+  // Handles [NotificationsSpeakerphoneChanged]. The record has no displaced
+  // fields; the WebSocket path fills them from the raw payload.
   Future<void> _onSpeakerphoneChanged(
     NotificationsSpeakerphoneChanged event,
     Emitter<NotificationState> emit,
@@ -398,11 +347,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     _emitCurrentSnapshot( emit );
   }
 
-  /// Re-emit the current loaded state with an updated `personasBySender`
-  /// snapshot. No data refetch; only the persona map changes. States that
-  /// don't carry the snapshot (Initial / Loading / Error / Responding /
-  /// Gist*) are not re-emitted — the next loaded state will pick up the
-  /// fresh map on its own emit path.
+  // Re-emits the current loaded state with fresh persona and speakerphone
+  // snapshots and no refetch. States without snapshots (initial, loading, error,
+  // responding, gist) are skipped; the next loaded state picks the maps up.
   void _emitCurrentSnapshot( Emitter<NotificationState> emit ) {
     final s        = state;
     final snap     = _personasSnapshot();
@@ -455,7 +402,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         abstracts : s.messages.map( ( m ) => m.abstractText ?? ""       ).toList(),
       ) );
       emit( NotificationsGistReady( gist.gist ) );
-      // Restore the conversation view so the list stays visible after the sheet closes.
+      // Restore the conversation so the list stays visible after the sheet closes.
       emit( s );
     } on NotificationApiException catch ( e ) {
       emit( NotificationsError( e.message ) );
@@ -515,8 +462,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     }
   }
 
-  /// Re-fetch the current view (inbox or conversation) without changing
-  /// emit ordering. No-op if there's no tracked context yet.
+  // Refetches the current view (inbox, conversation or by-date) and emits it.
+  // Does nothing before a view has been loaded; keeps the last good state if the
+  // refetch fails.
   Future<void> _refreshCurrent( Emitter<NotificationState> emit ) async {
     if ( _activeUserEmail == null ) return;
     try {
@@ -554,7 +502,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         ) );
       }
     } on NotificationApiException catch ( _ ) {
-      // Keep last good state silently — refresh is best-effort.
+      // Best-effort refresh: keep the last good state.
     }
   }
 }

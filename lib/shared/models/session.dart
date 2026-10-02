@@ -1,25 +1,43 @@
 import 'package:equatable/equatable.dart';
 
+/// Lifecycle state of a login session.
 enum SessionStatus {
+  /// In use and accepting activity.
   active,
+  /// Idle.
   inactive,
+  /// Past its expiry time.
   expired,
+  /// Ended explicitly.
   terminated,
 }
 
+/// One login session on one device.
 class Session extends Equatable {
+  /// Unique session identifier.
   final String id;
+  /// The user who owns the session.
   final String userId;
+  /// The credential that authenticates the session.
   final String token;
+  /// Current lifecycle state.
   final SessionStatus status;
+  /// When the session started.
   final DateTime createdAt;
+  /// When the session ends, or null if it does not expire.
   final DateTime? expiresAt;
+  /// The last time the session was used, or null if never.
   final DateTime? lastActivityAt;
+  /// Identifier of the device, or null.
   final String? deviceId;
+  /// Description of the device, or null.
   final String? deviceInfo;
+  /// Network address the session came from, or null.
   final String? ipAddress;
+  /// Free-form extra fields, or null.
   final Map<String, dynamic>? metadata;
 
+  /// Creates a session.
   const Session({
     required this.id,
     required this.userId,
@@ -34,6 +52,7 @@ class Session extends Equatable {
     this.metadata,
   });
 
+  /// Returns a copy with the given fields replaced.
   Session copyWith({
     String? id,
     String? userId,
@@ -62,15 +81,18 @@ class Session extends Equatable {
     );
   }
 
+  /// Whether the expiry time has passed; a session with no expiry never expires.
   bool get isExpired {
     if (expiresAt == null) return false;
     return DateTime.now().isAfter(expiresAt!);
   }
 
+  /// Whether the status is active and the session has not expired.
   bool get isActive {
     return status == SessionStatus.active && !isExpired;
   }
 
+  /// Builds a session from its wire map; an unknown status becomes active.
   factory Session.fromJson(Map<String, dynamic> json) {
     return Session(
       id: json['id'] as String,
@@ -94,6 +116,7 @@ class Session extends Equatable {
     );
   }
 
+  /// Returns the wire map for this session.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

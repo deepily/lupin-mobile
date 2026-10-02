@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../data/push_pause_repository.dart';
 
-/// "Pause push from server" (row 67ee93b0, Rick 2026-09-29): stop the server
-/// sending wake-up pushes for a chosen length of time.
+/// The "Pause push from server" controls: stop wake-up pushes for a chosen time.
 ///
-/// 🔴 The state is never cached. The pause lives in server memory and a restart
-/// clears it, so it is re-read when the screen opens and every time the app
-/// returns to the foreground.
+/// The state is never cached, because the pause lives in server memory.
+/// A restart clears it, so it is re-read when the screen opens and on each foreground.
 class PushPauseSection extends StatefulWidget {
+  /// Where the pause is read and written.
   final PushPauseRepository repository;
+
+  /// Creates the section over [repository].
   const PushPauseSection( { super.key, required this.repository } );
 
   /// The durations offered; null minutes means until resumed.
@@ -67,7 +68,9 @@ class _PushPauseSectionState extends State<PushPauseSection>
     _state = await widget.repository.getState();
   } );
 
-  /// One place for busy / error / 403 handling, so no path can crash the screen.
+  /// Runs [action] with busy, error and 403 handling in one place.
+  ///
+  /// No path can crash the screen.
   Future<void> _run( Future<void> Function() action ) async {
     setState( () { _busy = true; _error = null; } );
     try {

@@ -5,11 +5,19 @@ import '../../../shared/models/models.dart';
 
 /// Parameters for stopping voice recording
 class StopVoiceRecordingParams {
+  /// The recording to stop.
   final String voiceInputId;
+
+  /// The captured audio bytes, or null when none were supplied.
   final List<int>? audioData;
+
+  /// The measured length of the recording, or null when not measured.
   final Duration? recordingDuration;
+
+  /// Extra data stored with the recording.
   final Map<String, dynamic>? metadata;
 
+  /// Creates parameters for [voiceInputId].
   const StopVoiceRecordingParams({
     required this.voiceInputId,
     this.audioData,
@@ -25,6 +33,7 @@ class StopVoiceRecordingParams {
 class StopVoiceRecordingUseCase extends ParameterizedUseCase<VoiceInput, StopVoiceRecordingParams> {
   final VoiceRepository _voiceRepository;
 
+  /// Creates the use case over the voice repository.
   StopVoiceRecordingUseCase(this._voiceRepository);
 
   @override

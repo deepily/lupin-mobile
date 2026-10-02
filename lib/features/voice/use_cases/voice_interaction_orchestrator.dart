@@ -10,12 +10,22 @@ import '../../audio/use_cases/generate_tts_audio_use_case.dart';
 
 /// Parameters for complete voice interaction
 class VoiceInteractionParams {
+  /// The session the interaction belongs to.
   final String sessionId;
+
+  /// The capture device, or null for the default one.
   final String? deviceId;
+
+  /// Whether to speak the response.
   final bool enableTTS;
+
+  /// Settings for recording and transcription, or null for the defaults.
   final Map<String, dynamic>? voiceSettings;
+
+  /// Settings for speech generation, or null for the defaults.
   final Map<String, dynamic>? ttsSettings;
 
+  /// Creates parameters for [sessionId], with speech on by default.
   const VoiceInteractionParams({
     required this.sessionId,
     this.deviceId,
@@ -30,11 +40,19 @@ class VoiceInteractionParams {
 
 /// Result of complete voice interaction
 class VoiceInteractionResult {
+  /// The processed voice input.
   final VoiceInput voiceInput;
+
+  /// The spoken response, or null when speech was off or failed.
   final AudioChunk? ttsAudio;
+
+  /// The time from start to finish.
   final Duration totalProcessingTime;
+
+  /// Per-stage measurements.
   final Map<String, dynamic> metrics;
 
+  /// Creates a result.
   const VoiceInteractionResult({
     required this.voiceInput,
     this.ttsAudio,
@@ -42,6 +60,7 @@ class VoiceInteractionResult {
     required this.metrics,
   });
 
+  /// Returns the result as a JSON-ready map, with the audio reduced to a flag.
   Map<String, dynamic> toJson() {
     return {
       'voice_input_id': voiceInput.id,
@@ -63,6 +82,7 @@ class VoiceInteractionOrchestrator extends ParameterizedUseCase<VoiceInteraction
   final GenerateTTSAudioUseCase _generateTTSUseCase;
   final WatchVoiceProcessingProgressUseCase _watchProgressUseCase;
 
+  /// Creates the orchestrator over the stage use cases.
   VoiceInteractionOrchestrator(
     this._startRecordingUseCase,
     this._stopRecordingUseCase,
@@ -300,6 +320,7 @@ class VoiceInteractionOrchestrator extends ParameterizedUseCase<VoiceInteraction
 class QuickVoiceInteractionUseCase extends ParameterizedUseCase<VoiceInteractionResult, String> {
   final VoiceInteractionOrchestrator _orchestrator;
 
+  /// Creates the use case over [_orchestrator].
   QuickVoiceInteractionUseCase(this._orchestrator);
 
   @override

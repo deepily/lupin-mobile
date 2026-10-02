@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../services/notification_audio/notification_preferences.dart';
 
-/// TTS preview-fraction slider pinned at the top of the focus pane (Rick
-/// 2026-08-21; mirrors the web client's `#cc-tts-fraction-slider`): how much
-/// of each message is spoken automatically, 0-100% in 10% steps. Stays put
-/// while the focused conversation changes underneath. 0% = first sentence
-/// only; 100% = whole message.
+/// Slider pinned at the top of the focus pane for how much of each message is spoken.
+///
+/// The fraction runs from 0 to 100 percent in 10 percent steps. At 0 percent only the first
+/// sentence is spoken, and at 100 percent the whole message. The bar stays put while the
+/// focused conversation changes underneath.
 class TtsFractionBar extends StatefulWidget {
+  /// The preference store that holds the fraction.
   final NotificationPreferences prefs;
+
+  /// Creates the bar over [prefs].
   const TtsFractionBar( { super.key, required this.prefs } );
 
   @override

@@ -7,8 +7,14 @@ import '../domain/decision_proxy_bloc.dart';
 import '../domain/decision_proxy_event.dart';
 import '../domain/decision_proxy_state.dart';
 
+/// Per-domain trust details for one user, grouped by domain and refreshable by pulling down.
+///
+/// Needs a [DecisionProxyBloc] above it.
 class TrustStateScreen extends StatefulWidget {
+  /// The user whose trust states are shown.
   final String userEmail;
+
+  /// Creates the screen for [userEmail].
   const TrustStateScreen( { super.key, required this.userEmail } );
 
   @override

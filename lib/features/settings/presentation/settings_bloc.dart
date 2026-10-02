@@ -7,26 +7,37 @@ import '../../../core/logging/logger.dart';
 import '../use_cases/settings_use_cases.dart';
 
 // Events
+
+/// Base type of everything the settings screens send to [SettingsBloc].
 abstract class SettingsEvent extends Equatable {
+  /// Creates an event.
   const SettingsEvent();
 
   @override
   List<Object?> get props => [];
 }
 
+/// Asks for a category's settings and their validation issues.
 class LoadSettingsEvent extends SettingsEvent {
+  /// The category to load; null loads the general category.
   final SettingsCategory? category;
 
+  /// Creates the event.
   const LoadSettingsEvent({this.category});
 
   @override
   List<Object?> get props => [category];
 }
 
+/// Sets one setting.
 class UpdateSettingEvent extends SettingsEvent {
+  /// The setting's key.
   final String key;
+
+  /// The new value.
   final dynamic value;
 
+  /// Creates the event.
   const UpdateSettingEvent({
     required this.key,
     required this.value,
@@ -36,44 +47,60 @@ class UpdateSettingEvent extends SettingsEvent {
   List<Object?> get props => [key, value];
 }
 
+/// Sets several settings in one call.
 class UpdateMultipleSettingsEvent extends SettingsEvent {
+  /// The new values, keyed by setting key.
   final Map<String, dynamic> settings;
 
+  /// Creates the event.
   const UpdateMultipleSettingsEvent({required this.settings});
 
   @override
   List<Object?> get props => [settings];
 }
 
+/// Applies a quick-settings preset.
 class ApplyPresetEvent extends SettingsEvent {
+  /// The preset to apply.
   final QuickSettingsPreset preset;
 
+  /// Creates the event.
   const ApplyPresetEvent({required this.preset});
 
   @override
   List<Object?> get props => [preset];
 }
 
+/// Asks for a validation pass over the stored settings.
 class ValidateSettingsEvent extends SettingsEvent {
+  /// Creates the event.
   const ValidateSettingsEvent();
 }
 
+/// Imports a previously exported set of settings.
 class ImportSettingsEvent extends SettingsEvent {
+  /// The exported settings data.
   final Map<String, dynamic> settingsData;
 
+  /// Creates the event.
   const ImportSettingsEvent({required this.settingsData});
 
   @override
   List<Object?> get props => [settingsData];
 }
 
+/// Asks for the settings to be exported as data.
 class ExportSettingsEvent extends SettingsEvent {
+  /// Creates the event.
   const ExportSettingsEvent();
 }
 
+/// Resets settings to their defaults.
 class ResetSettingsEvent extends SettingsEvent {
+  /// The category to reset; null resets everything the use case covers.
   final SettingsCategory? category;
 
+  /// Creates the event.
   const ResetSettingsEvent({this.category});
 
   @override
@@ -81,27 +108,43 @@ class ResetSettingsEvent extends SettingsEvent {
 }
 
 // States
+
+/// Base type of everything [SettingsBloc] emits.
 abstract class SettingsState extends Equatable {
+  /// Creates a state.
   const SettingsState();
 
   @override
   List<Object?> get props => [];
 }
 
+/// Nothing has been loaded yet.
 class SettingsInitial extends SettingsState {
+  /// Creates the state.
   const SettingsInitial();
 }
 
+/// A load, preset, import or reset is in flight.
 class SettingsLoading extends SettingsState {
+  /// Creates the state.
   const SettingsLoading();
 }
 
+/// A category's settings are loaded and ready to show.
 class SettingsLoaded extends SettingsState {
+  /// The current values, keyed by setting key.
   final Map<String, dynamic> settings;
+
+  /// The definitions that describe each setting.
   final List<SettingDefinition> definitions;
+
+  /// The category shown; null means the general category.
   final SettingsCategory? category;
+
+  /// Problems the validation pass found.
   final List<SettingsValidationIssue> validationIssues;
 
+  /// Creates the state.
   const SettingsLoaded({
     required this.settings,
     required this.definitions,
@@ -112,6 +155,7 @@ class SettingsLoaded extends SettingsState {
   @override
   List<Object?> get props => [settings, definitions, category, validationIssues];
 
+  /// Returns a copy with any given field replaced.
   SettingsLoaded copyWith({
     Map<String, dynamic>? settings,
     List<SettingDefinition>? definitions,
@@ -127,11 +171,18 @@ class SettingsLoaded extends SettingsState {
   }
 }
 
+/// One setting was saved.
 class SettingsUpdated extends SettingsState {
+  /// The setting's key.
   final String key;
+
+  /// The saved value.
   final dynamic value;
+
+  /// Whether the change only takes effect after an app restart.
   final bool requiresRestart;
 
+  /// Creates the state.
   const SettingsUpdated({
     required this.key,
     required this.value,
@@ -142,10 +193,15 @@ class SettingsUpdated extends SettingsState {
   List<Object?> get props => [key, value, requiresRestart];
 }
 
+/// A preset was applied.
 class SettingsPresetApplied extends SettingsState {
+  /// The preset that was applied.
   final QuickSettingsPreset preset;
+
+  /// What the use case reported back.
   final Map<String, dynamic> result;
 
+  /// Creates the state.
   const SettingsPresetApplied({
     required this.preset,
     required this.result,
@@ -155,46 +211,63 @@ class SettingsPresetApplied extends SettingsState {
   List<Object?> get props => [preset, result];
 }
 
+/// A validation pass finished.
 class SettingsValidated extends SettingsState {
+  /// The problems found; empty when the settings are valid.
   final List<SettingsValidationIssue> issues;
 
+  /// Creates the state.
   const SettingsValidated({required this.issues});
 
   @override
   List<Object?> get props => [issues];
 }
 
+/// The settings were exported.
 class SettingsExported extends SettingsState {
+  /// The exported settings data.
   final Map<String, dynamic> exportData;
 
+  /// Creates the state.
   const SettingsExported({required this.exportData});
 
   @override
   List<Object?> get props => [exportData];
 }
 
+/// An import finished.
 class SettingsImported extends SettingsState {
+  /// What the use case reported back.
   final Map<String, dynamic> result;
 
+  /// Creates the state.
   const SettingsImported({required this.result});
 
   @override
   List<Object?> get props => [result];
 }
 
+/// A reset finished.
 class SettingsReset extends SettingsState {
+  /// The category that was reset; null means everything the use case covers.
   final SettingsCategory? category;
 
+  /// Creates the state.
   const SettingsReset({this.category});
 
   @override
   List<Object?> get props => [category];
 }
 
+/// An operation failed.
 class SettingsError extends SettingsState {
+  /// A message fit to show the user.
   final String message;
+
+  /// The use case's error code, when it gave one.
   final String? errorCode;
 
+  /// Creates the state.
   const SettingsError({
     required this.message,
     this.errorCode,
@@ -205,6 +278,11 @@ class SettingsError extends SettingsState {
 }
 
 // BLoC
+
+/// Loads, edits, validates, imports, exports and resets settings, and follows live changes.
+///
+/// After each successful change it reloads the category on screen. It also patches the
+/// loaded values whenever the settings service reports a change from elsewhere.
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsService _settingsService;
   final UpdateSettingsUseCase _updateSettingsUseCase;
@@ -219,6 +297,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final TaggedLogger _logger = Logger.tagged('SettingsBloc');
   StreamSubscription? _settingsChangesSubscription;
 
+  /// Creates the bloc over the settings service and one use case per operation.
   SettingsBloc({
     required SettingsService settingsService,
     required UpdateSettingsUseCase updateSettingsUseCase,

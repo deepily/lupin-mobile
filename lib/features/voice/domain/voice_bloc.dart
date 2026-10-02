@@ -20,6 +20,7 @@ class VoiceBloc extends Bloc<VoiceEvent, VoiceState> {
   Timer? _recordingTimer;
   VoiceInput? _currentVoiceInput;
 
+  /// Creates the bloc, which starts in the initial state.
   VoiceBloc({
     required TtsService ttsService,
     required VoiceRepository voiceRepository,

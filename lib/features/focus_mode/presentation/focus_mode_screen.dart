@@ -48,22 +48,22 @@ import 'session_rail.dart';
 import 'tts_queue_sheet.dart';
 import 'voice_reply_field.dart';
 
-/// The Home grid's destinations, in the grid's own top-to-bottom order
-/// (row c59457f0 item 2). The Focus view is not in this list: the drawer
-/// gives it a fixed entry of its own under Quick Ask (row 74a799c9), and
-/// Notifications / Job Queue / Trust Dashboard fall under item 1.
+/// The Home grid's destinations, in the grid's own top-to-bottom order.
 ///
-/// 🔴 THE ROUTE WIRING MIRRORS `home_screen.dart` BLOC FOR BLOC, and the
-/// asymmetry in it is deliberate there: the four polling panes build their bloc
-/// INSIDE the route, because an app-root bloc would keep polling behind whatever
-/// the operator is actually looking at; Broadcast takes the app-root bloc by
-/// `.value`, because its ack tally arrives on a socket frame and has to outlive
-/// the pane. Two doors to one screen must not disagree about that, so a change
-/// to either side belongs on both.
+/// The Focus view is not in this list: the drawer gives it a fixed entry of its own under
+/// Quick Ask. Notifications, Job Queue and Trust Dashboard are left out of the surfaces
+/// drawer.
 ///
-/// TOP-LEVEL, not a method on the state, so a test can call each `builder` and
-/// see WHICH screen an entry opens without mounting that screen's whole bloc
-/// graph.
+/// The route wiring mirrors `home_screen.dart` bloc for bloc.
+/// The four polling panes build their bloc inside the route, because an app-root bloc would
+/// keep polling behind whatever the operator is looking at.
+/// Broadcast takes the app-root bloc by `.value`, because its ack tally arrives on a socket
+/// frame and has to outlive the pane.
+/// Two doors to one screen must not disagree, so a change to either side belongs on both.
+///
+/// It is top-level, not a method on the state.
+/// A test can then call each `builder` and see which screen an entry opens without mounting
+/// that screen's whole bloc graph.
 @visibleForTesting
 List<FocusDrawerSurface> focusDrawerSurfaces( BuildContext context ) {
   return <FocusDrawerSurface>[
@@ -102,8 +102,9 @@ List<FocusDrawerSurface> focusDrawerSurfaces( BuildContext context ) {
   ];
 }
 
-/// The roster the notification view offers for muting (row f1e80e67): every
-/// sender the server has seen for this user, one row per mute key.
+/// Builds the roster loader the notification view offers for muting.
+///
+/// The roster is every sender the server has seen for this user, one row per mute key.
 ///
 /// Ensures:
 ///   - null when nobody is signed in or no repository is registered, which
@@ -123,15 +124,13 @@ PushPauseRepository? pushPauseRepository() =>
         ? ServiceLocator.get<PushPauseRepository>()
         : null;
 
-/// The drawer's settings block — NOT Home-grid surfaces, and listed after them
-/// under their own divider. The stop-list entry is disabled when the service is
-/// not registered, exactly as the pre-experiment drawer had it.
+/// The drawer's settings block, listed after the Home-grid surfaces under their own divider.
+///
+/// The stop-list entry is disabled when the service is not registered.
 @visibleForTesting
 List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
   return <FocusDrawerSurface>[
-    // Row 7cac3a17's deliverable gets its own entry rather than living two
-    // taps inside 'Settings' — Rick asked for a dedicated view because the
-    // bombardment is the thing he is trying to reach.
+    // Notifications gets its own entry rather than living two taps inside Settings.
     FocusDrawerSurface( Icons.notifications_outlined, 'Notifications', ( _ ) =>
       NotificationManagementScreen(
         prefs       : ServiceLocator.get<NotificationPreferences>(),
@@ -152,52 +151,52 @@ List<FocusDrawerSurface> focusDrawerTools( BuildContext context ) {
   ];
 }
 
-/// Whether the Focus drawer runs the SURFACES experiment (row c59457f0).
+/// Whether the Focus drawer runs the surfaces experiment by default.
 ///
-/// 🔴 TRUE ON RICK'S ORDER, 2026-09-26: *"a little bit of a UI layout tweak...
-/// Hide them, don't delete them for now... preserve the old layout."* With it
-/// true the drawer lists the Home grid's destinations top to bottom and leaves
-/// out Inbox, Queue Dashboard and Trust Dashboard.
+/// It is true. With it true the drawer lists the Home grid's destinations top to bottom.
+/// Inbox, Queue Dashboard and Trust Dashboard are left out, hidden and not deleted.
 ///
-/// ⚠️ NOT a `const bool` like `_kShowTrustDashboard` in `home_screen.dart`, and
-/// that difference is the whole point: a const cannot be flipped from a test,
-/// so the "the flag restores the old drawer" test would have to re-implement
-/// the drawer to say anything — which is a test of the test. This is the
-/// DEFAULT, and [FocusModeScreen.surfacesExperiment] is the one switch that
-/// overrides it. Nothing is deleted either way: `_legacyDrawer` still compiles
-/// and is still exercised at `false`.
+/// It is a default, not a `const bool` flag like `_kShowTrustDashboard` in `home_screen.dart`.
+/// A const cannot be flipped from a test.
+/// [FocusModeScreen.surfacesExperiment] is the one switch that overrides it.
+/// `_legacyDrawer` still compiles and is still exercised when the switch is false.
 const bool kFocusDrawerSurfacesExperimentDefault = true;
 
-/// The surfaces drawer's header. Rick has the final word on the wording, so it
-/// is ONE string in ONE place — change it here and the drawer follows.
-/// Candidates offered with row c59457f0 were "Surfaces", "Go to" and "Lupin".
+/// The surfaces drawer's header, kept as one string in one place so the drawer follows it.
 const String kFocusDrawerHeader = 'Surfaces';
 
-/// The Focus view's name, wherever it is shown: this screen's app bar, the
-/// drawer entry and the Home grid card. ONE string, for the same reason as
-/// [kFocusDrawerHeader] (Rick 2026-09-28, row 74a799c9: "Lupin AF Focus").
+/// The Focus view's name, wherever it is shown.
+///
+/// It appears on this screen's app bar, the drawer entry and the Home grid card, and is one
+/// string for the same reason as [kFocusDrawerHeader].
 const String kLupinFocusTitle = 'Lupin AF Focus';
 
-/// Whether the surfaces drawer offers a Home grid entry. Rick 2026-09-28 (row
-/// 74a799c9): redundant now that the drawer lists every grid destination, so
-/// it is HIDDEN, not deleted, like the Inbox and the two dashboards. The
-/// legacy drawer keeps its own Home grid entry either way.
+/// Whether the surfaces drawer offers a Home grid entry.
+///
+/// It is redundant now that the drawer lists every grid destination, so it is hidden, not
+/// deleted, like the Inbox and the two dashboards.
+/// The legacy drawer keeps its own Home grid entry either way.
 const bool kShowHomeGridInSurfacesDrawer = false;
 
-/// The app's DEFAULT post-auth surface (Q1): vertical badge rail + chat
-/// pane (Q11 Pattern A), pause/resume hold control bound to S1's streams,
-/// the S4 voice composer gated on S2's `pendingPromptFor` signal, and a
-/// drawer demoting the legacy surfaces (nothing deleted).
+/// The app's default post-auth surface.
+///
+/// It shows a vertical badge rail beside a chat pane, a pause and resume hold control bound
+/// to the speech streams, and a voice composer.
+/// A drawer demotes the legacy surfaces without deleting them.
 class FocusModeScreen extends StatefulWidget {
-  /// Constructor seams (test injection); default to the service locator.
+  /// The speech orchestrator; a test seam that defaults to the service locator.
   final TtsOrchestrator? tts;
+
+  /// The speech-recognition service; a test seam that defaults to the service locator.
   final AsrService?      asr;
 
-  /// THE one switch for row c59457f0's drawer experiment (ruling R1, Tiffany
-  /// 2026-09-28). Null means [kFocusDrawerSurfacesExperimentDefault]; `false`
-  /// restores the pre-experiment drawer, entry for entry.
+  /// The one switch for the drawer experiment.
+  ///
+  /// Null means [kFocusDrawerSurfacesExperimentDefault]. False restores the legacy drawer,
+  /// entry for entry.
   final bool? surfacesExperiment;
 
+  /// Creates the Focus screen; every argument is optional.
   const FocusModeScreen( { super.key, this.tts, this.asr, this.surfacesExperiment } );
 
   @override
@@ -208,8 +207,10 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   late final TtsOrchestrator _tts;
   late final AsrService      _asr;
 
-  /// The app bar sits OUTSIDE the split host, so the files button reaches it
-  /// by key rather than by looking up the tree.
+  /// Reaches the split host from the app bar's files button.
+  ///
+  /// The app bar sits outside the split host, so the button uses this key instead of looking
+  /// up the tree.
   final GlobalKey<DocSplitHostState> _splitKey = GlobalKey<DocSplitHostState>();
 
   @override
@@ -218,8 +219,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     _tts = widget.tts ?? ServiceLocator.get<TtsOrchestrator>();
     _asr = widget.asr ?? ServiceLocator.get<AsrService>();
 
-    // Screen-init cold start (S2 §3.2) — guarded so the auth_success
-    // re-hydration dispatch (app.dart) isn't duplicated on a warm bloc.
+    // Cold start, guarded so the `auth_success` re-hydration dispatch in `app.dart` is not
+    // duplicated on a warm bloc.
     final bloc  = context.read<FocusChatBloc>();
     final email = _authedEmail();
     if ( email != null &&
@@ -251,8 +252,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
         ),
         title   : const Text( kLupinFocusTitle ),
         actions : [
-          // Rick 2026-09-17: re-read the written-senders list AND the live-seat
-          // roster, so a seat that has never messaged him can still be reached.
+          // Re-reads the written-senders list and the live-seat roster, so a seat that has
+          // never messaged the user can still be reached.
           IconButton(
             key       : const Key( TestKeys.focusRosterRefreshButton ),
             icon      : const Icon( Icons.refresh ),
@@ -261,9 +262,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
                 .read<FocusChatBloc>()
                 .add( const FocusRosterRefreshRequested() ),
           ),
-          // Row 0534b50d (parity with web row 47759aa3): a way into the file
-          // viewer — and so into Upload — without digging up an old doc link.
-          // It opens in the same split as a tapped doc link.
+          // A way into the file viewer, and so into Upload, without digging up an old doc
+          // link. It opens in the same split as a tapped doc link.
           IconButton(
             key       : const Key( TestKeys.focusFilesButton ),
             icon      : const Icon( Icons.folder_open ),
@@ -271,8 +271,8 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             onPressed : () => _splitKey.currentState?.openRoots(),
           ),
           _QueueButton( tts: _tts ),
-          // AC-S3.5c — the promoted shared control; behavior is asserted in
-          // test/widget/shared/pause_control_test.dart, not here.
+          // The shared pause control; its behavior is asserted in
+          // `test/widget/shared/pause_control_test.dart`, not here.
           TtsPauseToggle( tts: _tts, toggleKey: const Key( TestKeys.focusPauseToggle ) ),
         ],
       ),
@@ -281,10 +281,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
         children: [
           TtsPausedBanner( tts: _tts, bannerKey: const Key( TestKeys.focusPausedBanner ) ),
           const FocusFilterBar(),
-          // Rows 2416d2c5 / e0843a8a: a tapped doc link SHARES this space
-          // with the conversation instead of floating over it, so the bubbles
-          // reflow into their half. The composer below stays full width — it
-          // writes to the focused session either way.
+          // A tapped doc link shares this space with the conversation instead of floating
+          // over it, so the bubbles reflow into their half. The composer below stays full
+          // width because it writes to the focused session either way.
           Expanded(
             child: DocSplitHost(
               key       : _splitKey,
@@ -302,13 +301,12 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
               ),
             ),
           ),
-          // 🔴 P0 e5cc78ee, Rick 2026-09-23: with the soft keyboard up (Gboard plus
-          // its voice strip runs 420 dp and more) and a spoken reply open for editing,
-          // the composer was taller than the body left over. The outer Column then
-          // overflowed, and the Send/X row sat BELOW the body's bounds: painted, but
-          // never hit-tested, so both buttons were dead while everything above them
-          // worked. Capped here and scrolled from the bottom, so the buttons are the
-          // part that always stays on screen and the transcript is what scrolls.
+          // With the soft keyboard up (a keyboard plus its voice strip can run 420 dp and
+          // more) and a reply open for editing, the composer can be taller than the body
+          // left over. The outer Column would then overflow and the Send and close row would
+          // sit below the body's bounds, painted but never hit-tested, so both buttons are
+          // dead. The cap and the bottom-anchored scroll keep the buttons on screen and let
+          // the transcript scroll instead.
           ConstrainedBox(
             constraints : BoxConstraints( maxHeight: _composerCap( context ) ),
             child       : SingleChildScrollView(
@@ -322,21 +320,22 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     );
   }
 
-  /// The most height the composer may take: 60% of what the keyboard leaves,
-  /// but never less than one button row plus its caption.
+  /// The most height the composer may take.
+  ///
+  /// It is 60% of what the keyboard leaves, but never less than one button row plus its
+  /// caption.
   double _composerCap( BuildContext context ) {
     final mq      = MediaQuery.of( context );
     final visible = mq.size.height - mq.viewInsets.bottom - mq.padding.top - kToolbarHeight;
     return max( kVoiceReplyRowHeight + 32, visible * 0.6 );
   }
 
-  /// S4 composer slot — UNGATED since 2026-08-21 (Rick: "send a voice
-  /// message to a persona chip"): any focused session takes a voice/text
-  /// message. With an unanswered ask it is a REPLY (the bloc's
-  /// `pendingPromptFor` fallback resolves the target, F-S2-S2-3); without
-  /// one it is a DIRECT MESSAGE through `POST /api/notify`, the same call the
-  /// browsers make (Rick 2026-09-17). The caption says
-  /// which, so the user knows what Send will do.
+  /// The composer slot, which any focused session accepts.
+  ///
+  /// With an unanswered ask, Send is a reply, and the bloc's `pendingPromptFor` fallback
+  /// resolves the target. Without one, Send is a direct message through `POST /api/notify`,
+  /// the same call the browsers make.
+  /// The caption says which, so the user knows what Send will do.
   Widget _composer( BuildContext context ) {
     return BlocBuilder<FocusChatBloc, FocusChatState>(
       builder: ( context, state ) {
@@ -392,8 +391,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
               ),
               VoiceReplyField(
                 asr      : _asr,
-                // promptContext intentionally omitted — the bloc resolves
-                // the pending ask (reply) or falls through to a DM.
+                // The bloc resolves the pending ask (reply) or falls through to a direct message.
                 onSubmit : ( text ) => bloc.add(
                   FocusRespondRequested( senderId: focused, text: text ),
                 ),
@@ -405,8 +403,10 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     );
   }
 
-  /// One drawer row off one [FocusDrawerSurface] — so the icon, the label, the
-  /// key and the route can never be spelled differently between two entries.
+  /// One drawer row off one [FocusDrawerSurface].
+  ///
+  /// The icon, label, key and route come from one place, so two entries cannot spell them
+  /// differently.
   Widget _entryTile( BuildContext context, FocusDrawerSurface s ) {
     return ListTile(
       key     : Key( '${TestKeys.focusDrawerEntryPrefix}${s.title}' ),
@@ -417,19 +417,22 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     );
   }
 
-  /// Close the drawer, then push [builder]'s route. Shared by both drawers so
-  /// they cannot disagree about the pop-then-push order.
+  /// Closes the drawer, then pushes [builder]'s route.
+  ///
+  /// Both drawers share it, so they cannot disagree about the pop-then-push order.
   void _push( BuildContext context, WidgetBuilder builder ) {
     Navigator.of( context ).pop();   // close the drawer first
     Navigator.of( context ).push( MaterialPageRoute<void>( builder: builder ) );
   }
 
-  /// The SURFACES drawer (row c59457f0): Quick Ask and Lupin AF Focus on top
-  /// (row 74a799c9; the Home grid entry is behind [kShowHomeGridInSurfacesDrawer]),
-  /// then every Home-grid destination top to bottom, then Settings and the
-  /// stop-list, then Log out. Inbox, Queue Dashboard and Trust Dashboard are
-  /// ABSENT here and present in [_legacyDrawer] — hidden behind the switch,
-  /// not deleted (Rick 2026-09-26: "Hide them, don't delete them for now").
+  /// The surfaces drawer.
+  ///
+  /// Quick Ask and Lupin AF Focus come first, and the Home grid entry is behind
+  /// [kShowHomeGridInSurfacesDrawer].
+  /// Every Home-grid destination follows top to bottom, then Settings and the stop-list,
+  /// then Log out.
+  /// Inbox, Queue Dashboard and Trust Dashboard are absent here and present in
+  /// [_legacyDrawer], hidden behind the switch and not deleted.
   Drawer _surfacesDrawer( BuildContext context ) {
     return Drawer(
       child: ListView(
@@ -444,31 +447,23 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             title   : const Text( 'Quick Ask' ),
             onTap   : () => _push( context, ( _ ) => const QuickAskScreen() ),
           ),
-          // Row 74a799c9: Focus is the landing screen and this drawer opens FROM
-          // it, so the entry goes back to the first route instead of pushing a
-          // second copy — the same door the Home grid card uses.
+          // Focus is the landing screen and this drawer opens from it, so the entry goes back
+          // to the first route instead of pushing a second copy, like the Home grid card.
           //
-          // 🔴 closeDrawer(), NOT Navigator.pop() (review F7). `pop()` closes a
-          // drawer only as a side effect: DrawerController registers a
-          // LocalHistoryEntry on open and pop() removes THAT rather than a route.
-          // But the controller drops the entry the moment the close animation
-          // turns around (drawer.dart, AnimationStatus.reverse), while the tile
-          // stays mounted and hit-testable for the rest of the ~250 ms slide —
-          // it is only clipped by an Align widthFactor. So a second tap in that
-          // window found no history entry and popped the ROUTE: Focus is the
-          // first and only route under MaterialApp.home, which left an empty
-          // navigator and a black screen that only a restart cleared. An
-          // ordinary double-tap, on the branch named for thumb fixes.
+          // It calls closeDrawer(), not Navigator.pop(). A pop closes a drawer only as a side
+          // effect: the drawer controller registers a local-history entry on open, and pop()
+          // removes that rather than a route. The controller drops the entry when the close
+          // animation turns around, while the tile stays tappable for the rest of the slide.
+          // A second tap in that window popped the route itself, and Focus is the only route
+          // under `MaterialApp.home`, which left an empty navigator and a black screen.
           //
-          // closeDrawer() touches no routes and is idempotent, so the second tap
-          // is harmless. popUntil stays as the belt to that braces: it is a
-          // no-op while Focus is the first route, and still correct if a future
-          // change ever opens this drawer from somewhere deeper.
+          // closeDrawer() touches no routes and is idempotent, so a second tap is harmless.
+          // popUntil stays as a backup: it is a no-op while Focus is the first route, and
+          // still correct if the drawer is ever opened from somewhere deeper.
           //
-          // The Builder is load-bearing: `context` here is FocusModeScreen's own
-          // build context, which is ABOVE the Scaffold this drawer belongs to, so
-          // Scaffold.of() on it throws. The app bar's menu button already takes a
-          // Builder context for openDrawer() for the same reason.
+          // The Builder is required: `context` here is above the Scaffold this drawer belongs
+          // to, so `Scaffold.of()` on it throws. The app bar's menu button takes a Builder
+          // context for the same reason.
           Builder(
             builder: ( drawerCtx ) => ListTile(
               key     : const Key( '${TestKeys.focusDrawerEntryPrefix}$kLupinFocusTitle' ),
@@ -506,6 +501,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     );
   }
 
+  /// The pre-experiment drawer, kept entry for entry behind the experiment switch.
   Drawer _legacyDrawer( BuildContext context ) {
     final email = _authedEmail() ?? '';
     void push( Widget screen ) {
@@ -519,11 +515,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       child: ListView(
         children: [
           const DrawerHeader( child: Text( 'Legacy surfaces' ) ),
-          // Quick Ask sits under the 'Legacy surfaces' header for round 1.
-          // That reads oddly for the round-1 headline feature and is
-          // DELIBERATE: the drawer is the only navigation surface the app has,
-          // and renaming the header or minting a non-legacy entry point is a
-          // navigation change that belongs with round 2's multi-job card view.
+          // Quick Ask sits under the legacy header. That reads oddly for a headline feature,
+          // but the drawer is the only navigation surface the app has, and renaming the
+          // header or adding a non-legacy entry point is a navigation change of its own.
           ListTile(
             leading : const Icon( Icons.mic ),
             title   : const Text( 'Quick Ask' ),
@@ -576,8 +570,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
               stopList: ServiceLocator.get<NotificationStopList>(),
             ) ),
           ),
-          // Rick 2026-09-23: "no explicit or easily found way of logging out" —
-          // this is the landing screen, and Logout lived only on the Home grid.
+          // Logout lives here because this is the landing screen.
           const Divider(),
           ListTile(
             key     : const Key( TestKeys.focusDrawerLogout ),
@@ -594,8 +587,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   }
 }
 
-/// App-bar speech-queue button (Rick 2026-08-21): live count badge off
-/// [TtsOrchestrator.queueDepthStream]; tap opens [TtsQueueSheet].
+/// App-bar speech-queue button with a live count badge; a tap opens [TtsQueueSheet].
+///
+/// The count comes from [TtsOrchestrator.queueDepthStream].
 class _QueueButton extends StatelessWidget {
   final TtsOrchestrator tts;
   const _QueueButton( { required this.tts } );
@@ -623,14 +617,23 @@ class _QueueButton extends StatelessWidget {
   }
 }
 
-/// One row of the surfaces drawer: its icon and label, the route it opens, and
-/// whether it is tappable. Kept as DATA so the drawer's order is one list to
-/// read rather than nine `ListTile`s to scan — and so a test can ask an entry
-/// which screen it opens.
+/// One row of the surfaces drawer, with its icon, label, route and tappable state.
+///
+/// It is data, so the drawer's order is one list to read and a test can ask an entry which
+/// screen it opens.
 class FocusDrawerSurface {
+  /// The row's leading icon.
   final IconData      icon;
+
+  /// The row's label.
   final String        title;
+
+  /// Builds the screen the row opens.
   final WidgetBuilder builder;
+
+  /// Whether the row can be tapped.
   final bool          enabled;
+
+  /// Creates a drawer row; [enabled] defaults to true.
   const FocusDrawerSurface( this.icon, this.title, this.builder, { this.enabled = true } );
 }

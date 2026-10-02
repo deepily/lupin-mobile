@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 
-/// Draws a dashed circular stroke around its boundary `Rect`. Used by
-/// `PersonaBadge` (Phase 3 §4) to render the `borrowed=true` variant per
-/// `Q2` (FROZEN 2026-05-06).
+/// Draws a dashed circular stroke around its boundary rectangle.
 ///
-/// Per `Q9` (FROZEN at REUSE pre-pass 2026-05-06) — confirmed genuinely-new:
-/// no existing `CustomPainter` subclass in the mobile tree and no
-/// dashed-border package in `pubspec.yaml`.
+/// `PersonaBadge` uses it for the borrowed variant, and for the overflow variant with round
+/// caps. No other painter or dashed-border package exists in this app.
 class DashedBorderPainter extends CustomPainter {
+  /// Stroke colour.
   final Color     color;
+  /// Stroke width in logical pixels.
   final double    strokeWidth;
+  /// Length of each dash along the circle, in logical pixels.
   final double    dashLength;
+  /// Length of each gap between dashes, in logical pixels.
   final double    gapLength;
-  /// New in Section C (Phase 3, 2026-05-23 notif-client-sync). Default
-  /// `StrokeCap.butt` preserves the existing dashed-border behavior. The
-  /// overflow variant of `PersonaBadge` passes `StrokeCap.round` together
-  /// with a short `dashLength` (≈ `strokeWidth`) to render true round dots.
+  /// End shape of each dash.
+  ///
+  /// The default butt cap draws plain dashes. Round caps with a dash length near
+  /// [strokeWidth] draw round dots, which the overflow badge uses.
   final StrokeCap cap;
 
+  /// Creates a painter with the given colour and optional dash geometry.
   const DashedBorderPainter( {
     required this.color,
     this.strokeWidth = 1.5,

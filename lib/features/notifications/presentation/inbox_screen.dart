@@ -10,8 +10,14 @@ import 'conversation_screen.dart';
 import 'mute_sender_action.dart';
 import 'persona_badge.dart';
 
+/// Inbox listing one tile per sender, with swipe-to-delete and bulk clear.
+///
+/// Loads the inbox on open and on pull-to-refresh. Long-pressing a tile offers mute.
 class InboxScreen extends StatefulWidget {
+  /// Account whose inbox is loaded and whose conversations are deleted.
   final String userEmail;
+
+  /// Creates the inbox for [userEmail].
   const InboxScreen( { super.key, required this.userEmail } );
 
   @override

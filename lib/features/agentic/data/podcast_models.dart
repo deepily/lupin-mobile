@@ -5,14 +5,22 @@ library;
 // Request
 // ─────────────────────────────────────────────
 
+/// Request to generate a podcast from a research source.
 class PodcastGeneratorRequest {
-  final String       researchSource;   // path to source doc or description
+  /// Path to a source document, or a plain description of the topic.
+  final String       researchSource;
+  /// Languages to produce; empty means the server default.
   final List<String> targetLanguages;
+  /// Cap on podcast segments; null uses the server default.
   final int?         maxSegments;
+  /// True asks the server to plan the job without running it.
   final bool         dryRun;
+  /// Time to start the job, as an ISO timestamp; null starts it now.
   final String?      scheduledAt;
+  /// True asks the queue to run this job with nothing else running.
   final bool         monopolize;
 
+  /// Creates a request from its parts.
   const PodcastGeneratorRequest( {
     required this.researchSource,
     this.targetLanguages = const [],
@@ -22,10 +30,11 @@ class PodcastGeneratorRequest {
     this.monopolize      = false,
   } );
 
-  /// v2 wave 2 — `/api/v2/submit` args. Renames per JOB_ARG_CONTRACTS:
-  /// `research_source` → `research`, `target_languages` → `languages`.
-  /// `max_segments` is carried but not read by the factory on b12174fc.
+  /// Spoken-command text that routes a `/api/v2/submit` call to this job.
+  ///
+  /// The submit args rename `research_source` to `research` and `target_languages` to `languages`.
   static const submitCommand = 'agent router go to podcast generator';
+  /// Builds the `args` map of the `/api/v2/submit` body, without queue directives.
   Map<String, dynamic> toSubmitArgs() => {
     'research'                                       : researchSource,
     if ( targetLanguages.isNotEmpty ) 'languages'    : targetLanguages,
@@ -33,6 +42,7 @@ class PodcastGeneratorRequest {
     if ( dryRun                     ) 'dry_run'      : dryRun,
   };
 
+  /// Builds the JSON body of this job's own submit endpoint.
   Map<String, dynamic> toJson() => {
     'research_source'                          : researchSource,
     if ( targetLanguages.isNotEmpty ) 'target_languages' : targetLanguages,

@@ -10,39 +10,41 @@ import 'notification_audio_settings_screen.dart';
 import 'push_pause_section.dart';
 import 'notification_filter_settings_screen.dart';
 
-/// The notification management view (Rick 2026-09-28, row 7cac3a17 — "now that
-/// everything's been proven to work I need to be able to manage how intrusive
-/// the notifications are, because right now I'm getting bombarded").
+/// The notification management view: how intrusive the notifications are.
 ///
-/// Three levels, exactly as he described them: a master switch; under it one
-/// switch per SURFACE — while the app is closed (the FCM wake path) and while
-/// it is open (the in-app ding and spoken summary); and under each surface one
-/// checkbox per PRIORITY.
+/// It has three levels. A master switch comes first, then one switch per surface, then
+/// one checkbox per priority under each surface.
+/// The surfaces are while the app is closed (the FCM wake path) and while it is open
+/// (the in-app ding and spoken summary).
 ///
-/// 🔴 WHAT "OFF" MEANS HERE, IN ONE SENTENCE: the phone stays quiet, and
-/// nothing is lost. A suppressed notification is never hidden from a list and
-/// never marked played on the server, so every one of them is still waiting
-/// the next time the app is opened. Silence, never deletion — the same rule on
-/// both surfaces.
+/// Off means the phone stays quiet and nothing is lost.
+/// A suppressed notification is never hidden from a list.
+/// Nor is it marked played on the server, so each one is still waiting the next time the
+/// app opens.
+/// This is silence, never deletion, on both surfaces.
 ///
-/// This screen owns whether a notification is RAISED. How a raised one SOUNDS
-/// still belongs to the sound-and-speech screen, linked at the bottom.
+/// This screen owns whether a notification is raised. How a raised one sounds belongs to
+/// the sound-and-speech screen, linked at the bottom.
 class NotificationManagementScreen extends StatefulWidget {
+  /// The stored notification preferences this screen reads and writes.
   final NotificationPreferences prefs;
 
-  /// The stop-list screen's dependency, passed through only so this screen can
-  /// offer the link. Null hides the link — a caller that has no stop-list
-  /// registered should not render a row that would crash on tap.
+  /// The stop-list screen's dependency, passed through only so this screen can offer the link.
+  ///
+  /// Null hides the link, so a caller with no stop-list registered renders no row that
+  /// would crash on tap.
   final NotificationStopList? stopList;
 
-  /// Who can be muted: the senders the server knows about (row f1e80e67).
-  /// Null hides the Add button — the list of already-muted senders, and
-  /// removing them, still work without it.
+  /// Loads who can be muted: the senders the server knows about.
+  ///
+  /// Null hides the Add button; the list of already-muted senders, and removing them,
+  /// still work without it.
   final Future<List<MutableSender>> Function()? loadSenders;
 
-  /// Server push pause (row 67ee93b0). Null hides the section.
+  /// The server push pause; null hides the section.
   final PushPauseRepository? pushPause;
 
+  /// Creates the screen over [prefs]; the other arguments switch sections on.
   const NotificationManagementScreen( {
     super.key,
     required this.prefs,
@@ -156,8 +158,9 @@ class _NotificationManagementScreenState
     );
   }
 
-  /// Flip and rebuild immediately, fire the write in parallel. Same pattern as
-  /// the sound screen: SharedPreferences is eventually consistent, and a UI
+  /// Rebuilds at once and fires the write in parallel.
+  ///
+  /// The sound screen does the same. SharedPreferences is eventually consistent, and a UI
   /// that waited on the disk would feel broken on every tap.
   void _write( Future<void> Function() write ) {
     setState( () {} );
@@ -252,25 +255,30 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Mute by sender + quiet hours (Rick 2026-09-29, row f1e80e67, plan §7.5) ──
+// ── Mute by sender and quiet hours ──
 
-/// One sender that can be muted: the key the mute is stored under and the
-/// label a person reads. Built with the SAME two functions the notification
-/// shade uses, so the list says "🌻 Maya" exactly as the notification did.
+/// One sender that can be muted: the key the mute is stored under and the label read.
+///
+/// It is built with the same two functions the notification shade uses, so the list
+/// shows the glyph and name exactly as the notification did.
 class MutableSender {
+  /// The key the mute is stored under.
   final String key;
+
+  /// The label a person reads, as the notification shade shows it.
   final String label;
+
+  /// Creates a sender from its mute [key] and display [label].
   const MutableSender( { required this.key, required this.label } );
 
-  /// Collapse a server sender roster to one row per mute key.
+  /// Collapses a server sender roster to one row per mute key.
   ///
   /// Requires:
   ///     - senders is the `senders-visible` roster, in the server's order
   ///
   /// Ensures:
-  ///     - one entry per distinct `notificationSenderKey` — two seats of one
-  ///       persona, or two sessions of one project, are ONE thing to mute,
-  ///       because that is what the mute will actually silence
+  ///     - one entry per distinct `notificationSenderKey`, because two seats of one
+  ///       persona, or two sessions of one project, are one thing to mute
   ///     - the first occurrence wins, so the server's order is preserved
   ///     - a sender that yields no key is left out (there is nothing to mute)
   static List<MutableSender> fromRoster( List<SenderSummary> senders ) {
@@ -488,8 +496,9 @@ class _QuietHoursSection extends StatelessWidget {
   }
 }
 
-/// `1320` → `22:00`. Twenty-four-hour, because a quiet window is read at a
-/// glance and "10:00 PM → 7:00 AM" is twice the width for the same fact.
+/// Formats minutes since midnight as 24-hour `HH:MM`, so `1320` becomes `22:00`.
+///
+/// A quiet window is read at a glance, and the 12-hour form is twice the width.
 @visibleForTesting
 String formatMinutes( int minutes ) {
   final h = ( minutes ~/ 60 ) % 24;

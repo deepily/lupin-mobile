@@ -4,85 +4,115 @@ import '../../../services/tts/tts_orchestrator.dart';
 import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/data/notification_models.dart';
 
-/// Hydration phase of the focus surface (single flag — the surface
-/// re-renders wholesale on any change, S2 §3.1).
-enum FocusHydration { idle, loading, ready, error }
-
-/// Rail filter (2026.06.25 plan §4.1, ratified by Rick 2026-08-21):
-/// `live` = sessions active in the last hour and not exited;
-/// `history` = everything active in the last 24h (exited included).
-enum FocusFilter { live, history }
-
-/// Rail SENDER SCOPE (Rick 2026-08-21, voice): `personas` = only senders
-/// carrying a voice-persona glyph; `all` = personas + system senders.
-/// Default `personas`, resets each launch. RAIL ONLY — the focused
-/// sender is always visible, and TTS/pane are untouched (the stop-list
-/// governs what is spoken).
-enum FocusSenderScope { personas, all }
-
-/// Recency band of a sender at `asOf` — mirrors the web clients' pure
-/// client-side math (🟢 <1h, 🟡 <24h, ⚪ dropped).
-enum FocusBand { live, history, stale }
-
-/// Thin view-model wrapping [NotificationItem] with answered-state — the
-/// OPERATIVE §3.1 mapping branch (F-S2-S2-2; Phase-0 2026-06-12 ruled
-/// raw-passthrough OUT: the conversation wire is a fixed 19-field dict
-/// with no `response_options` / `voice_persona`, so backfilled items ride
-/// `NotificationItem.fromJson( msg.raw )` + an explicit answered flag).
+/// Hydration phase of the focus surface.
 ///
-/// `answered` truth table:
-///   - backfill: `state == "responded"` OR non-null `response_value`
-///     (discriminator fields ARE wire-present, Phase-0 fixture)
-///   - live: false on arrival; flipped true by a successful
-///     `FocusRespondRequested` targeting this item's id
+/// It is a single flag, because the surface re-renders wholesale on any change.
+enum FocusHydration {
+  /// Nothing has been requested.
+  idle,
+
+  /// A fetch is in flight.
+  loading,
+
+  /// The data is loaded.
+  ready,
+
+  /// The fetch failed.
+  error
+}
+
+/// Rail filter: live shows recent sessions not exited, history shows the last 24 hours.
 ///
-/// Persona badges for BACKFILLED bubbles: `item.voicePersona` is always
-/// null on this path (not on the wire) — renderers fall back to
-/// [FocusChatState.personasBySender] (the registry), per Phase-0.
+/// Live is sessions active in the last hour and not exited. History is everything active in
+/// the last 24 hours, exited ones included.
+/// Design: src/docs/decisions/README.md (R-FM-filter-scope)
+enum FocusFilter {
+  /// Sessions active in the last hour and not exited.
+  live,
+
+  /// Everything active in the last 24 hours, exited included.
+  history
+}
+
+/// Rail sender scope: `personas` shows persona senders only, `all` adds system senders.
+///
+/// Persona senders are the ones carrying a voice-persona glyph.
+/// The default is `personas` and it resets each launch. It affects the rail only: the
+/// focused sender is always visible, and speech and the pane are untouched, since the
+/// stop-list governs what is spoken.
+/// Design: src/docs/decisions/README.md (R-FM-filter-scope)
+enum FocusSenderScope {
+  /// Only senders with a voice-persona glyph.
+  personas,
+
+  /// Personas and system senders.
+  all
+}
+
+/// Recency band of a sender at `asOf`, matching the web clients' client-side math.
+enum FocusBand {
+  /// Active in the last hour.
+  live,
+
+  /// Active in the last 24 hours.
+  history,
+
+  /// Older than 24 hours, so dropped from the rail.
+  stale
+}
+
+/// A thin view-model wrapping [NotificationItem] with its answered state.
+///
+/// The conversation wire is a fixed 19-field dict with no `response_options` or
+/// `voice_persona`, so backfilled items ride `NotificationItem.fromJson( msg.raw )` plus an
+/// explicit answered flag. A backfilled item is answered when `state == "responded"` or
+/// `response_value` is non-null. A live item is unanswered on arrival and flips to answered
+/// when a successful `FocusRespondRequested` targets its id. Backfilled bubbles carry no
+/// `item.voicePersona`, so renderers fall back to [FocusChatState.personasBySender].
 class FocusMessage extends Equatable {
+  /// The notification this message wraps.
   final NotificationItem item;
+
+  /// True when the ask is finished: answered here, answered elsewhere or expired.
   final bool             answered;
 
-  /// The orchestrator's own suppression record, retained so the user can
-  /// still choose to hear it — AC-S3.8(2), AC-S4.14.
+  /// The orchestrator's own suppression record, retained so the user can still hear the item.
   ///
-  /// A question the user is expected to act on is NOT dropped at ingest the
-  /// way ordinary stop-listed chatter is (Rick, 2026-08-29: *"yes of course
-  /// you should show the answer. And of course you should mute it and mark
-  /// it. That way I can play it if I want."*). It is stored, rendered with
-  /// the matched rule NAMED, and left with its answer affordance intact —
-  /// but it is still not spoken.
-  ///
-  /// 🔴 This is the object gate 1 produced, kept verbatim — NOT a
-  /// reconstruction. Speak-anyway hands it straight back to
-  /// `TtsOrchestrator.speakAnyway()`, so the thing that plays is the thing
-  /// that was refused. Retaining it HERE rather than in the orchestrator
-  /// keeps that stream stateless (Arnold's point) and keys the record by
-  /// the message it belongs to, which is the only correlation that cannot
-  /// go wrong.
+  /// A question the user is expected to act on is not dropped at ingest as ordinary
+  /// stop-listed chatter is. It is stored, rendered with the matched rule named, and left
+  /// with its answer affordance, but it is still not spoken. This is the object the first
+  /// gate produced, kept verbatim and not reconstructed.
+  /// Speak-anyway hands it straight back to `TtsOrchestrator.speakAnyway()`, so the item
+  /// that plays is the item that was refused.
+  /// It is kept here and not in the orchestrator, which keeps that stream stateless and
+  /// keys the record by the message it belongs to.
+  /// Design: src/docs/decisions/README.md (R-FM-show-suppressed-ask)
   final TtsSuppression?  suppression;
 
-  /// The matched pattern, for a UI that only needs to NAME the rule.
-  /// A projection, so it can never disagree with [suppression].
+  /// The matched pattern, for a UI that only needs to name the rule.
+  ///
+  /// It is a projection, so it can never disagree with [suppression].
   String? get suppressedRule => suppression?.rule;
 
-  /// HOW this ask ended, when it ended without our answer — AC-S4.9 /
-  /// AC-S4.13. Null for the ordinary case (unanswered, or answered right
-  /// here). "Expired" and "already answered elsewhere" are different facts
-  /// and the card says which.
+  /// How this ask ended, when it ended without our answer; null for the ordinary case.
+  ///
+  /// "Expired" and "already answered elsewhere" are different facts, and the card says which.
   final AskResolution?   resolution;
 
-  /// What the ending CARRIED, when it carried something — the
-  /// `default_used` on an expiry, the `response_value` on someone else's
-  /// answer. "Expired" alone is thin; "expired, default used: no" tells the
-  /// user what the server did on their behalf (AC-S4.3).
+  /// What the ending carried, when it carried something.
+  ///
+  /// It is the `default_used` on an expiry or the `response_value` on someone else's answer.
+  /// "Expired" alone is thin; "expired, default used: no" tells the user what the server did
+  /// on their behalf.
   final String?          resolutionDetail;
 
-  /// The answer the user gave that never reached the server (row b00e076c:
-  /// tapped while offline, 2026-09-18). Kept so the card can say "not sent"
-  /// and resend it — never dropped quietly. Null once it is delivered.
+  /// The answer the user gave that never reached the server, such as one tapped while offline.
+  ///
+  /// It is kept so the card can say "not sent" and resend it, never dropped quietly. It is
+  /// null once delivered.
   final String?          unsentAnswer;
 
+  /// Creates a message.
   const FocusMessage( {
     required this.item,
     this.answered = false,
@@ -92,21 +122,22 @@ class FocusMessage extends Equatable {
     this.unsentAnswer,
   } );
 
+  /// Builds a message from a backfilled conversation entry.
   factory FocusMessage.fromConversation( ConversationMessage msg ) {
     return FocusMessage(
       item     : NotificationItem.fromJson( msg.raw ),
-      // 🔴 `expired` counts as answered — AC-S4.4. An expired ask is DEAD:
-      // the server already substituted its `response_default`. Counting it
-      // as still-pending left it forever at the head of `pendingPromptFor`,
-      // so the composer aimed every voice reply at a dead ask and took a
-      // 400 the user never saw. Answered here means FINISHED, not
-      // answered-by-us.
+      // `expired` counts as answered. An expired ask is dead, because the server already
+      // substituted its `response_default`. Counting it as pending left it forever at the
+      // head of `pendingPromptFor`, so the composer aimed every voice reply at a dead ask
+      // and took a 400 the user never saw. Answered here means finished, not answered by
+      // us.
       answered : msg.state == 'responded'
               || msg.state == 'expired'
               || msg.responseValue != null,
     );
   }
 
+  /// Copies the message with changes; [clearUnsentAnswer] drops the unsent answer.
   FocusMessage copyWith( {
     bool?           answered,
     TtsSuppression? suppression,
@@ -128,45 +159,68 @@ class FocusMessage extends Equatable {
       [ item.id, answered, suppressedRule, resolution, resolutionDetail, unsentAnswer ];
 }
 
-/// State contract for the focus surface (S2 §3.1; consumed by S3).
+/// State contract for the focus surface.
 ///
-/// `senderOrder` is establishment order (Q7): append-only within an app
-/// run; first-seen first. Cold start seeds it from a one-time
-/// `lastActivity` DESC snapshot (OSQ-3 as amended) — the rail NEVER
-/// re-sorts thereafter, not even on reconnect refresh.
+/// `senderOrder` is establishment order: append-only within an app run, first seen first.
+/// Cold start seeds it from a one-time `lastActivity` descending snapshot, and the rail
+/// never re-sorts afterwards, not even on a reconnect refresh.
 class FocusChatState extends Equatable {
-  /// Live band — mirrors web `notifications.js` / multiplexer (3.6e6 ms).
+  /// The live band's width, matching the web clients: one hour.
   static const Duration liveWindow    = Duration( hours: 1 );
-  /// History band — mirrors web (8.64e7 ms); also the server fetch bound.
+
+  /// The history band's width, matching the web clients: 24 hours; also the server fetch bound.
   static const Duration historyWindow = Duration( hours: 24 );
 
+  /// Senders in establishment order.
   final List<String>                     senderOrder;
+
+  /// The voice persona of each sender, or null when none is assigned.
   final Map<String, VoicePersona?>       personasBySender;
-  final Map<String, List<FocusMessage>>  windows;          // capped at 7 per sender (Q8)
-  final Map<String, int>                 unreadBySender;   // 0 for focused sender (Q4)
+
+  /// Each sender's recent messages, capped at 7.
+  final Map<String, List<FocusMessage>>  windows;
+
+  /// Unread counts per sender; always 0 for the focused sender.
+  final Map<String, int>                 unreadBySender;
+
+  /// The sender whose conversation is open, or null.
   final String?                          focusedSender;
+
+  /// Whether the data is loaded.
   final FocusHydration                   hydration;
-  // ── visibility lens (filter = VISIBILITY, not deletion — Rick 2026.06.25) ──
+
+  // The next fields form the visibility lens. A filter is visibility, not deletion.
+
+  /// When each sender was last active.
   final Map<String, DateTime>            lastActivityBySender;
-  final Set<String>                      exitedSenders;    // persona released + debounce elapsed, or reaped
+
+  /// Senders that exited: persona released and debounce elapsed, or reaped.
+  final Set<String>                      exitedSenders;
+
+  /// The rail's recency filter.
   final FocusFilter                      filter;
+
+  /// The rail's sender scope.
   final FocusSenderScope                 senderScope;
-  final DateTime?                        asOf;             // evaluation clock; null ⇒ not yet evaluated
-  /// Messages the user's stop-list suppressed at ingest, per sender
-  /// (plan 2026.08.21 §3) — never stored in the window, never spoken,
-  /// never counted unread; surfaced only as a "N hidden" caption.
+
+  /// The evaluation clock; null means not yet evaluated.
+  final DateTime?                        asOf;
+
+  /// Messages the user's stop-list suppressed at ingest, per sender.
+  ///
+  /// They are never stored in the window, spoken or counted unread, and surface only as a
+  /// "N hidden" caption.
   final Map<String, int>                 hiddenCountBySender;
 
-  /// The notification id a NOTIFICATION TAP asked to bring into view (row
-  /// d9bc6f6c), or null. Set with [focusedSender] by one event so the two
-  /// cannot disagree; cleared once the pane has acted on it.
+  /// The notification id a notification tap asked to bring into view, or null.
   ///
-  /// ⚠️ A ONE-SHOT INSTRUCTION, NOT A SELECTION. It does not mean "this message
-  /// is highlighted" — it means "scroll to this message, once". Leaving it set
-  /// would re-scroll on every unrelated rebuild, yanking the list out from under
-  /// a user who has since scrolled somewhere else themselves.
+  /// One event sets it together with [focusedSender], so the two cannot disagree, and it is
+  /// cleared once the pane has acted on it. It is a one-shot instruction, not a selection:
+  /// it means "scroll to this message, once". Leaving it set would re-scroll on every
+  /// unrelated rebuild, yanking the list from under a user who has scrolled elsewhere.
   final String?                          revealMessageId;
 
+  /// Creates the state.
   const FocusChatState( {
     required this.senderOrder,
     required this.personasBySender,
@@ -183,6 +237,7 @@ class FocusChatState extends Equatable {
     this.revealMessageId,
   } );
 
+  /// The empty state before any data arrives.
   const FocusChatState.initial()
       : senderOrder          = const [],
         personasBySender     = const {},
@@ -198,8 +253,10 @@ class FocusChatState extends Equatable {
         hiddenCountBySender  = const {},
         revealMessageId      = null;
 
-  /// Recency band of [senderId] evaluated at [asOf]. Unknown activity or a
-  /// null clock ⇒ `live` (pre-hydration: never blank the rail on a guess).
+  /// The recency band of [senderId] evaluated at [asOf].
+  ///
+  /// Unknown activity or a null clock gives `live`, so the rail is never blanked on a guess
+  /// before hydration.
   FocusBand bandFor( String senderId ) {
     final at = asOf;
     final la = lastActivityBySender[ senderId ];
@@ -210,15 +267,16 @@ class FocusChatState extends Equatable {
     return FocusBand.stale;
   }
 
-  /// Does [senderId] carry a persona GLYPH (the rail's persona group)?
-  /// Same test `SessionRail._badgeFor` uses to pick PersonaBadge over the
-  /// initial fallback — a persona without an icon renders as system.
+  /// Whether [senderId] carries a persona glyph, which puts it in the rail's persona group.
+  ///
+  /// It is the same test `SessionRail._badgeFor` uses to pick PersonaBadge over the initial
+  /// fallback, so a persona without an icon renders as system.
   bool isPersona( String senderId ) {
     final p = personasBySender[ senderId ];
     return p != null && ( p.icon ?? '' ).isNotEmpty;
   }
 
-  /// Recency/exit lens only (Live/24h) — independent of [senderScope].
+  // The recency and exit lens only (Live or 24h), independent of [senderScope].
   bool _passesBand( String senderId ) {
     final band = bandFor( senderId );
     switch ( filter ) {
@@ -229,9 +287,10 @@ class FocusChatState extends Equatable {
     }
   }
 
-  /// Is [senderId] rendered under the current [filter] + [senderScope]?
-  /// The focused sender is ALWAYS visible (never blank the pane mid-read —
-  /// plan §4.6; Rick 2026-08-21: also through a Personas-only scope).
+  /// Whether [senderId] is rendered under the current [filter] and [senderScope].
+  ///
+  /// The focused sender is always visible, even through a Personas-only scope, so the pane
+  /// is never blanked mid-read.
   bool isVisible( String senderId ) {
     if ( senderId == focusedSender ) return true;
     if ( !_passesBand( senderId ) ) return false;
@@ -243,9 +302,11 @@ class FocusChatState extends Equatable {
     }
   }
 
-  /// Persona group, OLDEST SESSION FIRST (Rick 2026-08-21): sorted by
-  /// `voice_persona.assigned_at` ascending; senders with no timestamp
-  /// follow in establishment order; ties keep establishment order (stable).
+  /// The persona group, oldest session first.
+  ///
+  /// It is sorted by `voice_persona.assigned_at` ascending. Senders with no timestamp follow
+  /// in establishment order, and ties keep establishment order, so the sort is stable.
+  /// Design: src/docs/decisions/README.md (R-FM-rail-order)
   List<String> get visiblePersonas {
     final indexed = <MapEntry<int, String>>[];
     for ( var i = 0; i < senderOrder.length; i++ ) {
@@ -264,36 +325,37 @@ class FocusChatState extends Equatable {
     return indexed.map( ( e ) => e.value ).toList( growable: false );
   }
 
-  /// System group (no persona glyph), establishment order — Rick ruled
-  /// 2026-08-21: arrival order, never re-sorted.
+  /// The system group: senders with no persona glyph, in arrival order, never re-sorted.
   List<String> get visibleSystem =>
       senderOrder.where( ( s ) => !isPersona( s ) && isVisible( s ) ).toList( growable: false );
 
-  /// Derived, pure: the senders the rail shows — persona group (oldest
-  /// session first) then system group (establishment order). `senderOrder`
-  /// / `windows` are never pruned — this is a render lens.
+  /// The senders the rail shows: the persona group, then the system group.
+  ///
+  /// It is a pure render lens; `senderOrder` and `windows` are never pruned.
   List<String> get visibleOrder =>
       [ ...visiblePersonas, ...visibleSystem ];
 
-  /// Toolbar counts for the Personas / All segments — under the current
-  /// Live/24h lens, independent of [senderScope].
+  /// The Personas segment's count under the current Live or 24h lens.
+  ///
+  /// It is independent of [senderScope].
   int get personaCount => senderOrder.where( ( s ) => isPersona( s ) && _passesBand( s ) ).length;
+  /// The All segment's count, under the current Live or 24h lens.
   int get allCount     => senderOrder.where( _passesBand ).length;
 
-  /// Count the toolbar shows for each segment (independent of [filter]).
+  /// The Live segment's count, independent of [filter].
   int get liveCount => senderOrder
       .where( ( s ) => bandFor( s ) == FocusBand.live && !exitedSenders.contains( s ) )
       .length;
+  /// The 24h segment's count, independent of [filter].
   int get historyCount => senderOrder
       .where( ( s ) => bandFor( s ) != FocusBand.stale )
       .length;
 
-  /// The pinned contract-signal selector (F-S2-S2-3): the sender's NEWEST
-  /// item with `responseRequested && !answered`, or null (⇒ no unanswered
-  /// ask). ONE selector, TWO consumers: the voice-reply fallback inside
-  /// [FocusRespondRequested] resolution, and S3's buried-ask bubble
-  /// rendering / composer gating. Pure derivation over the window — no
-  /// side effects.
+  /// The sender's newest item with `responseRequested && !answered`, or null for none.
+  ///
+  /// It is the one selector for two consumers: the voice-reply fallback inside
+  /// [FocusRespondRequested] resolution, and the buried-ask bubble rendering and composer
+  /// gating. It is a pure derivation over the window with no side effects.
   FocusMessage? pendingPromptFor( String senderId ) {
     final window = windows[ senderId ];
     if ( window == null ) return null;
@@ -304,6 +366,7 @@ class FocusChatState extends Equatable {
     return null;
   }
 
+  /// Copies the state with changes; the `clear...` flags drop a field to null.
   FocusChatState copyWith( {
     List<String>?                    senderOrder,
     Map<String, VoicePersona?>?      personasBySender,
@@ -334,9 +397,9 @@ class FocusChatState extends Equatable {
       senderScope          : senderScope          ?? this.senderScope,
       asOf                 : asOf                 ?? this.asOf,
       hiddenCountBySender  : hiddenCountBySender  ?? this.hiddenCountBySender,
-      // Explicit clear, like `clearFocusedSender`: a null-coalescing copyWith
-      // cannot express "set this back to null", and the reveal target MUST be
-      // clearable or it fires forever.
+      // An explicit clear, like `clearFocusedSender`: a null-coalescing copyWith cannot
+      // express "set this back to null", and the reveal target must be clearable or it
+      // fires forever.
       revealMessageId      : clearRevealMessageId
           ? null
           : ( revealMessageId ?? this.revealMessageId ),

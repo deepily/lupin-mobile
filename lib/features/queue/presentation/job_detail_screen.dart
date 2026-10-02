@@ -14,8 +14,12 @@ import '../domain/queue_event.dart';
 import '../domain/queue_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Detail screen for one job, with its interactions and the actions its state allows.
 class JobDetailScreen extends StatefulWidget {
+  /// The job shown.
   final JobSummary job;
+
+  /// Creates the screen.
   const JobDetailScreen( { super.key, required this.job } );
 
   @override

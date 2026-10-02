@@ -6,11 +6,19 @@ import '../../../shared/models/models.dart';
 
 /// Parameters for processing voice input
 class ProcessVoiceInputParams {
+  /// The voice input to process.
   final String voiceInputId;
+
+  /// Whether to queue a transcription job.
   final bool enableTranscription;
+
+  /// Whether a response should be generated afterwards.
   final bool enableResponseGeneration;
+
+  /// Extra options merged into the input's metadata and the job's metadata.
   final Map<String, dynamic>? processingOptions;
 
+  /// Creates parameters for [voiceInputId], with both stages enabled by default.
   const ProcessVoiceInputParams({
     required this.voiceInputId,
     this.enableTranscription = true,
@@ -27,6 +35,7 @@ class ProcessVoiceInputUseCase extends ParameterizedUseCase<VoiceInput, ProcessV
   final VoiceRepository _voiceRepository;
   final JobRepository _jobRepository;
 
+  /// Creates the use case over the voice and job repositories.
   ProcessVoiceInputUseCase(
     this._voiceRepository,
     this._jobRepository,
@@ -143,6 +152,7 @@ class ProcessVoiceInputUseCase extends ParameterizedUseCase<VoiceInput, ProcessV
 class WatchVoiceProcessingProgressUseCase extends StreamUseCase<VoiceInput, String> {
   final VoiceRepository _voiceRepository;
 
+  /// Creates the use case over the voice repository.
   WatchVoiceProcessingProgressUseCase(this._voiceRepository);
 
   @override

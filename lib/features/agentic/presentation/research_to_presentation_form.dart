@@ -11,7 +11,11 @@ import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Form that submits deep research chained into a presentation.
+///
+/// On success it replaces itself with the job detail screen.
 class ResearchToPresentationForm extends StatefulWidget {
+  /// Creates the form.
   const ResearchToPresentationForm( { super.key } );
 
   @override

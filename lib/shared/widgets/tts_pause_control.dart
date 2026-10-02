@@ -1,56 +1,38 @@
-/// The shared speech-hold control (AC-S3.5c, plan 2026.08.29 §6).
+/// The shared speech-hold control: a toggle and a banner used by more than one screen.
 ///
-/// PROMOTED from `focus_mode_screen.dart`, where `_PauseToggle` and
-/// `_PausedBanner` were both `_`-private. Quick Ask could not import them,
-/// so the obvious move was to write a third `StreamBuilder` over
-/// `pausedStream` into a tree that already held two — which is the defect
-/// AC-S3.5c exists to prevent, not a tidiness preference. Sam asked for
-/// this promotion in the original cascade and nothing in the plan did it.
+/// Focus mode and Quick Ask both mount these, so one stream subscription serves both.
+/// Their behaviour is asserted once, in `test/widget/shared/pause_control_test.dart`.
+/// A screen that mounts them only asserts that they are mounted.
 ///
-/// Behavior is asserted ONCE, in `test/widget/shared/pause_control_test.dart`.
-/// A screen that mounts these asserts only that they are mounted — it does
-/// not re-test them.
-///
-/// 🔴 **Both widgets seed from the synchronous [TtsOrchestrator.isPaused]
-/// getter via `initialData`, and that is STILL load-bearing** (AC-S3.5b).
-///
-/// `pausedStream` used to be a plain broadcast controller with no
-/// current-value replay, so a control mounted while speech was ALREADY held
-/// received nothing until the next transition and rendered "not paused"
-/// indefinitely — over a queue that really was held. Store row `a3fdb6ad`
-/// fixed that in the stream's own contract, so a consumer that forgets to
-/// seed is no longer silently wrong.
-///
-/// ⚠️ Seeding stays anyway, and this is not belt-and-braces for its own sake:
-/// `initialData` paints the FIRST frame, and the replay lands one microtask
-/// later. Remove it and the wrong state shrinks from indefinite to one frame —
-/// smaller, still wrong.
+/// Both widgets seed from the synchronous [TtsOrchestrator.isPaused] getter through
+/// `initialData`. The stream replays its current value one microtask after subscription.
+/// Without the seed, the first frame would show the wrong state for speech already held.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../services/tts/tts_orchestrator.dart';
 
-/// Hold / resume toggle bound to [TtsOrchestrator.pausedStream].
+/// Hold and resume toggle bound to [TtsOrchestrator.pausedStream].
 ///
-/// A pause is a HOLD, not a mute (Q6): nothing is dropped, the in-flight
-/// utterance finishes at its own boundary, and arrivals accumulate. Pair
-/// it with a [TtsPausedBanner] so the held state is explained rather than
-/// implied by an icon.
+/// A pause holds speech and does not mute it. Nothing is dropped, the utterance in flight
+/// finishes at its own boundary, and new arrivals queue up.
+/// Pair it with a [TtsPausedBanner] so the held state is explained and not only implied.
 class TtsPauseToggle extends StatelessWidget {
+  /// The orchestrator whose hold state the toggle shows and flips.
   final TtsOrchestrator tts;
 
-  /// The mounting screen's own test key, so focus mode and Quick Ask stay
-  /// separately addressable while sharing one implementation.
+  /// The mounting screen's own key, so each screen can address its own toggle.
   final Key? toggleKey;
 
+  /// Creates a toggle for [tts].
   const TtsPauseToggle( { super.key, required this.tts, this.toggleKey } );
 
   @override
   Widget build( BuildContext context ) {
     return StreamBuilder<bool>(
       stream      : tts.pausedStream,
-      initialData : tts.isPaused,     // AC-S3.5b — see the library note
+      initialData : tts.isPaused,     // Seeds the first frame; see the library note.
       builder: ( context, snap ) {
         final paused = snap.data ?? false;
         return IconButton(
@@ -64,25 +46,26 @@ class TtsPauseToggle extends StatelessWidget {
   }
 }
 
-/// Loudly-visible held state (Q6: held ≠ silent-forever) with the LIVE
-/// held count off [TtsOrchestrator.queueDepthStream] — it ticks up as
-/// messages accumulate under the hold, so held reads as *held*, not lost.
+/// Banner that shows speech is held, with a live count of queued messages.
 ///
-/// The Quick Ask half of AC-S3.5c: the hold is global, so a user who
-/// paused on the focus screen arrives here to silence. Without this banner
-/// they get a bare icon and no explanation of why nothing is speaking.
+/// The count follows [TtsOrchestrator.queueDepthStream], so it grows as messages
+/// accumulate under the hold and nothing looks lost.
+/// The hold is global: a user who paused on one screen arrives at another in silence.
+/// The banner explains why nothing is speaking.
 class TtsPausedBanner extends StatelessWidget {
+  /// The orchestrator whose hold state and queue depth the banner shows.
   final TtsOrchestrator tts;
 
-  /// The mounting screen's own test key.
+  /// The mounting screen's own key.
   final Key? bannerKey;
 
-  /// Optional extra context appended to the held-count line. Screens use
-  /// it to say something true about their own surface; the orchestrator
-  /// does not record WHERE a pause came from, so nothing here invents a
-  /// provenance it cannot know.
+  /// Optional extra context appended to the held-count line.
+  ///
+  /// Screens use it to say something true about their own surface. The orchestrator does
+  /// not record where a pause came from, so the banner never claims a source.
   final String? reason;
 
+  /// Creates a banner for [tts], with an optional [reason] line.
   const TtsPausedBanner( {
     super.key,
     required this.tts,
@@ -94,7 +77,7 @@ class TtsPausedBanner extends StatelessWidget {
   Widget build( BuildContext context ) {
     return StreamBuilder<bool>(
       stream      : tts.pausedStream,
-      initialData : tts.isPaused,     // AC-S3.5b — see the library note
+      initialData : tts.isPaused,     // Seeds the first frame; see the library note.
       builder: ( context, pausedSnap ) {
         if ( pausedSnap.data != true ) return const SizedBox.shrink();
         return Material(

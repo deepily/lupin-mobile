@@ -13,87 +13,94 @@ import '../../notifications/data/notification_repository.dart';
 import 'focus_chat_event.dart';
 import 'focus_chat_state.dart';
 
-/// The slim, purpose-built state engine for the focus surface (Q2 — NOT an
-/// extension of the legacy NotificationBloc). Holds exactly what the 5%
-/// needs: insertion-ordered session registry (Q7), per-sender last-7
-/// message windows (Q8), unread counts (Q4), focused sender, and the
-/// `pendingPromptFor` contract-signal (F-S2-S2-3).
+/// The state engine for the focus surface, separate from the legacy `NotificationBloc`.
 ///
-/// SOLE TTS dispatcher (F-S1-1 user ruling): every inbound notification —
-/// every priority — goes to `TtsOrchestrator.enqueueAlways()` (S1's
-/// ungated entry point). The legacy NotificationBloc's TTS dispatch is
-/// withdrawn at the DI seam (`service_locator` no longer injects its
-/// Optional `tts` dependency, F-S2-1) — the legacy bloc FILE is untouched.
+/// It holds an insertion-ordered session registry, per-sender windows of the last seven
+/// messages, unread counts, the focused sender and the `pendingPromptFor` signal.
+/// It is the sole TTS dispatcher: every inbound notification, at every priority, goes to
+/// `TtsOrchestrator.enqueueAlways()`, the ungated entry point.
+/// The legacy bloc's TTS dispatch is withdrawn at the dependency-injection seam, because
+/// `service_locator` no longer injects its optional `tts` dependency.
+/// The legacy bloc file is untouched.
 class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   final NotificationRepository _repo;
   final TtsOrchestrator        _tts;
 
-  /// Window cap per sender (Q8 — last 7 messages).
+  /// Window cap per sender: the last seven messages.
   static const int windowCap = 7;
 
-  /// Backfill depth passed EXPLICITLY to `conversation()`: the server
-  /// defaults to a 24-HOUR window when `hours` is omitted
-  /// (Phase-0 2026-06-12, `notifications.py:1854`) — unlike `senders()`,
-  /// where omitted means full history. One week fills a 7-item window for
-  /// any recently active sender without unbounded payloads from chatty
-  /// ones; the window cap is the real limiter.
+  /// Backfill depth, in hours, passed to `conversation()`: one week.
+  ///
+  /// It is passed explicitly because the server defaults to a 24-hour window when `hours`
+  /// is omitted, unlike `senders()`, where omitted means full history. One week fills a
+  /// seven-item window for any recently active sender without unbounded payloads from
+  /// chatty ones. The window cap is the real limiter.
   static const int backfillHours = 24 * 7;
 
-  /// Server-side history bound for the senders fetch (plan 2026.06.25 §4.4
-  /// G4): stale (⚪ >24h) senders never arrive; the 1h Live band is the
+  /// Server-side history bound, in hours, for the senders fetch.
+  ///
+  /// Stale senders (inactive over 24 hours) never arrive. The one-hour Live band is the
   /// client predicate on top ([FocusChatState.isVisible]).
   static const int sendersHours = 24;
 
-  /// `voice_persona_released` carries no `reason` (parent task 69edd619 adds
-  /// one); a benign seat hand-back and a true exit are wire-identical, so
-  /// the release arms this debounce and a re-`assigned` cancels it.
+  /// Default debounce before a released voice persona counts as an exit.
+  ///
+  /// `voice_persona_released` carries no `reason`, so a benign seat hand-back and a true
+  /// exit look the same on the wire. The release arms this debounce and a re-`assigned`
+  /// cancels it.
   static const Duration defaultExitDebounce = Duration( seconds: 4 );
 
-  /// Cached from the last [FocusColdStartRequested] — backfill on
-  /// [FocusSenderSelected] needs it (the event carries only the senderId).
+  /// Email cached from the last [FocusColdStartRequested].
+  ///
+  /// Backfill on [FocusSenderSelected] needs it, since that event carries only the sender id.
   String? _userEmail;
 
   /// Senders whose windows have been hydrated from the backfill endpoint.
-  /// A window created by live arrivals alone is NOT hydrated — first
-  /// selection still backfills and merges (OSQ-4).
+  ///
+  /// A window built from live arrivals alone is not hydrated, so first selection still
+  /// backfills and merges.
   final Set<String> _backfilled = {};
 
-  /// Senders that are on the rail ONLY because the live-seat roster listed
-  /// them — nothing has arrived from them yet. Row cea58ee0: the roster's
-  /// sender id can disagree with the one the seat's own notifications carry
-  /// (the server resolves the project inside a container that cannot see the
-  /// host path, so a worktree seat comes back as `claude.code@seat-…`). When
-  /// the real id turns up, it takes over the alias's place on the rail.
+  /// Senders on the rail only because the live-seat roster listed them.
+  ///
+  /// Nothing has arrived from them yet. The roster's sender id can disagree with the one
+  /// the seat's own notifications carry. The server resolves the project inside a
+  /// container that cannot see the host path, so a worktree seat comes back as
+  /// `claude.code@seat-…`. When the real id turns up, it takes over the alias's place on
+  /// the rail.
   final Set<String> _rosterOnly = {};
 
-  /// Injectable clock (deterministic band tests) + timers.
+  /// Injectable clock (for deterministic band tests) and timers.
   final DateTime Function() _now;
   final Duration?           _tickInterval;   // null ⇒ no periodic tick (tests / DI decides)
   final Duration            _exitDebounce;
   Timer?                    _activityTimer;
   final Map<String, Timer>  _exitTimers = {};
 
-  /// User stop-list (plan 2026.08.21 §3). A matched inbound message still
-  /// ESTABLISHES / bumps its sender (it is activity) but is not stored,
-  /// not counted unread and not spoken; backfill/refresh fetches are
-  /// filtered by the same predicate. Null ⇒ no filtering.
+  /// User stop-list: matched inbound messages are not stored, counted unread or spoken.
+  ///
+  /// A matched message still establishes or bumps its sender, because it is activity.
+  /// Backfill and refresh fetches are filtered by the same predicate.
+  /// Null means no filtering.
   final NotificationStopList? _stopList;
 
-  /// Setter 1 of the `verbatim` flag (plan §6): does this `job_id` belong
-  /// to a live Quick Ask question? Injected rather than imported so the
-  /// enqueue stays in ONE place and this bloc does not learn about Quick
-  /// Ask's internals. Null ⇒ no live ask surface (focus mode alone), and
-  /// only the QUESTION arms of [shouldSpeakVerbatim] apply.
+  /// Whether a `job_id` belongs to a live Quick Ask question, the first `verbatim` setter.
+  ///
+  /// It is injected rather than imported so the enqueue stays in one place and this bloc
+  /// does not learn about Quick Ask's internals. Null means no live ask surface (focus
+  /// mode alone), and only the question arms of [shouldSpeakVerbatim] apply.
   final bool Function( String jobId )? _isQuickAskJob;
 
-  /// Wiring probe for bug 9adff476. Setter 1 above went UNINJECTED in
-  /// production while `actionable_speech_test` stayed green, because that
-  /// test supplies the very dependency it exercises — a test that hands in
-  /// the thing under test cannot fail on the thing being absent. This
-  /// exposes the seam so a DI-level test can assert PRODUCTION wired it.
+  /// Whether the Quick Ask probe was wired, for a dependency-injection test.
+  ///
+  /// The probe went uninjected in production while `actionable_speech_test` stayed green,
+  /// because that test supplies the dependency it exercises.
+  /// A test that hands in the thing under test cannot fail on its absence.
+  /// This exposes the seam so a DI-level test can assert production wired it.
   @visibleForTesting
   bool get hasQuickAskProbe => _isQuickAskJob != null;
 
+  /// Creates the bloc; every collaborator except the repository and orchestrator is optional.
   FocusChatBloc(
     this._repo, {
     required TtsOrchestrator tts,
@@ -155,10 +162,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
 
     _rosterOnly.remove( sid );
-    _adoptRosterAlias( sid, emit );                   // row cea58ee0 — before `order` is read
+    _adoptRosterAlias( sid, emit );                   // before `order` is read
 
     final order = List<String>.from( state.senderOrder );
-    if ( !order.contains( sid ) ) order.add( sid );   // establishment order (Q7)
+    if ( !order.contains( sid ) ) order.add( sid );   // establishment order
 
     // A speaking sender is alive: bump its activity, re-enter Live, drop any
     // pending exit — and refresh the clock so the band re-derives now.
@@ -168,9 +175,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final exited   = Set<String>.from( state.exitedSenders )..remove( sid );
     _exitTimers.remove( sid )?.cancel();
 
-    // Is this something the user must ACT ON? One predicate, used twice
-    // below: it decides the stop-list exemption AND whether speech is
-    // verbatim (AC-S3.6 / AC-S3.6b / AC-S3.8).
+    // Is this something the user must act on? One predicate, used twice below: it decides
+    // the stop-list exemption and whether speech is verbatim.
     final actionable = isActionableQuestion(
       responseRequested : item.responseRequested,
       senderId          : item.senderId,
@@ -178,18 +184,15 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     );
     final rule = _suppressionRule( item );
 
-    // Stop-list (plan 2026.08.21 §3): suppressed = not stored, not unread,
-    // not spoken — counted so the pane can say "N hidden". Sender still
-    // establishes/bumps above (the chatter proves the session is alive).
+    // Stop-list: a suppressed message is not stored, not unread and not spoken. It is
+    // counted so the pane can say "N hidden". The sender still establishes or bumps above,
+    // because the chatter proves the session is alive.
     //
-    // 🔴 AC-S3.8(2), Rick 2026-08-29 — ONE exemption: an item the user is
-    // expected to act on is NOT dropped here. *"yes of course you should
-    // show the answer. And of course you should mute it and mark it. That
-    // way I can play it if I want."* ⇒ it falls through to be stored and
-    // rendered with the rule NAMED, and the speech call below is skipped.
-    // Without this the item is discarded at ingest, and AC-S4.14 — which
-    // asks the prompt widget to show that question WITH its answer
-    // controls — has no text to render and no card to render it on.
+    // One exemption: an item the user is expected to act on is not dropped here. It falls
+    // through to be stored and rendered with the matched rule named, and the speech call
+    // below is skipped. Dropping it at ingest would leave the prompt widget with no text
+    // to render and no card to show its answer controls on.
+    // Design: src/docs/decisions/README.md (R-FM-show-suppressed-ask)
     if ( rule != null && !actionable ) {
       final hidden = Map<String, int>.from( state.hiddenCountBySender )
         ..[ sid ] = ( state.hiddenCountBySender[ sid ] ?? 0 ) + 1;
@@ -207,13 +210,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final window  = List<FocusMessage>.from( windows[ sid ] ?? const [] )
       ..add( FocusMessage( item: item ) );
     while ( window.length > windowCap ) {
-      window.removeAt( 0 );                            // evict oldest (Q8)
+      window.removeAt( 0 );                            // evict oldest
     }
     windows[ sid ] = window;
 
     final unread = Map<String, int>.from( state.unreadBySender );
     if ( state.focusedSender == sid ) {
-      unread[ sid ] = 0;                               // focused stays read (Q4)
+      unread[ sid ] = 0;                               // focused stays read
     } else {
       unread[ sid ] = ( unread[ sid ] ?? 0 ) + 1;
     }
@@ -227,30 +230,22 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       asOf                 : now,
     ) );
 
-    // 🔴 Shown, marked — and still NOT spoken (AC-S3.8(2)). Rick kept the
-    // mute half of his stop-list ruling explicitly.
+    // Shown and marked, but not spoken: the user kept the mute half of the stop-list ruling.
     //
-    // The muting is done BY GATE 1, inside the orchestrator, and this call
-    // is made deliberately rather than skipped (Arnold's finding,
-    // 2026-08-29). An early return here muted the item just as well — and
-    // meant the orchestrator was never invoked, so gate 1 never fired and
-    // NO `TtsSuppression` was ever emitted. That left AC-S4.14's
-    // speak-anyway with no object to act on and AC-S4.15's seam spanning a
-    // wire that did not exist: "orchestrator suppression → prompt-widget
-    // notice" cannot be tested end to end when the first half never
-    // happens.
+    // The muting is done by gate 1 inside the orchestrator, so this call is made rather than
+    // skipped. An early return here would mute the item just as well, but the orchestrator
+    // would never be invoked, gate 1 would never fire and no `TtsSuppression` would be
+    // emitted. Speak-anyway would then have no object to act on.
     //
-    // Letting the call through changes nothing about what the user hears —
-    // gate 1 fires first, before `verbatim` is ever consulted, and returns
-    // without speaking. It changes only that the suppression is now
-    // REPORTED, which is the whole point of AC-S3.7.
+    // Letting the call through changes nothing the user hears: gate 1 fires first, before
+    // `verbatim` is consulted, and returns without speaking. It only makes the suppression
+    // reported.
     //
-    // ⚠️ This relies on the orchestrator and this bloc sharing ONE
-    // `NotificationStopList` — they do (`service_locator.dart:268` and
-    // `:321` both resolve the same registered singleton), and a test pins
-    // that shared instance so it cannot become incidental.
+    // This relies on the orchestrator and this bloc sharing one `NotificationStopList`.
+    // `service_locator.dart` resolves the same registered singleton for both, and a test
+    // pins that shared instance.
 
-    // EVERY item, EVERY priority (Q6) — the ungated S1 path (F-S1-1).
+    // Every item, at every priority, takes the ungated path.
     final persona = item.voicePersona ?? state.personasBySender[ sid ];
     final suppression = _tts.enqueueAlways(
       priority : item.priority,
@@ -258,13 +253,13 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       title    : item.title,
       voiceId  : item.voicePersona?.voiceId,
       sender   : TtsSender( senderId: sid, name: persona?.displayName ?? persona?.name, icon: persona?.icon ),
-      // Row ea716d77: sender mute needs the same key the mute was stored under.
+      // Sender mute needs the same key the mute was stored under.
       senderKey: notificationSenderKey( {
         if ( persona?.name != null ) 'voice_persona': { 'name': persona!.name },
         'sender_id': item.senderId,
       } ),
-      // Ruling 4 + AC-S3.6/S3.6b: an answer the user asked for, or a
-      // question something is blocked on, speaks in full and is not muted.
+      // An answer the user asked for, or a question something is blocked on, speaks in full
+      // and is not muted.
       verbatim : shouldSpeakVerbatim(
         responseRequested : item.responseRequested,
         senderId          : item.senderId,
@@ -273,9 +268,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       ),
     );
 
-    // Gate 1 refused it: retain the orchestrator's OWN record against this
-    // message, so speak-anyway later hands back the very object that was
-    // refused rather than a reconstruction of it (AC-S4.14).
+    // Gate 1 refused it: retain the orchestrator's own record against this message, so
+    // speak-anyway later hands back the very object that was refused.
     if ( suppression != null ) {
       final marked = List<FocusMessage>.from( windows[ sid ]! );
       for ( var i = marked.length - 1; i >= 0; i-- ) {
@@ -289,11 +283,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
   }
 
-  /// The user tapped "speak it anyway" on a muted item — AC-S4.14.
+  /// Handles a "speak it anyway" tap on a muted item.
   ///
-  /// Hands the orchestrator back its OWN suppression object. No
-  /// reconstruction, no second path to the same data: whatever gate 1
-  /// refused is exactly what plays.
+  /// Hands the orchestrator back its own suppression object, with no reconstruction:
+  /// whatever gate 1 refused is what plays.
   void _onSpeakAnyway( FocusSpeakAnywayRequested event, Emitter<FocusChatState> emit ) {
     for ( final window in state.windows.values ) {
       for ( final m in window ) {
@@ -316,15 +309,15 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     await _selectSender( event.senderId, emit, clearReveal: true );
   }
 
-  /// A NOTIFICATION TAP (row d9bc6f6c): the same selection the rail performs,
-  /// plus the message to bring into view, applied as ONE state change.
+  /// A notification tap: the rail's selection plus a message to bring into view.
+  ///
+  /// Both are applied as one state change.
   ///
   /// Ensures:
-  ///   - focusedSender is the tap's sender and revealMessageId its notification,
-  ///     both set before the first await, so a UI rebuild can never observe one
-  ///     without the other
-  ///   - the conversation is backfilled even when cold start has not run yet —
-  ///     the event carries the email for exactly that case
+  ///   - focusedSender is the tap's sender and revealMessageId its notification, both set
+  ///     before the first await, so a UI rebuild never observes one without the other
+  ///   - the conversation is backfilled even when cold start has not run yet, since the
+  ///     event carries the email for that case
   Future<void> _onRevealRequested(
     FocusMessageRevealRequested event,
     Emitter<FocusChatState> emit,
@@ -341,12 +334,12 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     emit( state.copyWith( clearRevealMessageId: true ) );
   }
 
-  /// The ONE selection path — rail tap and notification tap both land here, so
-  /// unread-zeroing and backfill cannot drift between them.
+  /// The one selection path, shared by rail tap and notification tap.
   ///
-  /// [reveal] is the notification id to scroll to (notification tap);
-  /// [clearReveal] drops any target already set (rail tap). Passing neither
-  /// leaves the existing target alone.
+  /// Unread-zeroing and backfill therefore cannot drift between them.
+  ///
+  /// [reveal] is the notification id to scroll to (notification tap). [clearReveal] drops
+  /// any target already set (rail tap). Passing neither leaves the existing target alone.
   Future<void> _selectSender(
     String sid,
     Emitter<FocusChatState> emit, {
@@ -390,10 +383,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
   }
 
-  /// Row cea58ee0: [realSid] has just been seen from a real source (a
-  /// message, or the written-senders list). If a roster-only alias of the
-  /// same session is on the rail, [realSid] takes over its place, focus,
-  /// persona, activity and counts, and the alias disappears. No-op otherwise.
+  /// Lets a real sender id take over a roster-only alias of the same session.
+  ///
+  /// [realSid] has just been seen from a real source: a message or the written-senders list.
+  /// If an alias of the same session is on the rail, [realSid] takes over its place, focus,
+  /// persona, activity and counts, and the alias disappears. Otherwise it does nothing.
   void _adoptRosterAlias( String realSid, Emitter<FocusChatState> emit ) {
     if ( state.senderOrder.contains( realSid ) ) return;
     final hash = sessionHashOf( realSid );
@@ -443,16 +437,18 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       await _coldStartBuild( emit );
     } else {
       await _reconnectRefresh( emit );
-      _resendUnsentAnswers();   // row b00e076c — after the refresh has marked what closed meanwhile
+      _resendUnsentAnswers();   // after the refresh has marked what closed meanwhile
     }
-    // Rick 2026-09-17: the live seats join on EVERY cold start, not only the
-    // first — a reconnect is exactly when a newly spawned seat should appear.
+    // The live seats join on every cold start, not only the first: a reconnect is when a
+    // newly spawned seat should appear.
     await _mergeLiveSeats( emit );
   }
 
-  /// Toolbar refresh (Rick 2026-09-17): the same merge cold start does, on
-  /// demand. Needs the user e-mail the cold start recorded; without it there
-  /// is nothing to fetch and the tap is a no-op rather than an error.
+  /// Handles the toolbar refresh: the same merge cold start does, on demand.
+  ///
+  /// It needs the user email that cold start recorded. Without it there is nothing to
+  /// fetch, and the tap is a no-op rather than an error.
+  /// Design: src/docs/decisions/README.md (R-FM-roster-refresh)
   Future<void> _onRosterRefresh(
     FocusRosterRefreshRequested event,
     Emitter<FocusChatState> emit,
@@ -462,26 +458,26 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     await _mergeLiveSeats( emit );
   }
 
-  /// Merge the LIVE-SEAT roster (`/api/commons/active-sessions`) into the
-  /// rail (Rick 2026-09-17). The notification-derived list only knows senders
-  /// who have written to this user, so a running seat he had never heard from
-  /// was unreachable on the phone — he had to open the browser to start the
-  /// conversation. A seat appears here with an EMPTY window; tapping it
-  /// focuses it and the (ungated) composer writes to it.
+  /// Merges the live-seat roster (`/api/commons/active-sessions`) into the rail.
   ///
-  /// Only seats the server addresses with a full `sender_id` can join: the
-  /// rail is keyed by it, and guessing one from `session_id` would invent a
-  /// sender. A roster failure is NOT fatal — the written-senders rail still
-  /// stands, so it logs and leaves state alone.
+  /// The notification-derived list only knows senders who have written to this user.
+  /// A running seat the user had never heard from was therefore unreachable on the phone.
+  /// A seat appears here with an empty window. Tapping it focuses it, and the ungated
+  /// composer writes to it.
+  ///
+  /// Only seats the server addresses with a full `sender_id` can join. The rail is keyed
+  /// by it, and guessing one from `session_id` would invent a sender. A roster failure is
+  /// not fatal, because the written-senders rail still stands, so it logs and leaves state
+  /// alone.
+  /// Design: src/docs/decisions/README.md (R-FM-roster-refresh)
   Future<void> _mergeLiveSeats( Emitter<FocusChatState> emit ) async {
     final List<ActiveSession> seats;
     try {
       seats = await _repo.activeSessions();
     } catch ( e ) {
-      // Deliberately catch EVERYTHING, not just NotificationApiException: this
-      // roster is an ADDITION to a rail that already works. A server that
-      // doesn't serve the endpoint, a shape we didn't expect, anything at all
-      // — the written-senders rail must survive it untouched.
+      // Catch everything, not just NotificationApiException: this roster is an addition to
+      // a rail that already works. A server that does not serve the endpoint, or an
+      // unexpected shape, must leave the written-senders rail untouched.
       print( '[FocusChat] live-seat roster unavailable: $e' );
       return;
     }
@@ -493,46 +489,27 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 
     for ( final seat in seats ) {
       var sid = seat.senderId;
-      // 🔴 ADDRESSABILITY, NOT ABSENCE. This used to read
-      // `if ( sid == null || sid.isEmpty ) continue;` — which asks whether the string is
-      // THERE, not whether it names a seat we can reach. A sentinel like "none" or
-      // "unknown" is neither null nor empty, so it sailed through, failed to match any
-      // known session hash two lines below, and was appended to the rail AS ITS OWN
-      // SENDER — one row named after the sentinel, which every unidentifiable seat then
-      // collapses onto.
-      //
-      // MEASURED through the real bloc (Tiffany, 2026-09-19): `""` was skipped, `"none"`
-      // was NOT — 11 passed / 1 failed, the failure being exactly the "none" probe.
-      //
-      // `sessionHashOf` is the predicate this guard always wanted, and it was already
-      // sitting two lines below at the merge check. It subsumes null, "", "unknown",
+      // A seat joins only if its sender id is addressable, not merely present. A sentinel
+      // such as "none" or "unknown" is neither null nor empty, would match no known session
+      // hash, and would be appended to the rail as its own sender, collapsing every
+      // unidentifiable seat onto one row. `sessionHashOf` subsumes null, "", "unknown",
       // "none" and anything else without a `#<hash>`.
       //
-      // ⚠️ THIS ASSUMES EVERY LEGITIMATE ROSTER SEAT CARRIES A SESSION HASH, which holds
-      // because the roster is `/api/commons/active-sessions` — CC seats by construction.
-      // Checked before landing: every roster fixture in the suite has one, and the only
-      // hash-less sender id in the tree is a `target_user` on a dispatch response
-      // (`focus_chat_bloc_test.dart:291`), a different field on a different ingress.
-      // If that ever stops being true, this guard silently drops a real seat — so the
-      // assumption is written here rather than left to be rediscovered.
+      // This assumes every legitimate roster seat carries a session hash. That holds because
+      // the roster is `/api/commons/active-sessions`, which lists Claude Code seats only.
+      // If it ever stops being true, this guard silently drops a real seat.
       //
-      // ⚠️ NOT A LIVE BUG: Mr. Radio ruled the wire shape is absent-or-null, "no sentinel
-      // string in the payload" (lupin row 2184bebb). This hardens against a CONTRACT
-      // VIOLATION, not against the agreed contract. Cheap insurance, kept because the
-      // phone cannot tell a sentinel from a seat and the cost of being wrong is a rail
-      // that quietly merges strangers.
+      // The server contract is that the wire shape is absent-or-null, with no sentinel string
+      // in the payload. This guard hardens against a contract violation, because the phone
+      // cannot tell a sentinel from a seat and a wrong merge would quietly join strangers.
       //
-      // ⚠️ THE `sid == null` ARM IS REDUNDANT FOR CORRECTNESS AND REQUIRED BY THE
-      // COMPILER — DO NOT "SIMPLIFY" IT AWAY. `sessionHashOf( null )` already returns
-      // null, so the second arm alone is behaviourally complete. But Dart's flow analysis
-      // promotes `sid` to non-null only from an explicit null test, and everything below
-      // this line uses it as a non-nullable String. Dropping the first arm compiles to
-      // four type errors, not to a subtle bug — which is the good kind of dependency, and
-      // is why it is written out rather than left as a puzzle.
+      // The `sid == null` arm is redundant for correctness but required by the compiler:
+      // `sessionHashOf( null )` already returns null, but Dart promotes `sid` to non-null only
+      // from an explicit null test, and everything below uses it as a non-nullable String.
+      // Do not simplify it away.
       if ( sid == null || sessionHashOf( sid ) == null ) continue;
-      // Row cea58ee0: the same session under a different project segment is
-      // the SAME seat. Merge into the sender already on the rail rather than
-      // adding a second row for it.
+      // The same session under a different project segment is the same seat. Merge into
+      // the sender already on the rail rather than adding a second row for it.
       if ( !order.contains( sid ) ) {
         final known = senderWithSessionHash( order, sessionHashOf( sid ) );
         if ( known != null ) {
@@ -566,23 +543,22 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     ) );
   }
 
-  /// COLD START (OSQ-3 as amended, F-S2-S2-1): ONE `sendersVisible()` fetch
-  /// bounded to [sendersHours] (2026-08-21: `senders()` with hours omitted
-  /// returned the FULL history — 146 senders on the dev box vs 6 in 24h —
-  /// and carries no persona; `senders-visible` stamps `voice_persona` from
-  /// the session bridge), registry ordered `lastActivity` DESC — a one-time
-  /// recency snapshot. Establishment order governs every live arrival
-  /// thereafter; the rail never re-sorts. Seeds `lastActivityBySender` and
-  /// `personasBySender` (live `FocusPersonaUpdated` still overrides).
+  /// Builds the rail from one `sendersVisible()` fetch bounded to [sendersHours].
+  ///
+  /// The registry is ordered by last activity, most recent first, as a one-time recency
+  /// snapshot. Establishment order governs every live arrival thereafter, and the rail
+  /// never re-sorts. `senders()` is not used because, with hours omitted, it returns the
+  /// full history and carries no persona; `senders-visible` stamps `voice_persona` from
+  /// the session bridge. It seeds `lastActivityBySender` and `personasBySender`, and a
+  /// live `FocusPersonaUpdated` still overrides them.
   Future<void> _coldStartBuild( Emitter<FocusChatState> emit ) async {
     emit( state.copyWith( hydration: FocusHydration.loading ) );
     try {
-      // Phase 1 — the await, into a local (F-S2-IMPL-1: never emit a copy
-      // captured before an await; a live arrival during the fetch would be
-      // clobbered out of the registry, orphaning its window).
+      // Phase 1: the await, into a local. Never emit a copy captured before an await; a live
+      // arrival during the fetch would be clobbered out of the registry, orphaning its window.
       final senders = await _repo.sendersVisible( _userEmail!, hours: sendersHours );
 
-      // Phase 2 — synchronous re-read → merge → emit, no await between.
+      // Phase 2: synchronous re-read, merge and emit, with no await between.
       final ordered = List<SenderSummary>.from( senders )
         ..sort( ( a, b ) {
           final la = a.lastActivity;
@@ -594,9 +570,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         } );
       final order = ordered.map( ( s ) => s.senderId ).toList();
       for ( final sid in state.senderOrder ) {
-        // Arrivals that established themselves mid-fetch append after the
-        // snapshot (snapshot governs the initial rail; establishment order
-        // governs everything after — Q7).
+        // Arrivals that established themselves mid-fetch append after the snapshot. The
+        // snapshot governs the initial rail; establishment order governs everything after.
         if ( !order.contains( sid ) ) order.add( sid );
       }
 
@@ -613,21 +588,18 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     }
   }
 
-  /// RECONNECT-REFRESH (F-S2-S3-1 merge contract): existing senders KEEP
-  /// their positions (Q7 anti-shuffle); new senders APPEND in fetch order;
-  /// hydrated windows re-fetch + MERGE-DEDUPE by notification id (cap 7
-  /// newest-last); unread counts are PRESERVED for existing senders — never
-  /// zeroed (a refresh is not a read) — and INCREMENT per newly merged
-  /// message for non-focused senders (implementer call, on the record in
-  /// §8: the missed-message badges are the signal S5's no-auto-re-speak
-  /// pickup behavior relies on); `focusedSender` unchanged.
+  /// Refreshes after a reconnect, merging fetched data into the existing rail and windows.
+  ///
+  /// Existing senders keep their positions and new senders append in fetch order.
+  /// Hydrated windows re-fetch and merge, deduplicated by notification id, capped at seven
+  /// newest-last. Unread counts are preserved for existing senders, since a refresh is not
+  /// a read, and increment per newly merged message for non-focused senders. Those badges
+  /// are the signal the no-auto-re-speak pickup relies on. `focusedSender` is unchanged.
   Future<void> _reconnectRefresh( Emitter<FocusChatState> emit ) async {
     try {
-      // Phase 1 — ALL awaits into locals (F-S2-IMPL-1, same family as
-      // F-S1-IMPL-1): an inbound processed during these awaits mutates
-      // state; copies captured before the awaits would clobber its
-      // append/unread/rail entry on emit (audio spoke it, UI lost it —
-      // and the lost badge is the signal S5's pickup relies on).
+      // Phase 1: all awaits go into locals. An inbound processed during these awaits mutates
+      // state, and copies captured before them would clobber its append, unread count and
+      // rail entry on emit: the audio would speak it and the UI would lose it.
       final senders = await _repo.sendersVisible( _userEmail!, hours: sendersHours );
       final fetchedBySender = <String, List<FocusMessage>>{};
       for ( final sid in _backfilled.toList() ) {
@@ -638,11 +610,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
             .toList();
       }
 
-      // Phase 2 — ONE synchronous re-read → merge → emit; no await between
-      // the state read and the emit (the _onSenderSelected discipline).
+      // Phase 2: one synchronous re-read, merge and emit, with no await between the state
+      // read and the emit.
       for ( final s in senders ) {
         _rosterOnly.remove( s.senderId );
-        _adoptRosterAlias( s.senderId, emit );   // row cea58ee0
+        _adoptRosterAlias( s.senderId, emit );
       }
       final order = List<String>.from( state.senderOrder );
       for ( final s in senders ) {
@@ -690,7 +662,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     personas[ sid ] = event.persona;   // null ⇒ released (no badge)
 
     if ( event.persona == null ) {
-      // Released: arm the exit debounce (plan §4.8 item 4). A re-assign for
+      // Released: arm the exit debounce. A re-assign for
       // the same sender before it fires means the seat was merely handed
       // back (reassignment / `/clear` / borrowed-return) — not an exit.
       _exitTimers.remove( sid )?.cancel();
@@ -742,16 +714,15 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     FocusRespondRequested event,
     Emitter<FocusChatState> emit,
   ) async {
-    // Resolve the target notification id (F-S2-S2-3): explicit typed
-    // context wins; voice replies fall back to the pinned selector.
+    // Resolve the target notification id: explicit typed context wins; voice replies fall
+    // back to the pinned selector.
     final targetId = event.promptContext?.notificationId
         ?? state.pendingPromptFor( event.senderId )?.item.id;
 
     if ( targetId == null ) {
-      // No unanswered ask ⇒ this is a DIRECT MESSAGE to the session (Rick
-      // 2026-08-21: the composer is ungated; a reply with nothing to reply
-      // to is a DM). Same event, same bubble — a different door: since
-      // 2026-09-17 the browsers' `POST /api/notify` user_initiated_message.
+      // No unanswered ask means this is a direct message to the session: the composer is
+      // ungated, and a reply with nothing to reply to is a DM. Same event, same bubble, a
+      // different door: the browsers' `POST /api/notify` user_initiated_message.
       await _sendDirectMessage( event.senderId, event.text, emit );
       return;
     }
@@ -765,8 +736,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       final windows = _copyWindows();
       final window  = List<FocusMessage>.from( windows[ event.senderId ] ?? const [] );
 
-      // Flip the answered ask so pendingPromptFor stops returning it — and
-      // clear any earlier unsent copy: this one got through (row b00e076c).
+      // Flip the answered ask so pendingPromptFor stops returning it, and clear any earlier
+      // unsent copy: this one got through.
       for ( var i = 0; i < window.length; i++ ) {
         if ( window[ i ].item.id == targetId ) {
           window[ i ] = window[ i ].copyWith( answered: true, clearUnsentAnswer: true );
@@ -774,8 +745,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         }
       }
 
-      // Append the user reply — S3's direction-styling discriminator is
-      // the pinned `user_initiated_message` type (F-S2-S2-2).
+      // Append the user reply. The direction-styling discriminator is the pinned
+      // `user_initiated_message` type.
       final now = DateTime.now();
       window.add( FocusMessage(
         item: NotificationItem(
@@ -804,10 +775,9 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         asOf                 : _now(),
       ) );
     } on NotificationApiException catch ( e ) {
-      // AC-S4.9 — two of these 400s are not errors, they are ENDINGS.
-      // "already responded" and "grace period exceeded" both mean the ask
-      // is finished; raising a generic error leaves the card pending
-      // forever and tells the user nothing they can act on.
+      // Two of these 400s are not errors but endings: "already responded" and "grace period
+      // exceeded" both mean the ask is finished. Raising a generic error would leave the card
+      // pending forever and tell the user nothing they can act on.
       final resolution = classifyRespondFailure( e.message );
       if ( resolution.isResolved ) {
         emit( state.copyWith(
@@ -815,10 +785,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         return;
       }
       print( '[FocusChat] respond failed for $targetId: $e' );
-      // Row b00e076c (2026-09-18): the answer used to vanish here — not
-      // sent, not queued, and the card never said so. Keep it ON the card,
-      // so it reads "not sent", can be resent with a tap, and is resent
-      // automatically on reconnect (see [_resendUnsentAnswers]).
+      // Keep the unsent answer on the card, so it reads "not sent", can be resent with a tap,
+      // and is resent automatically on reconnect (see [_resendUnsentAnswers]).
       emit( state.copyWith(
         windows   : _windowsWithUnsent( event.senderId, targetId, event.text ),
         hydration : FocusHydration.error,
@@ -839,10 +807,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return windows;
   }
 
-  /// Row b00e076c: on reconnect, every answer that never left the phone is
-  /// sent again — if its ask is still open. One the server closed meanwhile
-  /// (expired, or answered elsewhere) keeps its unsent text, and the card
-  /// says it was not sent.
+  /// Resends, on reconnect, every answer that never left the phone, if its ask is still open.
+  ///
+  /// One the server closed meanwhile (expired, or answered elsewhere) keeps its unsent
+  /// text, and the card says it was not sent.
   void _resendUnsentAnswers() {
     state.windows.forEach( ( sid, window ) {
       for ( final m in window ) {
@@ -857,29 +825,27 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     } );
   }
 
-  /// `notification_expired` — AC-S4.3. The ask timed out and the server
-  /// substituted its `response_default`. Marked finished, carrying WHICH
-  /// default was used, so the card can say what happened on the user's
-  /// behalf rather than going quiet.
+  /// Handles `notification_expired`: the ask timed out and the server used its default.
+  ///
+  /// The ask is marked finished and carries which default was used.
+  /// The card can then say what happened on the user's behalf rather than going quiet.
   void _onAskExpired( FocusAskExpired event, Emitter<FocusChatState> emit ) {
     emit( state.copyWith( windows: _resolveEverywhere(
       event.notificationId, AskResolution.expired, event.defaultUsed ) ) );
   }
 
-  /// `notification_responded` — AC-S4.3. Another device, a proxy, or the
-  /// browser answered it. Retire the card: not an error, and not our
-  /// answer.
+  /// Handles `notification_responded`: another device, a proxy or the browser answered it.
+  ///
+  /// The card is retired. That is not an error, and not this phone's answer.
   void _onAskResponded( FocusAskResponded event, Emitter<FocusChatState> emit ) {
     emit( state.copyWith( windows: _resolveEverywhere(
       event.notificationId, AskResolution.answeredElsewhere, event.responseValue ) ) );
   }
 
-  /// Resolve a notification id WITHOUT knowing its sender.
+  /// Resolves a notification id without knowing its sender.
   ///
-  /// The lifecycle frames carry `notification_id` and nothing else
-  /// identifying — no `sender_id` — so the id is looked up across every
-  /// window rather than in one. Scanning all of them is honest about what
-  /// the wire gives us; guessing a sender would be worse.
+  /// The lifecycle frames carry `notification_id` and no `sender_id`, so the id is looked
+  /// up across every window rather than in one. Guessing a sender would be worse.
   Map<String, List<FocusMessage>> _resolveEverywhere(
     String        notificationId,
     AskResolution resolution,
@@ -905,9 +871,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return windows;
   }
 
-  /// Mark [targetId] finished with [resolution] — AC-S4.9. The ask stops
-  /// being pending (so the composer stops aiming at it) and carries what
-  /// actually happened, which is not the same as "you answered it".
+  /// Marks [targetId] finished with [resolution].
+  ///
+  /// The ask stops being pending, so the composer stops aiming at it.
+  /// It carries what actually happened, which is not the same as "you answered it".
   Map<String, List<FocusMessage>> _windowsWithResolved(
     String senderId,
     String targetId,
@@ -925,17 +892,16 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return windows;
   }
 
-  /// The query a browser sends when the user types into a session's box:
-  /// `POST /api/notify` as a `user_initiated_message`, `direction=human_to_ai`,
-  /// addressed to the listener email (the sender id before `#`) with the
-  /// session hash (after `#`) as `job_id`. Rick 2026-09-17: the phone uses
-  /// the exact endpoint the legacy and mux clients use — not `/api/dm/send`,
-  /// which framed the phone as a peer session nobody could reply to (lupin
-  /// bug 80f10bdd). Legacy: notifications.js; mux: SenderCardRecorderRenderer.ts.
+  /// Builds the query a browser sends when the user types into a session's box.
   ///
-  /// Returns null when the message cannot be addressed: no signed-in email,
-  /// or a sender id without an `email#hash` shape (the browsers refuse those
-  /// too).
+  /// It is `POST /api/notify` as a `user_initiated_message`, `direction=human_to_ai`.
+  /// It is addressed to the listener email (the sender id before `#`), with the session
+  /// hash (after `#`) as `job_id`.
+  /// The phone uses the exact endpoint the legacy and mux clients use, not `/api/dm/send`.
+  /// That endpoint framed the phone as a peer session nobody could reply to.
+  /// Returns null when the message cannot be addressed: no signed-in email, or a sender id
+  /// without an `email#hash` shape, which the browsers refuse too.
+  /// Design: src/docs/decisions/README.md (R-FM-direct-message-endpoint)
   NotifyRequest? sessionMessageFor( String senderId, String text ) {
     final email   = _userEmail;
     final hashIdx = senderId.indexOf( '#' );
@@ -1004,26 +970,26 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   Map<String, List<FocusMessage>> _copyWindows() =>
       Map<String, List<FocusMessage>>.from( state.windows );
 
-  /// Stop-list predicate for live items. The user's own replies are never
-  /// suppressed (they are not notifications).
-  /// WHICH stop-list rule mutes [item], or null — AC-S3.8(2). The pattern
-  /// is stored on the message so an exempted question can NAME what muted
-  /// it. Replaces the old boolean `_suppressed`, which had exactly one
-  /// caller: a predicate that could say THAT an item was muted but never
-  /// WHICH rule did it cannot render the notice Rick asked for.
+  /// The stop-list rule that mutes [item], or null.
+  ///
+  /// The pattern is stored on the message so an exempted question can name what muted it.
+  /// The user's own replies are never suppressed, because they are not notifications.
   StopPattern? _suppressionRule( NotificationItem item ) =>
       item.type == 'user_initiated_message' ? null : _stopList?.matchFor( item.message );
 
-  /// Rick 2026-09-17: the Live lens counts traffic in BOTH directions —
-  /// "notifications sent or received in the last hour". A session the user
-  /// just wrote to is live by that fact alone, so a successful send bumps
-  /// its activity (and refreshes the clock the band re-derives from) exactly
-  /// as an inbound arrival does.
+  /// Returns last-activity with [senderId] bumped to [now] after a successful send.
+  ///
+  /// The Live lens counts notifications in both directions, sent or received in the last
+  /// hour. A session the user just wrote to is live by that fact alone.
+  /// A send therefore bumps its activity, and refreshes the clock the band re-derives from,
+  /// as an arrival does.
+  /// Design: src/docs/decisions/README.md (R-FM-live-both-directions)
   Map<String, DateTime> _activityBumped( String senderId, DateTime now ) =>
       Map<String, DateTime>.from( state.lastActivityBySender )..[ senderId ] = now;
 
-  /// Merge fetched `lastActivity` into the registry (fetched wins — it is
-  /// the server's view; a live arrival after this emit bumps it again).
+  /// Merges fetched `lastActivity` into the registry; the fetched value wins.
+  ///
+  /// It is the server's view, and a live arrival after this emit bumps it again.
   Map<String, DateTime> _seedActivity( List<SenderSummary> senders ) {
     final activity = Map<String, DateTime>.from( state.lastActivityBySender );
     for ( final s in senders ) {
@@ -1033,9 +999,9 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return activity;
   }
 
-  /// Seed persona badges from `senders-visible` for senders the live
-  /// `FocusPersonaUpdated` stream has not (yet) told us about. A live
-  /// assignment/release already recorded wins — the bridge stamp is the
+  /// Seeds persona badges from `senders-visible` for senders no live event has covered.
+  ///
+  /// A live assignment or release already recorded wins. The bridge stamp is the
   /// cold-start fallback, not an override.
   Map<String, VoicePersona?> _seedPersonas( List<SenderSummary> senders ) {
     final personas = Map<String, VoicePersona?>.from( state.personasBySender );
@@ -1046,11 +1012,12 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return personas;
   }
 
-  /// First-hydration merge (OSQ-4 backfill meeting a live-built window):
-  /// union dedupe by id PREFERRING the existing entry (live items carry
-  /// `responseOptions` / answered flips that the 19-field backfill wire
-  /// cannot), answered ORed in from the fetched twin, then timestamp
-  /// ascending, capped to the newest [windowCap].
+  /// Merges a first-hydration backfill into a window built from live arrivals.
+  ///
+  /// It is a union deduplicated by id that prefers the existing entry, because live items
+  /// carry `responseOptions` and answered flips that the backfill wire cannot.
+  /// Answered is ORed in from the fetched twin, then the result is sorted by timestamp
+  /// ascending and capped to the newest [windowCap].
   List<FocusMessage> _hydrateMerge(
     List<FocusMessage> existing,
     List<FocusMessage> fetched,
@@ -1072,10 +1039,10 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         : merged;
   }
 
-  /// Reconnect-refresh merge (F-S2-S3-1, contract-literal): existing
-  /// entries keep their order; fetched items not already present APPEND in
-  /// timestamp order; dedupe by id; cap [windowCap] newest-last (drop from
-  /// the front).
+  /// Merges a reconnect-refresh fetch: existing entries keep their order.
+  ///
+  /// Fetched items not already present append in timestamp order, deduplicated by id,
+  /// capped at [windowCap] newest-last by dropping from the front.
   List<FocusMessage> _contractMerge(
     List<FocusMessage> existing,
     List<FocusMessage> fetched,
@@ -1094,7 +1061,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
 }
 
 /// The 8-hex session hash after the `#` of a Claude Code sender id, or null.
-/// Two sender ids with the same hash are the same session (row cea58ee0).
+///
+/// Two sender ids with the same hash are the same session.
 String? sessionHashOf( String? senderId ) {
   if ( senderId == null ) return null;
   final i = senderId.lastIndexOf( '#' );
