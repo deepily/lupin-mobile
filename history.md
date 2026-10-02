@@ -13,6 +13,18 @@ Most recent entries (2026-09-01 onward) are retained below.
 
 ---
 
+## 2026.10.01 | Session `fb9c89d0` (Tiffany 💍) — mobile docs track: pilot, sweep, ratchet tooling
+
+Crew: Clayton, Krishna (two seats, Rick's ruling). Umbrella row `b707f92f`; manifest `src/docs/plan-stubs/mobile-docs-track.stubs.json`.
+
+- **Merged and pushed** (tip `28a7307` plus this entry): Phases 1 and 2 closed; pilot steps 1-3; ignore checker (`tool/check_doc_ignores.py`); sweep of `lib/services`, and `lib/features/` fleet, fleet_status, task_list, transcript, broadcast. Comments only, each batch gated (comments-stripped comparison, lupin `docs_only_diff`, linter, full suite). Undocumented public members in `lib/`: 4,914 → 3,188.
+- **Committed, NOT gated, NOT merged** (detached, in the workers' locked worktrees): Krishna `2ccb028` = `lib/core` (all but `app_constants.dart`), session, audio, artifacts, home, claude_code, auth, pre-commit hook and installer, CI step, `tool/data/gated_dirs.txt` (12 directories gated, 13 left out with counts). Clayton `907a178` = focus_mode, notifications, queue, finished_tasks, quick_ask, shared (all but `prompt_bodies.dart`), docs, agentic, settings, decision_proxy, voice (comments only; the module does not compile).
+- Decisions file `src/docs/decisions/README.md` grew to 53 records on the merged branch.
+
+**RESUME HERE:** after my re-spin at 17:18 the auto-mode classifier denied the manager gate script (`batch.sh`), and kept denying it after Rick said yes at about 23:00 (gate row `a6d3bd18`). First thing: get a Bash permission rule for it, or have Rick run it with `!`, then gate and merge `2ccb028` and `907a178` in one batch. Then Rick's rulings: `a1bbc3ef` (two tests assert comment text), `32aedd1c` (`lib/features/voice`), Phase 5 Step 1 scope (`27a1d168`, 823 analyzer issues in 13 directories), claim judge (`9e0dd2dd`, `2847a900`), bug `bdd60a1b` (Claude Code submit endpoint). Post-game for this crew is owed.
+
+---
+
 ## 2026.09.30 | Session `43b31a9d` (Tiffany 💍) — PR prep for the v0.2.2 branch
 
 - Rick's broadcast `0375db54`: wip is being PR'd to `main`; next branch is `wip-v0.2.2-2026.09.30-tracking-lupin`.

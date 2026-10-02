@@ -1,6 +1,27 @@
 # TODO
 
-## ▶ START HERE — mobile docs track (2026-09-30 close, Tiffany 💍)
+## ▶ START HERE — mobile docs track (2026-10-01 close, Tiffany 💍)
+
+**Live row `b707f92f` (P0).** Merged tip `28a7307`. Two finished, **ungated** worker commits wait in locked worktrees: Krishna `2ccb028`, Clayton `907a178` (contents in `history.md`).
+
+| Next | Waits on |
+|---|---|
+| Gate and merge `2ccb028` + `907a178` in one batch | Rick: a Bash permission rule for the manager gate script, or run it with `!` (gate row `a6d3bd18`; the classifier denied it even after his yes) |
+| Two tests assert comment text, so `app_constants.dart` and `prompt_bodies.dart` are unswept | Rick, decision `a1bbc3ef` (recommend: convert the tests) |
+| `lib/features/voice` does not compile, looks unused | Rick, decision `32aedd1c` (recommend: delete after checking reachability) |
+| Phase 5 Step 1: 823 analyzer issues in 13 swept directories (code work); or hook fails on docs rules only | Rick, row `27a1d168` |
+| Claim judge over pilot and sweep | Rick's D3, rows `9e0dd2dd`, `2847a900` |
+| `ClaudeCodeRepository` posts to `/api/claude-code/submit` (reported retired) | bug `bdd60a1b`, unverified server-side |
+| Post-game for the Clayton + Krishna crew | next session |
+
+### Decisions Log — 2026-10-01 (session `fb9c89d0`, Tiffany)
+
+- **Sweep started before the claim judge can run, with two workers; no more seats without Rick** (Rick, ask card 16:31).
+- **A test that asserts comment text blocks its file, not the directory**: leave the file at base, do not edit the test, name the exception in the commit (manager; Rick to rule on `a1bbc3ef`).
+- **Hook and CI cover only directories that pass `analyze --fatal-infos` today**, from `tool/data/gated_dirs.txt`; left-out directories listed with counts (manager, reversible; ungated at `2ccb028`).
+- **A card answer does not clear an auto-mode denial.** Only the operator running the command, or a permission rule, does.
+
+## ▶ Earlier: mobile docs track (2026-09-30 close, Tiffany 💍)
 
 **Live row `b707f92f` (P0)**, lupin plan 1 §10a. M1 standard merged `0fe024e`; M0 analyzer half merged `55266af`.
 
