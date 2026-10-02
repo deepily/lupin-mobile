@@ -24,7 +24,7 @@ lib/features/docs
 # left out: lib/features/agentic 4 (measured at 907a178)
 # left out: lib/features/settings 4 (measured at 907a178)
 # left out: lib/features/decision_proxy 2 (measured at 907a178)
-# left out: lib/features/voice 29 (measured at 907a178)
+# removed: lib/features/voice, deleted 2026-10-02 with lib/core/use_cases/use_case_registry.dart (row 32aedd1c)
 # left out: lib/core 374 (measured at 7a2b3c9)
 # left out: lib/services 324 (measured at 7a2b3c9)
 # left out: lib/features/audio 18 (measured at 7a2b3c9)
