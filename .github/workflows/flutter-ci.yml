@@ -45,6 +45,17 @@ jobs:
       
     - name: Analyze code
       run: flutter analyze --no-fatal-infos
+
+    - name: Analyze gated directories (fatal infos)
+      # Required: this is what catches a `git commit --no-verify` bypass of the pre-commit hook.
+      # The list is tool/data/gated_dirs.txt, shared with the hook: swept directories that pass today.
+      run: |
+        status=0
+        for d in $(python3 tool/pre_commit_gate.py --list); do
+          echo "== flutter analyze --fatal-infos $d"
+          flutter analyze --fatal-infos "$d" || status=1
+        done
+        exit $status
       
     - name: Check for dependency issues
       run: flutter pub outdated --no-dev-dependencies --up-to-date --no-dependency-overrides

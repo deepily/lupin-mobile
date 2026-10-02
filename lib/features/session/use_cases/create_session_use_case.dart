@@ -6,14 +6,22 @@ import '../../../shared/models/models.dart';
 
 /// Parameters for creating a session
 class CreateSessionParams {
+  /// The id of the user the session is for.
   final String userId;
+  /// The session token handed to the repository.
   final String token;
+  /// How long the session lasts; null leaves the repository default.
   final Duration? expiresIn;
+  /// The device the session belongs to; null skips the same-device check.
   final String? deviceId;
+  /// A description of the device, also stored as the user agent.
   final String? deviceInfo;
+  /// The address the session was opened from.
   final String? ipAddress;
+  /// Extra data merged into the new session's metadata.
   final Map<String, dynamic>? metadata;
 
+  /// Creates the parameters; the user id and token are required.
   const CreateSessionParams({
     required this.userId,
     required this.token,
@@ -33,6 +41,7 @@ class CreateSessionUseCase extends ParameterizedUseCase<Session, CreateSessionPa
   final SessionRepository _sessionRepository;
   final UserRepository _userRepository;
 
+  /// Creates the use case with the repositories it reads and writes.
   CreateSessionUseCase(
     this._sessionRepository,
     this._userRepository,
@@ -139,6 +148,7 @@ class CreateSessionUseCase extends ParameterizedUseCase<Session, CreateSessionPa
 class ValidateSessionUseCase extends ParameterizedUseCase<Session, String> {
   final SessionRepository _sessionRepository;
 
+  /// Creates the use case with the session repository.
   ValidateSessionUseCase(this._sessionRepository);
 
   @override
@@ -203,6 +213,7 @@ class ValidateSessionUseCase extends ParameterizedUseCase<Session, String> {
 class TerminateSessionUseCase extends ParameterizedUseCase<bool, String> {
   final SessionRepository _sessionRepository;
 
+  /// Creates the use case with the session repository.
   TerminateSessionUseCase(this._sessionRepository);
 
   @override

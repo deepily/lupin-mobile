@@ -31,8 +31,10 @@ class EvictionManager {
   // Event controller
   final _eventController = StreamController<EvictionEvent>.broadcast();
   
+  /// Emits an event when eviction starts, completes or fails.
   Stream<EvictionEvent> get evictionEvents => _eventController.stream;
   
+  /// Creates a [EvictionManager].
   EvictionManager({
     required AudioCache audioCache,
     required VoiceRecordingCache voiceRecordingCache,
@@ -292,7 +294,7 @@ class EvictionManager {
   /// 
   /// Raises:
   ///   - AnalysisException if cache analysis fails
-  ///   - No exceptions for empty recommendations
+  ///   - nothing is raised for empty recommendations
   Future<List<EvictionRecommendation>> getEvictionRecommendations() async {
     final recommendations = <EvictionRecommendation>[];
     
@@ -349,7 +351,7 @@ class EvictionManager {
   ///   - No memory leaks remain
   /// 
   /// Raises:
-  ///   - No exceptions propagate (cleanup errors are suppressed)
+  ///   - nothing propagates; cleanup errors are suppressed
   void dispose() {
     _periodicEvictionTimer?.cancel();
     _eventController.close();
@@ -421,6 +423,7 @@ class EvictionManager {
 
 /// Base eviction strategy handler
 abstract class EvictionStrategyHandler {
+  /// Lists the items that could be evicted, in eviction order for the strategy.
   Future<List<EvictionCandidate>> getCandidates({
     required AudioCache audioCache,
     required VoiceRecordingCache voiceRecordingCache,
@@ -586,14 +589,22 @@ class FIFOEvictionStrategy extends EvictionStrategyHandler {
 
 /// Eviction candidate
 class EvictionCandidate {
+  /// Identifier of the item.
   final String id;
+  /// Kind of cached item.
   final String type;
+  /// Size in bytes.
   final int sizeBytes;
+  /// Eviction priority.
   final double priority;
+  /// When the item was last accessed, or null.
   final DateTime? lastAccessed;
+  /// When the entry was created.
   final DateTime? createdAt;
+  /// Number of times the item was read, or null when unknown.
   final int? accessCount;
   
+  /// Creates a [EvictionCandidate].
   const EvictionCandidate({
     required this.id,
     required this.type,
@@ -607,12 +618,18 @@ class EvictionCandidate {
 
 /// Eviction result
 class EvictionResult {
+  /// Whether the eviction succeeded.
   final bool success;
+  /// Number of items evicted.
   final int itemsEvicted;
+  /// Bytes freed.
   final int bytesFreed;
+  /// Eviction strategy used.
   final CacheEvictionStrategy strategy;
+  /// Error message, or null on success.
   final String? error;
   
+  /// Creates a [EvictionResult].
   const EvictionResult({
     required this.success,
     required this.itemsEvicted,
@@ -621,6 +638,7 @@ class EvictionResult {
     this.error,
   });
   
+  /// Result of a successful eviction.
   factory EvictionResult.success({
     required int itemsEvicted,
     required int bytesFreed,
@@ -634,6 +652,7 @@ class EvictionResult {
     );
   }
   
+  /// Result of a failed eviction, carrying [error].
   factory EvictionResult.failed(String error) {
     return EvictionResult(
       success: false,
@@ -644,6 +663,7 @@ class EvictionResult {
     );
   }
   
+  /// Result when the cache was under its limit and nothing was evicted.
   factory EvictionResult.noEvictionNeeded() {
     return const EvictionResult(
       success: true,
@@ -656,12 +676,18 @@ class EvictionResult {
 
 /// Eviction recommendation
 class EvictionRecommendation {
+  /// Kind of cached item.
   final String type;
+  /// Eviction priority.
   final EvictionPriority priority;
+  /// Human-readable description.
   final String description;
+  /// Estimated bytes the action would free.
   final int estimatedBytesFreed;
+  /// Eviction strategy used.
   final CacheEvictionStrategy strategy;
   
+  /// Creates a [EvictionRecommendation].
   const EvictionRecommendation({
     required this.type,
     required this.priority,
@@ -673,24 +699,34 @@ class EvictionRecommendation {
 
 /// Eviction priority
 enum EvictionPriority {
+  /// Eviction can wait.
   low,
+  /// Eviction is advisable.
   medium,
+  /// Eviction is needed soon.
   high,
+  /// Eviction is needed now.
   critical,
 }
 
 /// Base eviction event
 abstract class EvictionEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Eviction started event
 class EvictionStartedEvent extends EvictionEvent {
+  /// Eviction strategy used.
   final CacheEvictionStrategy strategy;
+  /// Cache size in bytes when eviction started.
   final int currentSize;
+  /// Size in bytes eviction aims for.
   final int targetSize;
+  /// Bytes to evict.
   final int bytesToEvict;
   
+  /// Creates the event.
   EvictionStartedEvent({
     required this.strategy,
     required this.currentSize,
@@ -701,11 +737,16 @@ class EvictionStartedEvent extends EvictionEvent {
 
 /// Eviction completed event
 class EvictionCompletedEvent extends EvictionEvent {
+  /// Eviction strategy used.
   final CacheEvictionStrategy strategy;
+  /// Number of items evicted.
   final int itemsEvicted;
+  /// Bytes freed.
   final int bytesFreed;
+  /// How long it took.
   final Duration duration;
   
+  /// Creates the event.
   EvictionCompletedEvent({
     required this.strategy,
     required this.itemsEvicted,
@@ -716,9 +757,12 @@ class EvictionCompletedEvent extends EvictionEvent {
 
 /// Eviction failed event
 class EvictionFailedEvent extends EvictionEvent {
+  /// Eviction strategy used.
   final CacheEvictionStrategy strategy;
+  /// Error message, or null on success.
   final String error;
   
+  /// Creates the event.
   EvictionFailedEvent({
     required this.strategy,
     required this.error,

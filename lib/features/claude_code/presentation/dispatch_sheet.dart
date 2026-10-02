@@ -32,7 +32,9 @@ Widget _retiredBanner( String copy ) {
   );
 }
 
+/// A bottom sheet that collects a prompt and submits it as a Claude Code job.
 class DispatchSheet extends StatefulWidget {
+  /// Creates the sheet.
   const DispatchSheet( { super.key } );
 
   @override

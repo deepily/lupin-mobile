@@ -10,15 +10,24 @@ library;
 
 /// Request body for POST /api/claude-code/submit.
 class ClaudeCodeSubmitRequest {
+  /// The task text sent to Claude Code.
   final String  prompt;
+  /// The project the job runs in.
   final String  project;
+  /// The task type, such as `BOUNDED`.
   final String  taskType;
+  /// The most turns the job may take.
   final int     maxTurns;
+  /// The websocket id that receives progress; omitted from the JSON when null.
   final String? websocketId;
+  /// True to ask for a dry run.
   final bool    dryRun;
+  /// When to run the job; omitted from the JSON when null.
   final String? scheduledAt;
+  /// True to ask that the job run alone.
   final bool    monopolize;
 
+  /// Creates the request; only the prompt is required.
   const ClaudeCodeSubmitRequest( {
     required this.prompt,
     this.project     = "lupin",
@@ -30,6 +39,7 @@ class ClaudeCodeSubmitRequest {
     this.monopolize  = false,
   } );
 
+  /// The request body, using the backend's snake_case field names.
   Map<String, dynamic> toJson() => {
     "prompt"     : prompt,
     "project"    : project,
@@ -44,11 +54,16 @@ class ClaudeCodeSubmitRequest {
 
 /// Response from POST /api/claude-code/submit.
 class ClaudeCodeSubmitResponse {
+  /// The server's status word for the submission.
   final String status;
+  /// The id of the new job.
   final String jobId;
+  /// The job's place in the queue; 0 when the server omits it.
   final int    queuePosition;
+  /// The server's message; empty when omitted.
   final String message;
 
+  /// Creates the response.
   const ClaudeCodeSubmitResponse( {
     required this.status,
     required this.jobId,
@@ -56,6 +71,7 @@ class ClaudeCodeSubmitResponse {
     required this.message,
   } );
 
+  /// Reads the response from the backend's JSON body.
   factory ClaudeCodeSubmitResponse.fromJson( Map<String, dynamic> j ) =>
       ClaudeCodeSubmitResponse(
         status        : j[ "status" ]         as String,
@@ -65,10 +81,14 @@ class ClaudeCodeSubmitResponse {
       );
 }
 
+/// A failed call to the Claude Code API.
 class ClaudeCodeApiException implements Exception {
+  /// The server's detail text, or the transport error message.
   final String  message;
+  /// The HTTP status code, when a response arrived.
   final int?    statusCode;
 
+  /// Creates the exception.
   const ClaudeCodeApiException( this.message, { this.statusCode } );
 
   @override

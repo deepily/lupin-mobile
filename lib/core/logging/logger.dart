@@ -5,33 +5,52 @@ import '../storage/storage_manager.dart';
 
 /// Log levels for filtering and categorizing log messages
 enum LogLevel {
+  /// Finest detail.
   verbose(0, 'VERBOSE', '🔍'),
+  /// Debugging detail.
   debug(1, 'DEBUG', '🐛'),
+  /// Normal operation.
   info(2, 'INFO', 'ℹ️'),
+  /// Something unexpected that the app recovered from.
   warning(3, 'WARNING', '⚠️'),
+  /// A failure.
   error(4, 'ERROR', '❌'),
+  /// A failure the app may not survive.
   critical(5, 'CRITICAL', '🚨');
 
   const LogLevel(this.value, this.name, this.emoji);
 
+  /// Numeric severity; a higher value is more severe.
   final int value;
+  /// Upper-case label printed in a log line.
   final String name;
+  /// Glyph printed in a log line.
   final String emoji;
 
+  /// True when this level is at least as severe as [other].
   bool operator >=(LogLevel other) => value >= other.value;
+  /// True when this level is at most as severe as [other].
   bool operator <=(LogLevel other) => value <= other.value;
+  /// True when this level is more severe than [other].
   bool operator >(LogLevel other) => value > other.value;
+  /// True when this level is less severe than [other].
   bool operator <(LogLevel other) => value < other.value;
 }
 
 /// Context information for log entries
 class LogContext {
+  /// User the entry concerns, or null.
   final String? userId;
+  /// Session the entry concerns, or null.
   final String? sessionId;
+  /// Request the entry concerns, or null.
   final String? requestId;
+  /// Feature the entry concerns, or null.
   final String? feature;
+  /// Extra structured fields, or null.
   final Map<String, dynamic>? metadata;
 
+  /// Creates a context; every field is optional.
   const LogContext({
     this.userId,
     this.sessionId,
@@ -40,6 +59,7 @@ class LogContext {
     this.metadata,
   });
 
+  /// Serializes the context.
   Map<String, dynamic> toJson() {
     return {
       if (userId != null) 'userId': userId,
@@ -53,14 +73,22 @@ class LogContext {
 
 /// Individual log entry with timestamp, level, and context
 class LogEntry {
+  /// When the entry was created.
   final DateTime timestamp;
+  /// Severity of the entry.
   final LogLevel level;
+  /// The logged text.
   final String message;
+  /// Source tag, or null.
   final String? tag;
+  /// Context of the entry, or null.
   final LogContext? context;
+  /// The error being logged, or null.
   final Object? error;
+  /// Stack trace of the error, or null.
   final StackTrace? stackTrace;
 
+  /// Creates an entry.
   LogEntry({
     required this.timestamp,
     required this.level,
@@ -71,6 +99,7 @@ class LogEntry {
     this.stackTrace,
   });
 
+  /// Serializes the entry.
   Map<String, dynamic> toJson() {
     return {
       'timestamp': timestamp.toIso8601String(),
@@ -83,6 +112,7 @@ class LogEntry {
     };
   }
 
+  /// Formats the entry as one human-readable line.
   String toFormattedString() {
     final buffer = StringBuffer();
     
@@ -120,7 +150,9 @@ class LogEntry {
 
 /// Log destination interface for pluggable output targets
 abstract class LogDestination {
+  /// Writes [entry] to the destination.
   void write(LogEntry entry);
+  /// Writes any buffered entries.
   Future<void> flush();
 }
 
@@ -141,13 +173,17 @@ class ConsoleLogDestination implements LogDestination {
 
 /// File log destination for persistent logging
 class FileLogDestination implements LogDestination {
+  /// Name of the log file.
   final String fileName;
+  /// Size at which the file is rotated, in bytes.
   final int maxFileSize;
+  /// Number of rotated files kept.
   final int maxFiles;
   final StorageManager _storage;
   final List<LogEntry> _buffer = [];
   final int _bufferSize;
 
+  /// Creates a destination that writes through [_storage].
   FileLogDestination(
     this._storage, {
     this.fileName = 'lupin_mobile.log',
@@ -227,12 +263,15 @@ class FileLogDestination implements LogDestination {
 
 /// Remote log destination for production monitoring
 class RemoteLogDestination implements LogDestination {
+  /// URL the logs are sent to.
   final String endpoint;
+  /// Key sent with each upload.
   final String apiKey;
   final List<LogEntry> _buffer = [];
   final int _bufferSize;
   final Duration _flushInterval;
 
+  /// Creates a destination that buffers entries and uploads them on an interval.
   RemoteLogDestination({
     required this.endpoint,
     required this.apiKey,
@@ -288,6 +327,7 @@ class RemoteLogDestination implements LogDestination {
 /// Main logger class with configurable destinations and filtering
 class Logger {
   static Logger? _instance;
+  /// The shared logger.
   static Logger get instance => _instance ?? (_instance = Logger._());
 
   Logger._();
@@ -371,18 +411,22 @@ class Logger {
     log(LogLevel.verbose, message, tag: tag, context: context);
   }
 
+  /// Logs [message] at debug level.
   static void debug(String message, {String? tag, LogContext? context}) {
     log(LogLevel.debug, message, tag: tag, context: context);
   }
 
+  /// Logs [message] at info level.
   static void info(String message, {String? tag, LogContext? context}) {
     log(LogLevel.info, message, tag: tag, context: context);
   }
 
+  /// Logs [message] at warning level.
   static void warning(String message, {String? tag, LogContext? context}) {
     log(LogLevel.warning, message, tag: tag, context: context);
   }
 
+  /// Logs [message] at error level, with an optional [error] and [stackTrace].
   static void error(
     String message, {
     String? tag,
@@ -393,6 +437,7 @@ class Logger {
     log(LogLevel.error, message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
+  /// Logs [message] at critical level.
   static void critical(
     String message, {
     String? tag,
@@ -419,26 +464,33 @@ class Logger {
 
 /// Tagged logger for component-specific logging
 class TaggedLogger {
+  /// Tag added to every message.
   final String tag;
 
+  /// Creates a logger that tags its messages with [tag].
   TaggedLogger(this.tag);
 
+  /// Logs [message] at verbose level.
   void verbose(String message, {LogContext? context}) {
     Logger.verbose(message, tag: tag, context: context);
   }
 
+  /// Logs [message] at debug level.
   void debug(String message, {LogContext? context}) {
     Logger.debug(message, tag: tag, context: context);
   }
 
+  /// Logs [message] at info level.
   void info(String message, {LogContext? context}) {
     Logger.info(message, tag: tag, context: context);
   }
 
+  /// Logs [message] at warning level.
   void warning(String message, {LogContext? context}) {
     Logger.warning(message, tag: tag, context: context);
   }
 
+  /// Logs [message] at error level, with an optional [error] and [stackTrace].
   void error(
     String message, {
     LogContext? context,
@@ -448,6 +500,7 @@ class TaggedLogger {
     Logger.error(message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
+  /// Logs [message] at critical level.
   void critical(
     String message, {
     LogContext? context,

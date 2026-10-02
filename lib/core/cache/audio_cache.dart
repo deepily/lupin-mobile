@@ -241,15 +241,24 @@ class AudioCache {
 
 /// Audio metadata for caching
 class AudioMetadata {
+  /// Hash of the text, used as the cache key.
   final String textHash;
+  /// Text that was synthesized.
   final String originalText;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Number of audio chunks.
   final int chunkCount;
+  /// Total playing time.
   final Duration totalDuration;
+  /// When the entry was created.
   final DateTime createdAt;
+  /// When the entry was last read.
   final DateTime lastAccessedAt;
+  /// Number of times the item was read, or null when unknown.
   final int accessCount;
 
+  /// Creates a [AudioMetadata].
   const AudioMetadata({
     required this.textHash,
     required this.originalText,
@@ -261,6 +270,7 @@ class AudioMetadata {
     this.accessCount = 0,
   });
 
+  /// Returns a copy with the given fields replaced.
   AudioMetadata copyWith({
     String? textHash,
     String? originalText,
@@ -283,6 +293,7 @@ class AudioMetadata {
     );
   }
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'text_hash': textHash,
@@ -296,6 +307,7 @@ class AudioMetadata {
     };
   }
 
+  /// Reads a [AudioMetadata] from the map [toJson] produces.
   factory AudioMetadata.fromJson(Map<String, dynamic> json) {
     return AudioMetadata(
       textHash: json['text_hash'],
@@ -312,13 +324,20 @@ class AudioMetadata {
 
 /// Audio cache statistics
 class AudioCacheStats {
+  /// Number of cached chunks.
   final int totalChunks;
+  /// Number of cached metadata entries.
   final int totalMetadata;
+  /// Total size in bytes.
   final int totalSizeBytes;
+  /// Entry counts per provider.
   final Map<String, int> providerStats;
+  /// Hit rate for chunk lookups.
   final double chunkHitRate;
+  /// Hit rate for metadata lookups.
   final double metadataHitRate;
 
+  /// Creates a [AudioCacheStats].
   const AudioCacheStats({
     required this.totalChunks,
     required this.totalMetadata,
@@ -328,6 +347,7 @@ class AudioCacheStats {
     required this.metadataHitRate,
   });
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'total_chunks': totalChunks,
@@ -342,48 +362,66 @@ class AudioCacheStats {
 
 /// Base audio cache event
 abstract class AudioCacheEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Audio cache store event
 class AudioCacheStoreEvent extends AudioCacheEvent {
+  /// Text involved in the operation.
   final String text;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Number of audio chunks.
   final int chunkCount;
   
+  /// Creates the event.
   AudioCacheStoreEvent(this.text, this.provider, this.chunkCount);
 }
 
 /// Audio cache hit event
 class AudioCacheHitEvent extends AudioCacheEvent {
+  /// Text involved in the operation.
   final String text;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Number of audio chunks.
   final int chunkCount;
   
+  /// Creates the event.
   AudioCacheHitEvent(this.text, this.provider, this.chunkCount);
 }
 
 /// Audio cache miss event
 class AudioCacheMissEvent extends AudioCacheEvent {
+  /// Text involved in the operation.
   final String text;
+  /// TTS provider that produced the audio.
   final String provider;
   
+  /// Creates the event.
   AudioCacheMissEvent(this.text, this.provider);
 }
 
 /// Audio precache request event
 class AudioPrecacheRequestEvent extends AudioCacheEvent {
+  /// Text involved in the operation.
   final String text;
+  /// TTS provider that produced the audio.
   final String provider;
   
+  /// Creates the event.
   AudioPrecacheRequestEvent(this.text, this.provider);
 }
 
 /// Audio cache clear event
 class AudioCacheClearEvent extends AudioCacheEvent {
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Number of entries removed.
   final int removedCount;
   
+  /// Creates the event.
   AudioCacheClearEvent(this.provider, this.removedCount);
 }
 

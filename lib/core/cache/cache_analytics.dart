@@ -36,6 +36,7 @@ class CacheAnalytics {
   // Stream controller
   final _analyticsController = StreamController<AnalyticsEvent>.broadcast();
   
+  /// Emits an event for each cache operation recorded.
   Stream<AnalyticsEvent> get analyticsStream => _analyticsController.stream;
   
   CacheAnalytics._();
@@ -287,7 +288,7 @@ class CacheAnalytics {
     return _getLatencyStats();
   }
   
-  /// Update metrics (called periodically)
+  /// Refreshes the derived metrics; called periodically.
   void updateMetrics() {
     // Persist current metrics
     _persistMetrics();
@@ -362,11 +363,13 @@ class CacheAnalytics {
   
   // Getters
   
+  /// Hits divided by lookups across all providers.
   double get overallHitRate {
     final total = _totalHits + _totalMisses;
     return total > 0 ? _totalHits / total : 0.0;
   }
   
+  /// Overall compression ratio.
   double get compressionRatio {
     return _totalBytesStored > 0 
         ? 1.0 - (_totalCompressionSaved / _totalBytesStored)
@@ -506,21 +509,31 @@ class CacheAnalytics {
 
 /// Cache metrics for a specific key (provider or type)
 class CacheMetrics {
+  /// Key identifying the entry.
   final String key;
+  /// Number of cache hits.
   int hits = 0;
+  /// Number of cache misses.
   int misses = 0;
+  /// Number of stores.
   int stores = 0;
+  /// Bytes stored.
   int bytesStored = 0;
+  /// Bytes retrieved.
   int bytesRetrieved = 0;
+  /// When the key was last accessed, or null.
   DateTime? lastAccess;
   
+  /// Creates a [CacheMetrics].
   CacheMetrics({required this.key});
   
+  /// Hits divided by lookups, or 0 when there were none.
   double get hitRate {
     final total = hits + misses;
     return total > 0 ? hits / total : 0.0;
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'key': key,
@@ -537,13 +550,20 @@ class CacheMetrics {
 
 /// Cache access record
 class CacheAccessRecord {
+  /// Kind of cached item.
   final String type;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Operation performed.
   final String operation;
+  /// Size in bytes.
   final int? sizeBytes;
+  /// When the object was created.
   final DateTime timestamp;
+  /// Extra metadata for the entry.
   final Map<String, dynamic>? metadata;
   
+  /// Creates a [CacheAccessRecord].
   const CacheAccessRecord({
     required this.type,
     required this.provider,
@@ -553,6 +573,7 @@ class CacheAccessRecord {
     this.metadata,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'type': type,
@@ -567,22 +588,38 @@ class CacheAccessRecord {
 
 /// Cache analytics data
 class CacheAnalyticsData {
+  /// Start of the reporting period.
   final DateTime periodStart;
+  /// Length of the reporting period.
   final Duration periodDuration;
+  /// Hits in the period.
   final int totalHits;
+  /// Misses in the period.
   final int totalMisses;
+  /// Stores in the period.
   final int totalStores;
+  /// Evictions in the period.
   final int totalEvictions;
+  /// Bytes stored in the period.
   final int totalBytesStored;
+  /// Bytes retrieved in the period.
   final int totalBytesRetrieved;
+  /// Bytes saved by compression in the period.
   final int totalCompressionSaved;
+  /// Hit rate across all lookups.
   final double overallHitRate;
+  /// Compression ratio achieved.
   final double compressionRatio;
+  /// Metrics per provider.
   final Map<String, CacheMetrics> providerMetrics;
+  /// Metrics per item type.
   final Map<String, CacheMetrics> typeMetrics;
+  /// Latency statistics per operation.
   final Map<String, LatencyStats> operationLatencies;
+  /// Most recent access records.
   final List<CacheAccessRecord> recentAccess;
   
+  /// Creates a [CacheAnalyticsData].
   const CacheAnalyticsData({
     required this.periodStart,
     required this.periodDuration,
@@ -604,14 +641,22 @@ class CacheAnalyticsData {
 
 /// Latency statistics
 class LatencyStats {
+  /// Number of samples.
   final int count;
+  /// Smallest sample.
   final Duration min;
+  /// Largest sample.
   final Duration max;
+  /// Mean of the samples.
   final Duration average;
+  /// Median sample.
   final Duration p50;
+  /// 90th percentile sample.
   final Duration p90;
+  /// 99th percentile sample.
   final Duration p99;
   
+  /// Creates a [LatencyStats].
   const LatencyStats({
     required this.count,
     required this.min,
@@ -622,6 +667,7 @@ class LatencyStats {
     required this.p99,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'count': count,
@@ -637,16 +683,22 @@ class LatencyStats {
 
 /// Base analytics event
 abstract class AnalyticsEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Cache store event
 class CacheStoreEvent extends AnalyticsEvent {
+  /// Kind of cached item.
   final String type;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Size in bytes.
   final int sizeBytes;
+  /// Compression ratio achieved.
   final double compressionRatio;
   
+  /// Creates the event.
   CacheStoreEvent({
     required this.type,
     required this.provider,
@@ -657,10 +709,14 @@ class CacheStoreEvent extends AnalyticsEvent {
 
 /// Cache hit event
 class CacheHitEvent extends AnalyticsEvent {
+  /// Kind of cached item.
   final String type;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Hit rate.
   final double hitRate;
   
+  /// Creates the event.
   CacheHitEvent({
     required this.type,
     required this.provider,
@@ -670,10 +726,14 @@ class CacheHitEvent extends AnalyticsEvent {
 
 /// Cache miss event
 class CacheMissEvent extends AnalyticsEvent {
+  /// Kind of cached item.
   final String type;
+  /// TTS provider that produced the audio.
   final String provider;
+  /// Hit rate.
   final double hitRate;
   
+  /// Creates the event.
   CacheMissEvent({
     required this.type,
     required this.provider,
@@ -683,10 +743,14 @@ class CacheMissEvent extends AnalyticsEvent {
 
 /// Cache eviction event
 class CacheEvictionEvent extends AnalyticsEvent {
+  /// Why the eviction happened.
   final String reason;
+  /// Number of items.
   final int itemCount;
+  /// Bytes freed.
   final int bytesFreed;
   
+  /// Creates the event.
   CacheEvictionEvent({
     required this.reason,
     required this.itemCount,
@@ -696,10 +760,14 @@ class CacheEvictionEvent extends AnalyticsEvent {
 
 /// Analytics update event
 class AnalyticsUpdateEvent extends AnalyticsEvent {
+  /// Hit rate.
   final double hitRate;
+  /// Compression ratio achieved.
   final double compressionRatio;
+  /// Total bytes.
   final int totalBytes;
   
+  /// Creates the event.
   AnalyticsUpdateEvent({
     required this.hitRate,
     required this.compressionRatio,

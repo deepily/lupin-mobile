@@ -4,12 +4,14 @@ import '../voice_repository.dart';
 import '../base_repository.dart';
 import 'shared_preferences_repository.dart';
 
+/// Voice input repository backed by SharedPreferences, with a broadcast change stream.
 class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String> 
     implements VoiceRepository {
   
   final StreamController<List<VoiceInput>> _voiceStreamController = 
       StreamController<List<VoiceInput>>.broadcast();
   
+  /// Creates the repository under the `voice` key prefix.
   VoiceRepositoryImpl() : super('voice');
   
   @override
@@ -57,6 +59,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
         voice.timestamp.isAfter(start) && voice.timestamp.isBefore(end));
   }
   
+  /// Sets the status of the voice input [voiceId]; throws when it does not exist.
   @override
   Future<VoiceInput> updateStatus(String voiceId, VoiceInputStatus status) async {
     final voice = await findById(voiceId);
@@ -82,6 +85,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
     return await update(updatedVoice);
   }
   
+  /// Stores [response] on [voiceId] and marks it completed; throws when it is missing.
   @override
   Future<VoiceInput> updateResponse(String voiceId, String response) async {
     final voice = await findById(voiceId);
@@ -96,11 +100,13 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
     return await update(updatedVoice);
   }
   
+  /// Returns the inputs that are still processing.
   @override
   Future<List<VoiceInput>> getActiveVoiceInputs() async {
     return await findWhere((voice) => voice.isProcessing);
   }
   
+  /// Returns the newest inputs of [sessionId] first, cut to [limit] when given.
   @override
   Future<List<VoiceInput>> getRecentVoiceInputs(String sessionId, {int? limit}) async {
     List<VoiceInput> voices = await findBySession(sessionId);
@@ -170,6 +176,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
     });
   }
   
+  /// Deletes inputs older than [olderThan], thirty days when omitted.
   @override
   Future<void> deleteOldVoiceInputs({Duration? olderThan}) async {
     final cutoff = olderThan != null 
@@ -185,6 +192,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
   }
   
   // PaginatedRepository methods
+  /// Returns one page of inputs, sorted by [sortBy] when given.
   @override
   Future<PaginatedResult<VoiceInput>> findPaginated({
     int page = 0,
@@ -253,6 +261,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
     );
   }
   
+  /// Returns one page of inputs matching [query].
   @override
   Future<PaginatedResult<VoiceInput>> search(
     String query, {
@@ -277,11 +286,13 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
   }
   
   // RealtimeRepository methods
+  /// Emits the full list after each change.
   @override
   Stream<List<VoiceInput>> watchAll() {
     return _voiceStreamController.stream;
   }
   
+  /// Emits the input with [id], or null, after each change.
   @override
   Stream<VoiceInput?> watchById(String id) {
     return _voiceStreamController.stream.map((voices) {
@@ -293,6 +304,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
     });
   }
   
+  /// Emits the inputs that match [criteria] after each change.
   @override
   Stream<List<VoiceInput>> watchWhere(Map<String, dynamic> criteria) {
     return _voiceStreamController.stream.map((voices) {
@@ -319,6 +331,7 @@ class VoiceRepositoryImpl extends SharedPreferencesRepository<VoiceInput, String
     _voiceStreamController.add(allVoices);
   }
   
+  /// Closes the change stream.
   void dispose() {
     _voiceStreamController.close();
   }

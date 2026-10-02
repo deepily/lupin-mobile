@@ -1,0 +1,32 @@
+# Directories the pre-commit hook and the CI step run `analyze --fatal-infos` on.
+# One shared list: tool/pre_commit_gate.py reads it for the hook and for `--list` (CI).
+# One path per line. Add a directory by moving its line out of "left out" below, after it passes.
+lib/features/artifacts
+lib/features/auth
+lib/features/holding_area
+lib/features/home
+lib/features/fleet
+lib/features/fleet_status
+lib/features/task_list
+lib/features/transcript
+lib/features/broadcast
+lib/features/finished_tasks
+lib/features/quick_ask
+lib/features/docs
+
+# Swept but left out: each has non-doc errors or infos today, so `analyze --fatal-infos` fails.
+# Format: `# left out: <dir> <issue count> (measured at <sha>)`. Clearing them is Phase 5 Step 1.
+# The first group was measured at 907a178 (Clayton's sweep branch), not on this branch.
+# left out: lib/features/focus_mode 8 (measured at 907a178)
+# left out: lib/features/notifications 6 (measured at 907a178)
+# left out: lib/features/queue 1 (measured at 907a178)
+# left out: lib/shared 11 (measured at 907a178)
+# left out: lib/features/agentic 4 (measured at 907a178)
+# left out: lib/features/settings 4 (measured at 907a178)
+# left out: lib/features/decision_proxy 2 (measured at 907a178)
+# left out: lib/features/voice 29 (measured at 907a178)
+# left out: lib/core 374 (measured at 7a2b3c9)
+# left out: lib/services 324 (measured at 7a2b3c9)
+# left out: lib/features/audio 18 (measured at 7a2b3c9)
+# left out: lib/features/session 8 (measured at 7a2b3c9)
+# left out: lib/features/claude_code 4 (measured at 7a2b3c9)

@@ -33,13 +33,13 @@ abstract class JobRepository extends PaginatedRepository<Job, String>
   /// Get jobs by priority (if metadata contains priority)
   Future<List<Job>> findByPriority(String priority);
   
-  /// Update job status
+  /// Sets a job's status
   Future<Job> updateStatus(String jobId, JobStatus status);
   
-  /// Update job result
+  /// Stores a job's result
   Future<Job> updateResult(String jobId, String result);
   
-  /// Update job error
+  /// Stores a job's error
   Future<Job> updateError(String jobId, String error);
   
   /// Get active jobs (todo + running)
@@ -63,16 +63,26 @@ abstract class JobRepository extends PaginatedRepository<Job, String>
 
 /// Job statistics
 class JobStats {
+  /// Number of jobs.
   final int totalJobs;
+  /// Jobs waiting to run.
   final int todoJobs;
+  /// Jobs currently running.
   final int runningJobs;
+  /// Jobs that finished successfully.
   final int completedJobs;
+  /// Jobs that failed for good.
   final int deadJobs;
+  /// Mean time a job took to process.
   final Duration averageProcessingTime;
+  /// Share of jobs that completed.
   final double successRate;
+  /// Job counts by hour of day.
   final Map<String, int> jobsByHour;
+  /// Error counts by error type.
   final Map<String, int> errorsByType;
 
+  /// Creates the stats; every field is required.
   const JobStats({
     required this.totalJobs,
     required this.todoJobs,
@@ -85,6 +95,7 @@ class JobStats {
     this.errorsByType = const {},
   });
 
+  /// Serializes the stats.
   Map<String, dynamic> toJson() {
     return {
       'total_jobs': totalJobs,

@@ -4,12 +4,14 @@ import '../audio_repository.dart';
 import '../base_repository.dart';
 import 'shared_preferences_repository.dart';
 
+/// Audio chunk repository backed by SharedPreferences, with a broadcast change stream.
 class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String> 
     implements AudioRepository {
   
   final StreamController<List<AudioChunk>> _audioStreamController = 
       StreamController<List<AudioChunk>>.broadcast();
   
+  /// Creates the repository under the `audio` key prefix.
   AudioRepositoryImpl() : super('audio');
   
   @override
@@ -41,11 +43,13 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     _notifyListeners();
   }
   
+  /// Finds the chunks of [sessionId].
   @override
   Future<List<AudioChunk>> findBySession(String sessionId) async {
     return await findWhere((audio) => audio.sessionId == sessionId);
   }
   
+  /// Finds the chunks of [jobId].
   @override
   Future<List<AudioChunk>> findByJobId(String jobId) async {
     return await findWhere((audio) => audio.jobId == jobId);
@@ -56,12 +60,14 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     return await findWhere((audio) => audio.type == type);
   }
   
+  /// Finds the chunks whose timestamp falls between [start] and [end].
   @override
   Future<List<AudioChunk>> findByTimeRange(DateTime start, DateTime end) async {
     return await findWhere((audio) => 
         audio.timestamp.isAfter(start) && audio.timestamp.isBefore(end));
   }
   
+  /// Sets the playing flag of the chunk [audioId]; throws when it does not exist.
   @override
   Future<AudioChunk> updatePlaybackState(String audioId, bool isPlaying) async {
     final audio = await findById(audioId);
@@ -79,6 +85,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     return await update(updatedAudio);
   }
   
+  /// Returns the newest chunks of [sessionId] first, cut to [limit] when given.
   @override
   Future<List<AudioChunk>> getRecentAudio(String sessionId, {int? limit}) async {
     List<AudioChunk> audioChunks = await findBySession(sessionId);
@@ -102,6 +109,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     });
   }
   
+  /// Computes audio statistics, for [sessionId] when given.
   @override
   Future<AudioStats> getAudioStats({String? sessionId}) async {
     List<AudioChunk> audioChunks = await findAll();
@@ -146,6 +154,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     );
   }
   
+  /// Deletes chunks older than [olderThan], seven days when omitted.
   @override
   Future<void> cleanupOldAudio({Duration? olderThan}) async {
     final cutoff = olderThan != null 
@@ -160,6 +169,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     }
   }
   
+  /// Marks [audioId] cached or not, with its [localPath]; throws when it is missing.
   @override
   Future<void> updateCacheStatus(String audioId, bool isCached, String? localPath) async {
     final audio = await findById(audioId);
@@ -178,6 +188,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     await update(updatedAudio);
   }
   
+  /// Total size in bytes of the cached chunks, from each chunk's `size_bytes` metadata.
   @override
   Future<int> getTotalCacheSize() async {
     final cachedAudio = await getCachedAudio();
@@ -185,6 +196,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
         sum + (audio.metadata?['size_bytes'] as int? ?? 0));
   }
   
+  /// Uncaches chunks; with [keepRecent] it keeps those from the last 24 hours.
   @override
   Future<void> clearCache({bool keepRecent = true}) async {
     if (keepRecent) {
@@ -207,6 +219,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
   }
   
   // PaginatedRepository methods
+  /// Returns one page of chunks, sorted by [sortBy] when given.
   @override
   Future<PaginatedResult<AudioChunk>> findPaginated({
     int page = 0,
@@ -283,6 +296,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     );
   }
   
+  /// Returns one page of chunks whose job id, session id or metadata contains [query].
   @override
   Future<PaginatedResult<AudioChunk>> search(
     String query, {
@@ -317,11 +331,13 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
   }
   
   // RealtimeRepository methods
+  /// Emits the full list after each change.
   @override
   Stream<List<AudioChunk>> watchAll() {
     return _audioStreamController.stream;
   }
   
+  /// Emits the chunk with [id], or null, after each change.
   @override
   Stream<AudioChunk?> watchById(String id) {
     return _audioStreamController.stream.map((audioChunks) {
@@ -333,6 +349,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     });
   }
   
+  /// Emits the chunks that match [criteria] after each change.
   @override
   Stream<List<AudioChunk>> watchWhere(Map<String, dynamic> criteria) {
     return _audioStreamController.stream.map((audioChunks) {
@@ -361,6 +378,7 @@ class AudioRepositoryImpl extends SharedPreferencesRepository<AudioChunk, String
     _audioStreamController.add(allAudio);
   }
   
+  /// Closes the change stream.
   void dispose() {
     _audioStreamController.close();
   }

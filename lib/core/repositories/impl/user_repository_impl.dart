@@ -4,9 +4,11 @@ import '../user_repository.dart';
 import '../base_repository.dart';
 import 'shared_preferences_repository.dart';
 
+/// User repository backed by SharedPreferences.
 class UserRepositoryImpl extends SharedPreferencesRepository<User, String> 
     implements UserRepository {
   
+  /// Creates the repository under the `user` key prefix.
   UserRepositoryImpl() : super('user');
   
   @override

@@ -4,9 +4,11 @@ import '../session_repository.dart';
 import '../base_repository.dart';
 import 'shared_preferences_repository.dart';
 
+/// Session repository backed by SharedPreferences.
 class SessionRepositoryImpl extends SharedPreferencesRepository<Session, String> 
     implements SessionRepository {
   
+  /// Creates the repository under the `session` key prefix.
   SessionRepositoryImpl() : super('session');
   
   @override

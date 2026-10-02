@@ -9,7 +9,9 @@ import 'cache_policy.dart';
 /// persistence support, automatic cleanup, and detailed analytics.
 /// Supports both memory and persistent storage for offline functionality.
 class CacheManager<T> {
+  /// Key of the cache this manager serves.
   final String cacheKey;
+  /// Policy the cache follows.
   final CachePolicy policy;
   final StorageManager _storage;
   final Map<String, CacheEntry<T>> _memoryCache = {};
@@ -18,11 +20,13 @@ class CacheManager<T> {
   
   /// Serialization functions
   final Map<String, dynamic> Function(T) toJson;
+  /// Rebuilds a cached value from its JSON map.
   final T Function(Map<String, dynamic>) fromJson;
   
   /// Size calculation function (optional)
   final int Function(T)? calculateSize;
 
+  /// Creates a [CacheManager].
   CacheManager({
     required this.cacheKey,
     required this.toJson,
@@ -203,7 +207,7 @@ class CacheManager<T> {
   ///   - Performance data is accurate and current
   /// 
   /// Raises:
-  ///   - No exceptions are raised (always returns valid stats)
+  ///   - nothing is raised; valid stats are always returned
   CacheStats getStats() {
     int totalSize = 0;
     int expiredCount = 0;
@@ -284,7 +288,7 @@ class CacheManager<T> {
   ///   - No memory leaks remain
   /// 
   /// Raises:
-  ///   - No exceptions propagate (cleanup errors are suppressed)
+  ///   - nothing propagates; cleanup errors are suppressed
   void dispose() {
     _cleanupTimer?.cancel();
     _eventController.close();
@@ -408,14 +412,22 @@ class CacheManager<T> {
 
 /// Cache statistics
 class CacheStats {
+  /// Number of items.
   final int itemCount;
+  /// Total size in bytes.
   final int totalSizeBytes;
+  /// Number of expired entries.
   final int expiredCount;
+  /// Hit rate.
   final double hitRate;
+  /// Creation time of the oldest entry, or null.
   final DateTime? oldestEntry;
+  /// Creation time of the newest entry, or null.
   final DateTime? newestEntry;
+  /// Policy the cache follows.
   final CachePolicy policy;
 
+  /// Creates a [CacheStats].
   const CacheStats({
     required this.itemCount,
     required this.totalSizeBytes,
@@ -426,12 +438,15 @@ class CacheStats {
     required this.policy,
   });
 
+  /// Share of the entry limit in use, as a percentage.
   double get utilizationPercent => 
     policy.maxItems > 0 ? itemCount / policy.maxItems : 0.0;
 
+  /// Share of the size limit in use, as a percentage.
   double get sizeUtilizationPercent => 
     policy.maxSizeBytes > 0 ? totalSizeBytes / policy.maxSizeBytes : 0.0;
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'item_count': itemCount,
@@ -448,37 +463,49 @@ class CacheStats {
 
 /// Base cache event
 abstract class CacheEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Cache hit event
 class CacheHitEvent extends CacheEvent {
+  /// Key identifying the entry.
   final String key;
+  /// Creates the event.
   CacheHitEvent(this.key);
 }
 
 /// Cache miss event
 class CacheMissEvent extends CacheEvent {
+  /// Key identifying the entry.
   final String key;
+  /// Creates the event.
   CacheMissEvent(this.key);
 }
 
 /// Cache put event
 class CachePutEvent extends CacheEvent {
+  /// Key identifying the entry.
   final String key;
+  /// Size in bytes.
   final int sizeBytes;
+  /// Creates the event.
   CachePutEvent(this.key, this.sizeBytes);
 }
 
 /// Cache remove event
 class CacheRemoveEvent extends CacheEvent {
+  /// Key identifying the entry.
   final String key;
+  /// Creates the event.
   CacheRemoveEvent(this.key);
 }
 
 /// Cache expired event
 class CacheExpiredEvent extends CacheEvent {
+  /// Key identifying the entry.
   final String key;
+  /// Creates the event.
   CacheExpiredEvent(this.key);
 }
 
@@ -487,6 +514,8 @@ class CacheClearEvent extends CacheEvent {}
 
 /// Cache cleanup event
 class CacheCleanupEvent extends CacheEvent {
+  /// Number of items removed.
   final int itemsRemoved;
+  /// Creates the event.
   CacheCleanupEvent(this.itemsRemoved);
 }

@@ -405,11 +405,16 @@ class VoiceRecordingCache {
 
 /// Voice recording data
 class VoiceRecordingData {
+  /// The voice input the recording belongs to.
   final VoiceInput voiceInput;
+  /// Recorded audio bytes.
   Uint8List audioData;
+  /// Whether the audio is compressed.
   bool compressed;
+  /// When the recording was cached.
   final DateTime cachedAt;
   
+  /// Creates a [VoiceRecordingData].
   VoiceRecordingData({
     required this.voiceInput,
     required this.audioData,
@@ -417,6 +422,7 @@ class VoiceRecordingData {
     required this.cachedAt,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'voice_input': voiceInput.toJson(),
@@ -426,6 +432,7 @@ class VoiceRecordingData {
     };
   }
   
+  /// Reads a [VoiceRecordingData] from the map [toJson] produces.
   factory VoiceRecordingData.fromJson(Map<String, dynamic> json) {
     return VoiceRecordingData(
       voiceInput: VoiceInput.fromJson(json['voice_input']),
@@ -438,13 +445,20 @@ class VoiceRecordingData {
 
 /// Transcription data
 class TranscriptionData {
+  /// Identifier of the recording.
   final String recordingId;
+  /// Transcribed text.
   final String transcription;
+  /// Recognizer confidence.
   final double confidence;
+  /// Language of the transcription.
   final String language;
+  /// When the entry was created.
   final DateTime createdAt;
+  /// Alternative transcriptions, or null.
   final Map<String, dynamic>? alternatives;
   
+  /// Creates a [TranscriptionData].
   const TranscriptionData({
     required this.recordingId,
     required this.transcription,
@@ -454,6 +468,7 @@ class TranscriptionData {
     this.alternatives,
   });
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'recording_id': recordingId,
@@ -465,6 +480,7 @@ class TranscriptionData {
     };
   }
   
+  /// Reads a [TranscriptionData] from the map [toJson] produces.
   factory TranscriptionData.fromJson(Map<String, dynamic> json) {
     return TranscriptionData(
       recordingId: json['recording_id'],
@@ -479,16 +495,26 @@ class TranscriptionData {
 
 /// Recording metadata for indexing
 class RecordingMetadata {
+  /// Identifier of the recording.
   final String recordingId;
+  /// Session the recording belongs to.
   final String sessionId;
+  /// How long it took.
   final Duration duration;
+  /// Size in bytes.
   final int sizeBytes;
+  /// Whether the audio is compressed.
   final bool compressed;
+  /// Whether a transcription is stored.
   final bool hasTranscription;
+  /// When the entry was created.
   final DateTime createdAt;
+  /// When the entry was last read.
   final DateTime lastAccessedAt;
+  /// Number of times the item was read, or null when unknown.
   final int accessCount;
   
+  /// Creates a [RecordingMetadata].
   const RecordingMetadata({
     required this.recordingId,
     required this.sessionId,
@@ -501,6 +527,7 @@ class RecordingMetadata {
     required this.accessCount,
   });
   
+  /// Returns a copy with the given fields replaced.
   RecordingMetadata copyWith({
     DateTime? lastAccessedAt,
     int? accessCount,
@@ -518,6 +545,7 @@ class RecordingMetadata {
     );
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'recording_id': recordingId,
@@ -532,6 +560,7 @@ class RecordingMetadata {
     };
   }
   
+  /// Reads a [RecordingMetadata] from the map [toJson] produces.
   factory RecordingMetadata.fromJson(Map<String, dynamic> json) {
     return RecordingMetadata(
       recordingId: json['recording_id'],
@@ -549,12 +578,18 @@ class RecordingMetadata {
 
 /// Recording search result
 class RecordingSearchResult {
+  /// Identifier of the recording.
   final String recordingId;
+  /// Transcribed text.
   final String transcription;
+  /// Extra metadata for the entry.
   final RecordingMetadata metadata;
+  /// How well the recording matches the query.
   final double relevanceScore;
+  /// Query that matched.
   final String matchedQuery;
   
+  /// Creates a [RecordingSearchResult].
   const RecordingSearchResult({
     required this.recordingId,
     required this.transcription,
@@ -566,14 +601,22 @@ class RecordingSearchResult {
 
 /// Voice recording cache statistics
 class VoiceRecordingCacheStats {
+  /// Number of items.
   final int itemCount;
+  /// Total size in bytes.
   final int totalSizeBytes;
+  /// Total playing time.
   final Duration totalDuration;
+  /// Number of compressed recordings.
   final int compressedCount;
+  /// Number of recordings with a transcription.
   final int transcribedCount;
+  /// Mean recording length.
   final Duration averageDuration;
+  /// Hit rate.
   final double hitRate;
   
+  /// Creates a [VoiceRecordingCacheStats].
   const VoiceRecordingCacheStats({
     required this.itemCount,
     required this.totalSizeBytes,
@@ -584,10 +627,12 @@ class VoiceRecordingCacheStats {
     required this.hitRate,
   });
   
+  /// Share of recordings that are compressed.
   double get compressionRate => itemCount > 0 
       ? compressedCount / itemCount 
       : 0.0;
       
+  /// Share of recordings that have a transcription.
   double get transcriptionRate => itemCount > 0 
       ? transcribedCount / itemCount 
       : 0.0;
@@ -595,15 +640,20 @@ class VoiceRecordingCacheStats {
 
 /// Base voice recording cache event
 abstract class VoiceRecordingCacheEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Voice recording stored event
 class VoiceRecordingStoredEvent extends VoiceRecordingCacheEvent {
+  /// Identifier of the recording.
   final String recordingId;
+  /// Size in bytes.
   final int sizeBytes;
+  /// Whether a transcription is stored.
   final bool hasTranscription;
   
+  /// Creates the event.
   VoiceRecordingStoredEvent(
     this.recordingId,
     this.sizeBytes,
@@ -613,23 +663,30 @@ class VoiceRecordingStoredEvent extends VoiceRecordingCacheEvent {
 
 /// Voice recording accessed event
 class VoiceRecordingAccessedEvent extends VoiceRecordingCacheEvent {
+  /// Identifier of the recording.
   final String recordingId;
+  /// Whether the recording was found.
   final bool found;
   
+  /// Creates the event.
   VoiceRecordingAccessedEvent(this.recordingId, this.found);
 }
 
 /// Voice recording cleanup event
 class VoiceRecordingCleanupEvent extends VoiceRecordingCacheEvent {
+  /// Number of entries removed.
   final int removedCount;
   
+  /// Creates the event.
   VoiceRecordingCleanupEvent(this.removedCount);
 }
 
 /// Voice recording optimize event
 class VoiceRecordingOptimizeEvent extends VoiceRecordingCacheEvent {
+  /// Number of recordings optimized.
   final int optimizedCount;
   
+  /// Creates the event.
   VoiceRecordingOptimizeEvent(this.optimizedCount);
 }
 

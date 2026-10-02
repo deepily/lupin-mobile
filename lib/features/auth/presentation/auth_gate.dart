@@ -9,18 +9,21 @@ import '../domain/auth_state.dart';
 import 'biometric_prompt_screen.dart';
 import 'login_screen.dart';
 
-/// Build-time dev credentials baked in via --dart-define. Only consulted in
-/// debug builds; release builds always see empty strings regardless of what
-/// was passed at build time. The values never touch source files or git.
+/// Dev credentials supplied at build time with --dart-define.
+///
+/// Only debug builds read them; release builds ignore the defines. The values
+/// never touch source files or git.
 const String _kDevEmail    = String.fromEnvironment( 'LUPIN_DEV_EMAIL'    );
 const String _kDevPassword = String.fromEnvironment( 'LUPIN_DEV_PASSWORD' );
 
-/// Top-level widget that routes between login, biometric unlock, and the
-/// authenticated app shell based on AuthBloc state.
+/// Routes between login, biometric unlock and the app shell by auth state.
 class AuthGate extends StatefulWidget {
+  /// The server context shown on the login screen.
   final ServerContextService serverContext;
+  /// The app shell shown once the user is authenticated.
   final Widget authenticatedChild;
 
+  /// Creates the gate; both arguments are required.
   const AuthGate( {
     super.key,
     required this.serverContext,

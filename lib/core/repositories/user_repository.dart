@@ -13,10 +13,10 @@ abstract class UserRepository extends CachedRepository<User, String> {
   /// Find users by status
   Future<List<User>> findByStatus(UserStatus status);
   
-  /// Update user preferences
+  /// Stores the user's preferences
   Future<User> updatePreferences(String userId, Map<String, dynamic> preferences);
   
-  /// Update user last login
+  /// Stores the user's last login time
   Future<User> updateLastLogin(String userId, DateTime lastLogin);
   
   /// Get user statistics
@@ -34,14 +34,22 @@ abstract class UserRepository extends CachedRepository<User, String> {
 
 /// User statistics
 class UserStats {
+  /// Number of sessions.
   final int totalSessions;
+  /// Number of jobs.
   final int totalJobs;
+  /// Number of audio requests.
   final int totalAudioRequests;
+  /// Total time the user was active.
   final Duration totalActiveTime;
+  /// Time of the most recent activity, or null when there is none.
   final DateTime? lastActivity;
+  /// The user's stored preferences.
   final Map<String, dynamic> preferences;
+  /// Use counts by feature.
   final Map<String, int> featureUsage;
 
+  /// Creates the stats; every field is required.
   const UserStats({
     required this.totalSessions,
     required this.totalJobs,
@@ -52,6 +60,7 @@ class UserStats {
     this.featureUsage = const {},
   });
 
+  /// Serializes the stats.
   Map<String, dynamic> toJson() {
     return {
       'total_sessions': totalSessions,

@@ -110,7 +110,7 @@ class AnalyticsDashboard {
     return Map.from(_widgets);
   }
   
-  /// Update widget data
+  /// Refreshes the data of one widget.
   Future<void> updateWidget(String id) async {
     final widget = _widgets[id];
     if (widget == null) return;
@@ -123,7 +123,7 @@ class AnalyticsDashboard {
     }
   }
   
-  /// Update all widgets
+  /// Refreshes the data of every widget.
   Future<void> updateAllWidgets() async {
     for (final widgetId in _widgets.keys) {
       await updateWidget(widgetId);
@@ -549,13 +549,20 @@ class AnalyticsDashboard {
 
 /// Analytics dashboard configuration
 class AnalyticsDashboardConfig {
+  /// Whether widgets refresh on a timer.
   final bool enableAutoRefresh;
+  /// Interval between automatic refreshes, in seconds.
   final int refreshIntervalSeconds;
+  /// Most reports kept.
   final int maxReports;
+  /// Most insights kept.
   final int maxInsights;
+  /// Whether insights are generated.
   final bool enableInsightGeneration;
+  /// Whether the health score is calculated.
   final bool enableHealthScoring;
   
+  /// Creates an analytics dashboard config.
   const AnalyticsDashboardConfig({
     this.enableAutoRefresh = true,
     this.refreshIntervalSeconds = 30,
@@ -565,10 +572,12 @@ class AnalyticsDashboardConfig {
     this.enableHealthScoring = true,
   });
   
+  /// The default configuration.
   factory AnalyticsDashboardConfig.defaultConfig() {
     return const AnalyticsDashboardConfig();
   }
   
+  /// The production preset.
   factory AnalyticsDashboardConfig.production() {
     return const AnalyticsDashboardConfig(
       refreshIntervalSeconds = 60,
@@ -577,6 +586,7 @@ class AnalyticsDashboardConfig {
     );
   }
   
+  /// The development preset.
   factory AnalyticsDashboardConfig.development() {
     return const AnalyticsDashboardConfig(
       refreshIntervalSeconds = 10,
@@ -585,6 +595,7 @@ class AnalyticsDashboardConfig {
     );
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'enable_auto_refresh': enableAutoRefresh,

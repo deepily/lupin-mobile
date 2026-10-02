@@ -276,17 +276,28 @@ abstract class AudioRepository extends BaseRepository<AudioChunk, String> {
 
 /// Audio cache statistics
 class AudioCacheStats {
+  /// Number of audio chunks held.
   final int totalChunks;
+  /// Cache hits recorded.
   final int cacheHits;
+  /// Cache misses recorded.
   final int cacheMisses;
+  /// Total size of the cached audio, in bytes.
   final int totalSizeBytes;
+  /// Size limit of the cache, in bytes.
   final int maxSizeBytes;
+  /// Chunk counts by TTS provider.
   final Map<String, int> chunksByProvider;
+  /// Chunk counts by audio type.
   final Map<String, int> chunksByType;
+  /// Average chunk size in bytes, by audio type.
   final Map<String, double> averageChunkSize;
+  /// Age of the oldest cache entry.
   final Duration oldestCacheEntry;
+  /// Age of the newest cache entry.
   final Duration newestCacheEntry;
 
+  /// Creates the stats; every field is required.
   const AudioCacheStats({
     required this.totalChunks,
     required this.cacheHits,
@@ -300,12 +311,15 @@ class AudioCacheStats {
     required this.newestCacheEntry,
   });
 
+  /// Share of lookups that hit the cache.
   double get hitRate => 
       (cacheHits + cacheMisses) > 0 ? cacheHits / (cacheHits + cacheMisses) : 0.0;
 
+  /// Share of the cache size limit in use.
   double get cacheUtilization => 
       maxSizeBytes > 0 ? totalSizeBytes / maxSizeBytes : 0.0;
 
+  /// Serializes the stats.
   Map<String, dynamic> toJson() {
     return {
       'total_chunks': totalChunks,

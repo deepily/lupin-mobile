@@ -9,20 +9,27 @@ import '../../core/testing/test_keys.dart';
 import '../../services/artifacts/io_file_service.dart';
 import '../../services/tts/tts_orchestrator.dart';
 
-/// Thin wrapper around `audioplayers.AudioPlayer` so the widget can be
-/// widget-tested without invoking platform channels (which `audioplayers`
-/// requires and which the Flutter test runner cannot satisfy).
+/// Thin wrapper around the audio player so the widget can be widget-tested.
 ///
-/// Tests inject a Mocktail-driven implementation; production builds use
-/// [_RealAudioPlaybackController].
+/// The real player needs platform channels, which the Flutter test runner
+/// cannot provide. Tests inject a Mocktail-driven implementation; production
+/// builds use [_RealAudioPlaybackController].
 abstract class AudioPlaybackController {
+  /// Emits the current playback position.
   Stream<Duration> get onPosition;
+  /// Emits the total length of the loaded audio.
   Stream<Duration> get onDuration;
+  /// Emits once when playback reaches the end.
   Stream<void>     get onComplete;
+  /// Starts playing [file] from the beginning.
   Future<void> play( File file );
+  /// Pauses playback, keeping the position.
   Future<void> pause();
+  /// Continues playback from the paused position.
   Future<void> resume();
+  /// Stops playback and resets the position.
   Future<void> stop();
+  /// Releases the underlying player.
   Future<void> dispose();
 }
 
@@ -63,7 +70,9 @@ enum _PlaybackState { idle, loading, ready, playing, paused, error }
 /// device only emits one audio stream at a time. The original
 /// download-and-share flow remains accessible as a Share overflow action.
 class AudioArtifactPlayer extends StatefulWidget {
+  /// The id of the job that produced the audio.
   final String jobId;
+  /// The server-side path of the MP3 file.
   final String audioPath;
 
   /// Test seam — production code passes nothing and gets a real controller.
@@ -75,6 +84,7 @@ class AudioArtifactPlayer extends StatefulWidget {
   /// Test seam — production code resolves [TtsOrchestrator] from the locator.
   final TtsOrchestrator? ttsOrchestrator;
 
+  /// Creates the player; the job id and audio path are required.
   const AudioArtifactPlayer( {
     super.key,
     required this.jobId,

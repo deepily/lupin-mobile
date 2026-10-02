@@ -677,18 +677,30 @@ class PerformanceMonitor {
 
 /// Performance monitoring configuration
 class PerformanceMonitorConfig {
+  /// Whether system monitoring runs.
   final bool enableSystemMonitoring;
+  /// Whether metrics are persisted.
   final bool enablePersistence;
+  /// Interval between system samples, in seconds.
   final int systemMonitorIntervalSeconds;
+  /// Interval between metric flushes, in minutes.
   final int metricsFlushIntervalMinutes;
+  /// Most events kept per category.
   final int maxEventsPerCategory;
+  /// Most history entries kept.
   final int maxHistorySize;
+  /// Most system snapshots kept.
   final int maxSystemSnapshots;
+  /// Duration above which an operation counts as slow, in milliseconds.
   final int slowOperationThresholdMs;
+  /// Duration above which a network request counts as slow, in milliseconds.
   final int slowNetworkThresholdMs;
+  /// Memory above which usage counts as high, in megabytes.
   final double highMemoryThresholdMB;
+  /// CPU above which usage counts as high, in percent.
   final double highCpuThresholdPercent;
   
+  /// Creates a performance monitor config.
   const PerformanceMonitorConfig({
     this.enableSystemMonitoring = true,
     this.enablePersistence = true,
@@ -703,10 +715,12 @@ class PerformanceMonitorConfig {
     this.highCpuThresholdPercent = 80.0,
   });
   
+  /// The default configuration.
   factory PerformanceMonitorConfig.defaultConfig() {
     return const PerformanceMonitorConfig();
   }
   
+  /// The production preset.
   factory PerformanceMonitorConfig.production() {
     return const PerformanceMonitorConfig(
       systemMonitorIntervalSeconds = 30,
@@ -716,6 +730,7 @@ class PerformanceMonitorConfig {
     );
   }
   
+  /// The development preset.
   factory PerformanceMonitorConfig.development() {
     return const PerformanceMonitorConfig(
       systemMonitorIntervalSeconds = 5,
@@ -725,6 +740,7 @@ class PerformanceMonitorConfig {
     );
   }
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'enable_system_monitoring': enableSystemMonitoring,
@@ -744,12 +760,18 @@ class PerformanceMonitorConfig {
 
 /// Performance event
 class PerformanceEvent {
+  /// Name of the event.
   final String name;
+  /// Category the event belongs to.
   final String category;
+  /// How long the event took, or null for an instantaneous event.
   final Duration? duration;
+  /// When the event started.
   final DateTime timestamp;
+  /// Extra structured detail, or null; an `error` entry marks a failed event.
   final Map<String, dynamic>? metadata;
   
+  /// Creates an event.
   PerformanceEvent({
     required this.name,
     required this.category,
@@ -758,6 +780,7 @@ class PerformanceEvent {
     this.metadata,
   }) : timestamp = timestamp ?? DateTime.now();
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -771,12 +794,16 @@ class PerformanceEvent {
 
 /// Performance timer for measuring operations
 class PerformanceTimer {
+  /// Name of the timed operation.
   final String operation;
+  /// Category the event belongs to.
   final String category;
+  /// Called with the finished event when the timer stops.
   final void Function(PerformanceEvent) onComplete;
   final DateTime _startTime;
   Map<String, dynamic>? _metadata;
   
+  /// Creates a timer that starts now.
   PerformanceTimer({
     required this.operation,
     required this.category,
@@ -805,17 +832,29 @@ class PerformanceTimer {
 
 /// Performance metrics for a category
 class PerformanceMetrics {
+  /// Category the event belongs to.
   final String category;
+  /// Number of events recorded.
   int eventCount = 0;
+  /// Number of events with an error.
   int errorCount = 0;
+  /// Total duration of timed events, in milliseconds.
   double totalDurationMs = 0.0;
+  /// Shortest timed event, in milliseconds; infinite until one is recorded.
   double minDurationMs = double.infinity;
+  /// Longest timed event, in milliseconds.
   double maxDurationMs = 0.0;
+  /// Time of the first event, or null.
   DateTime? firstEventTime;
+  /// Time of the latest event, or null.
   DateTime? lastEventTime;
   
+  /// Creates metrics for [category].
   PerformanceMetrics({required this.category});
   
+  /// Records [event].
+  ///
+  /// It counts an error when the metadata has one, and times the event when it has a duration.
   void addEvent(PerformanceEvent event) {
     eventCount++;
     firstEventTime ??= event.timestamp;
@@ -833,11 +872,14 @@ class PerformanceMetrics {
     }
   }
   
+  /// Mean duration of timed events, in milliseconds.
   double get averageDurationMs => 
       eventCount > 0 ? totalDurationMs / eventCount : 0.0;
   
+  /// Share of events with an error, from 0 to 1.
   double get errorRate => eventCount > 0 ? errorCount / eventCount : 0.0;
   
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'category': category,

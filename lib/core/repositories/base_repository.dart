@@ -282,13 +282,20 @@ abstract class RealtimeRepository<T, ID> extends BaseRepository<T, ID> {
 
 /// Result class for paginated queries
 class PaginatedResult<T> {
+  /// Items on this page.
   final List<T> items;
+  /// Number of items across all pages.
   final int totalCount;
+  /// Zero-based page index.
   final int page;
+  /// Page size.
   final int size;
+  /// Whether a later page exists.
   final bool hasNext;
+  /// Whether an earlier page exists.
   final bool hasPrevious;
 
+  /// Creates a page; every field is required.
   const PaginatedResult({
     required this.items,
     required this.totalCount,
@@ -298,19 +305,28 @@ class PaginatedResult<T> {
     required this.hasPrevious,
   });
 
+  /// Number of pages, rounded up.
   int get totalPages => (totalCount / size).ceil();
+  /// True when this page has no items.
   bool get isEmpty => items.isEmpty;
+  /// True when this page has items.
   bool get isNotEmpty => items.isNotEmpty;
 }
 
 /// Cache statistics
 class CacheStats {
+  /// Cache hits recorded.
   final int hitCount;
+  /// Cache misses recorded.
   final int missCount;
+  /// Number of entries held.
   final int entryCount;
+  /// Maximum number of entries.
   final int maxSize;
+  /// When the cache was last read or written.
   final DateTime lastAccess;
 
+  /// Creates the stats; every field is required.
   const CacheStats({
     required this.hitCount,
     required this.missCount,
@@ -319,6 +335,7 @@ class CacheStats {
     required this.lastAccess,
   });
 
+  /// Share of lookups that hit the cache.
   double get hitRate => 
       (hitCount + missCount) > 0 ? hitCount / (hitCount + missCount) : 0.0;
 }

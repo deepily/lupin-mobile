@@ -6,41 +6,68 @@ import '../error_handling/error_handler.dart';
 
 /// Settings categories for organization
 enum SettingsCategory {
+  /// Settings of the app as a whole.
   general,
+  /// Voice input settings.
   voice,
+  /// Audio output and text-to-speech settings.
   audio,
+  /// Network behavior settings.
   network,
+  /// Analytics, crash reporting and data retention.
   privacy,
+  /// Contrast, font size and haptics.
   accessibility,
+  /// Debug and development settings.
   developer,
 }
 
 /// Setting types for validation and UI generation
 enum SettingType {
+  /// A true or false value.
   boolean,
+  /// A whole number.
   integer,
+  /// A decimal number.
   double,
+  /// Text.
   string,
+  /// A list of values.
   list,
+  /// A map of values.
   map,
+  /// One of a fixed set of values.
   enum_,
 }
 
 /// Individual setting definition
 class SettingDefinition<T> {
+  /// Dotted key the value is stored under, for example `voice.enabled`.
   final String key;
+  /// Group the setting belongs to.
   final SettingsCategory category;
+  /// Kind of value the setting holds.
   final SettingType type;
+  /// Value used until the user sets one.
   final T defaultValue;
+  /// Name shown to the user.
   final String title;
+  /// Explanation shown to the user, or null.
   final String? description;
+  /// Smallest allowed value, or null for no lower bound.
   final T? minValue;
+  /// Largest allowed value, or null for no upper bound.
   final T? maxValue;
+  /// The only values allowed, or null when any value is.
   final List<T>? allowedValues;
+  /// Whether a change takes effect only after an app restart.
   final bool requiresRestart;
+  /// Whether the setting is hidden from the basic settings screen.
   final bool isAdvanced;
+  /// Extra check a value must pass, or null.
   final bool Function(T value)? validator;
 
+  /// Creates a definition; the optional fields default to null or false.
   const SettingDefinition({
     required this.key,
     required this.category,
@@ -81,6 +108,7 @@ class SettingDefinition<T> {
     return true;
   }
 
+  /// Serializes the definition.
   Map<String, dynamic> toJson() {
     return {
       'key': key,
@@ -630,11 +658,16 @@ class SettingsManager {
 
 /// Settings change event
 class SettingsChangedEvent {
+  /// Key of the setting that changed.
   final String key;
+  /// Value before the change.
   final dynamic oldValue;
+  /// Value after the change.
   final dynamic newValue;
+  /// Whether the change takes effect only after an app restart.
   final bool requiresRestart;
 
+  /// Creates the event; every field is required.
   const SettingsChangedEvent({
     required this.key,
     required this.oldValue,
