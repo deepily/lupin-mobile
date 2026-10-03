@@ -11,6 +11,17 @@ Tip `28b7ea0`. Docs gate done; everything else open waits on Cheech or on Rick a
 | Code clean-up of 188 errors / 74 warnings in 11 directories (row `5a200e6c`, held) | Rick's rulings per deletion |
 | Docs crew post-game (row `c05c6f8c`, held) | next session |
 
+### Decisions Log — 2026-10-03 (session `576809a5`, Tiffany)
+
+Rulings from the docs crew post-game (`src/rnd/2026.10.03-mobile-docs-track-crew-post-game.md`), approved by Rick on an ask card (clean yes, about 15:20 EDT).
+
+- **A manager's merge gate script is a tracked file under `tool/` with a permission rule, never a scratchpad file** (R1; work is row `00db303b`).
+- **Measure a gate's pass condition on every directory it must cover before building the gate** (R2).
+- **Before sweeping a directory, check that it compiles and is referenced; if not, ask for a keep-or-delete ruling first** (R3).
+- **Every worker brief on this repo asks for lessons posted to the commons `post-game` topic as they happen, with how the worker came to know them** (R4).
+- **A demonstration closes a row only when the manager reruns it, or the evidence answers every gap the row names** (R5).
+- **Card answers, about 15:12 EDT** (Rick): one seat for the gates demonstration; held rows `eb5a05fe`, `c05c6f8c` and `5a200e6c` approved; he gives Cheech a Fable figure for the Dart labelled set.
+
 ### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
 
 - **Stop poke is a plain on/off switch, admin-only write, no timer** (Rick, first-hand, about 11:00).
