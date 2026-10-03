@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
-import '../storage/storage_manager.dart';
 import 'cache_manager.dart';
 import 'cache_policy.dart';
 import 'offline_manager.dart';

@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lupin_mobile/features/transcript/data/transcript_models.dart';
 import 'package:lupin_mobile/features/transcript/data/transcript_repository.dart';
 
 import '../_helpers/stub_dio.dart';

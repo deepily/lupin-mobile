@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../storage/storage_manager.dart';
 import 'cache_manager.dart';

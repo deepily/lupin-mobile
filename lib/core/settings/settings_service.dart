@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'settings_manager.dart';
 import '../logging/logger.dart';
-import '../error_handling/error_handler.dart';
 
 /// High-level service for settings operations and business logic
 class SettingsService {

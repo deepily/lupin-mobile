@@ -12,7 +12,6 @@ import 'features/auth/presentation/auth_gate.dart';
 import 'features/auth/presentation/ws_lifecycle_listener.dart';
 import 'features/agentic/domain/agentic_submission_bloc.dart';
 import 'features/claude_code/domain/claude_code_bloc.dart';
-import 'features/claude_code/domain/claude_code_event.dart';
 import 'features/decision_proxy/domain/decision_proxy_bloc.dart';
 import 'features/focus_mode/domain/focus_chat_bloc.dart';
 import 'features/focus_mode/domain/focus_chat_event.dart';
