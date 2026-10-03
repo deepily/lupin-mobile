@@ -10,13 +10,29 @@ import merge_gate as mg
 
 
 def err( path, code, msg, line=1, col=1, sev="ERROR" ):
-    """One machine-format finding."""
+    """
+    Build one machine-format finding.
+
+    Requires:
+        - path, code and msg are strings; line and col are integers
+    Ensures:
+        - returns SEVERITY|COMPILE_TIME_ERROR|code|path|line|col|3|msg
+    """
     return f"{sev}|COMPILE_TIME_ERROR|{code}|{path}|{line}|{col}|3|{msg}"
 
 
 class NewErrorTest( unittest.TestCase ):
 
-    def counts( self, *lines ): return mg.parse_errors( "\n".join( lines ), ( "/r/", ) )
+    def counts( self, *lines ):
+        """
+        Parse finding lines as the head of a checkout rooted at /r.
+
+        Requires:
+            - each line is a machine-format finding
+        Ensures:
+            - returns the Counter parse_errors gives, with the /r/ prefix stripped
+        """
+        return mg.parse_errors( "\n".join( lines ), ( "/r/", ) )
 
     def test_same_error_on_a_moved_line_is_not_new( self ):
         base = self.counts( err( "/r/lib/a.dart", "UNDEFINED_IDENTIFIER", "Undefined name 'x'.", line=10, col=5 ) )
@@ -87,10 +103,67 @@ class CommentsOnlyTest( unittest.TestCase ):
         self.assertIn( "// kept", mg.strip_dart( src ) )
         self.assertNotIn( "gone", mg.strip_dart( src ) )
 
+    def test_raw_string_ending_in_a_backslash_closes_there( self ):             # L8: raw strings have no escapes
+        old = "var a = r'\\'; int b = 1; // c\n"
+        self.assertFalse( mg.comments_differ( old, "var a = r'\\'; int b = 1; // d\n" ) )   # comment after it is a comment
+        self.assertTrue(  mg.comments_differ( old, "var a = r'\\'; int b = 2; // c\n" ) )   # code after it is code
+        self.assertFalse( mg.comments_differ( 'var a = r"\\"; int b = 1; // c\n', 'var a = r"\\"; int b = 1;\n' ) )
+
     def test_a_file_added_or_deleted_is_a_change( self ):
         self.assertTrue( mg.comments_differ( "", "int a = 1;" ) )
         self.assertTrue( mg.comments_differ( "int a = 1;", "" ) )
         self.assertFalse( mg.comments_differ( "", "// only a comment\n" ) )
+
+
+class ToolPresenceTest( unittest.TestCase ):
+
+    NEEDED = [ "flutter.sh", "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py",
+               "tool/check_test_failures.py", "tool/check_ac_g2.py" ]
+
+    def test_a_missing_binary_and_scripts_are_named_not_raised( self ):             # L3
+        saved = os.environ.get( "DART" )
+        os.environ[ "DART" ] = "/nonexistent/dart"
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                missing = mg.missing_tools( d, skip_suite=False )
+        finally:
+            if saved is None: del os.environ[ "DART" ]
+            else: os.environ[ "DART" ] = saved
+        for name in self.NEEDED + [ "/nonexistent/dart" ]: self.assertTrue( any( name in m for m in missing ), name )
+
+    def test_nothing_is_missing_when_everything_is_there( self ):                    # negative control
+        saved = os.environ.get( "DART" )
+        os.environ[ "DART" ] = sys.executable
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                for rel in self.NEEDED:
+                    os.makedirs( os.path.dirname( os.path.join( d, rel ) ), exist_ok=True )
+                    open( os.path.join( d, rel ), "w" ).close()
+                self.assertEqual( mg.missing_tools( d, skip_suite=False ), [] )
+        finally:
+            if saved is None: del os.environ[ "DART" ]
+            else: os.environ[ "DART" ] = saved
+
+    def test_skip_suite_does_not_need_flutter_sh( self ):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertFalse( any( "flutter.sh" in m for m in mg.missing_tools( d, skip_suite=True ) ) )
+
+
+class AnalyzerExitTest( unittest.TestCase ):
+
+    KEY = ( "lib/a.dart", "X", "m" )
+
+    def test_exit_3_with_no_parsed_errors_is_a_failure( self ):                      # L2
+        self.assertIn( "no ERROR", mg.analyzer_failure( 3, mg.collections.Counter(), "head" ) )
+
+    def test_exit_3_with_errors_is_a_finished_run( self ):                           # negative control
+        self.assertIsNone( mg.analyzer_failure( 3, mg.collections.Counter( { self.KEY: 1 } ), "head" ) )
+
+    def test_clean_and_info_exits_are_finished_runs( self ):
+        for code in ( 0, 1, 2 ): self.assertIsNone( mg.analyzer_failure( code, mg.collections.Counter(), "head" ) )
+
+    def test_exit_outside_0_to_3_did_not_finish( self ):
+        self.assertIn( "did not finish", mg.analyzer_failure( 64, mg.collections.Counter(), "start" ) )
 
 
 class VerdictTest( unittest.TestCase ):
@@ -112,6 +185,27 @@ class VerdictTest( unittest.TestCase ):
     def test_a_failure_beats_a_skip( self ):
         self.assertEqual( mg.verdict( [ ( "analyzer", 1, "" ), ( "suite", None, "" ) ] )[ 0 ], "FAIL" )
 
+    def test_changed_gate_inputs_make_pass_with_warning_and_stay_zero( self ):      # L5
+        self.assertEqual( mg.verdict( self.OK, [ "tool/check_ac_g2.py" ] ), ( "PASS-WITH-WARNING", 0 ) )
+
+    def test_a_warning_never_softens_a_fail_or_a_quick( self ):
+        self.assertEqual( mg.verdict( [ ( "a", 1, "" ) ], [ "tool/data/x.json" ] ), ( "FAIL", 1 ) )
+        self.assertEqual( mg.verdict( [ ( "a", 0, "" ), ( "suite", None, "" ) ], [ "tool/data/x.json" ] ), ( "QUICK", 3 ) )
+
+    def test_gate_inputs_are_recognised( self ):
+        names = [ "tool/merge_gate.py", "tool/check_ac_g2.py", "tool/check_test_failures.py", "tool/pre_commit_gate.py",
+                  "tool/doc_coverage.py", "tool/data/test_failures_baseline.json", "test/fixtures/ac_g2_passing_baseline.json" ]
+        self.assertEqual( mg.gate_input_files( names + [ "lib/a.dart", "tool/test_merge_gate.py", "README.md" ] ), sorted( names ) )
+        self.assertEqual( mg.gate_input_files( [ "lib/a.dart", "tool/test_merge_gate.py" ] ), [] )               # negative control
+
+    def test_warning_line_sits_under_the_verdict_and_names_the_files( self ):
+        text = mg.report( "PASS-WITH-WARNING", [ ( "analyzer", 0, "ok" ) ], "a..b", "/tmp/x", [ "tool/check_ac_g2.py" ] ).splitlines()
+        self.assertEqual( text[ 1 ], "WARNING: this range changes the gate's own inputs: tool/check_ac_g2.py. A human must read that diff." )
+
+    def test_range_label_says_when_analyzer_config_changes_were_allowed( self ):   # F1
+        self.assertIn( "analyzer-config-allowed", mg.range_label( "a" * 40, "b" * 40, 2, False, True ) )
+        self.assertNotIn( "analyzer-config-allowed", mg.range_label( "a" * 40, "b" * 40, 2, False, False ) )
+
     def test_report_leads_with_the_verdict_and_lists_each_exit_code( self ):
         text = mg.report( "FAIL", [ ( "analyzer", 0, "ok" ), ( "ignores", 1, "bad" ), ( "suite", None, "skipped" ) ], "abc..def", "/tmp/x" ).splitlines()
         self.assertTrue( text[ 0 ].startswith( "FAIL" ) )
@@ -123,11 +217,30 @@ class VerdictTest( unittest.TestCase ):
 class GitRangeTest( unittest.TestCase ):
     """A throwaway repo: one base commit, one comment-only commit, one token-changing commit."""
 
-    def sh( self, *a ): return subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", *a ], cwd=self.d, capture_output=True, text=True, check=True ).stdout.strip()
+    def sh( self, *a ):
+        """
+        Run git in the throwaway repo.
 
-    def commit( self, text, msg ):
+        Requires:
+            - a is a list of git arguments; self.d is the repo
+        Ensures:
+            - returns stdout, stripped; raises CalledProcessError on failure
+        """
+        return subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", *a ], cwd=self.d, capture_output=True, text=True, check=True ).stdout.strip()
+
+    def commit( self, text, msg, extra=None ):
+        """
+        Write a.dart (and optionally one more file), commit, and return the new sha.
+
+        Requires:
+            - text is the new contents of a.dart; extra is None or a ( path, contents ) pair
+        Ensures:
+            - returns the full sha of the new commit
+        """
         with open( os.path.join( self.d, "a.dart" ), "w" ) as f: f.write( text )
-        with open( os.path.join( self.d, "notes.md" ), "a" ) as f: f.write( msg )
+        if extra:
+            os.makedirs( os.path.dirname( os.path.join( self.d, extra[ 0 ] ) ), exist_ok=True )
+            with open( os.path.join( self.d, extra[ 0 ] ), "w" ) as f: f.write( extra[ 1 ] )
         self.sh( "add", "-A" ); self.sh( "commit", "-q", "-m", msg )
         return self.sh( "rev-parse", "HEAD" )
 
@@ -137,6 +250,7 @@ class GitRangeTest( unittest.TestCase ):
         self.c0 = self.commit( "int f() => 1;\n", "base" )
         self.c1 = self.commit( "/// Docs.\nint f() => 1; // why\n", "comments" )
         self.c2 = self.commit( "/// Docs.\nint f() => 2; // why\n", "token" )
+        self.c3 = self.commit( "/// Docs.\nint f() => 2; // why, said better\n", "comment plus a pubspec change", ( "pubspec.yaml", "name: x\n" ) )
 
     def tearDown( self ): self.tmp.cleanup()
 
@@ -152,11 +266,57 @@ class GitRangeTest( unittest.TestCase ):
     def test_a_range_with_no_dart_change_fails_rather_than_passes_vacuously( self ):
         self.assertEqual( mg.check_comments_only( self.c1, self.c1, self.d )[ 0 ], 1 )
 
-    def test_non_dart_files_are_listed_not_judged( self ):
-        self.assertEqual( mg.changed_dart_files( self.c0, self.c1, self.d ), ( [ "a.dart" ], [ "notes.md" ] ) )
+    def test_a_non_dart_change_fails_comments_only_and_names_the_file( self ):      # F3
+        code, detail = mg.check_comments_only( self.c2, self.c3, self.d )
+        self.assertEqual( code, 1 )
+        self.assertIn( "pubspec.yaml", detail )
+
+    def test_non_dart_files_are_listed_apart_from_dart_files( self ):
+        self.assertEqual( mg.changed_dart_files( self.c2, self.c3, self.d ), ( [ "a.dart" ], [ "pubspec.yaml" ] ) )
+
+    def test_range_commits_counts_and_an_empty_range_is_zero( self ):             # L1
+        self.assertEqual( mg.range_commits( self.c1, self.c1, self.d ), 0 )
+        self.assertEqual( mg.range_commits( self.c0, self.c2, self.d ), 2 )
+
+    def test_main_refuses_an_empty_range_with_exit_2( self ):
+        self.assertEqual( mg.main( [ "--base", "HEAD", "--skip-suite" ], root=self.d ), 2 )
+
+    def test_analyzer_config_files_are_picked_out( self ):                        # F1
+        names = [ "lib/a.dart", "analysis_options.yaml", "lib/features/x/analysis_options.yaml", "docs/analysis_options.yaml.md" ]
+        self.assertEqual( mg.analyzer_config_files( names ), [ "analysis_options.yaml", "lib/features/x/analysis_options.yaml" ] )
+        self.assertEqual( mg.analyzer_config_files( [ "lib/a.dart" ] ), [] )
+
+    def test_a_range_that_edits_analyzer_options_fails_the_analyzer_row( self ):
+        c4 = self.commit( "int f() => 2;\n", "options", ( "analysis_options.yaml", "analyzer:\n  exclude:\n    - lib/zz.dart\n" ) )
+        with tempfile.TemporaryDirectory() as logs:
+            code, detail = mg.check_analyzer( self.c3, logs, root=self.d, allow_config=False )
+        self.assertEqual( code, 1 )
+        self.assertIn( "analysis_options.yaml", detail )
+        self.assertIn( "--allow-analyzer-config", detail )
+        self.assertEqual( mg.analyzer_config_files( mg.changed_dart_files( self.c3, c4, self.d )[ 1 ] ), [ "analysis_options.yaml" ] )
+
+    def test_untracked_inputs_are_listed( self ):                                 # F2
+        for rel, text in ( ( "lib/zz_missing.dart", "x" ), ( "test/t_test.dart", "x" ), ( "tool/x.py", "x" ), ( "pubspec.lock", "x" ),
+                           ( "lib/features/q/analysis_options.yaml", "x" ), ( "README.md", "x" ), ( "build/out.txt", "x" ) ):
+            os.makedirs( os.path.dirname( os.path.join( self.d, rel ) ) or self.d, exist_ok=True )
+            with open( os.path.join( self.d, rel ), "w" ) as f: f.write( text )
+        self.assertEqual( mg.untracked_inputs( self.d ),
+                          [ "lib/features/q/analysis_options.yaml", "lib/zz_missing.dart", "pubspec.lock", "test/t_test.dart", "tool/x.py" ] )
+
+    def test_an_ignored_file_is_not_an_untracked_input( self ):                   # negative control
+        with open( os.path.join( self.d, ".gitignore" ), "w" ) as f: f.write( "lib/gen.dart\n" )
+        self.sh( "add", ".gitignore" ); self.sh( "commit", "-q", "-m", "ignore" )
+        os.makedirs( os.path.join( self.d, "lib" ), exist_ok=True )
+        with open( os.path.join( self.d, "lib", "gen.dart" ), "w" ) as f: f.write( "x" )
+        self.assertEqual( mg.untracked_inputs( self.d ), [] )
+
+    def test_main_refuses_to_run_with_an_untracked_lib_file( self ):
+        os.makedirs( os.path.join( self.d, "lib" ), exist_ok=True )
+        with open( os.path.join( self.d, "lib", "zz_missing.dart" ), "w" ) as f: f.write( "x" )
+        self.assertEqual( mg.main( [ "--skip-suite", self.c3 ], root=self.d ), 2 )
 
     def test_resolve_range_forms( self ):
-        self.assertEqual( mg.resolve_range( None, "main", self.d ), ( self.c2, self.c2 ) )          # base is HEAD itself
+        self.assertEqual( mg.resolve_range( None, "main", self.d ), ( self.c3, self.c3 ) )          # base is HEAD itself
         self.assertEqual( mg.resolve_range( f"{self.c0}..{self.c2}", "main", self.d ), ( self.c0, self.c2 ) )
         self.assertEqual( mg.resolve_range( self.c1, "main", self.d ), ( self.c0, self.c1 ) )
 

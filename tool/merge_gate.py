@@ -21,15 +21,34 @@ Checks, each an existing tool run as a subprocess, its output kept in a log dire
   6. suite      ./flutter.sh test --machine, judged by tool/check_test_failures.py (re-runs the suite
                 once when that script asks for it)
   7. ac-g2      tool/check_ac_g2.py on the suite's output
-  8. comments   (--comments-only) every changed .dart file is identical once comments are stripped
+  8. comments   (--comments-only) every changed .dart file is identical once comments are stripped, and
+                no other file changed at all
 
 The start of the range is measured WITHOUT touching the checkout: `git archive` exports lib/, test/ and
 the pubspec files of that commit into a scratch directory, and the analyzer runs there. No stash, no
 worktree, no checkout. Files that are gitignored and absent from the export (a missing google-services
 style file) can only add errors to the start, which makes the comparison more lenient, never stricter.
 
-Output: one verdict line (PASS, FAIL or QUICK), one line per check with its exit code, the log directory.
-Exit 0 = PASS · 1 = FAIL · 2 = could not run (bad range, dirty tree) · 3 = QUICK (clean, but the suite was skipped).
+Run it from the real checkout, not from a copy under a scratch directory: three AC-G2 tests skip there and
+check 7 reports them missing.
+
+Refused with exit 2 (CANNOT RUN): a range that does not end at HEAD, an empty range, modified tracked files,
+an untracked file under lib/, test/ or tool/ (or an untracked pubspec or analysis_options.yaml: the checks
+read the working tree, so it would satisfy an import the commit cannot), a missing dart, flutter.sh or tool script.
+
+A range that edits any analysis_options.yaml fails check 1 (a commit could exclude its own errors); pass
+--allow-analyzer-config to accept it, and the verdict line then says so.
+
+Output: one verdict line, one line per check with its exit code, the log directory. Verdicts:
+  PASS               every check ran and passed                                    exit 0
+  PASS-WITH-WARNING  as PASS, but the range changes the gate's own inputs (this script, tool/check_*.py,
+                     pre_commit_gate.py, doc_coverage.py, tool/data/, the AC-G2 baseline); a human must read that diff   exit 0
+  QUICK              nothing failed but --skip-suite left checks 6 and 7 unrun        exit 3
+  FAIL               a check that ran failed                                          exit 1
+Exit 2 = could not run.
+
+Known limits, left as they are: no check has a timeout, so a hung check hangs the gate (never a PASS);
+an unterminated /* comment runs to the end of the file in strip_dart (such a file fails to compile, so check 1 fails).
 """
 import argparse, collections, json, os, re, shutil, subprocess, sys, tempfile
 
@@ -105,6 +124,14 @@ def strip_dart( text ):
     out, i, n = [], 0, len( text )
     stack = [ [ "code", 0 ] ]          # ["code", brace depth] or ["str", quote, raw]
     def space():
+        """
+        Add one space to the output unless it is empty or already ends in one.
+
+        Requires:
+            - out is the output list of the enclosing strip_dart call
+        Ensures:
+            - never leaves two spaces in a row or a leading space
+        """
         if out and out[ -1 ] != " ": out.append( " " )
     while i < n:
         top, c = stack[ -1 ], text[ i ]
@@ -211,9 +238,96 @@ def changed_dart_files( start, end, root=ROOT ):
 
 
 def show( rev, path, root=ROOT ):
-    """Return a file's text at a commit, or "" when it does not exist there."""
+    """
+    Read a file's text at a commit.
+
+    Requires:
+        - rev is a commit in root; path is repo-relative
+    Ensures:
+        - returns the text, or "" when the file does not exist at that commit
+    """
     p = subprocess.run( [ "git", "show", f"{rev}:{path}" ], cwd=root, capture_output=True, text=True )
     return p.stdout if p.returncode == 0 else ""
+
+
+def range_commits( start, end, root=ROOT ):
+    """
+    Count the commits in a range.
+
+    Requires:
+        - start and end are commits in root
+    Ensures:
+        - returns the number of commits reachable from end and not from start; 0 means an empty range
+    """
+    return len( git( [ "rev-list", f"{start}..{end}" ], root ).split() )
+
+
+INPUT_DIRS  = ( "lib/", "test/", "tool/" )
+INPUT_FILES = ( "pubspec.yaml", "pubspec.lock", "analysis_options.yaml" )
+
+
+def untracked_inputs( root=ROOT ):
+    """
+    List untracked, non-ignored files that the checks would read.
+
+    Requires:
+        - root is a git checkout
+    Ensures:
+        - returns sorted repo-relative paths under lib/, test/ or tool/, plus any untracked pubspec.yaml,
+          pubspec.lock or analysis_options.yaml (at any depth)
+        - files matched by .gitignore are not listed
+    """
+    names = git( [ "ls-files", "--others", "--exclude-standard" ], root ).splitlines()
+    return sorted( n for n in names if n.startswith( INPUT_DIRS ) or os.path.basename( n ) in INPUT_FILES )
+
+
+def analyzer_config_files( names ):
+    """
+    Pick the analyzer option files out of a list of changed paths.
+
+    Requires:
+        - names is a list of repo-relative paths
+    Ensures:
+        - returns sorted paths whose file name is exactly analysis_options.yaml, at any depth
+    """
+    return sorted( n for n in names if os.path.basename( n ) == "analysis_options.yaml" )
+
+
+def gate_input_files( names ):
+    """
+    Pick out the changed paths that feed the gate itself.
+
+    Requires:
+        - names is a list of repo-relative paths
+    Ensures:
+        - returns sorted paths that are tool/merge_gate.py, tool/check_*.py, tool/pre_commit_gate.py,
+          tool/doc_coverage.py, anything under tool/data/, or the AC-G2 baseline
+        - tests and every other file are not listed
+    """
+    def feeds( n ):
+        base = os.path.basename( n )
+        return ( n in ( "tool/merge_gate.py", "tool/pre_commit_gate.py", "tool/doc_coverage.py", "test/fixtures/ac_g2_passing_baseline.json" )
+                 or n.startswith( "tool/data/" ) or ( n.startswith( "tool/" ) and "/" not in n[ 5: ] and base.startswith( "check_" ) and base.endswith( ".py" ) ) )
+    return sorted( n for n in names if feeds( n ) )
+
+
+def missing_tools( root=ROOT, skip_suite=False ):
+    """
+    List what the gate needs and cannot find.
+
+    Requires:
+        - root is the checkout the gate will run in
+    Ensures:
+        - returns one message per missing item: the dart binary, flutter/bin/flutter, flutter.sh (unless skip_suite)
+          and each tool/ script the gate calls
+        - returns [] when everything is present
+    """
+    missing = []
+    dart = pcg.dart_cmd( ROOT )
+    if not ( shutil.which( dart ) if os.sep not in dart else os.path.isfile( dart ) ): missing.append( f"dart binary {dart}" )
+    needed = [ "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py" ]
+    if not skip_suite: needed += [ "flutter.sh", "tool/check_test_failures.py", "tool/check_ac_g2.py" ]
+    return missing + [ f"{n} missing under {root}" for n in needed if not os.path.exists( os.path.join( root, n ) ) ]
 
 
 # ---------------------------------------------------------------- checks
@@ -237,7 +351,14 @@ def run_logged( name, cmd, logdir, root=ROOT, stdout_to=None ):
 
 
 def dart_dirs( root ):
-    """Return the directories among lib and test that exist under root."""
+    """
+    Pick the directories the analyzer is run over.
+
+    Requires:
+        - root is a directory
+    Ensures:
+        - returns the names among "lib" and "test" that exist under root, in that order
+    """
     return [ d for d in ( "lib", "test" ) if os.path.isdir( os.path.join( root, d ) ) ]
 
 
@@ -245,17 +366,49 @@ def analyze_machine( root, logdir, name ):
     """
     Run `dart analyze --format=machine` over lib and test in root; return ( exit_code, stdout ).
 
+    Requires:
+        - root holds lib/ (and optionally test/); logdir exists; name is a log file stem
     Ensures:
         - exit codes 0 to 3 (clean, infos, warnings, errors) are all a finished run
         - the output is saved as <logdir>/<name>.log
     """
     p = subprocess.run( [ pcg.dart_cmd( ROOT ), "analyze", "--format=machine", *dart_dirs( root ) ],
                         cwd=root, capture_output=True, text=True )
-    open( os.path.join( logdir, name + ".log" ), "w" ).write( p.stdout + p.stderr )
+    with open( os.path.join( logdir, name + ".log" ), "w" ) as f: f.write( p.stdout + p.stderr )
     return p.returncode, p.stdout
 
 
-def check_analyzer( start, logdir, root=ROOT ):
+def analyzer_failure( code, errors, where ):
+    """
+    Say whether an analyzer run counts as unfinished or unbelievable.
+
+    Requires:
+        - code is the analyzer's exit code; errors is the Counter parse_errors made from its output; where names the run
+    Ensures:
+        - returns a message when the exit code is outside 0 to 3 (the run did not finish)
+        - returns a message when the exit code is 3 (errors exist) but no ERROR line was parsed (the output format
+          changed or was cut short), so "no new errors" cannot be believed
+        - returns None otherwise
+    """
+    if code not in ( 0, 1, 2, 3 ): return f"analyzer did not finish at {where} (exit {code})"
+    if code == 3 and not errors: return f"analyzer exited 3 at {where} but no ERROR line was parsed"
+    return None
+
+
+def range_label( start, end, count, comments_only, config_allowed ):
+    """
+    Build the short text after the verdict word.
+
+    Requires:
+        - start and end are full shas; count is the number of commits
+    Ensures:
+        - returns "start..end (N commits)", with " comments-only" and " analyzer-config-allowed" appended when set
+    """
+    label = f"{start[:7]}..{end[:7]} ({count} commit{'' if count == 1 else 's'})"
+    return label + ( " comments-only" if comments_only else "" ) + ( " analyzer-config-allowed" if config_allowed else "" )
+
+
+def check_analyzer( start, logdir, root=ROOT, allow_config=False ):
     """
     Fail on any analyzer ERROR that the start of the range does not also have.
 
@@ -263,14 +416,19 @@ def check_analyzer( start, logdir, root=ROOT ):
         - start is a commit in root; the working tree is the end of the range
 
     Ensures:
+        - returns 1, without running the analyzer, when the range edits any analysis_options.yaml and
+          allow_config is not set: the head is analyzed with its own options, so a commit could exclude its own errors
         - returns ( exit_code, detail ); 0 only when the head has no error beyond the start's
         - returns 1 when either analyzer run did not finish, or the start could not be exported
         - leaves the checkout untouched: the start is exported with git archive into a scratch directory
     """
+    touched = analyzer_config_files( git( [ "diff", "--name-only", "--no-renames", f"{start}..HEAD" ], root ).splitlines() )
+    if touched and not allow_config:
+        return 1, f"range edits analyzer config: {', '.join( touched )}; read that diff, then pass --allow-analyzer-config"
     print( "== analyzer (head)", file=sys.stderr, flush=True )
     code, head_text = analyze_machine( root, logdir, "1-analyzer-head" )
-    if code not in ( 0, 1, 2, 3 ): return 1, f"analyzer did not finish at head (exit {code})"
     head = parse_errors( head_text, ( root + "/", ) )
+    if analyzer_failure( code, head, "head" ): return 1, analyzer_failure( code, head, "head" )
     print( "== analyzer (start of range)", file=sys.stderr, flush=True )
     with tempfile.TemporaryDirectory( prefix="merge-gate-base-" ) as d:
         arc = subprocess.run( f"git archive {start} lib test pubspec.yaml pubspec.lock analysis_options.yaml | tar -x -C {d}",
@@ -280,8 +438,8 @@ def check_analyzer( start, logdir, root=ROOT ):
         pub = subprocess.run( [ flutter, "pub", "get", "--offline" ], cwd=d, capture_output=True, text=True )
         if pub.returncode != 0: return 1, f"pub get failed for the start of the range: {pub.stderr.strip()[:200]}"
         code, base_text = analyze_machine( d, logdir, "1-analyzer-base" )
-        if code not in ( 0, 1, 2, 3 ): return 1, f"analyzer did not finish at start (exit {code})"
         base = parse_errors( base_text, ( d + "/", ) )
+        if analyzer_failure( code, base, "start" ): return 1, analyzer_failure( code, base, "start" )
     new = new_errors( base, head )
     if new:
         for f, c, m in new[ :20 ]: print( f"  new error: {f} {c}: {m}", file=sys.stderr )
@@ -298,13 +456,17 @@ def check_comments_only( start, end, root=ROOT ):
 
     Ensures:
         - returns ( exit_code, detail ); 0 only when every changed .dart file strips to the same text at both ends
-        - a .dart file added or deleted by the range counts as changed text
-        - non-.dart files are counted in the detail but do not fail the check
+          and no other file changed
+        - a .dart file added or deleted counts as changed text, unless it holds nothing but comments and whitespace:
+          such a file strips to "" and so passes, whether it was added or deleted
+        - any changed file that is not .dart fails the check, and the detail names it
+        - a range that changes no .dart file fails rather than passing for nothing
     """
     dart, other = changed_dart_files( start, end, root )
     bad = [ p for p in dart if comments_differ( show( start, p, root ), show( end, p, root ) ) ]
     for p in bad: print( f"  not comments-only: {p}", file=sys.stderr )
-    note = f"{len( dart )} .dart file(s), {len( other )} other file(s) not checked"
+    note = f"{len( dart )} .dart file(s)"
+    if other: return 1, f"changes non-.dart file(s): {', '.join( other )} ({note})"
     if not dart: return 1, f"no .dart file changed; nothing to call comments-only ({note})"
     return ( 1, f"{len( bad )} file(s) change more than comments ({note})" ) if bad else ( 0, f"comments only ({note})" )
 
@@ -313,6 +475,8 @@ def check_suite( logdir, root=ROOT ):
     """
     Run the full suite and judge it with tool/check_test_failures.py; run it twice only if that script asks.
 
+    Requires:
+        - root holds flutter.sh and tool/check_test_failures.py; logdir exists
     Ensures:
         - returns ( exit_code, detail, json_path ); exit_code is check_test_failures' own verdict
         - the suite's own exit code is never read: it is non-zero whenever any test fails
@@ -325,95 +489,114 @@ def check_suite( logdir, root=ROOT ):
         run2 = os.path.join( logdir, "6-suite-run2.json" )
         run_logged( "6-suite-run2-stderr", [ os.path.join( root, "flutter.sh" ), "test", "--machine" ], logdir, root, stdout_to=run2 )
         code, last = run_logged( "6-verdict-rerun", [ sys.executable, "tool/check_test_failures.py", run1, run2 ], logdir, root ), "6-verdict-rerun"
-    lines = open( os.path.join( logdir, last + ".log" ) ).read().strip().splitlines()
+    with open( os.path.join( logdir, last + ".log" ) ) as f: lines = f.read().strip().splitlines()
     return code, ( lines[ 0 ] if lines else "no output" ), run1
 
 
 # ---------------------------------------------------------------- verdict
 
-def verdict( results ):
+def verdict( results, warnings=() ):
     """
     Combine the check results into one word and an exit code.
 
     Requires:
         - results is a list of ( name, exit_code_or_None, detail ); None means the check was skipped
+        - warnings is the list of changed gate-input files, empty when none
 
     Ensures:
         - returns ( "FAIL", 1 ) when any check that ran exited non-zero
         - else ( "QUICK", 3 ) when any check was skipped: a skipped suite never earns PASS
+        - else ( "PASS-WITH-WARNING", 0 ) when warnings is not empty
         - else ( "PASS", 0 )
+        - a warning never turns FAIL or QUICK into anything else
     """
     if any( c is not None and c != 0 for _n, c, _d in results ): return "FAIL", FAIL
     if any( c is None for _n, c, _d in results ): return "QUICK", QUICK
-    return "PASS", PASS
+    return ( "PASS-WITH-WARNING", PASS ) if warnings else ( "PASS", PASS )
 
 
-def report( word, results, rng, logdir ):
+def report( word, results, rng, logdir, warnings=() ):
     """
     Format the verdict line, one line per check, and the log directory.
 
     Requires:
         - word is the verdict word; results as in verdict(); rng is a short "start..end" text
+        - warnings is the list of changed gate-input files, empty when none
 
     Ensures:
         - the first line starts with the verdict word; each check line carries its exit code, or SKIPPED
+        - when warnings is not empty, the second line is the WARNING line naming them
     """
     lines = [ f"{word} {rng}" ]
+    if warnings: lines.append( f"WARNING: this range changes the gate's own inputs: {', '.join( warnings )}. A human must read that diff." )
     for name, code, detail in results:
         lines.append( f"  {name:<13} {'SKIPPED' if code is None else 'exit ' + str( code ):<8} {detail}" )
     lines.append( f"logs: {logdir}" )
     return "\n".join( lines )
 
 
-def main( argv=None ):
+def main( argv=None, root=ROOT ):
     """
     Run the gate.
 
     Requires:
         - run inside the checkout that holds the commits, range ending at HEAD, tracked files unmodified
+        - root is that checkout (the tests pass a throwaway repo)
 
     Ensures:
-        - returns 0 for PASS, 1 for FAIL, 2 when the gate could not start, 3 for QUICK
+        - returns 0 for PASS and PASS-WITH-WARNING, 1 for FAIL, 2 when the gate could not start, 3 for QUICK
+        - exit 2 for: a bad revision, a range not ending at HEAD, an empty range, modified tracked files,
+          untracked input files, a missing tool
         - runs every check even after one fails, so one run shows every failure
     """
-    ap = argparse.ArgumentParser( description="Run the merge gate on a commit or range." )
+    ap = argparse.ArgumentParser( description="Run the merge gate on a commit or range. Run it from the real checkout, not a scratch copy." )
     ap.add_argument( "rev", nargs="?", help="a commit, or A..B ending at HEAD; default: the merge-base of --base and HEAD, to HEAD" )
     ap.add_argument( "--base", default="main", help="branch the work will merge into (default main)" )
     ap.add_argument( "--skip-suite", action="store_true", help="skip the full suite and ac-g2; the verdict says QUICK" )
     ap.add_argument( "--comments-only", action="store_true", help="also require that the range changes only comments in .dart files" )
+    ap.add_argument( "--allow-analyzer-config", action="store_true", help="accept a range that edits analysis_options.yaml (the verdict line says so)" )
     ap.add_argument( "--log-dir", help="keep logs here (default: a new directory under the system temp)" )
     args = ap.parse_args( argv )
+    def refuse( msg ):
+        print( f"CANNOT RUN — {msg}", file=sys.stderr ); return UNRUNNABLE
     try:
-        start, end = resolve_range( args.rev, args.base )
-        head = git( [ "rev-parse", "HEAD" ] ).strip()
-        dirty = git( [ "status", "--porcelain", "--untracked-files=no" ] ).strip()
+        start, end = resolve_range( args.rev, args.base, root )
+        head  = git( [ "rev-parse", "HEAD" ], root ).strip()
+        dirty = git( [ "status", "--porcelain", "--untracked-files=no" ], root ).strip()
+        count = range_commits( start, end, root )
+        loose = untracked_inputs( root )
     except RuntimeError as ex:
-        print( f"CANNOT RUN — {ex}", file=sys.stderr ); return UNRUNNABLE
-    if end != head: print( f"CANNOT RUN — the range ends at {end[:7]} but HEAD is {head[:7]}; check out the end of the range first", file=sys.stderr ); return UNRUNNABLE
-    if dirty: print( f"CANNOT RUN — tracked files are modified:\n{dirty}", file=sys.stderr ); return UNRUNNABLE
+        return refuse( str( ex ) )
+    if end != head: return refuse( f"the range ends at {end[:7]} but HEAD is {head[:7]}; check out the end of the range first" )
+    if count == 0:  return refuse( f"the range {start[:7]}..{end[:7]} is empty; there is nothing to gate" )
+    if dirty:       return refuse( f"tracked files are modified:\n{dirty}" )
+    if loose:       return refuse( "untracked files the checks would read (git add them or delete them):\n  " + "\n  ".join( loose ) )
+    absent = missing_tools( root, args.skip_suite )
+    if absent:      return refuse( "; ".join( absent ) )
     logdir = args.log_dir or tempfile.mkdtemp( prefix="merge-gate-" )
     os.makedirs( logdir, exist_ok=True )
-    count  = len( git( [ "rev-list", f"{start}..{end}" ] ).split() )
-    rng    = f"{start[:7]}..{end[:7]} ({count} commit{'' if count == 1 else 's'})" + ( " comments-only" if args.comments_only else "" )
+    names    = git( [ "diff", "--name-only", "--no-renames", f"{start}..{end}" ], root ).splitlines()
+    warnings = gate_input_files( names )
+    rng      = range_label( start, end, count, args.comments_only, bool( analyzer_config_files( names ) ) and args.allow_analyzer_config )
 
     results = []
-    code, detail = check_analyzer( start, logdir );  results.append( ( "analyzer", code, detail ) )
+    code, detail = check_analyzer( start, logdir, root, args.allow_analyzer_config );  results.append( ( "analyzer", code, detail ) )
     for name, cmd in ( ( "docs-gate",   [ sys.executable, "tool/pre_commit_gate.py", "--docs-all" ] ),
                        ( "ignores",     [ sys.executable, "tool/check_doc_ignores.py" ] ),
                        ( "coverage",    [ sys.executable, "tool/doc_coverage.py" ] ),
                        ( "tool-tests",  [ sys.executable, "-m", "pytest", "tool/", "-q" ] ) ):
-        code = run_logged( f"{len( results ) + 1}-{name}", cmd, logdir )
+        code = run_logged( f"{len( results ) + 1}-{name}", cmd, logdir, root )
         results.append( ( name, code, " ".join( cmd[ 1: ] ) ) )
     if args.skip_suite:
         results += [ ( "suite", None, "skipped by --skip-suite" ), ( "ac-g2", None, "skipped by --skip-suite" ) ]
     else:
-        code, detail, run1 = check_suite( logdir );  results.append( ( "suite", code, detail ) )
-        code = run_logged( "7-ac-g2", [ sys.executable, "tool/check_ac_g2.py", run1 ], logdir )
+        code, detail, run1 = check_suite( logdir, root );  results.append( ( "suite", code, detail ) )
+        code = run_logged( "7-ac-g2", [ sys.executable, "tool/check_ac_g2.py", run1 ], logdir, root )
         results.append( ( "ac-g2", code, "tool/check_ac_g2.py" ) )
     if args.comments_only:
-        code, detail = check_comments_only( start, end );  results.append( ( "comments-only", code, detail ) )
-    word, exit_code = verdict( results )
-    print( report( word, results, rng, logdir ) )
+        code, detail = check_comments_only( start, end, root );  results.append( ( "comments-only", code, detail ) )
+    word, exit_code = verdict( results, warnings )
+    print( report( word, results, rng, logdir, warnings ) )
     return exit_code
 
 
