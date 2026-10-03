@@ -25,6 +25,4 @@ lib/features/settings
 lib/features/decision_proxy
 lib/core
 lib/services
-lib/features/audio
-lib/features/session
 lib/features/claude_code

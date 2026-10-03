@@ -36,7 +36,6 @@ const Map<String, Map<String, int>> _census = {
   'features/task_list/presentation/task_list_header.dart'           : { 'no': 1 },
   'shared/widgets/dictation_text_field.dart'                        : { 'exception': 1 },
   'shared/widgets/prompt_bodies.dart'                               : { 'yes': 4 },
-  'ui/debug/websocket_debug_dashboard.dart'                         : { 'no': 1 },
 };
 
 final _plain     = RegExp( r'(?<![A-Za-z])(?:TextField|TextFormField)\(' );
