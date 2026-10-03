@@ -3,15 +3,18 @@
 
   python3 tool/pre_commit_gate.py            # gate the staged changes (what the hook runs)
   python3 tool/pre_commit_gate.py --list     # print the swept directories and stop
+  python3 tool/pre_commit_gate.py --docs-all # check 3 alone, over every gated directory (what CI runs)
 
 Runs three checks and blocks the commit when any one fails:
   1. tool/lint_dart_docs.py --staged --strict   (Dart doc linter, staged lines only)
   2. tool/check_doc_ignores.py                  (ignore gate, whole of lib/)
-  3. flutter analyze --fatal-infos <dir>        (one run per gated directory the commit touches)
+  3. dart analyze --format=machine <dirs>       (the gated directories the commit touches; fails
+                                                 ONLY on public_member_api_docs, every other finding
+                                                 is ignored, errors included)
 
-The gated directories are listed in tool/data/gated_dirs.txt: the swept directories that pass
-analyze today. The swept ones left out are named there with their issue counts. Set FLUTTER to
-use another flutter binary; the default is `flutter` on PATH, then ./flutter.sh.
+The gated directories are listed in tool/data/gated_dirs.txt: every swept directory. Other analyzer
+findings are a separate clean-up (Rick, 2026-10-02: "Docs now, code clean-up later"). Set DART to
+use another dart binary; the default is `dart` on PATH, then flutter/bin/dart in the repo.
 Bypass with `git commit --no-verify`; the CI step in .github/workflows/flutter-ci.yml catches that.
 
 Exit 0 = every check passed · 1 = at least one check failed.
@@ -22,6 +25,9 @@ ROOT    = os.path.dirname( os.path.dirname( os.path.abspath( __file__ ) ) )
 OPTIONS    = "analysis_options.yaml"
 GATED_LIST = "tool/data/gated_dirs.txt"
 LEFT_OUT   = re.compile( r"#\s*left out:\s*(\S+)\s+(\d+)\b" )
+DOC_CODE   = "PUBLIC_MEMBER_API_DOCS"
+# One machine line: SEVERITY|TYPE|CODE|file|line|col|length|message, with a literal | escaped as \|
+PIPE       = re.compile( r"(?<!\\)\|" )
 
 
 def all_swept_dirs( root=ROOT ):
@@ -105,15 +111,59 @@ def staged_paths( root=ROOT ):
     return [ l for l in out.splitlines() if l ]
 
 
-def flutter_cmd( root=ROOT ):
+def dart_cmd( root=ROOT ):
     """
-    Choose the flutter binary the analyze check uses.
+    Choose the dart binary the docs check uses.
 
     Ensures:
-        - returns $FLUTTER when set, else `flutter` on PATH, else the repo's flutter.sh wrapper
+        - returns $DART when set, else `dart` on PATH, else the repo's flutter/bin/dart
     """
-    if os.environ.get( "FLUTTER" ): return os.environ["FLUTTER"]
-    return "flutter" if shutil.which( "flutter" ) else os.path.join( root, "flutter.sh" )
+    if os.environ.get( "DART" ): return os.environ["DART"]
+    return "dart" if shutil.which( "dart" ) else os.path.join( root, "flutter", "bin", "dart" )
+
+
+def missing_doc_findings( machine_output ):
+    """
+    Pick the missing-doc findings out of `dart analyze --format=machine` output.
+
+    Requires:
+        - machine_output is the analyzer's stdout, one finding per line
+
+    Ensures:
+        - returns the lines whose diagnostic code is public_member_api_docs, in input order
+        - ignores every other finding, errors and warnings included, and any line that is not a finding
+    """
+    found = []
+    for line in machine_output.splitlines():
+        fields = PIPE.split( line )
+        if len( fields ) >= 8 and fields[2].upper() == DOC_CODE: found.append( line )
+    return found
+
+
+def check_docs( dirs, root=ROOT ):
+    """
+    Run the analyzer over the directories and fail only on missing doc comments.
+
+    Requires:
+        - dirs is a list of repo-relative directories, each with an options file enabling public_member_api_docs
+
+    Ensures:
+        - returns True when the analyzer ran and reported no missing doc comment
+        - returns False, after printing each missing-doc finding, when it reported one
+        - returns False when the analyzer did not run to completion (exit code outside 0 to 3: 1 infos, 2 warnings, 3 errors)
+        - returns True without running anything when dirs is empty
+    """
+    if not dirs: return True
+    print( f"== docs only (public_member_api_docs): {' '.join( dirs )}", flush=True )
+    proc = subprocess.run( [ dart_cmd( root ), "analyze", "--format=machine", *dirs ],
+                           cwd=root, capture_output=True, text=True )
+    if proc.returncode not in ( 0, 1, 2, 3 ):
+        print( f"analyzer did not finish (exit {proc.returncode}):\n{proc.stdout}{proc.stderr}", file=sys.stderr )
+        return False
+    bad = missing_doc_findings( proc.stdout )
+    for line in bad: print( line )
+    if bad: print( f"{len( bad )} missing doc comment(s)", file=sys.stderr )
+    return not bad
 
 
 def run_check( name, cmd, root=ROOT ):
@@ -144,11 +194,14 @@ def main( argv=None, root=ROOT ):
     """
     ap = argparse.ArgumentParser( description="Blocking pre-commit gate for the documentation standard." )
     ap.add_argument( "--list", action="store_true", help="print the gated directories and stop" )
+    ap.add_argument( "--docs-all", action="store_true",
+                     help="run check 3 alone over every gated directory, ignoring the staged changes (CI)" )
     args = ap.parse_args( argv )
     swept = swept_dirs( root )
     if args.list:
         print( "\n".join( swept ) )
         return 0
+    if args.docs_all: return 0 if check_docs( swept, root ) else 1
     staged  = staged_paths( root )
     results = [
         run_check( "doc linter (staged lines)",
@@ -156,9 +209,7 @@ def main( argv=None, root=ROOT ):
         run_check( "ignore checker",
                    [ sys.executable, "tool/check_doc_ignores.py" ], root ),
     ]
-    for d in touched_dirs( staged, swept ):
-        results.append( run_check( f"analyze --fatal-infos {d}",
-                                   [ flutter_cmd( root ), "analyze", "--fatal-infos", d ], root ) )
+    results.append( check_docs( touched_dirs( staged, swept ), root ) )
     if all( results ): return 0
     print( "\nBLOCKED: fix the failures above, or bypass once with `git commit --no-verify` (CI still checks).",
            file=sys.stderr )

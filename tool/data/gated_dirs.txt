@@ -1,6 +1,9 @@
-# Directories the pre-commit hook and the CI step run `analyze --fatal-infos` on.
-# One shared list: tool/pre_commit_gate.py reads it for the hook and for `--list` (CI).
-# One path per line. Add a directory by moving its line out of "left out" below, after it passes.
+# Directories the pre-commit hook and the CI step check for missing doc comments.
+# One shared list: tool/pre_commit_gate.py reads it for the hook and for `--list` / `--docs-all` (CI).
+# Meaning: every swept directory, i.e. each one with its own analysis_options.yaml enabling
+# public_member_api_docs. The check fails ONLY on that diagnostic; every other analyzer finding
+# (errors, warnings, style notes) is ignored here. Rick, 2026-10-02: "Docs now, code clean-up later".
+# One path per line. Add a directory here when it gets its own options file.
 lib/features/artifacts
 lib/features/auth
 lib/features/holding_area
@@ -14,20 +17,14 @@ lib/features/finished_tasks
 lib/features/quick_ask
 lib/features/docs
 lib/shared
-
-# Swept but left out: each has non-doc errors or infos today, so `analyze --fatal-infos` fails.
-# Format: `# left out: <dir> <issue count> (measured at <sha>)`. Clearing them is Phase 5 Step 1.
-# The first group was measured at 907a178 (Clayton's sweep branch), not on this branch.
-# left out: lib/features/focus_mode 8 (measured at 907a178)
-# left out: lib/features/notifications 6 (measured at 907a178)
-# left out: lib/features/queue 1 (measured at 907a178)
-
-# left out: lib/features/agentic 4 (measured at 907a178)
-# left out: lib/features/settings 4 (measured at 907a178)
-# left out: lib/features/decision_proxy 2 (measured at 907a178)
-# removed: lib/features/voice, deleted 2026-10-02 with lib/core/use_cases/use_case_registry.dart (row 32aedd1c)
-# left out: lib/core 374 (measured at 7a2b3c9)
-# left out: lib/services 324 (measured at 7a2b3c9)
-# left out: lib/features/audio 18 (measured at 7a2b3c9)
-# left out: lib/features/session 8 (measured at 7a2b3c9)
-# left out: lib/features/claude_code 4 (measured at 7a2b3c9)
+lib/features/focus_mode
+lib/features/notifications
+lib/features/queue
+lib/features/agentic
+lib/features/settings
+lib/features/decision_proxy
+lib/core
+lib/services
+lib/features/audio
+lib/features/session
+lib/features/claude_code

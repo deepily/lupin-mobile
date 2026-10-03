@@ -30,10 +30,14 @@ class PreCommitGateTest( unittest.TestCase ):
         self.assertEqual( gate.swept_dirs( root ), [ "lib/features/auth" ] )
         self.assertEqual( gate.left_out_dirs( root ), { "lib/core": 374 } )
 
-    def test_every_swept_dir_in_this_repo_is_gated_or_named_left_out( self ):
-        listed = set( gate.swept_dirs() ) | set( gate.left_out_dirs() )
-        self.assertEqual( set( gate.all_swept_dirs() ) - listed, set() )
-        self.assertEqual( set( gate.swept_dirs() ) & set( gate.left_out_dirs() ), set() )
+    def test_every_swept_dir_in_this_repo_is_gated( self ):
+        self.assertEqual( set( gate.all_swept_dirs() ) - set( gate.swept_dirs() ), set() )
+        self.assertEqual( gate.left_out_dirs(), {} )
+
+    def test_every_gated_dir_enables_public_member_api_docs( self ):
+        for d in gate.swept_dirs():
+            with open( os.path.join( gate.ROOT, d, gate.OPTIONS ), encoding="utf-8" ) as f:
+                self.assertIn( "public_member_api_docs", f.read(), d )
 
     def test_touched_dirs_matches_whole_segments( self ):
         swept = [ "lib/core", "lib/features/auth" ]
@@ -57,28 +61,60 @@ class PreCommitGateTest( unittest.TestCase ):
     def test_main_blocks_when_any_check_fails_but_runs_all( self ):
         calls = []
         orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs )
+        orig_docs = gate.check_docs
         gate.run_check    = lambda name, cmd, root=None: calls.append( name ) or name.startswith( "ignore" )
+        gate.check_docs   = lambda dirs, root=None: calls.append( "docs" ) or True
         gate.staged_paths = lambda root=None: [ "lib/core/a.dart" ]
         gate.swept_dirs   = lambda root=None: [ "lib/core" ]
         try:
             code = gate.main( [] )
         finally:
             gate.run_check, gate.staged_paths, gate.swept_dirs = orig
+            gate.check_docs = orig_docs
         self.assertEqual( code, 1 )
-        self.assertEqual( len( calls ), 3 )
+        self.assertEqual( calls, [ "doc linter (staged lines)", "ignore checker", "docs" ] )
 
     def test_main_passes_when_all_checks_pass_and_skips_untouched_dirs( self ):
         calls = []
         orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs )
+        orig_docs = gate.check_docs
         gate.run_check    = lambda name, cmd, root=None: calls.append( name ) or True
+        gate.check_docs   = lambda dirs, root=None: calls.append( f"docs {dirs}" ) or True
         gate.staged_paths = lambda root=None: [ "README.md" ]
         gate.swept_dirs   = lambda root=None: [ "lib/core" ]
         try:
             code = gate.main( [] )
         finally:
             gate.run_check, gate.staged_paths, gate.swept_dirs = orig
+            gate.check_docs = orig_docs
         self.assertEqual( code, 0 )
-        self.assertEqual( len( calls ), 2 )
+        self.assertEqual( calls[2:], [ "docs []" ] )
+
+    def test_filter_ignores_everything_but_missing_docs( self ):
+        out = ( "ERROR|COMPILE_TIME_ERROR|UNDEFINED_GETTER|/r/lib/core/a.dart|3|4|5|The getter 'x' isn't defined.\n"
+                "WARNING|STATIC_WARNING|UNUSED_IMPORT|/r/lib/core/a.dart|1|1|9|Unused import.\n"
+                "INFO|LINT|AVOID_PRINT|/r/lib/core/a.dart|7|1|5|Don't print.\n" )
+        self.assertEqual( gate.missing_doc_findings( out ), [] )
+
+    def test_filter_catches_a_missing_doc_among_other_findings( self ):
+        doc = "INFO|LINT|PUBLIC_MEMBER_API_DOCS|/r/lib/core/a.dart|9|8|3|Missing documentation for a public member."
+        out = "ERROR|COMPILE_TIME_ERROR|UNDEFINED_GETTER|/r/a.dart|3|4|5|bad \\| pipe\n" + doc + "\n"
+        self.assertEqual( gate.missing_doc_findings( out ), [ doc ] )
+
+    def test_check_docs_follows_the_filter_not_the_exit_code( self ):
+        def fake( out, code ):
+            return lambda *a, **k: subprocess.CompletedProcess( a, code, stdout=out, stderr="" )
+        orig = subprocess.run
+        try:
+            subprocess.run = fake( "ERROR|COMPILE_TIME_ERROR|X|/f|1|1|1|m\n", 3 )
+            self.assertTrue( gate.check_docs( [ "lib/core" ] ) )
+            subprocess.run = fake( "INFO|LINT|PUBLIC_MEMBER_API_DOCS|/f|1|1|1|m\n", 1 )
+            self.assertFalse( gate.check_docs( [ "lib/core" ] ) )
+            subprocess.run = fake( "", 64 )
+            self.assertFalse( gate.check_docs( [ "lib/core" ] ) )
+        finally:
+            subprocess.run = orig
+        self.assertTrue( gate.check_docs( [] ) )
 
 
 if __name__ == "__main__":
