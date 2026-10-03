@@ -91,7 +91,7 @@ class AppInitialization {
 
   /// Initialize storage system
   static Future<void> _initializeStorage() async {
-    final storage = await StorageManager.getInstance();
+    await StorageManager.getInstance();
     Logger.info('Storage system initialized');
   }
 
