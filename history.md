@@ -16,7 +16,7 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ## 2026.10.03 | Session `576809a5` (Tiffany 💍) — dead code deleted, merge gate in the repo, docs crew post-game
 
-Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 EDT on Rick's card; both released with mementos). Tip `459f82a`, not pushed.
+Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 EDT on Rick's card; both released with mementos; Clayton again from 19:22 to 19:30 for the last rulings). Tip `97cf2ac` plus the checkpoint commit, not pushed.
 
 - **Docs plan**: gates demonstration rerun by Pocholo with a real commit through the installed hook, in a directory that is not analyzer-clean (row `e6a8fdb2` closed); Phase 5 closed (row `075eca61`). Plan manifest reworded to today's gate (`4e5acc5`, row `d56061a4`).
 - **Post-game** for the docs crew, five rulings approved by Rick: `src/docs/post-games/v0.2.2/2026.10.03-mobile-docs-track-crew-post-game.md` (`2e6e879`; moved to the per-version folder in `c8f9a52` after María's new rule, with an index and the `/plan-post-game` wrapper updated).
@@ -27,7 +27,9 @@ Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 E
 - Reviewed María's post-games move in planning-is-prompting (row `77dac8ed`): PASS, four findings.
 - The permission check refused commands in three worker seats (`git rm`, a gates script, a bulk-edit script, then a read-only `git status`); each seat stopped and reported, and the work went another approved way or to a fresh seat.
 
-**RESUME HERE:** (1) Rick's answer on where the merge gate's permission rule lives (`.claude/settings.json` is gitignored here); then add the rule and show a fresh seat running the gate, and close row `00db303b`. (2) Row `5a200e6c` shows "parked"; only Rick's login can un-park it. Left under it: 349 style notes, then promoting clean directories to the strict gate. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
+- **Evening, after the manager's self-respin (18:52 EDT)**: Rick ruled the last two analyzer warnings and the unused mock (row `fa6c1842`, closed). Clayton applied them, Pocholo approved, merged at `97cf2ac`: analyzer over `lib test` 0 errors, 0 warnings, 332 style notes; merge gate PASS on `e4ae5be..97cf2ac`; APK rebuilt with `--fcm` at `97cf2ac`. The merge gate's permission rule is in Rick's `.claude/settings.local.json`, added by him after the permission check refused a seat writing a tracked settings file.
+
+**RESUME HERE:** (1) Row `00db303b` has met its acceptance and is parked; close it once Rick un-parks it. (2) Row `5a200e6c` shows "parked"; only Rick's login can un-park it. Left under it: 332 style notes, then promoting clean directories to the strict gate. (2b) Post-game for the 2026-10-03 crew, row `ea96c8d7`, held. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
 
 ---
 
