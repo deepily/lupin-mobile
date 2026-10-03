@@ -268,16 +268,13 @@ class RemoteLogDestination implements LogDestination {
   final String apiKey;
   final List<LogEntry> _buffer = [];
   final int _bufferSize;
-  final Duration _flushInterval;
 
   /// Creates a destination that buffers entries and uploads them on an interval.
   RemoteLogDestination({
     required this.endpoint,
     required this.apiKey,
     int bufferSize = 50,
-    Duration flushInterval = const Duration(seconds: 30),
-  }) : _bufferSize = bufferSize,
-       _flushInterval = flushInterval {
+  }) : _bufferSize = bufferSize {
     
     // Start periodic flush
     _startPeriodicFlush();
