@@ -393,7 +393,7 @@
                     "name"       : "Sweep lib/features/audio",
                     "item_class" : "task",
                     "priority"   : "P2",
-                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/audio/ under a nested options file (0 findings and 11 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/audio/ under a nested options file (0 findings and 11 hits at the baselines), comments only per docs_only_diff, and no new suite failure. Note: lib/features/audio was deleted on 2026-10-03, so there is nothing left to sweep",
                     "owner_role" : "implementer",
                     "depends_on" : []
                 },
@@ -402,7 +402,7 @@
                     "name"       : "Sweep lib/features/session",
                     "item_class" : "task",
                     "priority"   : "P2",
-                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/session/ under a nested options file (0 findings and 11 hits at the baselines), comments only per docs_only_diff, and no new suite failure",
+                    "acceptance" : "Zero doc-linter findings and zero public_member_api_docs hits in lib/features/session/ under a nested options file (0 findings and 11 hits at the baselines), comments only per docs_only_diff, and no new suite failure. Note: lib/features/session was deleted on 2026-10-03, so there is nothing left to sweep",
                     "owner_role" : "implementer",
                     "depends_on" : []
                 },

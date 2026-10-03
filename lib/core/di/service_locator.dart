@@ -100,12 +100,10 @@ import 'package:record/record.dart';
 import '../../services/asr/asr_service.dart';
 import '../../features/quick_ask/domain/quick_ask_bloc.dart';
 
-// Legacy voice/audio/TTS/use-case-registry stack is disabled — the code in
-// lib/core/repositories/impl/{voice,audio}_repository_impl.dart and
-// lib/features/{voice,audio,session}/use_cases/ references symbols that don't
-// exist (TtsService, interfaces/*.dart, model fields). Tree-shaker skips these
-// files as long as nothing imports them from the active graph. If we ever need
-// voice/TTS again, fix those files first, then re-import here.
+// The legacy voice/audio/TTS/use-case-registry stack is not part of the app: its
+// repository, use-case and enhanced-service files are deleted from lib/.
+// Voice reply uses the ASR and streaming TTS services registered in this file.
+// If voice or TTS needs more than they offer, add new code and register it here.
 
 // Settings
 import '../settings/settings_manager.dart';
