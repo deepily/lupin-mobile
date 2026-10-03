@@ -750,7 +750,7 @@ class TranscriptStreamBloc extends Bloc<TranscriptEvent, TranscriptViewState>
   // -------------------------------------------------------------------------
 
   // Trims to [ringBytes], oldest first. The cap is in bytes and the eviction is by count,
-  // the app's existing idiom plus byte accounting: `monitoring_models.dart` already evicts
+  // the app's existing idiom plus byte accounting: `quick_ask_bloc.dart` already evicts
   // with `removeAt( 0 )` past a limit, and this adds [TranscriptBlock.sizeBytes], the UTF-8
   // length after server truncation, so "never exceeds its cap" means the same thing here as
   // on the server. One block larger than the whole ring is kept, not dropped, because

@@ -1,7 +1,7 @@
 /// Firebase bootstrap, gated behind the compile-time flag `ENABLE_FCM`.
 ///
 /// Build with `flutter build apk --dart-define=ENABLE_FCM=true`. The default is off, so builds without it carry no
-/// hard dependency on `google-services.json`. `performance_monitor.dart` and `streaming_tts_player.dart` set the precedent.
+/// hard dependency on `google-services.json`. `streaming_tts_player.dart` sets the precedent.
 ///
 /// Provisioning the Firebase project is a human, laptop-side step (`src/rnd/2026.06.11-focus-mode-voice-chat/91-osq7-firebase-console-runbook.md`).
 /// The same pass completes the wiring this file expects but does not require:
