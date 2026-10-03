@@ -1,15 +1,16 @@
 # TODO
 
-## ▶ START HERE — 2026-10-02 close (Tiffany 💍)
+## ▶ START HERE — 2026-10-03 (Tiffany 💍)
 
-Tip `28b7ea0`. Docs gate done; everything else open waits on Cheech or on Rick at his convenience (live owed work is in the store, owner `tiffany`).
+Tip `459f82a`, not pushed. APK built with `--fcm` there. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| Blind second check of the Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`) | Cheech's dev split; no Fable budget for the Dart set until Rick gives Cheech a second figure |
-| Transcript fixtures (row `768e852f`, parked) and one Stop poke flip on the phone (row `ee68d5e7`, parked) | Rick, when convenient; he is not listed as a blocker |
-| Code clean-up of 188 errors / 74 warnings in 11 directories (row `5a200e6c`, held) | Rick's rulings per deletion |
-| Docs crew post-game (row `c05c6f8c`, held) | next session |
+| Add the merge gate's permission rule, show a fresh seat running the gate, close row `00db303b` | Rick's answer on where the rule lives (`.claude/settings.json` is gitignored here) |
+| Code clean-up, what is left (row `5a200e6c`): 349 style notes, then promote clean directories to the strict gate | Rick un-parks the row (his login only); then a seat |
+| Two analyzer warnings and one unused test mock (decision row `fa6c1842`, held) | Rick's rulings |
+| Blind second check of the Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`) | Cheech's dev split and Rick's Fable figure to him; Pocholo is up and blind for it |
+| Transcript fixtures (row `768e852f`) and one Stop poke flip on the phone (row `ee68d5e7`), both parked to 2026-10-05 | Rick, when convenient |
 
 ### Decisions Log — 2026-10-03 (session `576809a5`, Tiffany)
 
@@ -21,6 +22,10 @@ Rulings from the docs crew post-game (`src/docs/post-games/v0.2.2/2026.10.03-mob
 - **Every worker brief on this repo asks for lessons posted to the commons `post-game` topic as they happen, with how the worker came to know them** (R4).
 - **A demonstration closes a row only when the manager reruns it, or the evidence answers every gap the row names** (R5).
 - **Card answers, about 15:12 EDT** (Rick): one seat for the gates demonstration; held rows `eb5a05fe`, `c05c6f8c` and `5a200e6c` approved; he gives Cheech a Fable figure for the Dart labelled set.
+- **Delete the unreachable code: groups A and B, and the two test helpers that do not compile** (Rick, ask card about 16:27 EDT). 54 files; 70 tests went with the old code. Two author seats approved on the same card.
+- **Held rows `00db303b` (gate script into the repo) and `d56061a4` (stale plan manifest) approved** (Rick, ask card about 16:30 EDT, clean yes).
+- **Post-games live in `src/docs/post-games/<version>/`, tracked, one folder per work-branch version** (owner's ruling relayed in planning-is-prompting `7a17919`; applied here in `c8f9a52`).
+- **Of the last four analyzer warnings, two were fixed on the manager's ruling as behaviour-neutral** (keep the storage call and drop its variable; drop an unreachable line in an unused test mock); the other two wait for Rick (row `fa6c1842`).
 
 ### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
 

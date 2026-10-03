@@ -14,6 +14,23 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.03 | Session `576809a5` (Tiffany 💍) — dead code deleted, merge gate in the repo, docs crew post-game
+
+Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 EDT on Rick's card; both released with mementos). Tip `459f82a`, not pushed.
+
+- **Docs plan**: gates demonstration rerun by Pocholo with a real commit through the installed hook, in a directory that is not analyzer-clean (row `e6a8fdb2` closed); Phase 5 closed (row `075eca61`). Plan manifest reworded to today's gate (`4e5acc5`, row `d56061a4`).
+- **Post-game** for the docs crew, five rulings approved by Rick: `src/docs/post-games/v0.2.2/2026.10.03-mobile-docs-track-crew-post-game.md` (`2e6e879`; moved to the per-version folder in `c8f9a52` after María's new rule, with an index and the `/plan-post-game` wrapper updated).
+- **Unreachable code deleted** (row `5a200e6c`, Rick's ruling: groups A and B and two broken test helpers): 54 files, 26,186 lines (`2bb8308`, follow-up comments `e03ea92`). Analyzer errors over `lib` and `test` 199 → 0; tests 2,776 → 2,706 (70 went with the old code); AC-G2 baseline rebuilt. Trial on scratch copies first, then an independent review.
+- **Analyzer warnings** 102 → 2 (`887fbb9`, `459f82a`). Two left need a ruling (decision row `fa6c1842`, held).
+- **`tool/merge_gate.py`** (row `00db303b`, post-game ruling R1): the manager's merge gate as a tracked script, 100 tool tests (`9ce5b90`, `6b7e309`). Three review rounds found and closed ten ways to a wrong PASS. Used for real twice; last run PASS on `6b7e309..459f82a`.
+- APK built with `--fcm` at `459f82a`. Suite at the tip: NO_NEW_FAILURE (3 known), 2,706 tests.
+- Reviewed María's post-games move in planning-is-prompting (row `77dac8ed`): PASS, four findings.
+- The permission check refused commands in three worker seats (`git rm`, a gates script, a bulk-edit script, then a read-only `git status`); each seat stopped and reported, and the work went another approved way or to a fresh seat.
+
+**RESUME HERE:** (1) Rick's answer on where the merge gate's permission rule lives (`.claude/settings.json` is gitignored here); then add the rule and show a fresh seat running the gate, and close row `00db303b`. (2) Row `5a200e6c` shows "parked"; only Rick's login can un-park it. Left under it: 349 style notes, then promoting clean directories to the strict gate. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
+
+---
+
 ## 2026.10.02 | Session `27fa7f7e` (Tiffany 💍) — stop poke switch, Claude Code submit fix, docs track loose ends
 
 Crew: Pocholo (one reviewer seat, Rick's yes; review row `4c62c7b9` PASS, no blockers; seat released 14:45 EDT with a memento at `io/mementos/pocholo.md`).
