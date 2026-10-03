@@ -33,11 +33,16 @@ Run it from the real checkout, not from a copy under a scratch directory: three 
 check 7 reports them missing.
 
 Refused with exit 2 (CANNOT RUN): a range that does not end at HEAD, an empty range, modified tracked files,
-an untracked file under lib/, test/ or tool/ (or an untracked pubspec or analysis_options.yaml: the checks
-read the working tree, so it would satisfy an import the commit cannot), a missing dart, flutter.sh or tool script.
+any untracked, non-ignored file outside src/rnd/, src/docs/, history/, todo-archive/, io/ and .claude/ (the checks
+read the working tree, so an untracked file can satisfy an import or an asset that the commit cannot), a missing
+dart, flutter.sh or tool script.
 
 A range that edits any analysis_options.yaml fails check 1 (a commit could exclude its own errors); pass
---allow-analyzer-config to accept it, and the verdict line then says so.
+--allow-analyzer-config to accept it. A range that adds a line containing `ignore:` or `ignore_for_file:` to any
+.dart file fails check 1 too (such a comment silences analyzer errors; the public_member_api_docs form is not
+exempt); pass --allow-ignores to accept it. Either flag makes the verdict line say so.
+The analyzer runs over the top-level directories of the tracked .dart files (lib, test, integration_test, ...),
+at the head and, separately, at the start of the range.
 
 Output: one verdict line, one line per check with its exit code, the log directory. Verdicts:
   PASS               every check ran and passed                                    exit 0
@@ -45,12 +50,13 @@ Output: one verdict line, one line per check with its exit code, the log directo
                      pre_commit_gate.py, doc_coverage.py, tool/data/, the AC-G2 baseline); a human must read that diff   exit 0
   QUICK              nothing failed but --skip-suite left checks 6 and 7 unrun        exit 3
   FAIL               a check that ran failed                                          exit 1
-Exit 2 = could not run.
+Exit 2 = could not run. PASS-WITH-WARNING exits 0, so a caller must read the verdict word and the warning line,
+not only the exit code.
 
 Known limits, left as they are: no check has a timeout, so a hung check hangs the gate (never a PASS);
 an unterminated /* comment runs to the end of the file in strip_dart (such a file fails to compile, so check 1 fails).
 """
-import argparse, collections, json, os, re, shutil, subprocess, sys, tempfile
+import argparse, collections, json, os, re, shlex, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname( os.path.abspath( __file__ ) )
 sys.path.insert( 0, HERE )
@@ -262,23 +268,99 @@ def range_commits( start, end, root=ROOT ):
     return len( git( [ "rev-list", f"{start}..{end}" ], root ).split() )
 
 
-INPUT_DIRS  = ( "lib/", "test/", "tool/" )
-INPUT_FILES = ( "pubspec.yaml", "pubspec.lock", "analysis_options.yaml" )
+ALLOWED_UNTRACKED = ( "src/rnd/", "src/docs/", "history/", "todo-archive/", "io/", ".claude/" )
 
 
 def untracked_inputs( root=ROOT ):
     """
-    List untracked, non-ignored files that the checks would read.
+    List untracked, non-ignored files that the checks could read.
 
     Requires:
         - root is a git checkout
     Ensures:
-        - returns sorted repo-relative paths under lib/, test/ or tool/, plus any untracked pubspec.yaml,
-          pubspec.lock or analysis_options.yaml (at any depth)
-        - files matched by .gitignore are not listed
+        - returns sorted repo-relative paths of every untracked file that .gitignore does not cover,
+          except those under src/rnd/, src/docs/, history/, todo-archive/, io/ and .claude/
+        - a test may read any path (an asset, a fixture), so no other directory is exempt
     """
     names = git( [ "ls-files", "--others", "--exclude-standard" ], root ).splitlines()
-    return sorted( n for n in names if n.startswith( INPUT_DIRS ) or os.path.basename( n ) in INPUT_FILES )
+    return sorted( n for n in names if not n.startswith( ALLOWED_UNTRACKED ) )
+
+
+def limited( names, limit=10 ):
+    """
+    Format a file list for a message, at most limit entries.
+
+    Requires:
+        - names is a list of strings; limit is a positive integer
+    Ensures:
+        - returns one indented line per name up to limit, then "...and N more" when names are left out
+    """
+    lines = [ f"  {n}" for n in names[ :limit ] ]
+    if len( names ) > limit: lines.append( f"  ...and {len( names ) - limit} more" )
+    return "\n".join( lines )
+
+
+IGNORE_LINE = re.compile( r"\bignore(?:_for_file)?:\s*(?P<codes>.*)$" )
+
+
+def count_ignore_lines( text ):
+    """
+    Count the lines of a source file that carry an analyzer ignore.
+
+    Requires:
+        - text is the contents of a .dart file
+    Ensures:
+        - returns the number of lines containing `ignore:` or `ignore_for_file:` as a word
+        - a line with several codes counts once; a line that merely says "ignore" does not count
+    """
+    return sum( 1 for line in text.splitlines() if IGNORE_LINE.search( line ) )
+
+
+def ignore_additions( start, end, root=ROOT ):
+    """
+    List the ignore comments a range adds, per .dart file.
+
+    Requires:
+        - start and end are commits in root
+    Ensures:
+        - returns sorted ( file, codes ) pairs for each changed .dart file whose count of ignore lines rose
+          between start and end; codes is the text after `ignore:` on each added line, joined with "; "
+        - a line that only moves within a file, or a removed ignore, is not an addition
+        - the public_member_api_docs form is counted like any other
+    """
+    found = []
+    for path in changed_dart_files( start, end, root )[ 0 ]:
+        old, new = show( start, path, root ), show( end, path, root )
+        if count_ignore_lines( new ) <= count_ignore_lines( old ): continue
+        grab  = lambda t: collections.Counter( l.strip() for l in t.splitlines() if IGNORE_LINE.search( l ) )
+        added = ( grab( new ) - grab( old ) ).elements()
+        found.append( ( path, "; ".join( IGNORE_LINE.search( l ).group( "codes" ).strip() for l in sorted( added ) ) ) )
+    return sorted( found )
+
+
+def dart_roots( paths ):
+    """
+    Pick the analyzer targets out of a list of tracked paths.
+
+    Requires:
+        - paths is a list of repo-relative paths
+    Ensures:
+        - returns the sorted, de-duplicated top-level directory of each .dart file, or the file itself when it sits at the repo root
+        - non-.dart paths are ignored
+    """
+    return sorted( { p.split( "/" )[ 0 ] if "/" in p else p for p in paths if p.endswith( ".dart" ) } )
+
+
+def dart_roots_at( rev, root=ROOT ):
+    """
+    List the analyzer targets of a commit.
+
+    Requires:
+        - rev is a commit in root
+    Ensures:
+        - returns dart_roots of every file tracked at rev
+    """
+    return dart_roots( git( [ "ls-tree", "-r", "--name-only", rev ], root ).splitlines() )
 
 
 def analyzer_config_files( names ):
@@ -293,6 +375,11 @@ def analyzer_config_files( names ):
     return sorted( n for n in names if os.path.basename( n ) == "analysis_options.yaml" )
 
 
+GATE_FILES = ( "tool/merge_gate.py", "tool/test_merge_gate.py", "tool/pre_commit_gate.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py",
+               "tool/conftest.py", "test/fixtures/ac_g2_passing_baseline.json", "flutter.sh", "dart_test.yaml", "pytest.ini",
+               "pubspec.yaml", "pubspec.lock" )
+
+
 def gate_input_files( names ):
     """
     Pick out the changed paths that feed the gate itself.
@@ -300,14 +387,15 @@ def gate_input_files( names ):
     Requires:
         - names is a list of repo-relative paths
     Ensures:
-        - returns sorted paths that are tool/merge_gate.py, tool/check_*.py, tool/pre_commit_gate.py,
-          tool/doc_coverage.py, anything under tool/data/, or the AC-G2 baseline
-        - tests and every other file are not listed
+        - returns sorted paths that decide what a check runs or accepts: this script and its test, tool/check_*.py,
+          pre_commit_gate.py, doc_coverage.py, lint_dart_docs.py, tool/conftest.py, anything under tool/data/ or
+          .github/workflows/, the AC-G2 baseline, flutter.sh, dart_test.yaml, pytest.ini, pubspec.yaml, pubspec.lock
+        - every other file is not listed
     """
     def feeds( n ):
         base = os.path.basename( n )
-        return ( n in ( "tool/merge_gate.py", "tool/pre_commit_gate.py", "tool/doc_coverage.py", "test/fixtures/ac_g2_passing_baseline.json" )
-                 or n.startswith( "tool/data/" ) or ( n.startswith( "tool/" ) and "/" not in n[ 5: ] and base.startswith( "check_" ) and base.endswith( ".py" ) ) )
+        return ( n in GATE_FILES or n.startswith( ( "tool/data/", ".github/workflows/" ) )
+                 or ( n.startswith( "tool/" ) and "/" not in n[ 5: ] and base.startswith( "check_" ) and base.endswith( ".py" ) ) )
     return sorted( n for n in names if feeds( n ) )
 
 
@@ -350,29 +438,17 @@ def run_logged( name, cmd, logdir, root=ROOT, stdout_to=None ):
         return subprocess.run( cmd, cwd=root, stdout=log, stderr=subprocess.STDOUT ).returncode
 
 
-def dart_dirs( root ):
+def analyze_machine( root, logdir, name, targets ):
     """
-    Pick the directories the analyzer is run over.
+    Run `dart analyze --format=machine` over the targets in root; return ( exit_code, stdout ).
 
     Requires:
-        - root is a directory
-    Ensures:
-        - returns the names among "lib" and "test" that exist under root, in that order
-    """
-    return [ d for d in ( "lib", "test" ) if os.path.isdir( os.path.join( root, d ) ) ]
-
-
-def analyze_machine( root, logdir, name ):
-    """
-    Run `dart analyze --format=machine` over lib and test in root; return ( exit_code, stdout ).
-
-    Requires:
-        - root holds lib/ (and optionally test/); logdir exists; name is a log file stem
+        - targets is a non-empty list of directories or files that exist under root; logdir exists; name is a log file stem
     Ensures:
         - exit codes 0 to 3 (clean, infos, warnings, errors) are all a finished run
         - the output is saved as <logdir>/<name>.log
     """
-    p = subprocess.run( [ pcg.dart_cmd( ROOT ), "analyze", "--format=machine", *dart_dirs( root ) ],
+    p = subprocess.run( [ pcg.dart_cmd( ROOT ), "analyze", "--format=machine", *targets ],
                         cwd=root, capture_output=True, text=True )
     with open( os.path.join( logdir, name + ".log" ), "w" ) as f: f.write( p.stdout + p.stderr )
     return p.returncode, p.stdout
@@ -395,20 +471,20 @@ def analyzer_failure( code, errors, where ):
     return None
 
 
-def range_label( start, end, count, comments_only, config_allowed ):
+def range_label( start, end, count, comments_only, config_allowed, ignores_allowed=False ):
     """
     Build the short text after the verdict word.
 
     Requires:
         - start and end are full shas; count is the number of commits
     Ensures:
-        - returns "start..end (N commits)", with " comments-only" and " analyzer-config-allowed" appended when set
+        - returns "start..end (N commits)", with " comments-only", " analyzer-config-allowed" and " ignores-allowed" appended when set
     """
     label = f"{start[:7]}..{end[:7]} ({count} commit{'' if count == 1 else 's'})"
-    return label + ( " comments-only" if comments_only else "" ) + ( " analyzer-config-allowed" if config_allowed else "" )
+    return label + ( " comments-only" if comments_only else "" ) + ( " analyzer-config-allowed" if config_allowed else "" ) + ( " ignores-allowed" if ignores_allowed else "" )
 
 
-def check_analyzer( start, logdir, root=ROOT, allow_config=False ):
+def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=False ):
     """
     Fail on any analyzer ERROR that the start of the range does not also have.
 
@@ -418,28 +494,41 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False ):
     Ensures:
         - returns 1, without running the analyzer, when the range edits any analysis_options.yaml and
           allow_config is not set: the head is analyzed with its own options, so a commit could exclude its own errors
+        - returns 1, likewise, when the range adds an ignore comment to a .dart file and allow_ignores is not set;
+          the detail names each file and the codes
+        - analyzes the top-level directories of the tracked .dart files at the head, and those at the start for the start
         - returns ( exit_code, detail ); 0 only when the head has no error beyond the start's
         - returns 1 when either analyzer run did not finish, or the start could not be exported
         - leaves the checkout untouched: the start is exported with git archive into a scratch directory
     """
     touched = analyzer_config_files( git( [ "diff", "--name-only", "--no-renames", f"{start}..HEAD" ], root ).splitlines() )
+    ignored = ignore_additions( start, "HEAD", root )
+    refusals = []
     if touched and not allow_config:
-        return 1, f"range edits analyzer config: {', '.join( touched )}; read that diff, then pass --allow-analyzer-config"
-    print( "== analyzer (head)", file=sys.stderr, flush=True )
-    code, head_text = analyze_machine( root, logdir, "1-analyzer-head" )
-    head = parse_errors( head_text, ( root + "/", ) )
-    if analyzer_failure( code, head, "head" ): return 1, analyzer_failure( code, head, "head" )
-    print( "== analyzer (start of range)", file=sys.stderr, flush=True )
-    with tempfile.TemporaryDirectory( prefix="merge-gate-base-" ) as d:
-        arc = subprocess.run( f"git archive {start} lib test pubspec.yaml pubspec.lock analysis_options.yaml | tar -x -C {d}",
-                              shell=True, cwd=root, capture_output=True, text=True )
-        if arc.returncode != 0: return 1, f"could not export {start[:7]}: {arc.stderr.strip()}"
-        flutter = os.path.join( ROOT, "flutter", "bin", "flutter" )
-        pub = subprocess.run( [ flutter, "pub", "get", "--offline" ], cwd=d, capture_output=True, text=True )
-        if pub.returncode != 0: return 1, f"pub get failed for the start of the range: {pub.stderr.strip()[:200]}"
-        code, base_text = analyze_machine( d, logdir, "1-analyzer-base" )
-        base = parse_errors( base_text, ( d + "/", ) )
-        if analyzer_failure( code, base, "start" ): return 1, analyzer_failure( code, base, "start" )
+        refusals.append( f"range edits analyzer config: {', '.join( touched )} (pass --allow-analyzer-config after reading that diff)" )
+    if ignored and not allow_ignores:
+        refusals.append( "range adds ignore comments: " + "; ".join( f"{f} [{c}]" for f, c in ignored ) + " (pass --allow-ignores after reading that diff)" )
+    if refusals: return 1, " | ".join( refusals )
+    head_targets, base_targets = dart_roots_at( "HEAD", root ), dart_roots_at( start, root )
+    head = collections.Counter()
+    if head_targets:
+        print( "== analyzer (head)", file=sys.stderr, flush=True )
+        code, head_text = analyze_machine( root, logdir, "1-analyzer-head", head_targets )
+        head = parse_errors( head_text, ( root + "/", ) )
+        if analyzer_failure( code, head, "head" ): return 1, analyzer_failure( code, head, "head" )
+    base = collections.Counter()
+    if base_targets:
+        print( "== analyzer (start of range)", file=sys.stderr, flush=True )
+        with tempfile.TemporaryDirectory( prefix="merge-gate-base-" ) as d:
+            arc = subprocess.run( "git archive " + " ".join( shlex.quote( x ) for x in ( start, *base_targets, "pubspec.yaml", "pubspec.lock", "analysis_options.yaml" ) )
+                                  + f" | tar -x -C {shlex.quote( d )}", shell=True, cwd=root, capture_output=True, text=True )
+            if arc.returncode != 0: return 1, f"could not export {start[:7]}: {arc.stderr.strip()}"
+            flutter = os.path.join( ROOT, "flutter", "bin", "flutter" )
+            pub = subprocess.run( [ flutter, "pub", "get", "--offline" ], cwd=d, capture_output=True, text=True )
+            if pub.returncode != 0: return 1, f"pub get failed for the start of the range: {pub.stderr.strip()[:200]}"
+            code, base_text = analyze_machine( d, logdir, "1-analyzer-base", base_targets )
+            base = parse_errors( base_text, ( d + "/", ) )
+            if analyzer_failure( code, base, "start" ): return 1, analyzer_failure( code, base, "start" )
     new = new_errors( base, head )
     if new:
         for f, c, m in new[ :20 ]: print( f"  new error: {f} {c}: {m}", file=sys.stderr )
@@ -555,6 +644,7 @@ def main( argv=None, root=ROOT ):
     ap.add_argument( "--skip-suite", action="store_true", help="skip the full suite and ac-g2; the verdict says QUICK" )
     ap.add_argument( "--comments-only", action="store_true", help="also require that the range changes only comments in .dart files" )
     ap.add_argument( "--allow-analyzer-config", action="store_true", help="accept a range that edits analysis_options.yaml (the verdict line says so)" )
+    ap.add_argument( "--allow-ignores", action="store_true", help="accept a range that adds `ignore:` / `ignore_for_file:` comments (the verdict line says so)" )
     ap.add_argument( "--log-dir", help="keep logs here (default: a new directory under the system temp)" )
     args = ap.parse_args( argv )
     def refuse( msg ):
@@ -570,17 +660,18 @@ def main( argv=None, root=ROOT ):
     if end != head: return refuse( f"the range ends at {end[:7]} but HEAD is {head[:7]}; check out the end of the range first" )
     if count == 0:  return refuse( f"the range {start[:7]}..{end[:7]} is empty; there is nothing to gate" )
     if dirty:       return refuse( f"tracked files are modified:\n{dirty}" )
-    if loose:       return refuse( "untracked files the checks would read (git add them or delete them):\n  " + "\n  ".join( loose ) )
+    if loose:       return refuse( f"{len( loose )} untracked file(s) the checks would read (git add them, delete them, or add them to .gitignore):\n" + limited( loose ) )
     absent = missing_tools( root, args.skip_suite )
     if absent:      return refuse( "; ".join( absent ) )
     logdir = args.log_dir or tempfile.mkdtemp( prefix="merge-gate-" )
     os.makedirs( logdir, exist_ok=True )
     names    = git( [ "diff", "--name-only", "--no-renames", f"{start}..{end}" ], root ).splitlines()
     warnings = gate_input_files( names )
-    rng      = range_label( start, end, count, args.comments_only, bool( analyzer_config_files( names ) ) and args.allow_analyzer_config )
+    rng      = range_label( start, end, count, args.comments_only, bool( analyzer_config_files( names ) ) and args.allow_analyzer_config,
+                           bool( ignore_additions( start, end, root ) ) and args.allow_ignores )
 
     results = []
-    code, detail = check_analyzer( start, logdir, root, args.allow_analyzer_config );  results.append( ( "analyzer", code, detail ) )
+    code, detail = check_analyzer( start, logdir, root, args.allow_analyzer_config, args.allow_ignores );  results.append( ( "analyzer", code, detail ) )
     for name, cmd in ( ( "docs-gate",   [ sys.executable, "tool/pre_commit_gate.py", "--docs-all" ] ),
                        ( "ignores",     [ sys.executable, "tool/check_doc_ignores.py" ] ),
                        ( "coverage",    [ sys.executable, "tool/doc_coverage.py" ] ),

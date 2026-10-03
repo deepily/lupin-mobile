@@ -4,7 +4,7 @@
 Covers the parts that decide the verdict, without running Flutter: the new-error comparison, the
 comments-only comparison, the verdict word and exit code, and a throwaway git repo for the range code.
 """
-import os, subprocess, sys, tempfile, unittest
+import contextlib, io, os, subprocess, sys, tempfile, unittest
 sys.path.insert( 0, os.path.dirname( os.path.abspath( __file__ ) ) )
 import merge_gate as mg
 
@@ -195,8 +195,38 @@ class VerdictTest( unittest.TestCase ):
     def test_gate_inputs_are_recognised( self ):
         names = [ "tool/merge_gate.py", "tool/check_ac_g2.py", "tool/check_test_failures.py", "tool/pre_commit_gate.py",
                   "tool/doc_coverage.py", "tool/data/test_failures_baseline.json", "test/fixtures/ac_g2_passing_baseline.json" ]
-        self.assertEqual( mg.gate_input_files( names + [ "lib/a.dart", "tool/test_merge_gate.py", "README.md" ] ), sorted( names ) )
-        self.assertEqual( mg.gate_input_files( [ "lib/a.dart", "tool/test_merge_gate.py" ] ), [] )               # negative control
+        self.assertEqual( mg.gate_input_files( names + [ "lib/a.dart", "tool/test_check_doc_ignores.py", "README.md" ] ), sorted( names ) )
+        self.assertEqual( mg.gate_input_files( [ "lib/a.dart", "tool/test_check_doc_ignores.py" ] ), [] )        # negative control
+
+    def test_files_that_decide_what_the_suite_and_tests_do_are_gate_inputs( self ):    # N4
+        names = [ "flutter.sh", "dart_test.yaml", "pytest.ini", "tool/conftest.py", "pubspec.yaml", "pubspec.lock",
+                  "tool/lint_dart_docs.py", "tool/test_merge_gate.py", ".github/workflows/flutter-ci.yml" ]
+        self.assertEqual( mg.gate_input_files( names ), sorted( names ) )
+        self.assertEqual( mg.gate_input_files( [ "docs/flutter.sh.md", "lib/pubspec.yaml.dart", "tool/conftest.py.txt" ] ), [] )   # control
+
+    def test_usage_text_says_a_warning_pass_still_exits_zero( self ):
+        self.assertIn( "PASS-WITH-WARNING exits 0", mg.__doc__ )
+        self.assertIn( "not only the exit code", mg.__doc__ )
+
+    def test_count_ignore_lines( self ):                                             # N1
+        text = "// ignore_for_file: a, b\nint x = 1; // ignore: c\n// we do not ignore this\nint y = 2;\n"
+        self.assertEqual( mg.count_ignore_lines( text ), 2 )
+        self.assertEqual( mg.count_ignore_lines( "int y = 2;\n" ), 0 )
+
+    def test_range_label_says_when_ignores_were_allowed( self ):
+        self.assertIn( "ignores-allowed", mg.range_label( "a" * 40, "b" * 40, 1, False, False, True ) )
+        self.assertNotIn( "ignores-allowed", mg.range_label( "a" * 40, "b" * 40, 1, False, False ) )
+
+    def test_dart_roots_are_top_level_dirs_and_root_files( self ):                    # N2
+        paths = [ "lib/a.dart", "lib/x/b.dart", "test/t.dart", "integration_test/s.dart", "main.dart", "tool/hello.dart" ]
+        self.assertEqual( mg.dart_roots( paths ), [ "integration_test", "lib", "main.dart", "test", "tool" ] )
+        self.assertEqual( mg.dart_roots( [] ), [] )
+
+    def test_limited_listing_shows_ten_and_counts_the_rest( self ):                   # N3
+        text = mg.limited( [ f"f{i}" for i in range( 13 ) ] )
+        self.assertEqual( len( text.splitlines() ), 11 )
+        self.assertIn( "and 3 more", text )
+        self.assertNotIn( "more", mg.limited( [ "a", "b" ] ) )
 
     def test_warning_line_sits_under_the_verdict_and_names_the_files( self ):
         text = mg.report( "PASS-WITH-WARNING", [ ( "analyzer", 0, "ok" ) ], "a..b", "/tmp/x", [ "tool/check_ac_g2.py" ] ).splitlines()
@@ -295,25 +325,79 @@ class GitRangeTest( unittest.TestCase ):
         self.assertIn( "--allow-analyzer-config", detail )
         self.assertEqual( mg.analyzer_config_files( mg.changed_dart_files( self.c3, c4, self.d )[ 1 ] ), [ "analysis_options.yaml" ] )
 
-    def test_untracked_inputs_are_listed( self ):                                 # F2
-        for rel, text in ( ( "lib/zz_missing.dart", "x" ), ( "test/t_test.dart", "x" ), ( "tool/x.py", "x" ), ( "pubspec.lock", "x" ),
-                           ( "lib/features/q/analysis_options.yaml", "x" ), ( "README.md", "x" ), ( "build/out.txt", "x" ) ):
+    def touch( self, *rels ):
+        """
+        Create small untracked files in the throwaway repo.
+
+        Requires:
+            - each rel is a repo-relative path
+        Ensures:
+            - each file exists with the text "x"
+        """
+        for rel in rels:
             os.makedirs( os.path.dirname( os.path.join( self.d, rel ) ) or self.d, exist_ok=True )
-            with open( os.path.join( self.d, rel ), "w" ) as f: f.write( text )
+            with open( os.path.join( self.d, rel ), "w" ) as f: f.write( "x" )
+
+    def test_untracked_files_anywhere_are_listed( self ):                          # F2, widened by N3
+        self.touch( "lib/zz_missing.dart", "test/t_test.dart", "tool/x.py", "pubspec.lock", "lib/features/q/analysis_options.yaml",
+                    "assets/config/zz.json", "README.md", "integration_test/s.dart" )
         self.assertEqual( mg.untracked_inputs( self.d ),
-                          [ "lib/features/q/analysis_options.yaml", "lib/zz_missing.dart", "pubspec.lock", "test/t_test.dart", "tool/x.py" ] )
+                          [ "README.md", "assets/config/zz.json", "integration_test/s.dart", "lib/features/q/analysis_options.yaml",
+                            "lib/zz_missing.dart", "pubspec.lock", "test/t_test.dart", "tool/x.py" ] )
+
+    def test_the_allow_list_is_not_refused( self ):                                # N3 negative control
+        self.touch( "src/rnd/x.md", "src/docs/x.md", "history/x.md", "todo-archive/x.md", "io/m.md", ".claude/x.json" )
+        self.assertEqual( mg.untracked_inputs( self.d ), [] )
 
     def test_an_ignored_file_is_not_an_untracked_input( self ):                   # negative control
         with open( os.path.join( self.d, ".gitignore" ), "w" ) as f: f.write( "lib/gen.dart\n" )
         self.sh( "add", ".gitignore" ); self.sh( "commit", "-q", "-m", "ignore" )
-        os.makedirs( os.path.join( self.d, "lib" ), exist_ok=True )
-        with open( os.path.join( self.d, "lib", "gen.dart" ), "w" ) as f: f.write( "x" )
+        self.touch( "lib/gen.dart" )
         self.assertEqual( mg.untracked_inputs( self.d ), [] )
+
+    def test_main_refuses_an_untracked_asset( self ):                              # N3
+        self.touch( "assets/config/zz.json" )
+        err = io.StringIO()
+        with contextlib.redirect_stderr( err ): code = mg.main( [ "--skip-suite", self.c3 ], root=self.d )
+        self.assertEqual( code, 2 )
+        self.assertIn( "assets/config/zz.json", err.getvalue() )     # refused for THIS reason, not for a missing tool
+
+    def test_ignore_additions_name_file_and_code( self ):                          # N1
+        c4 = self.commit( "// ignore_for_file: invalid_assignment\nint f() => 2;\n", "adds an ignore" )
+        self.assertEqual( mg.ignore_additions( self.c3, c4, self.d ), [ ( "a.dart", "invalid_assignment" ) ] )
+
+    def test_a_moved_or_removed_ignore_is_not_an_addition( self ):                 # N1 negative controls
+        c4 = self.commit( "int f() => 2; // ignore: invalid_assignment\n", "adds" )
+        c5 = self.commit( "// ignore: invalid_assignment\nint f() => 2;\n", "moves it" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
+        self.assertEqual( mg.ignore_additions( c4, self.c3, self.d ), [] )
+
+    def test_the_docs_ignore_form_is_not_exempt( self ):                           # N1 ruling
+        c4 = self.commit( "// ignore: public_member_api_docs - generated\nint f() => 2;\n", "docs ignore" )
+        self.assertEqual( mg.ignore_additions( self.c3, c4, self.d ), [ ( "a.dart", "public_member_api_docs - generated" ) ] )
+
+    def test_a_range_that_adds_an_ignore_fails_the_analyzer_row( self ):            # N1
+        c4 = self.commit( "// ignore_for_file: invalid_assignment\nint f() => 2;\n", "adds an ignore" )
+        with tempfile.TemporaryDirectory() as logs:
+            code, detail = mg.check_analyzer( self.c3, logs, root=self.d, allow_config=False, allow_ignores=False )
+        self.assertEqual( code, 1 )
+        self.assertIn( "a.dart", detail )
+        self.assertIn( "invalid_assignment", detail )
+        self.assertIn( "--allow-ignores", detail )
+
+    def test_dart_roots_at_a_commit( self ):                                       # N2
+        self.assertEqual( mg.dart_roots_at( self.c3, self.d ), [ "a.dart" ] )
+        c4 = self.commit( "int f() => 2;\n", "adds integration test", ( "integration_test/z.dart", "int z = 1;\n" ) )
+        self.assertEqual( mg.dart_roots_at( c4, self.d ), [ "a.dart", "integration_test" ] )
+        self.assertEqual( mg.dart_roots_at( self.c0, self.d ), [ "a.dart" ] )
 
     def test_main_refuses_to_run_with_an_untracked_lib_file( self ):
         os.makedirs( os.path.join( self.d, "lib" ), exist_ok=True )
         with open( os.path.join( self.d, "lib", "zz_missing.dart" ), "w" ) as f: f.write( "x" )
-        self.assertEqual( mg.main( [ "--skip-suite", self.c3 ], root=self.d ), 2 )
+        err = io.StringIO()
+        with contextlib.redirect_stderr( err ): code = mg.main( [ "--skip-suite", self.c3 ], root=self.d )
+        self.assertEqual( code, 2 )
+        self.assertIn( "lib/zz_missing.dart", err.getvalue() )
 
     def test_resolve_range_forms( self ):
         self.assertEqual( mg.resolve_range( None, "main", self.d ), ( self.c3, self.c3 ) )          # base is HEAD itself
