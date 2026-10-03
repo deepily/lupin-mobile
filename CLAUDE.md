@@ -84,6 +84,11 @@ GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g\ -XX:MaxMetaspaceSize=1g\ -XX:ReservedC
 src/scripts/build-apk-on-server.sh --fcm   # --fcm keeps push wake-ups in; without it they are compiled OUT
 # From the laptop: build on the server over ssh, then install to the phone (row f681440d)
 src/scripts/deploy-apk-to-device.sh --build --fcm
+
+# Manager's merge gate (analyzer vs base, docs gate, ignores, coverage, tool tests, full suite, AC-G2).
+#   Run in the real checkout whose HEAD ends the range, with a clean tree and no untracked files.
+#   Verdicts: PASS, PASS-WITH-WARNING (exit 0; read the warning line), FAIL, QUICK (--skip-suite), CANNOT RUN.
+python3 tool/merge_gate.py --base <sha or branch> [--skip-suite] [--comments-only]
 ```
 
 **Always rebuild the APK after a client change (Rick, 2026-09-28).** Whenever a client change or bug fix merges into the main checkout and the suite is green, run `src/scripts/build-apk-on-server.sh --fcm` there and say the APK is ready. Rick then only runs `deploy-apk-to-device.sh` (no flags) from the laptop. **Always pass `--fcm`**: a build without it silently has no background wake-ups, and nothing on the phone says so (Pocholo's review F3, 2026-09-28).
