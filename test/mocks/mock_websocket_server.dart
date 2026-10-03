@@ -474,7 +474,6 @@ class MockWebSocketServer {
   
   /// Generate mock queue events
   Future<void> _generateQueueEvent(String sessionId, String eventType) async {
-    final queueType = eventType.split('_')[1]; // Extract queue type
     final itemCount = _random.nextInt(5);
     
     final mockItems = List.generate(itemCount, (index) => {
