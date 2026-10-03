@@ -71,16 +71,10 @@ flutter test test/integration/websocket_integration_test.dart
 flutter test test/integration/cache_integration_test.dart
 ```
 
-### Running Complete Integration Suite
+### Running the Whole Directory
 ```bash
-# Run all integration tests
-flutter test test/integration/integration_test_runner.dart
-
-# Run with verbose output
-flutter test test/integration/integration_test_runner.dart --verbose
-
-# Run with coverage
-flutter test test/integration/integration_test_runner.dart --coverage
+# There is no master runner; run the directory
+./flutter.sh test test/service_integration/
 ```
 
 ## Test Architecture

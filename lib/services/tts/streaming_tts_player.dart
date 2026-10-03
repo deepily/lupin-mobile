@@ -43,8 +43,8 @@ class _RealStreamingTtsAudioPlayer implements StreamingTtsAudioPlayer {
 
 /// Slim ElevenLabs TTS client for Lupin Mobile.
 ///
-/// It is a purpose-built alternative to the legacy `EnhancedTTSService`, which stays on disk, tree-shaken,
-/// with 2.7K lines of adaptive-strategy infrastructure that is not needed yet. This player:
+/// It is a purpose-built client with no adaptive-strategy layer; the legacy `EnhancedTTSService`,
+/// which had one, is deleted. This player:
 ///   1. Sends `speak(text)` to the backend `/api/get-speech-elevenlabs` through the shared Dio, whose auth
 ///      interceptor injects the Bearer token.
 ///   2. Consumes WebSocket events fed in by `app.dart _dispatchWsEvent`: status updates, binary audio chunks,
