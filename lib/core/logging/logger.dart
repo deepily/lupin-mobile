@@ -269,7 +269,9 @@ class RemoteLogDestination implements LogDestination {
   final List<LogEntry> _buffer = [];
   final int _bufferSize;
 
-  /// Creates a destination that buffers entries and uploads them on an interval.
+  /// Creates a destination that buffers entries before uploading them.
+  ///
+  /// Entries upload when the buffer fills or [flush] is called.
   RemoteLogDestination({
     required this.endpoint,
     required this.apiKey,
