@@ -1,0 +1,17 @@
+# Post-games
+
+Retrospectives of finished runs, one folder per work-branch version. The workflow that produces them is planning-is-prompting `workflow/post-game.md`; section 5.6 defines this folder.
+
+- **Where a retro goes:** `src/docs/post-games/<version>/yyyy.mm.dd-<slug>-post-game.md`, where `<version>` is the work branch's version (`v0.2.2` while the branch is `wip-v0.2.2-…`).
+- **Frontmatter:** `manager: <persona>`, the manager who ran the engagement.
+- **Tracked:** these files are committed. Logs, failsets, screenshots and data dumps are cited, never checked in.
+- **Lifetime:** a retro is kept while its version is the current work. Its lessons outlive it by graduating into a workflow doc, the Decisions Log or a store row. Deleting an older version's folder is the owner's call.
+- **Older retros:** post-games written before 2026-10-03 are in `src/rnd/` and stay there.
+
+## Index
+
+Register every full retro here when it is written.
+
+| Date | Version | Engagement | Manager | Type | Key threads | Rulings | Graduated to |
+|---|---|---|---|---|---|---|---|
+| 2026.10.03 | v0.2.2 | [Mobile docs track crew](v0.2.2/2026.10.03-mobile-docs-track-crew-post-game.md) | Tiffany | SWE-crew run (five seats over three days), written from mementos and receipts | gate held hostage by a re-spin · gate built on an unmeasured predicate · dead module swept · no rolling deposits | R1 to R5, approved by Rick 2026-10-03 | `TODO.md` Decisions Log 2026-10-03; row `00db303b` (R1) |

@@ -13,7 +13,7 @@ Tip `28b7ea0`. Docs gate done; everything else open waits on Cheech or on Rick a
 
 ### Decisions Log — 2026-10-03 (session `576809a5`, Tiffany)
 
-Rulings from the docs crew post-game (`src/rnd/2026.10.03-mobile-docs-track-crew-post-game.md`), approved by Rick on an ask card (clean yes, about 15:20 EDT).
+Rulings from the docs crew post-game (`src/docs/post-games/v0.2.2/2026.10.03-mobile-docs-track-crew-post-game.md`), approved by Rick on an ask card (clean yes, about 15:20 EDT).
 
 - **A manager's merge gate script is a tracked file under `tool/` with a permission rule, never a scratchpad file** (R1; work is row `00db303b`).
 - **Measure a gate's pass condition on every directory it must cover before building the gate** (R2).
