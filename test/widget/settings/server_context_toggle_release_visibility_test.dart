@@ -31,9 +31,8 @@ import 'package:lupin_mobile/services/auth/server_context_service.dart';
 
 /// Build-mode constants a gate could be written against. `dart.vm.product` is
 /// on the list because `const bool.fromEnvironment( "dart.vm.product" )` is
-/// release mode under another name, reads false under `flutter test` like the
-/// rest of them, and is already an idiom in this repo
-/// (lib/core/monitoring/performance_monitor.dart:663).
+/// release mode under another name. It reads false under `flutter test` like the
+/// rest of them.
 ///
 /// `bool.fromEnvironment` in general is NOT forbidden: a `--dart-define` the
 /// build sets deliberately is one of the escape hatches the widget's docstring

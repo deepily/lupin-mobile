@@ -14,7 +14,7 @@ class TranscriptFrameRouter {
   // only to watchers. If the server ever sent frames to every session of the user, the
   // phone's receive-all subscription would see other clients' watched seats, and
   // [publishAppend] dropping frames for seats with no open route makes that harmless. The
-  // second belt is `websocket_subscription_manager.dart`. `WsBlocDispatcher.dispatch`
+  // second belt, in the subscription layer, is not implemented in lib/. `WsBlocDispatcher.dispatch`
   // resolves its targets through `ServiceLocator.get<XBloc>()`, which returns singletons
   // that outlive their routes, so the bloc itself cannot go there. The drop needs a test
   // that can fail, so [droppedFrames] is a counter: "nothing happened" cannot be asserted

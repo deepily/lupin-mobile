@@ -37,12 +37,9 @@ class AppConstants {
   // the parent repo measured this (`src/tests/lupin_smoke/test_queue_workflow.py`).
   // The live event that carries job status is `eventJobStateTransition`.
   //
-  // They are kept rather than deleted, with this reason: four WebSocket services that no section of the
-  // Quick Ask plan owns reference them (`websocket_message_router.dart`, `websocket_subscription_manager.dart`,
-  // `websocket_dynamic_subscription_controller.dart`), as do several test helpers.
-  // Removing them is a roughly 40-site edit well outside the Quick Ask work, which is a bigger change than the tidiness is worth.
-  // Kept with a reason is acceptable; adding a fifth name beside four dead ones and leaving a later reader
-  // unable to tell which is real is not.
+  // They stay because `lib/app.dart`, `test/helpers/mock_event_generators.dart` and
+  // `test/unit/core/event_constants_test.dart` still reference them.
+  // Each one carries a Dead doc line so a reader can tell it from the live event.
   // Design: src/docs/decisions/README.md (R-CORE-dead-queue-events)
   /// Dead: the server never emits it; see the comment above.
   static const String eventQueueTodoUpdate = 'queue_todo_update';
