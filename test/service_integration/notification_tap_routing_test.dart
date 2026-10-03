@@ -15,7 +15,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:lupin_mobile/app.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_bloc.dart';
 import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
-import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/services/push/notification_tap_payload.dart';

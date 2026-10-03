@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
-import 'core/error_handling/error_handler.dart';
 import 'core/di/service_locator.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_binding.dart';

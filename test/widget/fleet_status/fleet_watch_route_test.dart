@@ -8,7 +8,6 @@ import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
 import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
-import 'package:lupin_mobile/features/transcript/data/transcript_models.dart';
 import 'package:lupin_mobile/features/transcript/data/transcript_repository.dart';
 import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.dart';
 import 'package:lupin_mobile/features/transcript/domain/transcript_stream_bloc.dart';

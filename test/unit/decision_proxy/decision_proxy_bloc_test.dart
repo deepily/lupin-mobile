@@ -58,7 +58,6 @@ void main() {
     blocTest<DecisionProxyBloc, DecisionProxyState>(
       "Ratify reloads dashboard",
       setUp: () {
-        var pendingHits = 0;
         adapter.handlers["POST /api/proxy/ratify/d-1"] = (_) => jsonBody({
           "status": "success", "decision_id": "d-1",
           "ratification_state": "approved", "ratified_by": "u@x.y",
@@ -70,7 +69,6 @@ void main() {
           "has_running_job": false,
         });
         adapter.handlers["GET /api/proxy/pending/u%40x.y"] = (_) {
-          pendingHits++;
           return jsonBody({
             "status": "success",
             "decisions": [],

@@ -29,7 +29,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:lupin_mobile/app.dart';
 import 'package:lupin_mobile/core/constants/app_constants.dart';
-import 'package:lupin_mobile/features/transcript/data/transcript_models.dart';
 import 'package:lupin_mobile/features/transcript/data/transcript_repository.dart';
 import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.dart';
 import 'package:lupin_mobile/features/transcript/domain/transcript_stream_bloc.dart';

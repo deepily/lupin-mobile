@@ -378,8 +378,6 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Snapshot of states, accumulated durations and flags, with snake_case keys.
   Map<String, dynamic> getUsageStatistics() {
-    final now = DateTime.now();
-    
     return {
       'current_lifecycle_state': _currentLifecycleState.toString(),
       'current_usage_state': _currentUsageState.toString(),

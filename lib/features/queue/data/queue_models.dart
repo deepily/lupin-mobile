@@ -5,9 +5,6 @@ library;
 
 import 'package:equatable/equatable.dart';
 
-DateTime? _parseDt( dynamic v ) =>
-    v == null ? null : DateTime.tryParse( v.toString() );
-
 T? _as<T>( dynamic v ) => v is T ? v : null;
 
 // ─────────────────────────────────────────────

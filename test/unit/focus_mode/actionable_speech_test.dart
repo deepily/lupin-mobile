@@ -61,7 +61,6 @@ void main() {
   late _MockTts  tts;
   late NotificationStopList stopList;
   late _MockPlayer   _lastPlayer;
-  late _MockFallback _lastFallback;
 
   /// The pattern under test, and a message that starts with it.
   const rule           = 'Done: Bash';
@@ -111,7 +110,6 @@ void main() {
     when( () => ws.sessionId ).thenReturn( 'wise penguin' );
 
     _lastPlayer = player;
-    _lastFallback = fallback;
     final o = TtsOrchestrator(
       player   : player,
       fallback : fallback,
