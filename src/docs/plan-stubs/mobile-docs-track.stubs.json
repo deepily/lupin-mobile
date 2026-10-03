@@ -26,7 +26,7 @@
                     "name"         : "Enforcement mechanism verified with two controls",
                     "item_class"   : "task",
                     "priority"     : "P2",
-                    "acceptance"   : "A nested analysis_options.yaml makes a directory with hits fail --fatal-infos and a clean directory pass, with both exit codes recorded",
+                    "acceptance"   : "A nested analysis_options.yaml makes a directory with hits fail --fatal-infos and a clean directory pass, with both exit codes recorded (historical wording: --fatal-infos was the Phase 0 experiment; the gate today fails only on missing doc comments)",
                     "owner_role"   : "implementer",
                     "depends_on"   : [ "m0-s1" ],
                     "done_receipt" : "c55a6d0, merged 55266af: mechanism (a) confirmed; a directory passes only with zero infos of any kind"
@@ -426,7 +426,7 @@
                     "name"       : "Turn the docs lint on for swept directories",
                     "item_class" : "task",
                     "priority"   : "P2",
-                    "acceptance" : "Each swept directory has a nested options file enabling public_member_api_docs and passes dart analyze --fatal-infos with zero infos of any kind",
+                    "acceptance" : "Each swept directory has a nested options file enabling public_member_api_docs and has no missing doc comments (public_member_api_docs) when checked with python3 tool/pre_commit_gate.py --docs-all; other analyzer findings do not fail the check",
                     "owner_role" : "implementer",
                     "depends_on" : []
                 },
@@ -444,7 +444,7 @@
                     "name"       : "Blocking pre-commit hook and installer",
                     "item_class" : "task",
                     "priority"   : "P2",
-                    "acceptance" : "The committed hook runs the Dart doc linter on changed lines, the ignore checker, and dart analyze --fatal-infos on each swept directory the commit touches, and blocks on any failure",
+                    "acceptance" : "The committed hook runs the Dart doc linter on changed lines, the ignore checker, and the missing-doc-comment check (dart analyze on each gated directory the commit touches; only public_member_api_docs findings fail it), and blocks on any failure",
                     "owner_role" : "implementer",
                     "depends_on" : [ "m4-s1", "m4-s2", "m0-s7" ]
                 },
@@ -453,7 +453,7 @@
                     "name"       : "CI step per swept directory",
                     "item_class" : "task",
                     "priority"   : "P2",
-                    "acceptance" : "CI runs flutter analyze --fatal-infos lib/<directory> for every swept directory",
+                    "acceptance" : "CI runs python3 tool/pre_commit_gate.py --docs-all, which checks every gated directory for missing doc comments",
                     "owner_role" : "implementer",
                     "depends_on" : [ "m4-s1" ]
                 },

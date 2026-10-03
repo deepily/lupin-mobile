@@ -10,7 +10,12 @@ Exit 0 = NOT ABOVE BASELINE · 1 = A BUCKET GREW · 2 = BASELINE MISSING / ANALY
 The root analysis_options.yaml is NOT touched. The rule is switched on in a scratch
 copy of lib/ + pubspec (so no config file is ever left in the real tree), and hits are
 bucketed from the analyzer's own machine-format output, never from a hand-written
-member counter. Buckets: each top-level lib/ dir (core, services, shared, ui, ...),
+member counter.
+
+The baseline is a frozen measurement at the sha it records (cf5be6f). It still lists
+features/voice: 96, a directory deleted since (222e9a0). That is left as is: compare() only
+reads buckets present in the current run, so a stale bucket can never fail the check, and
+regenerating would erase the measurement it exists to preserve. Buckets: each top-level lib/ dir (core, services, shared, ui, ...),
 plus one per features/<name>.
 """
 import json, os, re, shutil, subprocess, sys, tempfile
