@@ -67,7 +67,7 @@ mixin PaneVisibilityMixin<E, S> on Bloc<E, S> {
   /// The outstanding request's token, or null.
   ///
   /// Only [claimRequest] and [releaseRequest] change it.
-  @protected
+  @visibleForTesting
   CancelToken? get inFlightToken => _inFlight;
 
   /// Begins observing the app lifecycle; calling it twice subscribes once.
