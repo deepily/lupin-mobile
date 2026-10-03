@@ -1,6 +1,26 @@
 # TODO
 
-## ▶ START HERE — mobile docs track (2026-10-01 close, Tiffany 💍)
+## ▶ START HERE — 2026-10-02 close (Tiffany 💍)
+
+Tip `28b7ea0`. Docs gate done; everything else open waits on Cheech or on Rick at his convenience (live owed work is in the store, owner `tiffany`).
+
+| Next | Waits on |
+|---|---|
+| Blind second check of the Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`) | Cheech's dev split; no Fable budget for the Dart set until Rick gives Cheech a second figure |
+| Transcript fixtures (row `768e852f`, parked) and one Stop poke flip on the phone (row `ee68d5e7`, parked) | Rick, when convenient; he is not listed as a blocker |
+| Code clean-up of 188 errors / 74 warnings in 11 directories (row `5a200e6c`, held) | Rick's rulings per deletion |
+| Docs crew post-game (row `c05c6f8c`, held) | next session |
+
+### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
+
+- **Stop poke is a plain on/off switch, admin-only write, no timer** (Rick, first-hand, about 11:00).
+- **Convert tests that assert comment wording; delete `lib/features/voice` and the unused registry** (Rick, decisions `a1bbc3ef`, `32aedd1c`).
+- **Docs gate: docs now, code clean-up later** (Rick, ask card about 20:50). The analyzer check fails only on missing doc comments, over all 24 swept directories; other findings are a separate backlog row.
+- **Do not list Rick as a blocker** (Rick, broadcast `62334f19`). Work that waits on his own action is parked with a chase date, not blocked on him.
+- **Held rows carry a persona, not a group label** (Rick, via María): held rows are keyed `epic:unassigned`.
+- **Labelled sets** (Rick, via Cheech, lupin row `dad61023`): gate 190 pairs, 94 seeded, 59 short spans; Fable writes reworded text, one-shot calls, 500-call cap shared; no second extractor, no human arm. The cap does not cover the Dart set.
+
+## ▶ Earlier: mobile docs track (2026-10-01 close, Tiffany 💍)
 
 **Live row `b707f92f` (P0).** Merged tip `96f3768`: the whole sweep and the Phase 5 tooling are in (batch b9 green at 23:07, run by Rick with `!`).
 
