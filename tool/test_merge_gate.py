@@ -195,8 +195,13 @@ class VerdictTest( unittest.TestCase ):
     def test_gate_inputs_are_recognised( self ):
         names = [ "tool/merge_gate.py", "tool/check_ac_g2.py", "tool/check_test_failures.py", "tool/pre_commit_gate.py",
                   "tool/doc_coverage.py", "tool/data/test_failures_baseline.json", "test/fixtures/ac_g2_passing_baseline.json" ]
-        self.assertEqual( mg.gate_input_files( names + [ "lib/a.dart", "tool/test_check_doc_ignores.py", "README.md" ] ), sorted( names ) )
-        self.assertEqual( mg.gate_input_files( [ "lib/a.dart", "tool/test_check_doc_ignores.py" ] ), [] )        # negative control
+        self.assertEqual( mg.gate_input_files( names + [ "lib/a.dart", "tool/notes.md", "README.md" ] ), sorted( names ) )
+        self.assertEqual( mg.gate_input_files( [ "lib/a.dart", "tool/notes.md", "tool/helper.py" ] ), [] )          # negative control
+
+    def test_every_tool_test_file_is_a_gate_input( self ):                           # G2
+        names = [ "tool/test_check_doc_ignores.py", "tool/test_pre_commit_gate.py", "tool/test_merge_gate.py" ]
+        self.assertEqual( mg.gate_input_files( names ), sorted( names ) )
+        self.assertEqual( mg.gate_input_files( [ "test/unit/test_x.dart", "tool/doc_lint/test_y.py", "tool/test_x.md" ] ), [] )   # controls
 
     def test_files_that_decide_what_the_suite_and_tests_do_are_gate_inputs( self ):    # N4
         names = [ "flutter.sh", "dart_test.yaml", "pytest.ini", "tool/conftest.py", "pubspec.yaml", "pubspec.lock",
@@ -346,8 +351,12 @@ class GitRangeTest( unittest.TestCase ):
                             "lib/zz_missing.dart", "pubspec.lock", "test/t_test.dart", "tool/x.py" ] )
 
     def test_the_allow_list_is_not_refused( self ):                                # N3 negative control
-        self.touch( "src/rnd/x.md", "src/docs/x.md", "history/x.md", "todo-archive/x.md", "io/m.md", ".claude/x.json" )
+        self.touch( "src/rnd/x.md", "history/x.md", "todo-archive/x.md", "io/m.md", ".claude/x.json" )
         self.assertEqual( mg.untracked_inputs( self.d ), [] )
+
+    def test_src_docs_is_refused_because_a_test_reads_it( self ):                    # G3
+        self.touch( "src/docs/decisions/new.md" )
+        self.assertEqual( mg.untracked_inputs( self.d ), [ "src/docs/decisions/new.md" ] )
 
     def test_an_ignored_file_is_not_an_untracked_input( self ):                   # negative control
         with open( os.path.join( self.d, ".gitignore" ), "w" ) as f: f.write( "lib/gen.dart\n" )
@@ -371,6 +380,16 @@ class GitRangeTest( unittest.TestCase ):
         c5 = self.commit( "// ignore: invalid_assignment\nint f() => 2;\n", "moves it" )
         self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
         self.assertEqual( mg.ignore_additions( c4, self.c3, self.d ), [] )
+
+    def test_an_edited_ignore_line_is_an_addition( self ):                           # G1
+        c4 = self.commit( "int f() => 2; // ignore: avoid_print\n", "has one ignore" )
+        c5 = self.commit( "// ignore_for_file: avoid_print, invalid_assignment\nint f() => 2;\n", "edits it to cover more" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print, invalid_assignment" ) ] )
+
+    def test_editing_code_beside_an_unchanged_ignore_is_not_an_addition( self ):    # G1 negative control
+        c4 = self.commit( "int f() => 2; // ignore: avoid_print\n", "has one ignore" )
+        c5 = self.commit( "int f() => 3; // ignore: avoid_print\n", "edits the code on that line" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
 
     def test_the_docs_ignore_form_is_not_exempt( self ):                           # N1 ruling
         c4 = self.commit( "// ignore: public_member_api_docs - generated\nint f() => 2;\n", "docs ignore" )

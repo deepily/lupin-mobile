@@ -33,7 +33,7 @@ Run it from the real checkout, not from a copy under a scratch directory: three 
 check 7 reports them missing.
 
 Refused with exit 2 (CANNOT RUN): a range that does not end at HEAD, an empty range, modified tracked files,
-any untracked, non-ignored file outside src/rnd/, src/docs/, history/, todo-archive/, io/ and .claude/ (the checks
+any untracked, non-ignored file outside src/rnd/, history/, todo-archive/, io/ and .claude/ (the checks
 read the working tree, so an untracked file can satisfy an import or an asset that the commit cannot), a missing
 dart, flutter.sh or tool script.
 
@@ -47,7 +47,8 @@ at the head and, separately, at the start of the range.
 Output: one verdict line, one line per check with its exit code, the log directory. Verdicts:
   PASS               every check ran and passed                                    exit 0
   PASS-WITH-WARNING  as PASS, but the range changes the gate's own inputs (this script, tool/check_*.py,
-                     pre_commit_gate.py, doc_coverage.py, tool/data/, the AC-G2 baseline); a human must read that diff   exit 0
+                     tool/test_*.py, pre_commit_gate.py, doc_coverage.py, tool/data/, the AC-G2 baseline, flutter.sh,
+                     pubspec files, CI workflows; the full list is GATE_FILES); a human must read that diff   exit 0
   QUICK              nothing failed but --skip-suite left checks 6 and 7 unrun        exit 3
   FAIL               a check that ran failed                                          exit 1
 Exit 2 = could not run. PASS-WITH-WARNING exits 0, so a caller must read the verdict word and the warning line,
@@ -268,7 +269,7 @@ def range_commits( start, end, root=ROOT ):
     return len( git( [ "rev-list", f"{start}..{end}" ], root ).split() )
 
 
-ALLOWED_UNTRACKED = ( "src/rnd/", "src/docs/", "history/", "todo-archive/", "io/", ".claude/" )
+ALLOWED_UNTRACKED = ( "src/rnd/", "history/", "todo-archive/", "io/", ".claude/" )
 
 
 def untracked_inputs( root=ROOT ):
@@ -279,8 +280,8 @@ def untracked_inputs( root=ROOT ):
         - root is a git checkout
     Ensures:
         - returns sorted repo-relative paths of every untracked file that .gitignore does not cover,
-          except those under src/rnd/, src/docs/, history/, todo-archive/, io/ and .claude/
-        - a test may read any path (an asset, a fixture), so no other directory is exempt
+          except those under src/rnd/, history/, todo-archive/, io/ and .claude/
+        - a test may read any path (an asset, a fixture, src/docs/decisions/README.md), so no other directory is exempt
     """
     names = git( [ "ls-files", "--others", "--exclude-standard" ], root ).splitlines()
     return sorted( n for n in names if not n.startswith( ALLOWED_UNTRACKED ) )
@@ -323,18 +324,19 @@ def ignore_additions( start, end, root=ROOT ):
     Requires:
         - start and end are commits in root
     Ensures:
-        - returns sorted ( file, codes ) pairs for each changed .dart file whose count of ignore lines rose
-          between start and end; codes is the text after `ignore:` on each added line, joined with "; "
-        - a line that only moves within a file, or a removed ignore, is not an addition
+        - returns sorted ( file, codes ) pairs for each changed .dart file whose set of ignore comments (the text from
+          `ignore:` or `ignore_for_file:` to the end of its line) gained an entry between start and end; codes is the
+          text after the colon of each added comment, joined with "; "
+        - an ignore comment that only moves, or sits beside edited code, is not an addition; one that is edited
+          to cover more (or other) codes is; a removed ignore is not
         - the public_member_api_docs form is counted like any other
     """
+    def grab( text ):
+        return collections.Counter( m.group( 0 ).strip() for m in map( IGNORE_LINE.search, text.splitlines() ) if m )
     found = []
     for path in changed_dart_files( start, end, root )[ 0 ]:
-        old, new = show( start, path, root ), show( end, path, root )
-        if count_ignore_lines( new ) <= count_ignore_lines( old ): continue
-        grab  = lambda t: collections.Counter( l.strip() for l in t.splitlines() if IGNORE_LINE.search( l ) )
-        added = ( grab( new ) - grab( old ) ).elements()
-        found.append( ( path, "; ".join( IGNORE_LINE.search( l ).group( "codes" ).strip() for l in sorted( added ) ) ) )
+        added = list( ( grab( show( end, path, root ) ) - grab( show( start, path, root ) ) ).elements() )
+        if added: found.append( ( path, "; ".join( IGNORE_LINE.search( a ).group( "codes" ).strip() for a in sorted( added ) ) ) )
     return sorted( found )
 
 
@@ -375,7 +377,7 @@ def analyzer_config_files( names ):
     return sorted( n for n in names if os.path.basename( n ) == "analysis_options.yaml" )
 
 
-GATE_FILES = ( "tool/merge_gate.py", "tool/test_merge_gate.py", "tool/pre_commit_gate.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py",
+GATE_FILES = ( "tool/merge_gate.py", "tool/pre_commit_gate.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py",
                "tool/conftest.py", "test/fixtures/ac_g2_passing_baseline.json", "flutter.sh", "dart_test.yaml", "pytest.ini",
                "pubspec.yaml", "pubspec.lock" )
 
@@ -387,7 +389,7 @@ def gate_input_files( names ):
     Requires:
         - names is a list of repo-relative paths
     Ensures:
-        - returns sorted paths that decide what a check runs or accepts: this script and its test, tool/check_*.py,
+        - returns sorted paths that decide what a check runs or accepts: this script, tool/check_*.py, tool/test_*.py,
           pre_commit_gate.py, doc_coverage.py, lint_dart_docs.py, tool/conftest.py, anything under tool/data/ or
           .github/workflows/, the AC-G2 baseline, flutter.sh, dart_test.yaml, pytest.ini, pubspec.yaml, pubspec.lock
         - every other file is not listed
@@ -395,7 +397,7 @@ def gate_input_files( names ):
     def feeds( n ):
         base = os.path.basename( n )
         return ( n in GATE_FILES or n.startswith( ( "tool/data/", ".github/workflows/" ) )
-                 or ( n.startswith( "tool/" ) and "/" not in n[ 5: ] and base.startswith( "check_" ) and base.endswith( ".py" ) ) )
+                 or ( n.startswith( "tool/" ) and "/" not in n[ 5: ] and base.endswith( ".py" ) and base.startswith( ( "check_", "test_" ) ) ) )
     return sorted( n for n in names if feeds( n ) )
 
 
