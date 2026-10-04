@@ -214,6 +214,42 @@ class StrictGateTest( unittest.TestCase ):
             f.write( "// ignore_for_file: avoid_print - whole file\nvoid a() { print( 'x' ); }\n" )
         self.assertEqual( len( gate.strict_config_problems( [ "lib/strict" ], root ) ), 1 )
 
+    def committed_repo( self ):
+        root = make_strict_repo( strict_text=CLEAN )
+        subprocess.run( [ "git", "add", "-A" ], cwd=root, check=True )
+        subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base" ], cwd=root, check=True )
+        return root
+
+    def stage( self, root, rel, text ):
+        with open( os.path.join( root, rel ), "w", encoding="utf-8" ) as f: f.write( text )
+        subprocess.run( [ "git", "add", rel ], cwd=root, check=True )
+
+    def test_a_commit_cannot_excuse_itself_by_dropping_its_dir_from_the_gated_list( self ):
+        root = self.committed_repo()
+        self.stage( root, "tool/data/gated_dirs.txt", "lib/exempt\n" )
+        self.stage( root, "lib/strict/s.dart", NOTE )
+        self.assertEqual( gate.partition_touched( gate.staged_paths( root ), root ), ( [ "lib/exempt" ], [ "lib/strict" ] ) )
+
+    def test_a_commit_cannot_excuse_itself_by_adding_its_dir_to_the_exempt_list( self ):
+        root = self.committed_repo()
+        self.stage( root, "tool/data/strict_exempt.txt", "lib/exempt  # x (row 0123abcd)\nlib/strict  # trust me (row 0123abcd)\n" )
+        self.stage( root, "lib/strict/s.dart", NOTE )
+        docs_only, strict = gate.partition_touched( gate.staged_paths( root ), root )
+        self.assertIn( "lib/strict", strict )
+        self.assertNotIn( "lib/strict", docs_only )
+
+    def test_staging_only_a_config_file_checks_every_gated_dir( self ):
+        for rel in ( "analysis_options.yaml", "lib/strict/analysis_options.yaml", "tool/data/gated_dirs.txt" ):
+            root = self.committed_repo()
+            self.stage( root, rel, open( os.path.join( root, rel ) ).read() + "\n" if os.path.exists( os.path.join( root, rel ) ) else "\n" )
+            self.assertEqual( gate.partition_touched( gate.staged_paths( root ), root ), ( [ "lib/exempt" ], [ "lib/strict" ] ), rel )
+
+    def test_a_dir_deleted_in_the_same_commit_is_not_analyzed( self ):
+        root = self.committed_repo()
+        self.stage( root, "tool/data/gated_dirs.txt", "lib/exempt\n" )
+        subprocess.run( [ "git", "rm", "-rqf", "lib/strict" ], cwd=root, check=True )
+        self.assertEqual( gate.partition_touched( gate.staged_paths( root ), root ), ( [ "lib/exempt" ], [] ) )
+
     def test_unreadable_analyzer_failure_is_not_read_as_clean( self ):
         orig = subprocess.run
         subprocess.run = lambda *a, **k: subprocess.CompletedProcess( a, 1, stdout="garbled\n", stderr="" )

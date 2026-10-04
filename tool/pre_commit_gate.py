@@ -106,6 +106,22 @@ def touched_dirs( staged, swept ):
     return [ d for d in swept if any( p.startswith( d + "/" ) for p in staged ) ]
 
 
+def head_list( rel, root=ROOT ):
+    """
+    Read a list file as it is in HEAD, for the commit being checked.
+
+    Requires:
+        - root is a git working tree; rel is a repo-relative list file such as tool/data/gated_dirs.txt
+
+    Ensures:
+        - returns the directory names in that file at HEAD, comments and annotations dropped
+        - returns None when HEAD has no such file (first commit, or the file is new)
+    """
+    proc = subprocess.run( [ "git", "show", f"HEAD:{rel}" ], cwd=root, capture_output=True, text=True )
+    if proc.returncode != 0: return None
+    return [ l.split()[0] for l in ( x.strip() for x in proc.stdout.splitlines() ) if l and not l.startswith( "#" ) ]
+
+
 def partition_touched( staged, root=ROOT ):
     """
     Split the gated directories a commit touches into the docs-only ones and the strict ones.
@@ -116,9 +132,22 @@ def partition_touched( staged, root=ROOT ):
     Ensures:
         - returns ( docs_only, strict ), each in gated-list order
         - a touched directory named in strict_exempt.txt goes to docs_only, every other touched gated one to strict
+        - a directory the commit itself drops from gated_dirs.txt is still checked (and still exists on disk)
+        - a directory the commit itself adds to strict_exempt.txt is still checked strictly: an exemption
+          counts only once it is in HEAD, so a commit cannot excuse its own findings
+        - staging a list file or any analysis_options.yaml makes every gated directory count as touched
     """
-    touched = touched_dirs( staged, swept_dirs( root ) )
+    swept   = swept_dirs( root )
     exempt  = exempt_dirs( root )
+    in_head = head_list( GATED_LIST, root )
+    if in_head: swept = swept + [ d for d in in_head if d not in swept and os.path.isdir( os.path.join( root, d ) ) ]
+    ex_head = head_list( EXEMPT_LIST, root )
+    if ex_head is not None: exempt = [ d for d in exempt if d in ex_head ]
+    config  = ( GATED_LIST, EXEMPT_LIST, OPTIONS )
+    if any( p in config or ( p.startswith( "lib/" ) and p.endswith( "/" + OPTIONS ) ) for p in staged ):
+        touched = list( swept )
+    else:
+        touched = touched_dirs( staged, swept )
     return [ d for d in touched if d in exempt ], [ d for d in touched if d not in exempt ]
 
 
