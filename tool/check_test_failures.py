@@ -27,18 +27,19 @@ BASELINE = os.path.join( ROOT, "tool", "data", "test_failures_baseline.json" )
 NO_NEW_FAILURE, NEW_FAILURE, BASELINE_OR_INPUT_BAD, RERUN_REQUIRED = 0, 1, 2, 3
 
 
-def read_run( path ):
+def read_run_ids( path ):
     """
-    Parse one `flutter test --reporter json` file.
+    Parse one `flutter test --reporter json` file, keeping the ids of every test that ran.
 
     Requires:
         - path is a JSON-lines file from `flutter test --reporter json`
 
     Ensures:
-        - returns ( failed_ids, passed_count ); skipped tests are neither
+        - returns ( failed_ids, passed_count, ran_ids ); ran_ids holds every failed id and every passed id
+        - a skipped test is in neither; a test absent from the file is in neither
         - raises ValueError if the file holds no testDone events (a crashed run proves nothing)
     """
-    suites, tests, failed, passed, done = {}, {}, set(), 0, 0
+    suites, tests, failed, passed, ran, done = {}, {}, set(), 0, set(), 0
     for line in open( path ):
         line = line.strip()
         if not line.startswith( "{" ): continue
@@ -54,9 +55,26 @@ def read_run( path ):
             sp = suites.get( suite_id )
             rel = os.path.relpath( sp, ROOT ) if sp else "(unknown suite)"
             if e.get( "result" ) in ( "failure", "error" ):
-                failed.add( f"{rel}::{name}".replace( "::loading " + str( sp ), "::(loading)" ) if name and name.startswith( "loading " ) else f"{rel}::{name}" )
-            elif not e.get( "hidden" ): passed += 1
+                tid = f"{rel}::{name}".replace( "::loading " + str( sp ), "::(loading)" ) if name and name.startswith( "loading " ) else f"{rel}::{name}"
+                failed.add( tid ); ran.add( tid )
+            elif not e.get( "hidden" ):
+                passed += 1; ran.add( f"{rel}::{name}" )
     if done == 0: raise ValueError( f"{path}: no testDone events — the run crashed or is not JSON" )
+    return failed, passed, ran
+
+
+def read_run( path ):
+    """
+    Parse one `flutter test --reporter json` file.
+
+    Requires:
+        - path is a JSON-lines file from `flutter test --reporter json`
+
+    Ensures:
+        - returns ( failed_ids, passed_count ); skipped tests are neither
+        - raises ValueError if the file holds no testDone events (a crashed run proves nothing)
+    """
+    failed, passed, _ = read_run_ids( path )
     return failed, passed
 
 
@@ -83,7 +101,7 @@ def check( now_path, again_path=None ):
     base  = json.load( open( BASELINE ) )
     known = set( base[ "always_fail" ] ) | set( base[ "sometimes_fail" ] )
     try:
-        now = read_run( now_path )[ 0 ]
+        now, _, ran = read_run_ids( now_path )
         new = now - known
         if new and again_path: new = new & read_run( again_path )[ 0 ]
     except ( ValueError, OSError ) as ex:
@@ -96,9 +114,12 @@ def check( now_path, again_path=None ):
         print( f"NEW_FAILURE — {len( new )} failure(s) outside the known set, confirmed by the re-run:" )
         for n in sorted( new )[ :40 ]: print( f"  - {n}" )
         return NEW_FAILURE
-    gone = set( base[ "always_fail" ] ) - now
+    gone    = set( base[ "always_fail" ] ) - now
+    passes  = gone & ran
+    missing = gone - ran
     print( f"NO_NEW_FAILURE — {len( now )} failing, all known (always {len( base[ 'always_fail' ] )}, sometimes {len( base[ 'sometimes_fail' ] )})."
-           + ( f" {len( gone )} always-fail test(s) now pass: refresh the baseline." if gone else "" ) )
+           + ( f" {len( passes )} always-fail test(s) now pass: refresh the baseline." if passes else "" )
+           + ( f" {len( missing )} always-fail test(s) did not run (deleted, skipped or renamed), which is not a pass: read the diff; the baseline still lists them." if missing else "" ) )
     return NO_NEW_FAILURE
 
 
