@@ -42,6 +42,16 @@ class _SessionAdapter implements HttpClientAdapter {
   void close( { bool force = false } ) {}
 }
 
+class _SocketGone implements Exception {
+  @override
+  String toString() => "socket gone";
+}
+
+class _ExplodingError implements Exception {
+  @override
+  String toString() => throw StateError( "toString exploded" );
+}
+
 class _FakeChannel extends StreamChannelMixin<dynamic> implements WebSocketChannel {
   final _in = StreamController<dynamic>();
   bool failSends = false;
@@ -65,7 +75,7 @@ class _FakeSink implements WebSocketSink {
 
   @override
   void add( dynamic data ) {
-    if ( _c.failSends ) throw StateError( "socket closed" );
+    if ( _c.failSends ) throw _SocketGone();
   }
 
   @override void addError( Object e, [ StackTrace? st ] ) {}
@@ -77,6 +87,7 @@ class _FakeSink implements WebSocketSink {
 class _FailingStore extends WsResumeStore {
   bool failLastSeq = false;
   bool failSetSeq  = false;
+  bool explode     = false;
 
   @override
   Future<int> lastSeq() async {
@@ -86,7 +97,7 @@ class _FailingStore extends WsResumeStore {
 
   @override
   Future<void> setLastSeq( int seq ) async {
-    if ( failSetSeq ) throw StateError( "prefs unavailable" );
+    if ( failSetSeq ) throw ( explode ? _ExplodingError() : StateError( "prefs unavailable" ) );
     return super.setLastSeq( seq );
   }
 }
@@ -141,6 +152,7 @@ void main() {
     final found = entries( LogLevel.error ).where( ( e ) => e.message == "Connection failed" );
     expect( found, hasLength( 1 ) );
     expect( found.single.error, contains( "refused" ) );
+    expect( found.single.stackTrace, isNotNull );
     expect( jsonEncode( found.single.toJson() ), isNot( contains( _jwt ) ) );
   } );
 
@@ -188,14 +200,57 @@ void main() {
     expect( found.single.message, contains( "bad token" ) );
   } );
 
-  test( "Message parsing error: error entry", () async {
+  test( "Message parsing error: a warning, because the frame is still forwarded; carries the session and a stack", () async {
     await ws.connect( userId: "u1" );
     await settle();
 
     channels.single.serverSendsRaw( "this is not json" );
     await settle();
 
-    expect( entries( LogLevel.error ).where( ( e ) => e.message == "Message parsing error" ), hasLength( 1 ) );
+    expect( entries( LogLevel.error ).where( ( e ) => e.message == "Message parsing error" ), isEmpty );
+    final found = entries( LogLevel.warning ).where( ( e ) => e.message == "Message parsing error" );
+    expect( found, hasLength( 1 ) );
+    expect( found.single.stackTrace, isNotNull );
+    expect( found.single.context!.sessionId, "wise penguin" );
+  } );
+
+  test( "a form-encoded refresh token quoted in a parse error is masked", () async {
+    await ws.connect( userId: "u1" );
+    await settle();
+
+    channels.single.serverSendsRaw( "refresh_token=opaque-RT&x=1" );
+    await settle();
+
+    final found = entries( LogLevel.warning ).where( ( e ) => e.message == "Message parsing error" );
+    expect( found, hasLength( 1 ) );
+    expect( jsonEncode( found.single.toJson() ), isNot( contains( "opaque-RT" ) ) );
+  } );
+
+  test( "a form-encoded refresh token in the server's auth_error text is masked", () async {
+    await ws.connect( userId: "u1" );
+    await settle();
+
+    channels.single.serverSends( { "type": "auth_error", "message": "bad refresh_token=opaque-RT $_jwt" } );
+    await settle();
+
+    final found = entries( LogLevel.warning ).where( ( e ) => e.message.startsWith( "Authentication rejected" ) );
+    expect( found, hasLength( 1 ) );
+    expect( jsonEncode( found.single.toJson() ), isNot( contains( "opaque-RT" ) ) );
+    expect( jsonEncode( found.single.toJson() ), isNot( contains( _jwt ) ) );
+  } );
+
+  test( "a persist failure whose toString throws is still logged, with the runtime type", () async {
+    await ws.connect( userId: "u1" );
+    await settle();
+    store.failSetSeq = true;
+    store.explode    = true;
+
+    channels.single.serverSends( { "type": "queue_update", "seq": 9 } );
+    await settle();
+
+    final found = entries( LogLevel.warning ).where( ( e ) => e.message == "last_seq persist failed" );
+    expect( found, hasLength( 1 ) );
+    expect( found.single.error, contains( "_ExplodingError" ) );
   } );
 
   test( "Stream error: error entry", () async {
@@ -215,7 +270,7 @@ void main() {
     await settle();
     channels.single.failSends = true;
 
-    await expectLater( ws.sendMessage( { "type": "ping" } ), throwsA( isA<StateError>() ) );
+    await expectLater( ws.sendMessage( { "type": "ping" } ), throwsA( isA<_SocketGone>() ) );
 
     expect( entries( LogLevel.error ).where( ( e ) => e.message == "Failed to send message" ), hasLength( 1 ) );
   } );
@@ -225,7 +280,7 @@ void main() {
     await settle();
     channels.single.failSends = true;
 
-    await expectLater( ws.sendBinary( [ 1, 2, 3 ] ), throwsA( isA<StateError>() ) );
+    await expectLater( ws.sendBinary( [ 1, 2, 3 ] ), throwsA( isA<_SocketGone>() ) );
 
     expect( entries( LogLevel.error ).where( ( e ) => e.message == "Failed to send binary data" ), hasLength( 1 ) );
   } );
@@ -238,7 +293,9 @@ void main() {
     channels.single.serverSends( { "type": "queue_update", "seq": 7 } );
     await settle();
 
-    expect( entries( LogLevel.warning ).where( ( e ) => e.message.startsWith( "last_seq persist failed" ) ), hasLength( 1 ) );
+    final found = entries( LogLevel.warning ).where( ( e ) => e.message == "last_seq persist failed" );
+    expect( found, hasLength( 1 ) );
+    expect( found.single.error, contains( "prefs unavailable" ) );
   } );
 
   test( "ack failed: warning", () async {
@@ -249,6 +306,8 @@ void main() {
     channels.single.serverSends( { "type": "queue_update", "seq": 8 } );
     await settle();
 
-    expect( entries( LogLevel.warning ).where( ( e ) => e.message.startsWith( "ack failed" ) ), hasLength( 1 ) );
+    final found = entries( LogLevel.warning ).where( ( e ) => e.message == "ack failed" );
+    expect( found, hasLength( 1 ) );
+    expect( found.single.error, contains( "socket gone" ) );
   } );
 }

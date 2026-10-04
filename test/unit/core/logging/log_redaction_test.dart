@@ -63,6 +63,25 @@ void main() {
       expect( out, contains( "refresh_token" ) );
     } );
 
+    test( "a form-encoded token field name=value is masked and its neighbours are kept", () {
+      final out = redactSecrets( "refresh_token=opaque-RT&x=1" );
+      expect( out, isNot( contains( "opaque-RT" ) ) );
+      expect( out, contains( "refresh_token=" ) );
+      expect( out, contains( "&x=1" ) );
+    } );
+
+    test( "name = value with spaces and each token name is masked", () {
+      for ( final name in [ "access_token", "refresh_token", "id_token" ] ) {
+        final out = redactSecrets( "$name = secret-value-1, next" );
+        expect( out, isNot( contains( "secret-value-1" ) ), reason: name );
+        expect( out, contains( ", next" ), reason: name );
+      }
+    } );
+
+    test( "the name: value form keeps its separator after the change", () {
+      expect( redactSecrets( "{refresh_token: opaque}" ), "{refresh_token: <redacted>}" );
+    } );
+
     test( "a bare JWT under an unanticipated field name is still masked", () {
       final out = redactSecrets( "{some_future_field: $_jwt}" );
       expect( out, isNot( contains( "eyJ" ) ) );

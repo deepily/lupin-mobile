@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../logging/error_summary.dart';
 import '../logging/logger.dart';
 import '../storage/storage_manager.dart';
 import 'cache_policy.dart';
@@ -310,7 +311,7 @@ class CacheManager<T> {
             _memoryCache[entry.key] = entry;
           }
         } catch (e, st) {
-          Logger.error( 'Error loading cached entry', tag: 'CacheManager', error: e, stackTrace: st, context: LogContext( metadata: { 'cacheKey': cacheKey, 'storageKey': storageKey } ) );
+          Logger.error( 'Error loading cached entry', tag: 'CacheManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'cacheKey': cacheKey, 'storageKey': storageKey } ) );
         }
       }
     }
@@ -325,7 +326,7 @@ class CacheManager<T> {
     try {
       return CacheEntry.fromJson(json, fromJson);
     } catch (e, st) {
-      Logger.error( 'Error loading entry from storage', tag: 'CacheManager', error: e, stackTrace: st, context: LogContext( metadata: { 'cacheKey': cacheKey, 'storageKey': storageKey } ) );
+      Logger.error( 'Error loading entry from storage', tag: 'CacheManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'cacheKey': cacheKey, 'storageKey': storageKey } ) );
       return null;
     }
   }

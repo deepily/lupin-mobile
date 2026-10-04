@@ -5,6 +5,11 @@ import '../../core/constants/app_constants.dart';
 import '../../core/logging/log_redaction.dart';
 import '../../core/logging/logger.dart';
 
+/// Returns log metadata naming the request [path] without its query string.
+///
+/// The query string is left out because it can carry a credential.
+LogContext _requestContext( String path ) => LogContext( metadata: { 'path': path.split( '?' ).first } );
+
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
 /// Provides a centralized interface for all HTTP communications with
@@ -104,8 +109,8 @@ class HttpService {
     try {
       final response = await _dio.get('/api/get-session-id');
       return response.data;
-    } catch (e) {
-      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/get-session-id' ) );
       rethrow;
     }
   }
@@ -146,8 +151,8 @@ class HttpService {
         },
       );
       return response;
-    } catch (e) {
-      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/get-speech-elevenlabs' ) );
       rethrow;
     }
   }
@@ -179,8 +184,8 @@ class HttpService {
         },
       );
       return response;
-    } catch (e) {
-      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/get-speech' ) );
       rethrow;
     }
   }
@@ -216,8 +221,8 @@ class HttpService {
       );
       
       return response.data;
-    } catch (e) {
-      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/upload-and-transcribe-mp3' ) );
       rethrow;
     }
   }
@@ -235,8 +240,8 @@ class HttpService {
     try {
       final response = await _dio.get('/health');
       return response.statusCode == 200;
-    } catch (e) {
-      Logger.error( 'Health check failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/health' ) );
       return false;
     }
   }
@@ -266,8 +271,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      Logger.error( 'GET request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'GET request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
       rethrow;
     }
   }
@@ -299,8 +304,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      Logger.error( 'POST request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'POST request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
       rethrow;
     }
   }
@@ -332,8 +337,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      Logger.error( 'PUT request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'PUT request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
       rethrow;
     }
   }
@@ -363,8 +368,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e );
+    } catch (e, st) {
+      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
       rethrow;
     }
   }

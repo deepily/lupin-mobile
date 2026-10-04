@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+import '../logging/error_summary.dart';
 import '../logging/log_file_store.dart';
 import '../logging/logger.dart';
 
@@ -98,7 +99,7 @@ class StorageManager implements LogFileStore {
     try {
       return jsonDecode(jsonString) as Map<String, dynamic>;
     } catch (e, st) {
-      Logger.error( 'Error parsing JSON for key $key', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
+      Logger.error( 'Error parsing JSON for key $key', tag: 'StorageManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
       return null;
     }
   }
@@ -118,7 +119,7 @@ class StorageManager implements LogFileStore {
       final decoded = jsonDecode(jsonString) as List<dynamic>;
       return decoded.cast<Map<String, dynamic>>();
     } catch (e, st) {
-      Logger.error( 'Error parsing JSON list for key $key', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
+      Logger.error( 'Error parsing JSON list for key $key', tag: 'StorageManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
       return null;
     }
   }
@@ -263,7 +264,7 @@ class StorageManager implements LogFileStore {
       }
       return null;
     } catch (e, st) {
-      Logger.error( 'Failed to read file $fileName', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'file': fileName } ) );
+      Logger.error( 'Failed to read file $fileName', tag: 'StorageManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'file': fileName } ) );
       return null;
     }
   }

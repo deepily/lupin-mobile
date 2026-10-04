@@ -601,9 +601,15 @@ class Logger {
     log(LogLevel.info, message, tag: tag, context: context);
   }
 
-  /// Logs [message] at warning level.
-  static void warning(String message, {String? tag, LogContext? context}) {
-    log(LogLevel.warning, message, tag: tag, context: context);
+  /// Logs [message] at warning level, with an optional [error] and [stackTrace].
+  static void warning(
+    String message, {
+    String? tag,
+    LogContext? context,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    log(LogLevel.warning, message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
   /// Logs [message] at error level, with an optional [error] and [stackTrace].
@@ -665,9 +671,14 @@ class TaggedLogger {
     Logger.info(message, tag: tag, context: context);
   }
 
-  /// Logs [message] at warning level.
-  void warning(String message, {LogContext? context}) {
-    Logger.warning(message, tag: tag, context: context);
+  /// Logs [message] at warning level, with an optional [error] and [stackTrace].
+  void warning(
+    String message, {
+    LogContext? context,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    Logger.warning(message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
   /// Logs [message] at error level, with an optional [error] and [stackTrace].

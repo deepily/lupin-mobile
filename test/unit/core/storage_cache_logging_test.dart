@@ -2,6 +2,7 @@
 // app Logger. The five StorageManager file operations the log file destination
 // itself calls must NOT log, or a failing disk would feed itself.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -61,7 +62,7 @@ void main() {
 
   group( "StorageManager", () {
     test( "getJson on corrupt JSON: error entry, tag StorageManager, returns null", () async {
-      await storage.setString( "bad_json", "{not json" );
+      await storage.setString( "bad_json", "alice@example.com private note {not json" );
 
       expect( storage.getJson( "bad_json" ), isNull );
 
@@ -70,11 +71,12 @@ void main() {
       expect( found.single.message, "Error parsing JSON for key bad_json" );
       expect( found.single.stackTrace, isNotNull );
       expect( found.single.context!.metadata![ "key" ], "bad_json" );
-      expect( found.single.error, isNotNull );
+      expect( found.single.error, startsWith( "FormatException" ) );
+      expect( jsonEncode( found.single.toJson() ), isNot( contains( "alice@example.com" ) ), reason: "stored text stays out of the log" );
     } );
 
     test( "getJsonList on a JSON object: error entry, tag StorageManager, returns null", () async {
-      await storage.setString( "not_a_list", "{\"a\": 1}" );
+      await storage.setString( "not_a_list", "{\"email\": \"alice@example.com\"}" );
 
       expect( storage.getJsonList( "not_a_list" ), isNull );
 
@@ -83,6 +85,7 @@ void main() {
       expect( found.single.message, "Error parsing JSON list for key not_a_list" );
       expect( found.single.stackTrace, isNotNull );
       expect( found.single.context!.metadata![ "key" ], "not_a_list" );
+      expect( jsonEncode( found.single.toJson() ), isNot( contains( "alice@example.com" ) ) );
     } );
 
     test( "readFile on undecodable bytes: error entry, returns null", () async {
@@ -95,6 +98,7 @@ void main() {
       expect( found.single.message, "Failed to read file binary.bin" );
       expect( found.single.stackTrace, isNotNull );
       expect( found.single.context!.metadata![ "file" ], "binary.bin" );
+      expect( found.single.error, "FileSystemException" );
     } );
 
     test( "writeFile into a missing directory: error entry, and the exception still reaches the caller", () async {
@@ -138,7 +142,7 @@ void main() {
     const badEntry = {
       "key"       : "k1",
       "value"     : <String, dynamic>{},
-      "created_at": "not a date",
+      "created_at": "alice@example.com",
     };
 
     test( "a corrupt entry in storage on get: error entry, tag CacheManager, treated as a miss", () async {
@@ -153,6 +157,7 @@ void main() {
       expect( found.single.message, "Error loading entry from storage" );
       expect( found.single.stackTrace, isNotNull );
       expect( found.single.context!.metadata![ "storageKey" ], "cache_get_k1" );
+      expect( jsonEncode( found.single.toJson() ), isNot( contains( "alice@example.com" ) ) );
       cache.dispose();
     } );
 
@@ -167,12 +172,13 @@ void main() {
       expect( found.single.message, "Error loading cached entry" );
       expect( found.single.stackTrace, isNotNull );
       expect( found.single.context!.metadata![ "cacheKey" ], "cache_boot" );
+      expect( jsonEncode( found.single.toJson() ), isNot( contains( "alice@example.com" ) ) );
       cache.dispose();
     } );
   } );
 
   group( "OfflineManager", () {
-    test( "a queued request that fails to process: error entry naming the request, tag OfflineManager", () async {
+    test( "a queued request that fails to process: error entry without the request key, failure event still sent", () async {
       await storage.setBool( "offline_mode", false );
       final offline = await OfflineManager.getInstance();
       await settle();
@@ -181,14 +187,21 @@ void main() {
       // The payload cannot be encoded, so persisting the queue fails while "req-bad" is still in it.
       await expectLater( offline.queueRequest( "req-bad", { "o": Object() } ), throwsA( isA<Object>() ) );
       capture.entries.clear();
+      final events = <OfflineEvent>[];
+      final sub    = offline.events.listen( events.add );
 
       await offline.processQueuedRequests();
+      await settle();
+      await sub.cancel();
 
       final found = entriesFor( "OfflineManager" ).where( ( e ) => e.level == LogLevel.error );
       expect( found, hasLength( 1 ) );
-      expect( found.single.message, "Error processing queued request req-good" );
+      expect( found.single.message, "Error processing queued request" );
       expect( found.single.stackTrace, isNotNull );
-      expect( found.single.context!.metadata![ "requestKey" ], "req-good" );
+      expect( jsonEncode( found.single.toJson() ), isNot( contains( "req-good" ) ), reason: "the request key can hold a query or body" );
+      final processed = events.whereType<OfflineRequestProcessedEvent>().where( ( e ) => e.requestKey == "req-good" ).toList();
+      expect( processed.last.success, isFalse, reason: "the last event must still report the failure" );
+      expect( processed.where( ( e ) => !e.success ), hasLength( 1 ) );
       offline.dispose();
     } );
   } );

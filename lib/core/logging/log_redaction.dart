@@ -25,11 +25,12 @@ final RegExp _jsonTokenField = RegExp(
   caseSensitive: false,
 );
 
-/// A token field in a Dart map's `toString()`, such as `{refresh_token: ...}`.
+/// A token field written `name: value` (a Dart map's `toString()`) or `name=value` (a form body or query string).
 ///
-/// Dio prints request bodies this way, so the JSON form alone would miss them.
+/// Dio prints request bodies as maps, and a parse error can quote a form-encoded frame, so the JSON form alone
+/// would miss both. The value stops at a newline, comma, closing brace or ampersand.
 final RegExp _mapTokenField = RegExp(
-  r"((?:access|refresh|id)_token)\s*:\s*([^\n,}]+)",
+  r"((?:access|refresh|id)_token)\s*([:=])\s*([^\n,}&]+)",
   caseSensitive: false,
 );
 
@@ -52,7 +53,7 @@ String redactSecrets( String line ) {
   // Field names first: they bound the value precisely, so a non-JWT or opaque
   // token is caught even when the JWT pattern cannot see it.
   out = out.replaceAllMapped( _jsonTokenField, ( m ) => "\"${m[ 1 ]}\":\"$_mask\"" );
-  out = out.replaceAllMapped( _mapTokenField,  ( m ) => "${m[ 1 ]}: $_mask" );
+  out = out.replaceAllMapped( _mapTokenField,  ( m ) => "${m[ 1 ]}${m[ 2 ] == "=" ? "=" : ": "}$_mask" );
   out = out.replaceAllMapped( _authHeader,     ( m ) => "${m[ 1 ]}$_mask" );
 
   // Then the shape, wherever it appears — a token logged under a name we did

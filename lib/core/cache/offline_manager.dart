@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../logging/error_summary.dart';
 import '../logging/logger.dart';
 import '../storage/storage_manager.dart';
 import 'cache_manager.dart';
@@ -165,7 +166,8 @@ class OfflineManager {
         _eventController.add(OfflineRequestProcessedEvent(request.key, true));
         await removeFromQueue(request.key);
       } catch (e, st) {
-        Logger.error( 'Error processing queued request ${request.key}', tag: 'OfflineManager', error: e, stackTrace: st, context: LogContext( metadata: { 'requestKey': request.key } ) );
+        // The request key holds the path, query and body of the request, so it stays out of the log.
+        Logger.error( 'Error processing queued request', tag: 'OfflineManager', error: describeFailure( e ), stackTrace: st );
         _eventController.add(OfflineRequestProcessedEvent(request.key, false));
       }
     }
