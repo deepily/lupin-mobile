@@ -354,6 +354,12 @@ class GitRangeTest( unittest.TestCase ):
         self.touch( "src/rnd/x.md", "history/x.md", "todo-archive/x.md", "io/m.md", ".claude/x.json" )
         self.assertEqual( mg.untracked_inputs( self.d ), [] )
 
+    def test_every_allow_list_entry_carries_a_reason( self ):                      # G3 class
+        self.assertEqual( set( mg.ALLOWED_UNTRACKED ), set( mg.ALLOWED_UNTRACKED_WHY ) )
+        for prefix, why in mg.ALLOWED_UNTRACKED_WHY.items():
+            self.assertTrue( prefix.endswith( "/" ), prefix )
+            self.assertGreater( len( why.split() ), 3, f"{prefix} needs a written reason" )
+
     def test_src_docs_is_refused_because_a_test_reads_it( self ):                    # G3
         self.touch( "src/docs/decisions/new.md" )
         self.assertEqual( mg.untracked_inputs( self.d ), [ "src/docs/decisions/new.md" ] )
@@ -386,9 +392,24 @@ class GitRangeTest( unittest.TestCase ):
         c5 = self.commit( "// ignore_for_file: avoid_print, invalid_assignment\nint f() => 2;\n", "edits it to cover more" )
         self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print, invalid_assignment" ) ] )
 
-    def test_editing_code_beside_an_unchanged_ignore_is_not_an_addition( self ):    # G1 negative control
+    def test_an_ignore_that_moves_onto_new_code_is_an_addition( self ):             # M1: the recycled ignore
+        c4 = self.commit( "int g() => 1; // ignore: avoid_print\n", "ignore sits on g" )
+        c5 = self.commit( "int g() => 1;\nString f() => 1; // ignore: avoid_print\n", "same ignore text, now on new code" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print" ) ] )
+
+    def test_an_ignore_line_that_moves_above_other_code_is_an_addition( self ):    # M1: comment-only form
+        c4 = self.commit( "// ignore: avoid_print\nint g() => 1;\nint h() => 2;\n", "ignore covers g" )
+        c5 = self.commit( "int g() => 1;\n// ignore: avoid_print\nint h() => 2;\n", "now covers h" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print" ) ] )
+
+    def test_editing_code_beside_an_ignore_is_an_addition( self ):                  # M1: the edit can add the error it hides
         c4 = self.commit( "int f() => 2; // ignore: avoid_print\n", "has one ignore" )
         c5 = self.commit( "int f() => 3; // ignore: avoid_print\n", "edits the code on that line" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print" ) ] )
+
+    def test_an_ignore_whose_code_is_untouched_is_not_an_addition( self ):         # M1 negative control
+        c4 = self.commit( "int f() => 2; // ignore: avoid_print\nint k() => 1;\n", "has one ignore" )
+        c5 = self.commit( "int f() => 2; // ignore: avoid_print\nint k() => 9;\nint z() => 0;\n", "edits other lines" )
         self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
 
     def test_the_docs_ignore_form_is_not_exempt( self ):                           # N1 ruling
