@@ -17,7 +17,7 @@ Checks, each an existing tool run as a subprocess, its output kept in a log dire
   2. docs gate  tool/pre_commit_gate.py --docs-all
   3. ignores    tool/check_doc_ignores.py
   4. coverage   tool/doc_coverage.py
-  5. tool tests python3 -m pytest tool/ -q
+  5. tool tests python3 -m pytest tool/ -q -p no:structlog_config
   6. suite      ./flutter.sh test --machine, judged by tool/check_test_failures.py (re-runs the suite
                 once when that script asks for it)
   7. ac-g2      tool/check_ac_g2.py on the suite's output
@@ -33,14 +33,17 @@ Run it from the real checkout, not from a copy under a scratch directory: three 
 check 7 reports them missing.
 
 Refused with exit 2 (CANNOT RUN): a range that does not end at HEAD, an empty range, modified tracked files,
-any untracked, non-ignored file outside src/rnd/, history/, todo-archive/, io/ and .claude/ (the checks
+any untracked, non-ignored file outside the ALLOWED_UNTRACKED_WHY list (src/rnd/, history/, todo-archive/, io/, .claude/; the checks
 read the working tree, so an untracked file can satisfy an import or an asset that the commit cannot), a missing
 dart, flutter.sh or tool script.
 
 A range that edits any analysis_options.yaml fails check 1 (a commit could exclude its own errors); pass
---allow-analyzer-config to accept it. A range that adds a line containing `ignore:` or `ignore_for_file:` to any
-.dart file fails check 1 too (such a comment silences analyzer errors; the public_member_api_docs form is not
-exempt); pass --allow-ignores to accept it. Either flag makes the verdict line say so.
+--allow-analyzer-config to accept it. A range that changes any .dart file that carries an `ignore:` or
+`ignore_for_file:` at the head fails check 1 too (an ignore moved onto identical code, or an edit away from its line, hides
+errors the pair rule cannot see), as does one that changes the ignores in force: a new
+`ignore:` / `ignore_for_file:` comment, one edited to name other codes, or one that moved onto different code
+(an ignore silences analyzer errors on the code it covers; the public_member_api_docs form is not exempt); pass
+--allow-ignores to accept it. A removed ignore is not refused (it hides less). Either flag makes the verdict line say so.
 The analyzer runs over the top-level directories of the tracked .dart files (lib, test, integration_test, ...),
 at the head and, separately, at the start of the range.
 
@@ -269,7 +272,23 @@ def range_commits( start, end, root=ROOT ):
     return len( git( [ "rev-list", f"{start}..{end}" ], root ).split() )
 
 
-ALLOWED_UNTRACKED = ( "src/rnd/", "history/", "todo-archive/", "io/", ".claude/" )
+# Everything untracked is refused unless it is listed here with the reason nothing reads it. Searched 2026-10-03
+# (test/, integration_test/, lib/ and tool/ for File/Directory/open/rootBundle reads, pubspec.yaml assets, tool configs):
+# no test or tool reads under any of these. Before adding an entry, repeat that search and write the reason beside it.
+# The structlog_config pytest plugin (installed in the venv the lupin seats use) crashes pytest's report hook on the first
+# failing unittest-style test: exit 3 and INTERNALERROR, the reason only in the log. Bisected 2026-10-03: switching off that
+# plugin alone gives exit 1 and "1 failed"; switching off pytest-playwright (the first guess) does not. pytest accepts
+# `-p no:<name>` for a plugin that is not installed and ignores it, so the same command is safe on every machine.
+TOOL_TESTS_CMD = [ sys.executable, "-m", "pytest", "tool/", "-q", "-p", "no:structlog_config" ]
+
+ALLOWED_UNTRACKED_WHY = {
+    "src/rnd/"      : "research and plans; only test strings mention it (doc-browser fixtures), no file is opened",
+    "history/"      : "archived history.md files, read by people; tests name history.md only as a link string",
+    "todo-archive/" : "archived TODO files, read by people; nothing opens them",
+    ".claude/"      : "session manifests, worktrees and slash commands; not app, test or tool input",
+    "io/"           : "mementos and hand-over files between sessions; nothing in test/ or tool/ opens them",
+}
+ALLOWED_UNTRACKED = tuple( ALLOWED_UNTRACKED_WHY )
 
 
 def untracked_inputs( root=ROOT ):
@@ -324,20 +343,49 @@ def ignore_additions( start, end, root=ROOT ):
     Requires:
         - start and end are commits in root
     Ensures:
-        - returns sorted ( file, codes ) pairs for each changed .dart file whose set of ignore comments (the text from
-          `ignore:` or `ignore_for_file:` to the end of its line) gained an entry between start and end; codes is the
-          text after the colon of each added comment, joined with "; "
-        - an ignore comment that only moves, or sits beside edited code, is not an addition; one that is edited
-          to cover more (or other) codes is; a removed ignore is not
+        - returns sorted ( file, codes ) pairs for each changed .dart file whose ignores in force gained an entry between
+          start and end; an ignore is the pair ( its text from `ignore:` or `ignore_for_file:` to the end of the line,
+          the code it covers ); codes is the text after the colon of each added ignore, joined with "; "
+        - the code an `ignore:` covers is the code before it on its line, or the next line of code when it stands alone;
+          an `ignore_for_file:` covers the file, so it has no line
+        - an ignore that moves onto other code, sits beside edited code, or is edited to cover more (or other) codes
+          is an addition: the moved or edited code may carry an error the ignore now hides
+        - an ignore that moves together with unchanged code is not an addition; a removed ignore is not (it hides less)
         - the public_member_api_docs form is counted like any other
     """
     def grab( text ):
-        return collections.Counter( m.group( 0 ).strip() for m in map( IGNORE_LINE.search, text.splitlines() ) if m )
+        lines, keys = text.splitlines(), collections.Counter()
+        for i, line in enumerate( lines ):
+            m = IGNORE_LINE.search( line )
+            if not m: continue
+            if m.group( 0 ).startswith( "ignore_for_file" ):
+                covered = ""                                    # file-wide: no line to move
+            else:
+                beside  = line[ :m.start() ].rstrip().rstrip( "/" ).strip()
+                covered = beside or next( ( l.strip() for l in lines[ i + 1: ] if l.strip() and not l.strip().startswith( "//" ) ), "" )
+            keys[ ( m.group( 0 ).strip(), covered ) ] += 1
+        return keys
     found = []
     for path in changed_dart_files( start, end, root )[ 0 ]:
         added = list( ( grab( show( end, path, root ) ) - grab( show( start, path, root ) ) ).elements() )
-        if added: found.append( ( path, "; ".join( IGNORE_LINE.search( a ).group( "codes" ).strip() for a in sorted( added ) ) ) )
+        if added: found.append( ( path, "; ".join( IGNORE_LINE.search( a ).group( "codes" ).strip() for a, _ in sorted( added ) ) ) )
     return sorted( found )
+
+
+def ignore_files_changed( start, end, root=ROOT ):
+    """
+    List the changed .dart files that carry an ignore at the end of the range.
+
+    Requires:
+        - start and end are commits in root
+    Ensures:
+        - returns sorted paths of .dart files the range changes in any way whose text at end holds an `ignore:` or
+          `ignore_for_file:` comment; a file deleted by the range is not listed (nothing is left to hide an error)
+        - this is the rule that catches what the ( ignore, covered code ) pair cannot see: an ignore moved onto
+          identical-looking code, an edit to the signature above the ignored line, any change under `ignore_for_file:`
+    """
+    return sorted( p for p in changed_dart_files( start, end, root )[ 0 ]
+                   if any( IGNORE_LINE.search( line ) for line in show( end, p, root ).splitlines() ) )
 
 
 def dart_roots( paths ):
@@ -496,8 +544,8 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     Ensures:
         - returns 1, without running the analyzer, when the range edits any analysis_options.yaml and
           allow_config is not set: the head is analyzed with its own options, so a commit could exclude its own errors
-        - returns 1, likewise, when the range adds an ignore comment to a .dart file and allow_ignores is not set;
-          the detail names each file and the codes
+        - returns 1, likewise, when the range adds an ignore comment to a .dart file, or changes any .dart file that
+          carries an ignore at the head, and allow_ignores is not set; the detail names each file (and the codes added)
         - analyzes the top-level directories of the tracked .dart files at the head, and those at the start for the start
         - returns ( exit_code, detail ); 0 only when the head has no error beyond the start's
         - returns 1 when either analyzer run did not finish, or the start could not be exported
@@ -505,11 +553,15 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     """
     touched = analyzer_config_files( git( [ "diff", "--name-only", "--no-renames", f"{start}..HEAD" ], root ).splitlines() )
     ignored = ignore_additions( start, "HEAD", root )
+    carrying = [ f for f in ignore_files_changed( start, "HEAD", root ) if f not in [ n for n, _ in ignored ] ]
     refusals = []
     if touched and not allow_config:
         refusals.append( f"range edits analyzer config: {', '.join( touched )} (pass --allow-analyzer-config after reading that diff)" )
     if ignored and not allow_ignores:
         refusals.append( "range adds ignore comments: " + "; ".join( f"{f} [{c}]" for f, c in ignored ) + " (pass --allow-ignores after reading that diff)" )
+    if carrying and not allow_ignores:
+        refusals.append( "range changes .dart file(s) that carry an ignore, which can now hide an error: " + ", ".join( carrying )
+                         + " (pass --allow-ignores after reading that diff)" )
     if refusals: return 1, " | ".join( refusals )
     head_targets, base_targets = dart_roots_at( "HEAD", root ), dart_roots_at( start, root )
     head = collections.Counter()
@@ -670,14 +722,14 @@ def main( argv=None, root=ROOT ):
     names    = git( [ "diff", "--name-only", "--no-renames", f"{start}..{end}" ], root ).splitlines()
     warnings = gate_input_files( names )
     rng      = range_label( start, end, count, args.comments_only, bool( analyzer_config_files( names ) ) and args.allow_analyzer_config,
-                           bool( ignore_additions( start, end, root ) ) and args.allow_ignores )
+                           bool( ignore_additions( start, end, root ) or ignore_files_changed( start, end, root ) ) and args.allow_ignores )
 
     results = []
     code, detail = check_analyzer( start, logdir, root, args.allow_analyzer_config, args.allow_ignores );  results.append( ( "analyzer", code, detail ) )
     for name, cmd in ( ( "docs-gate",   [ sys.executable, "tool/pre_commit_gate.py", "--docs-all" ] ),
                        ( "ignores",     [ sys.executable, "tool/check_doc_ignores.py" ] ),
                        ( "coverage",    [ sys.executable, "tool/doc_coverage.py" ] ),
-                       ( "tool-tests",  [ sys.executable, "-m", "pytest", "tool/", "-q" ] ) ):
+                       ( "tool-tests",  TOOL_TESTS_CMD ) ):
         code = run_logged( f"{len( results ) + 1}-{name}", cmd, logdir, root )
         results.append( ( name, code, " ".join( cmd[ 1: ] ) ) )
     if args.skip_suite:

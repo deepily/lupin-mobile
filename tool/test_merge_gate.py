@@ -249,6 +249,20 @@ class VerdictTest( unittest.TestCase ):
         self.assertEqual( text[ -1 ], "logs: /tmp/x" )
 
 
+class ToolTestsCommandTest( unittest.TestCase ):
+
+    def test_a_failing_unittest_style_tool_test_reports_as_an_ordinary_failure( self ):    # round 2, item 2
+        """The row's own command, pointed at a folder holding one failing unittest.TestCase."""
+        with tempfile.TemporaryDirectory() as d:
+            with open( os.path.join( d, "test_boom.py" ), "w" ) as f:
+                f.write( "import unittest\nclass T( unittest.TestCase ):\n    def test_boom( self ): self.assertEqual( 1, 2 )\n" )
+            cmd = [ d if a == "tool/" else a for a in mg.TOOL_TESTS_CMD ]
+            p   = subprocess.run( cmd, cwd=d, capture_output=True, text=True )
+        self.assertEqual( p.returncode, 1, p.stdout[ -400: ] )          # 3 is pytest's INTERNALERROR
+        self.assertIn( "1 failed", p.stdout )
+        self.assertNotIn( "INTERNALERROR", p.stdout )
+
+
 class GitRangeTest( unittest.TestCase ):
     """A throwaway repo: one base commit, one comment-only commit, one token-changing commit."""
 
@@ -354,6 +368,12 @@ class GitRangeTest( unittest.TestCase ):
         self.touch( "src/rnd/x.md", "history/x.md", "todo-archive/x.md", "io/m.md", ".claude/x.json" )
         self.assertEqual( mg.untracked_inputs( self.d ), [] )
 
+    def test_every_allow_list_entry_carries_a_reason( self ):                      # G3 class
+        self.assertEqual( set( mg.ALLOWED_UNTRACKED ), set( mg.ALLOWED_UNTRACKED_WHY ) )
+        for prefix, why in mg.ALLOWED_UNTRACKED_WHY.items():
+            self.assertTrue( prefix.endswith( "/" ), prefix )
+            self.assertGreater( len( why.split() ), 3, f"{prefix} needs a written reason" )
+
     def test_src_docs_is_refused_because_a_test_reads_it( self ):                    # G3
         self.touch( "src/docs/decisions/new.md" )
         self.assertEqual( mg.untracked_inputs( self.d ), [ "src/docs/decisions/new.md" ] )
@@ -386,10 +406,69 @@ class GitRangeTest( unittest.TestCase ):
         c5 = self.commit( "// ignore_for_file: avoid_print, invalid_assignment\nint f() => 2;\n", "edits it to cover more" )
         self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print, invalid_assignment" ) ] )
 
-    def test_editing_code_beside_an_unchanged_ignore_is_not_an_addition( self ):    # G1 negative control
+    def test_an_ignore_that_moves_onto_new_code_is_an_addition( self ):             # M1: the recycled ignore
+        c4 = self.commit( "int g() => 1; // ignore: avoid_print\n", "ignore sits on g" )
+        c5 = self.commit( "int g() => 1;\nString f() => 1; // ignore: avoid_print\n", "same ignore text, now on new code" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print" ) ] )
+
+    def test_an_ignore_line_that_moves_above_other_code_is_an_addition( self ):    # M1: comment-only form
+        c4 = self.commit( "// ignore: avoid_print\nint g() => 1;\nint h() => 2;\n", "ignore covers g" )
+        c5 = self.commit( "int g() => 1;\n// ignore: avoid_print\nint h() => 2;\n", "now covers h" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print" ) ] )
+
+    def test_editing_code_beside_an_ignore_is_an_addition( self ):                  # M1: the edit can add the error it hides
         c4 = self.commit( "int f() => 2; // ignore: avoid_print\n", "has one ignore" )
         c5 = self.commit( "int f() => 3; // ignore: avoid_print\n", "edits the code on that line" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [ ( "a.dart", "avoid_print" ) ] )
+
+    def test_an_ignore_whose_code_is_untouched_is_not_an_addition( self ):         # M1 negative control
+        c4 = self.commit( "int f() => 2; // ignore: avoid_print\nint k() => 1;\n", "has one ignore" )
+        c5 = self.commit( "int f() => 2; // ignore: avoid_print\nint k() => 9;\nint z() => 0;\n", "edits other lines" )
         self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
+
+    def test_an_ignore_moved_onto_identical_code_is_caught_by_the_file_rule( self ):    # H1
+        c4 = self.commit( "int a() {\n  return 1; // ignore: return_of_invalid_type\n}\nString b() {\n  return 1;\n}\n", "ignore on a" )
+        c5 = self.commit( "int a() {\n  return 1;\n}\nString b() {\n  return 1; // ignore: return_of_invalid_type\n}\n", "ignore on b" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )                  # the pair rule is blind to it
+        self.assertEqual( mg.ignore_files_changed( c4, c5, self.d ), [ "a.dart" ] )
+
+    def test_an_edit_away_from_the_ignore_line_is_caught_by_the_file_rule( self ):     # H2
+        c4 = self.commit( "int b() {\n  return 1; // ignore: return_of_invalid_type\n}\n", "has an ignore" )
+        c5 = self.commit( "String b() {\n  return 1; // ignore: return_of_invalid_type\n}\n", "signature edited" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
+        self.assertEqual( mg.ignore_files_changed( c4, c5, self.d ), [ "a.dart" ] )
+
+    def test_any_change_under_ignore_for_file_is_caught_by_the_file_rule( self ):      # H2, file-wide form
+        c4 = self.commit( "// ignore_for_file: return_of_invalid_type\nint c() => 1;\n", "file-wide ignore" )
+        c5 = self.commit( "// ignore_for_file: return_of_invalid_type\nString c() => 1;\n", "code edited" )
+        self.assertEqual( mg.ignore_additions( c4, c5, self.d ), [] )
+        self.assertEqual( mg.ignore_files_changed( c4, c5, self.d ), [ "a.dart" ] )
+
+    def test_a_file_without_an_ignore_is_not_listed( self ):                           # negative control
+        c4 = self.commit( "int c() => 1;\n", "no ignore" )
+        c5 = self.commit( "int c() => 2;\n", "edited" )
+        self.assertEqual( mg.ignore_files_changed( c4, c5, self.d ), [] )
+
+    def test_an_unchanged_file_with_an_ignore_is_not_listed( self ):                   # negative control
+        c4 = self.commit( "int c() => 1; // ignore: avoid_print\n", "has an ignore" )
+        c5 = self.commit( "int c() => 1; // ignore: avoid_print\n", "touches another file", ( "notes.txt", "x\n" ) )
+        self.assertEqual( mg.ignore_files_changed( c4, c5, self.d ), [] )
+
+    def test_an_emptied_file_with_no_ignore_left_is_not_listed( self ):                      # negative control
+        c4 = self.commit( "int c() => 1; // ignore: avoid_print\n", "has an ignore" )
+        c5 = self.commit( "", "empties it" )
+        self.assertEqual( mg.ignore_files_changed( c4, c5, self.d ), [] )
+
+    def test_the_analyzer_row_refuses_a_changed_file_that_carries_an_ignore( self ):   # H1 and H2, refusal message
+        self.commit( "int b() {\n  return 1; // ignore: return_of_invalid_type\n}\n", "has an ignore" )
+        base = self.sh( "rev-parse", "HEAD" ).strip()
+        self.commit( "String b() {\n  return 1; // ignore: return_of_invalid_type\n}\n", "signature edited" )
+        with tempfile.TemporaryDirectory() as logs:
+            code, detail = mg.check_analyzer( base, logs, root=self.d, allow_config=False, allow_ignores=False )
+        self.assertEqual( code, 1 )
+        self.assertIn( "carry an ignore", detail )
+        self.assertIn( "a.dart", detail )
+        self.assertIn( "--allow-ignores", detail )
 
     def test_the_docs_ignore_form_is_not_exempt( self ):                           # N1 ruling
         c4 = self.commit( "// ignore: public_member_api_docs - generated\nint f() => 2;\n", "docs ignore" )
