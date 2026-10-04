@@ -470,6 +470,43 @@ class GitRangeTest( unittest.TestCase ):
         self.assertIn( "a.dart", detail )
         self.assertIn( "--allow-ignores", detail )
 
+    OPTIONS = "include: package:flutter_lints/flutter.yaml\n# note\nanalyzer:\n  exclude:\n    # the SDK\n    - flutter/**\n    - build/**   # output\n    - \"**/*.g.dart\"\n\nlinter:\n  rules:\n    - avoid_print\n"
+
+    def test_analyzer_excludes_are_read_from_the_options_file( self ):               # N5
+        self.assertEqual( mg.analyzer_excludes( self.OPTIONS ), [ "flutter/**", "build/**", "**/*.g.dart" ] )
+        self.assertEqual( mg.analyzer_excludes( "linter:\n  rules:\n    - avoid_print\n" ), [] )
+        self.assertEqual( mg.analyzer_excludes( "" ), [] )
+
+    def test_exclude_globs_match_whole_paths( self ):                                # N5
+        self.assertTrue( mg.glob_matches( "build/**", "build/zz.dart" ) )
+        self.assertTrue( mg.glob_matches( "build/**", "build/a/b/zz.dart" ) )
+        self.assertFalse( mg.glob_matches( "build/**", "lib/build/zz.dart" ) )
+        self.assertTrue( mg.glob_matches( "**/*.g.dart", "lib/x/a.g.dart" ) )
+        self.assertTrue( mg.glob_matches( "**/*.g.dart", "a.g.dart" ) )
+        self.assertFalse( mg.glob_matches( "**/*.g.dart", "lib/a.dart" ) )
+
+    def test_a_tracked_dart_file_under_an_excluded_path_is_listed( self ):           # N5
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
+        c5 = self.commit( "int f() => 1;\n", "forced file", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
+        self.assertEqual( mg.excluded_dart_files( c5, self.d ), [ "build/zz_broken.dart" ] )
+
+    def test_files_the_analyzer_does_read_or_that_are_not_dart_are_not_listed( self ):   # N5 negative control
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
+        os.makedirs( os.path.join( self.d, "build" ) )
+        with open( os.path.join( self.d, "build", "out.txt" ), "w" ) as f: f.write( "x" )
+        c5 = self.commit( "int f() => 2;\n", "plain" )
+        self.assertEqual( mg.excluded_dart_files( c5, self.d ), [] )
+
+    def test_the_analyzer_row_refuses_a_tracked_file_the_analyzer_never_opens( self ):    # N5, refusal message
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
+        base = self.sh( "rev-parse", "HEAD" )
+        self.commit( "int f() => 1;\n", "forced file", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
+        with tempfile.TemporaryDirectory() as logs:
+            code, detail = mg.check_analyzer( base, logs, root=self.d, allow_config=False, allow_ignores=False )
+        self.assertEqual( code, 1 )
+        self.assertIn( "analyzer-excluded", detail )
+        self.assertIn( "build/zz_broken.dart", detail )
+
     def test_the_docs_ignore_form_is_not_exempt( self ):                           # N1 ruling
         c4 = self.commit( "// ignore: public_member_api_docs - generated\nint f() => 2;\n", "docs ignore" )
         self.assertEqual( mg.ignore_additions( self.c3, c4, self.d ), [ ( "a.dart", "public_member_api_docs - generated" ) ] )
