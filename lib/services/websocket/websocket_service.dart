@@ -451,7 +451,7 @@ class WebSocketService {
       _channel!.sink.add(encoded);
     } catch (e) {
       print('[WebSocket] Failed to send message: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -475,7 +475,7 @@ class WebSocketService {
       _channel!.sink.add(data);
     } catch (e) {
       print('[WebSocket] Failed to send binary data: $e');
-      throw e;
+      rethrow;
     }
   }
 
