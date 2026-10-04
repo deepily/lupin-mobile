@@ -403,15 +403,13 @@ class _TestBloc extends TranscriptStreamBloc {
   final FakeLifecycle lifecycle;
 
   _TestBloc( {
-    required String               ccSessionId,
+    required super.ccSessionId,
     required this.lifecycle,
     required TranscriptRepository repo,
-    required TranscriptFrameRouter router,
+    required super.router,
     required RecordingSender      send,
   } ) : super(
-          ccSessionId : ccSessionId,
           repository  : repo,
-          router      : router,
           send        : send.call,
         );
 

@@ -23,7 +23,7 @@ class CachedHttpService extends HttpService {
   ///   - Service inherits all base HTTP functionality
   ///   - Caching and offline components are initialized asynchronously
   ///   - Service is ready for both online and offline operations
-  CachedHttpService(Dio dio) : super(dio) {
+  CachedHttpService(super.dio) {
     _initialize();
   }
 

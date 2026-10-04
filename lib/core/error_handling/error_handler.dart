@@ -49,15 +49,13 @@ class NetworkError extends AppError {
 
   /// Creates a network error; the default user message asks the user to check the connection.
   NetworkError(
-    String code,
-    String message, {
+    super.code,
+    super.message, {
     this.statusCode,
     this.endpoint,
     String? userMessage,
     Map<String, dynamic>? metadata,
   }) : super(
-         code,
-         message,
          userMessage: userMessage ?? 'Network connection problem. Please check your internet connection.',
          metadata: {
            ...?metadata,
@@ -115,15 +113,13 @@ class AuthError extends AppError {
 
   /// Creates an authentication or authorization error.
   AuthError(
-    String code,
-    String message, {
+    super.code,
+    super.message, {
     this.sessionId,
     this.userId,
     String? userMessage,
     Map<String, dynamic>? metadata,
   }) : super(
-         code,
-         message,
          userMessage: userMessage ?? 'Authentication required. Please sign in.',
          metadata: {
            ...?metadata,
@@ -172,15 +168,13 @@ class VoiceError extends AppError {
 
   /// Creates a voice or audio error.
   VoiceError(
-    String code,
-    String message, {
+    super.code,
+    super.message, {
     this.voiceInputId,
     this.audioPath,
     String? userMessage,
     Map<String, dynamic>? metadata,
   }) : super(
-         code,
-         message,
          userMessage: userMessage ?? 'Voice processing failed. Please try again.',
          metadata: {
            ...?metadata,
@@ -238,15 +232,13 @@ class StorageError extends AppError {
 
   /// Creates a storage error.
   StorageError(
-    String code,
-    String message, {
+    super.code,
+    super.message, {
     this.filePath,
     this.operation,
     String? userMessage,
     Map<String, dynamic>? metadata,
   }) : super(
-         code,
-         message,
          userMessage: userMessage ?? 'Storage operation failed.',
          metadata: {
            ...?metadata,
@@ -294,15 +286,13 @@ class ValidationError extends AppError {
 
   /// Creates a validation error.
   ValidationError(
-    String code,
-    String message, {
+    super.code,
+    super.message, {
     this.field,
     this.value,
     String? userMessage,
     Map<String, dynamic>? metadata,
   }) : super(
-         code,
-         message,
          userMessage: userMessage ?? 'Invalid input provided.',
          metadata: {
            ...?metadata,
