@@ -185,7 +185,7 @@ class StorageManager {
   /// Append data to a file
   Future<void> appendToFile(String fileName, String data) async {
     try {
-      final file = File('${_documentsPath}/$fileName');
+      final file = File('$_documentsPath/$fileName');
       await file.writeAsString(data, mode: FileMode.append);
     } catch (e) {
       print('[StorageManager] Failed to append to file $fileName: $e');
@@ -196,7 +196,7 @@ class StorageManager {
   /// Check if file exists
   Future<bool> fileExists(String fileName) async {
     try {
-      final file = File('${_documentsPath}/$fileName');
+      final file = File('$_documentsPath/$fileName');
       return await file.exists();
     } catch (e) {
       print('[StorageManager] Failed to check file existence for $fileName: $e');
@@ -207,7 +207,7 @@ class StorageManager {
   /// Get file size in bytes
   Future<int?> getFileSize(String fileName) async {
     try {
-      final file = File('${_documentsPath}/$fileName');
+      final file = File('$_documentsPath/$fileName');
       if (await file.exists()) {
         return await file.length();
       }
@@ -221,8 +221,8 @@ class StorageManager {
   /// Rename a file
   Future<void> renameFile(String oldFileName, String newFileName) async {
     try {
-      final oldFile = File('${_documentsPath}/$oldFileName');
-      final newFile = File('${_documentsPath}/$newFileName');
+      final oldFile = File('$_documentsPath/$oldFileName');
+      final newFile = File('$_documentsPath/$newFileName');
       
       if (await oldFile.exists()) {
         await oldFile.rename(newFile.path);
@@ -236,7 +236,7 @@ class StorageManager {
   /// Delete a file
   Future<void> deleteFile(String fileName) async {
     try {
-      final file = File('${_documentsPath}/$fileName');
+      final file = File('$_documentsPath/$fileName');
       if (await file.exists()) {
         await file.delete();
       }
@@ -249,7 +249,7 @@ class StorageManager {
   /// Read file contents
   Future<String?> readFile(String fileName) async {
     try {
-      final file = File('${_documentsPath}/$fileName');
+      final file = File('$_documentsPath/$fileName');
       if (await file.exists()) {
         return await file.readAsString();
       }
@@ -263,7 +263,7 @@ class StorageManager {
   /// Write file contents
   Future<void> writeFile(String fileName, String content) async {
     try {
-      final file = File('${_documentsPath}/$fileName');
+      final file = File('$_documentsPath/$fileName');
       await file.writeAsString(content);
     } catch (e) {
       print('[StorageManager] Failed to write file $fileName: $e');
