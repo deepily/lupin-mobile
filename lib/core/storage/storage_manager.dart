@@ -4,9 +4,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+import '../logging/log_file_store.dart';
 
 /// Storage manager for handling local data persistence
-class StorageManager {
+class StorageManager implements LogFileStore {
   static StorageManager? _instance;
   static final Completer<StorageManager> _completer = Completer<StorageManager>();
   
@@ -184,6 +185,7 @@ class StorageManager {
   // File operations for logging and caching
 
   /// Append data to a file
+  @override
   Future<void> appendToFile(String fileName, String data) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -195,6 +197,7 @@ class StorageManager {
   }
 
   /// Check if file exists
+  @override
   Future<bool> fileExists(String fileName) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -206,6 +209,7 @@ class StorageManager {
   }
 
   /// Get file size in bytes
+  @override
   Future<int?> getFileSize(String fileName) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -220,6 +224,7 @@ class StorageManager {
   }
 
   /// Rename a file
+  @override
   Future<void> renameFile(String oldFileName, String newFileName) async {
     try {
       final oldFile = File('$_documentsPath/$oldFileName');
@@ -235,6 +240,7 @@ class StorageManager {
   }
 
   /// Delete a file
+  @override
   Future<void> deleteFile(String fileName) async {
     try {
       final file = File('$_documentsPath/$fileName');

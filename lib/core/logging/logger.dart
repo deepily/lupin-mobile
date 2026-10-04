@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import '../storage/storage_manager.dart';
+import 'log_file_store.dart';
+import 'log_redaction.dart';
 
 /// Log levels for filtering and categorizing log messages
 enum LogLevel {
@@ -155,12 +156,22 @@ abstract class LogDestination {
   Future<void> flush();
 }
 
-/// Console log destination for development
+/// Console log destination: every entry in debug builds, warnings and above in release.
+///
+/// Release builds keep warnings and errors on the device console so a check that
+/// reads logcat still sees them. Release output goes through `debugPrint`.
 class ConsoleLogDestination implements LogDestination {
+  final bool _debugMode;
+
+  /// Creates a destination; [debugMode] defaults to `kDebugMode`, and false forces release output in tests.
+  ConsoleLogDestination({ bool? debugMode }) : _debugMode = debugMode ?? kDebugMode;
+
   @override
   void write(LogEntry entry) {
-    if (kDebugMode) {
-      print(entry.toFormattedString());
+    if (_debugMode) {
+      if (kDebugMode) print(entry.toFormattedString());
+    } else if (entry.level >= LogLevel.warning) {
+      debugPrint(entry.toFormattedString());
     }
   }
 
@@ -170,7 +181,11 @@ class ConsoleLogDestination implements LogDestination {
   }
 }
 
-/// File log destination for persistent logging
+/// File log destination for persistent logging.
+///
+/// Entries at error and above start a flush at once; others wait for [bufferSize]
+/// entries. At most one write runs at a time, and entries that arrive during it
+/// go out in a follow-up write, so no entry is written twice.
 class FileLogDestination implements LogDestination {
   /// Name of the log file.
   final String fileName;
@@ -178,9 +193,14 @@ class FileLogDestination implements LogDestination {
   final int maxFileSize;
   /// Number of rotated files kept.
   final int maxFiles;
-  final StorageManager _storage;
+  final LogFileStore _storage;
   final List<LogEntry> _buffer = [];
   final int _bufferSize;
+  Future<void>? _flushing;
+  bool _flushAgain = false;
+
+  /// Most entries kept in memory while the file cannot be written; the oldest drop first.
+  static const int maxBufferedEntries = 1000;
 
   /// Creates a destination that writes through [_storage].
   FileLogDestination(
@@ -194,8 +214,8 @@ class FileLogDestination implements LogDestination {
   @override
   void write(LogEntry entry) {
     _buffer.add(entry);
-    
-    if (_buffer.length >= _bufferSize) {
+
+    if (entry.level >= LogLevel.error || _buffer.length >= _bufferSize) {
       _flushBuffer();
     }
   }
@@ -205,21 +225,46 @@ class FileLogDestination implements LogDestination {
     await _flushBuffer();
   }
 
-  Future<void> _flushBuffer() async {
+  Future<void> _flushBuffer() {
+    if (_flushing != null) {
+      _flushAgain = true;
+      return _flushing!;
+    }
+    return _flushing = _drain();
+  }
+
+  Future<void> _drain() async {
+    try {
+      do {
+        _flushAgain = false;
+        await _writeBatch();
+      } while (_flushAgain);
+    } finally {
+      _flushing = null;
+    }
+  }
+
+  Future<void> _writeBatch() async {
     if (_buffer.isEmpty) return;
 
+    final batch = List<LogEntry>.of(_buffer);
+    _buffer.clear();
+
     try {
-      final logData = '${_buffer.map((entry) => jsonEncode(entry.toJson())).join('\n')}\n';
-      
+      final logData = '${batch.map((entry) => jsonEncode(entry.toJson())).join('\n')}\n';
+
       // Write to current log file
       await _storage.appendToFile(fileName, logData);
-      
+
       // Check file size and rotate if necessary
       await _rotateLogsIfNeeded();
-      
-      _buffer.clear();
     } catch (e) {
-      // Fallback to console if file writing fails
+      // Keep the batch for the next attempt, bounded so a dead disk cannot grow memory.
+      _buffer.insertAll(0, batch);
+      if (_buffer.length > maxBufferedEntries) {
+        _buffer.removeRange(0, _buffer.length - maxBufferedEntries);
+      }
+      // Not routed through Logger: this destination is what Logger writes to.
       if (kDebugMode) {
         print('Failed to write logs to file: $e');
       }
@@ -334,18 +379,28 @@ class Logger {
   final List<LogDestination> _destinations = [];
   LogContext? _globalContext;
 
-  /// Initialize logger with destinations
+  /// Initialize logger with destinations.
+  ///
+  /// Requires:
+  ///   - [fileStore] is non-null when [enableFile] is true
+  ///
+  /// Raises:
+  ///   - [ArgumentError] when [enableFile] is true and [fileStore] is null
   static Future<void> initialize({
     LogLevel minLevel = LogLevel.info,
     bool enableConsole = true,
     bool enableFile = true,
+    LogFileStore? fileStore,
     bool enableRemote = false,
     String? remoteEndpoint,
     String? remoteApiKey,
   }) async {
+    if (enableFile && fileStore == null) {
+      throw ArgumentError.value( fileStore, 'fileStore', 'required when enableFile is true' );
+    }
     final logger = Logger.instance;
     logger._minLevel = minLevel;
-    
+
     // Add console destination
     if (enableConsole) {
       logger._destinations.add(ConsoleLogDestination());
@@ -353,8 +408,7 @@ class Logger {
     
     // Add file destination
     if (enableFile) {
-      final storage = await StorageManager.getInstance();
-      logger._destinations.add(FileLogDestination(storage));
+      logger._destinations.add(FileLogDestination(fileStore!));
     }
     
     // Add remote destination
@@ -364,6 +418,20 @@ class Logger {
         apiKey: remoteApiKey,
       ));
     }
+  }
+
+  /// Adds [destination] to the shared logger.
+  static void addDestination(LogDestination destination) {
+    instance._destinations.add(destination);
+  }
+
+  /// Removes every destination and restores the default level and context.
+  @visibleForTesting
+  static void resetForTesting() {
+    final logger = instance;
+    logger._destinations.clear();
+    logger._minLevel      = kDebugMode ? LogLevel.debug : LogLevel.info;
+    logger._globalContext = null;
   }
 
   /// Set global context for all log entries
@@ -376,7 +444,11 @@ class Logger {
     instance._minLevel = level;
   }
 
-  /// Log a message with specified level
+  /// Log a message with specified level.
+  ///
+  /// Ensures:
+  ///   - credentials in [message] and in the text of [error] are masked by `redactSecrets`
+  ///   - with no destination attached, warnings and above go to `debugPrint` so an early failure is not lost
   static void log(
     LogLevel level,
     String message, {
@@ -392,12 +464,17 @@ class Logger {
     final entry = LogEntry(
       timestamp: DateTime.now(),
       level: level,
-      message: message,
+      message: redactSecrets( message ),
       tag: tag,
       context: context ?? logger._globalContext,
-      error: error,
+      error: error == null ? null : redactSecrets( error.toString() ),
       stackTrace: stackTrace,
     );
+
+    if (logger._destinations.isEmpty) {
+      if (level >= LogLevel.warning) debugPrint( entry.toFormattedString() );
+      return;
+    }
 
     for (final destination in logger._destinations) {
       destination.write(entry);
