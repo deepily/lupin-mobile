@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -95,7 +96,7 @@ class StorageManager {
     try {
       return jsonDecode(jsonString) as Map<String, dynamic>;
     } catch (e) {
-      print('[StorageManager] Error parsing JSON for key $key: $e');
+      debugPrint('[StorageManager] Error parsing JSON for key $key: $e');
       return null;
     }
   }
@@ -115,7 +116,7 @@ class StorageManager {
       final decoded = jsonDecode(jsonString) as List<dynamic>;
       return decoded.cast<Map<String, dynamic>>();
     } catch (e) {
-      print('[StorageManager] Error parsing JSON list for key $key: $e');
+      debugPrint('[StorageManager] Error parsing JSON list for key $key: $e');
       return null;
     }
   }
@@ -188,7 +189,7 @@ class StorageManager {
       final file = File('$_documentsPath/$fileName');
       await file.writeAsString(data, mode: FileMode.append);
     } catch (e) {
-      print('[StorageManager] Failed to append to file $fileName: $e');
+      debugPrint('[StorageManager] Failed to append to file $fileName: $e');
       rethrow;
     }
   }
@@ -199,7 +200,7 @@ class StorageManager {
       final file = File('$_documentsPath/$fileName');
       return await file.exists();
     } catch (e) {
-      print('[StorageManager] Failed to check file existence for $fileName: $e');
+      debugPrint('[StorageManager] Failed to check file existence for $fileName: $e');
       return false;
     }
   }
@@ -213,7 +214,7 @@ class StorageManager {
       }
       return null;
     } catch (e) {
-      print('[StorageManager] Failed to get file size for $fileName: $e');
+      debugPrint('[StorageManager] Failed to get file size for $fileName: $e');
       return null;
     }
   }
@@ -228,7 +229,7 @@ class StorageManager {
         await oldFile.rename(newFile.path);
       }
     } catch (e) {
-      print('[StorageManager] Failed to rename file $oldFileName to $newFileName: $e');
+      debugPrint('[StorageManager] Failed to rename file $oldFileName to $newFileName: $e');
       rethrow;
     }
   }
@@ -241,7 +242,7 @@ class StorageManager {
         await file.delete();
       }
     } catch (e) {
-      print('[StorageManager] Failed to delete file $fileName: $e');
+      debugPrint('[StorageManager] Failed to delete file $fileName: $e');
       rethrow;
     }
   }
@@ -255,7 +256,7 @@ class StorageManager {
       }
       return null;
     } catch (e) {
-      print('[StorageManager] Failed to read file $fileName: $e');
+      debugPrint('[StorageManager] Failed to read file $fileName: $e');
       return null;
     }
   }
@@ -266,7 +267,7 @@ class StorageManager {
       final file = File('$_documentsPath/$fileName');
       await file.writeAsString(content);
     } catch (e) {
-      print('[StorageManager] Failed to write file $fileName: $e');
+      debugPrint('[StorageManager] Failed to write file $fileName: $e');
       rethrow;
     }
   }
