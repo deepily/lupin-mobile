@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
@@ -178,7 +179,7 @@ class WebSocketService {
         throw Exception('Invalid session ID format received: $_sessionId. Expected "adjective noun" format.');
       }
       
-      print('[WebSocket] Got valid session ID: $_sessionId');
+      debugPrint('[WebSocket] Got valid session ID: $_sessionId');
       
       // Step 2: Connect to WebSocket with session ID in URL  
       final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
@@ -191,7 +192,7 @@ class WebSocketService {
       _setConnected( true );
       _reconnectAttempts = 0;
       
-      print('[WebSocket] Connected to ${uri.toString()}');
+      debugPrint('[WebSocket] Connected to ${uri.toString()}');
       
       // Start listening to messages
       _channel!.stream.listen(
@@ -209,7 +210,7 @@ class WebSocketService {
       _startPingTimer();
       
     } catch (e) {
-      print('[WebSocket] Connection failed: $e');
+      debugPrint('[WebSocket] Connection failed: $e');
       _setConnected( false );
       _scheduleReconnect();
     }
@@ -259,7 +260,7 @@ class WebSocketService {
       // Bearer auth token sourced from AuthBloc (set on login / refresh).
       final accessToken = readAccessToken();
       if (accessToken == null) {
-        print('[WebSocket] No access token available — auth skipped');
+        debugPrint('[WebSocket] No access token available — auth skipped');
         return;
       }
       final authToken = 'Bearer $accessToken';
@@ -275,9 +276,9 @@ class WebSocketService {
       );
 
       await sendMessage(authMessage);
-      print('[WebSocket] Authentication sent for user: $userId with session: $_sessionId');
+      debugPrint('[WebSocket] Authentication sent for user: $userId with session: $_sessionId');
     } catch (e) {
-      print('[WebSocket] Authentication failed: $e');
+      debugPrint('[WebSocket] Authentication failed: $e');
     }
   }
 
@@ -314,11 +315,11 @@ class WebSocketService {
       // Handle authentication response
       if (decoded['type'] == AppConstants.eventAuthSuccess) {
         _sessionId = decoded['session_id'];
-        print('[WebSocket] Authentication successful, session: $_sessionId');
+        debugPrint('[WebSocket] Authentication successful, session: $_sessionId');
       }
       
       if (decoded['type'] == AppConstants.eventAuthError) {
-        print('[WebSocket] Authentication failed: ${decoded['message'] ?? 'Unknown error'}');
+        debugPrint('[WebSocket] Authentication failed: ${decoded['message'] ?? 'Unknown error'}');
       }
       
       // Row 281a10d6: backlog is over. seq here is the SERVER's current seq —
@@ -346,7 +347,7 @@ class WebSocketService {
       
       // Handle TTS status updates
       if (decoded['type'] == 'status' || decoded['type'] == 'audio_complete' || decoded['type'] == 'error') {
-        print('[WebSocket] TTS ${decoded['type']}: ${decoded['text']}');
+        debugPrint('[WebSocket] TTS ${decoded['type']}: ${decoded['text']}');
       }
       
       // Forward message to listeners
@@ -361,7 +362,7 @@ class WebSocketService {
       }
       
     } catch (e) {
-      print('[WebSocket] Message parsing error: $e');
+      debugPrint('[WebSocket] Message parsing error: $e');
       // Forward raw message if JSON parsing fails
       _messageController?.add(message);
     }
@@ -377,7 +378,7 @@ class WebSocketService {
   ///   - Reconnection is scheduled if enabled
   ///   - Error is logged for debugging
   void _handleError(error) {
-    print('[WebSocket] Error: $error');
+    debugPrint('[WebSocket] Error: $error');
     _setConnected( false );
     _scheduleReconnect();
   }
@@ -391,7 +392,7 @@ class WebSocketService {
   ///   - Resources are cleaned up properly
   void _handleDisconnection() {
     final code = _channel?.closeCode;
-    print('[WebSocket] Connection closed (code: $code)');
+    debugPrint('[WebSocket] Connection closed (code: $code)');
     _setConnected( false );
     _pingTimer?.cancel();
 
@@ -399,7 +400,7 @@ class WebSocketService {
     // this one. Every other code (incl. 4001, whose refresh/sign-out is
     // handled by the auth layer, and 4003) reconnects as before.
     if ( code == closeCodeSuperseded ) {
-      print('[WebSocket] Superseded by a newer socket (4004) — not reconnecting');
+      debugPrint('[WebSocket] Superseded by a newer socket (4004) — not reconnecting');
       _shouldReconnect = false;
       _reconnectTimer?.cancel();
       return;
@@ -412,14 +413,14 @@ class WebSocketService {
 
   void _scheduleReconnect() {
     if (!_shouldReconnect || _reconnectAttempts >= maxReconnectAttempts) {
-      print('[WebSocket] Max reconnect attempts reached or reconnection disabled');
+      debugPrint('[WebSocket] Max reconnect attempts reached or reconnection disabled');
       return;
     }
     
     _reconnectAttempts++;
     final delay = _reconnectBaseDelay * _reconnectAttempts;
     
-    print('[WebSocket] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inMilliseconds}ms');
+    debugPrint('[WebSocket] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inMilliseconds}ms');
     
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () {
@@ -450,7 +451,7 @@ class WebSocketService {
       final encoded = jsonEncode(message);
       _channel!.sink.add(encoded);
     } catch (e) {
-      print('[WebSocket] Failed to send message: $e');
+      debugPrint('[WebSocket] Failed to send message: $e');
       rethrow;
     }
   }
@@ -459,8 +460,8 @@ class WebSocketService {
   ///
   /// A failed write or a dead socket is logged, never thrown into the message handler.
   void _persistAndAck( int seq ) {
-    _store.setLastSeq( seq ).catchError( ( Object e ) => print('[WebSocket] last_seq persist failed: $e') );
-    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => print('[WebSocket] ack failed: $e') );
+    _store.setLastSeq( seq ).catchError( ( Object e ) => debugPrint('[WebSocket] last_seq persist failed: $e') );
+    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => debugPrint('[WebSocket] ack failed: $e') );
   }
 
   /// Sends [data] as a binary frame.
@@ -474,7 +475,7 @@ class WebSocketService {
     try {
       _channel!.sink.add(data);
     } catch (e) {
-      print('[WebSocket] Failed to send binary data: $e');
+      debugPrint('[WebSocket] Failed to send binary data: $e');
       rethrow;
     }
   }
@@ -493,7 +494,7 @@ class WebSocketService {
     _setConnected( false );
     _sessionId = null;
     
-    print('[WebSocket] Disconnected');
+    debugPrint('[WebSocket] Disconnected');
   }
 
   /// Disconnects and closes the message and connection streams.
