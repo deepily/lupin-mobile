@@ -120,9 +120,10 @@ class PreCommitGateTest( unittest.TestCase ):
 # --- strict directories (row 5a200e6c) -------------------------------------------------------
 
 REAL_DART = gate.dart_cmd()
-NOTE      = "void shout() {\n  print( 'x' );\n}\n"          # one avoid_print style note
-CLEAN     = "void quiet() {}\n"
-OPTIONS_PRINT = "linter:\n  rules:\n    avoid_print: true\n"
+NOTE      = "/// Shouts.\nvoid shout() {\n  print( 'x' );\n}\n"          # one avoid_print style note, documented
+CLEAN     = "/// Quiet.\nvoid quiet() {}\n"
+ROOT_FIX  = "linter:\n  rules:\n    avoid_print: true\n"       # the fixture's stand-in for the root options file
+DIR_FIX   = "include: ../../analysis_options.yaml\nlinter:\n  rules:\n    public_member_api_docs: true\n"
 
 
 def make_strict_repo( strict_text=NOTE, exempt_text=NOTE ):
@@ -131,8 +132,9 @@ def make_strict_repo( strict_text=NOTE, exempt_text=NOTE ):
         "tool/data/gated_dirs.txt"   : "lib/strict\nlib/exempt\n",
         "tool/data/strict_exempt.txt": "lib/exempt  # test fixture (row 0123abcd)\n",
         "pubspec.yaml"               : "name: fixture\nenvironment:\n  sdk: ^3.0.0\n",
-        "lib/strict/analysis_options.yaml": OPTIONS_PRINT, "lib/strict/s.dart": strict_text,
-        "lib/exempt/analysis_options.yaml": OPTIONS_PRINT, "lib/exempt/e.dart": exempt_text } )
+        "analysis_options.yaml"      : ROOT_FIX,
+        "lib/strict/analysis_options.yaml": DIR_FIX, "lib/strict/s.dart": strict_text,
+        "lib/exempt/analysis_options.yaml": DIR_FIX, "lib/exempt/e.dart": exempt_text } )
 
 
 class StrictGateTest( unittest.TestCase ):
@@ -140,8 +142,11 @@ class StrictGateTest( unittest.TestCase ):
     def setUp( self ):
         self._dart = os.environ.get( "DART" )
         os.environ["DART"] = REAL_DART
+        self._template = gate.ROOT_TEMPLATE
+        gate.ROOT_TEMPLATE = [ "linter:", "  rules:", "    avoid_print: true" ]   # the fixture's root file
 
     def tearDown( self ):
+        gate.ROOT_TEMPLATE = self._template
         if self._dart is None: os.environ.pop( "DART", None )
         else: os.environ["DART"] = self._dart
 
@@ -156,7 +161,7 @@ class StrictGateTest( unittest.TestCase ):
         root = make_strict_repo()
         ok, out = self.run_strict( [ "lib/strict" ], root )
         self.assertFalse( ok )
-        self.assertIn( "STRICT lib/strict: avoid_print lib/strict/s.dart:2", out )
+        self.assertIn( "STRICT lib/strict: avoid_print lib/strict/s.dart:3", out )
 
     def test_exempt_dir_with_the_same_note_passes_the_docs_check_but_would_fail_strict( self ):
         root = make_strict_repo()
@@ -213,6 +218,64 @@ class StrictGateTest( unittest.TestCase ):
         with open( os.path.join( root, "lib/strict/s.dart" ), "w" ) as f:
             f.write( "// ignore_for_file: avoid_print - whole file\nvoid a() { print( 'x' ); }\n" )
         self.assertEqual( len( gate.strict_config_problems( [ "lib/strict" ], root ) ), 1 )
+
+    def problems_after( self, rel, text, append=True ):
+        root = make_strict_repo( strict_text=CLEAN )
+        path = os.path.join( root, rel )
+        os.makedirs( os.path.dirname( path ), exist_ok=True )
+        old  = open( path ).read() if append and os.path.exists( path ) else ""
+        with open( path, "w" ) as f: f.write( old + text )
+        return gate.strict_config_problems( [ "lib/strict" ], root )
+
+    def test_this_repos_options_files_match_the_templates( self ):
+        gate.ROOT_TEMPLATE = self._template
+        self.assertEqual( gate.strict_config_problems( gate.strict_dirs() ), [] )
+
+    def test_root_options_rule_switched_off_is_refused( self ):
+        probs = self.problems_after( "analysis_options.yaml", "    avoid_print: false\n" )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "analysis_options.yaml: options file may differ", probs[0] )
+        self.assertIn( "unexpected `avoid_print: false`", probs[0] )
+
+    def test_root_options_severity_downgrade_in_map_form_is_refused( self ):
+        probs = self.problems_after( "analysis_options.yaml", "analyzer:\n  errors:\n    avoid_print: ignore\n" )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "unexpected `analyzer:`, `errors:`, `avoid_print: ignore`", probs[0] )
+
+    def test_nested_options_file_with_an_exclude_is_refused_at_any_depth( self ):
+        probs = self.problems_after( "lib/strict/cache/deep/analysis_options.yaml", "analyzer:\n  exclude: '**'\n", append=False )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "lib/strict/cache/deep/analysis_options.yaml: options file may differ", probs[0] )
+        self.assertIn( "exclude: '**'", probs[0] )
+
+    def test_nested_options_file_that_is_the_template_is_allowed( self ):
+        probs = self.problems_after( "lib/strict/cache/analysis_options.yaml",
+                                     DIR_FIX.replace( "../../", "../../../" ), append=False )
+        self.assertEqual( probs, [] )
+
+    def test_options_file_including_another_file_is_refused( self ):
+        root  = make_strict_repo( strict_text=CLEAN )
+        with open( os.path.join( root, "lib/strict/analysis_options.yaml" ), "w" ) as f:
+            f.write( DIR_FIX.replace( "../../analysis_options.yaml", "../exempt/analysis_options.yaml" ) )
+        probs = gate.strict_config_problems( [ "lib/strict" ], root )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "unexpected `include: ../exempt/analysis_options.yaml`", probs[0] )
+
+    def test_directory_options_file_dropping_the_docs_rule_or_switching_a_rule_off_is_refused( self ):
+        for text, frag in ( ( "linter:\n  rules:\n    avoid_print: false\n", "unexpected `avoid_print: false`" ),
+                            ( "include: ../../analysis_options.yaml\nlinter:\n  rules:\n", "missing `public_member_api_docs: true`" ) ):
+            probs = self.problems_after( "lib/strict/analysis_options.yaml", text, append=False )
+            self.assertEqual( len( probs ), 1, text )
+            self.assertIn( frag, probs[0] )
+
+    def test_options_file_in_an_ancestor_directory_is_checked( self ):
+        probs = self.problems_after( "lib/analysis_options.yaml", "analyzer:\n  errors:\n    avoid_print: ignore\n", append=False )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "lib/analysis_options.yaml: options file may differ", probs[0] )
+
+    def test_comments_and_blank_lines_do_not_count_as_a_difference( self ):
+        probs = self.problems_after( "analysis_options.yaml", "\n# a note\n", append=True )
+        self.assertEqual( probs, [] )
 
     def committed_repo( self ):
         root = make_strict_repo( strict_text=CLEAN )

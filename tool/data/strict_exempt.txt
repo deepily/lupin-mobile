@@ -6,5 +6,5 @@
 # A line without a reason and a row is refused, and so is a directory that is not gated.
 # Remove a line when its directory analyzes clean. Measured 2026-10-03 at 138f79f.
 lib/services  # 13 avoid_print in network/http_service.dart; moves to the Logger (row 5e5b4ad2)
-lib/features/notifications  # 3 withOpacity + 1 use_build_context_synchronously, Rick's call (row 5a200e6c)
-lib/features/queue  # 1 withOpacity in queue_dashboard_screen.dart, Rick's call (row 5a200e6c)
+lib/features/notifications  # 3 withOpacity + 1 use_build_context_synchronously, Rick's call (row 6f0e209d)
+lib/features/queue  # 1 withOpacity in queue_dashboard_screen.dart, Rick's call (row 6f0e209d)

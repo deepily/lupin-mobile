@@ -13,8 +13,8 @@ Runs these checks and blocks the commit when any one fails:
                                                  is ignored, errors included), for the directories
                                                  named in tool/data/strict_exempt.txt
   4. dart analyze --fatal-infos --format=machine <dirs>  (every other gated directory the commit touches:
-                                                 ANY finding fails, plus no analyzer exclude/errors
-                                                 override and no unexplained ignore comment there)
+                                                 ANY finding fails, every options file that applies must be
+                                                 the plain template, and no unexplained ignore comment)
 
 The gated directories are listed in tool/data/gated_dirs.txt: every swept directory. A gated directory is
 strict (check 4) unless tool/data/strict_exempt.txt names it, with a reason and a row; the exempt ones keep
@@ -31,8 +31,11 @@ OPTIONS    = "analysis_options.yaml"
 GATED_LIST = "tool/data/gated_dirs.txt"
 EXEMPT_LIST = "tool/data/strict_exempt.txt"
 EXEMPT_LINE = re.compile( r"^(\S+)\s+#\s+(\S.*)\(row [0-9a-f]{8}\)\s*$" )
-ROOT_EXCLUDES = { "flutter/**", "build/**" }
-OVERRIDE_KEY  = re.compile( r"^\s*(exclude|errors|language|plugins)\s*:" )
+# The only content an options file that applies to a strict directory may have (comments and blank lines aside).
+# An allow-list, not a list of bad keys: any other key, in map or list form, at any depth, is refused.
+ROOT_TEMPLATE = [ "include: package:flutter_lints/flutter.yaml", "analyzer:", "  exclude:", "    - flutter/**",
+                  "    - build/**", "linter:", "  rules:" ]
+DIR_TEMPLATE  = [ "include: <root options file>", "linter:", "  rules:", "    public_member_api_docs: true" ]
 IGNORE_CMT    = re.compile( r"(?<!/)//(?!/)\s*ignore(_for_file)?\s*:(?P<body>.*)$" )
 LEFT_OUT   = re.compile( r"#\s*left out:\s*(\S+)\s+(\d+)\b" )
 DOC_CODE   = "PUBLIC_MEMBER_API_DOCS"
@@ -263,6 +266,58 @@ def strict_dirs( root=ROOT ):
     return [ d for d in swept_dirs( root ) if d not in exempt ]
 
 
+def options_lines( path ):
+    """
+    Read an analysis options file as its meaningful lines.
+
+    Requires:
+        - path is a readable text file
+
+    Ensures:
+        - returns the lines with indentation kept, trailing spaces and ` # comment` tails dropped
+        - drops blank lines and whole-line comments
+    """
+    out = []
+    with open( path, encoding="utf-8" ) as f:
+        for raw in f:
+            line = re.sub( r"\s+#.*$", "", raw.rstrip() ).rstrip()
+            if line.strip() and not line.lstrip().startswith( "#" ): out.append( line )
+    return out
+
+
+def options_problems( path, root=ROOT ):
+    """
+    Say how an options file that applies to a strict directory differs from the one allowed shape.
+
+    Requires:
+        - path is an analysis_options.yaml under root
+
+    Ensures:
+        - returns [] when the file is the root template (at the root) or the directory template: an `include:`
+          that resolves to the root options file, then `linter: rules: public_member_api_docs: true`, nothing else
+        - otherwise returns one message naming the file and each unexpected or missing line
+        - so a rule switched off, a severity lowered, an exclude, a language or plugins entry, a second rule list
+          or an include of another file is refused wherever it sits in the file
+    """
+    rel   = os.path.relpath( path, root )
+    lines = options_lines( path )
+    if os.path.dirname( rel ) == "":
+        want = ROOT_TEMPLATE
+    else:
+        inc = lines[0] if lines and lines[0].startswith( "include:" ) else ""
+        target = os.path.normpath( os.path.join( os.path.dirname( path ), inc.split( ":", 1 )[1].strip() ) ) if inc else ""
+        ok  = target == os.path.join( os.path.normpath( root ), OPTIONS )
+        want = [ lines[0] if ok else DIR_TEMPLATE[0] ] + DIR_TEMPLATE[1:]
+    extra   = [ l.strip() for l in lines if l not in want ]
+    missing = [ l.strip() for l in want if l not in lines ]
+    if lines == want: return []
+    detail  = []
+    if extra: detail.append( "unexpected `" + "`, `".join( extra ) + "`" )
+    if missing: detail.append( "missing `" + "`, `".join( missing ) + "`" )
+    if not detail: detail.append( "lines are in a different order or shape" )
+    return [ f"{rel}: options file may differ from the template only by comments ({'; '.join( detail )}); it can hide findings in a strict directory" ]
+
+
 def strict_config_problems( dirs, root=ROOT ):
     """
     Find the ways a strict directory could read clean without being clean, other than the analyzer itself.
@@ -272,20 +327,26 @@ def strict_config_problems( dirs, root=ROOT ):
 
     Ensures:
         - returns one message per problem, empty when none
-        - flags an exclude/errors/language/plugins key in a directory's analysis_options.yaml
-        - flags a root analysis_options.yaml exclude other than flutter/** and build/**
+        - checks, with options_problems, the root options file, every options file in an ancestor directory
+          of a strict directory, and every options file anywhere under it (nested ones included)
         - flags an `ignore` or `ignore_for_file` comment under the directory that gives no reason after " - "
           (public_member_api_docs ignores keep their own gate, tool/check_doc_ignores.py)
     """
     problems = []
+    files    = set()
+    if dirs: files.add( os.path.join( root, OPTIONS ) )
     for d in dirs:
-        opt = os.path.join( root, d, OPTIONS )
-        if os.path.exists( opt ):
-            with open( opt, encoding="utf-8" ) as f:
-                for n, l in enumerate( f, 1 ):
-                    if OVERRIDE_KEY.match( l ): problems.append( f"{d}/{OPTIONS}:{n}: `{l.strip()}` can hide findings in a strict directory" )
-        for here, _dirs, files in os.walk( os.path.join( root, d ) ):
-            for name in files:
+        up = os.path.dirname( d )
+        while up:
+            files.add( os.path.join( root, up, OPTIONS ) )
+            up = os.path.dirname( up )
+        for here, _dirs, names in os.walk( os.path.join( root, d ) ):
+            if OPTIONS in names: files.add( os.path.join( here, OPTIONS ) )
+    for path in sorted( files ):
+        if os.path.exists( path ): problems += options_problems( path, root )
+    for d in dirs:
+        for here, _dirs, names in os.walk( os.path.join( root, d ) ):
+            for name in names:
                 if not name.endswith( ".dart" ): continue
                 full = os.path.join( here, name )
                 with open( full, encoding="utf-8" ) as f:
@@ -296,13 +357,6 @@ def strict_config_problems( dirs, root=ROOT ):
                         if "public_member_api_docs" in body: continue
                         if m.group( 1 ) or not re.search( r"\s--?\s+\S", body ):
                             problems.append( f"{os.path.relpath( full, root )}:{n}: ignore comment in a strict directory needs a reason after ' - ' and may not be ignore_for_file" )
-    top = os.path.join( root, OPTIONS )
-    if os.path.exists( top ) and dirs:
-        with open( top, encoding="utf-8" ) as f:
-            for l in f:
-                m = re.match( r"^\s+-\s+(\S+)\s*$", l )
-                if m and not l.lstrip().startswith( "#" ) and m.group( 1 ) not in ROOT_EXCLUDES:
-                    problems.append( f"{OPTIONS}: list entry `{m.group( 1 )}` is not one of the known excludes {sorted( ROOT_EXCLUDES )}" )
     return problems
 
 
