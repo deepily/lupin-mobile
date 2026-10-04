@@ -313,6 +313,68 @@ class StrictGateTest( unittest.TestCase ):
         subprocess.run( [ "git", "rm", "-rqf", "lib/strict" ], cwd=root, check=True )
         self.assertEqual( gate.partition_touched( gate.staged_paths( root ), root ), ( [ "lib/exempt" ], [] ) )
 
+    # ( label, source with {r} for the rule text and {why} for an optional reason ); line 2 or 3 carries the ignore
+    IGNORE_FORMS = [
+        ( "// above",             "void a() {{\n  // ignore: {r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "/// above",            "void a() {{\n  /// ignore: {r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "//// above",           "void a() {{\n  //// ignore: {r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "trailing //",          "void a() {{\n  print( 'x' ); // ignore: {r}{why}\n}}\n" ),
+        ( "tight //ignore:",      "void a() {{\n  //ignore:{r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "wide spacing",         "void a() {{\n  //     ignore:   {r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "/* */ above",          "void a() {{\n  /* ignore: {r}{why} */\n  print( 'x' );\n}}\n" ),
+        ( "/** */ above",         "void a() {{\n  /** ignore: {r}{why} */\n  print( 'x' );\n}}\n" ),
+        ( "trailing /* */",       "void a() {{\n  print( 'x' ); /* ignore: {r}{why} */\n}}\n" ),
+        ( "multi-line /* */",     "void a() {{\n  /*\n  ignore: {r}{why}\n  */\n  print( 'x' );\n}}\n" ),
+        ( "uppercase",            "void a() {{\n  // IGNORE: {r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "space before colon",   "void a() {{\n  // ignore : {r}{why}\n  print( 'x' );\n}}\n" ),
+        ( "list of rules",        "void a() {{\n  // ignore: unused_element, {r}{why}\n  print( 'x' );\n}}\n" ),
+    ]
+    # the analyzer honours these (measured, dart 3.8.0): the gate must not read them as clean
+    HONOURED = [ "// above", "/// above", "//// above", "trailing //", "tight //ignore:", "wide spacing", "list of rules" ]
+
+    def strict_problems_for( self, source ):
+        root = make_strict_repo( strict_text=source )
+        return gate.strict_config_problems( [ "lib/strict" ], root ), root
+
+    def test_an_ignore_in_every_comment_form_needs_a_real_reason( self ):
+        for rule in ( "avoid_print", "public_member_api_docs" ):
+            for label, tmpl in self.IGNORE_FORMS:
+                with self.subTest( form=label, rule=rule ):
+                    probs, _ = self.strict_problems_for( tmpl.format( r=rule, why="" ) )
+                    self.assertEqual( len( probs ), 1, probs )
+                    self.assertIn( "lib/strict/s.dart:", probs[0] )
+                    self.assertIn( "ignore comment in a strict directory needs a real reason after ' - ': ignore has no reason", probs[0] )
+                    probs, _ = self.strict_problems_for( tmpl.format( r=rule, why=" - captured by the zone test" ) )
+                    self.assertEqual( probs, [], label )
+                    probs, _ = self.strict_problems_for( tmpl.format( r=rule, why=" - because" ) )
+                    self.assertEqual( len( probs ), 1, label )
+                    self.assertIn( "reason 'because' names no fact", probs[0] )
+
+    def test_ignore_for_file_in_every_comment_form_is_refused_even_with_a_reason( self ):
+        forms = [ "// ignore_for_file: avoid_print - whole file", "/// ignore_for_file: avoid_print - whole file",
+                  "/* ignore_for_file: avoid_print - whole file */", "// ignore_for_file: type=lint - whole file" ]
+        for head in forms:
+            for tail_only in ( False, True ):
+                with self.subTest( form=head, at_end=tail_only ):
+                    src = f"void a() {{\n  print( 'x' );\n}}\n{head}\n" if tail_only else f"{head}\nvoid a() {{\n  print( 'x' );\n}}\n"
+                    probs, _ = self.strict_problems_for( src )
+                    self.assertEqual( len( probs ), 1, probs )
+                    self.assertIn( "ignore_for_file is refused in a strict directory", probs[0] )
+
+    def test_the_forms_the_analyzer_honours_really_hide_the_finding_so_refusing_them_is_needed( self ):
+        labels = dict( self.IGNORE_FORMS )
+        for label in self.HONOURED:
+            with self.subTest( form=label ):
+                src = labels[label].format( r="avoid_print", why="" )
+                root = make_strict_repo( strict_text=src )
+                proc = subprocess.run( [ REAL_DART, "analyze", "--format=machine", "lib/strict" ], cwd=root, capture_output=True, text=True )
+                self.assertNotIn( "AVOID_PRINT", proc.stdout, "analyzer no longer honours this form: update the measured note in pre_commit_gate.py" )
+                self.assertEqual( len( gate.strict_config_problems( [ "lib/strict" ], root ) ), 1 )
+
+    def test_a_string_literal_holding_the_words_is_not_a_comment_and_a_prose_comment_is_not_an_ignore( self ):
+        probs, _ = self.strict_problems_for( "/// Documented.\nString a() => 'ignore: avoid_print';\n// we do not ignore this\n" )
+        self.assertEqual( probs, [] )
+
     def test_placeholder_ignore_reasons_are_refused_with_the_shared_weak_list( self ):
         for reason in ( "because", "todo", "later" ):
             root = make_strict_repo( strict_text=f"void a() {{\n  // ignore: avoid_print - {reason}\n  print( 'x' );\n}}\n" )

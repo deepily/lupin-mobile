@@ -39,7 +39,10 @@ EXEMPT_LINE = re.compile( r"^(\S+)\s+#\s+(\S.*)\(row [0-9a-f]{8}\)\s*$" )
 ROOT_TEMPLATE = [ "include: package:flutter_lints/flutter.yaml", "analyzer:", "  exclude:", "    - flutter/**",
                   "    - build/**", "linter:", "  rules:" ]
 DIR_TEMPLATE  = [ "include: <root options file>", "linter:", "  rules:", "    public_member_api_docs: true" ]
-IGNORE_CMT    = re.compile( r"(?<!/)//(?!/)\s*ignore(_for_file)?\s*:(?P<body>.*)$" )
+# Measured 2026-10-03 with dart 3.8.0: the analyzer honours `//`, `///` and `////` comments, indented or trailing,
+# with any spacing, `ignore: a, b`, `type=lint`, and ignore_for_file at any line; it does not honour /* */ forms.
+# The gate refuses every form, block comments included, so it never depends on that list staying true.
+IGNORE_CMT    = re.compile( r"\bignore(?P<file>_for_file)?\s*:(?P<body>.*)$", re.IGNORECASE )
 LEFT_OUT   = re.compile( r"#\s*left out:\s*(\S+)\s+(\d+)\b" )
 DOC_CODE   = "PUBLIC_MEMBER_API_DOCS"
 # One machine line: SEVERITY|TYPE|CODE|file|line|col|length|message, with a literal | escaped as \|
@@ -318,6 +321,38 @@ def strict_dirs( root=ROOT ):
     return [ d for d in swept_dirs( root ) if d not in exempt ]
 
 
+def comment_segments( text ):
+    """
+    Split Dart source into numbered comment texts: line comments and block comments, trailing ones included.
+
+    Requires:
+        - text is Dart source; strings are not parsed, so a `//` inside a string literal starts a segment too
+
+    Ensures:
+        - returns ( line_number, comment_text ) pairs in source order, one per comment per line
+        - a block comment that spans lines yields one pair per line, ended where `*/` closes it
+        - the comment marker itself (`//`, `///`, `/*`) is part of the text
+    """
+    out, in_block = [], False
+    for n, line in enumerate( text.splitlines(), 1 ):
+        pos = 0
+        while pos < len( line ):
+            if in_block:
+                end = line.find( "*/", pos )
+                out.append( ( n, line[pos:] if end < 0 else line[pos:end] ) )
+                if end < 0: break
+                in_block, pos = False, end + 2
+                continue
+            a, b = line.find( "//", pos ), line.find( "/*", pos )
+            if a < 0 and b < 0: break
+            if a >= 0 and ( b < 0 or a < b ):
+                out.append( ( n, line[a:] ) )
+                break
+            in_block, pos = True, b + 2
+            out.append( ( n, "" ) )
+    return out
+
+
 def options_lines( path ):
     """
     Read an analysis options file as its meaningful lines.
@@ -382,8 +417,8 @@ def strict_config_problems( dirs, root=ROOT ):
         - checks, with options_problems, the root options file, every options file in an ancestor directory
           of a strict directory, and every options file anywhere under it (nested ones included)
         - flags an `ignore_for_file` comment, and an `ignore` comment whose reason after " - " is missing or only
-          placeholder words (the list in tool/check_doc_ignores.py, reused); public_member_api_docs ignores keep
-          their own gate there
+          placeholder words (the list in tool/check_doc_ignores.py, reused), in any comment form: `//`, `///`,
+          `////`, `/* */`, trailing, indented, any spacing or case; this includes public_member_api_docs ignores
     """
     problems = []
     files    = set()
@@ -402,19 +437,17 @@ def strict_config_problems( dirs, root=ROOT ):
             for name in names:
                 if not name.endswith( ".dart" ): continue
                 full = os.path.join( here, name )
-                with open( full, encoding="utf-8" ) as f:
-                    for n, l in enumerate( f, 1 ):
-                        m = IGNORE_CMT.search( l )
-                        if not m: continue
-                        body = m.group( "body" )
-                        if "public_member_api_docs" in body: continue
-                        where  = f"{os.path.relpath( full, root )}:{n}"
-                        if m.group( 1 ):
-                            problems.append( f"{where}: ignore_for_file is refused in a strict directory" )
-                            continue
-                        parts  = ignores.SEPARATOR.split( body, 1 )
-                        reason = ignores.reason_problem( parts[1] if len( parts ) > 1 else "" )
-                        if reason: problems.append( f"{where}: ignore comment in a strict directory needs a real reason after ' - ': {reason}" )
+                with open( full, encoding="utf-8" ) as f: text = f.read()
+                for n, comment in comment_segments( text ):
+                    m = IGNORE_CMT.search( comment )
+                    if not m: continue
+                    where = f"{os.path.relpath( full, root )}:{n}"
+                    if m.group( "file" ):
+                        problems.append( f"{where}: ignore_for_file is refused in a strict directory" )
+                        continue
+                    parts  = ignores.SEPARATOR.split( m.group( "body" ), 1 )
+                    reason = ignores.reason_problem( parts[1] if len( parts ) > 1 else "" )
+                    if reason: problems.append( f"{where}: ignore comment in a strict directory needs a real reason after ' - ': {reason}" )
     return problems
 
 
