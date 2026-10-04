@@ -31,7 +31,9 @@ Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 E
 
 - **Night**: analyzer style notes 332 → 19 (`21c2eba`, `dec4a63`; Clayton, both parts approved by Pocholo; gate PASS-WITH-WARNING on `2e85e5f..dec4a63`, the warning being the three package declarations, read). Row `00db303b` closed. Post-game for this crew drafted with rulings R6 to R11 on hold for Rick: `src/docs/post-games/v0.2.2/2026.10.03-deletion-warnings-merge-gate-crew-post-game.md`. Maya found and fixed one more merge gate hole (a moved ignore line, `95c675b`, in review).
 
-**RESUME HERE:** (1) Rick's ruling on R6 to R11 (row `ea96c8d7`). (2) Row `5a200e6c`: promote the clean directories to the strict gate; 19 notes left, 5 of them Rick's to rule. (2b) Row `91c260ef`: Pocholo's review of `95c675b`. (2c) Row `5e5b4ad2`: error-path prints to the logger. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
+- **Late night (Rick's two-hour push)**: row `5a200e6c` closed: 19 of 22 gated directories are now strict in the hook and CI (`f3bdf8a`, Clayton, three review rounds). Merge gate hardened over four rounds (`a1c31af`, `4778094`, Maya): a changed file carrying an ignore, a tracked `.dart` file the analyzer skips, and an exclude list it cannot vouch for all fail. Gate PASS-WITH-WARNING on `a1c31af..f3bdf8a`. Tooling findings handed to María (lupin rows `cc86889e`, `631a812e`, `9dde52ef`).
+
+**RESUME HERE:** (1) Rick's ruling on R6 to R11 (row `ea96c8d7`). (2) Row `91c260ef`: Pocholo's verdict on Maya's `f8dad3b`, then merge and close. (2b) Row `5e5b4ad2`: Tiberius's logger slices. (2c) Row `eb5a05fe`: run the Dart draw once Cheech sends the landed seeder head. (2d) Decision row `6f0e209d`, Rick's. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
 
 ---
 

@@ -2,14 +2,15 @@
 
 ## ▶ START HERE — 2026-10-03 (Tiffany 💍)
 
-Tip `dec4a63` plus this checkpoint, not pushed. APK built with `--fcm` at `dec4a63`. Live owed work is in the store, owner `tiffany`.
+Tip `f3bdf8a` plus this checkpoint, not pushed. APK built with `--fcm` at `dec4a63`; only tool and CI files changed since, so it is current. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
 | Post-game for the 2026-10-03 crew (row `ea96c8d7`): drafted; rulings R6 to R11 | Rick reads it, then rules |
-| Code clean-up (row `5a200e6c`): 19 style notes left; promote the clean directories to the strict gate (`tool/data/gated_dirs.txt`) | a seat for the promotion; Rick for the 4 `withOpacity` and 1 `use_build_context_synchronously` |
-| Merge gate, moved-ignore fix `95c675b` (row `91c260ef`, Maya) | Pocholo's review, then the manager's call on refusing edits beside an ignore |
-| Error-path prints to the app logger, including the 13 held in `http_service.dart` (row `5e5b4ad2`) | a seat; the logger and storage manager import each other |
+| Merge gate reads the directory lists from its base: Maya's `f8dad3b` (row `91c260ef`) | Pocholo's review; then merge, gate, reap Maya, close the row |
+| Error-path prints to the app logger (row `5e5b4ad2`): Tiberius, six slices, slice 1 in progress | his slice 1 sha; then a reviewer; APK rebuild after merge |
+| Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`, `c70a83b1`, `ef09dc19`): pool and sizes file ready | Cheech DMs the landed seeder head; then the manager runs plan, one test call, write dev, check (255 Fable calls allotted) |
+| 4 `withOpacity` and 1 `BuildContext` after await (decision row `6f0e209d`, held) | Rick |
 | Blind second check of the Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`) | Cheech's dev split and Rick's Fable figure to him; Pocholo is up and blind for it |
 | Transcript fixtures (row `768e852f`) and one Stop poke flip on the phone (row `ee68d5e7`), both parked to 2026-10-05 | Rick, when convenient |
 
@@ -31,6 +32,9 @@ Rulings from the docs crew post-game (`src/docs/post-games/v0.2.2/2026.10.03-mob
 - **The merge gate's permission rule lives in Rick's `.claude/settings.local.json`, written by Rick** (Rick, same card and a follow-up about 19:15 EDT). He first chose a tracked `.claude/settings.json`; the permission check refused a seat writing it ("[Self-Modification]"), and he added the rule to his local settings himself. Untracked, so worktree seats do not get it; the gate runs only from the main checkout.
 - **Approved on cards, about 20:32 and 20:47 EDT** (Rick): the post-game for today's crew, the style-note clean-up, closing row `00db303b`; later rows `91c260ef`, `08d4c9fb` and `5e5b4ad2` admitted and the two parked rows un-parked. The post-game's rulings R6 to R11 are **on hold** until he has read it.
 - **`print` becomes `debugPrint` in 77 places** (Rick, ask card about 20:57 EDT, knowing the cost Pocholo measured: on a device output above about 12 KB a second is queued, so burst lines can arrive up to a second late and behind plain `print`; nothing is dropped). The manager had first ruled it behaviour-neutral, which the review showed was not quite true. 13 prints in `http_service.dart` stay, because a redaction test reads that output. Merged at `dec4a63`.
+- **Every gated directory is strict (any analyzer finding fails the hook and CI) unless `tool/data/strict_exempt.txt` names it with a reason and a row** (manager, on Clayton's measurement of all 22: 19 pass; merged `f3bdf8a` after three review rounds). A new gated directory is strict by default.
+- **Logger design, three manager calls reported to Rick** (row `5e5b4ad2`): release builds keep warnings and errors in logcat; the two "connectivity test failed" lines stay debug prints; the log file is flushed on an error, one flush in flight. The remote log destination is not touched.
+- **The Dart pool builder is built on Cheech's side, not by a mobile seat in lupin** (the card asking Rick for a cross-project seat timed out, 21:19 EDT). Fable budget for Dart: 255 of Rick's single cap of 1,000 (read in lupin's Decisions Log), dev 80, gate 175, Dart's own size mix.
 - **Three packages the code already imported are declared in `pubspec.yaml`**, pinned to the locked versions (manager's ruling as behaviour-neutral; the lock file changed in labels only).
 
 ### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
