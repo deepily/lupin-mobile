@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/logging/logger.dart';
 import '../auth/auth_token_provider.dart';
 import 'ws_resume_store.dart';
 
@@ -210,7 +211,7 @@ class WebSocketService {
       _startPingTimer();
       
     } catch (e) {
-      debugPrint('[WebSocket] Connection failed: $e');
+      Logger.error( 'Connection failed', tag: 'WebSocket', error: e );
       _setConnected( false );
       _scheduleReconnect();
     }
@@ -260,7 +261,7 @@ class WebSocketService {
       // Bearer auth token sourced from AuthBloc (set on login / refresh).
       final accessToken = readAccessToken();
       if (accessToken == null) {
-        debugPrint('[WebSocket] No access token available — auth skipped');
+        Logger.warning( 'No access token available — auth skipped', tag: 'WebSocket' );
         return;
       }
       final authToken = 'Bearer $accessToken';
@@ -278,7 +279,7 @@ class WebSocketService {
       await sendMessage(authMessage);
       debugPrint('[WebSocket] Authentication sent for user: $userId with session: $_sessionId');
     } catch (e) {
-      debugPrint('[WebSocket] Authentication failed: $e');
+      Logger.error( 'Authentication failed', tag: 'WebSocket', error: e );
     }
   }
 
@@ -319,7 +320,7 @@ class WebSocketService {
       }
       
       if (decoded['type'] == AppConstants.eventAuthError) {
-        debugPrint('[WebSocket] Authentication failed: ${decoded['message'] ?? 'Unknown error'}');
+        Logger.warning( 'Authentication rejected by server: ${decoded['message'] ?? 'Unknown error'}', tag: 'WebSocket' );
       }
       
       // Row 281a10d6: backlog is over. seq here is the SERVER's current seq —
@@ -362,7 +363,7 @@ class WebSocketService {
       }
       
     } catch (e) {
-      debugPrint('[WebSocket] Message parsing error: $e');
+      Logger.error( 'Message parsing error', tag: 'WebSocket', error: e );
       // Forward raw message if JSON parsing fails
       _messageController?.add(message);
     }
@@ -378,7 +379,7 @@ class WebSocketService {
   ///   - Reconnection is scheduled if enabled
   ///   - Error is logged for debugging
   void _handleError(error) {
-    debugPrint('[WebSocket] Error: $error');
+    Logger.error( 'Stream error', tag: 'WebSocket', error: error );
     _setConnected( false );
     _scheduleReconnect();
   }
@@ -413,7 +414,7 @@ class WebSocketService {
 
   void _scheduleReconnect() {
     if (!_shouldReconnect || _reconnectAttempts >= maxReconnectAttempts) {
-      debugPrint('[WebSocket] Max reconnect attempts reached or reconnection disabled');
+      Logger.warning( 'Max reconnect attempts reached or reconnection disabled', tag: 'WebSocket' );
       return;
     }
     
@@ -451,7 +452,7 @@ class WebSocketService {
       final encoded = jsonEncode(message);
       _channel!.sink.add(encoded);
     } catch (e) {
-      debugPrint('[WebSocket] Failed to send message: $e');
+      Logger.error( 'Failed to send message', tag: 'WebSocket', error: e );
       rethrow;
     }
   }
@@ -460,8 +461,8 @@ class WebSocketService {
   ///
   /// A failed write or a dead socket is logged, never thrown into the message handler.
   void _persistAndAck( int seq ) {
-    _store.setLastSeq( seq ).catchError( ( Object e ) => debugPrint('[WebSocket] last_seq persist failed: $e') );
-    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => debugPrint('[WebSocket] ack failed: $e') );
+    _store.setLastSeq( seq ).catchError( ( Object e ) => Logger.warning( 'last_seq persist failed: $e', tag: 'WebSocket' ) );
+    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => Logger.warning( 'ack failed: $e', tag: 'WebSocket' ) );
   }
 
   /// Sends [data] as a binary frame.
@@ -475,7 +476,7 @@ class WebSocketService {
     try {
       _channel!.sink.add(data);
     } catch (e) {
-      debugPrint('[WebSocket] Failed to send binary data: $e');
+      Logger.error( 'Failed to send binary data', tag: 'WebSocket', error: e );
       rethrow;
     }
   }
