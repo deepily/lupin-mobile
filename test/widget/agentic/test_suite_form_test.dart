@@ -40,7 +40,7 @@ void main() {
     testWidgets( "fires AgenticFormReset on mount and renders form fields", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
@@ -49,10 +49,10 @@ void main() {
 
       verify( () => bloc.add( any( that: isA<AgenticFormReset>() ) ) ).called( 1 );
       // Default form has integration + e2e pre-selected
-      expect( find.byKey( Key( "${TestKeys.tsTestTypeCheckboxPrefix}integration" ) ), findsOneWidget );
-      expect( find.byKey( Key( "${TestKeys.tsTestTypeCheckboxPrefix}e2e"         ) ), findsOneWidget );
-      expect( find.byKey( Key( "${TestKeys.tsTestTypeCheckboxPrefix}unit"        ) ), findsOneWidget );
-      expect( find.byKey( Key( "${TestKeys.tsTestTypeCheckboxPrefix}websocket"   ) ), findsOneWidget );
+      expect( find.byKey( const Key( "${TestKeys.tsTestTypeCheckboxPrefix}integration" ) ), findsOneWidget );
+      expect( find.byKey( const Key( "${TestKeys.tsTestTypeCheckboxPrefix}e2e"         ) ), findsOneWidget );
+      expect( find.byKey( const Key( "${TestKeys.tsTestTypeCheckboxPrefix}unit"        ) ), findsOneWidget );
+      expect( find.byKey( const Key( "${TestKeys.tsTestTypeCheckboxPrefix}websocket"   ) ), findsOneWidget );
       expect( find.byKey( const Key( TestKeys.tsAutoFixSwitch ) ), findsOneWidget );
       expect( find.byKey( const Key( TestKeys.tsDryRunSwitch  ) ), findsOneWidget );
       expect( find.byKey( const Key( TestKeys.tsSubmitButton  ) ), findsOneWidget );
@@ -61,7 +61,7 @@ void main() {
     testWidgets( "default selection submit dispatches with testSuite type and test_types 'integration,e2e'", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
@@ -83,16 +83,16 @@ void main() {
     testWidgets( "unchecking all types makes submit a no-op", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
       await tester.pumpWidget( underTest() );
       await tester.pump();
       // Uncheck the two pre-selected types
-      await tester.tap( find.byKey( Key( "${TestKeys.tsTestTypeCheckboxPrefix}integration" ) ) );
+      await tester.tap( find.byKey( const Key( "${TestKeys.tsTestTypeCheckboxPrefix}integration" ) ) );
       await tester.pump();
-      await tester.tap( find.byKey( Key( "${TestKeys.tsTestTypeCheckboxPrefix}e2e" ) ) );
+      await tester.tap( find.byKey( const Key( "${TestKeys.tsTestTypeCheckboxPrefix}e2e" ) ) );
       await tester.pump();
       await tester.tap( find.byKey( const Key( TestKeys.tsSubmitButton ) ) );
       await tester.pump();

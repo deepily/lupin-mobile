@@ -86,7 +86,7 @@ List<CallSite> callSites(String source, String path) {
     final line = "\n".allMatches(source.substring(0, m.start)).length + 1;
 
     final optOuts = <String, String>{};
-    for (final o in _optOut.allMatches(_commentBlockAbove(source, lineStart) + "\n" + args)) {
+    for (final o in _optOut.allMatches("${_commentBlockAbove(source, lineStart)}\n$args")) {
       optOuts[o.group(1)!] = o.group(2)!.trim();
     }
     sites.add(CallSite("$path:$line", _namedArguments(args), optOuts));

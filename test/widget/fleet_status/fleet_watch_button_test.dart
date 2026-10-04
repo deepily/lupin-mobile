@@ -73,8 +73,8 @@ void main() {
     return watched;
   }
 
-  Finder watchButton()   => find.byKey( Key( "${ TestKeys.fleetStatusWatchPrefix }$who" ) );
-  Finder livenessCell()  => find.byKey( Key( "${ TestKeys.fleetStatusLivenessPrefix }$who" ) );
+  Finder watchButton()   => find.byKey( const Key( "${ TestKeys.fleetStatusWatchPrefix }$who" ) );
+  Finder livenessCell()  => find.byKey( const Key( "${ TestKeys.fleetStatusLivenessPrefix }$who" ) );
 
   group( "C5.9 tap arm", () {
     testWidgets( "the button opens the console for THAT row's seat", ( tester ) async {
@@ -271,6 +271,6 @@ void main() {
     await pump( tester, composite: compositeWith(), watchable: const { fullId } );
 
     expect( tester.takeException(), isNull );
-    expect( find.byKey( Key( "${ TestKeys.fleetStatusRowPrefix }$who" ) ), findsOneWidget );
+    expect( find.byKey( const Key( "${ TestKeys.fleetStatusRowPrefix }$who" ) ), findsOneWidget );
   } );
 }

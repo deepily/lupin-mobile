@@ -41,7 +41,7 @@ NotificationItem _item( String id, { String priority = 'high' } ) => Notificatio
   displayQualifierWidget : false,
 );
 
-FocusChatState _state( { VoicePersona? persona } ) => FocusChatState.initial().copyWith(
+FocusChatState _state( { VoicePersona? persona } ) => const FocusChatState.initial().copyWith(
   senderOrder      : const [ _sender ],
   focusedSender    : _sender,
   windows          : { _sender: [ FocusMessage( item: _item( 'n1' ) ) ] },

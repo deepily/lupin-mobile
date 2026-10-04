@@ -32,7 +32,7 @@ void main() {
       },
       build : () => ClaudeCodeBloc( repo ),
       act   : ( b ) => b.add(
-        ClaudeCodeSubmit( ClaudeCodeSubmitRequest( prompt: 'bounded' ) ),
+        const ClaudeCodeSubmit( ClaudeCodeSubmitRequest( prompt: 'bounded' ) ),
       ),
       wait  : const Duration( milliseconds: 50 ),
       expect: () => [
@@ -50,7 +50,7 @@ void main() {
       },
       build : () => ClaudeCodeBloc( repo ),
       act   : ( b ) => b.add(
-        ClaudeCodeSubmit( ClaudeCodeSubmitRequest( prompt: 'x' ) ),
+        const ClaudeCodeSubmit( ClaudeCodeSubmitRequest( prompt: 'x' ) ),
       ),
       wait  : const Duration( milliseconds: 50 ),
       expect: () => [

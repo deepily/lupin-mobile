@@ -154,8 +154,8 @@ void main() {
           userId: 'user-1',
           token: 'mock-token',
           status: SessionStatus.active,
-          createdAt: DateTime.now().subtract(Duration(hours: 2)),
-          expiresAt: DateTime.now().subtract(Duration(hours: 1)),
+          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+          expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
         );
 
         expect(expiredSession.isExpired, isTrue);

@@ -292,7 +292,7 @@ void main() {
     /// `ZoneSpecification.print` capture is the AC-A4 mechanism (per
     /// F-Krishna-A2): we assert the production `print(...)` in the `default:`
     /// branch DOES NOT fire for the new types.
-    Future<void> _exerciseStubCase( String typeString ) async {
+    Future<void> exerciseStubCase( String typeString ) async {
       final logs = <String>[];
 
       await runZoned( () async {
@@ -348,19 +348,19 @@ void main() {
     test(
       "type='commons_broadcast_ack' (Section A no-op stub) — "
       "no audio, no TTS, persona map unchanged, no unknown-type log",
-      () => _exerciseStubCase( kNotifTypeCommonsBroadcastAck ),
+      () => exerciseStubCase( kNotifTypeCommonsBroadcastAck ),
     );
 
     test(
       "type='commons_question_received' (Section A no-op stub) — "
       "no audio, no TTS, persona map unchanged, no unknown-type log",
-      () => _exerciseStubCase( kNotifTypeCommonsQuestionReceived ),
+      () => exerciseStubCase( kNotifTypeCommonsQuestionReceived ),
     );
 
     test(
       "type='commons_activity' (Section A no-op stub) — "
       "no audio, no TTS, persona map unchanged, no unknown-type log",
-      () => _exerciseStubCase( kNotifTypeCommonsActivity ),
+      () => exerciseStubCase( kNotifTypeCommonsActivity ),
     );
   } );
 

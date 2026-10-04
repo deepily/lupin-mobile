@@ -83,7 +83,7 @@ void main() {
 
     test( "the exact logcat shape from 2026-09-19 is scrubbed", () {
       // The real leak, reproduced with a synthetic token.
-      final line = "[HTTP]  Authorization: Bearer $_jwt";
+      const line = "[HTTP]  Authorization: Bearer $_jwt";
       final out  = redactSecrets( line );
       expect( out, isNot( contains( "eyJ" ) ) );
       expect( out, contains( "<redacted>" ) );

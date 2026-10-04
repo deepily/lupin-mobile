@@ -252,8 +252,8 @@ class StreamingTtsPlayer {
     const sampleRate  = 24000;
     const channels    = 1;
     const bitsPerSample = 16;
-    final byteRate    = sampleRate * channels * bitsPerSample ~/ 8;
-    final blockAlign  = channels * bitsPerSample ~/ 8;
+    const byteRate    = sampleRate * channels * bitsPerSample ~/ 8;
+    const blockAlign  = channels * bitsPerSample ~/ 8;
     final dataLen     = pcm.length;
     final totalLen    = 36 + dataLen;
 

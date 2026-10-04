@@ -307,47 +307,47 @@ class NetworkConnectivityService {
   WebSocketConnectionStrategy getConnectionStrategy() {
     switch (_currentQuality) {
       case ConnectionQuality.excellent:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 1),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 1),
           maxReconnectAttempts: 10,
-          pingInterval: const Duration(seconds: 30),
+          pingInterval: Duration(seconds: 30),
           enableKeepalive: true,
           bufferSize: 16384,
           enableCompression: true,
         );
       case ConnectionQuality.good:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 2),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 2),
           maxReconnectAttempts: 8,
-          pingInterval: const Duration(seconds: 45),
+          pingInterval: Duration(seconds: 45),
           enableKeepalive: true,
           bufferSize: 8192,
           enableCompression: true,
         );
       case ConnectionQuality.fair:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 5),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 5),
           maxReconnectAttempts: 5,
-          pingInterval: const Duration(seconds: 60),
+          pingInterval: Duration(seconds: 60),
           enableKeepalive: true,
           bufferSize: 4096,
           enableCompression: false,
         );
       case ConnectionQuality.poor:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 10),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 10),
           maxReconnectAttempts: 3,
-          pingInterval: const Duration(seconds: 90),
+          pingInterval: Duration(seconds: 90),
           enableKeepalive: false,
           bufferSize: 2048,
           enableCompression: false,
         );
       case ConnectionQuality.offline:
       case ConnectionQuality.unknown:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 30),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 30),
           maxReconnectAttempts: 2,
-          pingInterval: const Duration(seconds: 120),
+          pingInterval: Duration(seconds: 120),
           enableKeepalive: false,
           bufferSize: 1024,
           enableCompression: false,

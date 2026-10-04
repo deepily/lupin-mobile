@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
-import '../../lib/core/constants/app_constants.dart';
+import 'package:lupin_mobile/core/constants/app_constants.dart';
 
 /// Generates realistic mock WebSocket events for testing purposes.
 /// 
@@ -492,7 +492,7 @@ class MockEventGenerators {
   }) {
     final session = sessionId ?? generateSessionId();
     final eventCount = count ?? 50;
-    final span = timeSpan ?? Duration(seconds: 10);
+    final span = timeSpan ?? const Duration(seconds: 10);
     
     final events = <Map<String, dynamic>>[];
     final startTime = DateTime.now();
@@ -537,7 +537,7 @@ class MockEventGenerators {
     Duration? duration,
   }) {
     final session = sessionId ?? generateSessionId();
-    final sessionDuration = duration ?? Duration(minutes: 5);
+    final sessionDuration = duration ?? const Duration(minutes: 5);
     final events = <Map<String, dynamic>>[];
     
     // 1. Authentication flow

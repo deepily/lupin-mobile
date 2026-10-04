@@ -91,7 +91,7 @@ class _ResearchToPodcastFormState extends State<ResearchToPodcastForm> {
             const SizedBox( height: 16 ),
             TextField(
               controller  : _budgetCtrl,
-              keyboardType: TextInputType.numberWithOptions( decimal: true ),
+              keyboardType: const TextInputType.numberWithOptions( decimal: true ),
               decoration  : const InputDecoration(
                 labelText : 'Budget (USD, optional)',
                 border    : OutlineInputBorder(),

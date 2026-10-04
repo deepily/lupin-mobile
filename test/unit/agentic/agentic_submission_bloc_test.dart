@@ -49,7 +49,7 @@ void main() {
             jsonBody( _submitResp( 'dr-aaa' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.deepResearch,
         request: DeepResearchRequest( query: 'q' ),
       ) ),
@@ -70,7 +70,7 @@ void main() {
             jsonBody( _submitResp( 'pg-bbb' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.podcast,
         request: PodcastGeneratorRequest( researchSource: 'src' ),
       ) ),
@@ -96,7 +96,7 @@ void main() {
             } );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.testFixExpediter,
         request: TfeResumeFromRequest( resumeFrom: 'tfe-old' ),
       ) ),
@@ -117,7 +117,7 @@ void main() {
             jsonBody( _submitResp( 'ts-ccc' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.testSuite,
         request: TestSuiteRequest( testTypes: 'integration' ),
       ) ),
@@ -136,7 +136,7 @@ void main() {
             jsonBody( _submitResp( 'bfe-ddd' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.bugFixExpediter,
         request: BugFixExpediterRequest( deadJobId: 'bfe-dead' ),
       ) ),
@@ -155,7 +155,7 @@ void main() {
             jsonBody( _submitResp( 'rp-eee' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.researchToPodcast,
         request: ResearchToPodcastRequest( query: 'q' ),
       ) ),
@@ -174,7 +174,7 @@ void main() {
             jsonBody( _submitResp( 'rx-fff' ) );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.researchToPresentation,
         request: ResearchToPresentationRequest( query: 'q' ),
       ) ),
@@ -193,7 +193,7 @@ void main() {
             jsonBody( { 'detail': 'server error' }, status: 500 );
       },
       build : () => AgenticSubmissionBloc( repo ),
-      act   : ( b ) => b.add( AgenticSubmitRequested(
+      act   : ( b ) => b.add( const AgenticSubmitRequested(
         type   : AgenticJobType.deepResearch,
         request: DeepResearchRequest( query: 'q' ),
       ) ),

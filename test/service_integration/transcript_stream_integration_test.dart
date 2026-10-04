@@ -460,12 +460,11 @@ class _TestBloc extends TranscriptStreamBloc {
   _TestBloc( {
     required this.lifecycle,
     required TranscriptRepository repo,
-    required TranscriptFrameRouter router,
+    required super.router,
     required RecordingSender send,
   } ) : super(
           ccSessionId : "seat-1",
           repository  : repo,
-          router      : router,
           send        : send.call,
         );
 

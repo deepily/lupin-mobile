@@ -60,7 +60,7 @@ void main() {
   late _MockRepo repo;
   late _MockTts  tts;
   late NotificationStopList stopList;
-  late _MockPlayer   _lastPlayer;
+  late _MockPlayer   lastPlayer;
 
   /// The pattern under test, and a message that starts with it.
   const rule           = 'Done: Bash';
@@ -109,7 +109,7 @@ void main() {
     when( () => fallback.stopFallbackSpeech()     ).thenAnswer( ( _ ) async {} );
     when( () => ws.sessionId ).thenReturn( 'wise penguin' );
 
-    _lastPlayer = player;
+    lastPlayer = player;
     final o = TtsOrchestrator(
       player   : player,
       fallback : fallback,
@@ -222,7 +222,7 @@ void main() {
         id: 'n9', sender: askFlowSenderId, message: mutedQuestion, ask: true ) ) );
       await Future<void>.delayed( Duration.zero );
 
-      verifyNever( () => _lastPlayer.speak(
+      verifyNever( () => lastPlayer.speak(
         text      : any( named: 'text'      ),
         sessionId : any( named: 'sessionId' ),
         voiceId   : any( named: 'voiceId'   ),
@@ -231,7 +231,7 @@ void main() {
       b.add( const FocusSpeakAnywayRequested( 'n9' ) );
       await Future<void>.delayed( Duration.zero );
 
-      final spoken = verify( () => _lastPlayer.speak(
+      final spoken = verify( () => lastPlayer.speak(
         text      : captureAny( named: 'text' ),
         sessionId : any( named: 'sessionId' ),
         voiceId   : any( named: 'voiceId'   ),
