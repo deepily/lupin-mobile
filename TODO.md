@@ -26,8 +26,8 @@ Rulings from the docs crew post-game (`src/docs/post-games/v0.2.2/2026.10.03-mob
 - **Held rows `00db303b` (gate script into the repo) and `d56061a4` (stale plan manifest) approved** (Rick, ask card about 16:30 EDT, clean yes).
 - **Post-games live in `src/docs/post-games/<version>/`, tracked, one folder per work-branch version** (owner's ruling relayed in planning-is-prompting `7a17919`; applied here in `c8f9a52`).
 - **Of the last four analyzer warnings, two were fixed on the manager's ruling as behaviour-neutral** (keep the storage call and drop its variable; drop an unreachable line in an unused test mock); the other two wait for Rick (row `fa6c1842`).
-- **Last two warnings and the unused mock** (Rick, ask card about 19:20 EDT, row `fa6c1842`): remove the logger's `flushInterval` field and argument; mark `inFlightToken` `@visibleForTesting`; delete `test/mocks/mock_websocket_server.dart`. Merged at `97cf2ac`.
-- **The merge gate's permission rule lives in Rick's `.claude/settings.local.json`, written by Rick** (Rick, same card and a follow-up about 19:25 EDT). He first chose a tracked `.claude/settings.json`; the permission check refused a seat writing it ("[Self-Modification]"), and he added the rule to his local settings himself. Untracked, so worktree seats do not get it; the gate runs only from the main checkout.
+- **Last two warnings and the unused mock** (Rick, ask card about 19:10 EDT, row `fa6c1842`): remove the logger's `flushInterval` field and argument; mark `inFlightToken` `@visibleForTesting`; delete `test/mocks/mock_websocket_server.dart`. Merged at `97cf2ac`.
+- **The merge gate's permission rule lives in Rick's `.claude/settings.local.json`, written by Rick** (Rick, same card and a follow-up about 19:15 EDT). He first chose a tracked `.claude/settings.json`; the permission check refused a seat writing it ("[Self-Modification]"), and he added the rule to his local settings himself. Untracked, so worktree seats do not get it; the gate runs only from the main checkout.
 
 ### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
 

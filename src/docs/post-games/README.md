@@ -14,4 +14,5 @@ Register every full retro here when it is written.
 
 | Date | Version | Engagement | Manager | Type | Key threads | Rulings | Graduated to |
 |---|---|---|---|---|---|---|---|
+| 2026.10.03 | v0.2.2 | [Deletion, warnings and merge gate crew](v0.2.2/2026.10.03-deletion-warnings-merge-gate-crew-post-game.md) | Tiffany | SWE-crew run (three workers, one afternoon), written from 12 rolling deposits and a live cross-examination of the reviewer | gate green on its own range · hollow refusal tests · instance fixes · deletion checked by imports alone · permission refusals · size standing in for completeness | R6 to R11, drafted, waiting for Rick | none yet; rows `91c260ef`, `08d4c9fb` |
 | 2026.10.03 | v0.2.2 | [Mobile docs track crew](v0.2.2/2026.10.03-mobile-docs-track-crew-post-game.md) | Tiffany | SWE-crew run (five seats over three days), written from mementos and receipts | gate held hostage by a re-spin · gate built on an unmeasured predicate · dead module swept · no rolling deposits | R1 to R5, approved by Rick 2026-10-03 | `TODO.md` Decisions Log 2026-10-03; row `00db303b` (R1) |
