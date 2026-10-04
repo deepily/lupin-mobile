@@ -664,6 +664,20 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     return 0, f"no new errors (head {sum( head.values() )}, start {sum( base.values() )})"
 
 
+def docs_gate_cmd( start ):
+    """
+    Build the command of the docs-gate row.
+
+    Requires:
+        - start is the first commit before the range (an ancestor of HEAD)
+    Ensures:
+        - returns the argv list for tool/pre_commit_gate.py --docs-all --base <start>: the gated and strict-exempt lists are
+          read as they were at start, so a range cannot add a directory to strict_exempt.txt, or drop one from gated_dirs.txt,
+          and then pass its own findings (the merge base of HEAD and an ancestor of HEAD is that ancestor)
+    """
+    return [ sys.executable, "tool/pre_commit_gate.py", "--docs-all", "--base", start ]
+
+
 def check_comments_only( start, end, root=ROOT ):
     """
     Fail when any changed .dart file differs in more than comments.
@@ -800,7 +814,7 @@ def main( argv=None, root=ROOT ):
 
     results = []
     code, detail = check_analyzer( start, logdir, root, args.allow_analyzer_config, args.allow_ignores );  results.append( ( "analyzer", code, detail ) )
-    for name, cmd in ( ( "docs-gate",   [ sys.executable, "tool/pre_commit_gate.py", "--docs-all" ] ),
+    for name, cmd in ( ( "docs-gate",   docs_gate_cmd( start ) ),
                        ( "ignores",     [ sys.executable, "tool/check_doc_ignores.py" ] ),
                        ( "coverage",    [ sys.executable, "tool/doc_coverage.py" ] ),
                        ( "tool-tests",  TOOL_TESTS_CMD ) ):
