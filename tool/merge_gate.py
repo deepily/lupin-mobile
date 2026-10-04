@@ -398,26 +398,41 @@ def ignore_files_changed( start, end, root=ROOT ):
 
 def analyzer_excludes( text ):
     """
-    Read the `analyzer: exclude:` globs out of an analysis_options.yaml.
+    Read the `analyzer: exclude:` globs out of an analysis_options.yaml, or say that they cannot be read.
 
     Requires:
         - text is the contents of an analysis_options.yaml (or "")
     Ensures:
         - returns the list of glob strings under `analyzer:` / `exclude:`, comments and quotes removed, in file order
-        - returns [] when there is no such list
-        - reads only that one shape (a block list of plain scalars); anything else under `exclude:` is not listed
+        - returns [] only when the file has no `exclude:` under `analyzer:` at all
+        - raises ValueError, naming the line, for any shape it does not handle: `analyzer:` or `exclude:` with a value on the
+          same line (flow style, `exclude: [a, b]`), an `include:` of anything but a package:, a list entry that is not a
+          plain or quoted scalar (an anchor, alias, flow or block scalar), or anything under `exclude:` that is not a `- entry`
+          (reading such a file as "no excludes" would let a tracked file the analyzer skips pass)
     """
-    found, in_analyzer, in_exclude = [], False, False
-    for raw in text.splitlines():
+    found, in_analyzer, in_exclude, exclude_indent = [], False, False, 0
+    for n, raw in enumerate( text.splitlines(), 1 ):
         line = raw.split( "#", 1 )[ 0 ].rstrip()
         if not line.strip(): continue
-        indent = len( line ) - len( line.lstrip() )
+        indent, body = len( line ) - len( line.lstrip() ), line.strip()
+        def unreadable( why ): return ValueError( f"analysis_options.yaml line {n}: {why}: {raw.strip()}" )
         if indent == 0:
-            in_analyzer, in_exclude = line.strip() == "analyzer:", False
-        elif in_analyzer and indent <= 2 and not line.strip().startswith( "-" ):
-            in_exclude = line.strip() == "exclude:"
-        elif in_analyzer and in_exclude and line.strip().startswith( "-" ):
-            found.append( line.strip()[ 1: ].strip().strip( "\"'" ) )
+            in_analyzer, in_exclude = body.startswith( "analyzer:" ), False
+            if in_analyzer and body != "analyzer:": raise unreadable( "analyzer is not a plain block mapping" )
+            if body.startswith( "include:" ) and not body[ len( "include:" ): ].strip().startswith( "package:" ):
+                raise unreadable( "include of a file the gate does not read" )
+        elif in_analyzer and in_exclude and indent > exclude_indent:
+            if not body.startswith( "- " ): raise unreadable( "exclude holds something other than a list entry" )
+            entry  = body[ 1: ].strip()
+            quoted = entry[ :1 ] in ( "\"", "'" )
+            entry  = entry.strip( "\"'" )
+            if not entry or ( not quoted and entry[ 0 ] in "[{&*|>!%@`" ): raise unreadable( "exclude entry is not a plain glob" )
+            found.append( entry )
+        elif in_analyzer:
+            in_exclude = False
+            if body.split( ":" )[ 0 ].strip() == "exclude":
+                if body != "exclude:": raise unreadable( "exclude is not a block list" )
+                in_exclude, exclude_indent = True, indent
     return found
 
 
@@ -441,11 +456,12 @@ def excluded_dart_files( rev, root=ROOT ):
     Requires:
         - rev is a commit in root
     Ensures:
+        - raises ValueError when the exclude list of the root analysis_options.yaml at rev cannot be read (see analyzer_excludes)
         - returns sorted tracked .dart paths at rev that match an `analyzer: exclude:` glob of the root analysis_options.yaml at rev
         - such a file (for example one added with `git add -f` under the gitignored build/) is tracked, so the untracked-file
           rule lets it through, yet the analyzer never opens it, so no error in it is ever counted
     """
-    globs = analyzer_excludes( show( rev, "analysis_options.yaml", root ) )
+    globs = analyzer_excludes( show( rev, "analysis_options.yaml", root ) )     # ValueError when it cannot be read
     names = git( [ "ls-tree", "-r", "--name-only", rev ], root ).splitlines()
     return sorted( n for n in names if n.endswith( ".dart" ) and any( glob_matches( g, n ) for g in globs ) )
 
@@ -606,7 +622,8 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     Ensures:
         - returns 1, without running the analyzer, when the range edits any analysis_options.yaml and
           allow_config is not set: the head is analyzed with its own options, so a commit could exclude its own errors
-        - returns 1, likewise, when the head tracks any .dart file under an analyzer `exclude:` path (it would never be analyzed)
+        - returns 1, likewise, when the head tracks any .dart file under an analyzer `exclude:` path (it would never be analyzed),
+          or when that exclude list is in a shape the gate cannot read (it refuses rather than assume there are none)
         - returns 1, likewise, when the range adds an ignore comment to a .dart file, or changes any .dart file that
           carries an ignore at the head, and allow_ignores is not set; the detail names each file (and the codes added)
         - analyzes the top-level directories of the tracked .dart files at the head, and those at the start for the start
@@ -625,7 +642,10 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     if carrying and not allow_ignores:
         refusals.append( "range changes .dart file(s) that carry an ignore, which can now hide an error: " + ", ".join( carrying )
                          + " (pass --allow-ignores after reading that diff)" )
-    hidden = excluded_dart_files( "HEAD", root )
+    try: hidden = excluded_dart_files( "HEAD", root )
+    except ValueError as ex:
+        hidden = []
+        refusals.append( f"cannot tell which paths the analyzer skips, so the gate will not guess: {ex}" )
     if hidden:
         refusals.append( "tracked .dart file(s) under an analyzer-excluded path, so the analyzer never reads them: " + ", ".join( hidden[ :10 ] )
                          + ( f" ...and {len( hidden ) - 10} more" if len( hidden ) > 10 else "" ) + " (git rm them, or take the path off the exclude list in a reviewed commit)" )

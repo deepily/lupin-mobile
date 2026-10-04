@@ -477,6 +477,25 @@ class GitRangeTest( unittest.TestCase ):
         self.assertEqual( mg.analyzer_excludes( "linter:\n  rules:\n    - avoid_print\n" ), [] )
         self.assertEqual( mg.analyzer_excludes( "" ), [] )
 
+    def test_an_exclude_list_in_flow_style_is_refused_not_read_as_empty( self ):     # N5, fails open otherwise
+        for text in ( "analyzer:\n  exclude: [ flutter/**, build/** ]\n", "analyzer: { exclude: [ build/** ] }\n",
+                      "analyzer:\n  exclude: build/**\n", "analyzer:\n  exclude:\n    - *skip\n", "analyzer:\n  exclude:\n    key: build/**\n",
+                      "include: other_options.yaml\n" ):
+            with self.assertRaises( ValueError, msg=text ): mg.analyzer_excludes( text )
+
+    def test_the_analyzer_row_refuses_an_exclude_list_it_cannot_read( self ):           # N5, refusal message
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", "analyzer:\n  exclude: [ build/** ]\n" ) )
+        base = self.sh( "rev-parse", "HEAD" )
+        self.commit( "int f() => 1;\n", "forced file", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
+        with tempfile.TemporaryDirectory() as logs:
+            code, detail = mg.check_analyzer( base, logs, root=self.d, allow_config=True, allow_ignores=False )
+        self.assertEqual( code, 1 )
+        self.assertIn( "cannot tell which paths the analyzer skips", detail )
+        self.assertIn( "exclude is not a block list", detail )
+
+    def test_the_real_options_file_is_readable( self ):                                 # N5 negative control
+        with open( os.path.join( mg.ROOT, "analysis_options.yaml" ) ) as f: self.assertEqual( mg.analyzer_excludes( f.read() ), [ "flutter/**", "build/**" ] )
+
     def test_exclude_globs_match_whole_paths( self ):                                # N5
         self.assertTrue( mg.glob_matches( "build/**", "build/zz.dart" ) )
         self.assertTrue( mg.glob_matches( "build/**", "build/a/b/zz.dart" ) )
