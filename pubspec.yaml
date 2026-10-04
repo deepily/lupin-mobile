@@ -99,6 +99,7 @@ dependencies:
   logger: ^2.0.2+1
   crypto: ^3.0.3
   file_picker: ^11.0.3
+  meta: ^1.16.0
 
 dev_dependencies:
   flutter_test:
@@ -122,6 +123,10 @@ dev_dependencies:
 
   # Code Quality
   flutter_lints: ^3.0.1
+
+  # Imported directly by tests; versions match pubspec.lock
+  shared_preferences_platform_interface: ^2.4.1
+  stream_channel: ^2.1.4
 
 flutter:
   uses-material-design: true

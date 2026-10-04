@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../core/cache/network_cache.dart';
 import '../../core/cache/offline_manager.dart';
@@ -127,7 +128,7 @@ class CachedHttpService extends HttpService {
         );
         
         if (cachedResponse != null) {
-          print('[HTTP] Using stale cache due to network error');
+          debugPrint('[HTTP] Using stale cache due to network error');
           return cachedResponse.toDioResponse<T>();
         }
       }
@@ -223,7 +224,7 @@ class CachedHttpService extends HttpService {
         );
         
         if (cachedResponse != null) {
-          print('[HTTP] Using stale cache due to network error');
+          debugPrint('[HTTP] Using stale cache due to network error');
           return cachedResponse.toDioResponse<T>();
         }
       }
@@ -257,7 +258,7 @@ class CachedHttpService extends HttpService {
       );
       return response.data ?? {};
     } catch (e) {
-      print('[HTTP] Session ID request failed: $e');
+      debugPrint('[HTTP] Session ID request failed: $e');
       rethrow;
     }
   }
@@ -302,7 +303,7 @@ class CachedHttpService extends HttpService {
       );
       return response;
     } catch (e) {
-      print('[HTTP] ElevenLabs TTS request failed: $e');
+      debugPrint('[HTTP] ElevenLabs TTS request failed: $e');
       rethrow;
     }
   }
@@ -340,7 +341,7 @@ class CachedHttpService extends HttpService {
       );
       return response;
     } catch (e) {
-      print('[HTTP] OpenAI TTS request failed: $e');
+      debugPrint('[HTTP] OpenAI TTS request failed: $e');
       rethrow;
     }
   }
@@ -369,7 +370,7 @@ class CachedHttpService extends HttpService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      print('[HTTP] Health check failed: $e');
+      debugPrint('[HTTP] Health check failed: $e');
       return false;
     }
   }
@@ -444,12 +445,12 @@ class CachedHttpService extends HttpService {
     await _ensureInitialized();
     
     if (_offlineManager.isOffline) {
-      print('[HTTP] Cannot process queued requests - still offline');
+      debugPrint('[HTTP] Cannot process queued requests - still offline');
       return;
     }
     
     final queuedRequests = _offlineManager.getQueuedRequests();
-    print('[HTTP] Processing ${queuedRequests.length} queued requests');
+    debugPrint('[HTTP] Processing ${queuedRequests.length} queued requests');
     
     for (final request in queuedRequests) {
       try {
@@ -487,9 +488,9 @@ class CachedHttpService extends HttpService {
         }
         
         await _offlineManager.removeFromQueue(request.key);
-        print('[HTTP] Successfully processed queued request: ${request.key}');
+        debugPrint('[HTTP] Successfully processed queued request: ${request.key}');
       } catch (e) {
-        print('[HTTP] Failed to process queued request ${request.key}: $e');
+        debugPrint('[HTTP] Failed to process queued request ${request.key}: $e');
       }
     }
   }

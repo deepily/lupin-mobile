@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 /// Watches network connectivity and quality to drive WebSocket reconnection decisions.
@@ -67,14 +68,14 @@ class NetworkConnectivityService {
   
   /// Initialize network monitoring service
   Future<void> initialize() async {
-    print('[NetworkService] Initializing network connectivity monitoring');
+    debugPrint('[NetworkService] Initializing network connectivity monitoring');
     
     // Get initial connectivity state
     try {
       final result = await _connectivity.checkConnectivity();
       await _handleConnectivityChange(result);
     } catch (e) {
-      print('[NetworkService] Error getting initial connectivity: $e');
+      debugPrint('[NetworkService] Error getting initial connectivity: $e');
       _currentState = NetworkState.unknown;
     }
     
@@ -82,19 +83,19 @@ class NetworkConnectivityService {
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _handleConnectivityChange,
       onError: (error) {
-        print('[NetworkService] Connectivity subscription error: $error');
+        debugPrint('[NetworkService] Connectivity subscription error: $error');
       },
     );
     
     // Start periodic quality monitoring
     _startQualityMonitoring();
     
-    print('[NetworkService] Network monitoring initialized');
+    debugPrint('[NetworkService] Network monitoring initialized');
   }
   
   /// Handle connectivity state changes
   Future<void> _handleConnectivityChange(ConnectivityResult result) async {
-    print('[NetworkService] Connectivity changed: $result');
+    debugPrint('[NetworkService] Connectivity changed: $result');
     
     _lastConnectivityResult = result;
     final previousState = _currentState;
@@ -126,7 +127,7 @@ class NetworkConnectivityService {
     
     // Broadcast state change if different
     if (_currentState != previousState) {
-      print('[NetworkService] Network state changed: $previousState -> $_currentState');
+      debugPrint('[NetworkService] Network state changed: $previousState -> $_currentState');
       _networkStateController.add(_currentState);
       
       // Trigger immediate quality test for connected state
@@ -162,7 +163,7 @@ class NetworkConnectivityService {
       }
       return false;
     } catch (e) {
-      print('[NetworkService] Internet connectivity test failed: $e');
+      debugPrint('[NetworkService] Internet connectivity test failed: $e');
       return false;
     }
   }
@@ -223,14 +224,14 @@ class NetworkConnectivityService {
       _currentQuality = _calculateConnectionQuality();
       
       if (_currentQuality != previousQuality) {
-        print('[NetworkService] Connection quality changed: $previousQuality -> $_currentQuality');
+        debugPrint('[NetworkService] Connection quality changed: $previousQuality -> $_currentQuality');
         _connectionQualityController.add(_currentQuality);
       }
       
-      print('[NetworkService] Quality test: latency=${latency}ms, quality=$_currentQuality');
+      debugPrint('[NetworkService] Quality test: latency=${latency}ms, quality=$_currentQuality');
       
     } catch (e) {
-      print('[NetworkService] Quality test failed: $e');
+      debugPrint('[NetworkService] Quality test failed: $e');
       _currentQuality = ConnectionQuality.poor;
       _connectionQualityController.add(_currentQuality);
     }
@@ -375,7 +376,7 @@ class NetworkConnectivityService {
   
   /// Dispose of resources
   void dispose() {
-    print('[NetworkService] Disposing network connectivity service');
+    debugPrint('[NetworkService] Disposing network connectivity service');
     _connectivitySubscription?.cancel();
     _qualityTestTimer?.cancel();
     _periodicCheckTimer?.cancel();

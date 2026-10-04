@@ -157,7 +157,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final item = event.item;
     final sid  = item.senderId;
     if ( sid == null ) {
-      print( '[FocusChat] inbound without sender_id dropped (id=${item.id})' );
+      debugPrint( '[FocusChat] inbound without sender_id dropped (id=${item.id})' );
       return;
     }
 
@@ -378,7 +378,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         hydration : FocusHydration.ready,
       ) );
     } on NotificationApiException catch ( e ) {
-      print( '[FocusChat] backfill failed for $sid: $e' );
+      debugPrint( '[FocusChat] backfill failed for $sid: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
@@ -478,7 +478,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
       // Catch everything, not just NotificationApiException: this roster is an addition to
       // a rail that already works. A server that does not serve the endpoint, or an
       // unexpected shape, must leave the written-senders rail untouched.
-      print( '[FocusChat] live-seat roster unavailable: $e' );
+      debugPrint( '[FocusChat] live-seat roster unavailable: $e' );
       return;
     }
 
@@ -583,7 +583,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         hydration            : FocusHydration.ready,
       ) );
     } on NotificationApiException catch ( e ) {
-      print( '[FocusChat] cold start failed: $e' );
+      debugPrint( '[FocusChat] cold start failed: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
@@ -648,7 +648,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         hydration            : FocusHydration.ready,
       ) );
     } on NotificationApiException catch ( e ) {
-      print( '[FocusChat] reconnect refresh failed: $e' );
+      debugPrint( '[FocusChat] reconnect refresh failed: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
@@ -784,7 +784,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
           windows: _windowsWithResolved( event.senderId, targetId, resolution ) ) );
         return;
       }
-      print( '[FocusChat] respond failed for $targetId: $e' );
+      debugPrint( '[FocusChat] respond failed for $targetId: $e' );
       // Keep the unsent answer on the card, so it reads "not sent", can be resent with a tap,
       // and is resent automatically on reconnect (see [_resendUnsentAnswers]).
       emit( state.copyWith(
@@ -925,7 +925,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   ) async {
     final request = sessionMessageFor( senderId, text );
     if ( request == null ) {
-      print( '[FocusChat] cannot address a message to $senderId (email: $_userEmail)' );
+      debugPrint( '[FocusChat] cannot address a message to $senderId (email: $_userEmail)' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
       return;
     }
@@ -960,7 +960,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         asOf                 : _now(),
       ) );
     } on NotificationApiException catch ( e ) {
-      print( '[FocusChat] direct message to $senderId failed: $e' );
+      debugPrint( '[FocusChat] direct message to $senderId failed: $e' );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../storage/storage_manager.dart';
 import 'cache_manager.dart';
@@ -164,7 +165,7 @@ class OfflineManager {
         _eventController.add(OfflineRequestProcessedEvent(request.key, true));
         await removeFromQueue(request.key);
       } catch (e) {
-        print('[OfflineManager] Error processing queued request ${request.key}: $e');
+        debugPrint('[OfflineManager] Error processing queued request ${request.key}: $e');
         _eventController.add(OfflineRequestProcessedEvent(request.key, false));
       }
     }
