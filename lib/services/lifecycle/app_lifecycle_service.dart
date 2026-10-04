@@ -71,7 +71,7 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Registers as a lifecycle observer and starts the session and inactivity timers.
   void initialize() {
-    print('[LifecycleService] Initializing app lifecycle monitoring');
+    debugPrint('[LifecycleService] Initializing app lifecycle monitoring');
     
     // Register as observer
     WidgetsBinding.instance.addObserver(this);
@@ -89,13 +89,13 @@ class AppLifecycleService with WidgetsBindingObserver {
     // Start inactivity monitoring
     _startInactivityMonitoring();
     
-    print('[LifecycleService] App lifecycle monitoring initialized');
+    debugPrint('[LifecycleService] App lifecycle monitoring initialized');
   }
   
   /// Totals the time spent in the previous state, then handles and broadcasts [state].
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    print('[LifecycleService] Lifecycle state changed: $_currentLifecycleState -> $state');
+    debugPrint('[LifecycleService] Lifecycle state changed: $_currentLifecycleState -> $state');
     
     final previousState = _currentLifecycleState;
     final now = DateTime.now();
@@ -142,14 +142,14 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle app resuming to foreground
   void _handleAppResumed() {
-    print('[LifecycleService] App resumed to foreground');
+    debugPrint('[LifecycleService] App resumed to foreground');
     
     final now = DateTime.now();
     
     // Calculate background duration if coming from background
     if (_backgroundTime != null) {
       final backgroundDuration = now.difference(_backgroundTime!);
-      print('[LifecycleService] Was in background for ${backgroundDuration.inSeconds}s');
+      debugPrint('[LifecycleService] Was in background for ${backgroundDuration.inSeconds}s');
       
       // Trigger background recovery actions based on duration
       if (backgroundDuration > longBackgroundThreshold) {
@@ -168,7 +168,7 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle app going to background
   void _handleAppPaused() {
-    print('[LifecycleService] App paused to background');
+    debugPrint('[LifecycleService] App paused to background');
     
     _backgroundTime = DateTime.now();
     _foregroundTime = null;
@@ -182,21 +182,21 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle app becoming inactive (e.g., during phone calls)
   void _handleAppInactive() {
-    print('[LifecycleService] App became inactive');
+    debugPrint('[LifecycleService] App became inactive');
     // App is still visible but not interactive
     // Keep connections alive but reduce activity
   }
   
   /// Handle app being detached (rare, usually during shutdown)
   void _handleAppDetached() {
-    print('[LifecycleService] App detached');
+    debugPrint('[LifecycleService] App detached');
     // Prepare for shutdown
     _prepareForShutdown();
   }
   
   /// Handle app being hidden (iOS specific)
   void _handleAppHidden() {
-    print('[LifecycleService] App hidden');
+    debugPrint('[LifecycleService] App hidden');
     // Similar to paused but potentially temporary
   }
   
@@ -206,7 +206,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     
     _inactivityTimer = Timer(inactivityThreshold, () {
       if (_currentUsageState == AppUsageState.active) {
-        print('[LifecycleService] User inactive for ${inactivityThreshold.inMinutes} minutes');
+        debugPrint('[LifecycleService] User inactive for ${inactivityThreshold.inMinutes} minutes');
         _setUsageState(AppUsageState.inactive);
       }
     });
@@ -217,7 +217,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     _backgroundTimer?.cancel();
     
     _backgroundTimer = Timer(backgroundThreshold, () {
-      print('[LifecycleService] App in background for ${backgroundThreshold.inMinutes} minutes');
+      debugPrint('[LifecycleService] App in background for ${backgroundThreshold.inMinutes} minutes');
       _setUsageState(AppUsageState.backgroundLong);
     });
   }
@@ -279,7 +279,7 @@ class AppLifecycleService with WidgetsBindingObserver {
   /// Set usage state and broadcast if changed
   void _setUsageState(AppUsageState newState) {
     if (_currentUsageState != newState) {
-      print('[LifecycleService] Usage state changed: $_currentUsageState -> $newState');
+      debugPrint('[LifecycleService] Usage state changed: $_currentUsageState -> $newState');
       _currentUsageState = newState;
       _usageStateController.add(newState);
     }
@@ -287,21 +287,21 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle recovery from long background duration
   void _triggerLongBackgroundRecovery() {
-    print('[LifecycleService] Triggering long background recovery');
+    debugPrint('[LifecycleService] Triggering long background recovery');
     // Full reconnection and state refresh required
     _setUsageState(AppUsageState.recovering);
   }
   
   /// Handle recovery from short background duration
   void _triggerShortBackgroundRecovery() {
-    print('[LifecycleService] Triggering short background recovery');
+    debugPrint('[LifecycleService] Triggering short background recovery');
     // Quick state validation and reconnection
     _setUsageState(AppUsageState.active);
   }
   
   /// Prepare app for shutdown
   void _prepareForShutdown() {
-    print('[LifecycleService] Preparing for app shutdown');
+    debugPrint('[LifecycleService] Preparing for app shutdown');
     _setUsageState(AppUsageState.shutdown);
   }
   
@@ -395,7 +395,7 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Unregisters the observer, cancels the timers and closes both streams.
   void dispose() {
-    print('[LifecycleService] Disposing app lifecycle service');
+    debugPrint('[LifecycleService] Disposing app lifecycle service');
     
     WidgetsBinding.instance.removeObserver(this);
     
