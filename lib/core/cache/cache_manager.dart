@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../storage/storage_manager.dart';
 import 'cache_policy.dart';
 
@@ -309,7 +310,7 @@ class CacheManager<T> {
             _memoryCache[entry.key] = entry;
           }
         } catch (e) {
-          print('[CacheManager] Error loading cached entry: $e');
+          debugPrint('[CacheManager] Error loading cached entry: $e');
         }
       }
     }
@@ -324,7 +325,7 @@ class CacheManager<T> {
     try {
       return CacheEntry.fromJson(json, fromJson);
     } catch (e) {
-      print('[CacheManager] Error loading entry from storage: $e');
+      debugPrint('[CacheManager] Error loading entry from storage: $e');
       return null;
     }
   }
