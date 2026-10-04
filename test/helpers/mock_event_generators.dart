@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
-import '../../lib/core/constants/app_constants.dart';
+import 'package:lupin_mobile/core/constants/app_constants.dart';
 
 /// Generates realistic mock WebSocket events for testing purposes.
 /// 
