@@ -60,35 +60,35 @@ class PreCommitGateTest( unittest.TestCase ):
 
     def test_main_blocks_when_any_check_fails_but_runs_all( self ):
         calls = []
-        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs )
-        orig_docs = gate.check_docs
+        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict )
         gate.run_check    = lambda name, cmd, root=None: calls.append( name ) or name.startswith( "ignore" )
         gate.check_docs   = lambda dirs, root=None: calls.append( "docs" ) or True
+        gate.check_strict = lambda dirs, root=None: calls.append( "strict" ) or True
         gate.staged_paths = lambda root=None: [ "lib/core/a.dart" ]
         gate.swept_dirs   = lambda root=None: [ "lib/core" ]
+        gate.exempt_dirs  = lambda root=None: []
         try:
             code = gate.main( [] )
         finally:
-            gate.run_check, gate.staged_paths, gate.swept_dirs = orig
-            gate.check_docs = orig_docs
+            gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict = orig
         self.assertEqual( code, 1 )
-        self.assertEqual( calls, [ "doc linter (staged lines)", "ignore checker", "docs" ] )
+        self.assertEqual( calls, [ "doc linter (staged lines)", "ignore checker", "docs", "strict" ] )
 
     def test_main_passes_when_all_checks_pass_and_skips_untouched_dirs( self ):
         calls = []
-        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs )
-        orig_docs = gate.check_docs
+        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict )
         gate.run_check    = lambda name, cmd, root=None: calls.append( name ) or True
         gate.check_docs   = lambda dirs, root=None: calls.append( f"docs {dirs}" ) or True
+        gate.check_strict = lambda dirs, root=None: calls.append( f"strict {dirs}" ) or True
         gate.staged_paths = lambda root=None: [ "README.md" ]
         gate.swept_dirs   = lambda root=None: [ "lib/core" ]
+        gate.exempt_dirs  = lambda root=None: []
         try:
             code = gate.main( [] )
         finally:
-            gate.run_check, gate.staged_paths, gate.swept_dirs = orig
-            gate.check_docs = orig_docs
+            gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict = orig
         self.assertEqual( code, 0 )
-        self.assertEqual( calls[2:], [ "docs []" ] )
+        self.assertEqual( calls[2:], [ "docs []", "strict []" ] )
 
     def test_filter_ignores_everything_but_missing_docs( self ):
         out = ( "ERROR|COMPILE_TIME_ERROR|UNDEFINED_GETTER|/r/lib/core/a.dart|3|4|5|The getter 'x' isn't defined.\n"
@@ -115,6 +115,114 @@ class PreCommitGateTest( unittest.TestCase ):
         finally:
             subprocess.run = orig
         self.assertTrue( gate.check_docs( [] ) )
+
+
+# --- strict directories (row 5a200e6c) -------------------------------------------------------
+
+REAL_DART = gate.dart_cmd()
+NOTE      = "void shout() {\n  print( 'x' );\n}\n"          # one avoid_print style note
+CLEAN     = "void quiet() {}\n"
+OPTIONS_PRINT = "linter:\n  rules:\n    avoid_print: true\n"
+
+
+def make_strict_repo( strict_text=NOTE, exempt_text=NOTE ):
+    """A temp repo with gated lib/strict (clean or noted) and lib/exempt, exempt listed in strict_exempt.txt."""
+    return make_repo( {
+        "tool/data/gated_dirs.txt"   : "lib/strict\nlib/exempt\n",
+        "tool/data/strict_exempt.txt": "lib/exempt  # test fixture (row 0123abcd)\n",
+        "pubspec.yaml"               : "name: fixture\nenvironment:\n  sdk: ^3.0.0\n",
+        "lib/strict/analysis_options.yaml": OPTIONS_PRINT, "lib/strict/s.dart": strict_text,
+        "lib/exempt/analysis_options.yaml": OPTIONS_PRINT, "lib/exempt/e.dart": exempt_text } )
+
+
+class StrictGateTest( unittest.TestCase ):
+
+    def setUp( self ):
+        self._dart = os.environ.get( "DART" )
+        os.environ["DART"] = REAL_DART
+
+    def tearDown( self ):
+        if self._dart is None: os.environ.pop( "DART", None )
+        else: os.environ["DART"] = self._dart
+
+    def run_strict( self, dirs, root ):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout( buf ), contextlib.redirect_stderr( io.StringIO() ):
+            ok = gate.check_strict( dirs, root )
+        return ok, buf.getvalue()
+
+    def test_strict_dir_with_one_style_note_fails_and_names_dir_rule_and_file( self ):
+        root = make_strict_repo()
+        ok, out = self.run_strict( [ "lib/strict" ], root )
+        self.assertFalse( ok )
+        self.assertIn( "STRICT lib/strict: avoid_print lib/strict/s.dart:2", out )
+
+    def test_exempt_dir_with_the_same_note_passes_the_docs_check_but_would_fail_strict( self ):
+        root = make_strict_repo()
+        self.assertEqual( gate.partition_touched( [ "lib/exempt/e.dart" ], root ), ( [ "lib/exempt" ], [] ) )
+        self.assertTrue( gate.check_docs( [ "lib/exempt" ], root ) )
+        self.assertFalse( self.run_strict( [ "lib/exempt" ], root )[0] )
+
+    def test_clean_strict_dir_passes( self ):
+        root = make_strict_repo( strict_text=CLEAN )
+        ok, out = self.run_strict( [ "lib/strict" ], root )
+        self.assertTrue( ok, out )
+        self.assertNotIn( "STRICT lib/strict", out )
+
+    def test_a_new_gated_dir_is_strict_by_default( self ):
+        root = make_strict_repo()
+        with open( os.path.join( root, "tool/data/gated_dirs.txt" ), "a" ) as f: f.write( "lib/brand_new\n" )
+        self.assertEqual( gate.strict_dirs( root ), [ "lib/strict", "lib/brand_new" ] )
+        self.assertEqual( gate.partition_touched( [ "lib/brand_new/x.dart" ], root ), ( [], [ "lib/brand_new" ] ) )
+
+    def test_exempt_line_without_reason_or_row_is_refused_with_its_line( self ):
+        for bad in ( "lib/exempt\n", "lib/exempt  # no row here\n", "lib/exempt  # (row 0123abcd)\n" ):
+            root = make_strict_repo()
+            with open( os.path.join( root, "tool/data/strict_exempt.txt" ), "w" ) as f: f.write( "# c\n" + bad )
+            with self.assertRaises( ValueError ) as cm: gate.exempt_dirs( root )
+            self.assertIn( "strict_exempt.txt:2: need `<dir>  # <reason> (row <8 hex>)`", str( cm.exception ), bad )
+
+    def test_exempt_dir_that_is_not_gated_is_refused_by_name( self ):
+        root = make_strict_repo()
+        with open( os.path.join( root, "tool/data/strict_exempt.txt" ), "w" ) as f: f.write( "lib/typo  # x (row 0123abcd)\n" )
+        with self.assertRaises( ValueError ) as cm: gate.exempt_dirs( root )
+        self.assertIn( "lib/typo is not in tool/data/gated_dirs.txt", str( cm.exception ) )
+
+    def test_exempt_list_in_this_repo_only_shrinks( self ):
+        self.assertLessEqual( set( gate.exempt_dirs() ),
+                              { "lib/services", "lib/features/notifications", "lib/features/queue" } )
+
+    def test_options_exclude_in_a_strict_dir_is_flagged( self ):
+        root = make_strict_repo( strict_text=CLEAN )
+        with open( os.path.join( root, "lib/strict/analysis_options.yaml" ), "a" ) as f:
+            f.write( "analyzer:\n  exclude:\n    - s.dart\n" )
+        probs = gate.strict_config_problems( [ "lib/strict" ], root )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "lib/strict/analysis_options.yaml:", probs[0] )
+        self.assertIn( "exclude:", probs[0] )
+
+    def test_unexplained_ignore_in_a_strict_dir_is_flagged_and_a_reasoned_one_is_not( self ):
+        root = make_strict_repo( strict_text="void a() {\n  // ignore: avoid_print\n  print( 'x' );\n}\n" )
+        probs = gate.strict_config_problems( [ "lib/strict" ], root )
+        self.assertEqual( len( probs ), 1 )
+        self.assertIn( "lib/strict/s.dart:2: ignore comment in a strict directory needs a reason", probs[0] )
+        with open( os.path.join( root, "lib/strict/s.dart" ), "w" ) as f:
+            f.write( "void a() {\n  // ignore: avoid_print - captured by the log test\n  print( 'x' );\n}\n" )
+        self.assertEqual( gate.strict_config_problems( [ "lib/strict" ], root ), [] )
+        with open( os.path.join( root, "lib/strict/s.dart" ), "w" ) as f:
+            f.write( "// ignore_for_file: avoid_print - whole file\nvoid a() { print( 'x' ); }\n" )
+        self.assertEqual( len( gate.strict_config_problems( [ "lib/strict" ], root ) ), 1 )
+
+    def test_unreadable_analyzer_failure_is_not_read_as_clean( self ):
+        orig = subprocess.run
+        subprocess.run = lambda *a, **k: subprocess.CompletedProcess( a, 1, stdout="garbled\n", stderr="" )
+        try:
+            import io, contextlib
+            with contextlib.redirect_stdout( io.StringIO() ), contextlib.redirect_stderr( io.StringIO() ):
+                self.assertFalse( gate.check_strict( [ "lib/core" ] ) )
+        finally:
+            subprocess.run = orig
 
 
 if __name__ == "__main__":
