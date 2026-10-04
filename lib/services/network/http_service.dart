@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/log_redaction.dart';
+import '../../core/logging/logger.dart';
 
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
@@ -104,7 +105,7 @@ class HttpService {
       final response = await _dio.get('/api/get-session-id');
       return response.data;
     } catch (e) {
-      print('[HTTP] Session ID request failed: $e');
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -146,7 +147,7 @@ class HttpService {
       );
       return response;
     } catch (e) {
-      print('[HTTP] ElevenLabs TTS request failed: $e');
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -179,7 +180,7 @@ class HttpService {
       );
       return response;
     } catch (e) {
-      print('[HTTP] OpenAI TTS request failed: $e');
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -216,7 +217,7 @@ class HttpService {
       
       return response.data;
     } catch (e) {
-      print('[HTTP] Audio upload failed: $e');
+      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -235,7 +236,7 @@ class HttpService {
       final response = await _dio.get('/health');
       return response.statusCode == 200;
     } catch (e) {
-      print('[HTTP] Health check failed: $e');
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e );
       return false;
     }
   }
@@ -266,7 +267,7 @@ class HttpService {
         options: options,
       );
     } catch (e) {
-      print('[HTTP] GET request failed: $e');
+      Logger.error( 'GET request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -299,7 +300,7 @@ class HttpService {
         options: options,
       );
     } catch (e) {
-      print('[HTTP] POST request failed: $e');
+      Logger.error( 'POST request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -332,7 +333,7 @@ class HttpService {
         options: options,
       );
     } catch (e) {
-      print('[HTTP] PUT request failed: $e');
+      Logger.error( 'PUT request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
@@ -363,7 +364,7 @@ class HttpService {
         options: options,
       );
     } catch (e) {
-      print('[HTTP] DELETE request failed: $e');
+      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e );
       rethrow;
     }
   }
