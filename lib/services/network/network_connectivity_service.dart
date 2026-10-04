@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../core/logging/logger.dart';
 
 /// Watches network connectivity and quality to drive WebSocket reconnection decisions.
 ///
@@ -74,16 +75,16 @@ class NetworkConnectivityService {
     try {
       final result = await _connectivity.checkConnectivity();
       await _handleConnectivityChange(result);
-    } catch (e) {
-      debugPrint('[NetworkService] Error getting initial connectivity: $e');
+    } catch (e, st) {
+      Logger.error( 'Error getting initial connectivity', tag: 'NetworkService', error: e, stackTrace: st );
       _currentState = NetworkState.unknown;
     }
     
     // Subscribe to connectivity changes
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _handleConnectivityChange,
-      onError: (error) {
-        debugPrint('[NetworkService] Connectivity subscription error: $error');
+      onError: (Object error, StackTrace st) {
+        Logger.error( 'Connectivity subscription error', tag: 'NetworkService', error: error, stackTrace: st );
       },
     );
     

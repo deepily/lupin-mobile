@@ -8,7 +8,7 @@ import '../../core/logging/logger.dart';
 /// Returns log metadata naming the request [path] without its query string.
 ///
 /// The query string is left out because it can carry a credential.
-LogContext _requestContext( String path ) => LogContext( metadata: { 'path': path.split( '?' ).first } );
+LogContext requestLogContext( String path ) => LogContext( metadata: { 'path': path.split( '?' ).first } );
 
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
@@ -110,7 +110,7 @@ class HttpService {
       final response = await _dio.get('/api/get-session-id');
       return response.data;
     } catch (e, st) {
-      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/get-session-id' ) );
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-session-id' ) );
       rethrow;
     }
   }
@@ -152,7 +152,7 @@ class HttpService {
       );
       return response;
     } catch (e, st) {
-      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/get-speech-elevenlabs' ) );
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech-elevenlabs' ) );
       rethrow;
     }
   }
@@ -185,7 +185,7 @@ class HttpService {
       );
       return response;
     } catch (e, st) {
-      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/get-speech' ) );
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech' ) );
       rethrow;
     }
   }
@@ -222,7 +222,7 @@ class HttpService {
       
       return response.data;
     } catch (e, st) {
-      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/api/upload-and-transcribe-mp3' ) );
+      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/upload-and-transcribe-mp3' ) );
       rethrow;
     }
   }
@@ -241,7 +241,7 @@ class HttpService {
       final response = await _dio.get('/health');
       return response.statusCode == 200;
     } catch (e, st) {
-      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( '/health' ) );
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/health' ) );
       return false;
     }
   }
@@ -272,7 +272,7 @@ class HttpService {
         options: options,
       );
     } catch (e, st) {
-      Logger.error( 'GET request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
+      Logger.error( 'GET request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -305,7 +305,7 @@ class HttpService {
         options: options,
       );
     } catch (e, st) {
-      Logger.error( 'POST request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
+      Logger.error( 'POST request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -338,7 +338,7 @@ class HttpService {
         options: options,
       );
     } catch (e, st) {
-      Logger.error( 'PUT request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
+      Logger.error( 'PUT request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -369,7 +369,7 @@ class HttpService {
         options: options,
       );
     } catch (e, st) {
-      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e, stackTrace: st, context: _requestContext( path ) );
+      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
