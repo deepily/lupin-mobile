@@ -44,6 +44,17 @@ errors the pair rule cannot see), as does one that changes the ignores in force:
 `ignore:` / `ignore_for_file:` comment, one edited to name other codes, or one that moved onto different code
 (an ignore silences analyzer errors on the code it covers; the public_member_api_docs form is not exempt); pass
 --allow-ignores to accept it. A removed ignore is not refused (it hides less). Either flag makes the verdict line say so.
+A tracked .dart file under flutter/ or build/ (the two paths the root analysis_options.yaml excludes; reachable by
+`git add -f`) fails check 1 as well: the analyzer never opens it, so its errors are never counted. The gate does not
+parse the exclude list: the root file must hold exactly `flutter/**` and `build/**` in the one block shape it has today
+(or no exclude at all), and no other tracked analysis_options.yaml may mention "exclude"; anything else is refused with
+the reason, so a reformatted or extended list stops the gate until a reviewed commit teaches it the new shape.
+
+Known limit (not fixed, by ruling): an ignore in file A can hide an error that a change in file B causes, and the rule
+above cannot see it because A is unchanged. It is latent while every ignore in the repo names a lint (today all three
+name avoid_print). The sound fix is a second analyzer run with the ignore comments stripped, at the start and the head,
+compared as new errors; build it if an ignore naming an error code ever lands.
+
 The analyzer runs over the top-level directories of the tracked .dart files (lib, test, integration_test, ...),
 at the head and, separately, at the start of the range.
 
@@ -388,6 +399,60 @@ def ignore_files_changed( start, end, root=ROOT ):
                    if any( IGNORE_LINE.search( line ) for line in show( end, p, root ).splitlines() ) )
 
 
+EXCLUDED_ROOTS = ( "flutter/", "build/" )
+EXCLUDE_BLOCK  = ( "analyzer:", "  exclude:", "    - flutter/**", "    - build/**" )
+
+
+def check_exclude_shape( text ):
+    """
+    Accept the root analysis_options.yaml only if its analyzer excludes are exactly the two this gate knows how to police.
+
+    Requires:
+        - text is the contents of the root analysis_options.yaml
+    Ensures:
+        - returns None when the file has no mention of "exclude" outside comments, or when its code lines (comments and
+          blank lines dropped) hold exactly the block `analyzer:` / `  exclude:` / `    - flutter/**` / `    - build/**`,
+          with nothing indented after it and no other code line mentioning "exclude" in any spelling, and every `include:` is a package:
+        - raises ValueError with the reason otherwise: any other shape (flow style, a dash at the key's indent, a quoted
+          key, another entry, a trailing slash, a brace or class glob, a second mention) is not read, because reading it
+          wrong would let a tracked .dart file the analyzer skips pass; the fix is to restore this shape or to teach this
+          function the new one in a reviewed commit
+    """
+    code = [ l.rstrip() for l in text.splitlines() if l.strip() and not l.lstrip().startswith( "#" ) ]
+    for l in code:
+        if l.startswith( "include:" ) and not l[ len( "include:" ): ].strip().startswith( "package:" ):
+            raise ValueError( f"root analysis_options.yaml includes a file the gate does not read: {l.strip()}" )
+    hits = [ i for i, l in enumerate( code ) if "exclude" in l.lower() ]
+    if not hits: return None
+    i = hits[ 0 ]
+    ok = ( len( hits ) == 1 and i > 0 and tuple( code[ i - 1:i + 3 ] ) == EXCLUDE_BLOCK and code.count( "analyzer:" ) == 1
+           and ( i + 3 >= len( code ) or not code[ i + 3 ].startswith( " " ) ) )
+    if not ok:
+        raise ValueError( "root analysis_options.yaml has an analyzer exclude in a shape other than exactly flutter/** and build/** "
+                          f"as a two-space block list (first mention: {code[ i ].strip()})" )
+
+
+def excluded_dart_files( rev, root=ROOT ):
+    """
+    List the tracked .dart files that the analyzer's own exclude list keeps it from reading.
+
+    Requires:
+        - rev is a commit in root
+    Ensures:
+        - raises ValueError when the root analysis_options.yaml excludes are not exactly flutter/** and build/** in the shape
+          check_exclude_shape accepts, or when any other tracked analysis_options.yaml mentions "exclude" at all
+        - otherwise returns sorted tracked .dart paths at rev under flutter/ or build/ (at the repo root, whole folder names)
+        - such a file (for example one added with `git add -f` under the gitignored build/) is tracked, so the untracked-file
+          rule lets it through, yet the analyzer never opens it, so no error in it is ever counted
+    """
+    names = git( [ "ls-tree", "-r", "--name-only", rev ], root ).splitlines()
+    check_exclude_shape( show( rev, "analysis_options.yaml", root ) )
+    for n in names:
+        if os.path.basename( n ) == "analysis_options.yaml" and n != "analysis_options.yaml" and "exclude" in show( rev, n, root ).lower():
+            raise ValueError( f"{n} mentions exclude; the gate reads only the root options file, so it cannot tell what the analyzer skips" )
+    return sorted( n for n in names if n.endswith( ".dart" ) and n.startswith( EXCLUDED_ROOTS ) )
+
+
 def dart_roots( paths ):
     """
     Pick the analyzer targets out of a list of tracked paths.
@@ -544,6 +609,8 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     Ensures:
         - returns 1, without running the analyzer, when the range edits any analysis_options.yaml and
           allow_config is not set: the head is analyzed with its own options, so a commit could exclude its own errors
+        - returns 1, likewise, when the head tracks any .dart file under an analyzer `exclude:` path (it would never be analyzed),
+          or when that exclude list is in a shape the gate cannot read (it refuses rather than assume there are none)
         - returns 1, likewise, when the range adds an ignore comment to a .dart file, or changes any .dart file that
           carries an ignore at the head, and allow_ignores is not set; the detail names each file (and the codes added)
         - analyzes the top-level directories of the tracked .dart files at the head, and those at the start for the start
@@ -562,6 +629,13 @@ def check_analyzer( start, logdir, root=ROOT, allow_config=False, allow_ignores=
     if carrying and not allow_ignores:
         refusals.append( "range changes .dart file(s) that carry an ignore, which can now hide an error: " + ", ".join( carrying )
                          + " (pass --allow-ignores after reading that diff)" )
+    try: hidden = excluded_dart_files( "HEAD", root )
+    except ValueError as ex:
+        hidden = []
+        refusals.append( f"cannot tell which paths the analyzer skips, so the gate will not guess: {ex}" )
+    if hidden:
+        refusals.append( "tracked .dart file(s) under an analyzer-excluded path, so the analyzer never reads them: " + ", ".join( hidden[ :10 ] )
+                         + ( f" ...and {len( hidden ) - 10} more" if len( hidden ) > 10 else "" ) + " (git rm them, or take the path off the exclude list in a reviewed commit)" )
     if refusals: return 1, " | ".join( refusals )
     head_targets, base_targets = dart_roots_at( "HEAD", root ), dart_roots_at( start, root )
     head = collections.Counter()
