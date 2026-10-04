@@ -167,7 +167,7 @@ class PendingSummary {
 
   /// Builds a summary from server JSON; a missing count map becomes empty.
   factory PendingSummary.fromJson( Map<String, dynamic> json ) {
-    Map<String, int> _intMap( dynamic m ) {
+    Map<String, int> intMap( dynamic m ) {
       if ( m is! Map ) return const {};
       return m.map( ( k, v ) => MapEntry(
         k.toString(),
@@ -176,8 +176,8 @@ class PendingSummary {
     }
     return PendingSummary(
       totalPending  : ( json["total_pending"] as num? )?.toInt() ?? 0,
-      byCategory    : _intMap( json["by_category"] ),
-      byTrustLevel  : _intMap( json["by_trust_level"] ),
+      byCategory    : intMap( json["by_category"] ),
+      byTrustLevel  : intMap( json["by_trust_level"] ),
       oldestPending : _parseDt( json["oldest_pending"] ),
     );
   }
