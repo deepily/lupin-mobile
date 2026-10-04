@@ -26,6 +26,9 @@ Exit 0 = every check passed · 1 = at least one check failed.
 """
 import argparse, os, re, shutil, subprocess, sys
 
+sys.path.insert( 0, os.path.dirname( os.path.abspath( __file__ ) ) )
+import check_doc_ignores as ignores   # the weak-reason list lives there, once
+
 ROOT    = os.path.dirname( os.path.dirname( os.path.abspath( __file__ ) ) )
 OPTIONS    = "analysis_options.yaml"
 GATED_LIST = "tool/data/gated_dirs.txt"
@@ -109,20 +112,74 @@ def touched_dirs( staged, swept ):
     return [ d for d in swept if any( p.startswith( d + "/" ) for p in staged ) ]
 
 
-def head_list( rel, root=ROOT ):
+def ref_list( rel, root=ROOT, ref="HEAD" ):
     """
-    Read a list file as it is in HEAD, for the commit being checked.
+    Read a list file as it is at a git ref.
 
     Requires:
         - root is a git working tree; rel is a repo-relative list file such as tool/data/gated_dirs.txt
 
     Ensures:
-        - returns the directory names in that file at HEAD, comments and annotations dropped
-        - returns None when HEAD has no such file (first commit, or the file is new)
+        - returns the directory names in that file at the ref, comments and annotations dropped
+        - returns None when the ref has no such file (first commit, or the file is new)
     """
-    proc = subprocess.run( [ "git", "show", f"HEAD:{rel}" ], cwd=root, capture_output=True, text=True )
+    proc = subprocess.run( [ "git", "show", f"{ref}:{rel}" ], cwd=root, capture_output=True, text=True )
     if proc.returncode != 0: return None
     return [ l.split()[0] for l in ( x.strip() for x in proc.stdout.splitlines() ) if l and not l.startswith( "#" ) ]
+
+
+def effective_lists( root=ROOT, ref="HEAD" ):
+    """
+    Give the gated and exempt lists a check must use, so a change cannot loosen its own gate.
+
+    Requires:
+        - root holds both list files; ref is a git ref (HEAD for the hook, the merge base for CI)
+
+    Ensures:
+        - returns ( gated, exempt ) as lists of directories
+        - gated is the working list plus any directory the ref gated that still exists on disk
+        - exempt is the working list limited to what the ref already exempted; when the ref has no exempt file it is the working list
+    """
+    gated   = swept_dirs( root )
+    exempt  = exempt_dirs( root )
+    in_ref  = ref_list( GATED_LIST, root, ref )
+    if in_ref: gated = gated + [ d for d in in_ref if d not in gated and os.path.isdir( os.path.join( root, d ) ) ]
+    ex_ref  = ref_list( EXEMPT_LIST, root, ref )
+    if ex_ref is not None: exempt = [ d for d in exempt if d in ex_ref ]
+    return gated, exempt
+
+
+def listed_but_missing( root=ROOT ):
+    """
+    Find gated directories that are on the list but no longer exist.
+
+    Requires:
+        - root holds tool/data/gated_dirs.txt
+
+    Ensures:
+        - returns one message per missing directory, naming it and the list it is in
+        - returns [] when every listed directory exists
+    """
+    return [ f"{d} is listed in {GATED_LIST} but the directory does not exist; delete that line"
+             f"{' and its line in ' + EXEMPT_LIST if d in exempt_dirs( root ) else ''}"
+             for d in swept_dirs( root ) if not os.path.isdir( os.path.join( root, d ) ) ]
+
+
+def merge_base( ref, root=ROOT ):
+    """
+    Resolve the commit a check must read the lists from.
+
+    Requires:
+        - ref names a commit that shares history with HEAD (a fetched base branch)
+
+    Ensures:
+        - returns the merge-base sha of HEAD and ref
+        - raises RuntimeError saying so when git cannot find one (never falls back to the working lists)
+    """
+    proc = subprocess.run( [ "git", "merge-base", "HEAD", ref ], cwd=root, capture_output=True, text=True )
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise RuntimeError( f"--base {ref}: no merge base with HEAD; fetch it (actions/checkout fetch-depth: 0)" )
+    return proc.stdout.strip()
 
 
 def partition_touched( staged, root=ROOT ):
@@ -140,12 +197,7 @@ def partition_touched( staged, root=ROOT ):
           counts only once it is in HEAD, so a commit cannot excuse its own findings
         - staging a list file or any analysis_options.yaml makes every gated directory count as touched
     """
-    swept   = swept_dirs( root )
-    exempt  = exempt_dirs( root )
-    in_head = head_list( GATED_LIST, root )
-    if in_head: swept = swept + [ d for d in in_head if d not in swept and os.path.isdir( os.path.join( root, d ) ) ]
-    ex_head = head_list( EXEMPT_LIST, root )
-    if ex_head is not None: exempt = [ d for d in exempt if d in ex_head ]
+    swept, exempt = effective_lists( root, "HEAD" )
     config  = ( GATED_LIST, EXEMPT_LIST, OPTIONS )
     if any( p in config or ( p.startswith( "lib/" ) and p.endswith( "/" + OPTIONS ) ) for p in staged ):
         touched = list( swept )
@@ -329,8 +381,9 @@ def strict_config_problems( dirs, root=ROOT ):
         - returns one message per problem, empty when none
         - checks, with options_problems, the root options file, every options file in an ancestor directory
           of a strict directory, and every options file anywhere under it (nested ones included)
-        - flags an `ignore` or `ignore_for_file` comment under the directory that gives no reason after " - "
-          (public_member_api_docs ignores keep their own gate, tool/check_doc_ignores.py)
+        - flags an `ignore_for_file` comment, and an `ignore` comment whose reason after " - " is missing or only
+          placeholder words (the list in tool/check_doc_ignores.py, reused); public_member_api_docs ignores keep
+          their own gate there
     """
     problems = []
     files    = set()
@@ -355,8 +408,13 @@ def strict_config_problems( dirs, root=ROOT ):
                         if not m: continue
                         body = m.group( "body" )
                         if "public_member_api_docs" in body: continue
-                        if m.group( 1 ) or not re.search( r"\s--?\s+\S", body ):
-                            problems.append( f"{os.path.relpath( full, root )}:{n}: ignore comment in a strict directory needs a reason after ' - ' and may not be ignore_for_file" )
+                        where  = f"{os.path.relpath( full, root )}:{n}"
+                        if m.group( 1 ):
+                            problems.append( f"{where}: ignore_for_file is refused in a strict directory" )
+                            continue
+                        parts  = ignores.SEPARATOR.split( body, 1 )
+                        reason = ignores.reason_problem( parts[1] if len( parts ) > 1 else "" )
+                        if reason: problems.append( f"{where}: ignore comment in a strict directory needs a real reason after ' - ': {reason}" )
     return problems
 
 
@@ -444,13 +502,25 @@ def main( argv=None, root=ROOT ):
     ap.add_argument( "--list", action="store_true", help="print the gated directories and stop" )
     ap.add_argument( "--docs-all", action="store_true",
                      help="run checks 3 and 4 over every gated directory, ignoring the staged changes (CI)" )
+    ap.add_argument( "--base", metavar="REF",
+                     help="with --docs-all: read the two lists as they were at the merge base with REF, so this change cannot loosen its own gate" )
     args = ap.parse_args( argv )
     swept = swept_dirs( root )
+    missing = listed_but_missing( root )
+    if missing and not args.list:
+        for m in missing: print( f"BLOCKED: {m}", file=sys.stderr )
+        return 1
     if args.list:
         print( "\n".join( swept ) )
         return 0
     if args.docs_all:
-        exempt = exempt_dirs( root )
+        if args.base:
+            try: swept, exempt = effective_lists( root, merge_base( args.base, root ) )
+            except RuntimeError as e:
+                print( f"BLOCKED: {e}", file=sys.stderr )
+                return 1
+        else:
+            exempt = exempt_dirs( root )
         docs   = check_docs( [ d for d in swept if d in exempt ], root )
         strict = check_strict( [ d for d in swept if d not in exempt ], root )
         return 0 if docs and strict else 1

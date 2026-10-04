@@ -211,7 +211,7 @@ class StrictGateTest( unittest.TestCase ):
         root = make_strict_repo( strict_text="void a() {\n  // ignore: avoid_print\n  print( 'x' );\n}\n" )
         probs = gate.strict_config_problems( [ "lib/strict" ], root )
         self.assertEqual( len( probs ), 1 )
-        self.assertIn( "lib/strict/s.dart:2: ignore comment in a strict directory needs a reason", probs[0] )
+        self.assertIn( "lib/strict/s.dart:2: ignore comment in a strict directory needs a real reason", probs[0] )
         with open( os.path.join( root, "lib/strict/s.dart" ), "w" ) as f:
             f.write( "void a() {\n  // ignore: avoid_print - captured by the log test\n  print( 'x' );\n}\n" )
         self.assertEqual( gate.strict_config_problems( [ "lib/strict" ], root ), [] )
@@ -312,6 +312,70 @@ class StrictGateTest( unittest.TestCase ):
         self.stage( root, "tool/data/gated_dirs.txt", "lib/exempt\n" )
         subprocess.run( [ "git", "rm", "-rqf", "lib/strict" ], cwd=root, check=True )
         self.assertEqual( gate.partition_touched( gate.staged_paths( root ), root ), ( [ "lib/exempt" ], [] ) )
+
+    def test_placeholder_ignore_reasons_are_refused_with_the_shared_weak_list( self ):
+        for reason in ( "because", "todo", "later" ):
+            root = make_strict_repo( strict_text=f"void a() {{\n  // ignore: avoid_print - {reason}\n  print( 'x' );\n}}\n" )
+            probs = gate.strict_config_problems( [ "lib/strict" ], root )
+            self.assertEqual( len( probs ), 1, reason )
+            self.assertIn( f"reason '{reason}' names no fact", probs[0] )
+        self.assertIs( gate.ignores.WEAK, __import__( "check_doc_ignores" ).WEAK )
+
+    def commit_all( self, root, msg ):
+        subprocess.run( [ "git", "add", "-A" ], cwd=root, check=True )
+        subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", msg ], cwd=root, check=True )
+        return subprocess.run( [ "git", "rev-parse", "HEAD" ], cwd=root, capture_output=True, text=True, check=True ).stdout.strip()
+
+    def run_main( self, argv, root ):
+        import io, contextlib
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout( out ), contextlib.redirect_stderr( err ):
+            code = gate.main( argv, root )
+        return code, out.getvalue(), err.getvalue()
+
+    def test_ci_with_a_base_ref_refuses_a_commit_that_exempts_itself( self ):
+        root = self.committed_repo()
+        base = subprocess.run( [ "git", "rev-parse", "HEAD" ], cwd=root, capture_output=True, text=True ).stdout.strip()
+        with open( os.path.join( root, "tool/data/strict_exempt.txt" ), "a" ) as f: f.write( "lib/strict  # trust me (row 0123abcd)\n" )
+        self.stage( root, "lib/strict/s.dart", NOTE )
+        self.commit_all( root, "loosen own gate" )
+        code, out, err = self.run_main( [ "--docs-all" ], root )
+        self.assertEqual( code, 0, out )
+        code, out, err = self.run_main( [ "--docs-all", "--base", base ], root )
+        self.assertEqual( code, 1 )
+        self.assertIn( "STRICT lib/strict: avoid_print lib/strict/s.dart:3", out )
+
+    def test_ci_with_a_base_ref_refuses_a_commit_that_drops_its_dir_from_the_gated_list( self ):
+        root = self.committed_repo()
+        base = subprocess.run( [ "git", "rev-parse", "HEAD" ], cwd=root, capture_output=True, text=True ).stdout.strip()
+        with open( os.path.join( root, "tool/data/gated_dirs.txt" ), "w" ) as f: f.write( "lib/exempt\n" )
+        self.stage( root, "lib/strict/s.dart", NOTE )
+        self.commit_all( root, "drop own dir" )
+        self.assertEqual( self.run_main( [ "--docs-all" ], root )[0], 0 )
+        code, out, err = self.run_main( [ "--docs-all", "--base", base ], root )
+        self.assertEqual( code, 1 )
+        self.assertIn( "STRICT lib/strict: avoid_print", out )
+
+    def test_base_ref_with_no_merge_base_fails_loud_and_never_falls_back_to_the_working_lists( self ):
+        root = self.committed_repo()
+        code, out, err = self.run_main( [ "--docs-all", "--base", "no-such-ref" ], root )
+        self.assertEqual( code, 1 )
+        self.assertIn( "--base no-such-ref: no merge base with HEAD", err )
+
+    def test_a_listed_directory_that_does_not_exist_is_named_with_its_list( self ):
+        root = self.committed_repo()
+        subprocess.run( [ "git", "rm", "-rqf", "lib/strict" ], cwd=root, check=True )
+        self.assertEqual( len( gate.listed_but_missing( root ) ), 1 )
+        code, out, err = self.run_main( [ "--docs-all" ], root )
+        self.assertEqual( code, 1 )
+        self.assertIn( "BLOCKED: lib/strict is listed in tool/data/gated_dirs.txt but the directory does not exist; delete that line", err )
+        self.assertNotIn( "did not finish", err )
+
+    def test_a_strict_dir_with_no_dart_files_passes_because_there_is_nothing_to_hide( self ):
+        root = make_strict_repo( strict_text=CLEAN )
+        os.remove( os.path.join( root, "lib/strict/s.dart" ) )
+        ok, out = self.run_strict( [ "lib/strict" ], root )
+        self.assertTrue( ok, out )
 
     def test_unreadable_analyzer_failure_is_not_read_as_clean( self ):
         orig = subprocess.run
