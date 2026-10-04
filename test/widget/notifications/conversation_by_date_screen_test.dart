@@ -84,12 +84,12 @@ void main() {
           .having( ( e ) => e.userEmail, "userEmail", "u@x.y" ),
       ) ) ).called( 1 );
 
-      expect( find.byKey( Key( '${TestKeys.convByDateSectionHeaderPrefix}2026-04-22' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.convByDateSectionHeaderPrefix}2026-04-21' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.convByDateItemPrefix}n-1' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.convByDateItemPrefix}n-2' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.convByDateItemPrefix}n-3' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.convByDateItemPrefix}n-4' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateSectionHeaderPrefix}2026-04-22' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateSectionHeaderPrefix}2026-04-21' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateItemPrefix}n-1' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateItemPrefix}n-2' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateItemPrefix}n-3' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateItemPrefix}n-4' ) ), findsOneWidget );
     });
 
     testWidgets( "renders empty-state when byDate is empty", ( tester ) async {
@@ -175,8 +175,8 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
-      expect( find.byKey( Key( '${TestKeys.convByDateRespondPrefix}n-2' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.convByDateRespondPrefix}n-1' ) ), findsNothing );
+      expect( find.byKey( const Key( '${TestKeys.convByDateRespondPrefix}n-2' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.convByDateRespondPrefix}n-1' ) ), findsNothing );
     });
 
     testWidgets( "tapping Respond opens InteractivePromptSheet", ( tester ) async {
@@ -199,7 +199,7 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
-      await tester.tap( find.byKey( Key( '${TestKeys.convByDateRespondPrefix}n-2' ) ) );
+      await tester.tap( find.byKey( const Key( '${TestKeys.convByDateRespondPrefix}n-2' ) ) );
       await tester.pumpAndSettle();
 
       // Prompt sheet renders Yes + No buttons (FilledButton + OutlinedButton).

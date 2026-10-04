@@ -59,7 +59,7 @@ class NetworkCache {
       data: response.data,
       headers: response.headers.map,
       timestamp: DateTime.now(),
-      ttl: customTtl ?? Duration(minutes: 30),
+      ttl: customTtl ?? const Duration(minutes: 30),
     );
     
     await _responseCache.put(

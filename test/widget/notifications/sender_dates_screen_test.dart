@@ -62,9 +62,9 @@ void main() {
           .having( ( e ) => e.userEmail, "userEmail", "u@x.y" ),
       ) ) ).called( 1 );
 
-      expect( find.byKey( Key( '${TestKeys.senderDatesTilePrefix}2026-04-22' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.senderDatesTilePrefix}2026-04-21' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.senderDatesTilePrefix}2026-04-20' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.senderDatesTilePrefix}2026-04-22' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.senderDatesTilePrefix}2026-04-21' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.senderDatesTilePrefix}2026-04-20' ) ), findsOneWidget );
     });
 
     testWidgets( "renders empty-state when dates list is empty", ( tester ) async {
@@ -140,7 +140,7 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
-      await tester.tap( find.byKey( Key( '${TestKeys.senderDatesTilePrefix}2026-04-22' ) ) );
+      await tester.tap( find.byKey( const Key( '${TestKeys.senderDatesTilePrefix}2026-04-22' ) ) );
       await tester.pumpAndSettle();
 
       expect( find.byType( ConversationByDateScreen ), findsOneWidget );

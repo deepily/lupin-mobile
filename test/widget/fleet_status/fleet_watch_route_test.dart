@@ -111,7 +111,7 @@ void main() {
   }
 
   Finder watchButton() =>
-      find.byKey( Key( "${ TestKeys.fleetStatusWatchPrefix }$who" ) );
+      find.byKey( const Key( "${ TestKeys.fleetStatusWatchPrefix }$who" ) );
 
   testWidgets( "the screen reads the roster and the button opens the console",
       ( tester ) async {

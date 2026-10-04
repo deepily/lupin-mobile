@@ -33,7 +33,7 @@ void main() {
     }
     ServiceLocator.instance.registerSingleton<NotificationPreferences>( prefs );
     bloc = MockNotificationBloc();
-    whenListen( bloc, Stream<NotificationState>.empty(), initialState: NotificationsInboxLoaded(
+    whenListen( bloc, const Stream<NotificationState>.empty(), initialState: NotificationsInboxLoaded(
       senders   : [ SenderSummary( senderId: _sender, lastActivity: DateTime( 2026, 9, 29 ), count: 1 ) ],
       userEmail : "u@x.y",
     ) );

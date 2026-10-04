@@ -63,14 +63,14 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'DeepResearchRequest', () {
     test( 'toJson includes required query only when optionals absent', () {
-      final j = DeepResearchRequest( query: 'AI trends' ).toJson();
+      final j = const DeepResearchRequest( query: 'AI trends' ).toJson();
       expect( j[ 'query'    ], 'AI trends' );
       expect( j.containsKey( 'budget'   ), isFalse );
       expect( j.containsKey( 'dry_run'  ), isFalse );
     } );
 
     test( 'toJson includes optionals when set', () {
-      final j = DeepResearchRequest(
+      final j = const DeepResearchRequest(
         query   : 'test',
         budget  : 5.0,
         dryRun  : true,
@@ -108,13 +108,13 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'PodcastGeneratorRequest', () {
     test( 'toJson serialises researchSource', () {
-      final j = PodcastGeneratorRequest( researchSource: '/reports/dr-1.md' ).toJson();
+      final j = const PodcastGeneratorRequest( researchSource: '/reports/dr-1.md' ).toJson();
       expect( j[ 'research_source' ], '/reports/dr-1.md' );
       expect( j.containsKey( 'target_languages' ), isFalse );
     } );
 
     test( 'toJson includes target_languages when non-empty', () {
-      final j = PodcastGeneratorRequest(
+      final j = const PodcastGeneratorRequest(
         researchSource : 'src',
         targetLanguages: [ 'en', 'es' ],
       ).toJson();
@@ -127,14 +127,14 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'PresentationGeneratorRequest', () {
     test( 'toJson serialises sourcePath', () {
-      final j = PresentationGeneratorRequest( sourcePath: '/reports/dr-1.md' ).toJson();
+      final j = const PresentationGeneratorRequest( sourcePath: '/reports/dr-1.md' ).toJson();
       expect( j[ 'source_path' ], '/reports/dr-1.md' );
       expect( j.containsKey( 'theme'       ), isFalse );
       expect( j.containsKey( 'render_only' ), isFalse );
     } );
 
     test( 'toJson includes render_only when true', () {
-      final j = PresentationGeneratorRequest(
+      final j = const PresentationGeneratorRequest(
         sourcePath : 'src',
         renderOnly : true,
         theme      : 'dark',
@@ -149,13 +149,13 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'SweTeamRequest', () {
     test( 'toJson serialises task', () {
-      final j = SweTeamRequest( task: 'fix the bug' ).toJson();
+      final j = const SweTeamRequest( task: 'fix the bug' ).toJson();
       expect( j[ 'task' ], 'fix the bug' );
       expect( j.containsKey( 'trust_mode' ), isFalse );
     } );
 
     test( 'toJson includes trust_mode when set', () {
-      final j = SweTeamRequest( task: 't', trustMode: 'active' ).toJson();
+      final j = const SweTeamRequest( task: 't', trustMode: 'active' ).toJson();
       expect( j[ 'trust_mode' ], 'active' );
     } );
   } );
@@ -165,13 +165,13 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'BugFixExpediterRequest', () {
     test( 'toJson serialises deadJobId', () {
-      final j = BugFixExpediterRequest( deadJobId: 'bfe-xyz' ).toJson();
+      final j = const BugFixExpediterRequest( deadJobId: 'bfe-xyz' ).toJson();
       expect( j[ 'dead_job_id' ], 'bfe-xyz' );
       expect( j.containsKey( 'extra_context' ), isFalse );
     } );
 
     test( 'toJson includes extra_context when set', () {
-      final j = BugFixExpediterRequest(
+      final j = const BugFixExpediterRequest(
         deadJobId   : 'bfe-1',
         extraContext: 'timeout in phase 3',
       ).toJson();
@@ -184,13 +184,13 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'TestSuiteRequest', () {
     test( 'toJson includes default test_types', () {
-      final j = TestSuiteRequest().toJson();
+      final j = const TestSuiteRequest().toJson();
       expect( j[ 'test_types' ], 'integration,e2e' );
       expect( j.containsKey( 'dry_run' ), isFalse );
     } );
 
     test( 'toJson includes testTypes and autoFixOnFailure when set', () {
-      final j = TestSuiteRequest(
+      final j = const TestSuiteRequest(
         testTypes      : 'unit,integration',
         autoFixOnFailure: true,
         dryRun         : true,
@@ -206,7 +206,7 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'TfeResumeFromRequest', () {
     test( 'toJson serialises resume_from', () {
-      final j = TfeResumeFromRequest( resumeFrom: 'tfe-abc' ).toJson();
+      final j = const TfeResumeFromRequest( resumeFrom: 'tfe-abc' ).toJson();
       expect( j[ 'resume_from' ], 'tfe-abc' );
     } );
   } );
@@ -216,7 +216,7 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'ResearchToPodcastRequest', () {
     test( 'toJson serialises query', () {
-      final j = ResearchToPodcastRequest( query: 'quantum computing' ).toJson();
+      final j = const ResearchToPodcastRequest( query: 'quantum computing' ).toJson();
       expect( j[ 'query' ], 'quantum computing' );
       expect( j.containsKey( 'budget' ), isFalse );
     } );
@@ -227,7 +227,7 @@ void main() {
   // ─────────────────────────────────────────────
   group( 'ResearchToPresentationRequest', () {
     test( 'toJson serialises query and theme', () {
-      final j = ResearchToPresentationRequest(
+      final j = const ResearchToPresentationRequest(
         query : 'machine learning',
         theme : 'minimal',
         dryRun: true,

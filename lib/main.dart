@@ -53,7 +53,7 @@ void main() async {
     );
     
     // Show minimal error app
-    runApp(MaterialApp(
+    runApp(const MaterialApp(
       home: Scaffold(
         body: Center(
           child: Column(

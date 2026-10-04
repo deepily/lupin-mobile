@@ -42,7 +42,7 @@ void main() {
         expect( body[ 'question' ], 'AI trends' );
         return jsonBody( _submitResp( 'dr-abc' ) );
       };
-      final r = await repo.submitDeepResearch( DeepResearchRequest( query: 'AI trends' ) );
+      final r = await repo.submitDeepResearch( const DeepResearchRequest( query: 'AI trends' ) );
       expect( r.jobId, 'dr-abc' );
     } );
 
@@ -50,7 +50,7 @@ void main() {
       adapter.handlers[ 'POST /api/v2/submit' ] = ( _ ) =>
           jsonBody( { 'detail': 'server error' }, status: 500 );
       await expectLater(
-        repo.submitDeepResearch( DeepResearchRequest( query: 'q' ) ),
+        repo.submitDeepResearch( const DeepResearchRequest( query: 'q' ) ),
         throwsA( isA<AgenticApiException>() ),
       );
     } );
@@ -75,7 +75,7 @@ void main() {
         return jsonBody( _submitResp( 'pg-001' ) );
       };
       final r = await repo.submitPodcast(
-        PodcastGeneratorRequest( researchSource: '/reports/dr-1.md' ),
+        const PodcastGeneratorRequest( researchSource: '/reports/dr-1.md' ),
       );
       expect( r.jobId, 'pg-001' );
     } );
@@ -89,7 +89,7 @@ void main() {
         return jsonBody( _submitResp( 'px-002' ) );
       };
       final r = await repo.submitPresentation(
-        PresentationGeneratorRequest( sourcePath: '/reports/dr-2.md' ),
+        const PresentationGeneratorRequest( sourcePath: '/reports/dr-2.md' ),
       );
       expect( r.jobId, 'px-002' );
     } );
@@ -101,7 +101,7 @@ void main() {
         expect( body[ 'args' ][ 'task' ], 'refactor auth' );
         return jsonBody( _submitResp( 'sw-003' ) );
       };
-      final r = await repo.submitSweTeam( SweTeamRequest( task: 'refactor auth' ) );
+      final r = await repo.submitSweTeam( const SweTeamRequest( task: 'refactor auth' ) );
       expect( r.jobId, 'sw-003' );
     } );
 
@@ -113,7 +113,7 @@ void main() {
         return jsonBody( _submitResp( 'bfe-new' ) );
       };
       final r = await repo.submitBugFixExpediter(
-        BugFixExpediterRequest( deadJobId: 'bfe-dead' ),
+        const BugFixExpediterRequest( deadJobId: 'bfe-dead' ),
       );
       expect( r.jobId, 'bfe-new' );
     } );
@@ -125,7 +125,7 @@ void main() {
         expect( body[ 'args' ][ 'test_types' ], 'unit' );
         return jsonBody( _submitResp( 'ts-004' ) );
       };
-      final r = await repo.submitTestSuite( TestSuiteRequest( testTypes: 'unit' ) );
+      final r = await repo.submitTestSuite( const TestSuiteRequest( testTypes: 'unit' ) );
       expect( r.jobId, 'ts-004' );
     } );
 
@@ -144,7 +144,7 @@ void main() {
         } );
       };
       final r = await repo.resumeTestFixExpediter(
-        TfeResumeFromRequest( resumeFrom: 'tfe-old' ),
+        const TfeResumeFromRequest( resumeFrom: 'tfe-old' ),
       );
       expect( r.resumedJobId, 'tfe-new' );
       expect( r.phaseName,    'run_tests' );
@@ -158,7 +158,7 @@ void main() {
         return jsonBody( _submitResp( 'rp-005' ) );
       };
       final r = await repo.submitResearchToPodcast(
-        ResearchToPodcastRequest( query: 'fusion energy' ),
+        const ResearchToPodcastRequest( query: 'fusion energy' ),
       );
       expect( r.jobId, 'rp-005' );
     } );
@@ -171,7 +171,7 @@ void main() {
         return jsonBody( _submitResp( 'rx-006' ) );
       };
       final r = await repo.submitResearchToPresentation(
-        ResearchToPresentationRequest( query: 'climate data' ),
+        const ResearchToPresentationRequest( query: 'climate data' ),
       );
       expect( r.jobId, 'rx-006' );
     } );

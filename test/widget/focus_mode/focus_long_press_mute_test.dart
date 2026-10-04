@@ -42,7 +42,7 @@ void main() {
     prefs = NotificationPreferences( await SharedPreferences.getInstance() );
     bloc  = _MockBloc();
     when( () => bloc.close() ).thenAnswer( ( _ ) async {} );
-    final st = FocusChatState.initial().copyWith(
+    final st = const FocusChatState.initial().copyWith(
       senderOrder      : const [ _sender ],
       focusedSender    : _sender,
       windows          : { _sender: [ FocusMessage( item: _item() ) ] },

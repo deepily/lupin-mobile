@@ -253,7 +253,7 @@ class CachedHttpService extends HttpService {
       final response = await get<Map<String, dynamic>>(
         '/api/get-session-id',
         useCache: true,
-        cacheTtl: Duration(minutes: 5),
+        cacheTtl: const Duration(minutes: 5),
       );
       return response.data ?? {};
     } catch (e) {
@@ -298,7 +298,7 @@ class CachedHttpService extends HttpService {
           'similarity_boost': similarityBoost,
         },
         useCache: true,
-        cacheTtl: Duration(hours: 1),
+        cacheTtl: const Duration(hours: 1),
       );
       return response;
     } catch (e) {
@@ -336,7 +336,7 @@ class CachedHttpService extends HttpService {
           'text': text,
         },
         useCache: true,
-        cacheTtl: Duration(hours: 1),
+        cacheTtl: const Duration(hours: 1),
       );
       return response;
     } catch (e) {
@@ -365,7 +365,7 @@ class CachedHttpService extends HttpService {
       final response = await get(
         '/health',
         useCache: true,
-        cacheTtl: Duration(minutes: 2),
+        cacheTtl: const Duration(minutes: 2),
       );
       return response.statusCode == 200;
     } catch (e) {

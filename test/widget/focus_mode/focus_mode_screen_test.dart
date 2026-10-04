@@ -413,7 +413,7 @@ void main() {
       await tester.pump();
 
       final affordance =
-          find.byKey( Key( '${TestKeys.focusBatchFallbackPrefix}b1' ) );
+          find.byKey( const Key( '${TestKeys.focusBatchFallbackPrefix}b1' ) );
       expect( affordance, findsOneWidget );
       expect( find.byKey( const Key( TestKeys.promptYesButton ) ), findsNothing );
 

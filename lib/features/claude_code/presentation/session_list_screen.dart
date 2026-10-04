@@ -53,11 +53,11 @@ class SessionListScreen extends StatelessWidget {
                 border : Border( left: BorderSide( color: _kRetiredBannerAccent, width: 4 ) ),
               ),
               padding: const EdgeInsets.all( 16 ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon( Icons.warning_amber_rounded, color: _kRetiredBannerAccent, size: 32 ),
-                  const SizedBox( width: 16 ),
-                  const Expanded(
+                  Icon( Icons.warning_amber_rounded, color: _kRetiredBannerAccent, size: 32 ),
+                  SizedBox( width: 16 ),
+                  Expanded(
                     child: Text(
                       "INTERACTIVE Claude Code session list retired 2026-05-05.\n\n"
                       "BOUNDED submissions still work via the + button and land as `cc-*` jobs "

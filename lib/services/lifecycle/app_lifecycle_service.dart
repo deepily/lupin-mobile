@@ -309,10 +309,10 @@ class AppLifecycleService with WidgetsBindingObserver {
   AppStateConnectionStrategy getConnectionStrategy() {
     switch (_currentUsageState) {
       case AppUsageState.active:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(seconds: 30),
+          heartbeatInterval: Duration(seconds: 30),
           reconnectImmediately: true,
           maxConcurrentConnections: 2,
           enableAudioStreaming: true,
@@ -320,10 +320,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.inactive:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(minutes: 1),
+          heartbeatInterval: Duration(minutes: 1),
           reconnectImmediately: true,
           maxConcurrentConnections: 1,
           enableAudioStreaming: false,
@@ -331,10 +331,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.background:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(minutes: 2),
+          heartbeatInterval: Duration(minutes: 2),
           reconnectImmediately: false,
           maxConcurrentConnections: 1,
           enableAudioStreaming: false,
@@ -342,10 +342,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.backgroundLong:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: false,
           enableHeartbeat: false,
-          heartbeatInterval: const Duration(minutes: 5),
+          heartbeatInterval: Duration(minutes: 5),
           reconnectImmediately: false,
           maxConcurrentConnections: 0,
           enableAudioStreaming: false,
@@ -353,10 +353,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.recovering:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(seconds: 15),
+          heartbeatInterval: Duration(seconds: 15),
           reconnectImmediately: true,
           maxConcurrentConnections: 2,
           enableAudioStreaming: true,
@@ -364,10 +364,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.shutdown:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: false,
           enableHeartbeat: false,
-          heartbeatInterval: const Duration(minutes: 10),
+          heartbeatInterval: Duration(minutes: 10),
           reconnectImmediately: false,
           maxConcurrentConnections: 0,
           enableAudioStreaming: false,

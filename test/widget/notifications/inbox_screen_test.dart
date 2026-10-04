@@ -68,8 +68,8 @@ void main() {
         ),
       ) ) ).called( 1 );
 
-      expect( find.byKey( Key( '${TestKeys.inboxSenderTilePrefix}s-1' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.inboxSenderTilePrefix}s-2' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.inboxSenderTilePrefix}s-1' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.inboxSenderTilePrefix}s-2' ) ), findsOneWidget );
       expect( find.text( "s-1" ), findsOneWidget );
       expect( find.text( "s-2" ), findsOneWidget );
       expect( find.text( "2" ), findsOneWidget ); // newCount badge

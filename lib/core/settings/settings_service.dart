@@ -249,7 +249,7 @@ class SettingsService {
     
     // Voice and TTS consistency
     if (!isVoiceEnabled && isTTSEnabled) {
-      issues.add(SettingsValidationIssue(
+      issues.add(const SettingsValidationIssue(
         type: SettingsValidationIssueType.warning,
         message: 'TTS is enabled but voice input is disabled',
         affectedSettings: ['voice.enabled', 'audio.tts_enabled'],
@@ -259,7 +259,7 @@ class SettingsService {
     
     // Network and performance consistency
     if (isWifiOnly && !isOfflineMode) {
-      issues.add(SettingsValidationIssue(
+      issues.add(const SettingsValidationIssue(
         type: SettingsValidationIssueType.info,
         message: 'WiFi-only mode may cause issues without offline mode',
         affectedSettings: ['network.wifi_only', 'network.offline_mode'],
@@ -269,7 +269,7 @@ class SettingsService {
     
     // Accessibility and TTS
     if (isHighContrast && fontScale < 1.2) {
-      issues.add(SettingsValidationIssue(
+      issues.add(const SettingsValidationIssue(
         type: SettingsValidationIssueType.suggestion,
         message: 'High contrast is enabled but font scale is small',
         affectedSettings: ['accessibility.high_contrast', 'accessibility.font_scale'],
@@ -279,7 +279,7 @@ class SettingsService {
     
     // Developer settings in production
     if (isDebugMode || isVerboseLogging) {
-      issues.add(SettingsValidationIssue(
+      issues.add(const SettingsValidationIssue(
         type: SettingsValidationIssueType.warning,
         message: 'Developer settings are enabled',
         affectedSettings: ['developer.debug_mode', 'developer.verbose_logging'],
