@@ -166,10 +166,9 @@ class _SenderTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          "${sender.count} message${sender.count == 1 ? '' : 's'}"
-          + ( sender.lastActivity != null
+          "${sender.count} message${sender.count == 1 ? '' : 's'}${sender.lastActivity != null
               ? "  ·  ${_relativeTime( sender.lastActivity! )}"
-              : "" ),
+              : ""}",
         ),
         trailing: newCount > 0
           ? Container(

@@ -179,10 +179,9 @@ class _ModeHeader extends StatelessWidget {
             ),
             const SizedBox( height: 4 ),
             Text(
-              "ini=${trustModeToString( mode.iniMode )}"
-              + ( mode.runningMode != null
+              "ini=${trustModeToString( mode.iniMode )}${mode.runningMode != null
                   ? " · running=${trustModeToString( mode.runningMode! )}"
-                  : "" ),
+                  : ""}",
               style: Theme.of( context ).textTheme.bodySmall,
             ),
             const SizedBox( height: 12 ),

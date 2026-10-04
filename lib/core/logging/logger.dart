@@ -209,7 +209,7 @@ class FileLogDestination implements LogDestination {
     if (_buffer.isEmpty) return;
 
     try {
-      final logData = _buffer.map((entry) => jsonEncode(entry.toJson())).join('\n') + '\n';
+      final logData = '${_buffer.map((entry) => jsonEncode(entry.toJson())).join('\n')}\n';
       
       // Write to current log file
       await _storage.appendToFile(fileName, logData);
