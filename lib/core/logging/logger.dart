@@ -183,7 +183,7 @@ class ConsoleLogDestination implements LogDestination {
 
 /// File log destination for persistent logging.
 ///
-/// Entries at error and above start a flush at once; others wait for [bufferSize]
+/// Entries at error and above start a flush at once; others wait for the buffer size
 /// entries. At most one write runs at a time, and entries that arrive during it
 /// go out in a follow-up write, so no entry is written twice.
 class FileLogDestination implements LogDestination {
@@ -198,6 +198,7 @@ class FileLogDestination implements LogDestination {
   final int _bufferSize;
   Future<void>? _flushing;
   bool _flushAgain = false;
+  int _dropped = 0;
 
   /// Most entries kept in memory while the file cannot be written; the oldest drop first.
   static const int maxBufferedEntries = 1000;
@@ -214,10 +215,19 @@ class FileLogDestination implements LogDestination {
   @override
   void write(LogEntry entry) {
     _buffer.add(entry);
+    _enforceCap();
 
     if (entry.level >= LogLevel.error || _buffer.length >= _bufferSize) {
       _flushBuffer();
     }
+  }
+
+  /// Drops the oldest entries beyond [maxBufferedEntries] and counts them.
+  void _enforceCap() {
+    final excess = _buffer.length - maxBufferedEntries;
+    if (excess <= 0) return;
+    _buffer.removeRange( 0, excess );
+    _dropped += excess;
   }
 
   @override
@@ -237,39 +247,66 @@ class FileLogDestination implements LogDestination {
     try {
       do {
         _flushAgain = false;
-        await _writeBatch();
+        final written = await _writeBatch();
+        if (written && _dropped > 0) {
+          _buffer.add( _dropNote( _dropped ) );
+          _dropped    = 0;
+          _flushAgain = true;
+        }
       } while (_flushAgain);
     } finally {
       _flushing = null;
     }
   }
 
-  Future<void> _writeBatch() async {
-    if (_buffer.isEmpty) return;
+  /// Writes the buffered entries; returns false when the write failed and the entries were kept.
+  Future<bool> _writeBatch() async {
+    if (_buffer.isEmpty) return false;
 
     final batch = List<LogEntry>.of(_buffer);
     _buffer.clear();
 
     try {
-      final logData = '${batch.map((entry) => jsonEncode(entry.toJson())).join('\n')}\n';
+      final logData = '${batch.map(_encode).join('\n')}\n';
 
       // Write to current log file
       await _storage.appendToFile(fileName, logData);
 
       // Check file size and rotate if necessary
       await _rotateLogsIfNeeded();
+      return true;
     } catch (e) {
       // Keep the batch for the next attempt, bounded so a dead disk cannot grow memory.
       _buffer.insertAll(0, batch);
-      if (_buffer.length > maxBufferedEntries) {
-        _buffer.removeRange(0, _buffer.length - maxBufferedEntries);
-      }
+      _enforceCap();
       // Not routed through Logger: this destination is what Logger writes to.
       if (kDebugMode) {
         print('Failed to write logs to file: $e');
       }
+      return false;
     }
   }
+
+  /// Encodes one entry; an entry that cannot be encoded becomes a stub line, so it never blocks the batch.
+  String _encode( LogEntry entry ) {
+    try {
+      return jsonEncode( entry.toJson() );
+    } catch (_) {
+      return jsonEncode( {
+        'timestamp': entry.timestamp.toIso8601String(),
+        'level'    : entry.level.name,
+        if (entry.tag != null) 'tag': entry.tag,
+        'message'  : 'unencodable entry',
+      } );
+    }
+  }
+
+  LogEntry _dropNote( int count ) => LogEntry(
+    timestamp: DateTime.now(),
+    level    : LogLevel.warning,
+    message  : 'dropped $count log entries while the file write was stalled or failing',
+    tag      : 'Logger',
+  );
 
   Future<void> _rotateLogsIfNeeded() async {
     try {
@@ -446,8 +483,13 @@ class Logger {
 
   /// Log a message with specified level.
   ///
+  /// Every string that leaves the logger is masked by `redactSecrets`: the message,
+  /// tag, error text, stack trace, and every field of the context, including nested
+  /// metadata. Stack traces are masked too because a trace can quote a URL or argument.
+  ///
   /// Ensures:
-  ///   - credentials in [message] and in the text of [error] are masked by `redactSecrets`
+  ///   - never throws: a failure while building or delivering an entry is dropped
+  ///   - an error whose `toString` throws is recorded by its runtime type
   ///   - with no destination attached, warnings and above go to `debugPrint` so an early failure is not lost
   static void log(
     LogLevel level,
@@ -457,28 +499,80 @@ class Logger {
     Object? error,
     StackTrace? stackTrace,
   }) {
-    final logger = instance;
-    
-    if (level < logger._minLevel) return;
+    try {
+      final logger = instance;
 
-    final entry = LogEntry(
-      timestamp: DateTime.now(),
-      level: level,
-      message: redactSecrets( message ),
-      tag: tag,
-      context: context ?? logger._globalContext,
-      error: error == null ? null : redactSecrets( error.toString() ),
-      stackTrace: stackTrace,
+      if (level < logger._minLevel) return;
+
+      final entry = LogEntry(
+        timestamp: DateTime.now(),
+        level: level,
+        message: redactSecrets( message ),
+        tag: tag == null ? null : redactSecrets( tag ),
+        context: _maskedContext( context ?? logger._globalContext ),
+        error: error == null ? null : _maskedText( error ),
+        stackTrace: stackTrace == null ? null : StackTrace.fromString( _maskedText( stackTrace ) ),
+      );
+
+      if (logger._destinations.isEmpty) {
+        if (level >= LogLevel.warning) debugPrint( entry.toFormattedString() );
+        return;
+      }
+
+      for (final destination in logger._destinations) {
+        try {
+          destination.write(entry);
+        } catch (e) {
+          if (kDebugMode) debugPrint( '[Logger] a destination failed: ${e.runtimeType}' );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint( '[Logger] dropped an entry: ${e.runtimeType}' );
+    }
+  }
+
+  static String _maskedText( Object value ) {
+    try {
+      return redactSecrets( value.toString() );
+    } catch (_) {
+      return '<${value.runtimeType}: toString failed>';
+    }
+  }
+
+  static LogContext? _maskedContext( LogContext? context ) {
+    if (context == null) return null;
+    return LogContext(
+      userId    : context.userId    == null ? null : redactSecrets( context.userId! ),
+      sessionId : context.sessionId == null ? null : redactSecrets( context.sessionId! ),
+      requestId : context.requestId == null ? null : redactSecrets( context.requestId! ),
+      feature   : context.feature   == null ? null : redactSecrets( context.feature! ),
+      metadata  : context.metadata == null ? null : _maskedMap( context.metadata!, 0 ),
     );
+  }
 
-    if (logger._destinations.isEmpty) {
-      if (level >= LogLevel.warning) debugPrint( entry.toFormattedString() );
-      return;
-    }
+  static const int _maxMaskDepth = 6;
 
-    for (final destination in logger._destinations) {
-      destination.write(entry);
+  static Map<String, dynamic> _maskedMap( Map<dynamic, dynamic> map, int depth ) {
+    final out = <String, dynamic>{};
+    for (final entry in map.entries) {
+      final key = _maskedText( entry.key );
+      out[ key ] = _maskedValue( entry.key, entry.value, depth + 1 );
     }
+    return out;
+  }
+
+  /// Masks [value], using [key] so a credential under a field name the redactor knows is caught.
+  static dynamic _maskedValue( Object? key, Object? value, int depth ) {
+    if (value == null || value is num || value is bool) return value;
+    if (depth > _maxMaskDepth) return '<nested too deep>';
+    if (value is Map) return _maskedMap( value, depth );
+    if (value is Iterable) return [for (final item in value) _maskedValue( key, item, depth + 1 )];
+
+    final text = _maskedText( value );
+    if (key == null) return text;
+    final prefix = '${_maskedText( key )}: ';
+    final keyed  = _maskedText( '$prefix$text' );
+    return keyed.startsWith( prefix ) ? keyed.substring( prefix.length ) : text;
   }
 
   /// Convenience methods for different log levels
