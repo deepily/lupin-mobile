@@ -29,7 +29,9 @@ Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 E
 
 - **Evening, after the manager's self-respin (18:52 EDT)**: Rick ruled the last two analyzer warnings and the unused mock (row `fa6c1842`, closed). Clayton applied them, Pocholo approved, merged at `97cf2ac`: analyzer over `lib test` 0 errors, 0 warnings, 332 style notes; merge gate PASS on `e4ae5be..97cf2ac`; APK rebuilt with `--fcm` at `97cf2ac`. The merge gate's permission rule is in Rick's `.claude/settings.local.json`, added by him after the permission check refused a seat writing a tracked settings file.
 
-**RESUME HERE:** (1) Row `00db303b` has met its acceptance and is parked; close it once Rick un-parks it. (2) Row `5a200e6c` shows "parked"; only Rick's login can un-park it. Left under it: 332 style notes, then promoting clean directories to the strict gate. (2b) Post-game for the 2026-10-03 crew, row `ea96c8d7`, held. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
+- **Night**: analyzer style notes 332 → 19 (`21c2eba`, `dec4a63`; Clayton, both parts approved by Pocholo; gate PASS-WITH-WARNING on `2e85e5f..dec4a63`, the warning being the three package declarations, read). Row `00db303b` closed. Post-game for this crew drafted with rulings R6 to R11 on hold for Rick: `src/docs/post-games/v0.2.2/2026.10.03-deletion-warnings-merge-gate-crew-post-game.md`. Maya found and fixed one more merge gate hole (a moved ignore line, `95c675b`, in review).
+
+**RESUME HERE:** (1) Rick's ruling on R6 to R11 (row `ea96c8d7`). (2) Row `5a200e6c`: promote the clean directories to the strict gate; 19 notes left, 5 of them Rick's to rule. (2b) Row `91c260ef`: Pocholo's review of `95c675b`. (2c) Row `5e5b4ad2`: error-path prints to the logger. (3) Blind second check (row `eb5a05fe`) waits on Cheech's Dart dev split and Rick's Fable figure; Pocholo is up and blind for it. (4) Parked to 2026-10-05: Stop poke flip (`ee68d5e7`), transcript capture (`768e852f`).
 
 ---
 

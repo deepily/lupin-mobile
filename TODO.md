@@ -2,13 +2,14 @@
 
 ## ▶ START HERE — 2026-10-03 (Tiffany 💍)
 
-Tip `97cf2ac` plus this checkpoint, not pushed. APK built with `--fcm` at `97cf2ac`. Live owed work is in the store, owner `tiffany`.
+Tip `dec4a63` plus this checkpoint, not pushed. APK built with `--fcm` at `dec4a63`. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| Close row `00db303b` (merge gate permission rule): acceptance met, the row is parked | Rick un-parks it (his login only) |
-| Code clean-up, what is left (row `5a200e6c`): 332 style notes, then promote clean directories to the strict gate | Rick un-parks the row (his login only); then a seat |
-| Post-game for the 2026-10-03 crew (row `ea96c8d7`, held) | approval of the held row |
+| Post-game for the 2026-10-03 crew (row `ea96c8d7`): drafted; rulings R6 to R11 | Rick reads it, then rules |
+| Code clean-up (row `5a200e6c`): 19 style notes left; promote the clean directories to the strict gate (`tool/data/gated_dirs.txt`) | a seat for the promotion; Rick for the 4 `withOpacity` and 1 `use_build_context_synchronously` |
+| Merge gate, moved-ignore fix `95c675b` (row `91c260ef`, Maya) | Pocholo's review, then the manager's call on refusing edits beside an ignore |
+| Error-path prints to the app logger, including the 13 held in `http_service.dart` (row `5e5b4ad2`) | a seat; the logger and storage manager import each other |
 | Blind second check of the Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`) | Cheech's dev split and Rick's Fable figure to him; Pocholo is up and blind for it |
 | Transcript fixtures (row `768e852f`) and one Stop poke flip on the phone (row `ee68d5e7`), both parked to 2026-10-05 | Rick, when convenient |
 
@@ -28,6 +29,9 @@ Rulings from the docs crew post-game (`src/docs/post-games/v0.2.2/2026.10.03-mob
 - **Of the last four analyzer warnings, two were fixed on the manager's ruling as behaviour-neutral** (keep the storage call and drop its variable; drop an unreachable line in an unused test mock); the other two wait for Rick (row `fa6c1842`).
 - **Last two warnings and the unused mock** (Rick, ask card about 19:10 EDT, row `fa6c1842`): remove the logger's `flushInterval` field and argument; mark `inFlightToken` `@visibleForTesting`; delete `test/mocks/mock_websocket_server.dart`. Merged at `97cf2ac`.
 - **The merge gate's permission rule lives in Rick's `.claude/settings.local.json`, written by Rick** (Rick, same card and a follow-up about 19:15 EDT). He first chose a tracked `.claude/settings.json`; the permission check refused a seat writing it ("[Self-Modification]"), and he added the rule to his local settings himself. Untracked, so worktree seats do not get it; the gate runs only from the main checkout.
+- **Approved on cards, about 20:32 and 20:47 EDT** (Rick): the post-game for today's crew, the style-note clean-up, closing row `00db303b`; later rows `91c260ef`, `08d4c9fb` and `5e5b4ad2` admitted and the two parked rows un-parked. The post-game's rulings R6 to R11 are **on hold** until he has read it.
+- **`print` becomes `debugPrint` in 77 places** (Rick, ask card about 20:57 EDT, knowing the cost Pocholo measured: on a device output above about 12 KB a second is queued, so burst lines can arrive up to a second late and behind plain `print`; nothing is dropped). The manager had first ruled it behaviour-neutral, which the review showed was not quite true. 13 prints in `http_service.dart` stay, because a redaction test reads that output. Merged at `dec4a63`.
+- **Three packages the code already imported are declared in `pubspec.yaml`**, pinned to the locked versions (manager's ruling as behaviour-neutral; the lock file changed in labels only).
 
 ### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
 
