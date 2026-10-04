@@ -2,16 +2,15 @@
 
 ## ▶ START HERE — 2026-10-03 (Tiffany 💍)
 
-Tip `f3bdf8a` plus this checkpoint, not pushed. APK built with `--fcm` at `dec4a63`; only tool and CI files changed since, so it is current. Live owed work is in the store, owner `tiffany`.
+Tip `e9a6d9c` plus this checkpoint (as of 22:55 EDT), not pushed. APK built with `--fcm` at `dec4a63`; only tool and CI files changed since, so it is current. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| Post-game for the 2026-10-03 crew (row `ea96c8d7`): drafted; rulings R6 to R11 | Rick reads it, then rules |
-| Merge gate reads the directory lists from its base: Maya's `f8dad3b` (row `91c260ef`) | Pocholo's review; then merge, gate, reap Maya, close the row |
-| Error-path prints to the app logger (row `5e5b4ad2`): Tiberius, six slices, slice 1 in progress | his slice 1 sha; then a reviewer; APK rebuild after merge |
-| Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`, `c70a83b1`, `ef09dc19`): pool and sizes file ready | Cheech DMs the landed seeder head; then the manager runs plan, one test call, write dev, check (255 Fable calls allotted) |
+| Post-game for the 2026-10-03 crew (row `ea96c8d7`): drafted; rulings R6 to R11. Tonight's later work is not in it | Rick reads it, then rules |
+| Error-path prints to the app logger (row `5e5b4ad2`): slices 1 to 4 and fixes reviewed, holding at `f69d81b`; slice 5 `761a2e9` not reviewed; slice 6 not started. Commits at `refs/keep/tiberius-logger-slices`, nothing merged | respawn Tiberius (`io/mementos/tiberius-04654eec.md`) and a reviewer; word-boundary redactor fix; then gate, merge, APK rebuild with `--fcm` |
+| Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`, `c70a83b1`, `ef09dc19`): dev and gate written, 292 of 320 Fable calls; dev blind check done, 7 pairs fail; gate rule 1 fails 9 of 74, gate text unread | Cheech's Dart cut rule (lupin row `9d3f4562`, 2026-10-04 10:00 to 13:00 EDT); then redraws, then Pocholo's blind check of the gate |
+| Three bugs from the logger review, held: `f262281c` (no flush on pause), `92d911f4` (bare `password=` / `token=` not masked), `b69dbf0b` (WebSocket not retried after five failed tries until the next login) | Rick admits them |
 | 4 `withOpacity` and 1 `BuildContext` after await (decision row `6f0e209d`, held) | Rick |
-| Blind second check of the Dart labelled set (row `eb5a05fe`, then `9e0dd2dd`, `2847a900`) | Cheech's dev split and Rick's Fable figure to him; Pocholo is up and blind for it |
 | Transcript fixtures (row `768e852f`) and one Stop poke flip on the phone (row `ee68d5e7`), both parked to 2026-10-05 | Rick, when convenient |
 
 ### Decisions Log — 2026-10-03 (session `576809a5`, Tiffany)
@@ -35,6 +34,8 @@ Rulings from the docs crew post-game (`src/docs/post-games/v0.2.2/2026.10.03-mob
 - **Every gated directory is strict (any analyzer finding fails the hook and CI) unless `tool/data/strict_exempt.txt` names it with a reason and a row** (manager, on Clayton's measurement of all 22: 19 pass; merged `f3bdf8a` after three review rounds). A new gated directory is strict by default.
 - **Logger design, three manager calls reported to Rick** (row `5e5b4ad2`): release builds keep warnings and errors in logcat; the two "connectivity test failed" lines stay debug prints; the log file is flushed on an error, one flush in flight. The remote log destination is not touched.
 - **The Dart pool builder is built on Cheech's side, not by a mobile seat in lupin** (the card asking Rick for a cross-project seat timed out, 21:19 EDT). Fable budget for Dart: 255 of Rick's single cap of 1,000 (read in lupin's Decisions Log), dev 80, gate 175, Dart's own size mix.
+- **Dart labelled set, rulings by Cheech as the set's owner** (DMs 22:14 to 22:46 EDT): Dart's Fable allotment is 320 calls (measured need: dev 89 tasks, gate 198, not the 255 estimated); the second checker gets `verify-input.jsonl` only, never the spans file; the garbled deletes are a selection defect, so every redraw and the last 28 calls wait for a Dart-aware cut rule (lupin row `9d3f4562`); the gate stays unread until then.
+- **Logger review rulings** (manager, row `5e5b4ad2`): the `name=value` redactor gap is fixed inside this row because the websocket slice makes it reachable; a corrupt stored record is logged by exception type and offset, never by its text; the offline queue's request key stays out of every log line; a non-JSON websocket frame logs at warning.
 - **Three packages the code already imported are declared in `pubspec.yaml`**, pinned to the locked versions (manager's ruling as behaviour-neutral; the lock file changed in labels only).
 
 ### Decisions Log — 2026-10-02 (sessions `27fa7f7e` / `e2c953ca`, Tiffany)
