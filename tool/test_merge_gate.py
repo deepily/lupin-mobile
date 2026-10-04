@@ -249,6 +249,35 @@ class VerdictTest( unittest.TestCase ):
         self.assertEqual( text[ -1 ], "logs: /tmp/x" )
 
 
+class DocsGateCommandTest( unittest.TestCase ):
+
+    def test_the_docs_gate_reads_its_lists_from_the_start_of_the_range( self ):       # follow-up to Clayton's --base
+        start = "a" * 40
+        cmd   = mg.docs_gate_cmd( start )
+        self.assertEqual( cmd[ 1: ], [ "tool/pre_commit_gate.py", "--docs-all", "--base", start ] )
+
+    def test_main_runs_the_docs_gate_with_the_start_of_the_range( self ):               # the row really uses it
+        seen = []
+        real = ( mg.run_logged, mg.missing_tools, mg.check_analyzer )
+        def spy( name, cmd, logdir, root ): seen.append( cmd ); return 0
+        with tempfile.TemporaryDirectory() as d:
+            sh = lambda *a: subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", *a ], cwd=d, check=True, capture_output=True, text=True ).stdout.strip()
+            sh( "init", "-q", "-b", "main" )
+            for n, text in enumerate( ( "int f() => 1;\n", "int f() => 2;\n" ) ):
+                with open( os.path.join( d, "a.dart" ), "w" ) as f: f.write( text )
+                sh( "add", "-A" ); sh( "commit", "-q", "-m", f"c{n}" )
+            start = sh( "rev-parse", "HEAD~1" )
+            mg.run_logged, mg.missing_tools, mg.check_analyzer = spy, lambda root, skip: [], lambda *a, **k: ( 0, "stubbed" )
+            try:
+                with contextlib.redirect_stdout( io.StringIO() ), contextlib.redirect_stderr( io.StringIO() ):
+                    mg.main( [ "--skip-suite", f"{start}..HEAD" ], root=d )
+            finally:
+                mg.run_logged, mg.missing_tools, mg.check_analyzer = real
+        docs = [ c for c in seen if "tool/pre_commit_gate.py" in c ]
+        self.assertTrue( docs, f"the docs gate never ran: {seen}" )
+        self.assertEqual( docs[ 0 ][ -2: ], [ "--base", start ] )
+
+
 class ToolTestsCommandTest( unittest.TestCase ):
 
     def test_a_failing_unittest_style_tool_test_reports_as_an_ordinary_failure( self ):    # round 2, item 2
