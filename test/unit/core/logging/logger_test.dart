@@ -2,6 +2,7 @@
 // release console output, and the file destination's flush behaviour.
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -54,6 +55,23 @@ class _FakeStore implements LogFileStore {
 class _ThrowingToString {
   @override
   String toString() => throw StateError( "toString exploded" );
+}
+
+class _UnreadableMap with MapMixin<String, dynamic> {
+  @override
+  Iterable<String> get keys => throw StateError( "keys exploded" );
+
+  @override
+  dynamic operator []( Object? key ) => null;
+
+  @override
+  void operator []=( String key, dynamic value ) {}
+
+  @override
+  void clear() {}
+
+  @override
+  dynamic remove( Object? key ) => null;
 }
 
 class _ThrowingDestination implements LogDestination {
@@ -148,6 +166,18 @@ void main() {
 
       expect( cap.entries, hasLength( 1 ) );
       expect( "${cap.entries.single.error}", contains( "_ThrowingToString" ) );
+    } );
+
+    test( "metadata that cannot be read costs the entry its context, not the entry", () {
+      final cap = _CaptureDestination();
+      Logger.addDestination( cap );
+
+      Logger.error( "failed", tag: "HTTP", context: LogContext( feature: "f", metadata: _UnreadableMap() ) );
+
+      expect( cap.entries, hasLength( 1 ) );
+      expect( cap.entries.single.message, "failed" );
+      expect( cap.entries.single.tag, "HTTP" );
+      expect( cap.entries.single.context, isNull );
     } );
 
     test( "a destination that throws does not throw into the caller", () {

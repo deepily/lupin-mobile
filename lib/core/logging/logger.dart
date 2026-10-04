@@ -200,7 +200,10 @@ class FileLogDestination implements LogDestination {
   bool _flushAgain = false;
   int _dropped = 0;
 
-  /// Most entries kept in memory while the file cannot be written; the oldest drop first.
+  /// Most entries waiting in the buffer; the oldest drop first.
+  ///
+  /// A batch being written is held apart from the buffer, so with a write in flight
+  /// memory holds up to twice this many entries.
   static const int maxBufferedEntries = 1000;
 
   /// Creates a destination that writes through [_storage].
@@ -489,6 +492,7 @@ class Logger {
   ///
   /// Ensures:
   ///   - never throws: a failure while building or delivering an entry is dropped
+  ///   - metadata that cannot be read costs the entry its context, not the entry itself
   ///   - an error whose `toString` throws is recorded by its runtime type
   ///   - with no destination attached, warnings and above go to `debugPrint` so an early failure is not lost
   static void log(
@@ -504,12 +508,19 @@ class Logger {
 
       if (level < logger._minLevel) return;
 
+      LogContext? maskedContext;
+      try {
+        maskedContext = _maskedContext( context ?? logger._globalContext );
+      } catch (_) {
+        maskedContext = null;   // unreadable metadata costs the context, not the entry
+      }
+
       final entry = LogEntry(
         timestamp: DateTime.now(),
         level: level,
         message: redactSecrets( message ),
         tag: tag == null ? null : redactSecrets( tag ),
-        context: _maskedContext( context ?? logger._globalContext ),
+        context: maskedContext,
         error: error == null ? null : _maskedText( error ),
         stackTrace: stackTrace == null ? null : StackTrace.fromString( _maskedText( stackTrace ) ),
       );

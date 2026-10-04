@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import '../logging/log_file_store.dart';
+import '../logging/logger.dart';
 
 /// Storage manager for handling local data persistence
 class StorageManager implements LogFileStore {
@@ -96,8 +97,8 @@ class StorageManager implements LogFileStore {
     
     try {
       return jsonDecode(jsonString) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('[StorageManager] Error parsing JSON for key $key: $e');
+    } catch (e, st) {
+      Logger.error( 'Error parsing JSON for key $key', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
       return null;
     }
   }
@@ -116,8 +117,8 @@ class StorageManager implements LogFileStore {
     try {
       final decoded = jsonDecode(jsonString) as List<dynamic>;
       return decoded.cast<Map<String, dynamic>>();
-    } catch (e) {
-      debugPrint('[StorageManager] Error parsing JSON list for key $key: $e');
+    } catch (e, st) {
+      Logger.error( 'Error parsing JSON list for key $key', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
       return null;
     }
   }
@@ -261,8 +262,8 @@ class StorageManager implements LogFileStore {
         return await file.readAsString();
       }
       return null;
-    } catch (e) {
-      debugPrint('[StorageManager] Failed to read file $fileName: $e');
+    } catch (e, st) {
+      Logger.error( 'Failed to read file $fileName', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'file': fileName } ) );
       return null;
     }
   }
@@ -272,8 +273,8 @@ class StorageManager implements LogFileStore {
     try {
       final file = File('$_documentsPath/$fileName');
       await file.writeAsString(content);
-    } catch (e) {
-      debugPrint('[StorageManager] Failed to write file $fileName: $e');
+    } catch (e, st) {
+      Logger.error( 'Failed to write file $fileName', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'file': fileName } ) );
       rethrow;
     }
   }

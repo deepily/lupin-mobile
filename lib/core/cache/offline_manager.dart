@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../logging/logger.dart';
 import '../storage/storage_manager.dart';
 import 'cache_manager.dart';
 import 'cache_policy.dart';
@@ -164,8 +164,8 @@ class OfflineManager {
         // Process request (this would be implemented by the caller)
         _eventController.add(OfflineRequestProcessedEvent(request.key, true));
         await removeFromQueue(request.key);
-      } catch (e) {
-        debugPrint('[OfflineManager] Error processing queued request ${request.key}: $e');
+      } catch (e, st) {
+        Logger.error( 'Error processing queued request ${request.key}', tag: 'OfflineManager', error: e, stackTrace: st, context: LogContext( metadata: { 'requestKey': request.key } ) );
         _eventController.add(OfflineRequestProcessedEvent(request.key, false));
       }
     }
