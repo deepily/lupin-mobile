@@ -44,8 +44,11 @@ errors the pair rule cannot see), as does one that changes the ignores in force:
 `ignore:` / `ignore_for_file:` comment, one edited to name other codes, or one that moved onto different code
 (an ignore silences analyzer errors on the code it covers; the public_member_api_docs form is not exempt); pass
 --allow-ignores to accept it. A removed ignore is not refused (it hides less). Either flag makes the verdict line say so.
-A tracked .dart file under a path the root analysis_options.yaml excludes (today build/**, flutter/**; reachable by
-`git add -f`) fails check 1 as well: the analyzer never opens it, so its errors are never counted.
+A tracked .dart file under flutter/ or build/ (the two paths the root analysis_options.yaml excludes; reachable by
+`git add -f`) fails check 1 as well: the analyzer never opens it, so its errors are never counted. The gate does not
+parse the exclude list: the root file must hold exactly `flutter/**` and `build/**` in the one block shape it has today
+(or no exclude at all), and no other tracked analysis_options.yaml may mention "exclude"; anything else is refused with
+the reason, so a reformatted or extended list stops the gate until a reviewed commit teaches it the new shape.
 
 Known limit (not fixed, by ruling): an ignore in file A can hide an error that a change in file B causes, and the rule
 above cannot see it because A is unchanged. It is latent while every ignore in the repo names a lint (today all three
@@ -396,57 +399,37 @@ def ignore_files_changed( start, end, root=ROOT ):
                    if any( IGNORE_LINE.search( line ) for line in show( end, p, root ).splitlines() ) )
 
 
-def analyzer_excludes( text ):
+EXCLUDED_ROOTS = ( "flutter/", "build/" )
+EXCLUDE_BLOCK  = ( "analyzer:", "  exclude:", "    - flutter/**", "    - build/**" )
+
+
+def check_exclude_shape( text ):
     """
-    Read the `analyzer: exclude:` globs out of an analysis_options.yaml, or say that they cannot be read.
+    Accept the root analysis_options.yaml only if its analyzer excludes are exactly the two this gate knows how to police.
 
     Requires:
-        - text is the contents of an analysis_options.yaml (or "")
+        - text is the contents of the root analysis_options.yaml
     Ensures:
-        - returns the list of glob strings under `analyzer:` / `exclude:`, comments and quotes removed, in file order
-        - returns [] only when the file has no `exclude:` under `analyzer:` at all
-        - raises ValueError, naming the line, for any shape it does not handle: `analyzer:` or `exclude:` with a value on the
-          same line (flow style, `exclude: [a, b]`), an `include:` of anything but a package:, a list entry that is not a
-          plain or quoted scalar (an anchor, alias, flow or block scalar), or anything under `exclude:` that is not a `- entry`
-          (reading such a file as "no excludes" would let a tracked file the analyzer skips pass)
+        - returns None when the file has no mention of "exclude" outside comments, or when its code lines (comments and
+          blank lines dropped) hold exactly the block `analyzer:` / `  exclude:` / `    - flutter/**` / `    - build/**`,
+          with nothing indented after it and no other code line mentioning "exclude" in any spelling, and every `include:` is a package:
+        - raises ValueError with the reason otherwise: any other shape (flow style, a dash at the key's indent, a quoted
+          key, another entry, a trailing slash, a brace or class glob, a second mention) is not read, because reading it
+          wrong would let a tracked .dart file the analyzer skips pass; the fix is to restore this shape or to teach this
+          function the new one in a reviewed commit
     """
-    found, in_analyzer, in_exclude, exclude_indent = [], False, False, 0
-    for n, raw in enumerate( text.splitlines(), 1 ):
-        line = raw.split( "#", 1 )[ 0 ].rstrip()
-        if not line.strip(): continue
-        indent, body = len( line ) - len( line.lstrip() ), line.strip()
-        def unreadable( why ): return ValueError( f"analysis_options.yaml line {n}: {why}: {raw.strip()}" )
-        if indent == 0:
-            in_analyzer, in_exclude = body.startswith( "analyzer:" ), False
-            if in_analyzer and body != "analyzer:": raise unreadable( "analyzer is not a plain block mapping" )
-            if body.startswith( "include:" ) and not body[ len( "include:" ): ].strip().startswith( "package:" ):
-                raise unreadable( "include of a file the gate does not read" )
-        elif in_analyzer and in_exclude and indent > exclude_indent:
-            if not body.startswith( "- " ): raise unreadable( "exclude holds something other than a list entry" )
-            entry  = body[ 1: ].strip()
-            quoted = entry[ :1 ] in ( "\"", "'" )
-            entry  = entry.strip( "\"'" )
-            if not entry or ( not quoted and entry[ 0 ] in "[{&*|>!%@`" ): raise unreadable( "exclude entry is not a plain glob" )
-            found.append( entry )
-        elif in_analyzer:
-            in_exclude = False
-            if body.split( ":" )[ 0 ].strip() == "exclude":
-                if body != "exclude:": raise unreadable( "exclude is not a block list" )
-                in_exclude, exclude_indent = True, indent
-    return found
-
-
-def glob_matches( pattern, path ):
-    """
-    Match a repo-relative path against an analyzer exclude glob.
-
-    Requires:
-        - pattern and path are strings; path uses "/" separators
-    Ensures:
-        - returns True when the whole path matches; `**` crosses folders, `*` and `?` stay inside one folder
-    """
-    rx = re.escape( pattern ).replace( r"\*\*/", "(?:.*/)?" ).replace( r"\*\*", ".*" ).replace( r"\*", "[^/]*" ).replace( r"\?", "[^/]" )
-    return re.fullmatch( rx, path ) is not None
+    code = [ l.rstrip() for l in text.splitlines() if l.strip() and not l.lstrip().startswith( "#" ) ]
+    for l in code:
+        if l.startswith( "include:" ) and not l[ len( "include:" ): ].strip().startswith( "package:" ):
+            raise ValueError( f"root analysis_options.yaml includes a file the gate does not read: {l.strip()}" )
+    hits = [ i for i, l in enumerate( code ) if "exclude" in l.lower() ]
+    if not hits: return None
+    i = hits[ 0 ]
+    ok = ( len( hits ) == 1 and i > 0 and tuple( code[ i - 1:i + 3 ] ) == EXCLUDE_BLOCK and code.count( "analyzer:" ) == 1
+           and ( i + 3 >= len( code ) or not code[ i + 3 ].startswith( " " ) ) )
+    if not ok:
+        raise ValueError( "root analysis_options.yaml has an analyzer exclude in a shape other than exactly flutter/** and build/** "
+                          f"as a two-space block list (first mention: {code[ i ].strip()})" )
 
 
 def excluded_dart_files( rev, root=ROOT ):
@@ -456,14 +439,18 @@ def excluded_dart_files( rev, root=ROOT ):
     Requires:
         - rev is a commit in root
     Ensures:
-        - raises ValueError when the exclude list of the root analysis_options.yaml at rev cannot be read (see analyzer_excludes)
-        - returns sorted tracked .dart paths at rev that match an `analyzer: exclude:` glob of the root analysis_options.yaml at rev
+        - raises ValueError when the root analysis_options.yaml excludes are not exactly flutter/** and build/** in the shape
+          check_exclude_shape accepts, or when any other tracked analysis_options.yaml mentions "exclude" at all
+        - otherwise returns sorted tracked .dart paths at rev under flutter/ or build/ (at the repo root, whole folder names)
         - such a file (for example one added with `git add -f` under the gitignored build/) is tracked, so the untracked-file
           rule lets it through, yet the analyzer never opens it, so no error in it is ever counted
     """
-    globs = analyzer_excludes( show( rev, "analysis_options.yaml", root ) )     # ValueError when it cannot be read
     names = git( [ "ls-tree", "-r", "--name-only", rev ], root ).splitlines()
-    return sorted( n for n in names if n.endswith( ".dart" ) and any( glob_matches( g, n ) for g in globs ) )
+    check_exclude_shape( show( rev, "analysis_options.yaml", root ) )
+    for n in names:
+        if os.path.basename( n ) == "analysis_options.yaml" and n != "analysis_options.yaml" and "exclude" in show( rev, n, root ).lower():
+            raise ValueError( f"{n} mentions exclude; the gate reads only the root options file, so it cannot tell what the analyzer skips" )
+    return sorted( n for n in names if n.endswith( ".dart" ) and n.startswith( EXCLUDED_ROOTS ) )
 
 
 def dart_roots( paths ):

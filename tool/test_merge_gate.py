@@ -470,50 +470,56 @@ class GitRangeTest( unittest.TestCase ):
         self.assertIn( "a.dart", detail )
         self.assertIn( "--allow-ignores", detail )
 
-    OPTIONS = "include: package:flutter_lints/flutter.yaml\n# note\nanalyzer:\n  exclude:\n    # the SDK\n    - flutter/**\n    - build/**   # output\n    - \"**/*.g.dart\"\n\nlinter:\n  rules:\n    - avoid_print\n"
+    OPTIONS = ( "include: package:flutter_lints/flutter.yaml\n# exclude is only a word in this comment\nanalyzer:\n  exclude:\n    # the SDK\n"
+                "    - flutter/**\n    # output\n    - build/**\n\nlinter:\n  rules:\n    - avoid_print\n" )
 
-    def test_analyzer_excludes_are_read_from_the_options_file( self ):               # N5
-        self.assertEqual( mg.analyzer_excludes( self.OPTIONS ), [ "flutter/**", "build/**", "**/*.g.dart" ] )
-        self.assertEqual( mg.analyzer_excludes( "linter:\n  rules:\n    - avoid_print\n" ), [] )
-        self.assertEqual( mg.analyzer_excludes( "" ), [] )
+    def refused( self, text ):
+        with self.assertRaises( ValueError, msg=text ): mg.check_exclude_shape( text )
 
-    def test_an_exclude_list_in_flow_style_is_refused_not_read_as_empty( self ):     # N5, fails open otherwise
-        for text in ( "analyzer:\n  exclude: [ flutter/**, build/** ]\n", "analyzer: { exclude: [ build/** ] }\n",
-                      "analyzer:\n  exclude: build/**\n", "analyzer:\n  exclude:\n    - *skip\n", "analyzer:\n  exclude:\n    key: build/**\n",
-                      "include: other_options.yaml\n" ):
-            with self.assertRaises( ValueError, msg=text ): mg.analyzer_excludes( text )
+    def test_the_exact_exclude_block_is_accepted( self ):                              # N5
+        self.assertIsNone( mg.check_exclude_shape( self.OPTIONS ) )
+        self.assertIsNone( mg.check_exclude_shape( "linter:\n  rules:\n    - avoid_print\n" ) )     # nothing excluded: nothing to police
+        with open( os.path.join( mg.ROOT, "analysis_options.yaml" ) ) as f: self.assertIsNone( mg.check_exclude_shape( f.read() ) )
 
-    def test_the_analyzer_row_refuses_an_exclude_list_it_cannot_read( self ):           # N5, refusal message
-        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", "analyzer:\n  exclude: [ build/** ]\n" ) )
-        base = self.sh( "rev-parse", "HEAD" )
-        self.commit( "int f() => 1;\n", "forced file", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
-        with tempfile.TemporaryDirectory() as logs:
-            code, detail = mg.check_analyzer( base, logs, root=self.d, allow_config=True, allow_ignores=False )
-        self.assertEqual( code, 1 )
-        self.assertIn( "cannot tell which paths the analyzer skips", detail )
-        self.assertIn( "exclude is not a block list", detail )
+    def test_every_other_exclude_shape_is_refused_not_read_as_empty( self ):          # N5: the two survivors and the rest
+        base = "analyzer:\n  exclude:\n"
+        self.refused( base + "  - flutter/**\n  - build/**\n" )                          # dash at the key's indent (valid YAML)
+        self.refused( 'analyzer:\n  "exclude":\n    - flutter/**\n    - build/**\n' )     # quoted key
+        self.refused( "analyzer:\n  exclude: [ flutter/**, build/** ]\n" )                # flow style
+        self.refused( "analyzer: { exclude: [ build/** ] }\n" )
+        self.refused( base + "    - flutter/**\n" )                                       # missing entry
+        self.refused( base + "    - flutter/**\n    - build/**\n    - lib/core/generated/\n" )   # extra entry, trailing slash
+        self.refused( base + "    - flutter/**\n    - build/**\n    - lib/{a,b}/**\n" )       # brace glob
+        self.refused( base + "    - flutter/**\n    - build/**\n    - lib/gener[a]ted/**\n" ) # character class
+        self.refused( base + "    - build/**\n    - flutter/**\n" )                      # other order: not the shape in the file
+        self.refused( base + "    - flutter/**  # sdk\n    - build/**\n" )               # trailing comment: not the shape
+        self.refused( "analyzer:\n  exclude:\n    - flutter/**\n    - build/**\nexclude_more: x\n" )   # a second mention
+        self.refused( "include: other_options.yaml\n" + self.OPTIONS )
 
-    def test_the_real_options_file_is_readable( self ):                                 # N5 negative control
-        with open( os.path.join( mg.ROOT, "analysis_options.yaml" ) ) as f: self.assertEqual( mg.analyzer_excludes( f.read() ), [ "flutter/**", "build/**" ] )
-
-    def test_exclude_globs_match_whole_paths( self ):                                # N5
-        self.assertTrue( mg.glob_matches( "build/**", "build/zz.dart" ) )
-        self.assertTrue( mg.glob_matches( "build/**", "build/a/b/zz.dart" ) )
-        self.assertFalse( mg.glob_matches( "build/**", "lib/build/zz.dart" ) )
-        self.assertTrue( mg.glob_matches( "**/*.g.dart", "lib/x/a.g.dart" ) )
-        self.assertTrue( mg.glob_matches( "**/*.g.dart", "a.g.dart" ) )
-        self.assertFalse( mg.glob_matches( "**/*.g.dart", "lib/a.dart" ) )
-
-    def test_a_tracked_dart_file_under_an_excluded_path_is_listed( self ):           # N5
+    def test_a_tracked_dart_file_under_flutter_or_build_is_listed( self ):             # N5
         self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
-        c5 = self.commit( "int f() => 1;\n", "forced file", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
-        self.assertEqual( mg.excluded_dart_files( c5, self.d ), [ "build/zz_broken.dart" ] )
+        os.makedirs( os.path.join( self.d, "flutter" ) )
+        with open( os.path.join( self.d, "flutter", "sdk.dart" ), "w" ) as f: f.write( "int y = 1;\n" )
+        c5 = self.commit( "int f() => 1;\n", "forced files", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
+        self.assertEqual( mg.excluded_dart_files( c5, self.d ), [ "build/zz_broken.dart", "flutter/sdk.dart" ] )
 
-    def test_files_the_analyzer_does_read_or_that_are_not_dart_are_not_listed( self ):   # N5 negative control
+    def test_only_the_root_folders_by_whole_name_are_listed( self ):                    # N5: the prefix and match-anywhere mutations
         self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
-        os.makedirs( os.path.join( self.d, "build" ) )
-        with open( os.path.join( self.d, "build", "out.txt" ), "w" ) as f: f.write( "x" )
-        c5 = self.commit( "int f() => 2;\n", "plain" )
+        for rel in ( "lib/build/x.dart", "buildx/a.dart", "flutter_extras/b.dart", "lib/flutter/c.dart", "build/out.txt" ):
+            os.makedirs( os.path.dirname( os.path.join( self.d, rel ) ), exist_ok=True )
+            with open( os.path.join( self.d, rel ), "w" ) as f: f.write( "x" )
+        c5 = self.commit( "int f() => 2;\n", "look-alikes" )
+        self.assertEqual( mg.excluded_dart_files( c5, self.d ), [] )
+
+    def test_a_nested_options_file_that_mentions_exclude_is_refused( self ):           # N5: per-directory options
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
+        c5 = self.commit( "int f() => 1;\n", "nested", ( "lib/core/analysis_options.yaml", "include: ../../analysis_options.yaml\nanalyzer:\n  exclude: '**'\n" ) )
+        with self.assertRaises( ValueError ) as cm: mg.excluded_dart_files( c5, self.d )
+        self.assertIn( "lib/core/analysis_options.yaml", str( cm.exception ) )
+
+    def test_a_nested_options_file_that_does_not_mention_exclude_is_fine( self ):        # N5 negative control
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", self.OPTIONS ) )
+        c5 = self.commit( "int f() => 1;\n", "nested", ( "lib/core/analysis_options.yaml", "include: ../../analysis_options.yaml\nlinter:\n  rules:\n    public_member_api_docs: true\n" ) )
         self.assertEqual( mg.excluded_dart_files( c5, self.d ), [] )
 
     def test_the_analyzer_row_refuses_a_tracked_file_the_analyzer_never_opens( self ):    # N5, refusal message
@@ -525,6 +531,16 @@ class GitRangeTest( unittest.TestCase ):
         self.assertEqual( code, 1 )
         self.assertIn( "analyzer-excluded", detail )
         self.assertIn( "build/zz_broken.dart", detail )
+
+    def test_the_analyzer_row_refuses_an_exclude_shape_it_cannot_read( self ):          # N5, refusal message
+        self.commit( "int f() => 1;\n", "options", ( "analysis_options.yaml", "analyzer:\n  exclude:\n  - build/**\n" ) )
+        base = self.sh( "rev-parse", "HEAD" )
+        self.commit( "int f() => 1;\n", "forced file", ( "build/zz_broken.dart", "int x = 'no';\n" ) )
+        with tempfile.TemporaryDirectory() as logs:
+            code, detail = mg.check_analyzer( base, logs, root=self.d, allow_config=True, allow_ignores=False )
+        self.assertEqual( code, 1 )
+        self.assertIn( "cannot tell which paths the analyzer skips", detail )
+        self.assertIn( "exactly flutter/** and build/**", detail )
 
     def test_the_docs_ignore_form_is_not_exempt( self ):                           # N1 ruling
         c4 = self.commit( "// ignore: public_member_api_docs - generated\nint f() => 2;\n", "docs ignore" )
