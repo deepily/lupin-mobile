@@ -19,6 +19,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        # The strict-directory check reads its two lists from the pull request's merge base, which needs history.
+        fetch-depth: 0
       
     - name: Set up Flutter
       uses: subosito/flutter-action@v2
@@ -46,12 +49,23 @@ jobs:
     - name: Analyze code
       run: flutter analyze --no-fatal-infos
 
-    - name: Check doc comments in swept directories
+    - name: Check doc comments and strict directories
       # Required: this is what catches a `git commit --no-verify` bypass of the pre-commit hook.
-      # Same code as the hook (check 3 of tool/pre_commit_gate.py): fails only on a missing doc
-      # comment (public_member_api_docs), ignores every other analyzer finding.
-      # The list is tool/data/gated_dirs.txt, shared with the hook.
-      run: python3 tool/pre_commit_gate.py --docs-all
+      # Same code as the hook (checks 3 and 4 of tool/pre_commit_gate.py): directories named in
+      # tool/data/strict_exempt.txt fail only on a missing doc comment (public_member_api_docs);
+      # every other gated directory fails on ANY analyzer finding.
+      # The lists are tool/data/gated_dirs.txt and strict_exempt.txt, shared with the hook.
+      # On a pull request the lists are read as they were at the merge base with the target branch
+      # (--base), so a change cannot loosen its own gate. On a push there is no base: the lists in the
+      # pushed commit are trusted (a push to main is already past review).
+      env:
+        BASE_REF: ${{ github.base_ref }}
+      run: |
+        if [ -n "$BASE_REF" ]; then
+          python3 tool/pre_commit_gate.py --docs-all --base "origin/$BASE_REF"
+        else
+          python3 tool/pre_commit_gate.py --docs-all
+        fi
 
     - name: Check for dependency issues
       run: flutter pub outdated --no-dev-dependencies --up-to-date --no-dependency-overrides

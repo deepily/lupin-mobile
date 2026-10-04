@@ -64,6 +64,12 @@ Mobile uses Bloc and Equatable; no file in `lib/` uses `@freezed` today, so the 
 
 `// ignore: public_member_api_docs` is allowed only with a reason on the same line: `// ignore: public_member_api_docs - generated override, see x.dart`. A reason names a fact (generated code, override of a documented member, platform callback), not a wish ("TODO", "obvious", "later"). `ignore_for_file` for this rule is never allowed. The coverage bar is zero `public_member_api_docs` hits per swept directory (D8).
 
+## Strict directories
+
+Every gated directory in `tool/data/gated_dirs.txt` is strict unless `tool/data/strict_exempt.txt` names it. In a strict directory ANY analyzer finding (error, warning, style note) blocks the commit (`dart analyze --fatal-infos`), every `analysis_options.yaml` that applies (the root one, the directory's own, any nested one) must be the plain template (`include:` of the root file, then `public_member_api_docs: true`; the root file as committed), so no rule can be switched off, no severity lowered and no path excluded, and an ignore comment in any form (`//`, `///`, `/* */`, trailing, indented) needs a real reason after ` - ` (`ignore_for_file` is refused). An exempt directory keeps the docs-only check. Each exempt line carries a reason and a row; delete the line when the directory analyzes clean. A new gated directory is strict from its first commit.
+
+The hook analyzes only the directories a commit touches, so a commit that only deletes a file, or changes code another strict directory uses, can break a strict directory and still pass the hook; CI runs `--docs-all` over every gated directory and catches both. `test/` is not gated: a style note there blocks nothing.
+
 ## Examples from lib/
 
 Excerpts are trimmed with `…`. Before-blocks are copied from the tree at `cf5be6f`.
