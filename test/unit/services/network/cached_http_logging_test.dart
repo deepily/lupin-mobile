@@ -175,5 +175,22 @@ void main() {
       }
       expect( debugLines.any( ( l ) => l.contains( "Successfully processed queued request: GET /ok" ) ), isTrue );
     } );
+
+    test( "a failed queued request stays queued for retry; the one that succeeded is gone", () async {
+      adapter.okPaths.add( "/ok" );
+      await offline.queueRequest( failKey, {
+        "method": "POST", "path": "/q?secret=query-secret", "data": { "note": "body-secret" }, "queryParameters": null,
+      } );
+      await offline.queueRequest( okKey, {
+        "method": "GET", "path": "/ok?token=ok-secret", "queryParameters": null,
+      } );
+
+      await service.processQueuedRequests();
+
+      final keys = offline.getQueuedRequests().map( ( r ) => r.key ).toList();
+      expect( keys, contains( failKey ) );
+      expect( keys, isNot( contains( okKey ) ) );
+      await offline.removeFromQueue( failKey );
+    } );
   } );
 }
