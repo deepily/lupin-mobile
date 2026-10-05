@@ -895,7 +895,12 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   }
 
   /// Returns [sid] for a log entry, or a placeholder when it is the signed-in user's own address.
-  String _loggableSender( String sid ) => sid == _userEmail ? '<user>' : sid;
+  ///
+  /// The comparison ignores case and surrounding spaces on both sides.
+  String _loggableSender( String sid ) {
+    final email = _userEmail;
+    return email != null && sid.trim().toLowerCase() == email.trim().toLowerCase() ? '<user>' : sid;
+  }
 
   /// Logs a failed call at [level] under the FocusChat tag.
   ///

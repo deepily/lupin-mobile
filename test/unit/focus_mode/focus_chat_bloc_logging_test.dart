@@ -185,15 +185,20 @@ void main() {
     expect( e.context!.metadata, { 'senderId': 'plain-sender', 'hasUserEmail': true } );
   } );
 
-  test( 'the user email as a sender id is logged as a placeholder', () async {
+  test( 'the user email as a sender id is logged as a placeholder, in any case and with stray spaces', () async {
     stubSendersOk();
     await coldStart();
 
-    bloc.add( const FocusRespondRequested( senderId: _email, text: 'yo' ) );
-    await pump();
+    for ( final spelling in [ _email, _email.toUpperCase(), '  $_email', '$_email  ' ] ) {
+      capture.entries.clear();
+      bloc.add( FocusRespondRequested( senderId: spelling, text: 'yo' ) );
+      await pump();
 
-    final e = single( LogLevel.warning, 'Cannot address a direct message to this sender' );
-    expect( e.context!.metadata![ 'senderId' ], '<user>' );
+      final found = focusEntries().toList();
+      expect( found, hasLength( 1 ), reason: spelling );
+      expect( found.single.context!.metadata![ 'senderId' ], '<user>', reason: spelling );
+      expect( jsonEncode( found.single.toJson() ).toLowerCase(), isNot( contains( _email ) ), reason: spelling );
+    }
   } );
 
   test( 'a failed direct message is an error with the sender and the status', () async {
