@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/logging/error_summary.dart';
+import '../../../core/logging/logger.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/push/notification_sender_label.dart';
 import '../../../services/tts/speech_intent.dart';
@@ -157,7 +159,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final item = event.item;
     final sid  = item.senderId;
     if ( sid == null ) {
-      debugPrint( '[FocusChat] inbound without sender_id dropped (id=${item.id})' );
+      Logger.warning( 'Inbound notification without a sender id dropped', tag: 'FocusChat', context: LogContext( metadata: { 'notificationId': item.id } ) );
       return;
     }
 
@@ -377,8 +379,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         windows   : windows,
         hydration : FocusHydration.ready,
       ) );
-    } on NotificationApiException catch ( e ) {
-      debugPrint( '[FocusChat] backfill failed for $sid: $e' );
+    } on NotificationApiException catch ( e, st ) {
+      _logFailure( 'Conversation backfill failed', e, st, senderId: sid );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
@@ -474,11 +476,11 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     final List<ActiveSession> seats;
     try {
       seats = await _repo.activeSessions();
-    } catch ( e ) {
+    } catch ( e, st ) {
       // Catch everything, not just NotificationApiException: this roster is an addition to
       // a rail that already works. A server that does not serve the endpoint, or an
       // unexpected shape, must leave the written-senders rail untouched.
-      debugPrint( '[FocusChat] live-seat roster unavailable: $e' );
+      _logFailure( 'Live-seat roster unavailable', e, st, level: LogLevel.warning );
       return;
     }
 
@@ -582,8 +584,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         asOf                 : _now(),
         hydration            : FocusHydration.ready,
       ) );
-    } on NotificationApiException catch ( e ) {
-      debugPrint( '[FocusChat] cold start failed: $e' );
+    } on NotificationApiException catch ( e, st ) {
+      _logFailure( 'Cold start failed', e, st );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
@@ -647,8 +649,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         asOf                 : _now(),
         hydration            : FocusHydration.ready,
       ) );
-    } on NotificationApiException catch ( e ) {
-      debugPrint( '[FocusChat] reconnect refresh failed: $e' );
+    } on NotificationApiException catch ( e, st ) {
+      _logFailure( 'Reconnect refresh failed', e, st );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
@@ -774,7 +776,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         lastActivityBySender : _activityBumped( event.senderId, _now() ),
         asOf                 : _now(),
       ) );
-    } on NotificationApiException catch ( e ) {
+    } on NotificationApiException catch ( e, st ) {
       // Two of these 400s are not errors but endings: "already responded" and "grace period
       // exceeded" both mean the ask is finished. Raising a generic error would leave the card
       // pending forever and tell the user nothing they can act on.
@@ -784,7 +786,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
           windows: _windowsWithResolved( event.senderId, targetId, resolution ) ) );
         return;
       }
-      debugPrint( '[FocusChat] respond failed for $targetId: $e' );
+      _logFailure( 'Response to an ask failed', e, st, senderId: event.senderId, notificationId: targetId );
       // Keep the unsent answer on the card, so it reads "not sent", can be resent with a tap,
       // and is resent automatically on reconnect (see [_resendUnsentAnswers]).
       emit( state.copyWith(
@@ -892,6 +894,34 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return windows;
   }
 
+  /// Returns [sid] for a log entry, or a placeholder when it is the signed-in user's own address.
+  String _loggableSender( String sid ) => sid == _userEmail ? '<user>' : sid;
+
+  /// Logs a failed call at [level] under the FocusChat tag.
+  ///
+  /// The server's detail text can quote stored content, so only the exception type and the HTTP status are recorded.
+  void _logFailure(
+    String message,
+    Object error,
+    StackTrace stackTrace, {
+    LogLevel level = LogLevel.error,
+    String?  senderId,
+    String?  notificationId,
+  } ) {
+    Logger.log(
+      level,
+      message,
+      tag        : 'FocusChat',
+      error      : describeFailure( error ),
+      stackTrace : stackTrace,
+      context    : LogContext( metadata: {
+        if ( senderId != null )                           'senderId'       : _loggableSender( senderId ),
+        if ( notificationId != null )                     'notificationId' : notificationId,
+        if ( error is NotificationApiException && error.statusCode != null ) 'statusCode' : error.statusCode,
+      } ),
+    );
+  }
+
   /// Builds the query a browser sends when the user types into a session's box.
   ///
   /// It is `POST /api/notify` as a `user_initiated_message`, `direction=human_to_ai`.
@@ -925,7 +955,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
   ) async {
     final request = sessionMessageFor( senderId, text );
     if ( request == null ) {
-      debugPrint( '[FocusChat] cannot address a message to $senderId (email: $_userEmail)' );
+      Logger.warning( 'Cannot address a direct message to this sender', tag: 'FocusChat', context: LogContext( metadata: { 'senderId': _loggableSender( senderId ), 'hasUserEmail': _userEmail != null && _userEmail!.isNotEmpty } ) );
       emit( state.copyWith( hydration: FocusHydration.error ) );
       return;
     }
@@ -959,8 +989,8 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         lastActivityBySender : _activityBumped( senderId, _now() ),
         asOf                 : _now(),
       ) );
-    } on NotificationApiException catch ( e ) {
-      debugPrint( '[FocusChat] direct message to $senderId failed: $e' );
+    } on NotificationApiException catch ( e, st ) {
+      _logFailure( 'Direct message failed', e, st, senderId: senderId );
       emit( state.copyWith( hydration: FocusHydration.error ) );
     }
   }
