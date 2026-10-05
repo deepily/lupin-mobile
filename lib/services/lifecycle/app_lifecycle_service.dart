@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import '../../core/logging/logger.dart';
 
 /// Tracks whether the app is foreground, inactive or backgrounded, and for how long.
 ///
@@ -44,6 +45,9 @@ class AppLifecycleService with WidgetsBindingObserver {
   Timer? _inactivityTimer;
   Timer? _backgroundTimer;
   Timer? _sessionTimer;
+
+  /// The log flush started by the last pause or detach, null when none is running.
+  Future<void>? _logFlush;
   
   // Public getters
   /// Latest framework lifecycle state.
@@ -172,6 +176,9 @@ class AppLifecycleService with WidgetsBindingObserver {
     
     _backgroundTime = DateTime.now();
     _foregroundTime = null;
+
+    // A background kill gives no later chance to write buffered log entries.
+    _flushLogs();
     
     // Stop inactivity monitoring in background
     _inactivityTimer?.cancel();
@@ -191,6 +198,7 @@ class AppLifecycleService with WidgetsBindingObserver {
   void _handleAppDetached() {
     debugPrint('[LifecycleService] App detached');
     // Prepare for shutdown
+    _flushLogs();
     _prepareForShutdown();
   }
   
@@ -200,6 +208,22 @@ class AppLifecycleService with WidgetsBindingObserver {
     // Similar to paused but potentially temporary
   }
   
+  /// Starts a log flush unless one is already running; a failure is printed, never thrown.
+  void _flushLogs() {
+    if (_logFlush != null) return;
+    _logFlush = _runLogFlush();
+  }
+
+  Future<void> _runLogFlush() async {
+    try {
+      await Logger.flush();
+    } catch (e) {
+      debugPrint('[LifecycleService] Log flush failed: $e');
+    } finally {
+      _logFlush = null;
+    }
+  }
+
   /// Start monitoring user inactivity
   void _startInactivityMonitoring() {
     _inactivityTimer?.cancel();
