@@ -53,7 +53,7 @@ const String _mask = "<redacted>";
 /// Ensures:
 ///   - no JWT-shaped substring survives in the result
 ///   - an `Authorization` header keeps its name and loses its value
-///   - any name ending in `token` or `password` (`access_token`, `api_token`, `db_password`, `accessToken`, bare `token`) keeps its name and lose their values, in both JSON (string, number or null values) and Dart-map spellings
+///   - any name ending in `token` or `password` (`access_token`, `api_token`, `db_password`, `accessToken`, bare `token`) keeps its name and loses its value, in both JSON (string, number or null values) and Dart-map spellings
 ///   - an error code that merely ends in `id_token`, such as `invalid_token`, is left alone
 ///   - text containing no credential is returned unchanged, character for character, because this runs on every logged line
 ///   - the mask itself is never re-masked, so repeated application is stable
