@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../core/cache/network_cache.dart';
 import '../../core/cache/offline_manager.dart';
+import '../../core/logging/logger.dart';
 import 'http_service.dart';
 
 /// Enhanced HTTP service with intelligent caching and offline support.
@@ -119,7 +120,7 @@ class CachedHttpService extends HttpService {
       }
       
       return response;
-    } catch (e) {
+    } catch (e, st) {
       // On network error, try cache again with longer TTL tolerance
       if (useCache) {
         final cachedResponse = await _networkCache.getCachedGetResponse(
@@ -128,7 +129,7 @@ class CachedHttpService extends HttpService {
         );
         
         if (cachedResponse != null) {
-          debugPrint('[HTTP] Using stale cache due to network error');
+          Logger.warning( 'Using stale cache due to network error', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
           return cachedResponse.toDioResponse<T>();
         }
       }
@@ -215,7 +216,7 @@ class CachedHttpService extends HttpService {
       }
       
       return response;
-    } catch (e) {
+    } catch (e, st) {
       // On network error, try cache if available
       if (useCache) {
         final cachedResponse = await _networkCache.getCachedPostResponse(
@@ -224,7 +225,7 @@ class CachedHttpService extends HttpService {
         );
         
         if (cachedResponse != null) {
-          debugPrint('[HTTP] Using stale cache due to network error');
+          Logger.warning( 'Using stale cache due to network error', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
           return cachedResponse.toDioResponse<T>();
         }
       }
@@ -257,8 +258,8 @@ class CachedHttpService extends HttpService {
         cacheTtl: const Duration(minutes: 5),
       );
       return response.data ?? {};
-    } catch (e) {
-      debugPrint('[HTTP] Session ID request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-session-id' ) );
       rethrow;
     }
   }
@@ -302,8 +303,8 @@ class CachedHttpService extends HttpService {
         cacheTtl: const Duration(hours: 1),
       );
       return response;
-    } catch (e) {
-      debugPrint('[HTTP] ElevenLabs TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech-elevenlabs' ) );
       rethrow;
     }
   }
@@ -340,8 +341,8 @@ class CachedHttpService extends HttpService {
         cacheTtl: const Duration(hours: 1),
       );
       return response;
-    } catch (e) {
-      debugPrint('[HTTP] OpenAI TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech' ) );
       rethrow;
     }
   }
@@ -369,8 +370,8 @@ class CachedHttpService extends HttpService {
         cacheTtl: const Duration(minutes: 2),
       );
       return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('[HTTP] Health check failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/health' ) );
       return false;
     }
   }
@@ -488,9 +489,20 @@ class CachedHttpService extends HttpService {
         }
         
         await _offlineManager.removeFromQueue(request.key);
-        debugPrint('[HTTP] Successfully processed queued request: ${request.key}');
-      } catch (e) {
-        debugPrint('[HTTP] Failed to process queued request ${request.key}: $e');
+        // The queue key holds the query and the POST body, so only method and path are logged.
+        debugPrint('[HTTP] Successfully processed queued request: $method ${path.split( '?' ).first}');
+      } catch (e, st) {
+        final data = request.data;
+        Logger.error(
+          'Failed to process queued request',
+          tag       : 'HTTP',
+          error     : e,
+          stackTrace: st,
+          context   : LogContext( metadata: {
+            if ( data['method'] is String ) 'method': data['method'],
+            if ( data['path'] is String ) 'path'  : ( data['path'] as String ).split( '?' ).first,
+          } ),
+        );
       }
     }
   }

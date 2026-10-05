@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import '../logging/error_summary.dart';
+import '../logging/logger.dart';
 import '../storage/storage_manager.dart';
 import 'cache_policy.dart';
 
@@ -309,8 +310,8 @@ class CacheManager<T> {
           if (!entry.isExpired(policy.maxAge)) {
             _memoryCache[entry.key] = entry;
           }
-        } catch (e) {
-          debugPrint('[CacheManager] Error loading cached entry: $e');
+        } catch (e, st) {
+          Logger.error( 'Error loading cached entry', tag: 'CacheManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'cacheKey': cacheKey, 'storageKey': storageKey } ) );
         }
       }
     }
@@ -324,8 +325,8 @@ class CacheManager<T> {
     
     try {
       return CacheEntry.fromJson(json, fromJson);
-    } catch (e) {
-      debugPrint('[CacheManager] Error loading entry from storage: $e');
+    } catch (e, st) {
+      Logger.error( 'Error loading entry from storage', tag: 'CacheManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'cacheKey': cacheKey, 'storageKey': storageKey } ) );
       return null;
     }
   }

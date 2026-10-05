@@ -4,9 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+import '../logging/error_summary.dart';
+import '../logging/log_file_store.dart';
+import '../logging/logger.dart';
 
 /// Storage manager for handling local data persistence
-class StorageManager {
+class StorageManager implements LogFileStore {
   static StorageManager? _instance;
   static final Completer<StorageManager> _completer = Completer<StorageManager>();
   
@@ -95,8 +98,8 @@ class StorageManager {
     
     try {
       return jsonDecode(jsonString) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('[StorageManager] Error parsing JSON for key $key: $e');
+    } catch (e, st) {
+      Logger.error( 'Error parsing JSON for key $key', tag: 'StorageManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
       return null;
     }
   }
@@ -115,8 +118,8 @@ class StorageManager {
     try {
       final decoded = jsonDecode(jsonString) as List<dynamic>;
       return decoded.cast<Map<String, dynamic>>();
-    } catch (e) {
-      debugPrint('[StorageManager] Error parsing JSON list for key $key: $e');
+    } catch (e, st) {
+      Logger.error( 'Error parsing JSON list for key $key', tag: 'StorageManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'key': key } ) );
       return null;
     }
   }
@@ -184,6 +187,7 @@ class StorageManager {
   // File operations for logging and caching
 
   /// Append data to a file
+  @override
   Future<void> appendToFile(String fileName, String data) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -195,6 +199,7 @@ class StorageManager {
   }
 
   /// Check if file exists
+  @override
   Future<bool> fileExists(String fileName) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -206,6 +211,7 @@ class StorageManager {
   }
 
   /// Get file size in bytes
+  @override
   Future<int?> getFileSize(String fileName) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -220,6 +226,7 @@ class StorageManager {
   }
 
   /// Rename a file
+  @override
   Future<void> renameFile(String oldFileName, String newFileName) async {
     try {
       final oldFile = File('$_documentsPath/$oldFileName');
@@ -235,6 +242,7 @@ class StorageManager {
   }
 
   /// Delete a file
+  @override
   Future<void> deleteFile(String fileName) async {
     try {
       final file = File('$_documentsPath/$fileName');
@@ -255,8 +263,8 @@ class StorageManager {
         return await file.readAsString();
       }
       return null;
-    } catch (e) {
-      debugPrint('[StorageManager] Failed to read file $fileName: $e');
+    } catch (e, st) {
+      Logger.error( 'Failed to read file $fileName', tag: 'StorageManager', error: describeFailure( e ), stackTrace: st, context: LogContext( metadata: { 'file': fileName } ) );
       return null;
     }
   }
@@ -266,8 +274,8 @@ class StorageManager {
     try {
       final file = File('$_documentsPath/$fileName');
       await file.writeAsString(content);
-    } catch (e) {
-      debugPrint('[StorageManager] Failed to write file $fileName: $e');
+    } catch (e, st) {
+      Logger.error( 'Failed to write file $fileName', tag: 'StorageManager', error: e, stackTrace: st, context: LogContext( metadata: { 'file': fileName } ) );
       rethrow;
     }
   }

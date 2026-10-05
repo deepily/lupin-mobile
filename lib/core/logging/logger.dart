@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import '../storage/storage_manager.dart';
+import 'log_file_store.dart';
+import 'log_redaction.dart';
 
 /// Log levels for filtering and categorizing log messages
 enum LogLevel {
@@ -155,12 +156,22 @@ abstract class LogDestination {
   Future<void> flush();
 }
 
-/// Console log destination for development
+/// Console log destination: every entry in debug builds, warnings and above in release.
+///
+/// Release builds keep warnings and errors on the device console so a check that
+/// reads logcat still sees them. Release output goes through `debugPrint`.
 class ConsoleLogDestination implements LogDestination {
+  final bool _debugMode;
+
+  /// Creates a destination; [debugMode] defaults to `kDebugMode`, and false forces release output in tests.
+  ConsoleLogDestination({ bool? debugMode }) : _debugMode = debugMode ?? kDebugMode;
+
   @override
   void write(LogEntry entry) {
-    if (kDebugMode) {
-      print(entry.toFormattedString());
+    if (_debugMode) {
+      if (kDebugMode) print(entry.toFormattedString());
+    } else if (entry.level >= LogLevel.warning) {
+      debugPrint(entry.toFormattedString());
     }
   }
 
@@ -170,7 +181,11 @@ class ConsoleLogDestination implements LogDestination {
   }
 }
 
-/// File log destination for persistent logging
+/// File log destination for persistent logging.
+///
+/// Entries at error and above start a flush at once; others wait for the buffer size
+/// entries. At most one write runs at a time, and entries that arrive during it
+/// go out in a follow-up write, so no entry is written twice.
 class FileLogDestination implements LogDestination {
   /// Name of the log file.
   final String fileName;
@@ -178,9 +193,18 @@ class FileLogDestination implements LogDestination {
   final int maxFileSize;
   /// Number of rotated files kept.
   final int maxFiles;
-  final StorageManager _storage;
+  final LogFileStore _storage;
   final List<LogEntry> _buffer = [];
   final int _bufferSize;
+  Future<void>? _flushing;
+  bool _flushAgain = false;
+  int _dropped = 0;
+
+  /// Most entries waiting in the buffer; the oldest drop first.
+  ///
+  /// A batch being written is held apart from the buffer, so with a write in flight
+  /// memory holds up to twice this many entries.
+  static const int maxBufferedEntries = 1000;
 
   /// Creates a destination that writes through [_storage].
   FileLogDestination(
@@ -194,10 +218,19 @@ class FileLogDestination implements LogDestination {
   @override
   void write(LogEntry entry) {
     _buffer.add(entry);
-    
-    if (_buffer.length >= _bufferSize) {
+    _enforceCap();
+
+    if (entry.level >= LogLevel.error || _buffer.length >= _bufferSize) {
       _flushBuffer();
     }
+  }
+
+  /// Drops the oldest entries beyond [maxBufferedEntries] and counts them.
+  void _enforceCap() {
+    final excess = _buffer.length - maxBufferedEntries;
+    if (excess <= 0) return;
+    _buffer.removeRange( 0, excess );
+    _dropped += excess;
   }
 
   @override
@@ -205,26 +238,78 @@ class FileLogDestination implements LogDestination {
     await _flushBuffer();
   }
 
-  Future<void> _flushBuffer() async {
-    if (_buffer.isEmpty) return;
+  Future<void> _flushBuffer() {
+    if (_flushing != null) {
+      _flushAgain = true;
+      return _flushing!;
+    }
+    return _flushing = _drain();
+  }
+
+  Future<void> _drain() async {
+    try {
+      do {
+        _flushAgain = false;
+        final written = await _writeBatch();
+        if (written && _dropped > 0) {
+          _buffer.add( _dropNote( _dropped ) );
+          _dropped    = 0;
+          _flushAgain = true;
+        }
+      } while (_flushAgain);
+    } finally {
+      _flushing = null;
+    }
+  }
+
+  /// Writes the buffered entries; returns false when the write failed and the entries were kept.
+  Future<bool> _writeBatch() async {
+    if (_buffer.isEmpty) return false;
+
+    final batch = List<LogEntry>.of(_buffer);
+    _buffer.clear();
 
     try {
-      final logData = '${_buffer.map((entry) => jsonEncode(entry.toJson())).join('\n')}\n';
-      
+      final logData = '${batch.map(_encode).join('\n')}\n';
+
       // Write to current log file
       await _storage.appendToFile(fileName, logData);
-      
+
       // Check file size and rotate if necessary
       await _rotateLogsIfNeeded();
-      
-      _buffer.clear();
+      return true;
     } catch (e) {
-      // Fallback to console if file writing fails
+      // Keep the batch for the next attempt, bounded so a dead disk cannot grow memory.
+      _buffer.insertAll(0, batch);
+      _enforceCap();
+      // Not routed through Logger: this destination is what Logger writes to.
       if (kDebugMode) {
         print('Failed to write logs to file: $e');
       }
+      return false;
     }
   }
+
+  /// Encodes one entry; an entry that cannot be encoded becomes a stub line, so it never blocks the batch.
+  String _encode( LogEntry entry ) {
+    try {
+      return jsonEncode( entry.toJson() );
+    } catch (_) {
+      return jsonEncode( {
+        'timestamp': entry.timestamp.toIso8601String(),
+        'level'    : entry.level.name,
+        if (entry.tag != null) 'tag': entry.tag,
+        'message'  : 'unencodable entry',
+      } );
+    }
+  }
+
+  LogEntry _dropNote( int count ) => LogEntry(
+    timestamp: DateTime.now(),
+    level    : LogLevel.warning,
+    message  : 'dropped $count log entries while the file write was stalled or failing',
+    tag      : 'Logger',
+  );
 
   Future<void> _rotateLogsIfNeeded() async {
     try {
@@ -334,18 +419,28 @@ class Logger {
   final List<LogDestination> _destinations = [];
   LogContext? _globalContext;
 
-  /// Initialize logger with destinations
+  /// Initialize logger with destinations.
+  ///
+  /// Requires:
+  ///   - [fileStore] is non-null when [enableFile] is true
+  ///
+  /// Raises:
+  ///   - [ArgumentError] when [enableFile] is true and [fileStore] is null
   static Future<void> initialize({
     LogLevel minLevel = LogLevel.info,
     bool enableConsole = true,
     bool enableFile = true,
+    LogFileStore? fileStore,
     bool enableRemote = false,
     String? remoteEndpoint,
     String? remoteApiKey,
   }) async {
+    if (enableFile && fileStore == null) {
+      throw ArgumentError.value( fileStore, 'fileStore', 'required when enableFile is true' );
+    }
     final logger = Logger.instance;
     logger._minLevel = minLevel;
-    
+
     // Add console destination
     if (enableConsole) {
       logger._destinations.add(ConsoleLogDestination());
@@ -353,8 +448,7 @@ class Logger {
     
     // Add file destination
     if (enableFile) {
-      final storage = await StorageManager.getInstance();
-      logger._destinations.add(FileLogDestination(storage));
+      logger._destinations.add(FileLogDestination(fileStore!));
     }
     
     // Add remote destination
@@ -364,6 +458,20 @@ class Logger {
         apiKey: remoteApiKey,
       ));
     }
+  }
+
+  /// Adds [destination] to the shared logger.
+  static void addDestination(LogDestination destination) {
+    instance._destinations.add(destination);
+  }
+
+  /// Removes every destination and restores the default level and context.
+  @visibleForTesting
+  static void resetForTesting() {
+    final logger = instance;
+    logger._destinations.clear();
+    logger._minLevel      = kDebugMode ? LogLevel.debug : LogLevel.info;
+    logger._globalContext = null;
   }
 
   /// Set global context for all log entries
@@ -376,7 +484,17 @@ class Logger {
     instance._minLevel = level;
   }
 
-  /// Log a message with specified level
+  /// Log a message with specified level.
+  ///
+  /// Every string that leaves the logger is masked by `redactSecrets`: the message,
+  /// tag, error text, stack trace, and every field of the context, including nested
+  /// metadata. Stack traces are masked too because a trace can quote a URL or argument.
+  ///
+  /// Ensures:
+  ///   - never throws: a failure while building or delivering an entry is dropped
+  ///   - metadata that cannot be read costs the entry its context, not the entry itself
+  ///   - an error whose `toString` throws is recorded by its runtime type
+  ///   - with no destination attached, warnings and above go to `debugPrint` so an early failure is not lost
   static void log(
     LogLevel level,
     String message, {
@@ -385,23 +503,87 @@ class Logger {
     Object? error,
     StackTrace? stackTrace,
   }) {
-    final logger = instance;
-    
-    if (level < logger._minLevel) return;
+    try {
+      final logger = instance;
 
-    final entry = LogEntry(
-      timestamp: DateTime.now(),
-      level: level,
-      message: message,
-      tag: tag,
-      context: context ?? logger._globalContext,
-      error: error,
-      stackTrace: stackTrace,
-    );
+      if (level < logger._minLevel) return;
 
-    for (final destination in logger._destinations) {
-      destination.write(entry);
+      LogContext? maskedContext;
+      try {
+        maskedContext = _maskedContext( context ?? logger._globalContext );
+      } catch (_) {
+        maskedContext = null;   // unreadable metadata costs the context, not the entry
+      }
+
+      final entry = LogEntry(
+        timestamp: DateTime.now(),
+        level: level,
+        message: redactSecrets( message ),
+        tag: tag == null ? null : redactSecrets( tag ),
+        context: maskedContext,
+        error: error == null ? null : _maskedText( error ),
+        stackTrace: stackTrace == null ? null : StackTrace.fromString( _maskedText( stackTrace ) ),
+      );
+
+      if (logger._destinations.isEmpty) {
+        if (level >= LogLevel.warning) debugPrint( entry.toFormattedString() );
+        return;
+      }
+
+      for (final destination in logger._destinations) {
+        try {
+          destination.write(entry);
+        } catch (e) {
+          if (kDebugMode) debugPrint( '[Logger] a destination failed: ${e.runtimeType}' );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint( '[Logger] dropped an entry: ${e.runtimeType}' );
     }
+  }
+
+  static String _maskedText( Object value ) {
+    try {
+      return redactSecrets( value.toString() );
+    } catch (_) {
+      return '<${value.runtimeType}: toString failed>';
+    }
+  }
+
+  static LogContext? _maskedContext( LogContext? context ) {
+    if (context == null) return null;
+    return LogContext(
+      userId    : context.userId    == null ? null : redactSecrets( context.userId! ),
+      sessionId : context.sessionId == null ? null : redactSecrets( context.sessionId! ),
+      requestId : context.requestId == null ? null : redactSecrets( context.requestId! ),
+      feature   : context.feature   == null ? null : redactSecrets( context.feature! ),
+      metadata  : context.metadata == null ? null : _maskedMap( context.metadata!, 0 ),
+    );
+  }
+
+  static const int _maxMaskDepth = 6;
+
+  static Map<String, dynamic> _maskedMap( Map<dynamic, dynamic> map, int depth ) {
+    final out = <String, dynamic>{};
+    for (final entry in map.entries) {
+      final key = _maskedText( entry.key );
+      out[ key ] = _maskedValue( entry.key, entry.value, depth + 1 );
+    }
+    return out;
+  }
+
+  /// Masks [value], using [key] so a credential under a field name the redactor knows is caught.
+  static dynamic _maskedValue( Object? key, Object? value, int depth ) {
+    if (value == null || value is num || value is bool) return value;
+    if (depth > _maxMaskDepth) return '<nested too deep>';
+    if (value is Map) return _maskedMap( value, depth );
+    if (value is Iterable) return [for (final item in value) _maskedValue( key, item, depth + 1 )];
+
+    final text = _maskedText( value );
+    if (key == null) return text;
+    final prefix = '${_maskedText( key )}: ';
+    final keyed  = _maskedText( '$prefix$text' );
+    return keyed.startsWith( prefix ) ? keyed.substring( prefix.length ) : text;
   }
 
   /// Convenience methods for different log levels
@@ -419,9 +601,15 @@ class Logger {
     log(LogLevel.info, message, tag: tag, context: context);
   }
 
-  /// Logs [message] at warning level.
-  static void warning(String message, {String? tag, LogContext? context}) {
-    log(LogLevel.warning, message, tag: tag, context: context);
+  /// Logs [message] at warning level, with an optional [error] and [stackTrace].
+  static void warning(
+    String message, {
+    String? tag,
+    LogContext? context,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    log(LogLevel.warning, message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
   /// Logs [message] at error level, with an optional [error] and [stackTrace].
@@ -483,9 +671,14 @@ class TaggedLogger {
     Logger.info(message, tag: tag, context: context);
   }
 
-  /// Logs [message] at warning level.
-  void warning(String message, {LogContext? context}) {
-    Logger.warning(message, tag: tag, context: context);
+  /// Logs [message] at warning level, with an optional [error] and [stackTrace].
+  void warning(
+    String message, {
+    LogContext? context,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    Logger.warning(message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
   /// Logs [message] at error level, with an optional [error] and [stackTrace].

@@ -3,6 +3,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/log_redaction.dart';
+import '../../core/logging/logger.dart';
+
+/// Returns log metadata naming the request [path] without its query string.
+///
+/// The query string is left out because it can carry a credential.
+LogContext requestLogContext( String path ) => LogContext( metadata: { 'path': path.split( '?' ).first } );
 
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
@@ -70,22 +76,27 @@ class HttpService {
       ));
     }
 
+    // Method and path only: the query string can carry a token, and this wrapper runs in release builds too.
+    // The lines are debug entries, so a release console (warning and above) does not show them.
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
-        print('[HTTP] Request: ${options.method} ${options.uri}');
+        Logger.debug( 'Request: ${options.method} ${_uriWithoutQuery( options.uri )}', tag: 'HTTP' );
         handler.next(options);
       },
       onResponse: (response, handler) {
-        print('[HTTP] Response: ${response.statusCode} ${response.requestOptions.uri}');
+        Logger.debug( 'Response: ${response.statusCode} ${_uriWithoutQuery( response.requestOptions.uri )}', tag: 'HTTP' );
         handler.next(response);
       },
       onError: (error, handler) {
-        print('[HTTP] Error: ${error.message}');
+        Logger.debug( 'Error: ${error.type.name} ${_uriWithoutQuery( error.requestOptions.uri )}', tag: 'HTTP' );
         handler.next(error);
       },
     ));
   }
-  
+
+  /// Returns [uri] as scheme, host, port and path, with the userinfo, query string and fragment dropped.
+  static String _uriWithoutQuery( Uri uri ) => '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}${uri.path}';
+
   /// Retrieves a new session ID from the FastAPI backend.
   /// 
   /// Requires:
@@ -103,8 +114,8 @@ class HttpService {
     try {
       final response = await _dio.get('/api/get-session-id');
       return response.data;
-    } catch (e) {
-      print('[HTTP] Session ID request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-session-id' ) );
       rethrow;
     }
   }
@@ -145,8 +156,8 @@ class HttpService {
         },
       );
       return response;
-    } catch (e) {
-      print('[HTTP] ElevenLabs TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech-elevenlabs' ) );
       rethrow;
     }
   }
@@ -178,8 +189,8 @@ class HttpService {
         },
       );
       return response;
-    } catch (e) {
-      print('[HTTP] OpenAI TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech' ) );
       rethrow;
     }
   }
@@ -215,8 +226,8 @@ class HttpService {
       );
       
       return response.data;
-    } catch (e) {
-      print('[HTTP] Audio upload failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/upload-and-transcribe-mp3' ) );
       rethrow;
     }
   }
@@ -234,8 +245,8 @@ class HttpService {
     try {
       final response = await _dio.get('/health');
       return response.statusCode == 200;
-    } catch (e) {
-      print('[HTTP] Health check failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/health' ) );
       return false;
     }
   }
@@ -265,8 +276,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] GET request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'GET request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -298,8 +309,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] POST request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'POST request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -331,8 +342,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] PUT request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'PUT request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -362,8 +373,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] DELETE request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }

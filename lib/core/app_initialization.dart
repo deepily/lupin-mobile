@@ -75,6 +75,7 @@ class AppInitialization {
       minLevel: logLevel,
       enableConsole: enableDebugLogging,
       enableFile: enableFileLogging,
+      fileStore: enableFileLogging ? await StorageManager.getInstance() : null,
       enableRemote: enableRemoteLogging,
       remoteEndpoint: remoteEndpoint,
       remoteApiKey: remoteApiKey,

@@ -13,6 +13,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/logging/log_redaction.dart';
+import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/network/http_service.dart';
 
 import '../../_helpers/stub_dio.dart';
@@ -23,6 +24,16 @@ const String _jwt =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
     ".eyJzdWIiOiJ0ZXN0LXVzZXItaWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ"
     ".ZmFrZXNpZ25hdHVyZUZPUlRFU1RTT05MWQ";
+
+class _Capture implements LogDestination {
+  final List<LogEntry> entries = [];
+
+  @override
+  void write( LogEntry entry ) => entries.add( entry );
+
+  @override
+  Future<void> flush() async {}
+}
 
 void main() {
   group( "redactSecrets masks credentials", () {
@@ -61,6 +72,58 @@ void main() {
       final out = redactSecrets( "{refresh_token: opaque-refresh-value}" );
       expect( out, isNot( contains( "opaque-refresh-value" ) ) );
       expect( out, contains( "refresh_token" ) );
+    } );
+
+    test( "a form-encoded token field name=value is masked and its neighbours are kept", () {
+      final out = redactSecrets( "refresh_token=opaque-RT&x=1" );
+      expect( out, isNot( contains( "opaque-RT" ) ) );
+      expect( out, contains( "refresh_token=" ) );
+      expect( out, contains( "&x=1" ) );
+    } );
+
+    test( "name = value with spaces and each token name is masked", () {
+      for ( final name in [ "access_token", "refresh_token", "id_token" ] ) {
+        final out = redactSecrets( "$name = secret-value-1, next" );
+        expect( out, isNot( contains( "secret-value-1" ) ), reason: name );
+        expect( out, contains( ", next" ), reason: name );
+      }
+    } );
+
+    test( "an error code that merely ends in id_token keeps its reason", () {
+      const line = "invalid_token: the token expired";
+      expect( redactSecrets( line ), line );
+      expect( redactSecrets( "error=invalid_token&x=1" ), "error=invalid_token&x=1" );
+    } );
+
+    test( "bare password and token fields are masked, neighbours kept", () {
+      expect( redactSecrets( "password=hunter2&x=1" ), "password=<redacted>&x=1" );
+      expect( redactSecrets( "{token: abc123, a: 1}" ), "{token: <redacted>, a: 1}" );
+      expect( redactSecrets( "login token=abc123" ), "login token=<redacted>" );
+      expect( redactSecrets( "{\"password\":\"hunter2\"}" ), "{\"password\":\"<redacted>\"}" );
+    } );
+
+    test( "prefixed names ending in _token or _password are masked", () {
+      for ( final name in [ "api_token", "auth_token", "user_password", "db_password", "x-access_token", "access-token", "accessToken" ] ) {
+        expect( redactSecrets( "$name=SECRET&x=1" ), "$name=<redacted>&x=1", reason: name );
+        expect( redactSecrets( "{$name: SECRET, a: 1}" ), "{$name: <redacted>, a: 1}", reason: name );
+        expect( redactSecrets( "{\"$name\":\"SECRET\"}" ), "{\"$name\":\"<redacted>\"}", reason: name );
+      }
+    } );
+
+    test( "an invalid_token error code is still left alone beside its neighbours", () {
+      expect( redactSecrets( "error=invalid_token&access_token=SECRET" ), "error=invalid_token&access_token=<redacted>" );
+      expect( redactSecrets( "invalid_token: the token expired" ), "invalid_token: the token expired" );
+      expect( redactSecrets( "tokenizer=x passwordless: true" ), "tokenizer=x passwordless: true" );
+    } );
+
+    test( "JSON values that are not strings, or hold escaped quotes, are masked whole", () {
+      expect( redactSecrets( "{\"password\":12345,\"a\":1}" ), "{\"password\":\"<redacted>\",\"a\":1}" );
+      expect( redactSecrets( "{\"password\": \"a\\\"b\", \"a\": 1}" ), "{\"password\":\"<redacted>\", \"a\": 1}" );
+      expect( redactSecrets( "{\"api_token\":null}" ), "{\"api_token\":\"<redacted>\"}" );
+    } );
+
+    test( "the name: value form keeps its separator after the change", () {
+      expect( redactSecrets( "{refresh_token: opaque}" ), "{refresh_token: <redacted>}" );
     } );
 
     test( "a bare JWT under an unanticipated field name is still masked", () {
@@ -215,6 +278,40 @@ void main() {
       expect( all, isNot( contains( "eyJ" ) ) );
     } );
 
+    test( "the interceptor's method and path reach the Logger and no query string reaches any sink", () async {
+      const querySecret = "QSECRET-9f3a";
+      // The URLs carry userinfo, and the failing stub throws with the request's own options, so the query is on the error line's URI.
+      const base = "http://alice:PWSECRET@host.example:7999";
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter( {
+          "GET $base/ok"   : ( _ ) => jsonBody( { "ok": true } ),
+          "GET $base/fail" : ( o ) => throw DioException( requestOptions: o, message: "boom" ),
+        } );
+      HttpService( dio );
+      Logger.resetForTesting();
+      final capture = _Capture();
+      Logger.addDestination( capture );
+
+      final printed = <String>[];
+      await runZoned( () async {
+        await dio.get( "$base/ok", queryParameters: { "access_token": querySecret, "api_key": querySecret } );
+        try { await dio.get( "$base/fail", queryParameters: { "api_key": querySecret } ); } catch ( _ ) {}
+      }, zoneSpecification: ZoneSpecification( print: ( _, __, ___, line ) => printed.add( line ) ) );
+
+      final logged = capture.entries.map( ( e ) => e.toFormattedString() ).join( "\n" );
+      expect( logged, contains( "Request: GET" ) );
+      expect( logged, contains( "/ok" ) );
+      expect( logged, isNot( contains( querySecret ) ) );
+      expect( logged, isNot( contains( "api_key" ) ) );
+      expect( logged, isNot( contains( "PWSECRET" ) ) );
+      expect( logged, isNot( contains( "alice" ) ) );
+      expect( logged, contains( "Response: 200 http://host.example:7999/ok" ) );
+      expect( logged, contains( "Error: unknown http://host.example:7999/fail" ) );
+      // The debug-only LogInterceptor also prints in tests; the always-on wrapper must not use plain print at all.
+      expect( printed.where( ( l ) => l.startsWith( "[HTTP] Request:" ) || l.startsWith( "[HTTP] Response:" ) || l.startsWith( "[HTTP] Error:" ) ), isEmpty );
+      Logger.resetForTesting();
+    } );
+
     test( "the narrow method/URI diagnostic still prints — device checks depend on it", () async {
       // c3fc62bf was closed on a `[HTTP] Request: POST …/api/v2/transcribe` line
       // from the SECOND interceptor. Scrubbing must not have silenced it.
@@ -224,16 +321,16 @@ void main() {
         } );
       HttpService( dio );
 
-      final printed = <String>[];
-      await runZoned(
-        () => dio.post( "/api/v2/transcribe" ),
-        zoneSpecification: ZoneSpecification(
-          print: ( _, __, ___, line ) => printed.add( line ),
-        ),
-      );
+      Logger.resetForTesting();
+      final capture = _Capture();
+      Logger.addDestination( capture );
 
-      expect( printed.join( "\n" ), contains( "Request: POST" ) );
-      expect( printed.join( "\n" ), contains( "/api/v2/transcribe" ) );
+      await dio.post( "/api/v2/transcribe" );
+
+      final logged = capture.entries.map( ( e ) => e.toFormattedString() ).join( "\n" );
+      expect( logged, contains( "Request: POST" ) );
+      expect( logged, contains( "/api/v2/transcribe" ) );
+      Logger.resetForTesting();
     } );
   } );
 }
