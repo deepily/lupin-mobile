@@ -280,10 +280,12 @@ void main() {
 
     test( "the interceptor's method and path reach the Logger and no query string reaches any sink", () async {
       const querySecret = "QSECRET-9f3a";
+      // The URLs carry userinfo, and the failing stub throws with the request's own options, so the query is on the error line's URI.
+      const base = "http://alice:PWSECRET@host.example:7999";
       final dio = Dio()
         ..httpClientAdapter = StubAdapter( {
-          "GET /ok"   : ( _ ) => jsonBody( { "ok": true } ),
-          "GET /fail" : ( _ ) => throw DioException( requestOptions: RequestOptions( path: "/fail" ), message: "boom ?access_token=$querySecret" ),
+          "GET $base/ok"   : ( _ ) => jsonBody( { "ok": true } ),
+          "GET $base/fail" : ( o ) => throw DioException( requestOptions: o, message: "boom" ),
         } );
       HttpService( dio );
       Logger.resetForTesting();
@@ -292,8 +294,8 @@ void main() {
 
       final printed = <String>[];
       await runZoned( () async {
-        await dio.get( "/ok", queryParameters: { "access_token": querySecret, "api_key": querySecret } );
-        try { await dio.get( "/fail", queryParameters: { "api_key": querySecret } ); } catch ( _ ) {}
+        await dio.get( "$base/ok", queryParameters: { "access_token": querySecret, "api_key": querySecret } );
+        try { await dio.get( "$base/fail", queryParameters: { "api_key": querySecret } ); } catch ( _ ) {}
       }, zoneSpecification: ZoneSpecification( print: ( _, __, ___, line ) => printed.add( line ) ) );
 
       final logged = capture.entries.map( ( e ) => e.toFormattedString() ).join( "\n" );
@@ -301,6 +303,10 @@ void main() {
       expect( logged, contains( "/ok" ) );
       expect( logged, isNot( contains( querySecret ) ) );
       expect( logged, isNot( contains( "api_key" ) ) );
+      expect( logged, isNot( contains( "PWSECRET" ) ) );
+      expect( logged, isNot( contains( "alice" ) ) );
+      expect( logged, contains( "Response: 200 http://host.example:7999/ok" ) );
+      expect( logged, contains( "Error: unknown http://host.example:7999/fail" ) );
       // The debug-only LogInterceptor also prints in tests; the always-on wrapper must not use plain print at all.
       expect( printed.where( ( l ) => l.startsWith( "[HTTP] Request:" ) || l.startsWith( "[HTTP] Response:" ) || l.startsWith( "[HTTP] Error:" ) ), isEmpty );
       Logger.resetForTesting();

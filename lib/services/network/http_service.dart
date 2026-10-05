@@ -94,8 +94,8 @@ class HttpService {
     ));
   }
 
-  /// Returns [uri] as scheme, host and path, with the query string and fragment dropped.
-  static String _uriWithoutQuery( Uri uri ) => '${uri.scheme}://${uri.authority}${uri.path}';
+  /// Returns [uri] as scheme, host, port and path, with the userinfo, query string and fragment dropped.
+  static String _uriWithoutQuery( Uri uri ) => '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}${uri.path}';
 
   /// Retrieves a new session ID from the FastAPI backend.
   /// 
