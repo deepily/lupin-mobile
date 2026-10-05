@@ -78,6 +78,19 @@ void main() {
       }
     } );
 
+    test( "an error code that merely ends in id_token keeps its reason", () {
+      const line = "invalid_token: the token expired";
+      expect( redactSecrets( line ), line );
+      expect( redactSecrets( "error=invalid_token&x=1" ), "error=invalid_token&x=1" );
+    } );
+
+    test( "bare password and token fields are masked, neighbours kept", () {
+      expect( redactSecrets( "password=hunter2&x=1" ), "password=<redacted>&x=1" );
+      expect( redactSecrets( "{token: abc123, a: 1}" ), "{token: <redacted>, a: 1}" );
+      expect( redactSecrets( "login token=abc123" ), "login token=<redacted>" );
+      expect( redactSecrets( "{\"password\":\"hunter2\"}" ), "{\"password\":\"<redacted>\"}" );
+    } );
+
     test( "the name: value form keeps its separator after the change", () {
       expect( redactSecrets( "{refresh_token: opaque}" ), "{refresh_token: <redacted>}" );
     } );

@@ -19,9 +19,9 @@ final RegExp _authHeader = RegExp(
   caseSensitive: false,
 );
 
-/// A token field in a JSON body: `"access_token":"…"`.
+/// A token or password field in a JSON body: `"access_token":"…"`, `"password":"…"`.
 final RegExp _jsonTokenField = RegExp(
-  "\"((?:access|refresh|id)_token)\"\\s*:\\s*\"[^\"]*\"",
+  "\"((?:(?:access|refresh|id)_)?token|password)\"\\s*:\\s*\"[^\"]*\"",
   caseSensitive: false,
 );
 
@@ -29,8 +29,11 @@ final RegExp _jsonTokenField = RegExp(
 ///
 /// Dio prints request bodies as maps, and a parse error can quote a form-encoded frame, so the JSON form alone
 /// would miss both. The value stops at a newline, comma, closing brace or ampersand.
+///
+/// The name must start a word: the lookbehind refuses a letter, digit or underscore before it, so an error code
+/// such as `invalid_token: the token expired` keeps its reason. Bare `token` and `password` fields are masked too.
 final RegExp _mapTokenField = RegExp(
-  r"((?:access|refresh|id)_token)\s*([:=])\s*([^\n,}&]+)",
+  r"(?<![A-Za-z0-9_])((?:(?:access|refresh|id)_)?token|password)\s*([:=])\s*([^\n,}&]+)",
   caseSensitive: false,
 );
 
@@ -44,7 +47,8 @@ const String _mask = "<redacted>";
 /// Ensures:
 ///   - no JWT-shaped substring survives in the result
 ///   - an `Authorization` header keeps its name and loses its value
-///   - `access_token`, `refresh_token` and `id_token` keep their names and lose their values, in both JSON and Dart-map spellings
+///   - `access_token`, `refresh_token`, `id_token`, bare `token` and `password` keep their names and lose their values, in both JSON and Dart-map spellings
+///   - an error code that merely ends in `id_token`, such as `invalid_token`, is left alone
 ///   - text containing no credential is returned unchanged, character for character, because this runs on every logged line
 ///   - the mask itself is never re-masked, so repeated application is stable
 String redactSecrets( String line ) {
