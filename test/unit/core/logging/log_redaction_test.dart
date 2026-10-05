@@ -102,6 +102,26 @@ void main() {
       expect( redactSecrets( "{\"password\":\"hunter2\"}" ), "{\"password\":\"<redacted>\"}" );
     } );
 
+    test( "prefixed names ending in _token or _password are masked", () {
+      for ( final name in [ "api_token", "auth_token", "user_password", "db_password", "x-access_token", "access-token", "accessToken" ] ) {
+        expect( redactSecrets( "$name=SECRET&x=1" ), "$name=<redacted>&x=1", reason: name );
+        expect( redactSecrets( "{$name: SECRET, a: 1}" ), "{$name: <redacted>, a: 1}", reason: name );
+        expect( redactSecrets( "{\"$name\":\"SECRET\"}" ), "{\"$name\":\"<redacted>\"}", reason: name );
+      }
+    } );
+
+    test( "an invalid_token error code is still left alone beside its neighbours", () {
+      expect( redactSecrets( "error=invalid_token&access_token=SECRET" ), "error=invalid_token&access_token=<redacted>" );
+      expect( redactSecrets( "invalid_token: the token expired" ), "invalid_token: the token expired" );
+      expect( redactSecrets( "tokenizer=x passwordless: true" ), "tokenizer=x passwordless: true" );
+    } );
+
+    test( "JSON values that are not strings, or hold escaped quotes, are masked whole", () {
+      expect( redactSecrets( "{\"password\":12345,\"a\":1}" ), "{\"password\":\"<redacted>\",\"a\":1}" );
+      expect( redactSecrets( "{\"password\": \"a\\\"b\", \"a\": 1}" ), "{\"password\":\"<redacted>\", \"a\": 1}" );
+      expect( redactSecrets( "{\"api_token\":null}" ), "{\"api_token\":\"<redacted>\"}" );
+    } );
+
     test( "the name: value form keeps its separator after the change", () {
       expect( redactSecrets( "{refresh_token: opaque}" ), "{refresh_token: <redacted>}" );
     } );
