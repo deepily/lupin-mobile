@@ -76,22 +76,27 @@ class HttpService {
       ));
     }
 
+    // Method and path only: the query string can carry a token, and this wrapper runs in release builds too.
+    // The lines are debug entries, so a release console (warning and above) does not show them.
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
-        print('[HTTP] Request: ${options.method} ${options.uri}');
+        Logger.debug( 'Request: ${options.method} ${_uriWithoutQuery( options.uri )}', tag: 'HTTP' );
         handler.next(options);
       },
       onResponse: (response, handler) {
-        print('[HTTP] Response: ${response.statusCode} ${response.requestOptions.uri}');
+        Logger.debug( 'Response: ${response.statusCode} ${_uriWithoutQuery( response.requestOptions.uri )}', tag: 'HTTP' );
         handler.next(response);
       },
       onError: (error, handler) {
-        print('[HTTP] Error: ${error.message}');
+        Logger.debug( 'Error: ${error.type.name} ${_uriWithoutQuery( error.requestOptions.uri )}', tag: 'HTTP' );
         handler.next(error);
       },
     ));
   }
-  
+
+  /// Returns [uri] as scheme, host and path, with the query string and fragment dropped.
+  static String _uriWithoutQuery( Uri uri ) => '${uri.scheme}://${uri.authority}${uri.path}';
+
   /// Retrieves a new session ID from the FastAPI backend.
   /// 
   /// Requires:

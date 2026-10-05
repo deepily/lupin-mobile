@@ -13,6 +13,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/logging/log_redaction.dart';
+import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/network/http_service.dart';
 
 import '../../_helpers/stub_dio.dart';
@@ -23,6 +24,16 @@ const String _jwt =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
     ".eyJzdWIiOiJ0ZXN0LXVzZXItaWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ"
     ".ZmFrZXNpZ25hdHVyZUZPUlRFU1RTT05MWQ";
+
+class _Capture implements LogDestination {
+  final List<LogEntry> entries = [];
+
+  @override
+  void write( LogEntry entry ) => entries.add( entry );
+
+  @override
+  Future<void> flush() async {}
+}
 
 void main() {
   group( "redactSecrets masks credentials", () {
@@ -247,6 +258,34 @@ void main() {
       expect( all, isNot( contains( "eyJ" ) ) );
     } );
 
+    test( "the interceptor's method and path reach the Logger and no query string reaches any sink", () async {
+      const querySecret = "QSECRET-9f3a";
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter( {
+          "GET /ok"   : ( _ ) => jsonBody( { "ok": true } ),
+          "GET /fail" : ( _ ) => throw DioException( requestOptions: RequestOptions( path: "/fail" ), message: "boom ?access_token=$querySecret" ),
+        } );
+      HttpService( dio );
+      Logger.resetForTesting();
+      final capture = _Capture();
+      Logger.addDestination( capture );
+
+      final printed = <String>[];
+      await runZoned( () async {
+        await dio.get( "/ok", queryParameters: { "access_token": querySecret, "api_key": querySecret } );
+        try { await dio.get( "/fail", queryParameters: { "api_key": querySecret } ); } catch ( _ ) {}
+      }, zoneSpecification: ZoneSpecification( print: ( _, __, ___, line ) => printed.add( line ) ) );
+
+      final logged = capture.entries.map( ( e ) => e.toFormattedString() ).join( "\n" );
+      expect( logged, contains( "Request: GET" ) );
+      expect( logged, contains( "/ok" ) );
+      expect( logged, isNot( contains( querySecret ) ) );
+      expect( logged, isNot( contains( "api_key" ) ) );
+      // The debug-only LogInterceptor also prints in tests; the always-on wrapper must not use plain print at all.
+      expect( printed.where( ( l ) => l.startsWith( "[HTTP] Request:" ) || l.startsWith( "[HTTP] Response:" ) || l.startsWith( "[HTTP] Error:" ) ), isEmpty );
+      Logger.resetForTesting();
+    } );
+
     test( "the narrow method/URI diagnostic still prints — device checks depend on it", () async {
       // c3fc62bf was closed on a `[HTTP] Request: POST …/api/v2/transcribe` line
       // from the SECOND interceptor. Scrubbing must not have silenced it.
@@ -256,16 +295,16 @@ void main() {
         } );
       HttpService( dio );
 
-      final printed = <String>[];
-      await runZoned(
-        () => dio.post( "/api/v2/transcribe" ),
-        zoneSpecification: ZoneSpecification(
-          print: ( _, __, ___, line ) => printed.add( line ),
-        ),
-      );
+      Logger.resetForTesting();
+      final capture = _Capture();
+      Logger.addDestination( capture );
 
-      expect( printed.join( "\n" ), contains( "Request: POST" ) );
-      expect( printed.join( "\n" ), contains( "/api/v2/transcribe" ) );
+      await dio.post( "/api/v2/transcribe" );
+
+      final logged = capture.entries.map( ( e ) => e.toFormattedString() ).join( "\n" );
+      expect( logged, contains( "Request: POST" ) );
+      expect( logged, contains( "/api/v2/transcribe" ) );
+      Logger.resetForTesting();
     } );
   } );
 }
