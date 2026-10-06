@@ -2,17 +2,18 @@
 
 ## ▶ START HERE — 2026-10-05 (Tiffany 💍)
 
-Tip `4808f84` plus this checkpoint commit, **not pushed** (23 commits ahead of origin before the checkpoint). APK built with `--fcm` at `4808f84`. No workers running; all five were released with verified mementos under `io/mementos/`. Live owed work is in the store, owner `tiffany`.
+State at the 23:05 EDT close: the WebSocket reconnect fix is merged (`4badc70`, merge gate PASS) and the APK is built with `--fcm` at that sha. No workers running; Chloé and the reviewer seat (persona Maya) were released with verified mementos under `io/mementos/`. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| Publish the Dart labelled set (row `ec076bcd`, held): copy both assembled splits to `projects-data/lupin/v022-phase2-labelled-dart/` and write `MANIFEST.json` | nothing; the dev seed must be found first (see the row) |
-| Plan 1 pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`): both still point at the closed row `eb5a05fe`; re-point them, then read both rows for the judge run | the published set; Cheech for how the judge is run on Dart |
-| WebSocket gives up after five retries (row `b69dbf0b`, parked, chase 2026-10-06 10:00 EDT): red test `b772cd9` is merged skipped; report at `io/2026.10.05/chloe/b69dbf0b-ws-reconnect-report.md` | Rick's choice of trigger (cards timed out at 20:06 and 21:05 EDT) |
+| Phone check of the reconnect fix (row `b69dbf0b`): airplane mode over 75 s; server stopped over 75 s with the app on screen; leave the app 10 s and return. The row still reads parked | Rick: `deploy-apk-to-device.sh`, the check, and an un-park (approver login) |
+| Plan 1 pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`): the two tool checks pass at merged lupin; only the judge is left. After Cheech's run: rebuild the pilot pairs (expect 45 pairs, 0 gone), build the sweep's pairs, run `run-check.sh` | Cheech: judge on the Dart set 2026-10-06, 10:00 to 13:00 EDT, and the merged `dart_pairs` fix (lupin bug `e19f2d9d`) |
+| Lifecycle and connectivity services were never started (bug `1b192f22`, held): fixed inside `4badc70`; follow-ups are the timers arming during a pause in the first seconds, and two questions for Rick (the google.com and cloudflare.com lookups; `limited` on a LAN with no internet) | Rick admits and rules |
+| APK scripts build with FCM by default, `--no-fcm` to opt out (row `58ec8260`, held) | Rick admits |
 | Log masking gaps (bug `8398bfe8`, held): quoted keys, list and nested values, `passwd` / `secret` / `api_key` | Rick admits it |
-| Post-game for the 2026-10-03 crew (row `ea96c8d7`), rulings R6 to R11; tonight's work is not in it | Rick reads it, then rules |
-| 4 `withOpacity` and 1 `BuildContext` after await (decision `6f0e209d`, held); memento sweep (row `e5610916`, held); transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked | Rick |
-| Seeder defects found tonight (lupin bugs `e86e07b1`, `6737b017`, held, owner Cheech) | Rick admits; Cheech staffs |
+| Post-games: the 2026-10-03 crew (row `ea96c8d7`), rulings R6 to R11; the 2026-10-05 crew (row `9a104a74`, held, not written) | Rick reads and rules; admits the second |
+| 4 `withOpacity` and 1 `BuildContext` after await (decision `6f0e209d`); transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked with a passed chase date | Rick |
+| Seeder defects (lupin bugs `e86e07b1`, `6737b017`, held, owner Cheech) | Rick admits; Cheech staffs |
 
 ### Decisions Log — 2026-10-05 (session `bca18ee2`, Tiffany)
 
@@ -27,6 +28,14 @@ Tip `4808f84` plus this checkpoint commit, **not pushed** (23 commits ahead of o
 - **Log flush on pause: 3-second timeout, one follow-up flush at most, destinations flushed side by side** (manager on John's findings, row `f262281c`). Accepted: a timed-out destination keeps running in the background.
 - **The WebSocket fix waits for Rick's choice of trigger; no fix is written before it** (manager). Recommended: resume, network restored, and a retry loop only while the app is on screen.
 - **The Dart set is published by Tiffany: both assembled splits copied to `projects-data/lupin/v022-phase2-labelled-dart/`, manifest by the seeder's own command** (Cheech as set owner, DM 21:06 EDT, condensed in transit).
+- **WebSocket reconnect trigger: Mix** (Rick, ask card about 21:40 EDT, a real keypress): resume, network restored, a foreground push wake-up, and a retry loop only while the app is on screen.
+- **One seat over the fleet cap of 8 for the review of that fix** (Rick, ask card, clean yes). The pool gave the seat the persona Maya, seeded from John's memento.
+- **Merge of the reviewed fix approved** (Rick, ask card, clean yes). The two refusals before and after it were my compound command, not a missing permission: `Bash(git merge:*)` is in the global settings.
+- **The connectivity service's two DNS timers pause while the app is paused** (manager, on Maya's finding F3; in line with Mix, which has no background cost).
+- **`main()` starts the lifecycle and connectivity services through one function, and a test fails if any start-up line is removed** (manager, on Maya's finding F4).
+- **The judge must pass on the Dart gate split before any Dart judge run over the sweep; Cheech runs it, dev then gate once** (Cheech, lupin `io/tmp/2026.10.05-cheech-to-tiffany-dart-judge-answers.md`). The published folder is frozen.
+- **Memento sweep: the two old dangling pointers are left alone; the newest files of Cheech, Krishna and Rachel are kept** (María for the first; my caution for the second).
+- **Rick on FCM: no going back to builds without a remote wake-up** (typed, about 22:40 EDT). Filed as row `58ec8260`; not yet admitted, so not yet done.
 
 ## ▶ Earlier: 2026-10-03 close (Tiffany 💍)
 
