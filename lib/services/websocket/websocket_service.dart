@@ -29,6 +29,9 @@ class WebSocketService implements WsReconnectTarget {
   /// that with close code 4004.
   bool _connecting = false;
 
+  /// Set when [connect] arrives during an attempt; the attempt runs once more if it ends without a socket.
+  bool _connectAgain = false;
+
   /// The observable behind [connectionStream].
   ///
   /// `isConnected` alone is a sync getter over a private bool, so any predicate built on it goes stale silently.
@@ -39,6 +42,8 @@ class WebSocketService implements WsReconnectTarget {
   static const int maxReconnectAttempts = 5;
   /// Default wait before a reconnect attempt.
   static const Duration reconnectDelay = Duration(seconds: 5);
+  /// Longest a session-id request or a handshake may take before the attempt fails.
+  static const Duration connectTimeout = Duration(seconds: 15);
   /// Interval between keepalive pings.
   static const Duration pingInterval = Duration(seconds: 30);
 
@@ -50,6 +55,7 @@ class WebSocketService implements WsReconnectTarget {
   final WsResumeStore?                _injectedStore;
   final WebSocketChannel Function( Uri ) _channelFactory;
   final Duration                      _reconnectBaseDelay;
+  final Duration                      _connectTimeout;
   WsResumeStore?                      _lazyStore;
 
   /// The highest frame `seq` processed on this install.
@@ -125,7 +131,9 @@ class WebSocketService implements WsReconnectTarget {
     WsResumeStore?                store,
     WebSocketChannel Function( Uri )? channelFactory,
     Duration?                     reconnectBaseDelay,
+    Duration?                     connectTimeout,
   })  : _injectedStore      = store,
+        _connectTimeout     = connectTimeout ?? WebSocketService.connectTimeout,
         _channelFactory     = channelFactory ?? WebSocketChannel.connect,
         _reconnectBaseDelay = reconnectBaseDelay ?? reconnectDelay {
     _messageController = StreamController<dynamic>.broadcast();
@@ -173,12 +181,18 @@ class WebSocketService implements WsReconnectTarget {
   ///   - [DioException] if session ID request fails
   ///   - [WebSocketChannelException] if WebSocket connection fails
   Future<void> connect({String? userId}) async {
-    if (_isConnected || _connecting) {
+    if (_isConnected) {
       return;
     }
 
+    // Recorded even when an attempt is already running: a sign-out then sign-in during an attempt must not
+    // leave the service refusing to connect. The running attempt is re-run if it was cancelled.
     _userId = userId;
     _shouldReconnect = true;
+    if ( _connecting ) {
+      _connectAgain = true;
+      return;
+    }
     await _establishConnection();
   }
 
@@ -216,8 +230,23 @@ class WebSocketService implements WsReconnectTarget {
     if ( _connecting ) return;
     _connecting = true;
     try {
+      do {
+        _connectAgain = false;
+        await _attemptOnce();
+      } while ( _connectAgain && !_isConnected && _shouldReconnect );
+    } finally {
+      _connecting = false;
+    }
+  }
+
+  /// One connect attempt: session id, channel, handshake. Its failure schedules a retry.
+  ///
+  /// Each network wait is bounded by [connectTimeout], so a stalled handshake cannot hold the single-flight flag.
+  Future<void> _attemptOnce() async {
+    WebSocketChannel? channel;
+    try {
       // Step 1: Get session ID from FastAPI (like the web client does)
-      final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id');
+      final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id').timeout( _connectTimeout );
       final sessionData = sessionResponse.data;
       _sessionId = sessionData['session_id'];
       
@@ -231,16 +260,18 @@ class WebSocketService implements WsReconnectTarget {
       // Step 2: Connect to WebSocket with session ID in URL  
       final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
       
-      final channel = _channelFactory( uri );
-      _channel = channel;
+      final opened = _channelFactory( uri );
+      channel = opened;
+      _channel = opened;
       
       // Wait for connection to be established
-      await channel.ready;
+      await opened.ready.timeout( _connectTimeout );
 
       // A disconnect() (sign-out) or a 4004 that landed while this attempt was in flight must not be undone by it.
-      if ( !_shouldReconnect ) {
-        await channel.sink.close( status.goingAway );
-        if ( identical( _channel, channel ) ) _channel = null;
+      // A disconnect() also drops this channel from _channel, so a later connect() runs a fresh attempt.
+      if ( !_shouldReconnect || !identical( _channel, opened ) ) {
+        await opened.sink.close( status.goingAway );
+        if ( identical( _channel, opened ) ) _channel = null;
         return;
       }
       
@@ -267,9 +298,13 @@ class WebSocketService implements WsReconnectTarget {
     } catch (e, st) {
       Logger.error( 'Connection failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
       _setConnected( false );
+      // A timed-out handshake leaves a half-open channel; close it so it cannot connect later.
+      final stale = channel;
+      if ( stale != null ) {
+        if ( identical( _channel, stale ) ) _channel = null;
+        unawaited( stale.sink.close( status.goingAway ).catchError( ( Object _ ) {} ) );
+      }
       _scheduleReconnect();
-    } finally {
-      _connecting = false;
     }
   }
 

@@ -27,6 +27,21 @@ class _SessionAdapter implements HttpClientAdapter {
   void close( { bool force = false } ) {}
 }
 
+/// Answers the session-id request only when the test releases it.
+class _GatedSessionAdapter implements HttpClientAdapter {
+  final Completer<void> gate = Completer<void>();
+
+  @override
+  Future<ResponseBody> fetch( RequestOptions o, Stream<List<int>>? s, Future<void>? c ) async {
+    await gate.future;
+    return ResponseBody.fromString( jsonEncode( { "session_id": "wise penguin" } ), 200,
+        headers: { Headers.contentTypeHeader: [ "application/json" ] } );
+  }
+
+  @override
+  void close( { bool force = false } ) {}
+}
+
 /// A channel whose handshake the test completes by hand, and whose close code it can set.
 class _FakeChannel extends StreamChannelMixin<dynamic> implements WebSocketChannel {
   final _in    = StreamController<dynamic>();
@@ -197,5 +212,91 @@ void main() {
 
     expect( await ws.reconnectNow(), isFalse );
     expect( channels.length, 1 );
+  } );
+
+  test( "sign-out then sign-in while a connect waits for the handshake still ends connected", () async {
+    await giveUp();
+    serverUp  = true;
+    autoReady = false;
+    final stale = ws.reconnectNow();
+    await _settle();
+
+    await ws.disconnect();
+    autoReady = true;
+    await ws.connect( userId: "u2" );
+    channels.first.ready_.complete();
+    await stale;
+    await _settle();
+
+    expect( ws.isConnected, isTrue, reason: "the second login must not be swallowed by the cancelled attempt" );
+    expect( ws.wantsConnection, isTrue );
+  } );
+
+  test( "sign-out then sign-in while a connect waits for the session id still ends connected", () async {
+    final gated = _GatedSessionAdapter();
+    final other = WebSocketService(
+      Dio()..httpClientAdapter = gated,
+      store              : WsResumeStore(),
+      reconnectBaseDelay : const Duration( milliseconds: 1 ),
+      channelFactory     : ( Uri _ ) {
+        final c = _FakeChannel()..ready_.complete();
+        channels.add( c );
+        return c;
+      },
+    );
+    addTearDown( other.disconnect );
+
+    final first = other.connect( userId: "u1" );
+    await _settle();
+    await other.disconnect();
+    await other.connect( userId: "u2" );
+    gated.gate.complete();
+    await first;
+    await _settle();
+
+    expect( other.isConnected, isTrue );
+    expect( other.wantsConnection, isTrue );
+  } );
+
+  test( "a handshake that never answers times out, frees the flag and lets a trigger through", () async {
+    final slow = WebSocketService(
+      Dio()..httpClientAdapter = _SessionAdapter(),
+      store              : WsResumeStore(),
+      reconnectBaseDelay : const Duration( seconds: 30 ),
+      connectTimeout     : const Duration( milliseconds: 50 ),
+      channelFactory     : ( Uri _ ) {
+        final c = _FakeChannel();
+        if ( autoReady ) c.ready_.complete();
+        channels.add( c );
+        return c;
+      },
+    );
+    addTearDown( slow.disconnect );
+
+    autoReady = false;
+    await slow.connect( userId: "u1" );
+    expect( slow.isConnecting, isFalse, reason: "the timeout ended the attempt" );
+    expect( slow.isRetryPending, isTrue );
+
+    autoReady = true;
+    expect( await slow.reconnectNow(), isTrue );
+    expect( slow.isConnected, isTrue );
+  } );
+
+  test( "a session-id request that never answers times out the same way", () async {
+    final gated = _GatedSessionAdapter();
+    final slow = WebSocketService(
+      Dio()..httpClientAdapter = gated,
+      store              : WsResumeStore(),
+      reconnectBaseDelay : const Duration( seconds: 30 ),
+      connectTimeout     : const Duration( milliseconds: 50 ),
+      channelFactory     : ( Uri _ ) => _FakeChannel()..ready_.complete(),
+    );
+    addTearDown( slow.disconnect );
+    addTearDown( () { if ( !gated.gate.isCompleted ) gated.gate.complete(); } );
+
+    await slow.connect( userId: "u1" );
+    expect( slow.isConnecting, isFalse );
+    expect( slow.isRetryPending, isTrue );
   } );
 }
