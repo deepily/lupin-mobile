@@ -6,6 +6,7 @@ import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_binding.dart';
 import 'services/push/notification_tap_router.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'services/websocket/ws_reconnect_coordinator.dart';
 import 'app.dart';
 
 void main() async {
@@ -20,6 +21,10 @@ void main() async {
     );
 
     Logger.info('Lupin Mobile app starting...');
+
+    // Row b69dbf0b: the socket's reconnect triggers. The lifecycle and connectivity services must be running for
+    // them to see anything; the connectivity check does DNS lookups, so it is not awaited.
+    startReconnectServices( ServiceLocator.get<WsReconnectCoordinator>() );
 
     // S5 FCM silent-relay wake-up. No-op unless built with
     // --dart-define=ENABLE_FCM=true (default OFF — Stage-1 builds carry

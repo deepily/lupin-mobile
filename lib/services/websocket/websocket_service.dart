@@ -7,12 +7,13 @@ import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/logger.dart';
 import '../auth/auth_token_provider.dart';
+import 'ws_reconnect_coordinator.dart';
 import 'ws_resume_store.dart';
 
 /// Singleton WebSocket service for real-time communication with the Lupin backend.
 ///
 /// Manages the connection, reconnection logic and message streaming.
-class WebSocketService {
+class WebSocketService implements WsReconnectTarget {
   final Dio _dio;
   WebSocketChannel? _channel;
   StreamController<dynamic>? _messageController;
@@ -21,6 +22,15 @@ class WebSocketService {
   
   bool _isConnected = false;
   bool _shouldReconnect = true;
+
+  /// True from the start of a connect attempt until it succeeds or fails.
+  ///
+  /// A second attempt in that window would open a second channel for one device slot, and the server answers
+  /// that with close code 4004.
+  bool _connecting = false;
+
+  /// Set when [connect] arrives during an attempt; the attempt runs once more if it ends without a socket.
+  bool _connectAgain = false;
 
   /// The observable behind [connectionStream].
   ///
@@ -32,6 +42,8 @@ class WebSocketService {
   static const int maxReconnectAttempts = 5;
   /// Default wait before a reconnect attempt.
   static const Duration reconnectDelay = Duration(seconds: 5);
+  /// Longest a session-id request or a handshake may take before the attempt fails.
+  static const Duration connectTimeout = Duration(seconds: 15);
   /// Interval between keepalive pings.
   static const Duration pingInterval = Duration(seconds: 30);
 
@@ -43,6 +55,7 @@ class WebSocketService {
   final WsResumeStore?                _injectedStore;
   final WebSocketChannel Function( Uri ) _channelFactory;
   final Duration                      _reconnectBaseDelay;
+  final Duration                      _connectTimeout;
   WsResumeStore?                      _lazyStore;
 
   /// The highest frame `seq` processed on this install.
@@ -58,7 +71,22 @@ class WebSocketService {
 
   // Public getters
   /// True while the socket is connected.
+  @override
   bool get isConnected => _isConnected;
+
+  /// True while a connect attempt is running.
+  @override
+  bool get isConnecting => _connecting;
+
+  /// True while a retry timer is waiting to fire.
+  @override
+  bool get isRetryPending => _reconnectTimer?.isActive ?? false;
+
+  /// True when this service is allowed to open a socket on its own.
+  ///
+  /// False before the first [connect], after [disconnect] (sign-out) and after a 4004 close.
+  @override
+  bool get wantsConnection => _shouldReconnect && _userId != null;
 
   /// Connection state as a stream that emits on change and replays on subscribe.
   ///
@@ -103,7 +131,9 @@ class WebSocketService {
     WsResumeStore?                store,
     WebSocketChannel Function( Uri )? channelFactory,
     Duration?                     reconnectBaseDelay,
+    Duration?                     connectTimeout,
   })  : _injectedStore      = store,
+        _connectTimeout     = connectTimeout ?? WebSocketService.connectTimeout,
         _channelFactory     = channelFactory ?? WebSocketChannel.connect,
         _reconnectBaseDelay = reconnectBaseDelay ?? reconnectDelay {
     _messageController = StreamController<dynamic>.broadcast();
@@ -155,9 +185,34 @@ class WebSocketService {
       return;
     }
 
+    // Recorded even when an attempt is already running: a sign-out then sign-in during an attempt must not
+    // leave the service refusing to connect. The running attempt is re-run if it was cancelled.
     _userId = userId;
     _shouldReconnect = true;
+    if ( _connecting ) {
+      _connectAgain = true;
+      return;
+    }
     await _establishConnection();
+  }
+
+  /// Tries once to bring a dropped socket back, as a trigger (resume, network restored, push wake-up, retry loop) would.
+  ///
+  /// Requires:
+  ///   - none; it checks its own preconditions and returns false when they fail
+  ///
+  /// Ensures:
+  ///   - returns false and does nothing when connected, when a connect is running, or when [wantsConnection] is false
+  ///   - otherwise cancels a pending retry timer, resets the retry counter and makes one attempt
+  ///   - at most one channel is ever opened, however many triggers arrive together
+  ///   - returns true when this call started an attempt, whether or not it succeeded
+  @override
+  Future<bool> reconnectNow() async {
+    if ( _isConnected || _connecting || !wantsConnection ) return false;
+    _reconnectTimer?.cancel();
+    _reconnectAttempts = 0;
+    await _establishConnection();
+    return true;
   }
 
   /// Internal method to establish WebSocket connection.
@@ -172,9 +227,26 @@ class WebSocketService {
   ///   - Message listeners are set up
   ///   - Reconnection counter is reset on success
   Future<void> _establishConnection() async {
+    if ( _connecting ) return;
+    _connecting = true;
+    try {
+      do {
+        _connectAgain = false;
+        await _attemptOnce();
+      } while ( _connectAgain && !_isConnected && _shouldReconnect );
+    } finally {
+      _connecting = false;
+    }
+  }
+
+  /// One connect attempt: session id, channel, handshake. Its failure schedules a retry.
+  ///
+  /// Each network wait is bounded by [connectTimeout], so a stalled handshake cannot hold the single-flight flag.
+  Future<void> _attemptOnce() async {
+    WebSocketChannel? channel;
     try {
       // Step 1: Get session ID from FastAPI (like the web client does)
-      final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id');
+      final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id').timeout( _connectTimeout );
       final sessionData = sessionResponse.data;
       _sessionId = sessionData['session_id'];
       
@@ -188,10 +260,20 @@ class WebSocketService {
       // Step 2: Connect to WebSocket with session ID in URL  
       final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
       
-      _channel = _channelFactory( uri );
+      final opened = _channelFactory( uri );
+      channel = opened;
+      _channel = opened;
       
       // Wait for connection to be established
-      await _channel!.ready;
+      await opened.ready.timeout( _connectTimeout );
+
+      // A disconnect() (sign-out) or a 4004 that landed while this attempt was in flight must not be undone by it.
+      // A disconnect() also drops this channel from _channel, so a later connect() runs a fresh attempt.
+      if ( !_shouldReconnect || !identical( _channel, opened ) ) {
+        await opened.sink.close( status.goingAway );
+        if ( identical( _channel, opened ) ) _channel = null;
+        return;
+      }
       
       _setConnected( true );
       _reconnectAttempts = 0;
@@ -216,6 +298,12 @@ class WebSocketService {
     } catch (e, st) {
       Logger.error( 'Connection failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
       _setConnected( false );
+      // A timed-out handshake leaves a half-open channel; close it so it cannot connect later.
+      final stale = channel;
+      if ( stale != null ) {
+        if ( identical( _channel, stale ) ) _channel = null;
+        unawaited( stale.sink.close( status.goingAway ).catchError( ( Object _ ) {} ) );
+      }
       _scheduleReconnect();
     }
   }

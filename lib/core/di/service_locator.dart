@@ -97,6 +97,7 @@ import '../../services/tts/tts_orchestrator.dart';
 
 // Voice-reply ASR (S4 — record pkg push-to-talk → parent Whisper endpoint)
 import 'package:record/record.dart';
+import '../../services/websocket/ws_reconnect_coordinator.dart';
 import '../../services/asr/asr_service.dart';
 import '../../features/quick_ask/domain/quick_ask_bloc.dart';
 
@@ -403,6 +404,10 @@ class ServiceLocator {
     // WebSocket Service
     _getIt.registerSingleton<WebSocketService>(
       WebSocketService(_getIt<Dio>()),
+    );
+    // Reconnect triggers for the socket above; main() starts it.
+    _getIt.registerSingleton<WsReconnectCoordinator>(
+      WsReconnectCoordinator.forApp( _getIt<WebSocketService>() ),
     );
 
     // Tier 2 data layer — typed repos over the shared Dio (auth interceptor

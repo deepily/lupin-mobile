@@ -457,7 +457,8 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         ),
         onSignedOut: () async {
           final ws = ServiceLocator.get<WebSocketService>();
-          if ( ws.isConnected ) await ws.disconnect();
+          // Always: a socket that is down but still allowed to retry would otherwise be revived after sign-out.
+          await ws.disconnect();
           // S5 best-effort unregister (POST /api/fcm/unregister-token).
           await fcmOnLoggedOut();
         },

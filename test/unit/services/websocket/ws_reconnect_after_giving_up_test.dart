@@ -3,8 +3,8 @@
 // network is restored, and the socket must come back. Today it does not.
 //
 // Both triggers are pumped on the real singletons: AppLifecycleService through the test binding,
-// NetworkConnectivityService through a fake connectivity_plus platform. Its reachability check is a real
-// DNS lookup (no seam), so the connectivity test needs a resolver; the lifecycle test does not.
+// NetworkConnectivityService through a fake connectivity_plus platform. The connectivity service's reachability
+// check is replaced through its internetProbe seam, so the test needs no network.
 
 import 'dart:async';
 import 'dart:convert';
@@ -23,6 +23,7 @@ import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 import 'package:lupin_mobile/services/lifecycle/app_lifecycle_service.dart';
 import 'package:lupin_mobile/services/network/network_connectivity_service.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import 'package:lupin_mobile/services/websocket/ws_reconnect_coordinator.dart';
 import 'package:lupin_mobile/services/websocket/ws_resume_store.dart';
 
 class _SessionAdapter implements HttpClientAdapter {
@@ -71,13 +72,15 @@ void main() {
   final binding  = TestWidgetsFlutterBinding.ensureInitialized();
   final platform = _FakeConnectivity();
 
-  late WebSocketService ws;
+  late WebSocketService       ws;
+  late WsReconnectCoordinator coordinator;
   late int              connectAttempts;
   late bool             serverUp;
 
   setUpAll( () async {
     ConnectivityPlatform.instance = platform;
     AppLifecycleService().initialize();
+    NetworkConnectivityService().internetProbe = () async => true;
     await NetworkConnectivityService().initialize();
   } );
 
@@ -98,11 +101,17 @@ void main() {
         return _FakeChannel();
       },
     );
-    // Production wiring today is lib/app.dart:79 alone: the auth hook calls ws.connect.
-    // Nothing connects the lifecycle or the connectivity service to the socket.
+    coordinator = WsReconnectCoordinator(
+      target              : ws,
+      lifecycle           : AppLifecycleService().lifecycleStream,
+      network             : NetworkConnectivityService().networkStateStream,
+      initiallyForeground : true,
+      networkDebounce     : const Duration( milliseconds: 100 ),
+    )..start();
   } );
 
   tearDown( () async {
+    coordinator.stop();
     await ws.disconnect();
     Logger.resetForTesting();
   } );
@@ -127,7 +136,7 @@ void main() {
     await _wait( 400 );
 
     expect( ws.isConnected, isTrue, reason: "a resume after the outage should bring the socket back" );
-  }, skip: "row b69dbf0b: red until the reconnect trigger is decided and built" );
+  } );
 
   test( "the server returns and the network is restored: the socket reconnects", () async {
     await failSixConnectsAndGiveUp();
@@ -135,8 +144,8 @@ void main() {
     serverUp = true;
     platform.changes.add( ConnectivityResult.none );
     platform.changes.add( ConnectivityResult.wifi );
-    await _wait( 1500 );
+    await _wait( 600 );
 
     expect( ws.isConnected, isTrue, reason: "connectivity restored should bring the socket back" );
-  }, skip: "row b69dbf0b: red until the reconnect trigger is decided and built" );
+  } );
 }
