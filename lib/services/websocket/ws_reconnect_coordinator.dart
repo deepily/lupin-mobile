@@ -7,6 +7,24 @@ import '../../core/logging/logger.dart';
 import '../lifecycle/app_lifecycle_service.dart';
 import '../network/network_connectivity_service.dart';
 
+/// Starts what the reconnect triggers listen to, then [coordinator].
+///
+/// Neither the lifecycle nor the connectivity service does anything until its `initialize()` runs. The connectivity
+/// timers are paused while the app is not on screen, so a backgrounded app makes no DNS lookups.
+void startReconnectServices( WsReconnectCoordinator coordinator ) {
+  AppLifecycleService().initialize();
+  unawaited( NetworkConnectivityService().initialize() );
+  AppLifecycleService().lifecycleStream.listen( ( state ) {
+    final network = NetworkConnectivityService();
+    if ( state == AppLifecycleState.resumed ) {
+      network.resumeMonitoring();
+    } else if ( state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.detached ) {
+      network.pauseMonitoring();
+    }
+  } );
+  coordinator.start();
+}
+
 /// What the coordinator needs from the socket service.
 ///
 /// [WebSocketService] implements it; tests supply a fake.

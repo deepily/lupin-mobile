@@ -1,11 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
 import 'core/di/service_locator.dart';
-import 'services/lifecycle/app_lifecycle_service.dart';
-import 'services/network/network_connectivity_service.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_binding.dart';
 import 'services/push/notification_tap_router.dart';
@@ -28,9 +24,7 @@ void main() async {
 
     // Row b69dbf0b: the socket's reconnect triggers. The lifecycle and connectivity services must be running for
     // them to see anything; the connectivity check does DNS lookups, so it is not awaited.
-    AppLifecycleService().initialize();
-    unawaited( NetworkConnectivityService().initialize() );
-    ServiceLocator.get<WsReconnectCoordinator>().start();
+    startReconnectServices( ServiceLocator.get<WsReconnectCoordinator>() );
 
     // S5 FCM silent-relay wake-up. No-op unless built with
     // --dart-define=ENABLE_FCM=true (default OFF — Stage-1 builds carry

@@ -101,6 +101,26 @@ class NetworkConnectivityService {
     debugPrint('[NetworkService] Network monitoring initialized');
   }
   
+  /// True while the quality and periodic-check timers are armed.
+  @visibleForTesting
+  bool get isMonitoring => _qualityTestTimer != null;
+
+  /// Cancels the quality and periodic-check timers, so a backgrounded app makes no DNS lookups.
+  ///
+  /// The connectivity subscription stays on; it costs nothing.
+  void pauseMonitoring() {
+    _qualityTestTimer?.cancel();
+    _periodicCheckTimer?.cancel();
+    _qualityTestTimer   = null;
+    _periodicCheckTimer = null;
+  }
+
+  /// Re-arms the timers after [pauseMonitoring]; a no-op before [initialize] or while already armed.
+  void resumeMonitoring() {
+    if ( _connectivitySubscription == null || isMonitoring ) return;
+    _startQualityMonitoring();
+  }
+
   /// Handle connectivity state changes
   Future<void> _handleConnectivityChange(ConnectivityResult result) async {
     debugPrint('[NetworkService] Connectivity changed: $result');
