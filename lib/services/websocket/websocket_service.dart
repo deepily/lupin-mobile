@@ -22,6 +22,12 @@ class WebSocketService {
   bool _isConnected = false;
   bool _shouldReconnect = true;
 
+  /// True from the start of a connect attempt until it succeeds or fails.
+  ///
+  /// A second attempt in that window would open a second channel for one device slot, and the server answers
+  /// that with close code 4004.
+  bool _connecting = false;
+
   /// The observable behind [connectionStream].
   ///
   /// `isConnected` alone is a sync getter over a private bool, so any predicate built on it goes stale silently.
@@ -59,6 +65,17 @@ class WebSocketService {
   // Public getters
   /// True while the socket is connected.
   bool get isConnected => _isConnected;
+
+  /// True while a connect attempt is running.
+  bool get isConnecting => _connecting;
+
+  /// True while a retry timer is waiting to fire.
+  bool get isRetryPending => _reconnectTimer?.isActive ?? false;
+
+  /// True when this service is allowed to open a socket on its own.
+  ///
+  /// False before the first [connect], after [disconnect] (sign-out) and after a 4004 close.
+  bool get wantsConnection => _shouldReconnect && _userId != null;
 
   /// Connection state as a stream that emits on change and replays on subscribe.
   ///
@@ -151,13 +168,31 @@ class WebSocketService {
   ///   - [DioException] if session ID request fails
   ///   - [WebSocketChannelException] if WebSocket connection fails
   Future<void> connect({String? userId}) async {
-    if (_isConnected) {
+    if (_isConnected || _connecting) {
       return;
     }
 
     _userId = userId;
     _shouldReconnect = true;
     await _establishConnection();
+  }
+
+  /// Tries once to bring a dropped socket back, as a trigger (resume, network restored, push wake-up, retry loop) would.
+  ///
+  /// Requires:
+  ///   - none; it checks its own preconditions and returns false when they fail
+  ///
+  /// Ensures:
+  ///   - returns false and does nothing when connected, when a connect is running, or when [wantsConnection] is false
+  ///   - otherwise cancels a pending retry timer, resets the retry counter and makes one attempt
+  ///   - at most one channel is ever opened, however many triggers arrive together
+  ///   - returns true when this call started an attempt, whether or not it succeeded
+  Future<bool> reconnectNow() async {
+    if ( _isConnected || _connecting || !wantsConnection ) return false;
+    _reconnectTimer?.cancel();
+    _reconnectAttempts = 0;
+    await _establishConnection();
+    return true;
   }
 
   /// Internal method to establish WebSocket connection.
@@ -172,6 +207,8 @@ class WebSocketService {
   ///   - Message listeners are set up
   ///   - Reconnection counter is reset on success
   Future<void> _establishConnection() async {
+    if ( _connecting ) return;
+    _connecting = true;
     try {
       // Step 1: Get session ID from FastAPI (like the web client does)
       final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id');
@@ -188,10 +225,18 @@ class WebSocketService {
       // Step 2: Connect to WebSocket with session ID in URL  
       final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
       
-      _channel = _channelFactory( uri );
+      final channel = _channelFactory( uri );
+      _channel = channel;
       
       // Wait for connection to be established
-      await _channel!.ready;
+      await channel.ready;
+
+      // A disconnect() (sign-out) or a 4004 that landed while this attempt was in flight must not be undone by it.
+      if ( !_shouldReconnect ) {
+        await channel.sink.close( status.goingAway );
+        if ( identical( _channel, channel ) ) _channel = null;
+        return;
+      }
       
       _setConnected( true );
       _reconnectAttempts = 0;
@@ -217,6 +262,8 @@ class WebSocketService {
       Logger.error( 'Connection failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
       _setConnected( false );
       _scheduleReconnect();
+    } finally {
+      _connecting = false;
     }
   }
 
