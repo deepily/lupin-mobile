@@ -7,12 +7,13 @@ import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/logger.dart';
 import '../auth/auth_token_provider.dart';
+import 'ws_reconnect_coordinator.dart';
 import 'ws_resume_store.dart';
 
 /// Singleton WebSocket service for real-time communication with the Lupin backend.
 ///
 /// Manages the connection, reconnection logic and message streaming.
-class WebSocketService {
+class WebSocketService implements WsReconnectTarget {
   final Dio _dio;
   WebSocketChannel? _channel;
   StreamController<dynamic>? _messageController;
@@ -64,17 +65,21 @@ class WebSocketService {
 
   // Public getters
   /// True while the socket is connected.
+  @override
   bool get isConnected => _isConnected;
 
   /// True while a connect attempt is running.
+  @override
   bool get isConnecting => _connecting;
 
   /// True while a retry timer is waiting to fire.
+  @override
   bool get isRetryPending => _reconnectTimer?.isActive ?? false;
 
   /// True when this service is allowed to open a socket on its own.
   ///
   /// False before the first [connect], after [disconnect] (sign-out) and after a 4004 close.
+  @override
   bool get wantsConnection => _shouldReconnect && _userId != null;
 
   /// Connection state as a stream that emits on change and replays on subscribe.
@@ -187,6 +192,7 @@ class WebSocketService {
   ///   - otherwise cancels a pending retry timer, resets the retry counter and makes one attempt
   ///   - at most one channel is ever opened, however many triggers arrive together
   ///   - returns true when this call started an attempt, whether or not it succeeded
+  @override
   Future<bool> reconnectNow() async {
     if ( _isConnected || _connecting || !wantsConnection ) return false;
     _reconnectTimer?.cancel();
