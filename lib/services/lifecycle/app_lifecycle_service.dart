@@ -46,6 +46,8 @@ class AppLifecycleService with WidgetsBindingObserver {
   Timer? _backgroundTimer;
   Timer? _sessionTimer;
 
+  bool _initialized = false;
+
   /// The log flush started by the last pause or detach, null when none is running.
   Future<void>? _logFlush;
 
@@ -82,6 +84,8 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Registers as a lifecycle observer and starts the session and inactivity timers.
   void initialize() {
+    if ( _initialized ) return;
+    _initialized = true;
     debugPrint('[LifecycleService] Initializing app lifecycle monitoring');
     
     // Register as observer

@@ -30,6 +30,7 @@ import '../auth/server_context_service.dart';
 import '../notification_audio/notification_delivery_policy.dart';
 import '../notification_audio/notification_preferences.dart';
 import '../websocket/websocket_service.dart';
+import '../websocket/ws_reconnect_coordinator.dart';
 import 'fcm_wake_chain.dart';
 import 'fcm_wakeup_service.dart';
 import 'notification_sender_label.dart';
@@ -80,12 +81,12 @@ Future<FcmWakeupService?> initFcmIfEnabled() async {
   );
   _service = service;
 
-  // Foreground data message: a no-op beyond a debug log. The WebSocket is already live,
-  // and speech ownership stays with FocusChatBloc.
-  FirebaseMessaging.onMessage.listen( ( m ) {
-    debugPrint( '[FcmWakeup] foreground data message ignored '
-        '(type=${m.data[ 'type' ]}, WS is live)' );
-  } );
+  // Foreground data message: the socket may be down although a push just arrived, so try to bring it back.
+  // Speech ownership stays with FocusChatBloc.
+  FirebaseMessaging.onMessage.listen( ( m ) => onForegroundDataMessage(
+    m.data,
+    reconnect: ServiceLocator.get<WsReconnectCoordinator>().onForegroundPush,
+  ) );
 
   // Token-lifecycle writer 3: every authenticated WebSocket (re)connect re-registers the token, as an idempotent upsert.
   // `auth_success` frames mark both the initial connect and every reconnect.
@@ -97,6 +98,15 @@ Future<FcmWakeupService?> initFcmIfEnabled() async {
   } );
 
   return service;
+}
+
+/// Handles a data message that arrives while the app is on screen.
+///
+/// It asks [reconnect] to bring the socket back; that is a no-op when the socket is up or the user signed out.
+@visibleForTesting
+Future<void> onForegroundDataMessage( Map<String, dynamic> data, { required Future<void> Function() reconnect } ) async {
+  debugPrint( '[FcmWakeup] foreground data message (type=${data[ 'type' ]}), reconnecting the socket if it is down' );
+  await reconnect();
 }
 
 /// Auth-state hooks, called by the app layer on the auth-state stream's transitions.

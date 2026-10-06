@@ -15,6 +15,12 @@ class NetworkConnectivityService {
   NetworkConnectivityService._internal();
 
   final Connectivity _connectivity = Connectivity();
+
+  /// Replaces the reachability check and the latency probe; null means a real DNS lookup.
+  ///
+  /// Tests set it so they need no network. It is never set in the app.
+  @visibleForTesting
+  Future<bool> Function()? internetProbe;
   
   // Stream controllers for network state broadcasts
   final StreamController<NetworkState> _networkStateController = 
@@ -69,6 +75,7 @@ class NetworkConnectivityService {
   
   /// Initialize network monitoring service
   Future<void> initialize() async {
+    if ( _connectivitySubscription != null ) return;
     debugPrint('[NetworkService] Initializing network connectivity monitoring');
     
     // Get initial connectivity state
@@ -143,6 +150,8 @@ class NetworkConnectivityService {
   
   /// Test actual internet connectivity beyond device network interface
   Future<bool> _testInternetConnectivity() async {
+    final probe = internetProbe;
+    if ( probe != null ) return probe();
     try {
       // Try multiple reliable endpoints
       final testUrls = [
@@ -240,6 +249,7 @@ class NetworkConnectivityService {
   
   /// Measure network latency to reliable endpoint
   Future<int> _measureLatency() async {
+    if ( internetProbe != null ) return 0;
     final stopwatch = Stopwatch()..start();
     
     try {

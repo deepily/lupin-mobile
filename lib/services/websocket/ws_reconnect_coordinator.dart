@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/widgets.dart';
 
 import '../../core/logging/logger.dart';
+import '../lifecycle/app_lifecycle_service.dart';
 import '../network/network_connectivity_service.dart';
 
 /// What the coordinator needs from the socket service.
@@ -70,6 +71,17 @@ class WsReconnectCoordinator {
         _loopBase         = loopBase,
         _loopCap          = loopCap,
         _random           = random ?? Random().nextDouble;
+
+  /// Builds the coordinator on the app's lifecycle and connectivity singletons.
+  factory WsReconnectCoordinator.forApp( WsReconnectTarget target ) {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return WsReconnectCoordinator(
+      target              : target,
+      lifecycle           : AppLifecycleService().lifecycleStream,
+      network             : NetworkConnectivityService().networkStateStream,
+      initiallyForeground : state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive,
+    );
+  }
 
   /// True while the retry loop has a timer armed.
   bool get isLoopRunning => _loopTimer != null;
