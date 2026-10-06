@@ -60,6 +60,15 @@ class _FlushThrowingDestination implements LogDestination {
   Future<void> flush() async => throw StateError( "flush exploded" );
 }
 
+class _SyncFlushThrowingDestination implements LogDestination {
+  @override
+  void write( LogEntry entry ) {}
+
+  // Not async: the throw happens during the call, before any future exists.
+  @override
+  Future<void> flush() => throw StateError( "flush exploded synchronously" );
+}
+
 class _ThrowingToString {
   @override
   String toString() => throw StateError( "toString exploded" );
@@ -428,6 +437,17 @@ void main() {
       await expectLater( Logger.flush(), throwsA( isA<StateError>() ) );
 
       expect( store.appended.join(), contains( "behind the failing destination" ) );
+    } );
+
+    test( "a destination that throws synchronously does not starve the ones after it", () async {
+      final store = _FakeStore();
+      Logger.addDestination( _SyncFlushThrowingDestination() );
+      await Logger.initialize( enableConsole: false, fileStore: store );
+      Logger.warning( "behind the synchronous thrower", tag: "T" );
+
+      await expectLater( Logger.flush(), throwsA( isA<StateError>() ) );
+
+      expect( store.appended.join(), contains( "behind the synchronous thrower" ) );
     } );
   } );
 }

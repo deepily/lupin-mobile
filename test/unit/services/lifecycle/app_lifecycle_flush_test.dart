@@ -6,6 +6,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/logging/log_file_store.dart';
 import 'package:lupin_mobile/core/logging/logger.dart';
@@ -163,9 +164,16 @@ void main() {
         await Logger.initialize( enableConsole: false, fileStore: store );
 
         Logger.warning( "after the failing destination", tag: "T" );
+        final printed = <String>[];
+        final original = debugPrint;
+        debugPrint = ( String? message, { int? wrapWidth } ) => printed.add( message ?? "" );
+        addTearDown( () => debugPrint = original );
+
         binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
         await settle();
         await settle();
+
+        expect( printed.where( ( l ) => l.contains( "Log flush failed" ) ), hasLength( 1 ), reason: "one failing round is reported once" );
 
         // The lifecycle callback survived: the state moved and the next transition still works.
         expect( AppLifecycleService().currentLifecycleState, AppLifecycleState.paused );
