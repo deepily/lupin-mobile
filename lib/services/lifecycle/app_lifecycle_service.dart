@@ -48,6 +48,13 @@ class AppLifecycleService with WidgetsBindingObserver {
 
   /// The log flush started by the last pause or detach, null when none is running.
   Future<void>? _logFlush;
+
+  /// Set when a pause or detach arrives during a flush; the running flush then runs once more.
+  bool _logFlushAgain = false;
+
+  /// Longest a pause or detach flush may run before it is abandoned, so a hung destination cannot block later flushes.
+  @visibleForTesting
+  static Duration logFlushTimeout = const Duration(seconds: 3);
   
   // Public getters
   /// Latest framework lifecycle state.
@@ -208,17 +215,25 @@ class AppLifecycleService with WidgetsBindingObserver {
     // Similar to paused but potentially temporary
   }
   
-  /// Starts a log flush unless one is already running; a failure is printed, never thrown.
+  /// Starts a log flush; one already running is asked to run once more when it ends. A failure is printed, never thrown.
   void _flushLogs() {
-    if (_logFlush != null) return;
+    if (_logFlush != null) {
+      _logFlushAgain = true;
+      return;
+    }
     _logFlush = _runLogFlush();
   }
 
   Future<void> _runLogFlush() async {
     try {
-      await Logger.flush();
-    } catch (e) {
-      debugPrint('[LifecycleService] Log flush failed: $e');
+      do {
+        _logFlushAgain = false;
+        try {
+          await Logger.flush().timeout( logFlushTimeout );
+        } catch (e) {
+          debugPrint('[LifecycleService] Log flush failed: $e');
+        }
+      } while (_logFlushAgain);
     } finally {
       _logFlush = null;
     }

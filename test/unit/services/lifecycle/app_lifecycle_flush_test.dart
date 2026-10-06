@@ -1,6 +1,7 @@
 // Row f262281c: a buffered warning must reach the log file when the app is
 // paused or detached, because a low-memory kill or a swipe-away gives no later chance.
-// Rule 1: pause and detach flush. Rule 2: one flush in flight. Rule 3: a flush never throws.
+// Rule 1: pause and detach flush. Rule 2: one flush in flight, a pause during it runs one follow-up.
+// Rule 3: a flush never throws. Rule 4: a hung flush is abandoned after a timeout.
 
 import 'dart:async';
 import 'dart:ui';
@@ -108,22 +109,50 @@ void main() {
     } );
   } );
 
-  test( "one flush stays in flight; a later pause starts a new one", () async {
+  test( "one flush stays in flight; a pause during it is remembered and runs once more", () async {
     final counting = _CountingDestination()..gate = Completer<void>();
     Logger.addDestination( counting );
 
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
     binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
-    await settle();
-    expect( counting.flushCalls, 1, reason: "the second pause arrives while the first flush is running" );
-
-    counting.gate!.complete();
-    await settle();
     binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
     await settle();
-    expect( counting.flushCalls, 2 );
+    expect( counting.flushCalls, 1, reason: "later pauses arrive while the first flush is running" );
+
+    counting.gate!.complete();
+    await settle();
+    await settle();
+    expect( counting.flushCalls, 2, reason: "the pauses during the flush are covered by exactly one follow-up" );
+
+    binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
+    binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
+    await settle();
+    expect( counting.flushCalls, 3, reason: "a pause after the flush ended starts a new one" );
+  } );
+
+  test( "a flush that never ends is abandoned, and a later pause flushes again", () async {
+    final original = AppLifecycleService.logFlushTimeout;
+    AppLifecycleService.logFlushTimeout = const Duration( milliseconds: 50 );
+    addTearDown( () => AppLifecycleService.logFlushTimeout = original );
+
+    final hung = _CountingDestination()..gate = Completer<void>();
+    Logger.addDestination( hung );
+
+    binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
+    await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+    expect( hung.flushCalls, 1 );
+
+    final store = _FakeStore();
+    await Logger.initialize( enableConsole: false, fileStore: store );
+    Logger.warning( "after the hung flush", tag: "T" );
+    binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
+    binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
+    await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+
+    expect( hung.flushCalls, 2, reason: "the latch was released by the timeout" );
+    expect( store.appended.join(), contains( "after the hung flush" ) );
   } );
 
   group( "a failing flush never throws", () {

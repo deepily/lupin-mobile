@@ -52,6 +52,14 @@ class _FakeStore implements LogFileStore {
 }
 
 
+class _FlushThrowingDestination implements LogDestination {
+  @override
+  void write( LogEntry entry ) {}
+
+  @override
+  Future<void> flush() async => throw StateError( "flush exploded" );
+}
+
 class _ThrowingToString {
   @override
   String toString() => throw StateError( "toString exploded" );
@@ -404,6 +412,22 @@ void main() {
       expect( lines, hasLength( FileLogDestination.maxBufferedEntries + 1 ), reason: "the cap plus one drop note" );
       expect( lines.first, contains( "m50" ), reason: "the oldest entries were dropped" );
       expect( lines.last, contains( "dropped 50" ) );
+    } );
+  } );
+
+  group( "Logger.flush", () {
+    setUp( Logger.resetForTesting );
+    tearDown( Logger.resetForTesting );
+
+    test( "a destination that throws does not starve the ones after it; the failure is rethrown once", () async {
+      final store = _FakeStore();
+      Logger.addDestination( _FlushThrowingDestination() );
+      await Logger.initialize( enableConsole: false, fileStore: store );
+      Logger.warning( "behind the failing destination", tag: "T" );
+
+      await expectLater( Logger.flush(), throwsA( isA<StateError>() ) );
+
+      expect( store.appended.join(), contains( "behind the failing destination" ) );
     } );
   } );
 }

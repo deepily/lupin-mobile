@@ -634,12 +634,23 @@ class Logger {
     log(LogLevel.critical, message, tag: tag, context: context, error: error, stackTrace: stackTrace);
   }
 
-  /// Flush all destinations
+  /// Flushes every destination at once, so a slow or hung one cannot hold up the others.
+  ///
+  /// A destination that throws does not stop the rest. The first failure is rethrown once all have finished.
   static Future<void> flush() async {
     final logger = instance;
-    for (final destination in logger._destinations) {
-      await destination.flush();
-    }
+    Object?     firstError;
+    StackTrace? firstStack;
+    await Future.wait( [
+      for (final destination in List<LogDestination>.of( logger._destinations ))
+        Future<void>.sync( destination.flush ).catchError( ( Object e, StackTrace st ) {
+          if (firstError == null) {
+            firstError = e;
+            firstStack = st;
+          }
+        } ),
+    ] );
+    if (firstError != null) Error.throwWithStackTrace( firstError!, firstStack! );
   }
 
   /// Tagged loggers for specific components
