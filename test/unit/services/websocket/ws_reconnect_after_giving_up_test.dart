@@ -9,7 +9,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-// ignore: depend_on_referenced_packages
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
