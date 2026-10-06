@@ -127,6 +127,7 @@ dev_dependencies:
   # Imported directly by tests; versions match pubspec.lock
   shared_preferences_platform_interface: ^2.4.1
   stream_channel: ^2.1.4
+  connectivity_plus_platform_interface: ^1.2.4
 
 flutter:
   uses-material-design: true
