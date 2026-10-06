@@ -14,6 +14,22 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.05 | Session `bca18ee2` (Tiffany 💍) — logger merged, log flush on pause, Dart labelled set finished
+
+Crew (all Sonnet 5.5, all released with mementos): Chloé (author, two seats), John (reviewer), Clayton (author, in the lupin repository on Rick's card), Pocholo (blind reader). Rio (Cheech's seat) reviewed the lupin commits; Cheech merged them. Tip `4808f84`, not pushed (23 commits ahead of origin).
+
+- **Logger error paths** (row `5e5b4ad2`, closed): Tiberius's slices 1 to 5 plus Chloé's slice 6 (8 commits: redactor word boundary and prefixed secret names, interceptor lines without query or userinfo, queued-request test, FocusChatBloc, exemption count). John failed one commit (a password in a URL's userinfo reached the log; a test that could not fail) and passed the fix. Merged `6f8f7ad`; gate PASS-WITH-WARNING on `a5bf946..6f8f7ad` with `--allow-ignores` (one test-only ignore, read). Rows `5b09ed88` and `92d911f4` closed with it. Left open: held bug `8398bfe8` (quoted keys, list and nested values, `passwd`/`secret`/`api_key`).
+- **Log flush on pause** (row `f262281c`, closed): pause and detach flush the log, with a timeout, one follow-up flush and no starved destination (`16d6a56`, `2c41551`, `db61942`). The gate failed the first merge `e654389` on an ignore comment hiding an undeclared test package; fixed by declaring `connectivity_plus_platform_interface` (`e3f86d6`). Merged `4808f84`; gate PASS-WITH-WARNING on `6f8f7ad..4808f84` (pubspec change, read).
+- **WebSocket gives up after five retries** (row `b69dbf0b`, parked): reproduced by a skipped red test `b772cd9`, confirmed by John with controls. Options report: `io/2026.10.05/chloe/b69dbf0b-ws-reconnect-report.md`. Rick's choice of trigger did not arrive (two cards timed out).
+- **Dart labelled set** (lupin row `4cc9cd81` and row `eb5a05fe`, closed): Rick approved the row and a mobile author in lupin on two cards. Clayton wrote `redraw --failed FILE` and rule 9 (a delete never leaves a clause's lead-in hanging), five commits, merged by Cheech as lupin `bf1d05d5b`. I ran the redraws: dev blind read 73 → 78 → **80 of 80**; gate rule 1 clean, blind read 168 → **175 of 175**. 27 writer calls (Dart 319 of 340), none dropped. Both splits assembled under `projects-data/lupin/`. Manifest not written (Cheech's call).
+- APK built with `--fcm` at `4808f84`. Suite at the tip: NO_NEW_FAILURE (3 known), 2,786 pass.
+- The main checkout was found detached at `refs/keep/tiberius-logger-slices` (a checkout at 18:49:04, two seconds after two seats started); put back on the branch, nothing lost.
+- Verdicts, probes and reports saved under `io/2026.10.05/{john,chloe,rio}/`.
+
+**RESUME HERE:** (1) Plan 1 rows `2847a900` (pilot gate) and `9e0dd2dd` (claim judge over the pilot and sweep) are next: the labelled set they waited for exists; ask Cheech where the Dart set lives and who writes `MANIFEST.json`, then read both rows for the judge run. (2) Rick: WebSocket trigger (`b69dbf0b`, chase 2026-10-06 10:00 EDT), admit `8398bfe8`, post-game rulings R6 to R11 (`ea96c8d7`), decision `6f0e209d`. (3) Seeder defects found tonight need rows (list: lupin `io/tmp/2026.10.05-tiffany-dart-set-status-and-call-ask.md`).
+
+---
+
 ## 2026.10.03 | Session `576809a5` (Tiffany 💍) — dead code deleted, merge gate in the repo, docs crew post-game
 
 Crew: Pocholo (reviewer, all day), Clayton and Maya (authors, from about 16:28 EDT on Rick's card; both released with mementos; Clayton again from 19:22 to 19:30 for the last rulings). Tip `97cf2ac` plus the checkpoint commit, not pushed.

@@ -1,6 +1,34 @@
 # TODO
 
-## ▶ START HERE — 2026-10-03 (Tiffany 💍)
+## ▶ START HERE — 2026-10-05 (Tiffany 💍)
+
+Tip `4808f84` plus this checkpoint commit, **not pushed** (23 commits ahead of origin before the checkpoint). APK built with `--fcm` at `4808f84`. No workers running; all five were released with verified mementos under `io/mementos/`. Live owed work is in the store, owner `tiffany`.
+
+| Next | Waits on |
+|---|---|
+| Publish the Dart labelled set (row `ec076bcd`, held): copy both assembled splits to `projects-data/lupin/v022-phase2-labelled-dart/` and write `MANIFEST.json` | nothing; the dev seed must be found first (see the row) |
+| Plan 1 pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`): both still point at the closed row `eb5a05fe`; re-point them, then read both rows for the judge run | the published set; Cheech for how the judge is run on Dart |
+| WebSocket gives up after five retries (row `b69dbf0b`, parked, chase 2026-10-06 10:00 EDT): red test `b772cd9` is merged skipped; report at `io/2026.10.05/chloe/b69dbf0b-ws-reconnect-report.md` | Rick's choice of trigger (cards timed out at 20:06 and 21:05 EDT) |
+| Log masking gaps (bug `8398bfe8`, held): quoted keys, list and nested values, `passwd` / `secret` / `api_key` | Rick admits it |
+| Post-game for the 2026-10-03 crew (row `ea96c8d7`), rulings R6 to R11; tonight's work is not in it | Rick reads it, then rules |
+| 4 `withOpacity` and 1 `BuildContext` after await (decision `6f0e209d`, held); memento sweep (row `e5610916`, held); transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked | Rick |
+| Seeder defects found tonight (lupin bugs `e86e07b1`, `6737b017`, held, owner Cheech) | Rick admits; Cheech staffs |
+
+### Decisions Log — 2026-10-05 (session `bca18ee2`, Tiffany)
+
+- **Mobile runs lupin row `4cc9cd81` (the Dart labelled set after rule 8)** (Rick, ask card about 18:46 EDT, clean yes). Cheech admitted the row and reassigned it to Tiffany.
+- **A mobile author and a reviewer may work in the lupin repository for that row** (Rick, ask card about 18:49 EDT, clean yes). The fleet cap of 8 refused the reviewer seat, so Cheech's seat Rio reviewed; Cheech made the merge call (`bf1d05d5b`).
+- **Rick asked Tiffany to coordinate the fix for `4cc9cd81` with Cheech** (voice, about 18:50 EDT).
+- **Rule 9's `DROPPED_CONDITION` keeps refusing every condition clause before ", and/or/but"** (manager as row owner; Cheech, the set's owner, agreed by DM 19:56 EDT). Measured on the Dart pool of 4,375 entries: 56 spans refused, 502 condition-clause deletes still offered. The numbers are in the rule's docstring.
+- **Rule-1 failures that only miss the weak word are read by the key-holder (the manager) and accepted when a synonym keeps the weaker meaning** (manager; same practice as dev on 2026-10-03). Gate accept list: p005, p047, p051, p101, p134, p151.
+- **Dart's writer allotment is 340 calls** (Cheech, DM 21:05 EDT; was 320). Used: 319.
+- **Redactor gaps found in review are fixed inside the row when small and prefixed-name shaped; the rest go to a held bug** (manager, row `5e5b4ad2`; bug `8398bfe8`).
+- **A test that imports a transitive package declares it in `pubspec.yaml`; it does not silence the note** (manager, following the 2026-10-03 ruling on three packages; the merge gate enforced it on `e654389`).
+- **Log flush on pause: 3-second timeout, one follow-up flush at most, destinations flushed side by side** (manager on John's findings, row `f262281c`). Accepted: a timed-out destination keeps running in the background.
+- **The WebSocket fix waits for Rick's choice of trigger; no fix is written before it** (manager). Recommended: resume, network restored, and a retry loop only while the app is on screen.
+- **The Dart set is published by Tiffany: both assembled splits copied to `projects-data/lupin/v022-phase2-labelled-dart/`, manifest by the seeder's own command** (Cheech as set owner, DM 21:06 EDT, condensed in transit).
+
+## ▶ Earlier: 2026-10-03 close (Tiffany 💍)
 
 Tip `e9a6d9c` plus the two checkpoint commits of 2026-10-03 night; pushed at the 23:15 ritual on Rick's broadcast `e0ab1f3f` (receipt in the session-end card). APK built with `--fcm` at `dec4a63`; only tool and CI files changed since, so it is current. Live owed work is in the store, owner `tiffany`.
 
