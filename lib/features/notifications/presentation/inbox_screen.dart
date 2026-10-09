@@ -111,7 +111,7 @@ class _InboxScreenState extends State<InboxScreen> {
         ],
       ),
     );
-    if ( confirmed == true && context.mounted ) {
+    if ( confirmed == true && mounted ) {
       context.read<NotificationBloc>().add(
         NotificationsBulkDelete( userEmail: widget.userEmail ),
       );

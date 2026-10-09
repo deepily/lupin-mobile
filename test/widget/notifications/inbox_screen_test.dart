@@ -132,5 +132,34 @@ void main() {
       expect( find.text( "boom" ),  findsOneWidget );
       expect( find.text( "Retry" ), findsOneWidget );
     });
+
+    testWidgets( "confirming Clear all after the inbox route is gone does not touch the dead context", ( tester ) async {
+      whenListen(
+        bloc,
+        Stream<NotificationState>.fromIterable( [
+          NotificationsInboxLoaded( senders: [ s( "s-1" ) ], userEmail: "u@x.y" ),
+        ] ),
+        initialState: const NotificationsInitial(),
+      );
+
+      await tester.pumpWidget( underTest() );
+      await tester.pump();
+
+      await tester.tap( find.byTooltip( "Clear all" ) );
+      await tester.pumpAndSettle();
+      expect( find.text( "Clear all notifications?" ), findsOneWidget );
+
+      // The inbox route disappears while the dialog's future is still pending.
+      final inboxContext = tester.element( find.byType( InboxScreen ) );
+      Navigator.of( inboxContext ).removeRoute( ModalRoute.of( inboxContext )! );
+      await tester.pump();
+      expect( find.byType( InboxScreen ), findsNothing );
+
+      await tester.tap( find.text( "Clear" ) );
+      await tester.pumpAndSettle();
+
+      expect( tester.takeException(), isNull );
+      verifyNever( () => bloc.add( any( that: isA<NotificationsBulkDelete>() ) ) );
+    });
   });
 }
