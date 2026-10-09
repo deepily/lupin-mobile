@@ -255,7 +255,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
               sender   : TtsSender( senderId: n.senderId, name: n.voicePersona?.displayName ?? n.voicePersona?.name, icon: n.voicePersona?.icon ),
             );
           } else {
-            // ignore: avoid_print
+            // ignore: avoid_print - console trace so a skipped foreground item shows in logcat
             print( "[NotificationBloc] foreground ${n.priority} is switched off "
                    "— staying quiet; the item still lands in the list (id=${n.id})" );
           }
@@ -306,7 +306,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
           // silently. New types get a case above this default. The old name
           // `conversation_mode_changed` has no case; `speakerphone_changed`
           // replaced it.
-          // ignore: avoid_print
+          // ignore: avoid_print - console trace so an unknown type shows in logcat
           print( "[NotificationBloc] Unknown notification.type: '${n.type}' (id=${n.id})" );
           break;
       }
