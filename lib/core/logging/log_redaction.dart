@@ -39,7 +39,7 @@ final RegExp _authHeader = RegExp(
   caseSensitive: false,
 );
 
-/// A bare number (`123`, `-4`, `7.5`) ending at whitespace, `&`, `,`, a bracket or the text end.
+/// A bare number (`123`, `-4`, `7.5`) that ends at whitespace, `&`, `,` or a bracket.
 ///
 /// Letters after the digits (`512abc`, `1e5`) mean it could be a credential, so it does not count.
 final RegExp _bareNumber = RegExp( r"-?\d+(\.\d+)?(?=[\s&,\]})]|$)" );
@@ -47,7 +47,7 @@ final RegExp _bareNumber = RegExp( r"-?\d+(\.\d+)?(?=[\s&,\]})]|$)" );
 /// Underscores and dashes in a field name, dropped before it is looked up in [_countNames].
 final RegExp _nameSeparators = RegExp( r"[_-]" );
 
-/// The names whose bare-number values are counts and stay readable, lowercase and without `_` or `-`.
+/// Names whose bare-number values are counts, lowercase and without `_` or `-`.
 const Set<String> _countNames = {
   "tokens", "maxtokens", "prompttokens", "completiontokens", "totaltokens", "inputtokens", "outputtokens",
 };
