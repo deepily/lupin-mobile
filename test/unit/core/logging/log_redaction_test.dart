@@ -126,6 +126,55 @@ void main() {
       expect( redactSecrets( "{refresh_token: opaque}" ), "{refresh_token: <redacted>}" );
     } );
 
+    // Row 8398bfe8: three gaps found by John's review of 63996b9, each pinned here.
+    test( "quoted key names are masked: a Python repr, a single-quoted key, a quoted key with =", () {
+      expect( redactSecrets( "{'api_token': SECRET}" ), "{'api_token': <redacted>}" );
+      expect( redactSecrets( "{'password': SECRET}" ), "{'password': <redacted>}" );
+      expect( redactSecrets( "{'password': 'hunter2', 'a': 1}" ), "{'password': <redacted>, 'a': 1}" );
+      expect( redactSecrets( "'token'=SECRET" ), "'token'=<redacted>" );
+      expect( redactSecrets( "\"token\"=SECRET&x=1" ), "\"token\"=<redacted>&x=1" );
+      expect( redactSecrets( "{'Authorization': 'Bearer opaque-abc'}" ), isNot( contains( "opaque-abc" ) ) );
+    } );
+
+    test( "an array value is masked whole, not up to its first comma", () {
+      expect( redactSecrets( "{\"token\": [\"SECRET\",\"S2\"]}" ), "{\"token\":\"<redacted>\"}" );
+      expect( redactSecrets( "{\"token\": [\"SECRET\", \"S2\"], \"a\": 1}" ), "{\"token\":\"<redacted>\", \"a\": 1}" );
+      expect( redactSecrets( "{token: [SECRET, S2], a: 1}" ), "{token: <redacted>, a: 1}" );
+      expect( redactSecrets( "{'token': ['SECRET', 'S2'], 'a': 1}" ), "{'token': <redacted>, 'a': 1}" );
+    } );
+
+    test( "a nested-object value is masked whole, brackets inside strings do not end it early", () {
+      expect( redactSecrets( "{\"token\": {\"a\":\"SECRET\",\"b\":\"S2\"}}" ), "{\"token\":\"<redacted>\"}" );
+      expect( redactSecrets( "{\"token\": {\"a\":\"SE}CRET\",\"b\":[\"S2\"]}, \"z\": 1}" ), "{\"token\":\"<redacted>\", \"z\": 1}" );
+      expect( redactSecrets( "{\"password\": {\"a\":\"SE\\\"}CRET\"}, \"z\": 1}" ), "{\"password\":\"<redacted>\", \"z\": 1}" );
+    } );
+
+    test( "an unterminated array or object is masked to the end of the line", () {
+      expect( redactSecrets( "{\"token\": [\"SECRET\",\"S2\"\nnext line" ), "{\"token\":\"<redacted>\"\nnext line" );
+      expect( redactSecrets( "{token: {a: SECRET" ), "{token: <redacted>" );
+    } );
+
+    test( "passwd, secret and api_key style names are masked in every spelling", () {
+      for ( final name in [ "passwd", "secret", "client_secret", "api_key", "api-key", "apikey", "apiKey", "x-api-key", "db_passwd" ] ) {
+        expect( redactSecrets( "$name=SECRET&x=1" ), "$name=<redacted>&x=1", reason: name );
+        expect( redactSecrets( "{$name: SECRET, a: 1}" ), "{$name: <redacted>, a: 1}", reason: name );
+        expect( redactSecrets( "{\"$name\":\"SECRET\"}" ), "{\"$name\":\"<redacted>\"}", reason: name );
+        expect( redactSecrets( "{'$name': 'SECRET'}" ), "{'$name': <redacted>}", reason: name );
+      }
+    } );
+
+    test( "names that merely contain secret, key or passwd are left alone", () {
+      const line = "secretary=Jo keyboard: us monkey=1 passwdless: true api_keyring=x";
+      expect( redactSecrets( line ), line );
+    } );
+
+    test( "the new rules keep redaction stable under repeated application", () {
+      for ( final line in [ "{'password': 'hunter2'}", "{\"token\": [\"A\",\"B\"]}", "api_key=ABC&x=1", "{secret: {a: 1}}" ] ) {
+        final once = redactSecrets( line );
+        expect( redactSecrets( once ), once, reason: line );
+      }
+    } );
+
     test( "a bare JWT under an unanticipated field name is still masked", () {
       final out = redactSecrets( "{some_future_field: $_jwt}" );
       expect( out, isNot( contains( "eyJ" ) ) );
