@@ -72,20 +72,52 @@ void main() {
     } );
   } );
 
-  test( "no file in lib/ looks up google.com, cloudflare.com or 8.8.8.8", () {
-    final banned = <String>[ "google.com", "cloudflare.com", "8.8.8.8", "InternetAddress.lookup" ];
-    final hits   = <String>[];
+  group( "the third-party scan", () {
+    test( "catches the spellings that dodge a plain text match", () {
+      final dodges = <String>[
+        "x = 'goo' 'gle.com';",
+        "x = 'Google.COM';",
+        "x = 'google.' + 'com';",
+        "x = 'cloud' 'flare.com';",
+        'x = "Cloud" + "Flare.Com";',
+        "await InternetAddress . lookup( h );",
+        "await InternetAddress\n  .lookup( h );",
+        "x = '8.8.8.8';",
+      ];
+      for ( final dodge in dodges ) {
+        expect( thirdPartyHits( dodge ), isNotEmpty, reason: dodge );
+      }
+      expect( thirdPartyHits( "x = '\${AppConstants.apiBaseUrl}/health';" ), isEmpty );
+    } );
 
-    for ( final entity in Directory( "lib" ).listSync( recursive: true ) ) {
-      if ( entity is! File || !entity.path.endsWith( ".dart" ) ) continue;
-      final lines = entity.readAsLinesSync();
-      for ( var i = 0; i < lines.length; i++ ) {
-        for ( final word in banned ) {
-          if ( lines[ i ].contains( word ) ) hits.add( "${entity.path}:${i + 1} $word" );
+    test( "no file in lib/ looks up google.com, cloudflare.com or 8.8.8.8", () {
+      final hits = <String>[];
+
+      for ( final entity in Directory( "lib" ).listSync( recursive: true ) ) {
+        if ( entity is! File || !entity.path.endsWith( ".dart" ) ) continue;
+        for ( final hit in thirdPartyHits( entity.readAsStringSync() ) ) {
+          hits.add( "${entity.path}: $hit" );
         }
       }
-    }
 
-    expect( hits, isEmpty, reason: "reachability must ask the Lupin server, not a third party" );
+      expect( hits, isEmpty, reason: "reachability must ask the Lupin server, not a third party" );
+    } );
   } );
+}
+
+/// Returns the banned third-party names found in [source], ignoring case and whitespace around the dot of a lookup.
+///
+/// Adjacent string literals and literals joined with `+` are merged first, so `'goo' 'gle.com'` and
+/// `'google.' + 'com'` are caught. A host name assembled at run time (from a list, a join, a decode) cannot be
+/// caught by a text scan, and this scan does not try. The real guard is the behavioural test above: the loopback
+/// server saw `GET /health`, and the answer came from it.
+List<String> thirdPartyHits( String source ) {
+  final merged  = source.replaceAll( RegExp( r"""['"]\s*(\+\s*)?['"]""" ), "" );
+  final banned  = <RegExp>[
+    RegExp( r"google\.com", caseSensitive: false ),
+    RegExp( r"cloudflare\.com", caseSensitive: false ),
+    RegExp( r"8\.8\.8\.8" ),
+    RegExp( r"InternetAddress\s*\.\s*lookup", caseSensitive: false ),
+  ];
+  return <String>[ for ( final pattern in banned ) if ( pattern.hasMatch( merged ) ) pattern.pattern ];
 }
