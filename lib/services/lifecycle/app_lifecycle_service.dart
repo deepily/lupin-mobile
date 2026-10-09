@@ -97,13 +97,32 @@ class AppLifecycleService with WidgetsBindingObserver {
     _currentUsageState = AppUsageState.active;
     _lastStateChange = DateTime.now();
     _lastUserInteraction = DateTime.now();
-    _foregroundTime = DateTime.now();
     
     // Start session timer
     _startSessionTimer();
     
-    // Start inactivity monitoring
-    _startInactivityMonitoring();
+    if ( _currentLifecycleState == AppLifecycleState.resumed || _currentLifecycleState == AppLifecycleState.inactive ) {
+      // On screen: the foreground bookkeeping and the inactivity timer
+      _foregroundTime = DateTime.now();
+      _startInactivityMonitoring();
+    } else {
+      // Started in the background: run what the transition into this state would have run
+      switch (_currentLifecycleState) {
+        case AppLifecycleState.paused:
+          _handleAppPaused();
+          break;
+        case AppLifecycleState.detached:
+          _handleAppDetached();
+          break;
+        case AppLifecycleState.hidden:
+          _handleAppHidden();
+          break;
+        case AppLifecycleState.resumed:
+        case AppLifecycleState.inactive:
+          break;
+      }
+      _updateUsageState();
+    }
     
     debugPrint('[LifecycleService] App lifecycle monitoring initialized');
   }

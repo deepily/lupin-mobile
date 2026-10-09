@@ -1,8 +1,6 @@
 // Row 1b192f22 follow-up (Pocholo, Probe 3): when the app starts paused, initialize() must run the pause
 // bookkeeping: usage state background, no inactivity timer, and the log flush a pause normally starts.
 
-import 'dart:async';
-
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,8 +40,8 @@ void main() {
       expect( service.currentUsageState, AppUsageState.background );
       expect( counting.flushCalls, 1, reason: "the pause handler flushes logs" );
 
-      // Five times the threshold: a live inactivity timer would have flipped the state to inactive.
-      async.elapse( AppLifecycleService.inactivityThreshold * 5 );
+      // Twice the threshold, still under the background threshold: a live inactivity timer would have flipped the state to inactive.
+      async.elapse( AppLifecycleService.inactivityThreshold * 2 );
       expect( service.currentUsageState, AppUsageState.background );
     } );
   } );
