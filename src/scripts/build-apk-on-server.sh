@@ -100,11 +100,31 @@ if [ "$FCM" = true ]; then
     fcm_note=" (with FCM push wake-ups)"
 fi
 
+cd "$REPO_ROOT"
+sha="$( git rev-parse --short HEAD )"
+branch="$( git branch --show-current )"
+dirty=""
+[ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
+
+# Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
+# and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
+# compile-time flag needs writing down at all (row 8ff78c69, F3).
+stamp_built_apk() {
+    write_apk_stamp "$APK" "$sha" "$branch" "$FCM" \
+        "$( [ -n "$dirty" ] && echo true || echo false )"
+}
+
 # Test hook: print what would be built and stop, before any checkout, JDK or Gradle check.
 # src/scripts/test-apk-fcm-default.sh uses it to prove the default and the opt-out.
 if [ "${APK_BUILD_DRY_RUN:-}" = "1" ]; then
     echo "BUILD_ARGS: ${build_args[*]}"
     echo "FCM: $FCM"
+    # With a throwaway APK path, also write the stamp through the SAME function the real
+    # build uses, so a test can read back what the stamp says about this build.
+    if [ -n "${APK_STAMP_TEST_APK:-}" ]; then
+        APK="$APK_STAMP_TEST_APK"
+        stamp_built_apk
+    fi
     exit 0
 fi
 
@@ -151,12 +171,6 @@ fi
 # ════════════════════════════════════════════════════════════════════════════════════
 # Build
 # ════════════════════════════════════════════════════════════════════════════════════
-cd "$REPO_ROOT"
-sha="$( git rev-parse --short HEAD )"
-branch="$( git branch --show-current )"
-dirty=""
-[ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
-
 print_step "Building debug APK on $( hostname ): $branch @ $sha$dirty$fcm_note"
 print_info "About 1 minute warm, about 7 minutes cold."
 
@@ -178,11 +192,7 @@ if [ ! -f "$APK" ] || [ ! "$APK" -nt "$marker" ]; then
     exit 1
 fi
 
-# Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
-# and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
-# compile-time flag needs writing down at all (row 8ff78c69, F3).
-write_apk_stamp "$APK" "$sha" "$branch" "$FCM" \
-    "$( [ -n "$dirty" ] && echo true || echo false )"
+stamp_built_apk
 
 print_success "Built in $(( SECONDS - started ))s: $APK"
 print_success "Commit: $branch @ $sha$dirty$fcm_note"

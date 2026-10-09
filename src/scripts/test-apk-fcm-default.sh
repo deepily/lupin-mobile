@@ -59,6 +59,24 @@ contains "--no-fcm reports FCM false"              "FCM: false" "$out"
 check    "--fcm with --no-fcm is refused (exit 2)" "2" "$( APK_BUILD_DRY_RUN=1 "$BUILD" --fcm --no-fcm >/dev/null 2>&1; echo $? )"
 check    "an unknown flag is still refused"        "2" "$( APK_BUILD_DRY_RUN=1 "$BUILD" --bogus >/dev/null 2>&1; echo $? )"
 
+# The stamp is what deploy-apk-to-device.sh prints as "FCM: ON/OFF". It must say what the
+# build did: a stamp that always says one thing would leave every check above green.
+echo "build stamp agrees with the build"
+# shellcheck source=src/scripts/lib/apk-build-stamp.sh
+source "$SCRIPT_DIR/lib/apk-build-stamp.sh"
+TMP="$( mktemp -d "${TMPDIR:-/tmp}/apk-fcm-default-test.XXXXXX" )"
+trap 'rm -rf "$TMP"' EXIT
+stamped() {   # stamped <build args...>: dry-run, stamp a fresh APK path, print what the stamp says
+    local apk="$TMP/app-debug.apk"
+    rm -f "$apk" "$( apk_stamp_path "$apk" )"
+    touch "$apk"
+    APK_BUILD_DRY_RUN=1 APK_STAMP_TEST_APK="$apk" "$BUILD" "$@" >/dev/null 2>&1
+    apk_fcm_state "$apk"
+}
+check "no flag: the stamp says fcm on"         "on"  "$( stamped )"
+check "--fcm: the stamp says fcm on"           "on"  "$( stamped --fcm )"
+check "--no-fcm: the stamp says fcm off"       "off" "$( stamped --no-fcm )"
+
 echo "deploy-apk-to-device.sh"
 out="$( deploy --build )"
 lacks    "--build alone passes no opt-out (server default is FCM on)" "--no-fcm" "$out"
