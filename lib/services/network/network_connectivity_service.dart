@@ -37,7 +37,10 @@ class NetworkConnectivityService {
   Timer? _qualityTestTimer;
   Timer? _periodicCheckTimer;
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
-  
+
+  /// True from [pauseMonitoring] until [resumeMonitoring]; while true, [initialize] does not arm the timers.
+  bool _monitoringPaused = false;
+
   // Network quality metrics
   final List<int> _latencyHistory = [];
   final List<bool> _reachabilityHistory = [];
@@ -95,9 +98,9 @@ class NetworkConnectivityService {
       },
     );
     
-    // Start periodic quality monitoring
-    _startQualityMonitoring();
-    
+    // Start periodic quality monitoring, unless the app was paused while the checks above were running
+    if ( !_monitoringPaused ) _startQualityMonitoring();
+
     debugPrint('[NetworkService] Network monitoring initialized');
   }
   
@@ -109,6 +112,7 @@ class NetworkConnectivityService {
   ///
   /// The connectivity subscription stays on; it costs nothing.
   void pauseMonitoring() {
+    _monitoringPaused = true;
     _qualityTestTimer?.cancel();
     _periodicCheckTimer?.cancel();
     _qualityTestTimer   = null;
@@ -117,6 +121,7 @@ class NetworkConnectivityService {
 
   /// Re-arms the timers after [pauseMonitoring]; a no-op before [initialize] or while already armed.
   void resumeMonitoring() {
+    _monitoringPaused = false;
     if ( _connectivitySubscription == null || isMonitoring ) return;
     _startQualityMonitoring();
   }
