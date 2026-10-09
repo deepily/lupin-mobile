@@ -6,7 +6,7 @@ State at the 16:25 EDT checkpoint: tip `13882d9`, merge gate passed on `d572558.
 
 | Next | Waits on |
 |---|---|
-| One phone check for two rows: the connectivity rulings (row `1b192f22`, merged `13882d9`) and the reconnect fix (row `b69dbf0b`, un-parked by Rick). Steps: server stopped over 75 s with the app on screen, then restarted (reconnect within about 30 s); airplane mode over 75 s; leave the app 10 s and return (panes refresh once) | Rick: `deploy-apk-to-device.sh` (no flags), then the check. The server-stop step waits for Mr. Radio's "window closed" (his quiet window opened 16:22 EDT for about an hour) |
+| One phone check for two rows: the connectivity rulings (row `1b192f22`, merged `13882d9`) and the reconnect fix (row `b69dbf0b`, un-parked by Rick). Steps: server stopped over 75 s with the app on screen, then restarted (reconnect within about 30 s); airplane mode over 75 s; leave the app 10 s and return (panes refresh once) | Rick: `deploy-apk-to-device.sh` (no flags), then the check; ask set for 17:02 EDT |
 | Pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`); pairs are built (45 and 774) | Cheech: revision 4 draws 2026-10-10, 10:00 to 13:00 EDT; gate run that afternoon at the earliest |
 | Post-game rulings: R6 to R11 (row `ea96c8d7`), R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
 | "Rows blocked on me that I do not own" query, and hand-written clock times (lupin row `879fe139`, held) | Rick admits; a lupin seat builds |
@@ -27,7 +27,7 @@ State at the 16:25 EDT checkpoint: tip `13882d9`, merge gate passed on `d572558.
 - **A pane seeds its previous network state from the service when it starts** (manager, after Maya's round 3 finding).
 - **`ws_reconnect_coordinator.dart:148` stays as it is**: it acts on `connected` to `limited`, but only does something when the socket is down (manager).
 - **Metered polling (`isMobile`) is unchanged; Rick did not rule on it** (manager).
-- **Mr. Radio's quiet window, 16:22 EDT for about an hour: no lupin host tests, no bounce of `:7999`, `:8000` or `:8001`, no docker compose, no spawn, no edit of lupin's `.env`** (agreed by DM).
+- **Mr. Radio's quiet window ran 16:22 to 16:25 EDT and nothing ran in it** (his DM: the permission classifier refused his run; it is now Rick's to run, and he will ask for a new window). The agreed terms for a window: no lupin host tests, no bounce of `:7999`, `:8000` or `:8001`, no docker compose, no spawn, no edit of lupin's `.env`.
 - **Log masking: findings A (multi-line values) and B (quadratic scanner) are required before merge; `secret_key`, `private_key`, `access_key` and plural names are added** (manager, row `8398bfe8`).
 - **Only token-count names keep a bare number readable: `tokens`, `max_tokens`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `input_tokens`, `output_tokens`** (manager, after Maya refused my first, wider rule; commit `8927b28`).
 - **Accepted gaps, named on the rows**: JSON inside a string and a secret in a URL path in debug builds (`8398bfe8`); a pipe split across lines in the usage test (`c41c090a`).
