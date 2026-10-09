@@ -149,9 +149,37 @@ void main() {
       expect( redactSecrets( "{\"password\": {\"a\":\"SE\\\"}CRET\"}, \"z\": 1}" ), "{\"password\":\"<redacted>\", \"z\": 1}" );
     } );
 
-    test( "an unterminated array or object is masked to the end of the line", () {
-      expect( redactSecrets( "{\"token\": [\"SECRET\",\"S2\"\nnext line" ), "{\"token\":\"<redacted>\"\nnext line" );
+    test( "an unterminated array or object is masked to the end of the text, an unterminated string to the end of its line", () {
+      expect( redactSecrets( "{\"token\": [\"SECRET\",\"S2\"\nnext line" ), "{\"token\":\"<redacted>\"" );
       expect( redactSecrets( "{token: {a: SECRET" ), "{token: <redacted>" );
+      expect( redactSecrets( "token: \"SECRET\nnext line" ), "token: <redacted>\nnext line" );
+    } );
+
+    test( "a pretty-printed array or object spread over several lines is masked whole", () {
+      expect( redactSecrets( "{\"token\": [\n  \"SECRET\",\n  \"S2\"\n], \"a\": 1}" ), "{\"token\":\"<redacted>\", \"a\": 1}" );
+      expect( redactSecrets( "{\n  \"token\": {\n    \"a\": \"SECRET\",\n    \"b\": [\"S2\"]\n  },\n  \"ok\": 1\n}" ), "{\n  \"token\":\"<redacted>\",\n  \"ok\": 1\n}" );
+      expect( redactSecrets( "{'password': {\n 'a': 'SECRET'\n}}" ), "{'password': <redacted>}" );
+    } );
+
+    test( "cost grows linearly with the number of credential fields on one line", () {
+      // Counted by scaling, not by a wall-clock limit: 4x the fields must cost about 4x, not 16x.
+      // A scanner that copies or searches the rest of the line per field is quadratic and fails this.
+      Duration timeFor( int fields ) {
+        final line = List.generate( fields, ( i ) => "token=abc$i," ).join();
+        var best   = const Duration( days: 1 );
+        for ( var run = 0; run < 3; run++ ) {
+          final watch = Stopwatch()..start();
+          final out   = redactSecrets( line );
+          watch.stop();
+          expect( out, isNot( contains( "abc" ) ) );
+          if ( watch.elapsed < best ) best = watch.elapsed;
+        }
+        return best;
+      }
+
+      final small = timeFor( 5000 ).inMicroseconds + 1;
+      final large = timeFor( 20000 ).inMicroseconds + 1;
+      expect( large / small, lessThan( 9 ), reason: "5000 fields took ${small}us, 20000 took ${large}us" );
     } );
 
     test( "passwd, secret and api_key style names are masked in every spelling", () {

@@ -11,7 +11,7 @@ library;
 /// It is anchored on `eyJ` rather than matching any dotted triple, so ordinary dotted text is left alone.
 final RegExp _jwt = RegExp( r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}" );
 
-/// A credential field name, such as `access_token`, `db_password`, `client_secret` or `x-api-key`.
+/// A credential field name, such as `access_token`, `client_secret` or `x-api-key`.
 ///
 /// It is any identifier ending in `token`, `password`, `passwd`, `secret` or `api_key` (also `api-key`, `apikey`).
 /// It must start a word, so `tokenizer`, `passwordless`, `secretary` and `monkey` are left alone.
@@ -19,7 +19,7 @@ final RegExp _jwt = RegExp( r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-
 const String _credentialName =
     r"(?<![A-Za-z0-9_-])(?!invalid[_-]token\b)([A-Za-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key))";
 
-/// A credential field name and separator, such as `"access_token":`, `'api_token': ` or `password=`.
+/// A credential field name and separator, such as `"access_token":` or `password=`.
 ///
 /// Group 1 is the name's opening quote (empty if unquoted), group 2 the name, group 4 the separator.
 /// The closing quote (group 3) must repeat the opening one.
@@ -41,9 +41,9 @@ const String _mask = "<redacted>";
 
 /// Returns the index past the value starting at [start] in [text].
 ///
-/// A string ends at its closing quote; an array or object ends at its matching bracket, skipping strings.
-/// A value never closed (a truncated line) runs to the end of the line, so it is over-masked, not leaked.
-/// A bare scalar ends at a newline, comma, closing brace or ampersand, and, after a quoted name, at whitespace or `]`.
+/// A string ends at its closing quote, an array or object at its matching bracket (across lines).
+/// An unclosed string is masked to its line end, an unclosed array or object to the text end.
+/// A bare scalar ends at a newline, comma, brace or ampersand (after a quoted name, also whitespace or `]`).
 ///
 /// Requires:
 ///   - 0 <= start <= text.length
@@ -55,22 +55,18 @@ int _valueEnd( String text, int start, { required bool nameQuoted } ) {
   if ( start >= n ) return n;
   final first = text[ start ];
 
-  var lineEnd = text.indexOf( "\n", start );
-  if ( lineEnd < 0 ) lineEnd = n;
-
   if ( first == "\"" || first == "'" ) {
-    final close = _stringEnd( text, start, lineEnd );
-    return close ?? lineEnd;
+    return _stringEnd( text, start, stopAtNewline: true ) ?? _lineEnd( text, start );
   }
 
   if ( first == "[" || first == "{" ) {
     var depth = 0;
     var i     = start;
-    while ( i < lineEnd ) {
+    while ( i < n ) {
       final c = text[ i ];
       if ( c == "\"" || c == "'" ) {
-        final close = _stringEnd( text, i, lineEnd );
-        if ( close == null ) return lineEnd;
+        final close = _stringEnd( text, i, stopAtNewline: false );
+        if ( close == null ) return n;
         i = close;
         continue;
       }
@@ -81,22 +77,36 @@ int _valueEnd( String text, int start, { required bool nameQuoted } ) {
       }
       i++;
     }
-    return lineEnd;
+    return n;
   }
 
-  final stop = nameQuoted ? RegExp( r"[\s,}\]&]" ) : RegExp( r"[\n,}&]" );
-  final hit  = stop.firstMatch( text.substring( start ) );
-  return hit == null ? n : start + hit.start;
+  var i = start;
+  while ( i < n ) {
+    final c = text[ i ];
+    if ( c == "\n" || c == "," || c == "}" || c == "&" ) break;
+    if ( nameQuoted && ( c == " " || c == "\t" || c == "\r" || c == "]" ) ) break;
+    i++;
+  }
+  return i;
 }
 
-/// Returns the index past the string opened at [open], or null if unclosed before [limit].
-int? _stringEnd( String text, int open, int limit ) {
+/// Returns the index of the first newline at or after [from], or the text length.
+int _lineEnd( String text, int from ) {
+  final at = text.indexOf( "\n", from );
+  return at < 0 ? text.length : at;
+}
+
+/// Returns the index past the string opened at [open], or null if never closed.
+///
+/// With [stopAtNewline], a newline before the closing quote means it never closes.
+int? _stringEnd( String text, int open, { required bool stopAtNewline } ) {
   final quote = text[ open ];
   var i       = open + 1;
-  while ( i < limit ) {
+  while ( i < text.length ) {
     final c = text[ i ];
     if ( c == "\\" ) { i += 2; continue; }
     if ( c == quote ) return i + 1;
+    if ( stopAtNewline && c == "\n" ) return null;
     i++;
   }
   return null;
