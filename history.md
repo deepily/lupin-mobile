@@ -30,7 +30,9 @@ Crew (all Sonnet 5.5): Maya (reviewer), Clayton (author), Pocholo (author, then 
 - **Post-game** for the crew: `src/docs/post-games/v0.2.2/2026.10.09-board-whittling-crew-post-game.md`, rulings R12 to R18 drafted.
 - Logs and verdicts under `io/2026.10.09/{tiffany,maya,pocholo}/`.
 
-**RESUME HERE (checkpoint, 16:25 EDT):** (1) Rick: deploy and one phone check covering `1b192f22` and `b69dbf0b` (he un-parked it); ask set for 17:02 EDT. One step stops the server, so check first for a new quiet window from Mr. Radio (his first ran 16:22 to 16:25 EDT and nothing ran in it). (2) Rick: rulings R6 to R11 (`ea96c8d7`) and R12 to R18; push. (3) Cheech's gate run, chase 2026-10-10 14:00 EDT, then the judge over the pilot and the sweep.
+- **Evening**: Rick's phone check passed all three steps (card, about 18:20 EDT); rows `1b192f22` and `b69dbf0b` closed. He dropped rulings R6 to R11 (row `ea96c8d7` closed) and admitted lupin row `879fe139`.
+
+**RESUME HERE (checkpoint, 18:21 EDT; the list after "(2) Rick: rulings" below is superseded where this line differs):** (1) Rick: rulings R12 to R18 (link sent); the Stop poke flip (`ee68d5e7`: phone, Settings, Notifications, switch "Stop poke", admin sign-in) and transcript capture (`768e852f`). (2) Lupin row `879fe139` needs a lupin manager. Earlier line: (2) Rick: rulings R6 to R11 (`ea96c8d7`) and R12 to R18; push. (3) Cheech's gate run, chase 2026-10-10 14:00 EDT, then the judge over the pilot and the sweep.
 
 ## 2026.10.05 | Session `bca18ee2` (Tiffany 💍) — logger merged, log flush on pause, Dart labelled set finished
 

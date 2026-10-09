@@ -2,14 +2,13 @@
 
 ## ▶ START HERE — 2026-10-09 (Tiffany 💍)
 
-State at the 16:25 EDT checkpoint: tip `13882d9`, merge gate passed on `d572558..13882d9`, APK built with FCM at that sha, 42 commits ahead of origin, nothing pushed. No seats running. Live owed work is in the store, owner `tiffany`.
+State at the 18:21 EDT checkpoint: code tip `13882d9` (docs commits after it), APK built with FCM at that sha and passed Rick's phone check, nothing pushed. No seats running. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| One phone check for two rows: the connectivity rulings (row `1b192f22`, merged `13882d9`) and the reconnect fix (row `b69dbf0b`, un-parked by Rick). Steps: server stopped over 75 s with the app on screen, then restarted (reconnect within about 30 s); airplane mode over 75 s; leave the app 10 s and return (panes refresh once) | Rick: `deploy-apk-to-device.sh` (no flags), then the check; ask set for 17:02 EDT |
-| Pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`); pairs are built (45 and 774) | Cheech: revision 4 draws 2026-10-10, 10:00 to 13:00 EDT; gate run that afternoon at the earliest |
-| Post-game rulings: R6 to R11 (row `ea96c8d7`), R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
-| "Rows blocked on me that I do not own" query, and hand-written clock times (lupin row `879fe139`, held) | Rick admits; a lupin seat builds |
+| Pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`); pairs are built (45 and 774) | Cheech: no extractor passed on 2026-10-09; two prompt ablation draws 2026-10-10 from 10:00 EDT, his ruling by 14:00 EDT |
+| Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads (link sent 18:21 EDT) and rules |
+| "Rows blocked on me that I do not own" query (lupin row `879fe139`, admitted, queued) | A lupin manager takes it; asked Mr. Radio |
 | Transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked with a passed chase date | Rick, at his convenience |
 
 ### Decisions Log — 2026-10-09 (sessions `de4ce9d3` / `f6acc646`, Tiffany)
@@ -27,6 +26,10 @@ State at the 16:25 EDT checkpoint: tip `13882d9`, merge gate passed on `d572558.
 - **A pane seeds its previous network state from the service when it starts** (manager, after Maya's round 3 finding).
 - **`ws_reconnect_coordinator.dart:148` stays as it is**: it acts on `connected` to `limited`, but only does something when the socket is down (manager).
 - **Metered polling (`isMobile`) is unchanged; Rick did not rule on it** (manager).
+- **Phone check of the connectivity rulings and the reconnect fix: "All three steps passed"** (Rick, card, about 18:20 EDT). Rows `1b192f22` and `b69dbf0b` closed.
+- **Rulings R6 to R11 of the 2026-10-03 post-game: "Drop them"** (Rick, same card). None is a rule; row `ea96c8d7` closed.
+- **Rulings R12 to R18: Rick asked for a link to the document and has not ruled** (same card).
+- **Lupin row `879fe139` admitted** (Rick; it read queued at 18:20 EDT).
 - **Mr. Radio's quiet window ran 16:22 to 16:25 EDT and nothing ran in it** (his DM: the permission classifier refused his run; it is now Rick's to run, and he will ask for a new window). The agreed terms for a window: no lupin host tests, no bounce of `:7999`, `:8000` or `:8001`, no docker compose, no spawn, no edit of lupin's `.env`.
 - **Log masking: findings A (multi-line values) and B (quadratic scanner) are required before merge; `secret_key`, `private_key`, `access_key` and plural names are added** (manager, row `8398bfe8`).
 - **Only token-count names keep a bare number readable: `tokens`, `max_tokens`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `input_tokens`, `output_tokens`** (manager, after Maya refused my first, wider rule; commit `8927b28`).
