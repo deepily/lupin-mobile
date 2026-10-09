@@ -92,7 +92,8 @@ class AppLifecycleService with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     
     // Initialize state
-    _currentLifecycleState = AppLifecycleState.resumed;
+    // The binding already knows the real state when a pause came before this call; null means no event yet.
+    _currentLifecycleState = WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     _currentUsageState = AppUsageState.active;
     _lastStateChange = DateTime.now();
     _lastUserInteraction = DateTime.now();
