@@ -196,6 +196,9 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
+  /// The network state before the latest edge; seeded from the service when [startConnectivityRefresh] first runs.
+  NetworkState _previousNetworkState = NetworkState.unknown;
+
   /// Creates the bloc; [fleet] feeds the reassignment roster and may be null.
   TaskListBloc(
     this._repo,
@@ -258,16 +261,21 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     add( TaskListRefreshRequested( cancelToken: token ) );
   }
 
-  /// Starts retrying unsent writes and refreshing when the connection is restored.
+  /// Starts retrying unsent writes and refreshing when the connection is restored, `connected` or `limited`.
   ///
   /// The retry trigger is connectivity-restored, which `NetworkConnectivityService` already
   /// streams. The focus chat bloc's unsent-write shape fires on WebSocket re-auth, and this
   /// pane rides no socket, so its trigger does not carry over.
   void startConnectivityRefresh() {
+    // A pane opens after the service has settled, so its first edge is judged against the state it opened in.
+    if ( _connectivitySub == null ) _previousNetworkState = _network.currentState;
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      // Only the restored edge acts; firing on the way down would send a request into a
-      // connection that just failed.
-      if ( state != NetworkState.connected ) return;
+      final previous        = _previousNetworkState;
+      _previousNetworkState = state;
+      // Only an edge to a usable network acts, and a repeat of the same state is not an edge. `limited` is
+      // usable (Rick, 2026-10-09): the server may sit on a LAN with no internet. connected -> limited does
+      // not act: that is the moment the server stopped answering, and a request would go into it.
+      if ( !shouldRetryOnNetworkEdge( previous, state ) ) return;
 
       // The retry goes first. A refetch that lands before it repaints the board from the
       // server, which lacks the operator's write, so the row flickers back to its old value

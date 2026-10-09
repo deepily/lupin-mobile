@@ -263,6 +263,9 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
+  /// The network state before the latest edge; seeded from the service when [startConnectivityRefresh] first runs.
+  NetworkState _previousNetworkState = NetworkState.unknown;
+
   /// Creates the bloc; [network] and [fleet] are optional.
   HoldingAreaBloc(
     this._repo,
@@ -329,13 +332,18 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
       <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
 
-  /// Refreshes on the connectivity-restored edge only, after retrying unsent writes.
+  /// Refreshes on the connectivity-restored edge only (`connected` or `limited`), after retrying unsent writes.
   ///
   /// Firing on every state change would also refetch on the way down, into a connection
   /// that just failed.
   void startConnectivityRefresh() {
+    // A pane opens after the service has settled, so its first edge is judged against the state it opened in.
+    if ( _connectivitySub == null ) _previousNetworkState = _network.currentState;
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      if ( state != NetworkState.connected ) return;
+      final previous        = _previousNetworkState;
+      _previousNetworkState = state;
+      // The same rule as the task list; see `shouldRetryOnNetworkEdge`.
+      if ( !shouldRetryOnNetworkEdge( previous, state ) ) return;
       // The retry goes first; see `_onRetryUnsent`.
       add( const HoldingAreaUnsentRetryRequested() );
       add( const HoldingAreaRefreshRequested() );

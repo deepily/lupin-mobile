@@ -1,12 +1,13 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/logging/logger.dart';
 
 /// Watches network connectivity and quality to drive WebSocket reconnection decisions.
 ///
-/// App-wide singleton. It tracks the connection type, tests real reachability, keeps a history of latency
+/// App-wide singleton. It tracks the connection type, tests whether the Lupin server answers, keeps a history of latency
 /// and reachability, and maps the resulting quality to a [WebSocketConnectionStrategy].
 class NetworkConnectivityService {
   static final NetworkConnectivityService _instance = NetworkConnectivityService._internal();
@@ -16,7 +17,13 @@ class NetworkConnectivityService {
 
   final Connectivity _connectivity = Connectivity();
 
-  /// Replaces the reachability check and the latency probe; null means a real DNS lookup.
+  /// Path of the unauthenticated health endpoint that tells us the Lupin server answered.
+  static const String healthPath = '/health';
+
+  /// Plain client for the health request: no auth header and no token refresh, so a sign-in problem cannot read as no network.
+  final Dio _healthDio = Dio();
+
+  /// Replaces the reachability check and the latency probe; null means a real request to the Lupin server.
   ///
   /// Tests set it so they need no network. It is never set in the app.
   @visibleForTesting
@@ -108,7 +115,7 @@ class NetworkConnectivityService {
   @visibleForTesting
   bool get isMonitoring => _qualityTestTimer != null;
 
-  /// Cancels the quality and periodic-check timers, so a backgrounded app makes no DNS lookups.
+  /// Cancels the quality and periodic-check timers, so a backgrounded app makes no health requests.
   ///
   /// The connectivity subscription stays on; it costs nothing.
   void pauseMonitoring() {
@@ -138,7 +145,7 @@ class NetworkConnectivityService {
       case ConnectivityResult.wifi:
       case ConnectivityResult.mobile:
       case ConnectivityResult.ethernet:
-        // Test actual internet connectivity
+        // Ask the Lupin server whether it answers
         final hasInternet = await _testInternetConnectivity();
         _currentState = hasInternet ? NetworkState.connected : NetworkState.limited;
         break;
@@ -173,32 +180,26 @@ class NetworkConnectivityService {
     }
   }
   
-  /// Test actual internet connectivity beyond device network interface
+  /// Returns true when the configured Lupin server answers `GET /health` with 200 within 5 seconds.
+  ///
+  /// The base URL is read on every call, so a switch of server context takes effect on the next check.
   Future<bool> _testInternetConnectivity() async {
     final probe = internetProbe;
     if ( probe != null ) return probe();
+    final answered = await _requestHealth( const Duration( seconds: 5 ) );
+    if ( !answered ) debugPrint( '[NetworkService] Lupin server did not answer ${AppConstants.apiBaseUrl}$healthPath' );
+    return answered;
+  }
+
+  /// Sends `GET /health` to the configured Lupin server; true only for a 200 inside [timeout].
+  Future<bool> _requestHealth( Duration timeout ) async {
     try {
-      // Try multiple reliable endpoints
-      final testUrls = [
-        'google.com',
-        'cloudflare.com',
-        '8.8.8.8',
-      ];
-      
-      for (final url in testUrls) {
-        try {
-          final result = await InternetAddress.lookup(url)
-              .timeout(const Duration(seconds: 5));
-          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-            return true;
-          }
-        } catch (e) {
-          continue; // Try next URL
-        }
-      }
-      return false;
-    } catch (e) {
-      debugPrint('[NetworkService] Internet connectivity test failed: $e');
+      final response = await _healthDio.get<dynamic>(
+        '${AppConstants.apiBaseUrl}$healthPath',
+        options: Options( validateStatus: ( _ ) => true ),
+      ).timeout( timeout );
+      return response.statusCode == 200;
+    } catch ( e ) {
       return false;
     }
   }
@@ -220,16 +221,22 @@ class NetworkConnectivityService {
       }
     });
     
-    // Schedule periodic connectivity verification
+    // Schedule periodic connectivity verification. It runs while limited too, on an interface that can carry
+    // the server, so a server that comes back is seen without an OS network event.
     _periodicCheckTimer = Timer.periodic(periodicCheckInterval, (timer) async {
-      if (_currentState == NetworkState.connected) {
-        final hasInternet = await _testInternetConnectivity();
-        if (!hasInternet && _currentState == NetworkState.connected) {
-          await _handleConnectivityChange(_lastConnectivityResult);
-        }
+      final wasConnected = _currentState == NetworkState.connected;
+      if ( !wasConnected && !( _currentState == NetworkState.limited && _carriesTraffic( _lastConnectivityResult ) ) ) return;
+      final hasInternet = await _testInternetConnectivity();
+      if ( hasInternet != wasConnected && _currentState == ( wasConnected ? NetworkState.connected : NetworkState.limited ) ) {
+        await _handleConnectivityChange(_lastConnectivityResult);
       }
     });
   }
+
+  /// True for an interface type that can reach the server; Bluetooth is limited by design and never re-checked.
+  bool _carriesTraffic( ConnectivityResult result ) =>
+      result == ConnectivityResult.wifi || result == ConnectivityResult.mobile ||
+      result == ConnectivityResult.ethernet || result == ConnectivityResult.vpn;
   
   /// Perform network quality assessment
   Future<void> _performQualityTest() async {
@@ -272,21 +279,13 @@ class NetworkConnectivityService {
     }
   }
   
-  /// Measure network latency to reliable endpoint
+  /// Measures the round trip of `GET /health` to the Lupin server, in milliseconds; 9999 when it does not answer in 3 seconds.
   Future<int> _measureLatency() async {
     if ( internetProbe != null ) return 0;
     final stopwatch = Stopwatch()..start();
-    
-    try {
-      // Use DNS lookup as latency test (lightweight)
-      await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 3));
-      stopwatch.stop();
-      return stopwatch.elapsedMilliseconds;
-    } catch (e) {
-      stopwatch.stop();
-      return 9999; // Very high latency indicates poor connection
-    }
+    final answered  = await _requestHealth( const Duration( seconds: 3 ) );
+    stopwatch.stop();
+    return answered ? stopwatch.elapsedMilliseconds : 9999; // Very high latency indicates poor connection
   }
   
   /// Calculate connection quality based on metrics
@@ -429,11 +428,25 @@ enum NetworkState {
   /// No network connectivity.
   disconnected,
 
-  /// A network interface is up but there is no internet.
+  /// A network interface is up but the Lupin server did not answer.
   limited,
 
-  /// Full internet connectivity.
+  /// A network interface is up and the Lupin server answered.
   connected,
+}
+
+/// True when a network edge from [previous] to [next] should retry unsent writes and refetch.
+///
+/// Ensures:
+///   - an edge into `connected` or `limited` from a state that was not usable acts
+///   - `limited` to `connected` acts, because the server is now confirmed answering
+///   - `connected` to `limited` does not act, because the server just stopped answering
+///   - a repeat of the same state does not act
+bool shouldRetryOnNetworkEdge( NetworkState previous, NetworkState next ) {
+  if ( next != NetworkState.connected && next != NetworkState.limited ) return false;
+  if ( next == previous ) return false;
+  if ( previous == NetworkState.connected && next == NetworkState.limited ) return false;
+  return true;
 }
 
 /// How good the connection is, judged from latency and reachability.
