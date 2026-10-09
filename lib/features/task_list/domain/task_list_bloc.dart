@@ -258,16 +258,17 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     add( TaskListRefreshRequested( cancelToken: token ) );
   }
 
-  /// Starts retrying unsent writes and refreshing when the connection is restored.
+  /// Starts retrying unsent writes and refreshing when the connection is restored, `connected` or `limited`.
   ///
   /// The retry trigger is connectivity-restored, which `NetworkConnectivityService` already
   /// streams. The focus chat bloc's unsent-write shape fires on WebSocket re-auth, and this
   /// pane rides no socket, so its trigger does not carry over.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      // Only the restored edge acts; firing on the way down would send a request into a
-      // connection that just failed.
-      if ( state != NetworkState.connected ) return;
+      // Only an edge to a usable network acts; firing on the way down would send a request into a
+      // connection that just failed. `limited` is usable (Rick, 2026-10-09): the server may sit on a
+      // LAN with no internet, as ws_reconnect_coordinator also assumes.
+      if ( state != NetworkState.connected && state != NetworkState.limited ) return;
 
       // The retry goes first. A refetch that lands before it repaints the board from the
       // server, which lacks the operator's write, so the row flickers back to its old value

@@ -329,13 +329,14 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
       <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
 
-  /// Refreshes on the connectivity-restored edge only, after retrying unsent writes.
+  /// Refreshes on the connectivity-restored edge only (`connected` or `limited`), after retrying unsent writes.
   ///
   /// Firing on every state change would also refetch on the way down, into a connection
   /// that just failed.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      if ( state != NetworkState.connected ) return;
+      // `limited` is usable (Rick, 2026-10-09): the server may sit on a LAN with no internet.
+      if ( state != NetworkState.connected && state != NetworkState.limited ) return;
       // The retry goes first; see `_onRetryUnsent`.
       add( const HoldingAreaUnsentRetryRequested() );
       add( const HoldingAreaRefreshRequested() );
