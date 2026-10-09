@@ -8,7 +8,6 @@ import 'package:equatable/equatable.dart';
 /// adapter; do not assume the names match.
 ///
 /// Decision: src/docs/decisions/README.md (JobStatus-kept).
-/// Design: src/rnd/2026.06.11-focus-mode-voice-chat/10-section-s1-tts-pause-resume.md
 enum JobStatus {
   /// Queued and not yet started.
   todo,

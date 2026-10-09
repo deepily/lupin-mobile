@@ -4,11 +4,12 @@ import '../../../core/testing/test_keys.dart';
 
 /// The two field-door controls: priority and owner.
 ///
-/// Both go through `PATCH /api/tasks/{id}`, which addresses exactly two keys and not
-/// `status`; a status change sent there is silently ignored. This widget reports a
-/// priority and an owner, never a status, and
-/// `TaskWriteRepository.patchFields` cannot send one. It takes no pane parameter: the
-/// roster and the current values arrive as data, so both task panes may pass the same ones.
+/// Both go through `PATCH /api/tasks/{id}`, whose body declares seven editable fields and
+/// not `status`; a status change sent there is refused with a 422. This client sends two
+/// of them, `priority` and `owner_persona`. This widget reports a priority and an owner,
+/// never a status, and `TaskWriteRepository.patchFields` cannot send one. It takes no
+/// pane parameter: the roster and the current values arrive as data, so both task panes
+/// may pass the same ones.
 class TaskFieldControls extends StatefulWidget {
   /// The row's painted priority, or null when it carries none.
   final String? priority;

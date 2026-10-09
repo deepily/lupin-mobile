@@ -175,8 +175,8 @@ class _FilerGroupHeaderState extends State<FilerGroupHeader> {
   }
 
   // The batch reason box. It is a box, not a dialog, so the operator can read the group
-  // while typing the justification. It is always present, so the requirement is visible
-  // before won't-fix-all is pressed.
+  // while typing the justification. It is always present while the group is unfolded, so
+  // the requirement is visible before won't-fix-all is pressed.
   Widget _reasonBox( BuildContext context ) {
     return DictationTextField(
       fieldKey   : Key( '${TestKeys.holdingReasonFieldPrefix}${group.filer}' ),

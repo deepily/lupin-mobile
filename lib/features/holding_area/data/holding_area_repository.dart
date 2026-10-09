@@ -6,7 +6,9 @@ import '../../task_list/data/task_list_repository.dart' show TaskListPage;
 ///
 /// Writes are not here: both task panes use the shared `TaskWriteRepository`, which
 /// checks the 202 response once. The envelope type [TaskListPage] comes from the Task
-/// List, so one reader owns the `truncated`, `total` and `has_more` keys.
+/// List, so one reader owns the `truncated`, `total` and `has_more` keys. [TaskListPage]
+/// still lives in the Task List feature; it belongs in `fleet/data/` beside the row model
+/// and the write door.
 class HoldingAreaRepository {
   final Dio _dio;
 
