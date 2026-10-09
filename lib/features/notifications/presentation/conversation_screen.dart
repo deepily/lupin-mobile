@@ -297,7 +297,7 @@ class _MessageCard extends StatelessWidget {
               children: [
                 Chip(
                   visualDensity: VisualDensity.compact,
-                  backgroundColor: _stateColor( context ).withOpacity( 0.15 ),
+                  backgroundColor: _stateColor( context ).withValues( alpha: 0.15 ),
                   side: BorderSide( color: _stateColor( context ) ),
                   label: Text(
                     message.state ?? "pending",
