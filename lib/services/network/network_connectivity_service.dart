@@ -221,16 +221,22 @@ class NetworkConnectivityService {
       }
     });
     
-    // Schedule periodic connectivity verification
+    // Schedule periodic connectivity verification. It runs while limited too, on an interface that can carry
+    // the server, so a server that comes back is seen without an OS network event.
     _periodicCheckTimer = Timer.periodic(periodicCheckInterval, (timer) async {
-      if (_currentState == NetworkState.connected) {
-        final hasInternet = await _testInternetConnectivity();
-        if (!hasInternet && _currentState == NetworkState.connected) {
-          await _handleConnectivityChange(_lastConnectivityResult);
-        }
+      final wasConnected = _currentState == NetworkState.connected;
+      if ( !wasConnected && !( _currentState == NetworkState.limited && _carriesTraffic( _lastConnectivityResult ) ) ) return;
+      final hasInternet = await _testInternetConnectivity();
+      if ( hasInternet != wasConnected && _currentState == ( wasConnected ? NetworkState.connected : NetworkState.limited ) ) {
+        await _handleConnectivityChange(_lastConnectivityResult);
       }
     });
   }
+
+  /// True for an interface type that can reach the server; Bluetooth is limited by design and never re-checked.
+  bool _carriesTraffic( ConnectivityResult result ) =>
+      result == ConnectivityResult.wifi || result == ConnectivityResult.mobile ||
+      result == ConnectivityResult.ethernet || result == ConnectivityResult.vpn;
   
   /// Perform network quality assessment
   Future<void> _performQualityTest() async {
