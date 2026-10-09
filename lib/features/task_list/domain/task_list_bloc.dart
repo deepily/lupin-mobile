@@ -196,6 +196,9 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
+  /// The network state before the latest edge; `unknown` until the first edge, which counts as not usable.
+  NetworkState _previousNetworkState = NetworkState.unknown;
+
   /// Creates the bloc; [fleet] feeds the reassignment roster and may be null.
   TaskListBloc(
     this._repo,
@@ -265,10 +268,12 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// pane rides no socket, so its trigger does not carry over.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      // Only an edge to a usable network acts; firing on the way down would send a request into a
-      // connection that just failed. `limited` is usable (Rick, 2026-10-09): the server may sit on a
-      // LAN with no internet, as ws_reconnect_coordinator also assumes.
-      if ( state != NetworkState.connected && state != NetworkState.limited ) return;
+      final previous        = _previousNetworkState;
+      _previousNetworkState = state;
+      // Only an edge to a usable network acts, and a repeat of the same state is not an edge. `limited` is
+      // usable (Rick, 2026-10-09): the server may sit on a LAN with no internet. connected -> limited does
+      // not act: that is the moment the server stopped answering, and a request would go into it.
+      if ( !shouldRetryOnNetworkEdge( previous, state ) ) return;
 
       // The retry goes first. A refetch that lands before it repaints the board from the
       // server, which lacks the operator's write, so the row flickers back to its old value

@@ -435,6 +435,20 @@ enum NetworkState {
   connected,
 }
 
+/// True when a network edge from [previous] to [next] should retry unsent writes and refetch.
+///
+/// Ensures:
+///   - an edge into `connected` or `limited` from a state that was not usable acts
+///   - `limited` to `connected` acts, because the server is now confirmed answering
+///   - `connected` to `limited` does not act, because the server just stopped answering
+///   - a repeat of the same state does not act
+bool shouldRetryOnNetworkEdge( NetworkState previous, NetworkState next ) {
+  if ( next != NetworkState.connected && next != NetworkState.limited ) return false;
+  if ( next == previous ) return false;
+  if ( previous == NetworkState.connected && next == NetworkState.limited ) return false;
+  return true;
+}
+
 /// How good the connection is, judged from latency and reachability.
 enum ConnectionQuality {
   /// Quality not determined yet.

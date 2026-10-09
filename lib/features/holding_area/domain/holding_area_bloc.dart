@@ -263,6 +263,9 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
+  /// The network state before the latest edge; `unknown` until the first edge, which counts as not usable.
+  NetworkState _previousNetworkState = NetworkState.unknown;
+
   /// Creates the bloc; [network] and [fleet] are optional.
   HoldingAreaBloc(
     this._repo,
@@ -335,8 +338,10 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   /// that just failed.
   void startConnectivityRefresh() {
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
-      // `limited` is usable (Rick, 2026-10-09): the server may sit on a LAN with no internet.
-      if ( state != NetworkState.connected && state != NetworkState.limited ) return;
+      final previous        = _previousNetworkState;
+      _previousNetworkState = state;
+      // The same rule as the task list; see `shouldRetryOnNetworkEdge`.
+      if ( !shouldRetryOnNetworkEdge( previous, state ) ) return;
       // The retry goes first; see `_onRetryUnsent`.
       add( const HoldingAreaUnsentRetryRequested() );
       add( const HoldingAreaRefreshRequested() );
