@@ -14,14 +14,17 @@ import '../network/network_connectivity_service.dart';
 void startReconnectServices( WsReconnectCoordinator coordinator ) {
   AppLifecycleService().initialize();
   unawaited( NetworkConnectivityService().initialize() );
-  AppLifecycleService().lifecycleStream.listen( ( state ) {
+  void applyToMonitoring( AppLifecycleState state ) {
     final network = NetworkConnectivityService();
     if ( state == AppLifecycleState.resumed ) {
       network.resumeMonitoring();
     } else if ( state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.detached ) {
       network.pauseMonitoring();
     }
-  } );
+  }
+  AppLifecycleService().lifecycleStream.listen( applyToMonitoring );
+  // A pause that came before the observer existed produces no event; act on the state the service started in.
+  applyToMonitoring( AppLifecycleService().currentLifecycleState );
   coordinator.start();
 }
 
