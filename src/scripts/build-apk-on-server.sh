@@ -61,8 +61,10 @@ usage() {
 build-apk-on-server.sh — build the debug APK on the dev server, main checkout only
 
   (no arguments)   Build. Prints the commit it built and where the APK is.
-  --fcm            Compile in FCM push wake-ups (--dart-define=ENABLE_FCM=true). Opt-in
-                   until the wake path is proven on a device (row 8ff78c69, slice 1).
+  --no-fcm         Compile FCM push wake-ups OUT (no --dart-define=ENABLE_FCM=true).
+                   The default is to compile them IN: a build without them has no token
+                   and no background wake-up, and nothing on the phone says so.
+  --fcm            Accepted and ignored (FCM is already the default); old commands work.
   --help, -h       This text.
 
 Environment:
@@ -73,15 +75,38 @@ From the laptop, `deploy-apk-to-device.sh --build` runs this over ssh, then inst
 EOF
 }
 
-FCM=false
+FCM=true
+SAW_FCM=false
+SAW_NO_FCM=false
 while [ $# -gt 0 ]; do
     case "$1" in
-        --fcm)     FCM=true ;;
+        --fcm)     SAW_FCM=true ;;
+        --no-fcm)  SAW_NO_FCM=true; FCM=false ;;
         --help|-h) usage; exit 0 ;;
         *) print_error "Unknown argument: $1"; echo ""; usage; exit 2 ;;
     esac
     shift
 done
+
+if [ "$SAW_FCM" = true ] && [ "$SAW_NO_FCM" = true ]; then
+    print_error "--fcm and --no-fcm contradict each other; pass one."
+    exit 2
+fi
+
+fcm_note=""
+build_args=( build apk --debug )
+if [ "$FCM" = true ]; then
+    build_args+=( --dart-define=ENABLE_FCM=true )
+    fcm_note=" (with FCM push wake-ups)"
+fi
+
+# Test hook: print what would be built and stop, before any checkout, JDK or Gradle check.
+# src/scripts/test-apk-fcm-default.sh uses it to prove the default and the opt-out.
+if [ "${APK_BUILD_DRY_RUN:-}" = "1" ]; then
+    echo "BUILD_ARGS: ${build_args[*]}"
+    echo "FCM: $FCM"
+    exit 0
+fi
 
 # ════════════════════════════════════════════════════════════════════════════════════
 # Right place?
@@ -131,13 +156,6 @@ sha="$( git rev-parse --short HEAD )"
 branch="$( git branch --show-current )"
 dirty=""
 [ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
-
-fcm_note=""
-build_args=( build apk --debug )
-if [ "$FCM" = true ]; then
-    build_args+=( --dart-define=ENABLE_FCM=true )
-    fcm_note=" (with FCM push wake-ups)"
-fi
 
 print_step "Building debug APK on $( hostname ): $branch @ $sha$dirty$fcm_note"
 print_info "About 1 minute warm, about 7 minutes cold."
