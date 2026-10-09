@@ -15,6 +15,7 @@ final RegExp _jwt = RegExp( r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-
 ///
 /// It is an identifier ending in `token`, `password`, `passwd`, `secret`, `api_key`, `secret_key`, `private_key`
 /// or `access_key` (dash, underscore or camelCase), singular or plural.
+/// A plural name holding a bare number is a count, not a secret, and [redactSecrets] leaves it alone.
 /// It must start a word, so `tokenizer`, `passwordless`, `secretary` and `monkey` are left alone.
 /// The lookahead exempts the OAuth error code `invalid_token`, so its reason survives.
 const String _credentialName =
@@ -37,6 +38,9 @@ final RegExp _authHeader = RegExp(
   r"""(authorization["']?\s*[:=]\s*)([^\n,}]+)""",
   caseSensitive: false,
 );
+
+/// A bare number, such as `123`, `-4` or `7.5`, with no quote or bracket around it.
+final RegExp _bareNumber = RegExp( r"^\s*-?\d+(\.\d+)?\s*$" );
 
 const String _mask = "<redacted>";
 
@@ -137,6 +141,8 @@ String redactSecrets( String line ) {
     if ( m.start < copiedUpTo ) continue;
     final quote      = m[ 1 ]!;
     final end        = _valueEnd( out, m.end, nameQuoted: quote.isNotEmpty );
+    // A plural name holding a bare number (`max_tokens=512`) is a usage count, not a credential.
+    if ( m[ 2 ]!.toLowerCase().endsWith( "s" ) && _bareNumber.hasMatch( out.substring( m.end, end ) ) ) continue;
     buffer.write( out.substring( copiedUpTo, m.start ) );
     if ( quote == "\"" && m[ 4 ] == ":" ) {
       buffer.write( "\"${m[ 2 ]}\":\"$_mask\"" );

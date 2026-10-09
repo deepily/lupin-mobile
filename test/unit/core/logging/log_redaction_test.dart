@@ -208,6 +208,20 @@ void main() {
       }
     } );
 
+    test( "a plural name holding a bare number is a usage count and stays readable", () {
+      expect( redactSecrets( "tokens: 123" ), "tokens: 123" );
+      expect( redactSecrets( "{\"tokens\": 4096, \"a\": 1}" ), "{\"tokens\": 4096, \"a\": 1}" );
+      expect( redactSecrets( "max_tokens=512&x=1" ), "max_tokens=512&x=1" );
+      expect( redactSecrets( "{'tokens': 7.5}" ), "{'tokens': 7.5}" );
+      // Controls: strings, arrays and objects under a plural name, and a singular name holding a number, are still masked.
+      expect( redactSecrets( "{\"tokens\": [\"abc\"]}" ), "{\"tokens\":\"<redacted>\"}" );
+      expect( redactSecrets( "{\"tokens\": \"abc\"}" ), "{\"tokens\":\"<redacted>\"}" );
+      expect( redactSecrets( "tokens: {a: 1}" ), "tokens: <redacted>" );
+      expect( redactSecrets( "max_tokens=abc123" ), "max_tokens=<redacted>" );
+      expect( redactSecrets( "{\"password\":12345}" ), "{\"password\":\"<redacted>\"}" );
+      expect( redactSecrets( "token=12345" ), "token=<redacted>" );
+    } );
+
     test( "names that look close to the new ones are left alone", () {
       const line = "hockey=1 monkey: 2 keyboard=3 publickey=4 secretary=5 passworded=6 tokenizers=7 accesskeyboard=8";
       expect( redactSecrets( line ), line );
