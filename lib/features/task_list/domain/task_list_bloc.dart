@@ -196,7 +196,7 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
-  /// The network state before the latest edge; `unknown` until the first edge, which counts as not usable.
+  /// The network state before the latest edge; seeded from the service when [startConnectivityRefresh] first runs.
   NetworkState _previousNetworkState = NetworkState.unknown;
 
   /// Creates the bloc; [fleet] feeds the reassignment roster and may be null.
@@ -267,6 +267,8 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   /// streams. The focus chat bloc's unsent-write shape fires on WebSocket re-auth, and this
   /// pane rides no socket, so its trigger does not carry over.
   void startConnectivityRefresh() {
+    // A pane opens after the service has settled, so its first edge is judged against the state it opened in.
+    if ( _connectivitySub == null ) _previousNetworkState = _network.currentState;
     _connectivitySub ??= _network.networkStateStream.listen( ( state ) {
       final previous        = _previousNetworkState;
       _previousNetworkState = state;
