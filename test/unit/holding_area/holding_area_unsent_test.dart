@@ -46,6 +46,7 @@ class _FakeNetwork implements NetworkConnectivityService {
   bool get isMobile => false;
 
   void restore() => controller.add( NetworkState.connected );
+  void limited() => controller.add( NetworkState.limited );
 
   @override
   dynamic noSuchMethod( Invocation invocation ) => super.noSuchMethod( invocation );
@@ -185,6 +186,25 @@ void main() {
       expect( writesTo( transitionKey( 'a' ) ) - afterPress, 1,
           reason: 'a loop inside one edge hammers a connection that just came back' );
       expect( bloc.state.unsent.keys, [ 'a' ], reason: 'still unsent, still visible' );
+    } );
+
+    // Rick, 2026-10-09 (row 1b192f22): limited is usable, as in ws_reconnect_coordinator.
+    test( 'a limited edge retries the unsent write and refetches, like a connected one', () async {
+      await load();
+      adapter.handlers[ transitionKey( 'a' ) ] = _neverAnswered;
+      bloc.add( HoldingAreaRowVerbPressed( id: 'a', verb: TaskVerb.approve() ) );
+      await settle();
+      final writesAfterPress = writesTo( transitionKey( 'a' ) );
+      final readsAfterPress  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      adapter.handlers[ transitionKey( 'a' ) ] = ( _ ) => jsonBody( { 'status' : 'ok' } );
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey( 'a' ) ) - writesAfterPress, 1, reason: 'one retry on the limited edge' );
+      expect( bloc.state.unsent, isEmpty );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length - readsAfterPress, 1,
+          reason: 'and one refetch' );
     } );
 
     test( 'TWO restores produce TWO attempts', () async {

@@ -66,6 +66,7 @@ class _FakeNetwork implements NetworkConnectivityService {
   /// The restored edge. Anything else must not act.
   void restore() => controller.add( NetworkState.connected );
   void drop()    => controller.add( NetworkState.disconnected );
+  void limited() => controller.add( NetworkState.limited );
 
   @override
   dynamic noSuchMethod( Invocation invocation ) => super.noSuchMethod( invocation );
@@ -244,6 +245,24 @@ void main() {
 
       expect( writesTo( transitionKey ) - afterPress, 1,
           reason: 'a loop inside one edge hammers a connection that just came back' );
+    } );
+
+    // Rick, 2026-10-09 (row 1b192f22): a network that is up but cannot reach the server's
+    // internet side is usable, the way ws_reconnect_coordinator already treats it.
+    test( 'a limited edge retries the unsent write and refetches, like a connected one', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      final writesAfterPress = writesTo( transitionKey );
+      final readsAfterPress  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      adapter.handlers[ transitionKey ] = ( _ ) => jsonBody( { 'status' : 'ok' } );
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writesAfterPress, 1, reason: 'one retry on the limited edge' );
+      expect( bloc.state.unsent, isEmpty );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length - readsAfterPress, 1,
+          reason: 'and one refetch' );
     } );
 
     // ⚠️ ONLY THE RESTORED EDGE ACTS. Firing on every state change would also fire on the
