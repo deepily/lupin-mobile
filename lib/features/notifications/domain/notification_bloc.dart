@@ -335,8 +335,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     _emitCurrentSnapshot( emit );
   }
 
-  // Handles [NotificationsSpeakerphoneChanged]. The record has no displaced
-  // fields; the WebSocket path fills them from the raw payload.
+  // Handles [NotificationsSpeakerphoneChanged]. The typed event carries only `senderId`
+  // and `on`, so `displaced` and `displacedBy` are null on the record; the WebSocket
+  // path fills them from the raw payload.
   Future<void> _onSpeakerphoneChanged(
     NotificationsSpeakerphoneChanged event,
     Emitter<NotificationState> emit,
