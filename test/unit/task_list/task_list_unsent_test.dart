@@ -225,6 +225,7 @@ void main() {
 
       network.restore();
       await settle();
+      network.drop();
       network.restore();
       await settle();
 
@@ -249,6 +250,64 @@ void main() {
 
     // Rick, 2026-10-09 (row 1b192f22): a network that is up but cannot reach the server's
     // internet side is usable, the way ws_reconnect_coordinator already treats it.
+    // Round 2 (Maya's finding 2, Tiffany's table): connected -> limited is the moment the server stopped
+    // answering, so nothing is sent into it; limited -> connected is the server confirmed answering.
+    test( 'connected -> limited fires no retry and no refetch', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      network.restore();
+      await settle();
+      final writes = writesTo( transitionKey );
+      final reads  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ), writes, reason: 'the server just stopped answering' );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length, reads );
+    } );
+
+    test( 'limited -> connected fires exactly one retry and one refetch', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      network.limited();
+      await settle();
+      final writes = writesTo( transitionKey );
+      final reads  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      network.restore();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writes, 1 );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length - reads, 1 );
+    } );
+
+    test( 'the same usable state repeated fires once, not twice', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      final writes = writesTo( transitionKey );
+
+      network.limited();
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writes, 1 );
+    } );
+
+    test( 'disconnected -> limited fires once', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      network.restore();
+      network.drop();
+      await settle();
+      final writes = writesTo( transitionKey );
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writes, 1 );
+    } );
+
     test( 'a limited edge retries the unsent write and refetches, like a connected one', () async {
       adapter.handlers[ transitionKey ] = _neverAnswered;
       await pressPark();
