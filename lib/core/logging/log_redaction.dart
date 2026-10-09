@@ -13,11 +13,12 @@ final RegExp _jwt = RegExp( r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-
 
 /// A credential field name, such as `access_token`, `client_secret` or `x-api-key`.
 ///
-/// It is any identifier ending in `token`, `password`, `passwd`, `secret` or `api_key` (also `api-key`, `apikey`).
+/// It is an identifier ending in `token`, `password`, `passwd`, `secret`, `api_key`, `secret_key`, `private_key`
+/// or `access_key` (dash, underscore or camelCase), singular or plural.
 /// It must start a word, so `tokenizer`, `passwordless`, `secretary` and `monkey` are left alone.
 /// The lookahead exempts the OAuth error code `invalid_token`, so its reason survives.
 const String _credentialName =
-    r"(?<![A-Za-z0-9_-])(?!invalid[_-]token\b)([A-Za-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key))";
+    r"(?<![A-Za-z0-9_-])(?!invalid[_-]token\b)([A-Za-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|(?:secret|private|access)[_-]?key)s?)";
 
 /// A credential field name and separator, such as `"access_token":` or `password=`.
 ///

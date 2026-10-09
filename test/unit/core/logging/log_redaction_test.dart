@@ -191,6 +191,28 @@ void main() {
       }
     } );
 
+    test( "secret_key, private_key, access_key and their camelCase and prefixed spellings are masked", () {
+      for ( final name in [ "secret_key", "private_key", "access_key", "secret-key", "secretKey", "privateKey", "accessKey", "aws_secret_access_key", "SECRET_KEY" ] ) {
+        expect( redactSecrets( "$name=SECRET&x=1" ), "$name=<redacted>&x=1", reason: name );
+        expect( redactSecrets( "{$name: SECRET, a: 1}" ), "{$name: <redacted>, a: 1}", reason: name );
+        expect( redactSecrets( "{\"$name\":\"SECRET\"}" ), "{\"$name\":\"<redacted>\"}", reason: name );
+        expect( redactSecrets( "{'$name': 'SECRET'}" ), "{'$name': <redacted>}", reason: name );
+      }
+    } );
+
+    test( "plural credential names are masked, arrays included", () {
+      for ( final name in [ "tokens", "passwords", "secrets", "api_keys", "access_tokens", "refresh_tokens" ] ) {
+        expect( redactSecrets( "$name=SECRET&x=1" ), "$name=<redacted>&x=1", reason: name );
+        expect( redactSecrets( "{\"$name\":[\"SECRET\",\"S2\"]}" ), "{\"$name\":\"<redacted>\"}", reason: name );
+        expect( redactSecrets( "{'$name': ['SECRET', 'S2'], 'a': 1}" ), "{'$name': <redacted>, 'a': 1}", reason: name );
+      }
+    } );
+
+    test( "names that look close to the new ones are left alone", () {
+      const line = "hockey=1 monkey: 2 keyboard=3 publickey=4 secretary=5 passworded=6 tokenizers=7 accesskeyboard=8";
+      expect( redactSecrets( line ), line );
+    } );
+
     test( "names that merely contain secret, key or passwd are left alone", () {
       const line = "secretary=Jo keyboard: us monkey=1 passwdless: true api_keyring=x";
       expect( redactSecrets( line ), line );
