@@ -48,6 +48,24 @@ void main() {
         }
       } );
 
+      test( "finds the library next to the script, not relative to the caller's directory", () {
+        final sourceLine = code.split( "\n" ).firstWhere( ( line ) => line.contains( "lib/worktree-link-lib.sh" ) );
+        expect( sourceLine, contains( r'dirname "${BASH_SOURCE[0]}"' ), reason: "the path must follow the script" );
+        expect( sourceLine, isNot( contains( r"$PWD" ) ) );
+        expect( sourceLine, isNot( contains( r"$( pwd )/" ) ), reason: "pwd alone is the caller's directory" );
+      } );
+
+      test( "never pipes git's worktree list into a reader", () {
+        for ( final line in code.split( "\n" ).where( ( l ) => l.contains( "worktree list" ) ) ) {
+          expect( line, isNot( contains( "|" ) ), reason: "a short-circuiting reader makes git die of SIGPIPE (row f8f7d54b)" );
+        }
+        expect( code, isNot( contains( "awk '/^worktree" ) ) );
+      } );
+
+      test( "does not compare two directories with its own pwd -P test", () {
+        expect( RegExp( r"pwd -P[^\n]*==[^\n]*pwd -P" ).hasMatch( code ), isFalse, reason: "wt_same_dir owns this" );
+      } );
+
       test( "calls the library instead of repeating its mechanism", () {
         expect( code, isNot( contains( "worktree list --porcelain" ) ), reason: "wt_resolve_main owns this" );
         expect( RegExp( r'=\s*"\$\{line#worktree \}"' ).hasMatch( code ), isFalse, reason: "assigning the main path from the list is wt_resolve_main's job" );
