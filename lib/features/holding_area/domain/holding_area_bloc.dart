@@ -317,7 +317,7 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   }
 
   // Sends one remembered write through the door it came from. The door follows what the
-  // write changes: a PATCH carrying a status is ignored without complaint.
+  // write changes: a PATCH carrying a status is refused with a 422.
   Future<void> _send( UnsentWrite write ) {
     final verb = write.verb;
     if ( verb != null ) {

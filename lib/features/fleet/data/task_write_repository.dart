@@ -7,9 +7,9 @@ import 'package:dio/dio.dart';
 ///   Field door   PATCH /api/tasks/{id}              priority, owner_persona; never status
 ///   Status door  POST  /api/tasks/{id}/transition   every status verb an operator presses
 ///
-/// Approve is a status change. The field door silently ignores `PATCH {status: "queued"}`.
-/// That would leave a Holding Area that looks wired and changes nothing. [patchFields]
-/// takes two named parameters and no map, so it cannot send `status`.
+/// Approve is a status change. The field door refuses `PATCH {status: "queued"}` with a 422,
+/// because its body forbids keys it does not declare and `status` is not declared.
+/// [patchFields] takes two named parameters and no map, so it cannot send `status`.
 ///
 /// A 401 is not handled here. The shared Dio has a global auth interceptor that refreshes
 /// on 401 (`lib/services/auth/auth_interceptor.dart`), and a second refresh path would

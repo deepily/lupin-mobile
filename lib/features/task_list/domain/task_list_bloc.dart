@@ -420,8 +420,8 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
   }
 
   // Sends one remembered write back through the door it came from. The door is decided by
-  // what the write changes, as for a fresh write: a PATCH carrying a status is ignored, and
-  // a transition carrying a priority is not a request the endpoint understands.
+  // what the write changes, as for a fresh write: a PATCH carrying a status is refused with
+  // a 422, and so is a transition carrying a priority.
   Future<void> _send( UnsentWrite write ) {
     final verb = write.verb;
     if ( verb != null ) {
