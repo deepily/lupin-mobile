@@ -197,7 +197,7 @@ class _JobTile extends StatelessWidget {
       subtitle : Text( job.agentType ?? job.status ),
       trailing : Chip(
         label          : Text( job.status, style: const TextStyle( fontSize: 11 ) ),
-        backgroundColor: _statusColor( job.status ).withOpacity( 0.2 ),
+        backgroundColor: _statusColor( job.status ).withValues( alpha: 0.2 ),
       ),
       onTap    : () => Navigator.of( context ).push( MaterialPageRoute(
         builder: ( _ ) => BlocProvider.value(

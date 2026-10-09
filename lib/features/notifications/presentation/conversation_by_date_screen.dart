@@ -174,7 +174,7 @@ class _NotificationItemCard extends StatelessWidget {
                   children: [
                     Chip(
                       visualDensity: VisualDensity.compact,
-                      backgroundColor: color.withOpacity( 0.15 ),
+                      backgroundColor: color.withValues( alpha: 0.15 ),
                       side: BorderSide( color: color ),
                       label: Text(
                         item.priority,

@@ -140,7 +140,7 @@ class _SenderTile extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric( horizontal: 16 ),
-        color: Colors.red.withOpacity( 0.8 ),
+        color: Colors.red.withValues( alpha: 0.8 ),
         child: const Icon( Icons.delete, color: Colors.white ),
       ),
       onDismissed: ( _ ) {
