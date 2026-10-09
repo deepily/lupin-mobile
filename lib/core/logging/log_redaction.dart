@@ -15,7 +15,7 @@ final RegExp _jwt = RegExp( r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-
 ///
 /// It is an identifier ending in `token`, `password`, `passwd`, `secret`, `api_key`, `secret_key`, `private_key`
 /// or `access_key` (dash, underscore or camelCase), singular or plural.
-/// A plural name holding a bare number is a count, not a secret, and [redactSecrets] leaves it alone.
+/// Only token-count names (`max_tokens`, `total_tokens`, ...) may hold a bare number; see [_countNames].
 /// It must start a word, so `tokenizer`, `passwordless`, `secretary` and `monkey` are left alone.
 /// The lookahead exempts the OAuth error code `invalid_token`, so its reason survives.
 const String _credentialName =
@@ -39,8 +39,18 @@ final RegExp _authHeader = RegExp(
   caseSensitive: false,
 );
 
-/// A bare number, such as `123`, `-4` or `7.5`, with no quote or bracket around it.
-final RegExp _bareNumber = RegExp( r"^\s*-?\d+(\.\d+)?\s*$" );
+/// A bare number (`123`, `-4`, `7.5`) ending at whitespace, `&`, `,`, a bracket or the text end.
+///
+/// Letters after the digits (`512abc`, `1e5`) mean it could be a credential, so it does not count.
+final RegExp _bareNumber = RegExp( r"-?\d+(\.\d+)?(?=[\s&,\]})]|$)" );
+
+/// Underscores and dashes in a field name, dropped before it is looked up in [_countNames].
+final RegExp _nameSeparators = RegExp( r"[_-]" );
+
+/// The names whose bare-number values are counts and stay readable, lowercase and without `_` or `-`.
+const Set<String> _countNames = {
+  "tokens", "maxtokens", "prompttokens", "completiontokens", "totaltokens", "inputtokens", "outputtokens",
+};
 
 const String _mask = "<redacted>";
 
@@ -140,9 +150,9 @@ String redactSecrets( String line ) {
     // A credential name inside a value already masked (a nested object) is gone with it.
     if ( m.start < copiedUpTo ) continue;
     final quote      = m[ 1 ]!;
+    // A token-count name holding a bare number (`max_tokens=512`) is a usage count, not a credential.
+    if ( _countNames.contains( m[ 2 ]!.toLowerCase().replaceAll( _nameSeparators, "" ) ) && _bareNumber.matchAsPrefix( out, m.end ) != null ) continue;
     final end        = _valueEnd( out, m.end, nameQuoted: quote.isNotEmpty );
-    // A plural name holding a bare number (`max_tokens=512`) is a usage count, not a credential.
-    if ( m[ 2 ]!.toLowerCase().endsWith( "s" ) && _bareNumber.hasMatch( out.substring( m.end, end ) ) ) continue;
     buffer.write( out.substring( copiedUpTo, m.start ) );
     if ( quote == "\"" && m[ 4 ] == ":" ) {
       buffer.write( "\"${m[ 2 ]}\":\"$_mask\"" );

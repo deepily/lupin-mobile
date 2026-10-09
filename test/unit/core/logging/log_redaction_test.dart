@@ -222,6 +222,40 @@ void main() {
       expect( redactSecrets( "token=12345" ), "token=<redacted>" );
     } );
 
+    test( "only the token-count names may hold a bare number; every other secret name is masked whatever the value", () {
+      expect( redactSecrets( "passwords=12345678" ), "passwords=<redacted>" );
+      expect( redactSecrets( "{\"passwords\": 12345678}" ), "{\"passwords\":\"<redacted>\"}" );
+      expect( redactSecrets( "secrets: 424242" ), "secrets: <redacted>" );
+      expect( redactSecrets( "api_keys=123456789012" ), "api_keys=<redacted>" );
+      expect( redactSecrets( "access_tokens: 8675309" ), "access_tokens: <redacted>" );
+      expect( redactSecrets( "{'private_keys': 99999}" ), "{'private_keys': <redacted>}" );
+      expect( redactSecrets( "secret_keys=1" ), "secret_keys=<redacted>" );
+      expect( redactSecrets( "refresh_tokens=123456" ), "refresh_tokens=<redacted>" );
+      expect( redactSecrets( "x_max_tokens=512" ), "x_max_tokens=<redacted>" );
+    } );
+
+    test( "each count name keeps its number, in snake_case and camelCase", () {
+      for ( final name in [
+        "tokens", "max_tokens", "prompt_tokens", "completion_tokens", "total_tokens", "input_tokens", "output_tokens",
+        "maxTokens", "promptTokens", "completionTokens", "totalTokens", "inputTokens", "outputTokens",
+      ] ) {
+        expect( redactSecrets( "$name=512&x=1" ), "$name=512&x=1", reason: name );
+        expect( redactSecrets( "{$name: 512, a: 1}" ), "{$name: 512, a: 1}", reason: name );
+        expect( redactSecrets( "{\"$name\":512}" ), "{\"$name\":512}", reason: name );
+      }
+    } );
+
+    test( "a count number is bare when it ends at a space, ampersand, comma or bracket", () {
+      expect( redactSecrets( "max_tokens=512 (limit)" ), "max_tokens=512 (limit)" );
+      expect( redactSecrets( "GET /v1/chat?max_tokens=512 HTTP/1.1" ), "GET /v1/chat?max_tokens=512 HTTP/1.1" );
+      expect( redactSecrets( "[tokens=512]" ), "[tokens=512]" );
+      expect( redactSecrets( "max_tokens=512\nnext" ), "max_tokens=512\nnext" );
+      expect( redactSecrets( "max_tokens=512" ), "max_tokens=512" );
+      // Not bare: letters follow the digits, so it could be a credential.
+      expect( redactSecrets( "max_tokens=512abc" ), "max_tokens=<redacted>" );
+      expect( redactSecrets( "tokens: 1e5" ), "tokens: <redacted>" );
+    } );
+
     test( "names that look close to the new ones are left alone", () {
       const line = "hockey=1 monkey: 2 keyboard=3 publickey=4 secretary=5 passworded=6 tokenizers=7 accesskeyboard=8";
       expect( redactSecrets( line ), line );
