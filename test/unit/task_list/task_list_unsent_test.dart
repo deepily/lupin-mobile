@@ -57,6 +57,12 @@ class _FakeNetwork implements NetworkConnectivityService {
 
   bool mobile = false;
 
+  /// What `currentState` reports to a bloc that starts now.
+  NetworkState current = NetworkState.unknown;
+
+  @override
+  NetworkState get currentState => current;
+
   @override
   Stream<NetworkState> get networkStateStream => controller.stream;
 
@@ -280,6 +286,33 @@ void main() {
 
       expect( writesTo( transitionKey ) - writes, 1 );
       expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length - reads, 1 );
+    } );
+
+    // Round 3 (Maya, Tiffany): a pane opens after the service is already connected, so the first edge down
+    // to limited must not retry either.
+    test( 'a bloc started while connected: the first connected -> limited edge fires nothing', () async {
+      await bloc.close();
+      network.current = NetworkState.connected;
+      final late = TaskListBloc(
+        TaskListRepository( makeDio( adapter ) ),
+        TaskWriteRepository( makeDio( adapter ), actorEmail: () => 'rick@example.com' ),
+        network : network,
+      )..startConnectivityRefresh();
+      addTearDown( late.close );
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      late.add( TaskListVerbPressed(
+        taskId : 'row-1',
+        verb   : buildTaskVerb( 'park', reason: 'not this quarter', chaseTs: DateTime.utc( 2026, 10, 1 ) ),
+      ) );
+      await settle();
+      final writes = writesTo( transitionKey );
+      final reads  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ), writes, reason: 'the server just stopped answering' );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length, reads );
     } );
 
     test( 'the same usable state repeated fires once, not twice', () async {

@@ -45,6 +45,12 @@ class _FakeNetwork implements NetworkConnectivityService {
   @override
   bool get isMobile => false;
 
+  /// What `currentState` reports to a bloc that starts now.
+  NetworkState current = NetworkState.unknown;
+
+  @override
+  NetworkState get currentState => current;
+
   void restore() => controller.add( NetworkState.connected );
   void limited() => controller.add( NetworkState.limited );
   void drop()    => controller.add( NetworkState.disconnected );
@@ -226,6 +232,33 @@ void main() {
 
       expect( writesTo( transitionKey( 'a' ) ) - writes, 1 );
       expect( reads() - gets, 1 );
+    } );
+
+    // Round 3 (Maya, Tiffany): a pane opens after the service is already connected, so the first edge down
+    // to limited must not retry either.
+    test( 'a bloc started while connected: the first connected -> limited edge fires nothing', () async {
+      await bloc.close();
+      network.current = NetworkState.connected;
+      final dio  = makeDio( adapter );
+      final late = HoldingAreaBloc(
+        HoldingAreaRepository( dio ),
+        TaskWriteRepository( dio, actorEmail: () => 'rick@example.com' ),
+        network : network,
+      )..startConnectivityRefresh();
+      addTearDown( late.close );
+      late.add( const HoldingAreaRefreshRequested() );
+      await settle();
+      adapter.handlers[ transitionKey( 'a' ) ] = _neverAnswered;
+      late.add( HoldingAreaRowVerbPressed( id: 'a', verb: TaskVerb.approve() ) );
+      await settle();
+      final writes = writesTo( transitionKey( 'a' ) );
+      final gets   = reads();
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey( 'a' ) ), writes, reason: 'the server just stopped answering' );
+      expect( reads(), gets );
     } );
 
     test( 'the same usable state repeated fires once, not twice', () async {
