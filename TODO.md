@@ -2,13 +2,12 @@
 
 ## ▶ START HERE — 2026-10-09 (Tiffany 💍)
 
-State at the 18:21 EDT checkpoint: code tip `13882d9` (docs commits after it), APK built with FCM at that sha and passed Rick's phone check, nothing pushed. No seats running. Live owed work is in the store, owner `tiffany`.
+State at the 19:51 EDT checkpoint: tip `4e317c8` (comment fixes from the hand read, merge gate passed), APK built with FCM at `13882d9` and passed Rick's phone check (nothing but comments and docs changed since), nothing pushed. No seats running. The documentation plan (P0 row `b707f92f`) is closed. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| Pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`); pairs are built (45 and 774) | Cheech: no extractor passed on 2026-10-09; two prompt ablation draws 2026-10-10 from 10:00 EDT, his ruling by 14:00 EDT |
+| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); 577 pairs were not read by hand | Rick admits the row; Cheech reports an extractor that passes the Dart gate |
 | Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads (link sent 18:21 EDT) and rules |
-| "Rows blocked on me that I do not own" query (lupin row `879fe139`, admitted, queued) | A lupin manager takes it; asked Mr. Radio |
 | Transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked with a passed chase date | Rick, at his convenience |
 
 ### Decisions Log — 2026-10-09 (sessions `de4ce9d3` / `f6acc646`, Tiffany)
@@ -30,6 +29,15 @@ State at the 18:21 EDT checkpoint: code tip `13882d9` (docs commits after it), A
 - **Rulings R6 to R11 of the 2026-10-03 post-game: "Drop them"** (Rick, same card). None is a rule; row `ea96c8d7` closed.
 - **Rulings R12 to R18: Rick asked for a link to the document and has not ruled** (same card).
 - **Lupin row `879fe139` admitted** (Rick; it read queued at 18:20 EDT).
+- **Lupin row `879fe139` reassigned to Mr. Radio, owner and manager** (he agreed by DM, 18:21 EDT).
+- **Cheech's extractor draws run tonight, not tomorrow: "That's a huge blocker. He should get that out of your way"** (Rick, voice, about 18:47 EDT). Both prompt variants failed at 19:02 EDT.
+- **The mobile documentation plan closes on the six mechanical checks plus a hand-read sample of the 819 pairs; the claim judge is deferred until an extractor passes** (Rick, Cheech's card about 19:08 EDT; confirmed first-hand on my card about 19:10 EDT).
+- **Sample: "About 240, risk first"**: all 45 pilot pairs, the 77 sweep pairs whose doc comment became a plain comment or vanished, the 60 largest word losses, 60 random with seed 20261009 (Rick, my card, about 19:10 EDT).
+- **A real loss in the random part adds 60 more random pairs** (Rick, same card). It did not fire: the random 60 found none.
+- **Result of the hand read**: 242 pairs, 214 kept, 18 moved, 3 restored, 7 rightly gone. Fixes merged `4e317c8` (seven comment-only commits; Chloé's review; merge gate PASS). Rows `9e0dd2dd`, `2847a900`, `c70a83b1`, `ef09dc19` and the P0 `b707f92f` closed.
+- **The task write doors refuse an undeclared field with a 422; mobile comments that said "ignored" were wrong** (read in lupin `src/cosa/rest/routers/tasks.py` at `99ea8d5f9`; corrected in `4e317c8`).
+- **A hand-written memento with no header may be accepted after the manager reads it** (manager; Chloé's, reaped knowingly at 19:47 EDT).
+- **Mr. Radio's quiet windows also ran 18:23 to 18:49 and 18:50 to 19:26 EDT** (Rick's env keys run; the keys were not kept).
 - **Mr. Radio's quiet window ran 16:22 to 16:25 EDT and nothing ran in it** (his DM: the permission classifier refused his run; it is now Rick's to run, and he will ask for a new window). The agreed terms for a window: no lupin host tests, no bounce of `:7999`, `:8000` or `:8001`, no docker compose, no spawn, no edit of lupin's `.env`.
 - **Log masking: findings A (multi-line values) and B (quadratic scanner) are required before merge; `secret_key`, `private_key`, `access_key` and plural names are added** (manager, row `8398bfe8`).
 - **Only token-count names keep a bare number readable: `tokens`, `max_tokens`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `input_tokens`, `output_tokens`** (manager, after Maya refused my first, wider rule; commit `8927b28`).

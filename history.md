@@ -32,7 +32,9 @@ Crew (all Sonnet 5.5): Maya (reviewer), Clayton (author), Pocholo (author, then 
 
 - **Evening**: Rick's phone check passed all three steps (card, about 18:20 EDT); rows `1b192f22` and `b69dbf0b` closed. He dropped rulings R6 to R11 (row `ea96c8d7` closed) and admitted lupin row `879fe139`.
 
-**RESUME HERE (checkpoint, 18:21 EDT; the list after "(2) Rick: rulings" below is superseded where this line differs):** (1) Rick: rulings R12 to R18 (link sent); the Stop poke flip (`ee68d5e7`: phone, Settings, Notifications, switch "Stop poke", admin sign-in) and transcript capture (`768e852f`). (2) Lupin row `879fe139` needs a lupin manager. Earlier line: (2) Rick: rulings R6 to R11 (`ea96c8d7`) and R12 to R18; push. (3) Cheech's gate run, chase 2026-10-10 14:00 EDT, then the judge over the pilot and the sweep.
+- **Documentation plan closed (P0 row `b707f92f`)**: both of Cheech's extractor variants failed at 19:02 EDT, so Rick ruled a hand read of a sample in place of the claim judge. Pocholo and Chloé read 242 of 819 pairs (214 kept, 18 moved, 3 to restore, 7 rightly gone; the random 60 found none; a blind cross-check of 25 agreed). A fresh author seat wrote seven comment-only commits, Chloé reviewed (one not yet, then pass), merged `4e317c8`, merge gate PASS. Along the way: mobile comments said the task write doors ignore an undeclared field; the server refuses it with a 422. The full judge run stays owed on held row `79d49618`. Files: `io/2026.10.09/hand-read/`.
+
+**RESUME HERE (checkpoint, 19:51 EDT; replaces the lines below):** (1) Rick: rulings R12 to R18 (link sent); admit row `79d49618`; the Stop poke flip (`ee68d5e7`: phone, Settings, Notifications, switch "Stop poke", admin sign-in) and transcript capture (`768e852f`). (2) When Cheech reports a passing Dart extractor, run the judge over all 819 pairs (row `79d49618`). (3) No seats running; nothing pushed. Earlier line: (2) Rick: rulings R6 to R11 (`ea96c8d7`) and R12 to R18; push. (3) Cheech's gate run, chase 2026-10-10 14:00 EDT, then the judge over the pilot and the sweep.
 
 ## 2026.10.05 | Session `bca18ee2` (Tiffany 💍) — logger merged, log flush on pause, Dart labelled set finished
 
