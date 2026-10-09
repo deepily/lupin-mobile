@@ -65,7 +65,8 @@ class HoldingAreaWontFixAllPressed extends HoldingAreaEvent {
 ///
 /// Separate from [HoldingAreaRowVerbPressed] because the server doors differ: fields go
 /// to `PATCH /api/tasks/{id}` and status goes to `POST /api/tasks/{id}/transition`.
-/// Sending a priority change to the transition endpoint would be silently ignored.
+/// Sending a priority change to the transition endpoint is refused with a 422; the
+/// transition body takes no `priority`.
 class HoldingAreaFieldChanged extends HoldingAreaEvent {
   /// Id of the task being changed.
   final String  id;
