@@ -14,6 +14,24 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.09 | Session `de4ce9d3` (Tiffany 💍) — five held rows cleared, two connectivity rulings, blind Dart count
+
+Crew (all Sonnet 5.5): Maya (reviewer), Clayton (author), Pocholo (author, then reviewer), one author seat that got no persona; all released with mementos by 12:05 EDT. Afternoon: Pocholo (tester, released 14:00), Clayton (author, running at this checkpoint). Tip `95c1c02`, not pushed (28 commits ahead of origin). I cleared my own context at 12:31 EDT (session `f6acc646`, same seat).
+
+- **APK scripts build with FCM by default** (row `58ec8260`, closed): `--no-fcm` opts out, `--fcm` still accepted; a stamp test covers both. Merged `60d7be1`, stamp test in `869481b`.
+- **Log masking** (bug `8398bfe8`, closed): quoted keys, whole arrays and objects, `secret_key` / `private_key` / `access_key` and plural names, a linear scanner. Maya refused my ruling that any plural name holding a bare number stays readable (`passwords=12345678` printed); only token-count names keep a number now. Merged `869481b`.
+- **Analyzer notes** (decision `6f0e209d`, closed; Rick: "Fix both, with tests"): mounted guard in the inbox screen, four `withValues`, notifications and queue on the strict check. Merged `12acb7d`.
+- **Connectivity timers never arm while the app is paused** (bug `1b192f22`): three rounds, each from a reviewer finding (pause during start-up, pause before the services start, usage state on a paused start). Merged `f244d73`, `d35feaf`, `4e15c9c`. Rick ruled both open questions at about 14:41 EDT: the phone checks the Lupin server instead of `google.com` and `cloudflare.com`, and `limited` counts as usable in the task list and holding area. Clayton is writing both.
+- **Seat-worktree scripts share one library with lupin** (lupin row `c41c090a`, closed): byte-identical copy, the three scripts source it, a usage test that survives the reviewer's mutants. Merged `d5da690`, `95c1c02`. My merge turned lupin's `test_new_worktrees_come_up_tier_capable.py` red because I ran only one of the two lupin files that read mobile's scripts; Chloé's fixture fix landed at lupin `2c24f7fee`, and both files are green from the real checkouts (32 passed, 2 skipped). Closed after a spawn into a new worktree linked Flutter and the Gradle wrapper.
+- **Merge gates**: PASS `29a612c..60d7be1`, PASS `60d7be1..f244d73`, PASS-WITH-WARNING `f244d73..d35feaf` (ignores and the exemption list read), PASS `d35feaf..95c1c02`. Suite: no new failure, 3 known. APK built at `95c1c02`, FCM on.
+- **Blind Dart symbol count for Cheech** (lupin row `7a963ebf`, Dart leg): 227 of 227 changed files match the index at lupin `ab3fc4557`, 2,577 symbols each side; counter frozen by sha256 before the index ran. The row was missing from my handover; Cheech reminded me.
+- **Fresh slice of Dart pairs for Cheech** (row `df97c02b`, closed): from my 819 pairs (45 pilot, 774 sweep), 639 share no symbol with dev 80 or gate 175, and 344 share no file either. Unlabelled, so they test false alarms only. Folder `projects-data/lupin-mobile/dart-fresh-slice-2026.10.09/`.
+- **Claim judge** (rows `2847a900`, `9e0dd2dd`): Cheech's extractor revision 2 was not adopted; the gate run is no earlier than 2026-10-10 afternoon.
+- **Post-game** for the crew: `src/docs/post-games/v0.2.2/2026.10.09-board-whittling-crew-post-game.md`, rulings R12 to R18 drafted.
+- Logs and verdicts under `io/2026.10.09/{tiffany,maya,pocholo}/`.
+
+**RESUME HERE (checkpoint, 14:45 EDT):** (1) Clayton's hand-over on `1b192f22`: spawn a reviewer on his sha, merge, gate, rebuild the APK. (2) Rick: un-park and phone check of `b69dbf0b`; rulings R6 to R11 (`ea96c8d7`) and R12 to R18; push. (3) Cheech's gate run, chase 2026-10-10 14:00 EDT, then the judge over the pilot and the sweep.
+
 ## 2026.10.05 | Session `bca18ee2` (Tiffany 💍) — logger merged, log flush on pause, Dart labelled set finished
 
 Crew (all Sonnet 5.5, all released with mementos): Chloé (author, two seats), John (reviewer), Clayton (author, in the lupin repository on Rick's card), Pocholo (blind reader). Rio (Cheech's seat) reviewed the lupin commits; Cheech merged them. Tip `4808f84`, not pushed (23 commits ahead of origin).

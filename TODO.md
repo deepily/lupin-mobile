@@ -1,6 +1,36 @@
 # TODO
 
-## ▶ START HERE — 2026-10-05 (Tiffany 💍)
+## ▶ START HERE — 2026-10-09 (Tiffany 💍)
+
+State at the 14:45 EDT checkpoint: tip `95c1c02`, merge gates passed, APK built with FCM at that sha, nothing pushed. One seat running: Clayton, author, on Rick's two connectivity rulings. Live owed work is in the store, owner `tiffany`.
+
+| Next | Waits on |
+|---|---|
+| Connectivity rulings in code (row `1b192f22`): check the Lupin server, not `google.com` or `cloudflare.com`; `limited` is usable in the task list and holding area | Clayton's sha, then a reviewer, the merge gate and an APK rebuild |
+| Phone check of the reconnect fix (row `b69dbf0b`, parked): airplane mode over 75 s; server stopped over 75 s with the app on screen; leave the app 10 s and return | Rick: `deploy-apk-to-device.sh`, the check, and the un-park card |
+| Pilot gate (row `2847a900`) and claim judge over the pilot and the sweep (row `9e0dd2dd`); pairs are built (45 and 774) | Cheech: revision 4 draws 2026-10-10, 10:00 to 13:00 EDT; gate run that afternoon at the earliest |
+| Post-game rulings: R6 to R11 (row `ea96c8d7`), R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
+| "Rows blocked on me that I do not own" query, and hand-written clock times (lupin row `879fe139`, held) | Rick admits; a lupin seat builds |
+| Transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked with a passed chase date | Rick, at his convenience |
+
+### Decisions Log — 2026-10-09 (sessions `de4ce9d3` / `f6acc646`, Tiffany)
+
+- **Spin up a crew and whittle the board; there is fleet headroom** (Rick, voice, about 11:30 EDT; from my handover, not re-read).
+- **Analyzer notes, row `6f0e209d`: "Fix both, with tests"** (Rick, card, about 11:33 EDT; from my handover).
+- **One seat over the fleet cap of 12** (Rick, card, about 11:35 EDT; from my handover).
+- **Phone check of the reconnect fix: "Not yet, keep it open"** (Rick, card, about 11:30 EDT; from my handover). Row `b69dbf0b` stays parked.
+- **Internet check: the phone asks the Lupin server; the `google.com`, `cloudflare.com` and `8.8.8.8` lookups come out** (Rick, card, answered about 14:41 EDT, no default used). Row `1b192f22`.
+- **`limited` counts as usable in the task list and holding area** (Rick, same card).
+- **Rick admits the post-game row `41b0772d` himself** (same card; it read queued at 14:42 EDT).
+- **Log masking: findings A (multi-line values) and B (quadratic scanner) are required before merge; `secret_key`, `private_key`, `access_key` and plural names are added** (manager, row `8398bfe8`).
+- **Only token-count names keep a bare number readable: `tokens`, `max_tokens`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `input_tokens`, `output_tokens`** (manager, after Maya refused my first, wider rule; commit `8927b28`).
+- **Accepted gaps, named on the rows**: JSON inside a string and a secret in a URL path in debug builds (`8398bfe8`); a pipe split across lines in the usage test (`c41c090a`).
+- **The lost-pause and usage-state findings stay on row `1b192f22`, not new rows** (manager).
+- **Mobile's copy of `worktree-link-lib.sh` is never edited on the mobile side; lupin's byte-compare test fails on one byte** (Mr. Radio's test; manager's rule for the crew).
+- **The Dart symbol index is compared at lupin `ab3fc4557`** (Cheech, DM 13:55 EDT).
+- **Cheech's crew opens only `slice-b.jsonl` of the fresh slice, and not before a freeze says how it is used** (Cheech, DM 14:00 EDT).
+
+## ▶ Earlier: 2026-10-05 close (Tiffany 💍)
 
 State at the 23:05 EDT close: the WebSocket reconnect fix is merged (`4badc70`, merge gate PASS) and the APK is built with `--fcm` at that sha. No workers running; Chloé and the reviewer seat (persona Maya) were released with verified mementos under `io/mementos/`. Live owed work is in the store, owner `tiffany`.
 
