@@ -830,6 +830,10 @@ void main() {
       final prefs = _MockPrefs();
       when( () => prefs.ttsFraction        ).thenReturn( 0.5 );
       when( () => prefs.docsBelowWhenWide  ).thenReturn( false );
+      // The pane's silenced-speech marker reads these three on build.
+      when( () => prefs.enabled            ).thenReturn( true );
+      when( () => prefs.masterMute         ).thenReturn( false );
+      when( () => prefs.inQuietHours( any() ) ).thenReturn( false );
       GetIt.instance.registerSingleton<NotificationPreferences>( prefs );
       GetIt.instance.registerSingleton<NotificationStopList>( _MockStopList() );
       addTearDown( GetIt.instance.reset );
