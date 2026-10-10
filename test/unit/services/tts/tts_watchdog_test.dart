@@ -35,7 +35,7 @@ void main() {
   late DateTime?    lastActivity;
   TtsOrchestrator? orch;
 
-  Future<TtsOrchestrator> newOrch() async {
+  Future<TtsOrchestrator> newOrch( { Duration? fallbackBudget, Duration? maxPlayback } ) async {
     SharedPreferences.setMockInitialValues( {} );
     final prefs  = NotificationPreferences( await SharedPreferences.getInstance() );
     player       = _MockPlayer();
@@ -67,6 +67,8 @@ void main() {
 
     orch = TtsOrchestrator(
       player: player, fallback: fallback, prefs: prefs, ws: ws, speakWatchdog: window,
+      fallbackSpeakBudget: fallbackBudget ?? TtsOrchestrator.defaultFallbackSpeakBudget,
+      maxPlayback: maxPlayback,
     );
     return orch!;
   }
@@ -174,6 +176,81 @@ void main() {
       await pump();
       expect( o.lastOutcome!.line, "Last message sent to the speaker" );
       expect( o.lastOutcome!.problem, isFalse );
+    } );
+  } );
+
+  group( "review findings on edf2704 (Chloe)", () {
+    test( "finding 2: an on-device speak that never returns is abandoned and the queue moves on", () async {
+      final o = await newOrch( fallbackBudget: const Duration( milliseconds: 50 ) );
+      when( () => ws.sessionId ).thenReturn( null );   // every utterance takes the on-device path, no POST
+      final hung = Completer<void>();
+      var   calls = 0;
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        onDevice.add( inv.positionalArguments.first as String );
+        if ( ++calls == 1 ) await hung.future;   // the engine accepts the text and never answers
+      } );
+
+      o.enqueueAlways( priority: "high", message: "first, engine hangs" );
+      o.enqueueAlways( priority: "high", message: "second" );
+      await Future<void>.delayed( const Duration( milliseconds: 200 ) );
+
+      expect( onDevice, [ "first, engine hangs", "second" ], reason: "THE BUG: _current stayed set, zero POSTs, silence" );
+      expect( o.lastOutcome!.line, isNot( contains( "did not respond" ) ), reason: "the second spoke fine afterwards" );
+      hung.complete();
+    } );
+
+    test( "finding 1: a POST that returns after an urgent preempt does not strip the preemptor's watchdog", () async {
+      final o = await newOrch();
+      final slowPost = Completer<void>();
+      var   n = 0;
+      when( () => player.speak(
+        text      : any( named: "text"      ),
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId"   ),
+      ) ).thenAnswer( ( inv ) async {
+        posted.add( inv.namedArguments[ #text ] as String );
+        if ( ++n == 1 ) await slowPost.future;   // A's acknowledgement is slow
+      } );
+
+      o.enqueueAlways( priority: "high", message: "A, slow to be acknowledged" );
+      await pump();
+      o.enqueueAlways( priority: "urgent", message: "U, urgent" );   // preempts A while its POST is in flight
+      await pump();
+      expect( posted, [ "A, slow to be acknowledged", "U, urgent" ] );
+
+      slowPost.complete();   // A's POST finally returns, after U was dispatched
+      await pump();
+      await afterFirst();    // U's audio never arrives
+
+      expect( onDevice, contains( "U, urgent" ), reason: "THE BUG: A's late arm cancelled U's timer and U had none" );
+    } );
+
+    test( "finding 3: audio that reports playing forever is stopped at the ceiling and the queue advances", () async {
+      final o = await newOrch( maxPlayback: const Duration( milliseconds: 120 ) );
+      audioPlaying = true;   // onComplete never fires
+
+      o.enqueueAlways( priority: "high", message: "plays forever" );
+      o.enqueueAlways( priority: "high", message: "next" );
+      await pump();
+      expect( posted, [ "plays forever" ] );
+
+      await Future<void>.delayed( const Duration( milliseconds: 260 ) );
+      expect( posted, [ "plays forever", "next" ], reason: "THE BUG: the watchdog re-armed forever" );
+      expect( onDevice, isEmpty, reason: "it was heard already; it is not spoken a second time" );
+      expect( o.lastOutcome!.line, contains( "never reported finishing" ) );
+    } );
+
+    test( "finding 4: a throw inside the watchdog releases the queue instead of leaving it held", () async {
+      final o = await newOrch();
+      when( () => player.stop() ).thenAnswer( ( _ ) async => throw StateError( "player gone" ) );
+
+      o.enqueueAlways( priority: "high", message: "first" );
+      o.enqueueAlways( priority: "high", message: "second" );
+      await pump();
+      await afterFirst();
+
+      expect( posted, [ "first", "second" ], reason: "THE BUG: an unhandled throw left _current set" );
+      expect( o.lastOutcome!.line, anyOf( contains( "watchdog hit an error" ), contains( "sent to the speaker" ) ) );
     } );
   } );
 }
