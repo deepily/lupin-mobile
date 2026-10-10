@@ -433,9 +433,6 @@ def _write_selected( wsc: Any, collector: Any, name: str, reasons_for: Callable[
     _ok( name )
 
 
-_JWT_SHAPE = re.compile( r"eyJ[A-Za-z0-9_-]{17,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}" )
-
-
 def _looks_like_jwt( body: Any ) -> bool:
     """True when [body] contains a JWT-shaped token ANYWHERE in any string: three
     dot-separated base64url segments of 20+ characters, the first starting `eyJ`.
@@ -455,7 +452,7 @@ def _looks_like_jwt( body: Any ) -> bool:
     Requires:
         - [body] is JSON-serialisable
     """
-    return _JWT_SHAPE.search( json.dumps( body ) ) is not None
+    return lib.contains_jwt( body )
 
 
 def _without_jwt_lookalikes( reasons_for: Callable[ [ dict ], list[ str ] ] ) -> Callable[ [ dict ], list[ str ] ]:
