@@ -1,8 +1,7 @@
-@Tags( [ "pending-capture" ] )
-library;
+// pending-capture tag REMOVED 2026-10-10: every fixture this file loads has been captured, so
+// C5.18, C5.21 and C5.22 run in the gate.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/constants/app_constants.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
@@ -55,7 +54,7 @@ import '../../unit/_helpers/stub_dio.dart';
 ///     when expanded, and a truncated one answers over REST instead (that is C5.19's row, and
 ///     conflating them would make this row pass for the wrong reason)
 ///   - `transcript/append_thinking.json` — ONE real append frame carrying a `kind: thinking`
-///     block with non-trivial text
+///     block; its text is EMPTY in practice (97.7% of blocks), and that is what is asserted
 ///   - `transcript/state_refused.json` — ONE real `cc_transcript_state` frame with
 ///     `state: "refused"`, carrying the server's own `reason`
 ///   - `transcript/backlog_403.json` — the REST endpoint's real **403 body** for a seat the
@@ -246,14 +245,19 @@ void main() {
   } );
 
   // ---------------------------------------------------------------------------
-  group( "C5.22 (captured) — a `thinking` block is folded, then expandable (OSQ-7)", () {
-    testWidgets( "collapsed by default: the captured scratch text is NOT on screen",
+  group( "C5.22 (captured) — a `thinking` block the server recorded with no text", () {
+    testWidgets( "real empty thinking renders the dim 'not recorded' label and cannot expand",
         ( tester ) async {
+      // FIRST LINE, deliberately: the only way this test can fail today is the missing fixture.
       final frame = TranscriptAppend.fromJson(
         loadFixture( "transcript/append_thinking.json" ) );
 
       final thinking = onlyKind( frame, TranscriptBlockKind.thinking, "thinking" );
-      final snippet  = snippetOf( thinking, "thinking" );
+      expect( thinking.text.trim(), isEmpty,
+          reason: "empty thinking text is the server's real contract (Mr. Radio, 2026-10-09: "
+                  "97.7% of blocks). If the capture now carries text, this row is asserting "
+                  "the wrong shape; the expand path is covered by the synthetic row in "
+                  "live_console_test.dart" );
 
       await pumpFor( tester,
           ccSessionId : idOf( frame ),
@@ -262,44 +266,20 @@ void main() {
       router.publishAppend( frame );
       await settle( tester );
 
-      expect( find.text( "Thinking…" ), findsOneWidget );
+      expect( find.text( "Thinking (not recorded)" ), findsWidgets );
+      expect( find.byKey( const Key( TestKeys.transcriptUnrecordedThinking ) ), findsWidgets );
       expect( find.byKey( const Key( "${ TestKeys.transcriptChipPrefix }thinking" ) ),
-          findsOneWidget,
-          reason: "`thinking` is the FOURTH KNOWN kind (OSQ-7), not the default arm — the "
-                  "default's slug is `unknown`. A captured `kind` string this parser does "
-                  "not know lands there, which is the failure this captured arm exists to "
-                  "catch: raw kind was '${ thinking.rawKind }'" );
+          findsNothing,
+          reason: "an empty block offers no chip: it would open onto a blank body" );
       expect( find.byKey( const Key( "${ TestKeys.transcriptChipPrefix }unknown" ) ),
-          findsNothing );
-      expect( find.textContaining( snippet, findRichText: true ), findsNothing,
-          reason: "C5.22's negative control: a build routing `thinking` through the default "
-                  "arm shows the text unfolded and fails exactly here" );
-    } );
+          findsNothing,
+          reason: "`thinking` is the FOURTH KNOWN kind (OSQ-7); a captured `kind` string this "
+                  "parser does not know lands on `unknown`: raw kind was '${ thinking.rawKind }'" );
 
-    testWidgets( "expands in place to monospace SelectableText, never Markdown",
-        ( tester ) async {
-      final frame = TranscriptAppend.fromJson(
-        loadFixture( "transcript/append_thinking.json" ) );
-
-      final thinking = onlyKind( frame, TranscriptBlockKind.thinking, "thinking" );
-
-      await pumpFor( tester,
-          ccSessionId : idOf( frame ),
-          epoch       : frame.fileEpoch,
-          tailNextOffset : offsetOf( frame ) );
-      router.publishAppend( frame );
-      await settle( tester );
-
-      await tester.tap( find.byKey( const Key( "${ TestKeys.transcriptChipPrefix }thinking" ) ) );
+      await tester.tap( find.byKey( const Key( TestKeys.transcriptUnrecordedThinking ) ).first );
       await tester.pump();
-
-      final body = find.byKey( const Key( "${ TestKeys.transcriptPlainPrefix }thinking" ) );
-      expect( body, findsOneWidget );
-      expect( tester.widget<SelectableText>( body ).data, thinking.text,
-          reason: "the whole captured text, not a re-flowed version of it" );
-      expect( tester.widget<SelectableText>( body ).style?.fontFamily, "monospace" );
-      expect( find.byType( MarkdownBody ), findsNothing,
-          reason: "model scratch text is not prose and must not be re-flowed as prose" );
+      expect( find.byKey( const Key( "${ TestKeys.transcriptPlainPrefix }thinking" ) ),
+          findsNothing, reason: "the label is not expandable" );
     } );
   } );
 

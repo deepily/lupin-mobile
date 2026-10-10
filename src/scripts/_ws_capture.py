@@ -137,24 +137,22 @@ def mixed_kinds_reasons( frame: dict ) -> list[ str ]:
 
 
 def thinking_reasons( frame: dict ) -> list[ str ]:
-    """`append_thinking.json` — ONE append frame with a `thinking` block whose
-    text is substantial enough to assert "hidden" or "shown" about.
+    """`append_thinking.json` — ONE append frame carrying at least one `thinking`
+    block, whatever its text.
 
-    One line of 8+ characters is the floor: a two-character scratch block is
-    indistinguishable from empty once it is folded.
+    Claude Code records most thinking with EMPTY text (Mr. Radio measured 97.7%,
+    2026-10-09), so empty is the real contract and the fixture is meant to hold it.
+    The consuming test asserts on whichever blocks the frame carries: an empty one
+    renders as a dim "Thinking (not recorded)" label, one with text keeps its fold.
+    Requiring text would capture only the rare frame, and the tests would then
+    prove nothing about the common one.
     """
     if frame.get( "type" ) != APPEND_EVENT:
         return [ f"type is {frame.get( 'type' )!r}, not {APPEND_EVENT!r}" ]
 
-    reasons  = envelope_reasons( frame )
-    thinking = [ b for b in _blocks( frame ) if b.get( "kind" ) == "thinking" ]
-
-    if not thinking:
+    reasons = envelope_reasons( frame )
+    if not any( b.get( "kind" ) == "thinking" for b in _blocks( frame ) ):
         reasons.append( "no `thinking` block" )
-    elif not any( any( len( line.strip() ) >= 8 for line in _text_of( b ).splitlines() )
-                  for b in thinking ):
-        reasons.append( "no `thinking` block carries a line of 8+ characters" )
-
     return reasons
 
 

@@ -66,7 +66,30 @@ class _TranscriptBlockViewState extends State<TranscriptBlockView> {
       );
     }
 
+    // Claude Code records most thinking with EMPTY text. There is nothing to fold, so this
+    // is a plain dim label with no chip, no chevron and no tap target, as the web client
+    // does ("thinking (not recorded)").
+    if ( block.isUnrecordedThinking ) return _unrecordedThinking( context );
+
     return _collapsible( context, block );
+  }
+
+  Widget _unrecordedThinking( BuildContext context ) {
+    final theme = Theme.of( context );
+    return Padding(
+      padding : const EdgeInsets.symmetric( horizontal: 12, vertical: 2 ),
+      child   : Padding(
+        padding : const EdgeInsets.only( left: 22, top: 6, bottom: 6 ),
+        child   : Text(
+          "Thinking (not recorded)",
+          key   : const Key( TestKeys.transcriptUnrecordedThinking ),
+          style : theme.textTheme.labelMedium?.copyWith(
+            fontFamily : "monospace",
+            color      : theme.hintColor,
+          ),
+        ),
+      ),
+    );
   }
 
   // A one-line header that toggles, over a monospace body. The header is the whole hit
