@@ -16,6 +16,8 @@ import 'ws_resume_store.dart';
 class WebSocketService implements WsReconnectTarget {
   final Dio _dio;
   WebSocketChannel? _channel;
+  /// The listener on [_channel]; cancelled whenever that channel is retired, so a replaced channel cannot speak.
+  StreamSubscription<dynamic>? _channelSub;
   StreamController<dynamic>? _messageController;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
@@ -77,6 +79,12 @@ class WebSocketService implements WsReconnectTarget {
   /// True while a connect attempt is running.
   @override
   bool get isConnecting => _connecting;
+
+  /// Failures counted toward [maxReconnectAttempts] since the last success or manual trigger.
+  ///
+  /// One failure counts once, however many of its callbacks fire.
+  @visibleForTesting
+  int get reconnectAttempts => _reconnectAttempts;
 
   /// True while a retry timer is waiting to fire.
   @override
@@ -242,24 +250,28 @@ class WebSocketService implements WsReconnectTarget {
   /// One connect attempt: session id, channel, handshake. Its failure schedules a retry.
   ///
   /// Each network wait is bounded by [connectTimeout], so a stalled handshake cannot hold the single-flight flag.
+  /// The fetched session id is held in a local and becomes [sessionId] only once the socket is up, so a failed
+  /// or superseded attempt never leaves an id that has no connection.
   Future<void> _attemptOnce() async {
     WebSocketChannel? channel;
     try {
       // Step 1: Get session ID from FastAPI (like the web client does)
       final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id').timeout( _connectTimeout );
       final sessionData = sessionResponse.data;
-      _sessionId = sessionData['session_id'];
+      final fetchedId   = sessionData['session_id'];
       
       // Validate session ID format
-      if (_sessionId == null || !_isValidSessionFormat(_sessionId!)) {
-        throw Exception('Invalid session ID format received: $_sessionId. Expected "adjective noun" format.');
+      if ( fetchedId is! String || !_isValidSessionFormat( fetchedId ) ) {
+        throw Exception('Invalid session ID format received: $fetchedId. Expected "adjective noun" format.');
       }
       
-      debugPrint('[WebSocket] Got valid session ID: $_sessionId');
+      debugPrint('[WebSocket] Got valid session ID: $fetchedId');
       
       // Step 2: Connect to WebSocket with session ID in URL  
-      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
+      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$fetchedId');
       
+      // Whatever channel is still held is dead or half dead; it must not stay open behind the new one.
+      _retireChannel();
       final opened = _channelFactory( uri );
       channel = opened;
       _channel = opened;
@@ -275,16 +287,20 @@ class WebSocketService implements WsReconnectTarget {
         return;
       }
       
+      _sessionId = fetchedId;
       _setConnected( true );
       _reconnectAttempts = 0;
       
       debugPrint('[WebSocket] Connected to ${uri.toString()}');
       
-      // Start listening to messages
-      _channel!.stream.listen(
-        _handleMessage,
-        onError: _handleError,
-        onDone: _handleDisconnection,
+      // Start listening to messages. Each callback is bound to ITS channel, so a late done or error from a
+      // channel that has since been replaced cannot be read as the live channel's.
+      _channelSub = opened.stream.listen(
+        ( Object? message ) {
+          if ( identical( _channel, opened ) ) _handleMessage( message );
+        },
+        onError: ( Object error, [ StackTrace? st ] ) => _handleError( opened, error, st ),
+        onDone: () => _handleDisconnection( opened ),
       );
       
       // Step 3: Send authentication message (like the web client does)
@@ -460,31 +476,61 @@ class WebSocketService implements WsReconnectTarget {
     }
   }
 
-  /// Handles WebSocket errors.
-  /// 
+  /// Cancels the listener on, and closes, the channel this service holds, then forgets it.
+  ///
   /// Requires:
-  ///   - Error object from WebSocket stream
-  /// 
+  ///   - none; a null channel is a no-op
+  ///
   /// Ensures:
-  ///   - Connection status is set to disconnected
-  ///   - Reconnection is scheduled if enabled
-  ///   - Error is logged for debugging
-  void _handleError(error, [StackTrace? st]) {
+  ///   - [_channel] is null and its listener is cancelled, so no later callback from it is delivered
+  ///   - a close with `goingAway` is requested, and its failure is ignored
+  void _retireChannel() {
+    final old = _channel;
+    unawaited( _channelSub?.cancel() );
+    _channelSub = null;
+    _channel    = null;
+    if ( old != null ) unawaited( old.sink.close( status.goingAway ).catchError( ( Object _ ) {} ) );
+  }
+
+  /// Handles a WebSocket error on [source].
+  ///
+  /// Requires:
+  ///   - [source] is the channel whose stream raised [error]
+  ///
+  /// Ensures:
+  ///   - an error from a channel that is no longer current is ignored
+  ///   - otherwise the channel is retired, the state is disconnected, and exactly one reconnect is scheduled
+  ///     (the done that usually follows an error finds the channel retired and does nothing)
+  void _handleError( WebSocketChannel source, Object error, [StackTrace? st] ) {
+    if ( !identical( _channel, source ) ) {
+      debugPrint('[WebSocket] Ignoring an error from a replaced channel');
+      return;
+    }
     Logger.error( 'Stream error', tag: 'WebSocket', error: error, stackTrace: st, context: _logContext );
+    _retireChannel();
     _setConnected( false );
+    _pingTimer?.cancel();
     _scheduleReconnect();
   }
 
-  /// Handles WebSocket disconnection.
-  /// 
+  /// Handles the end of [source]'s stream.
+  ///
+  /// Requires:
+  ///   - [source] is the channel whose stream ended; its own close code is the one read
+  ///
   /// Ensures:
-  ///   - Connection status is updated
-  ///   - Ping timer is cancelled
-  ///   - Reconnection is scheduled if shouldReconnect is true
-  ///   - Resources are cleaned up properly
-  void _handleDisconnection() {
-    final code = _channel?.closeCode;
-    debugPrint('[WebSocket] Connection closed (code: $code)');
+  ///   - a done from a channel that is no longer current is ignored, so it cannot clear the live connection or
+  ///     schedule a reconnect (this service closed that channel itself, so a 4004 on it is its own doing)
+  ///   - otherwise the channel is retired, the state is disconnected and the ping timer is cancelled
+  ///   - 4004 on the current channel stops reconnection; any other code schedules one reconnect if allowed
+  void _handleDisconnection( WebSocketChannel source ) {
+    final code    = source.closeCode;
+    final current = identical( _channel, source );
+    debugPrint('[WebSocket] Connection closed (code: $code${current ? "" : ", replaced channel"})');
+
+    if ( !current ) return;
+
+    _retireChannel();
     _setConnected( false );
     _pingTimer?.cancel();
 
@@ -578,6 +624,8 @@ class WebSocketService implements WsReconnectTarget {
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
     
+    unawaited( _channelSub?.cancel() );
+    _channelSub = null;
     if (_channel != null) {
       await _channel!.sink.close(status.goingAway);
       _channel = null;

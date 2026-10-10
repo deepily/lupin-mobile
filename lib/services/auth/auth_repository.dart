@@ -128,14 +128,20 @@ class AuthRepository {
     }
   }
 
-  /// Ends the session on the server.
+  /// Ends the session on the server by revoking [refreshToken].
+  ///
+  /// The route takes `{ "refresh_token": ... }` as its body; a call without one is answered 422. So with no
+  /// [refreshToken] nothing is sent, because the server has nothing it could revoke.
   ///
   /// A 401 is ignored, because the caller clears local state either way. Throws [AuthException] for other failures.
-  Future<void> logout( String accessToken ) async {
+  /// The refresh token travels only in the request body: it is never logged and never put in an error message.
+  Future<void> logout( String accessToken, { String? refreshToken } ) async {
+    if ( refreshToken == null ) return;
     try {
       await _dio.post<dynamic>(
         "/auth/logout",
-        options: Options( headers: { "Authorization": "Bearer $accessToken" } ),
+        data    : { "refresh_token": refreshToken },
+        options : Options( headers: { "Authorization": "Bearer $accessToken" } ),
       );
     } on DioException catch ( e ) {
       // Logout failures are non-fatal — caller still clears local state.

@@ -86,10 +86,12 @@ class FcmWakeupService {
 
   /// Logout hook: best-effort unregister of the token.
   ///
-  /// A failure is logged and ignored.
+  /// Call it BEFORE the access token is cleared: the route needs a JWT, and a call after the clear is a 401.
+  /// A failure is logged and ignored. A second call is a no-op, because the token is forgotten on the first.
   Future<void> onLoggedOut() async {
     final token = _currentToken;
-    _userEmail = null;
+    _userEmail    = null;
+    _currentToken = null;
     if ( token == null ) return;
     try {
       await _dio.post<Map<String, dynamic>>(
