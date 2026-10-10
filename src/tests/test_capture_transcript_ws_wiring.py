@@ -219,6 +219,38 @@ def test_prose_with_two_dots_is_not_mistaken_for_a_jwt( script ):
     assert script._looks_like_jwt( { "text": "eyJ" + "a" * 25 + "." + "b" * 25 + "." + "c" * 25 } )
 
 
+# A realistic token shape: header (36 chars), payload, signature (43 chars).
+_HEADER  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+_PAYLOAD = "eyJzdWIiOiI1MGM3M2JhNy0zNmRkLTRlYWYtYTdlMi02MzI1NjI1MmM4NGYiLCJleHAiOjE3OTE2MDExODZ9"
+_SIG     = "dt7AKddyXdpWGYgKU91XiKsAbCdEfGhIjKlMnOpQrSt"
+_TOKEN   = f"{_HEADER}.{_PAYLOAD}.{_SIG}"
+
+
+def test_an_access_token_EMBEDDED_in_a_longer_string_is_caught( script ):
+    """Measured 2026-10-09: a Bash tool_result carried `{'tokens': {'access_token':
+    'eyJ...'}}` inside prose, and the whole-string test let it through."""
+    frame = { "blocks": [ { "kind": "tool_result",
+                            "text": f"{{'tokens': {{'access_token': '{_TOKEN}', 'token_type': 'bearer'}}}}" } ] }
+    assert script._looks_like_jwt( frame )
+
+
+def test_a_refresh_token_EMBEDDED_in_a_tool_call_is_caught( script ):
+    frame = { "blocks": [ { "kind": "tool_call", "name": "Bash",
+                            "text": f"Bash( command=python3 -c 'import x; r = \"{_TOKEN}\"; print( r )' )" } ] }
+    assert script._looks_like_jwt( frame )
+
+
+def test_a_token_in_a_nested_dict_value_is_caught( script ):
+    assert script._looks_like_jwt( { "a": [ { "b": { "c": f"Authorization: Bearer {_TOKEN}\nnext line" } } ] } )
+
+
+def test_a_three_dot_non_token_inside_a_longer_string_does_not_fire( script ):
+    """Dotted identifiers and file names are long and three-part but are not tokens."""
+    prose = ( "see src/cosa/rest/routers/cc_transcript.py and cosa.rest.routers.websocket.session_is_admin "
+              "then lupin.mobile.fleet_status.fleet_status_bloc_test.dart at v0.2.1.2026.08.29 done." )
+    assert not script._looks_like_jwt( { "text": prose } )
+
+
 def test_state_refused_comes_from_a_watch_on_an_UNKNOWN_id_not_the_live_seat( script, monkeypatch ):
     """The server answers an unknown id with `state: refused`; the live seat's
     watch answers `live`, which can never qualify. So the refused fixture needs
