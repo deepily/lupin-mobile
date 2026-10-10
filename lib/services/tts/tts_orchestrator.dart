@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../core/logging/logger.dart';
 import '../notification_audio/notification_audio_service.dart';
 import '../notification_audio/notification_preferences.dart';
@@ -73,6 +75,9 @@ class TtsOrchestrator {
   ///
   /// Without a ceiling a player that never fires its completion keeps the watchdog re-arming forever.
   final Duration?                 _maxPlaybackOverride;
+
+  /// Margin added to the service's own bounds to make the orchestrator's outer net; see [fallbackOuterBound].
+  final Duration                  _outerMargin;
 
   Timer?    _watchdog;
   bool      _disposed = false;
@@ -153,7 +158,9 @@ class TtsOrchestrator {
     Duration                          speakWatchdog     = defaultSpeakWatchdog,
     Duration                          fallbackSpeakBudget = defaultFallbackSpeakBudget,
     Duration?                         maxPlayback,
+    Duration                          fallbackOuterMargin = const Duration( seconds: 5 ),
   } ) : _speakWatchdog      = speakWatchdog,
+       _outerMargin         = fallbackOuterMargin,
        _fallbackBudget      = fallbackSpeakBudget,
        _maxPlaybackOverride = maxPlayback,
        _player   = player,
@@ -711,6 +718,7 @@ class TtsOrchestrator {
   }
 
   Future<void> _tryStartNext() async {
+    if ( _disposed ) return;
     // Pause gate: the single choke point. It covers utterance completion, error continuation and the
     // dispatch-if-idle step in both enqueue entry points.
     if ( _held ) {
@@ -729,7 +737,7 @@ class TtsOrchestrator {
 
   Future<void> _dispatchCurrent() async {
     final utter = _current;
-    if ( utter == null ) return;
+    if ( utter == null || _disposed ) return;
 
     _inFlightEpoch = ++_epoch;   // arm the completion/error handlers
     final myEpoch  = _inFlightEpoch;
@@ -741,16 +749,14 @@ class TtsOrchestrator {
       // THIS utterance only (don't enter the 5-min quota window).
       Logger.info( "dispatch outcome=fallback reason=no_session chars=${utter.text.length}", tag: "Tts" );
       _note( "Spoken on this phone's own voice: no server audio connection" );
-      await _speakViaFallback( utter.text );
-      _onUtteranceFinished();
+      _speakOnDevice( utter, myEpoch, then: _onUtteranceFinished );
       return;
     }
 
     if ( _isElevenLabsInFallbackWindow() ) {
       Logger.info( "dispatch outcome=fallback reason=quota_window chars=${utter.text.length}", tag: "Tts" );
       _note( "Spoken on this phone's own voice: the voice service is over quota" );
-      await _speakViaFallback( utter.text );
-      _onUtteranceFinished();
+      _speakOnDevice( utter, myEpoch, then: _onUtteranceFinished );
       return;
     }
 
@@ -774,9 +780,24 @@ class TtsOrchestrator {
       // not enter the 5-min quota window (this isn't a quota issue).
       Logger.warning( "dispatch outcome=fallback reason=post_failed chars=${utter.text.length}", tag: "Tts", error: e );
       _note( "Spoken on this phone's own voice: the server did not take the request" );
-      await _speakViaFallback( utter.text );
-      _onUtteranceFinished();
+      _speakOnDevice( utter, myEpoch, then: _onUtteranceFinished );
     }
+  }
+
+  /// Speaks [utter] on-device without making the caller wait, then runs [then] if it is still the live utterance.
+  ///
+  /// The speak lasts as long as the utterance. Awaiting it inside the dispatch chain made a microphone-hold
+  /// transition, which is serialized behind the previous one, wait for the speech it was meant to stop. Detached,
+  /// the epoch captured here does the guarding: a skip, stop, hold, preempt or dispose staled it already.
+  void _speakOnDevice( _Utterance utter, int epoch, { required void Function() then } ) {
+    unawaited( _speakViaFallback( utter.text ).then( ( _ ) {
+      if ( _disposed || epoch != _epoch || !identical( _current, utter ) ) return;
+      then();
+    } ).catchError( ( Object e, StackTrace st ) {
+      Logger.error( "dispatch outcome=error code=fallback_threw", tag: "Tts", error: e, stackTrace: st );
+      if ( _disposed || epoch != _epoch || !identical( _current, utter ) ) return;
+      then();
+    } ) );
   }
 
   /// True while [utter] is the in-flight utterance under dispatch epoch [epoch], and the orchestrator is live.
@@ -847,11 +868,12 @@ class TtsOrchestrator {
       ++_epoch;   // stale-guard any late completion or error for the abandoned stream
       await _stopPlayerBounded();
       if ( !identical( _current, utter ) ) return;   // skipped or stopped while stopping
-      await _speakViaFallback( utter.text );
-      if ( !identical( _current, utter ) ) return;
-      _current = null;
-      _emitQueue();
-      await _tryStartNext();
+      final fallbackEpoch = _epoch;
+      _speakOnDevice( utter, fallbackEpoch, then: () {
+        _current = null;
+        _emitQueue();
+        unawaited( _tryStartNext() );
+      } );
     } catch ( e, st ) {
       // A throw from the player or the fallback must not leave the queue held by an utterance nobody is waiting on.
       Logger.error( "dispatch outcome=error code=watchdog_threw", tag: "Tts", error: e, stackTrace: st );
@@ -873,6 +895,14 @@ class TtsOrchestrator {
     }
   }
 
+  /// The orchestrator's own net over one on-device speak: the service's acceptance and completion bounds, plus 5 s.
+  ///
+  /// It must stay strictly longer than their sum, so the service always gets to release itself first and the
+  /// two never race.
+  @visibleForTesting
+  Duration fallbackOuterBound( String text ) =>
+      _fallbackBudget + ( _maxPlaybackOverride ?? Duration( seconds: 30 + text.length ~/ 8 ) ) + _outerMargin;
+
   Future<void> _speakViaFallback( String text ) async {
     // Intentional: `voiceId` is not piped through to the `flutter_tts` fallback.
     // ElevenLabs voice ids live in a different voice space than the on-device `flutter_tts` engine voices, and mapping
@@ -885,7 +915,7 @@ class TtsOrchestrator {
     //
     // The service bounds acceptance and completion itself; this is the orchestrator's own net over both, so a
     // service that never returns still cannot hold [_current].
-    final outer = _fallbackBudget + ( _maxPlaybackOverride ?? Duration( seconds: 30 + text.length ~/ 8 ) );
+    final outer = fallbackOuterBound( text );
     try {
       await _fallback.flutterTtsSpeak( text ).timeout( outer );
     } on TimeoutException {
@@ -912,20 +942,21 @@ class TtsOrchestrator {
     _note( "Last message failed: ${event.errorCode}" );
 
     final wasCurrent = _current;
-    _current = null;
-    _emitQueue();
 
-    if ( event.errorCode == 'quota_exceeded' ) {
+    if ( event.errorCode == 'quota_exceeded' && wasCurrent != null ) {
       _elevenLabsDisabledUntil = DateTime.now().add( _quotaFallbackWindow );
       // Re-speak the current utterance via fallback, then continue.
       // (Under pause this re-speak still runs — it is the in-flight
       // utterance finishing; the continuation then parks at the
-      // `_tryStartNext()` gate.)
-      if ( wasCurrent != null ) {
-        _speakViaFallback( wasCurrent.text ).then( ( _ ) => _tryStartNext() );
-        return;
-      }
+      // `_tryStartNext()` gate.) It stays [_current] while it speaks, so nothing else dispatches over it.
+      _speakOnDevice( wasCurrent, _epoch, then: _onUtteranceFinished );
+      return;
     }
+    if ( event.errorCode == 'quota_exceeded' ) {
+      _elevenLabsDisabledUntil = DateTime.now().add( _quotaFallbackWindow );
+    }
+    _current = null;
+    _emitQueue();
     // Any other error: skip this utterance, continue queue (parks at the
     // pause gate when held).
     _tryStartNext();

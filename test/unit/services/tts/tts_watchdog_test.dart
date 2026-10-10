@@ -36,7 +36,7 @@ void main() {
   late DateTime?    lastActivity;
   TtsOrchestrator? orch;
 
-  Future<TtsOrchestrator> newOrch( { Duration? fallbackBudget, Duration? maxPlayback } ) async {
+  Future<TtsOrchestrator> newOrch( { Duration? fallbackBudget, Duration? maxPlayback, Duration? outerMargin } ) async {
     SharedPreferences.setMockInitialValues( {} );
     final prefs  = NotificationPreferences( await SharedPreferences.getInstance() );
     player       = _MockPlayer();
@@ -70,6 +70,7 @@ void main() {
       player: player, fallback: fallback, prefs: prefs, ws: ws, speakWatchdog: window,
       fallbackSpeakBudget: fallbackBudget ?? TtsOrchestrator.defaultFallbackSpeakBudget,
       maxPlayback: maxPlayback,
+      fallbackOuterMargin: outerMargin ?? const Duration( seconds: 5 ),
     );
     return orch!;
   }
@@ -182,7 +183,7 @@ void main() {
 
   group( "review findings on edf2704 (Chloe)", () {
     test( "finding 2: an on-device speak that never returns is abandoned and the queue moves on", () async {
-      final o = await newOrch( fallbackBudget: const Duration( milliseconds: 50 ), maxPlayback: const Duration( milliseconds: 50 ) );
+      final o = await newOrch( fallbackBudget: const Duration( milliseconds: 50 ), maxPlayback: const Duration( milliseconds: 50 ), outerMargin: const Duration( milliseconds: 20 ) );
       when( () => ws.sessionId ).thenReturn( null );   // every utterance takes the on-device path, no POST
       final hung = Completer<void>();
       var   calls = 0;
@@ -193,7 +194,7 @@ void main() {
 
       o.enqueueAlways( priority: "high", message: "first, engine hangs" );
       o.enqueueAlways( priority: "high", message: "second" );
-      await Future<void>.delayed( const Duration( milliseconds: 200 ) );
+      await Future<void>.delayed( const Duration( milliseconds: 300 ) );
 
       expect( onDevice, [ "first, engine hangs", "second" ], reason: "THE BUG: _current stayed set, zero POSTs, silence" );
       expect( o.lastOutcome!.line, isNot( contains( "did not respond" ) ), reason: "the second spoke fine afterwards" );
@@ -457,6 +458,72 @@ void main() {
 
       o.removeQueued( o.queueSnapshot.first.id );
       expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (2 waiting)", reason: "THE BUG: it said 3" );
+    } );
+  } );
+
+  group( "round 4 (Chloe, 3e6bd33): D1, R1, C2 and teardown", () {
+    test( "D1: releasing then re-taking the mic hold never waits for on-device speech", () async {
+      final o = await newOrch();
+      when( () => ws.sessionId ).thenReturn( null );
+      final engineBusy = Completer<void>();   // an engine that is mid-utterance and will not say otherwise
+      final got        = <String>[];
+      var   stops      = 0;
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        got.add( inv.positionalArguments.first as String );
+        await engineBusy.future;
+      } );
+      when( () => fallback.stopFallbackSpeech() ).thenAnswer( ( _ ) async { stops++; } );
+
+      await o.setCaptureHold( true );
+      o.enqueueAlways( priority: "high", message: "backlog" );
+      await pump();
+      expect( got, isEmpty, reason: "held" );
+
+      await o.setCaptureHold( false ).timeout( const Duration( milliseconds: 500 ),
+          onTimeout: () => fail( "THE BUG: the release waited for the on-device speech to end" ) );
+      await pump();
+      expect( got, [ "backlog" ] );
+
+      final stopsBefore = stops;
+      await o.setCaptureHold( true ).timeout( const Duration( milliseconds: 500 ),
+          onTimeout: () => fail( "THE BUG: the second hold waited behind the speech it had to stop" ) );
+      expect( stops, greaterThan( stopsBefore ), reason: "the second recording must not run over the speech" );
+      expect( o.queueDepth, 1, reason: "the interrupted utterance goes back to the head of the queue" );
+      engineBusy.complete();
+    } );
+
+    test( "C2: the outer bound is strictly longer than the service's accept plus completion bounds", () async {
+      TestWidgetsFlutterBinding.ensureInitialized();   // the real FlutterTts registers a platform channel
+      final o       = await newOrch();
+      final service = NotificationAudioService(
+        prefs: NotificationPreferences( await SharedPreferences.getInstance() ),
+      );
+      for ( final text in [ "", "short", "x" * 400, "y" * 10000 ] ) {
+        final inner = service.speakAcceptBudget + service.completionBoundFor( text );
+        expect( o.fallbackOuterBound( text ), greaterThan( inner ), reason: "${text.length} chars" );
+      }
+    } );
+
+    test( "teardown: a speak that ends after dispose does not dispatch the next utterance", () async {
+      final o = await newOrch();
+      when( () => ws.sessionId ).thenReturn( null );
+      final engineBusy = Completer<void>();
+      final got        = <String>[];
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        got.add( inv.positionalArguments.first as String );
+        await engineBusy.future;
+      } );
+
+      o.enqueueAlways( priority: "high", message: "first" );
+      o.enqueueAlways( priority: "high", message: "second" );
+      await pump();
+      expect( got, [ "first" ] );
+
+      await o.dispose();
+      engineBusy.complete();
+      await pump();
+      await pump();
+      expect( got, [ "first" ], reason: "THE BUG: the continuation dispatched 'second' into a closed orchestrator" );
     } );
   } );
 }

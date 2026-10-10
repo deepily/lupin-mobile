@@ -181,6 +181,31 @@ void main() {
       await future.timeout( const Duration( seconds: 1 ) );   // would hang for 5 s without the release
     } );
 
+    test( "R1: an engine's late cancel callback for a stopped utterance does not release the next one", () async {
+      VoidCallback? cancel;
+      when( () => tts.setCancelHandler( any() ) ).thenAnswer( ( inv ) {
+        cancel = inv.positionalArguments.first as VoidCallback;
+      } );
+      final service = boundedService( done: const Duration( seconds: 5 ) );
+
+      final first = service.flutterTtsSpeak( "skipped" );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await service.stopFallbackSpeech();            // the user skipped it
+      await first;
+
+      var secondFinished = false;
+      final second = service.flutterTtsSpeak( "next one" ).then( ( _ ) => secondFinished = true );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
+      cancel?.call();                                // the first one's cancel callback finally arrives
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      expect( secondFinished, isFalse, reason: "THE BUG: the stale cancel released the utterance that was speaking" );
+
+      completion!();
+      await second;
+      expect( cancel, isNull, reason: "no cancel handler is registered at all" );
+    } );
+
     test( "an engine that never reports finishing is stopped at the completion bound", () async {
       await boundedService().flutterTtsSpeak( "wedged engine" );
       verify( () => tts.stop() ).called( greaterThanOrEqualTo( 2 ) );   // before the speak, and the bound's own stop

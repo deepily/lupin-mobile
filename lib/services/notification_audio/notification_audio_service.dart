@@ -199,8 +199,10 @@ class NotificationAudioService {
     if ( _handlersSet ) return;
     _handlersSet = true;
     try {
+      // No cancel handler: the engine's cancel callback carries no utterance id, so a late one for a stopped
+      // utterance would release the next, already accepted, one. Every stop this service's callers issue goes
+      // through [stopFallbackSpeech], which releases the waiting speak itself.
       _tts.setCompletionHandler( _releaseCurrent );
-      _tts.setCancelHandler( _releaseCurrent );
       _tts.setErrorHandler( ( dynamic _ ) => _releaseCurrent() );
     } catch ( e ) {
       // Without callbacks the completion bound still releases the caller.
