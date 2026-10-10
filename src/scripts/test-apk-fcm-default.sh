@@ -61,6 +61,18 @@ check    "an unknown flag is still refused"        "2" "$( APK_BUILD_DRY_RUN=1 "
 
 # The stamp is what deploy-apk-to-device.sh prints as "FCM: ON/OFF". It must say what the
 # build did: a stamp that always says one thing would leave every check above green.
+echo "build line defines (shown in the app drawer)"
+out="$( build )"
+contains "the build carries a build time"    "--dart-define=BUILD_TIME=20"   "$out"
+contains "the build carries the time zone"   "--dart-define=BUILD_TZ="       "$out"
+contains "the build carries a commit sha"    "--dart-define=BUILD_SHA="      "$out"
+contains "the build says dirty or clean"     "--dart-define=BUILD_DIRTY="    "$out"
+expected_version="$( sed -n 's/^version:[[:space:]]*//p' "$SCRIPT_DIR/../../pubspec.yaml" | head -n 1 | tr -d '[:space:]' )"
+contains "the version comes from pubspec.yaml" "--dart-define=BUILD_VERSION=$expected_version" "$out"
+contains "the FCM define is still there"     "$DEFINE"                       "$out"
+out="$( build --no-fcm )"
+contains "--no-fcm still stamps the build"   "--dart-define=BUILD_TIME=20"   "$out"
+
 echo "build stamp agrees with the build"
 # shellcheck source=src/scripts/lib/apk-build-stamp.sh
 source "$SCRIPT_DIR/lib/apk-build-stamp.sh"

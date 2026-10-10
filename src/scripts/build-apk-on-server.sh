@@ -106,6 +106,17 @@ branch="$( git branch --show-current )"
 dirty=""
 [ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
 
+# What the app shows on its drawer's build line (lib/core/build_info.dart reads these).
+# Version comes from pubspec.yaml; push comes from the ENABLE_FCM define above.
+build_version="$( sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1 | tr -d '[:space:]' )"
+build_args+=(
+    "--dart-define=BUILD_TIME=$( date -Is )"
+    "--dart-define=BUILD_TZ=$( date +%Z )"
+    "--dart-define=BUILD_SHA=$sha"
+    "--dart-define=BUILD_DIRTY=$( [ -n "$dirty" ] && echo true || echo false )"
+    "--dart-define=BUILD_VERSION=$build_version"
+)
+
 # Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
 # and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
 # compile-time flag needs writing down at all (row 8ff78c69, F3).

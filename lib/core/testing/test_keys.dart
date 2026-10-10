@@ -277,6 +277,8 @@ class TestKeys {
   // Focus drawer, surfaces experiment
   /// Key of the focus drawer header.
   static const focusDrawerHeader      = 'focus.drawerHeader';
+  /// Key of the focus drawer build line.
+  static const focusDrawerBuildLine   = 'focus.drawerBuildLine';
   /// Key prefix of focus drawer entry. The suffix is entry title.
   static const focusDrawerEntryPrefix = 'focus.drawerEntry.';
   /// Key of the focus composer scroll.
