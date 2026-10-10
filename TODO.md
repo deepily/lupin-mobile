@@ -2,14 +2,25 @@
 
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
-State at the 16:02 EDT checkpoint: merge tip `16fc44d` (as at 13:14, plus the version line: branch name over date and the day's build number; gate PASS over `8ba73d3..16fc44d`, suite 0 failing). APK build 4 made with FCM at `16fc44d`, 15:39 EDT; Rick said at 15:08 he was installing but has not said "installed". Nothing pushed. No seats running; seeds `io/mementos/{tiberius,maya,rio,chloe}.md`. Rows `768e852f` and `ee68d5e7` are done. Store: speech bug `e0f0faf0` is queued and also carries the finished build-line work and the unstarted phone socket defects (rows `9d7b62e9` and `a246634e` were the price of two admit requests); the judge-run admit request on `79d49618` is pending on Rick's board.
+State at the 18:17 EDT checkpoint: merge tip `98a497e` (phone socket and logout fixes, Tiberius `0d6f56b`, Chloé PASS, gate PASS over `5eaaa2a..98a497e`). The APK on the phone is build 4 (`16fc44d`, 15:39 EDT); Rick installed it and logged in at 17:59 EDT. Build 5 waits for the mute banner. Nothing pushed. Seats up: Tiberius (author), Maya (author), Chloé (reviewer); seeds `io/mementos/{tiberius,maya,rio,chloe}.md`. I cleared my own context at 18:13 EDT (session `068dfb3b`, same seat).
 
 | Next | Waits on |
 |---|---|
-| No speech on the phone (Rick, 11:48 EDT; row `e0f0faf0`): the cause is **not proven**; text arrives, the app refuses or holds it before any voice starts, the server sees no speech request | Rick installs build 4, says "installed", Tiffany sends a test; if silent he reads the top line of the Speech queue sheet |
-| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); the three-vote rule landed in lupin at `8f797ccb`, command in lupin `io/tmp/2026.10.09-krishna-three-vote-judge-run-command.md` | Rick approves the admit request filed 15:09 EDT |
-| Phone's own socket teardown loop (Tiberius's finding, section G): an old listener can drop the live socket; logout returns 422 and push-token unregister 401. Owed on row `e0f0faf0` | staffing after the speech test; not started |
+| No speech on the phone (row `e0f0faf0`): **cause named by Rick at 18:00 EDT, reading the phone: "Last message not spoken, Master Mute is on."** Master mute is a saved preference (drawer, Settings, first row) | Rick says he turned it off; Tiffany sends a test; a speech request appears in the server log; he says he heard it |
+| Mute banner on the main screen plus the logout keystore fix: Tiberius `d5ccb9a` (on `d3dcb2d` on `0d6f56b`) | Chloé's verdict, then merge, gate, build 5 |
+| Command wrapper refresh from planning-is-prompting `05ec88d` (row `08c4e586`, held; relayed by María): Maya `4db931e` (on `53dfd1b` on `0d38a7e`) | Chloé's verdict on `5eaaa2a..4db931e`, then merge, gate, the sha to María; Rick admits or confirms the row |
+| Full claim judge run over all 819 documentation pairs (row `79d49618`): **held, nothing spent.** Extractor A2 failed the Dart dev 80 check in all three draws (lupin `io/tmp/2026.10.10-krishna-a2-dart-dev80.md`) | Rick says hold, run or drop after reading `io/2026.10.10/tiffany/explainer-judge-run.md` |
+| Post-game for today's crew (`src/docs/post-games/v0.2.2/`) | session end |
 | Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
+
+### Decisions Log — 2026-10-10, evening (Tiffany)
+
+- **Rick, card, about 17:50 EDT, first-hand**: Judge run "Dart check first (Recommended)". The check then failed: A2 missed 6, 5 and 3 of 32 seeded losses and raised 2, 1 and 0 false alarms of 48 across three draws.
+- **Rick, voice, 18:00 EDT, reading the phone**: "Last message not spoken, Master Mute is on."
+- **Rick, voice, 18:03 EDT**: "I think that you've got two toggles in two different places that disable the or mute the TTS, I believe. So look into your code". The two are "Notifications" (key `notif.enabled`) and "Master mute" (key `notif_audio.master_mute`); neither shows the other's state. Census: `io/2026.10.10/tiberius/census-speech-silencing-controls.md`.
+- **Rick, card, about 18:05 EDT, first-hand, on the two toggles**: "I'm inclined to keep both and show a marker per your recommendation but I'm really not certain what you mean by a marker on the main screen Names an Aeuntiser Where does that appear?" **My reading, his to correct**: keep both switches and show a banner at the top of the conversation screen, one row per active silencer, a tap opens the switch.
+- **Rick, same card, on the judge run**: "Can you provide me with a quick ephemeral explainer doc about why this is important? I'm not certain I understand the significance of what's going on here And of course as you know need more context". Not a ruling; the run stays held.
+- **Correction of the 2026-10-09 late-evening entry below**: extractor A2 never passed a Dart gate. What it passed was the exit test on the Python dev 70 set (Cheech, 17:41 EDT). I relayed "passes its gate" to Rick as fact and he admitted row `79d49618` on it.
 
 ### Decisions Log — 2026-10-10, afternoon (Tiffany)
 
@@ -39,7 +50,7 @@ State at the 16:02 EDT checkpoint: merge tip `16fc44d` (as at 13:14, plus the ve
 - **C5.22 reframed to the real contract** (Tiffany, standing authority, announced to Rick, his to overrule): Claude Code records most thinking with empty text (97.7% of blocks, Mr. Radio's count) and the server passes it through. An empty thinking block shows a dim "Thinking (not recorded)" label that cannot be expanded, as the web client does; a block with text keeps fold and expand.
 - **C5.18 was a stale fixture, and the server was right**: it has carried tool names since 2026-09-29; `append_mixed_kinds.json` predated names on tool results.
 - **The `pending-capture` test tag is retired**: every fixture exists, so a new fixture-dependent test lands together with its fixture.
-- **Relayed by Cheech, not heard first-hand**: Rick ruled at 23:24 EDT on Cheech's row `9ce53ec2` that the claim-judge vote rule is "all three must agree"; extractor A2 then passes its gate.
+- **Relayed by Cheech, not heard first-hand**: Rick ruled at 23:24 EDT on Cheech's row `9ce53ec2` that the claim-judge vote rule is "all three must agree"; extractor A2 then passes its gate. **Wrong, corrected 2026-10-10 evening above**: A2 passed the Python dev 70 exit test, not a Dart gate.
 
 ### Decisions Log — 2026-10-09 (sessions `de4ce9d3` / `f6acc646`, Tiffany)
 
