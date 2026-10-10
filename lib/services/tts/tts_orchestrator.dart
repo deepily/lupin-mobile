@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import '../../core/logging/logger.dart';
 import '../notification_audio/notification_audio_service.dart';
 import '../notification_audio/notification_preferences.dart';
 import '../notification_filter/notification_stop_list.dart';
@@ -33,6 +34,20 @@ class TtsOrchestrator {
   /// A matched message is muted on both entry points, including the ungated focus path, because a checked
   /// pattern means hide and mute.
   final NotificationStopList?     _stopList;
+
+  /// How long an utterance may sit with no audio event before it is given up on and spoken on-device.
+  ///
+  /// It is counted from the speak acknowledgement and restarts on each routed event. It does not apply while audio
+  /// is playing. Without it a lost completion event leaves [_current] set for good, and every later notification
+  /// queues silently behind it.
+  /// Design: src/docs/decisions/README.md (R-TTS-watchdog)
+  final Duration                  _speakWatchdog;
+
+  /// Default for [_speakWatchdog].
+  static const Duration defaultSpeakWatchdog = Duration( seconds: 20 );
+
+  Timer?    _watchdog;
+  DateTime? _dispatchedAt;
 
   final Queue<_Utterance> _fifo    = Queue();
   _Utterance?             _current;
@@ -79,7 +94,9 @@ class TtsOrchestrator {
     required NotificationPreferences  prefs,
     required WebSocketService         ws,
     NotificationStopList?             stopList,
-  } ) : _player   = player,
+    Duration                          speakWatchdog = defaultSpeakWatchdog,
+  } ) : _speakWatchdog = speakWatchdog,
+       _player   = player,
        _fallback  = fallback,
        _prefs     = prefs,
        _ws        = ws,
@@ -325,11 +342,18 @@ class TtsOrchestrator {
     // Gate M, the master switches ("off means off"): it outranks `verbatim` and the stop-list, like gate 0.
     // An item the switches silence is neither spoken nor offered as speak-anyway.
     // Design: src/docs/decisions/README.md (R-TTS-master-off)
-    if ( _masterSilenced( priority: priority, senderKey: senderKey ) ) return null;
+    final silencedBy = _silencedReason( priority: priority, senderKey: senderKey );
+    if ( silencedBy != null ) {
+      Logger.info( "dispatch outcome=gated reason=$silencedBy priority=$priority", tag: "Tts" );
+      return null;
+    }
 
     // Gate 0, the slider at 0%: it outranks `verbatim` and runs before the stop-list, so a silenced item
     // is neither spoken nor offered back as speak-anyway.
-    if ( _sliderAtZero ) return null;
+    if ( _sliderAtZero ) {
+      Logger.info( "dispatch outcome=gated reason=slider_zero priority=$priority", tag: "Tts" );
+      return null;
+    }
 
     // The only other gates on this path are the user's explicit "never speak this" rulings: a checked stop-list
     // pattern and the speak-system-senders switch, which mutes persona-less senders as a class.
@@ -347,10 +371,14 @@ class TtsOrchestrator {
         senderKey : senderKey,
       );
       _emitSuppression( suppression );
+      Logger.info( "dispatch outcome=gated reason=stop_list priority=$priority", tag: "Tts" );
       return suppression;
     }
     // Gate 2 — a preference; `verbatim` overrides it (ruling 4).
-    if ( !verbatim && _systemSenderMuted( sender ) ) return null;
+    if ( !verbatim && _systemSenderMuted( sender ) ) {
+      Logger.info( "dispatch outcome=gated reason=system_senders_off priority=$priority", tag: "Tts" );
+      return null;
+    }
 
     _enqueueUngated(
       priority : priority,
@@ -459,6 +487,8 @@ class TtsOrchestrator {
 
   /// Cancels the player subscriptions and closes the streams.
   Future<void> dispose() async {
+    _watchdog?.cancel();
+    _watchdog = null;
     await _completeSub?.cancel();
     await _errorSub?.cancel();
     await _pausedCtrl.close();
@@ -495,12 +525,21 @@ class TtsOrchestrator {
   ///
   /// The urgent bypasses are the same. The surface and per-priority checkboxes do not apply, because the focus
   /// path stays ungated by priority.
-  bool _masterSilenced( { required String priority, String? senderKey } ) {
-    if ( !_prefs.enabled || _prefs.masterMute ) return true;
+  bool _masterSilenced( { required String priority, String? senderKey } ) =>
+      _silencedReason( priority: priority, senderKey: senderKey ) != null;
+
+  /// Which master switch silences the item, or null when none does.
+  ///
+  /// Ensures:
+  ///   - one of `notifications_off`, `master_mute`, `sender_muted`, `quiet_hours`, in that order
+  ///   - the same decision [_masterSilenced] makes, so a log line can name the gate
+  String? _silencedReason( { required String priority, String? senderKey } ) {
+    if ( !_prefs.enabled ) return 'notifications_off';
+    if ( _prefs.masterMute ) return 'master_mute';
     final urgent = priority == 'urgent';
-    if ( _prefs.isSenderMuted( senderKey ) && !( urgent && _prefs.muteUrgentBypass ) ) return true;
-    if ( _prefs.inQuietHours( DateTime.now() ) && !( urgent && _prefs.quietUrgentBypass ) ) return true;
-    return false;
+    if ( _prefs.isSenderMuted( senderKey ) && !( urgent && _prefs.muteUrgentBypass ) ) return 'sender_muted';
+    if ( _prefs.inQuietHours( DateTime.now() ) && !( urgent && _prefs.quietUrgentBypass ) ) return 'quiet_hours';
+    return null;
   }
 
   String _formatSpeech( { required String message, String? title, bool verbatim = false } ) {
@@ -576,7 +615,12 @@ class TtsOrchestrator {
   Future<void> _tryStartNext() async {
     // Pause gate: the single choke point. It covers utterance completion, error continuation and the
     // dispatch-if-idle step in both enqueue entry points.
-    if ( _held ) return;
+    if ( _held ) {
+      if ( _current == null && _fifo.isNotEmpty ) {
+        Logger.info( "dispatch outcome=held paused=$_paused capture=$_captureHeld queued=${_fifo.length}", tag: "Tts" );
+      }
+      return;
+    }
     if ( _current != null ) return;
     if ( _fifo.isEmpty ) return;
     _current = _fifo.removeFirst();
@@ -589,17 +633,20 @@ class TtsOrchestrator {
     if ( utter == null ) return;
 
     _inFlightEpoch = ++_epoch;   // arm the completion/error handlers
+    _watchdog?.cancel();
 
     final sessionId = _ws.sessionId;
     if ( sessionId == null ) {
       // WS not connected — can't do ElevenLabs. Fall back silently for
       // THIS utterance only (don't enter the 5-min quota window).
+      Logger.info( "dispatch outcome=fallback reason=no_session chars=${utter.text.length}", tag: "Tts" );
       await _speakViaFallback( utter.text );
       _onUtteranceFinished();
       return;
     }
 
     if ( _isElevenLabsInFallbackWindow() ) {
+      Logger.info( "dispatch outcome=fallback reason=quota_window chars=${utter.text.length}", tag: "Tts" );
       await _speakViaFallback( utter.text );
       _onUtteranceFinished();
       return;
@@ -613,12 +660,53 @@ class TtsOrchestrator {
       );
       // Audio events (status / chunk / complete / error) arrive via WS
       // and drive `_onUtteranceFinished` or `_onElevenLabsError`.
-    } catch ( _ ) {
+      Logger.info( "dispatch outcome=posted chars=${utter.text.length}", tag: "Tts" );
+      _armWatchdog( utter );
+    } catch ( e ) {
       // Network/HTTP failure on POST — fall back for THIS utterance, do
       // not enter the 5-min quota window (this isn't a quota issue).
+      Logger.warning( "dispatch outcome=fallback reason=post_failed chars=${utter.text.length}", tag: "Tts", error: e );
       await _speakViaFallback( utter.text );
       _onUtteranceFinished();
     }
+  }
+
+  /// Starts the silence timer for [utter], which has just been posted.
+  void _armWatchdog( _Utterance utter ) {
+    _dispatchedAt = DateTime.now();
+    _watchdog?.cancel();
+    final epoch = _inFlightEpoch;
+    _watchdog = Timer( _speakWatchdog, () => _onWatchdog( utter, epoch ) );
+  }
+
+  /// Gives up on an utterance whose audio events stopped, and speaks it on-device.
+  ///
+  /// Requires:
+  ///   - runs from the timer armed by [_armWatchdog]
+  ///
+  /// Ensures:
+  ///   - does nothing when the utterance finished, was skipped or was preempted since the timer was armed
+  ///   - re-arms, and does not fire, while audio is playing or an event arrived inside the window
+  ///   - otherwise stops the player, speaks the utterance through the fallback once, then continues the queue
+  Future<void> _onWatchdog( _Utterance utter, int epoch ) async {
+    if ( epoch != _epoch || !identical( _current, utter ) ) return;   // finished, skipped or preempted
+
+    final last  = _player.lastActivityAt;
+    final since = DateTime.now().difference( last != null && last.isAfter( _dispatchedAt! ) ? last : _dispatchedAt! );
+    if ( _player.isAudioPlaying || since < _speakWatchdog ) {
+      _watchdog = Timer( _speakWatchdog, () => _onWatchdog( utter, epoch ) );
+      return;
+    }
+
+    Logger.warning( "dispatch outcome=fallback reason=watchdog silent_ms=${since.inMilliseconds} chars=${utter.text.length}", tag: "Tts" );
+    ++_epoch;   // stale-guard any late completion or error for the abandoned stream
+    await _player.stop();
+    if ( !identical( _current, utter ) ) return;   // skipped or stopped while stopping
+    await _speakViaFallback( utter.text );
+    if ( !identical( _current, utter ) ) return;
+    _current = null;
+    _emitQueue();
+    await _tryStartNext();
   }
 
   Future<void> _speakViaFallback( String text ) async {
@@ -643,6 +731,8 @@ class TtsOrchestrator {
 
   void _onElevenLabsError( TtsErrorEvent event ) {
     if ( _inFlightEpoch != _epoch ) return;   // stale event
+    _watchdog?.cancel();
+    Logger.info( "dispatch outcome=error code=${event.errorCode}", tag: "Tts" );
 
     final wasCurrent = _current;
     _current = null;
@@ -666,6 +756,7 @@ class TtsOrchestrator {
 
   void _onUtteranceFinished() {
     if ( _inFlightEpoch != _epoch ) return;   // stale event
+    _watchdog?.cancel();
     _current = null;
     _emitQueue();
     _tryStartNext();
