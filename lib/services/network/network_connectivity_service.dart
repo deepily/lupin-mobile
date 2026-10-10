@@ -7,8 +7,8 @@ import '../../core/logging/logger.dart';
 
 /// Watches network connectivity and quality to drive WebSocket reconnection decisions.
 ///
-/// App-wide singleton. It tracks the connection type, tests whether the Lupin server answers, keeps a history of latency
-/// and reachability, and maps the resulting quality to a [WebSocketConnectionStrategy].
+/// App-wide singleton. It tracks the connection type and tests whether the Lupin server answers.
+/// It keeps a history of latency and reachability, and maps the resulting quality to a [WebSocketConnectionStrategy].
 class NetworkConnectivityService {
   static final NetworkConnectivityService _instance = NetworkConnectivityService._internal();
   /// Returns the shared instance.
@@ -20,10 +20,14 @@ class NetworkConnectivityService {
   /// Path of the unauthenticated health endpoint that tells us the Lupin server answered.
   static const String healthPath = '/health';
 
-  /// Plain client for the health request: no auth header and no token refresh, so a sign-in problem cannot read as no network.
+  /// Plain client for the health request, with no auth header and no token refresh.
+  ///
+  /// A sign-in problem therefore cannot read as no network.
   final Dio _healthDio = Dio();
 
-  /// Replaces the reachability check and the latency probe; null means a real request to the Lupin server.
+  /// Replaces the reachability check and the latency probe.
+  ///
+  /// Null means a real request to the Lupin server.
   ///
   /// Tests set it so they need no network. It is never set in the app.
   @visibleForTesting
@@ -45,7 +49,9 @@ class NetworkConnectivityService {
   Timer? _periodicCheckTimer;
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
-  /// True from [pauseMonitoring] until [resumeMonitoring]; while true, [initialize] does not arm the timers.
+  /// True from [pauseMonitoring] until [resumeMonitoring].
+  ///
+  /// While true, [initialize] does not arm the timers.
   bool _monitoringPaused = false;
 
   // Network quality metrics
@@ -115,7 +121,9 @@ class NetworkConnectivityService {
   @visibleForTesting
   bool get isMonitoring => _qualityTestTimer != null;
 
-  /// Cancels the quality and periodic-check timers, so a backgrounded app makes no health requests.
+  /// Cancels the quality and periodic-check timers.
+  ///
+  /// A backgrounded app then sends no health requests.
   ///
   /// The connectivity subscription stays on; it costs nothing.
   void pauseMonitoring() {
@@ -126,7 +134,9 @@ class NetworkConnectivityService {
     _periodicCheckTimer = null;
   }
 
-  /// Re-arms the timers after [pauseMonitoring]; a no-op before [initialize] or while already armed.
+  /// Re-arms the timers after [pauseMonitoring].
+  ///
+  /// It does nothing before [initialize] or while the timers are armed.
   void resumeMonitoring() {
     _monitoringPaused = false;
     if ( _connectivitySubscription == null || isMonitoring ) return;
@@ -180,7 +190,7 @@ class NetworkConnectivityService {
     }
   }
   
-  /// Returns true when the configured Lupin server answers `GET /health` with 200 within 5 seconds.
+  /// Returns true when the Lupin server answers `GET /health` with 200 within 5 seconds.
   ///
   /// The base URL is read on every call, so a switch of server context takes effect on the next check.
   Future<bool> _testInternetConnectivity() async {
@@ -233,7 +243,9 @@ class NetworkConnectivityService {
     });
   }
 
-  /// True for an interface type that can reach the server; Bluetooth is limited by design and never re-checked.
+  /// True for an interface type that can reach the server.
+  ///
+  /// Bluetooth is limited and is never re-checked.
   bool _carriesTraffic( ConnectivityResult result ) =>
       result == ConnectivityResult.wifi || result == ConnectivityResult.mobile ||
       result == ConnectivityResult.ethernet || result == ConnectivityResult.vpn;
@@ -279,7 +291,9 @@ class NetworkConnectivityService {
     }
   }
   
-  /// Measures the round trip of `GET /health` to the Lupin server, in milliseconds; 9999 when it does not answer in 3 seconds.
+  /// Measures the round trip of `GET /health` to the Lupin server, in milliseconds.
+  ///
+  /// It returns 9999 when the server does not answer in 3 seconds.
   Future<int> _measureLatency() async {
     if ( internetProbe != null ) return 0;
     final stopwatch = Stopwatch()..start();

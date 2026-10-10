@@ -16,7 +16,9 @@ import 'ws_resume_store.dart';
 class WebSocketService implements WsReconnectTarget {
   final Dio _dio;
   WebSocketChannel? _channel;
-  /// The listener on [_channel]; cancelled whenever that channel is retired, so a replaced channel cannot speak.
+  /// The listener on [_channel].
+  ///
+  /// It is cancelled whenever that channel is retired, so a replaced channel cannot speak.
   StreamSubscription<dynamic>? _channelSub;
   StreamController<dynamic>? _messageController;
   Timer? _reconnectTimer;
@@ -31,7 +33,9 @@ class WebSocketService implements WsReconnectTarget {
   /// that with close code 4004.
   bool _connecting = false;
 
-  /// Set when [connect] arrives during an attempt; the attempt runs once more if it ends without a socket.
+  /// Set when [connect] arrives during an attempt.
+  ///
+  /// The attempt then runs once more if it ends without a socket.
   bool _connectAgain = false;
 
   /// The observable behind [connectionStream].
@@ -204,7 +208,9 @@ class WebSocketService implements WsReconnectTarget {
     await _establishConnection();
   }
 
-  /// Tries once to bring a dropped socket back, as a trigger (resume, network restored, push wake-up, retry loop) would.
+  /// Tries once to bring a dropped socket back, as a trigger would.
+  ///
+  /// The triggers are resume, network restored, push wake-up and the retry loop.
   ///
   /// Requires:
   ///   - none; it checks its own preconditions and returns false when they fail
@@ -250,8 +256,8 @@ class WebSocketService implements WsReconnectTarget {
   /// One connect attempt: session id, channel, handshake. Its failure schedules a retry.
   ///
   /// Each network wait is bounded by [connectTimeout], so a stalled handshake cannot hold the single-flight flag.
-  /// The fetched session id is held in a local and becomes [sessionId] only once the socket is up, so a failed
-  /// or superseded attempt never leaves an id that has no connection.
+  /// The fetched session id is held in a local.
+  /// It becomes [sessionId] only once the socket is up, so a failed or superseded attempt never leaves an id with no connection.
   Future<void> _attemptOnce() async {
     WebSocketChannel? channel;
     try {

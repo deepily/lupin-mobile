@@ -264,7 +264,9 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
-  /// The network state before the latest edge; seeded from the service when [startConnectivityRefresh] first runs.
+  /// The network state before the latest edge.
+  ///
+  /// It is seeded from the service when [startConnectivityRefresh] first runs.
   NetworkState _previousNetworkState = NetworkState.unknown;
 
   /// Creates the bloc; [network] and [fleet] are optional.
@@ -333,7 +335,9 @@ class HoldingAreaBloc extends Bloc<HoldingAreaEvent, HoldingAreaState>
   Map<String, UnsentWrite> _withUnsent( UnsentWrite write ) =>
       <String, UnsentWrite>{ ...state.unsent, write.taskId : write };
 
-  /// Refreshes on the connectivity-restored edge only (`connected` or `limited`), after retrying unsent writes.
+  /// Refreshes on the connectivity-restored edge only, after retrying unsent writes.
+  ///
+  /// Restored means `connected` or `limited`.
   ///
   /// Firing on every state change would also refetch on the way down, into a connection
   /// that just failed.

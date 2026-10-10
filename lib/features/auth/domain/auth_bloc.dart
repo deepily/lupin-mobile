@@ -18,8 +18,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   /// Creates the bloc over its four services, starting in [AuthInitial].
   ///
-  /// [onBeforeSignOut] runs on every sign-out and server switch while the access token is still set; it is how
-  /// the push token is unregistered with a bearer. Its failure never stops the sign-out.
+  /// [onBeforeSignOut] runs on every sign-out and server switch while the access token is still set.
+  /// It is how the push token is unregistered with a bearer. Its failure never stops the sign-out.
   AuthBloc( {
     required AuthRepository         repo,
     required SecureCredentialStore  store,
@@ -130,7 +130,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  /// Runs the server-side end of a sign-out, in the order the server needs, before local state is cleared.
+  /// Runs the server-side end of a sign-out in the order the server needs.
+  ///
+  /// It runs before local state is cleared.
   ///
   /// Ensures:
   ///   - [_onBeforeSignOut] runs first, while the access token is still set

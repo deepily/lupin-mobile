@@ -95,9 +95,9 @@ class TranscriptBlock {
 
   /// True for a `thinking` block the server sent with no text at all.
   ///
-  /// Claude Code records most thinking as a signature with an EMPTY text, so there is
-  /// nothing to fold or expand; the console says so instead of offering a chip that opens
-  /// onto a blank body. A truncated block is never unrecorded: truncation means text exists.
+  /// Claude Code records most thinking as a signature with empty text, so there is nothing to fold or expand.
+  /// The console says so instead of offering a chip that opens onto a blank body.
+  /// A truncated block is never unrecorded: truncation means text exists.
   bool get isUnrecordedThinking =>
       kind == TranscriptBlockKind.thinking && !truncated && text.trim().isEmpty;
 

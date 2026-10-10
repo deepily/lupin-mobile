@@ -43,8 +43,8 @@ class SpeechSilencer {
 ///
 /// Per-sender mutes, per-priority switches and the stop-list are not here: they silence some messages, not the phone.
 ///
-/// The preferences have no change notification, and quiet hours change with the clock, so the marker
-/// re-reads them once a second and repaints only when the active silencers or their wording change.
+/// The preferences have no change notification, and quiet hours change with the clock.
+/// The marker re-reads them once a second and repaints only when the active silencers or their wording change.
 class SpeechSilencedBanner extends StatefulWidget {
   /// Where the switches are read.
   final NotificationPreferences prefs;
@@ -52,7 +52,9 @@ class SpeechSilencedBanner extends StatefulWidget {
   /// The clock, injectable for tests.
   final DateTime Function() now;
 
-  /// Opens the Notifications screen; null pushes the same screen the drawer's Notifications row opens.
+  /// Opens the Notifications screen.
+  ///
+  /// Null pushes the same screen the drawer's Notifications row opens.
   final VoidCallback? onOpenNotifications;
 
   /// Opens the Settings screen; null pushes the same screen the drawer's Settings row opens.

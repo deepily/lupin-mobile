@@ -7,7 +7,9 @@ import '../services/push/fcm_bootstrap.dart';
 /// none of them and reads as unstamped.
 /// Design: src/scripts/build-apk-on-server.sh
 class BuildInfo {
-  /// Build time as ISO 8601 with offset, for example `2026-10-10T12:03:41-04:00`; empty when unstamped.
+  /// Build time as ISO 8601 with offset, such as `2026-10-10T12:03:41-04:00`.
+  ///
+  /// It is empty when the build is unstamped.
   final String time;
 
   /// Time zone abbreviation of [time], for example `EDT`; empty when not given.

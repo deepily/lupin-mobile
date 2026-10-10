@@ -894,7 +894,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     return windows;
   }
 
-  /// Returns [sid] for a log entry, or a placeholder when it is the signed-in user's own address.
+  /// Returns [sid] for a log entry, or a placeholder for the signed-in user's own address.
   ///
   /// The comparison ignores case and surrounding spaces on both sides.
   String _loggableSender( String sid ) {

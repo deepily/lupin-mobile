@@ -11,13 +11,15 @@ import 'tts_preview_truncator.dart';
 import '../websocket/websocket_service.dart';
 import 'streaming_tts_player.dart';
 
-/// What the orchestrator last did with a message, in one plain line for the speech-queue viewer.
+/// What the orchestrator last did with a message, in one plain line for the queue viewer.
 ///
 /// Rick cannot read the phone log, so the reason a message stayed silent has to be on screen.
 class TtsOutcome {
   /// One plain sentence, such as "Last message not spoken: Master mute is on".
   final String   line;
-  /// True when the message was not spoken as asked: gated, held, failed or sent to the on-device voice.
+  /// True when the message was not spoken as asked.
+  ///
+  /// That covers gated, held, failed, and sent to the on-device voice.
   final bool     problem;
   /// When the outcome was recorded.
   final DateTime at;
@@ -51,7 +53,7 @@ class TtsOrchestrator {
   /// pattern means hide and mute.
   final NotificationStopList?     _stopList;
 
-  /// How long an utterance may sit with no audio event before it is given up on and spoken on-device.
+  /// How long an utterance may sit with no audio event before it is spoken on-device.
   ///
   /// It is counted from the speak acknowledgement and restarts on each routed event. It does not apply while audio
   /// is playing. Without it a lost completion event leaves [_current] set for good, and every later notification
@@ -62,7 +64,7 @@ class TtsOrchestrator {
   /// Default for [_speakWatchdog].
   static const Duration defaultSpeakWatchdog = Duration( seconds: 20 );
 
-  /// How long one on-device speak may take to return before it is abandoned and the queue moves on.
+  /// How long one on-device speak may take to return before the queue moves on.
   ///
   /// `flutter_tts` returns once the engine has accepted the text, so a call that has not returned by now is a
   /// wedged engine. Without a bound it holds [_current] with no POST ever made.
@@ -71,12 +73,15 @@ class TtsOrchestrator {
   /// Default for [_fallbackBudget].
   static const Duration defaultFallbackSpeakBudget = Duration( seconds: 10 );
 
-  /// Ceiling on how long audio may report "playing" for one utterance; null means derive it from the text length.
+  /// Ceiling on how long audio may report "playing" for one utterance.
   ///
+  /// Null means derive it from the text length.
   /// Without a ceiling a player that never fires its completion keeps the watchdog re-arming forever.
   final Duration?                 _maxPlaybackOverride;
 
-  /// Margin added to the service's own bounds to make the orchestrator's outer net; see [fallbackOuterBound].
+  /// Margin added to the service's own bounds for the orchestrator's outer net.
+  ///
+  /// See [fallbackOuterBound].
   final Duration                  _outerMargin;
 
   Timer?    _watchdog;
@@ -789,11 +794,13 @@ class TtsOrchestrator {
     }
   }
 
-  /// Speaks [utter] on-device without making the caller wait, then runs [then] if it is still the live utterance.
+  /// Speaks [utter] on-device without making the caller wait.
   ///
-  /// The speak lasts as long as the utterance. Awaiting it inside the dispatch chain made a microphone-hold
-  /// transition, which is serialized behind the previous one, wait for the speech it was meant to stop. Detached,
-  /// the epoch captured here does the guarding: a skip, stop, hold, preempt or dispose staled it already.
+  /// It then runs [then] if [utter] is still the live utterance.
+  /// The speak lasts as long as the utterance.
+  /// Awaiting it inside the dispatch chain made a microphone-hold transition wait for the speech it was meant to stop.
+  /// That transition is serialized behind the previous one.
+  /// Detached, the epoch captured here does the guarding: a skip, stop, hold, preempt or dispose staled it already.
   void _speakOnDevice( _Utterance utter, int epoch, { required void Function() then } ) {
     unawaited( _speakViaFallback( utter.text ).then( ( _ ) {
       if ( _disposed || epoch != _epoch || !identical( _current, utter ) ) return;
@@ -805,7 +812,9 @@ class TtsOrchestrator {
     } ) );
   }
 
-  /// True while [utter] is the in-flight utterance under dispatch epoch [epoch], and the orchestrator is live.
+  /// True while [utter] is the in-flight utterance under dispatch epoch [epoch].
+  ///
+  /// The orchestrator must also be live.
   bool _stillInFlight( _Utterance utter, int epoch ) =>
       !_disposed && identical( _current, utter ) && _inFlightEpoch == epoch && _epoch == epoch;
 
@@ -820,9 +829,10 @@ class TtsOrchestrator {
     _watchdog = Timer( _speakWatchdog, () => unawaited( _onWatchdog( utter, epoch ) ) );
   }
 
-  /// The longest audio may stay "playing" for [utter] before the player is presumed to have lost its completion.
+  /// The longest audio may stay "playing" for [utter] before the player is presumed stuck.
   ///
-  /// It is 30 s plus the text at a deliberately slow 8 characters a second, unless a ceiling was injected.
+  /// A stuck player is one that lost its completion event.
+  /// It is 30 s plus the text at a slow 8 characters a second, unless a ceiling was injected.
   Duration _playbackCeiling( _Utterance utter ) =>
       _maxPlaybackOverride ?? Duration( seconds: 30 + utter.text.length ~/ 8 );
 
@@ -900,7 +910,9 @@ class TtsOrchestrator {
     }
   }
 
-  /// The orchestrator's own net over one on-device speak: the service's acceptance and completion bounds, plus 5 s.
+  /// The orchestrator's own net over one on-device speak.
+  ///
+  /// It is the service's acceptance and completion bounds, plus 5 s.
   ///
   /// It must stay strictly longer than their sum, so the service always gets to release itself first and the
   /// two never race.
