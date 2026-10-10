@@ -25,7 +25,7 @@ arguments:
 **Identity**:
 - **Prefix**: [LUPIN-MOBILE]
 - **Project Name**: Lupin Mobile
-- **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+- **Working Directory**: .
 
 **Arguments**:
 - **Baseline Report**: ${1:-auto}
@@ -50,7 +50,7 @@ arguments:
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **Project Name**: Lupin Mobile
-   - **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working Directory**: .
    - **Arguments**:
      - Baseline Report: ${1:-auto}
      - Remediation Scope: ${2:-ANALYSIS_ONLY}

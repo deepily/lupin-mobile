@@ -31,7 +31,7 @@ This command supports all four modes via arguments. For discoverability in the s
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **History file**: ./history.md
    - **Bug fix queue file**: ./bug-fix-queue.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
+   - **Project root**: ./
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:

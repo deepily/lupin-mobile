@@ -17,7 +17,7 @@ allowed-tools: Bash(.*), Read, Write, Edit
 **Identity**:
 - **Prefix**: [LUPIN-MOBILE]
 - **Project Name**: Lupin Mobile
-- **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+- **Working Directory**: .
 
 **Paths**:
 - **Logs Directory**: tests/results/logs
@@ -41,7 +41,7 @@ allowed-tools: Bash(.*), Read, Write, Edit
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **Project Name**: Lupin Mobile
-   - **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working Directory**: .
    - **Paths**:
      - Logs Directory: tests/results/logs
      - Reports Directory: tests/results/reports

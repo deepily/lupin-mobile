@@ -21,7 +21,7 @@ arguments:
 **Identity**:
 - **Prefix**: [LUPIN-MOBILE]
 - **Project Name**: Lupin Mobile
-- **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+- **Working Directory**: .
 
 **Date Range**: ${1:-auto} (defaults to last 7 days)
 
@@ -58,7 +58,7 @@ arguments:
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **Project Name**: Lupin Mobile
-   - **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working Directory**: .
    - **Date Range**: ${1:-auto} (defaults to last 7 days)
    - **Source Directories**: workflow/, .claude/commands/, src/rnd/
    - **Component Classification**:

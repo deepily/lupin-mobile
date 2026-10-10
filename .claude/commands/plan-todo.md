@@ -39,8 +39,8 @@
 
 3. **MUST use project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Working directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
-   - **TODO file path**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/TODO.md
+   - **Working directory**: .
+   - **TODO file path**: ./TODO.md
    - Do NOT proceed without these parameters
 
 4. **MUST execute the appropriate mode workflow**:

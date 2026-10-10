@@ -17,8 +17,8 @@
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **History file**: ./history.md
-   - **TODO file**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/TODO.md
-   - **README file**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/README.md
+   - **TODO file**: ./TODO.md
+   - **README file**: ./README.md
    - **Base branch**: main
    - **Branch naming pattern**: `wip-v{version}-{date}-{description}`
    - Do NOT proceed without these parameters

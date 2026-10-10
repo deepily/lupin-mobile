@@ -30,7 +30,7 @@
 
 2. **MUST use project configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Working directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working directory**: .
    - **Queue + log**: the `## Pending Decisions` and `## Decisions Log` sections of `TODO.md`.
 
 3. **MUST execute the ritual exactly**: gather → order (descending) → per decision (frame live → `ask_multiple_choice` with pros/cons + recommended-first + a `default` that covers a **timeout** — ⚠️ **not** an absent user, who 503s regardless → record) → recap. Do NOT skip recording or the recap.

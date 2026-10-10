@@ -31,7 +31,7 @@
 
 2. **MUST use project configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Working directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working directory**: .
 
 3. **MUST resolve the target**: named manager → that one; otherwise every active manager (`commons_who`) owing open work (`task_query`). If said directly to a manager, that manager runs the Operational Contract on itself.
 

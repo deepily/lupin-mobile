@@ -37,7 +37,7 @@
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **History file**: ./history.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
+   - **Project root**: ./
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:

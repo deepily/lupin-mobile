@@ -52,7 +52,7 @@ This command supports all five modes via arguments. For discoverability in the s
 
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
+   - **Project root**: ./
    - **Skills location**: .claude/skills/
    - Do NOT proceed without these parameters
 

@@ -39,8 +39,8 @@
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **History file**: ./history.md
    - **Bug fix queue file**: ./bug-fix-queue.md
-   - **TODO file**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/TODO.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
+   - **TODO file**: ./TODO.md
+   - **Project root**: ./
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:

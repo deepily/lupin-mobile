@@ -32,7 +32,7 @@
 
 2. **MUST use project configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Working directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working directory**: .
    - **Deliverable bindings**: `push` → the `/plan-session-end` push step · `backup` → `/plan-backup-write` · `post-game` → `/plan-post-game`
 
 3. **MUST extract all four elements** — `wrap_at`, `close_at`, `participants`, `deliverables` — and **read them back in one line before filing**. If the roster or the deliverable set is missing, ask once via `ask_multiple_choice` / `converse`. **Never infer a deliverable**: element 4 is the payload, and a generic "wrap up now" poke is the exact failure this exists to prevent.

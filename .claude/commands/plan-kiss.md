@@ -50,7 +50,7 @@
 
 2. **MUST use project configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Working directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working directory**: .
 
 3. **MUST resolve the target**: named persona → that one (canonical persona key — see `task-store-discipline.md`); otherwise every active session via `commons_who()`. If said directly to you, apply it to yourself immediately and do not broadcast.
 

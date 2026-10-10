@@ -17,7 +17,7 @@
 1. **MUST use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **History file**: ./history.md
-   - **Planning documents**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/workflow/
+   - **Planning documents**: $PLANNING_IS_PROMPTING_ROOT/workflow/
    - **Archive directory**: ./history/
    - Do NOT proceed without these parameters
 
