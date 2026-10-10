@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
+import '../../../core/build_info.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../shared/widgets/tts_pause_control.dart';
 import '../../../services/asr/asr_service.dart';
@@ -443,7 +444,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
   /// [_legacyDrawer], hidden behind the switch and not deleted.
   Drawer _surfacesDrawer( BuildContext context ) {
     return Drawer(
-      child: ListView(
+      child: _withBuildFooter( ListView(
         children: [
           const DrawerHeader(
             key   : Key( TestKeys.focusDrawerHeader ),
@@ -505,7 +506,31 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             },
           ),
         ],
-      ),
+      ) ),
+    );
+  }
+
+  /// Pins the build line under [entries], so it stays on screen however long the list is.
+  Widget _withBuildFooter( Widget entries ) {
+    return Column(
+      children: [
+        Expanded( child: entries ),
+        const Divider( height: 1 ),
+        SafeArea(
+          top   : false,
+          child : Padding(
+            padding : const EdgeInsets.symmetric( horizontal: 16, vertical: 10 ),
+            child   : Align(
+              alignment : Alignment.centerLeft,
+              child     : Text(
+                BuildInfo.current.describe(),
+                key   : const Key( TestKeys.focusDrawerBuildLine ),
+                style : Theme.of( context ).textTheme.bodySmall,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -520,7 +545,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
     }
 
     return Drawer(
-      child: ListView(
+      child: _withBuildFooter( ListView(
         children: [
           const DrawerHeader( child: Text( 'Legacy surfaces' ) ),
           // Quick Ask sits under the legacy header. That reads oddly for a headline feature,
@@ -591,7 +616,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
             },
           ),
         ],
-      ),
+      ) ),
     );
   }
 }

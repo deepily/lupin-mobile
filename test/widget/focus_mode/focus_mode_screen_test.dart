@@ -9,6 +9,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:lupin_mobile/core/build_info.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/agentic/domain/agentic_submission_bloc.dart';
 import 'package:lupin_mobile/features/agentic/presentation/agentic_hub_screen.dart';
@@ -711,6 +712,23 @@ void main() {
       expect( entry( 'Lupin AF Focus' ), findsOneWidget );
       expect( tester.getTopLeft( entry( 'Quick Ask' ) ).dy,
               lessThan( tester.getTopLeft( entry( 'Lupin AF Focus' ) ).dy ) );
+    } );
+
+    testWidgets( 'the build line is pinned under the entries and always on screen', ( tester ) async {
+      // A short phone: the entry list scrolls, the footer must not.
+      await openDrawer( tester );
+      tester.view.physicalSize = const Size( 800, 700 );
+      await tester.pumpAndSettle();
+      final line = find.byKey( const Key( TestKeys.focusDrawerBuildLine ) );
+      expect( line, findsOneWidget );
+      expect( tester.widget<Text>( line ).data, BuildInfo.current.describe() );
+      expect( tester.widget<Text>( line ).data, startsWith( 'Build' ) );
+      expect( tester.getBottomLeft( line ).dy, lessThanOrEqualTo( 700 ) );
+      // Scrolling the entries does not move it.
+      final before = tester.getTopLeft( line );
+      await tester.drag( entry( 'Quick Ask' ), const Offset( 0, -300 ) );
+      await tester.pumpAndSettle();
+      expect( tester.getTopLeft( line ), before );
     } );
 
     testWidgets( 'Home grid is hidden from the surfaces drawer (row 74a799c9)', ( tester ) async {
