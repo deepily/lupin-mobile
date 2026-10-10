@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import '../../core/logging/logger.dart';
 import '../push/notification_tap_payload.dart';
 import 'notification_preferences.dart';
 
@@ -30,7 +31,12 @@ class NotificationAudioService {
   final FlutterTts                      _tts;
   final NotificationPreferences         _prefs;
   bool _initialized = false;
-  bool _queueModeSet = false;
+  bool _handlersSet = false;
+  Completer<void>? _utteranceDone;
+
+  /// How long the engine may take to accept a text; see [flutterTtsSpeak].
+  final Duration speakAcceptBudget;
+  final Duration? _completionBound;
 
   /// The notification-tap callback this service must preserve when it initializes the plugin.
   ///
@@ -55,7 +61,10 @@ class NotificationAudioService {
     FlutterLocalNotificationsPlugin? plugin,
     FlutterTts?                      tts,
     DidReceiveNotificationResponseCallback? onNotificationTap,
-  } ) : _prefs = prefs,
+    this.speakAcceptBudget = const Duration( seconds: 10 ),
+    Duration? completionBound,
+  } ) : _completionBound = completionBound,
+       _prefs = prefs,
        _onNotificationTap = onNotificationTap,
        _fln   = plugin ?? FlutterLocalNotificationsPlugin(),
        _tts   = tts    ?? FlutterTts();
@@ -140,33 +149,77 @@ class NotificationAudioService {
     // as the fallback through [flutterTtsSpeak]. `NotificationBloc._onExternalUpdate` wires it beside this ding call.
   }
 
-  /// Speaks [text] with `flutter_tts`, for `TtsOrchestrator` when ElevenLabs is unavailable.
+  /// Speaks [text] with `flutter_tts` and returns when the engine has finished it, for `TtsOrchestrator` when
+  /// ElevenLabs is unavailable.
   ///
   /// Unavailable means quota exceeded, a network error or a disconnected WebSocket. It lives here because this
   /// service owns the `FlutterTts` singleton. A missing TTS engine is non-fatal.
+  ///
+  /// Two bounds, so a wedged engine can never hold the caller for good:
+  ///   - acceptance: [speakAcceptBudget] for the engine to take the text
+  ///   - completion: [completionBoundFor] the text, for the engine's completion, cancel or error callback
+  ///
+  /// The orchestrator keeps its in-flight utterance until this returns, which is what lets skip, stop-all,
+  /// pause, the microphone hold and an urgent arrival reach the speech. Returning on acceptance let a burst
+  /// pile up inside the engine where none of them could.
   Future<void> flutterTtsSpeak( String text ) async {
-    // Queue, never flush. `speak` returns once the engine accepts the text, so the orchestrator sends the next
-    // utterance straight away; in the default flush mode that cut the first one off. A `stop()` before `speak`
-    // did the same. Cancelling is `stopFallbackSpeech`'s job, which flushes whatever is queued.
-    if ( !_queueModeSet ) {
-      _queueModeSet = true;
-      try {
-        await _tts.setQueueMode( 1 );
-      } catch ( _ ) {
-        // Not every engine supports it; the speak below still goes ahead.
-      }
+    final done = Completer<void>();
+    _utteranceDone = done;
+    try {
+      _ensureHandlers();
+      await _tts.stop();
+      await _tts.speak( text ).timeout( speakAcceptBudget );
+    } on TimeoutException {
+      Logger.warning( "on-device speak was not accepted within ${speakAcceptBudget.inMilliseconds} ms", tag: "TtsFallback" );
+      _release( done );
+      await stopFallbackSpeech();
+      return;
+    } catch ( e ) {
+      // TTS engine may be unavailable on some devices; non-fatal.
+      Logger.warning( "on-device speak failed", tag: "TtsFallback", error: e );
+      _release( done );
+      return;
     }
     try {
-      await _tts.speak( text );
-    } catch ( _ ) {
-      // TTS engine may be unavailable on some devices; non-fatal.
+      await done.future.timeout( completionBoundFor( text ) );
+    } on TimeoutException {
+      Logger.warning( "on-device speech did not report finishing within ${completionBoundFor( text ).inSeconds} s", tag: "TtsFallback" );
+      _release( done );
+      await stopFallbackSpeech();
     }
+  }
+
+  /// How long the engine may take to finish [text] before it is presumed wedged.
+  ///
+  /// It is 30 s plus the text at a deliberately slow 8 characters a second, unless a bound was injected.
+  Duration completionBoundFor( String text ) =>
+      _completionBound ?? Duration( seconds: 30 + text.length ~/ 8 );
+
+  void _ensureHandlers() {
+    if ( _handlersSet ) return;
+    _handlersSet = true;
+    try {
+      _tts.setCompletionHandler( _releaseCurrent );
+      _tts.setCancelHandler( _releaseCurrent );
+      _tts.setErrorHandler( ( dynamic _ ) => _releaseCurrent() );
+    } catch ( e ) {
+      // Without callbacks the completion bound still releases the caller.
+      Logger.warning( "could not register the speech completion handlers", tag: "TtsFallback", error: e );
+    }
+  }
+
+  void _releaseCurrent() => _release( _utteranceDone );
+
+  void _release( Completer<void>? c ) {
+    if ( c != null && !c.isCompleted ) c.complete();
   }
 
   /// Stops any in-flight `flutter_tts` utterance.
   ///
   /// `TtsOrchestrator` calls it on urgent-preempt and user-cancel.
   Future<void> stopFallbackSpeech() async {
+    // Release a waiting speak first: some engines fire no cancel callback on stop.
+    _releaseCurrent();
     try {
       await _tts.stop();
     } catch ( _ ) {

@@ -225,7 +225,7 @@ class StreamingTtsPlayer {
   Future<void> _playPcmBuffer() async {
     if ( _pcmBuffer.isEmpty ) {
       // Defensive: no audio arrived but the WebSocket sent complete. Still signal complete so the orchestrator advances its FIFO.
-      _completeCtrl.add( const TtsCompleteEvent() );
+      _completeCtrl.add( const TtsCompleteEvent( played: false ) );
       return;
     }
     final wav = _wrapPcm24kAsWav( Uint8List.fromList( _pcmBuffer ) );
@@ -325,8 +325,12 @@ class TtsStatusEvent {
 
 /// Terminal event: the TTS stream finished cleanly.
 class TtsCompleteEvent {
-  /// Creates the event.
-  const TtsCompleteEvent();
+  /// False when the stream finished without a single audio chunk, so nothing was played.
+  ///
+  /// The orchestrator advances its queue either way, but only a played utterance reads "spoken".
+  final bool played;
+  /// Creates the event; [played] defaults to true.
+  const TtsCompleteEvent( { this.played = true } );
 }
 
 /// Terminal event: the TTS stream failed.

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui' show VoidCallback;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -141,29 +143,54 @@ void main() {
       tts    : tts,
     );
 
-    test( "flutterTtsSpeak speaks the supplied text and never stops first", () async {
-      await newService().flutterTtsSpeak( "hello world" );
+    VoidCallback? completion;
+
+    NotificationAudioService boundedService( { Duration accept = const Duration( milliseconds: 60 ),
+                                               Duration done   = const Duration( milliseconds: 120 ) } ) =>
+        NotificationAudioService(
+          prefs: prefs, plugin: fln, tts: tts, speakAcceptBudget: accept, completionBound: done );
+
+    setUp( () {
+      completion = null;
+      when( () => tts.setCompletionHandler( any() ) ).thenAnswer( ( inv ) {
+        completion = inv.positionalArguments.first as VoidCallback;
+      } );
+    } );
+
+    test( "flutterTtsSpeak returns only when the engine reports the utterance finished", () async {
+      final service = boundedService( done: const Duration( seconds: 5 ) );
+      var finished  = false;
+      final future  = service.flutterTtsSpeak( "hello world" ).then( ( _ ) => finished = true );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
       verify( () => tts.speak( "hello world" ) ).called( 1 );
-      verifyNever( () => tts.stop() );
+      expect( finished, isFalse, reason: "accepted is not finished: the orchestrator must keep its utterance" );
+
+      completion!();
+      await future;
+      expect( finished, isTrue );
+      verifyNever( () => tts.setQueueMode( any() ) );
     } );
 
-    test( "two utterances in a row are queued, so the second does not cut the first off", () async {
-      final service = newService();
-      await service.flutterTtsSpeak( "first" );
-      await service.flutterTtsSpeak( "second" );
+    test( "stopFallbackSpeech releases a speak that is waiting, even when the engine fires no cancel callback", () async {
+      final service = boundedService( done: const Duration( seconds: 5 ) );
+      final future  = service.flutterTtsSpeak( "long" );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
 
-      verify( () => tts.setQueueMode( 1 ) ).called( 1 );
-      verifyNever( () => tts.stop() );
-      verifyInOrder( [
-        () => tts.speak( "first" ),
-        () => tts.speak( "second" ),
-      ] );
+      await service.stopFallbackSpeech();
+      await future.timeout( const Duration( seconds: 1 ) );   // would hang for 5 s without the release
     } );
 
-    test( "an engine that refuses queue mode still speaks", () async {
-      when( () => tts.setQueueMode( any() ) ).thenThrow( Exception( "unsupported" ) );
-      await newService().flutterTtsSpeak( "still heard" );
-      verify( () => tts.speak( "still heard" ) ).called( 1 );
+    test( "an engine that never reports finishing is stopped at the completion bound", () async {
+      await boundedService().flutterTtsSpeak( "wedged engine" );
+      verify( () => tts.stop() ).called( greaterThanOrEqualTo( 2 ) );   // before the speak, and the bound's own stop
+    } );
+
+    test( "an engine that never accepts the text is abandoned at the acceptance budget", () async {
+      final never = Completer<dynamic>();
+      when( () => tts.speak( any() ) ).thenAnswer( ( _ ) => never.future );
+      await boundedService().flutterTtsSpeak( "never accepted" );
+      verify( () => tts.stop() ).called( greaterThanOrEqualTo( 2 ) );
     } );
 
     test( "flutterTtsSpeak swallows errors from the underlying engine", () async {
