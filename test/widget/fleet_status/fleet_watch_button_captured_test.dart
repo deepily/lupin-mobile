@@ -25,9 +25,8 @@ import '../../_helpers/fixture_loader.dart';
 /// the tag, so the per-slice merge gate can exclude these rows while a printed roster keeps
 /// them visible.
 ///
-/// ⇒ **The gate for a slice is `./flutter.sh test --exclude-tags pending-capture`**, plus
-/// the roster from `./flutter.sh test --tags pending-capture`. **Phase 3 closes only on a
-/// plain `./flutter.sh test` with zero exclusions.**
+/// ⇒ (History: the tag is retired 2026-10-10 and the gate is the plain
+/// `./flutter.sh test`, with zero exclusions.)
 ///
 /// ⚠️ MARÍA'S FIRST CONDITION IS THE ONE THAT KEEPS THIS TAG HONEST: a test may carry it
 /// ONLY IF ITS SOLE FAILURE IS `fixture_loader`'s missing-file `FileSystemException`. Any
