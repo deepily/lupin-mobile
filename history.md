@@ -14,6 +14,21 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.10 | Sessions `de4ce9d3` then `271cba01` (Tiffany 💍) — silent phone found, build line, doc rewrite closed
+
+Crew: Tiberius (author), Chloé (reviewer), Maya (author) and Rio (reviewer), both released in the afternoon. Session `de4ce9d3` died at about 19:20 EDT; `271cba01` picked up from row `79d49618` and Rick's pasted notes. Everything before 19:21 EDT below is from commits, gate logs and `TODO.md`, not from memory.
+
+- **Silent phone** (bug `e0f0faf0`, closed): Master mute was on. The outcome line added in `3bc7670` named it when Rick read the phone at 18:00 EDT; he heard speech at about 18:47 EDT. Also merged: a speech watchdog and four review rounds (`259531c`, `6a9ca61`, `4c26045`), and a banner naming each active silencer with its repaint and rebuild tests (`0dd0655`, `17750b7`, `a672945`, `37a6b20`).
+- **Phone socket and logout**: an old listener can no longer tear down the live socket, the session id is taken once the socket is up, logout sends the refresh token and unregisters the push token first. Merged `98a497e`. The late-completion gap is a server change, lupin row `87d19d27`.
+- **Build line**: the drawer shows branch, date and a per-day build number (`c07c65d`, `16fc44d`). Latest APK is 2026.10.10 build 8 at `44f723c`, push wake-ups on.
+- **Command wrappers** refreshed and backup paths corrected (row `08c4e586`, merge `cbe1854`).
+- **Doc-comment rewrite closed** (row `79d49618`): Rick turned all checking off and asked for the job finished. Six commits from Tiberius, each passed by Chloé, merged `d1c1e6e`: six dropped reasons restored, the last 3 public members documented, 92 linter findings in 22 `lib/` files cleared, rule 6 cites a commit (`R-DOC-reason-by-commit`). `lib/` reads 0 linter findings and 0 undocumented public members. The blind taste test before that: new comments preferred 39 to 6.
+- **Merge gate runs the doc linter** (row `27548910`, admitted by Rick): no gate step ran it before, which is how the 92 findings went unseen. Merged `45819e4` (`836af40`, `d31726f`).
+- **Dropped rows checked** (row `e0d17ef4`, closed): nothing new owed from `a246634e` or `9d7b62e9`; why they were dropped is unverified.
+- **Merge gates**: PASS `5663197..44f723c`; PASS-WITH-WARNING `b941543..45819e4` (the range changes the gate's own files; the question whether Chloé's review counts as the human read is with Rick). Earlier in the day: ten PASS and one FAIL (`259531c..6a9ca61`, passed 15 minutes later on a wider range), logs in `io/2026.10.10/tiffany/`.
+- **Post-game**: `src/docs/post-games/v0.2.2/2026.10.10-silent-phone-and-doc-closeout-crew-post-game.md`, rulings R19 to R25 (manager, reversible).
+- **Held, waiting for Rick**: flaky foreground-gate test (`ff9cc9d3`), R&D ledger for mobile (`e40642c3`).
+
 ## 2026.10.09 | Session `de4ce9d3` (Tiffany 💍) — five held rows cleared, two connectivity rulings, blind Dart count
 
 Crew (all Sonnet 5.5): Maya (reviewer), Clayton (author), Pocholo (author, then reviewer), one author seat that got no persona; all released with mementos by 12:05 EDT. Afternoon: Pocholo (tester, released 14:00), Clayton (author, running at this checkpoint). Tip `95c1c02`, not pushed (28 commits ahead of origin). I cleared my own context at 12:31 EDT (session `f6acc646`, same seat).
