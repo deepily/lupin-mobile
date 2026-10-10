@@ -163,8 +163,8 @@ Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow 
 - Project Name: Lupin Mobile
 - History file: `./history.md`
 - Archive directory: `./history/`
-- Backup source: `/mnt/DATA01/include/www.deepily.ai/projects/lupin/src/lupin-mobile/`
-- Backup destination: `/mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/`
+- Backup source: `/mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/`
+- Backup destination: `/mnt/DATA02/include/www.deepily.ai/projects/lupin-mobile/`
 
 **Slash Commands Available** (under `.claude/commands/`):
 

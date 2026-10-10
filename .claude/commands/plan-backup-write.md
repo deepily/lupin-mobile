@@ -62,8 +62,8 @@ Execute the project's backup script located at `src/scripts/backup.sh` in **writ
   Lupin Mobile Backup Sync
 ========================================
 Mode: WRITE MODE
-Source: /mnt/DATA01/include/www.deepily.ai/projects/lupin/src/lupin-mobile/
-Destination: /mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/
+Source: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
+Destination: /mnt/DATA02/include/www.deepily.ai/projects/lupin-mobile/
 Exclusions: src/scripts/conf/rsync-exclude.txt
 ========================================
 
