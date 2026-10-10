@@ -13,8 +13,9 @@ import '../../_helpers/transcript_fakes.dart';
 /// The Live Console screen — C5.4, C5.5, C5.14, C5.15, C5.17, C5.18, C5.19 and C5.22.
 ///
 /// ⚠️ TYPED MODEL OBJECTS, NOT CAPTURED FRAMES, and §5 requires captured ones for C5.18,
-/// C5.21 and C5.22. Those captured twins live in `live_console_captured_test.dart`, tagged
-/// `pending-capture` and RED until phase 1 emits. **What is here proves the BEHAVIOUR; it
+/// C5.21 and C5.22. Those captured twins live in `live_console_captured_test.dart`, which
+/// was tagged `pending-capture` until the fixtures were captured (2026-10-10) and now runs
+/// in the gate. **What is here proves the BEHAVIOUR; it
 /// does not discharge the rows that demand captured input**, and the slice report says so
 /// rather than rounding it off.
 void main() {

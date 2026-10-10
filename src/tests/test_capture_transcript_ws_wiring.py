@@ -4,8 +4,8 @@ The capture script's WS half, wired but unrunnable (row 768e852f slice 4).
 `capture_ws_frames` is where the client meets the script, and the thing most
 worth pinning is what it does when it CANNOT run: it must block each fixture with
 a reason a reader can act on and write NOTHING, because the consuming test's red
-on a missing file is María's condition for the `pending-capture` tag. A
-placeholder file would turn three red tests green while proving nothing.
+on a missing file was María's condition for the `pending-capture` tag (retired
+2026-10-10, once every fixture existed). A placeholder file would turn three red tests green while proving nothing.
 
 Run: python -m pytest src/tests/test_capture_transcript_ws_wiring.py -v
 """

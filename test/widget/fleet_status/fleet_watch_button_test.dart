@@ -11,8 +11,9 @@ import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_pan
 /// ⚠️ THE FIELD ARM IS NOT HERE. C5.9 requires the "renders iff `transcript_watchable`"
 /// half be proven against the **captured** projection and fleet-state fixtures rather than
 /// a stubbed row (F-Clayton-C4), and phase 1 has not emitted yet so there is nothing to
-/// capture. That arm lives in `fleet_watch_button_captured_test.dart`, tagged
-/// `pending-capture` and RED until the capture lands (María's B3 ruling). **This file does
+/// capture. That arm lives in `fleet_watch_button_captured_test.dart`, which was tagged
+/// `pending-capture` until the capture landed (María's B3 ruling; tag retired 2026-10-10)
+/// and now runs in the gate. **This file does
 /// not satisfy the field arm and must not be reported as doing so** — what it proves is
 /// that the pane's join, the tap target and the semantics tree behave, given a roster.
 ///

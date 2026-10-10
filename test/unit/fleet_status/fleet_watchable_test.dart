@@ -17,7 +17,8 @@ import '../_helpers/stub_dio.dart';
 /// ⚠️ THESE USE HAND-BUILT BODIES, NOT CAPTURED ONES, AND THAT IS A STATED LIMIT. They
 /// prove the parser obeys the contract as written in §3; they cannot prove the server
 /// emits that shape, because phase 1 has not emitted yet. C5.9's field arm is the captured
-/// half and it is `pending-capture` red until then.
+/// half; it was `pending-capture` red until the capture landed (tag retired 2026-10-10) and now
+/// runs in the gate.
 void main() {
   const fullId = "6bf7cfa9-964e-4cef-a5d9-a804a4d75874";
 
