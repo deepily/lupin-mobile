@@ -2,16 +2,21 @@
 
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
-State at the 13:14 EDT checkpoint: merge tip `4c26045` (build line in the main menu; speech queue can no longer be held silently and names each outcome on screen; four merges, the last gate PASS over `259531c..4c26045`, suite 0 failing). APK built with FCM at `4c26045`, 13:12 EDT; Rick has not said it is installed. Nothing pushed. One seat up: Tiberius (`cc-author-tiffany-1`), holding for Rick's phone test. Rows `768e852f` and `ee68d5e7` are done.
+State at the 16:02 EDT checkpoint: merge tip `16fc44d` (as at 13:14, plus the version line: branch name over date and the day's build number; gate PASS over `8ba73d3..16fc44d`, suite 0 failing). APK build 4 made with FCM at `16fc44d`, 15:39 EDT; Rick said at 15:08 he was installing but has not said "installed". Nothing pushed. No seats running; seeds `io/mementos/{tiberius,maya,rio,chloe}.md`. Rows `768e852f` and `ee68d5e7` are done. Store: speech bug `e0f0faf0` is queued and also carries the finished build-line work and the unstarted phone socket defects (rows `9d7b62e9` and `a246634e` were the price of two admit requests); the judge-run admit request on `79d49618` is pending on Rick's board.
 
 | Next | Waits on |
 |---|---|
-| No speech on the phone (Rick, 11:48 EDT): the cause is **not proven**; text arrives, the app refuses or holds it before any voice starts, the server sees no speech request | Rick installs the 13:12 build, says "installed", Tiffany sends a test; if silent he reads the top line of the Speech queue sheet |
-| Own store rows for the speech bug and the build line: new tickets were refused fleet-wide (ratio gate), so both are recorded as an amendment on row `79d49618` | the ticket gate opening; then file both and close the build-line one on `c07c65d` |
-| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); the three-vote rule landed in lupin at `8f797ccb`, command in lupin `io/tmp/2026.10.09-krishna-three-vote-judge-run-command.md` | Rick admits the row (asked 10:03 EDT, timed out) |
-| Phone's own socket teardown loop (Tiberius's finding, section G): an old listener can drop the live socket; logout returns 422 and push-token unregister 401 | a row once the ticket gate opens; not started |
-| Version shown is `v1.0.0+1` from `pubspec.yaml`, while the branch is v0.2.2 | Rick's word on changing `pubspec.yaml` |
+| No speech on the phone (Rick, 11:48 EDT; row `e0f0faf0`): the cause is **not proven**; text arrives, the app refuses or holds it before any voice starts, the server sees no speech request | Rick installs build 4, says "installed", Tiffany sends a test; if silent he reads the top line of the Speech queue sheet |
+| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); the three-vote rule landed in lupin at `8f797ccb`, command in lupin `io/tmp/2026.10.09-krishna-three-vote-judge-run-command.md` | Rick approves the admit request filed 15:09 EDT |
+| Phone's own socket teardown loop (Tiberius's finding, section G): an old listener can drop the live socket; logout returns 422 and push-token unregister 401. Owed on row `e0f0faf0` | staffing after the speech test; not started |
 | Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
+
+### Decisions Log — 2026-10-10, afternoon (Tiffany)
+
+- **Rick, on a card, 15:08 EDT, first-hand**: Install "Installing now"; Judge run "Request it, drop the socket row"; Version "Set it to the work branch name + a date represented in my canonical yyyyy.mm.dd And then build number for the day".
+- **My reading of the version answer, his to correct**: the full branch name on its own line, then `yyyy.mm.dd build N · HH:mm ZONE · sha · push`; N counts successful builds that day and restarts at 1; `pubspec.yaml` is untouched and no longer shown. Today's counter was seeded at 3 for the builds at 00:13, 12:23 and 13:12 EDT.
+- **An admit request costs one of my own live tickets** (the store's rule while Rick's switch is on). I pledged the finished build-line row for the speech bug, and, on Rick's word, the socket-defect row for the judge run; both rows' content was folded into `e0f0faf0` first.
+- **A seat's memento is written through `/plan-memento`**: a hand-written file has no record header and the reap refuses it (Maya, twice).
 
 ### Decisions Log — 2026-10-10, midday (Tiffany)
 
