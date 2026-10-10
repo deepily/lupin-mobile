@@ -30,6 +30,7 @@ class NotificationAudioService {
   final FlutterTts                      _tts;
   final NotificationPreferences         _prefs;
   bool _initialized = false;
+  bool _queueModeSet = false;
 
   /// The notification-tap callback this service must preserve when it initializes the plugin.
   ///
@@ -144,8 +145,18 @@ class NotificationAudioService {
   /// Unavailable means quota exceeded, a network error or a disconnected WebSocket. It lives here because this
   /// service owns the `FlutterTts` singleton. A missing TTS engine is non-fatal.
   Future<void> flutterTtsSpeak( String text ) async {
+    // Queue, never flush. `speak` returns once the engine accepts the text, so the orchestrator sends the next
+    // utterance straight away; in the default flush mode that cut the first one off. A `stop()` before `speak`
+    // did the same. Cancelling is `stopFallbackSpeech`'s job, which flushes whatever is queued.
+    if ( !_queueModeSet ) {
+      _queueModeSet = true;
+      try {
+        await _tts.setQueueMode( 1 );
+      } catch ( _ ) {
+        // Not every engine supports it; the speak below still goes ahead.
+      }
+    }
     try {
-      await _tts.stop();
       await _tts.speak( text );
     } catch ( _ ) {
       // TTS engine may be unavailable on some devices; non-fatal.

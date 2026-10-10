@@ -12,6 +12,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:lupin_mobile/services/notification_filter/notification_stop_list.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
@@ -251,6 +252,126 @@ void main() {
 
       expect( posted, [ "first", "second" ], reason: "THE BUG: an unhandled throw left _current set" );
       expect( o.lastOutcome!.line, anyOf( contains( "watchdog hit an error" ), contains( "sent to the speaker" ) ) );
+    } );
+  } );
+
+  group( "round 2 (Chloe, 291777b): stale lines, completion, wordings", () {
+    late NotificationPreferences prefs;
+
+    Future<TtsOrchestrator> fresh( { bool withStopList = false } ) async {
+      final o = await newOrch();   // sets up the mocks; its own prefs are replaced below
+      await o.dispose();
+      SharedPreferences.setMockInitialValues( {} );
+      final sp = await SharedPreferences.getInstance();
+      prefs = NotificationPreferences( sp );
+      orch = TtsOrchestrator(
+        player: player, fallback: fallback, prefs: prefs, ws: ws, speakWatchdog: window,
+        stopList: withStopList ? NotificationStopList( sp ) : null,
+      );
+      return orch!;
+    }
+
+    const emptied = "Speech queue emptied: nothing is waiting";
+
+    test( "the held line retires when the queue is emptied: clearQueued, removeQueued and stopAll", () async {
+      final o = await fresh();
+      o.pause();
+
+      o.enqueueAlways( priority: "high", message: "one" );
+      o.enqueueAlways( priority: "high", message: "two" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (2 waiting)" );
+      o.clearQueued();
+      expect( o.lastOutcome!.line, emptied, reason: "THE BUG: it kept saying 2 waiting" );
+      expect( o.lastOutcome!.problem, isFalse );
+
+      o.enqueueAlways( priority: "high", message: "three" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (1 waiting)" );
+      final id = o.queueSnapshot.single.id;
+      expect( o.removeQueued( id ), isTrue );
+      expect( o.lastOutcome!.line, emptied );
+
+      o.enqueueAlways( priority: "high", message: "four" );
+      await o.stopAll();
+      expect( o.lastOutcome!.line, emptied );
+    } );
+
+    test( "a held line is kept while something is still waiting", () async {
+      final o = await fresh();
+      o.pause();
+      o.enqueueAlways( priority: "high", message: "one" );
+      o.enqueueAlways( priority: "high", message: "two" );
+      o.removeQueued( o.queueSnapshot.first.id );
+      expect( o.lastOutcome!.line, startsWith( "Held, not spoken yet" ) );
+    } );
+
+    test( "a finished utterance reads 'Last message spoken', quietly; a stale completion says nothing", () async {
+      final o = await fresh();
+
+      o.enqueueAlways( priority: "high", message: "say this" );
+      await pump();
+      expect( o.lastOutcome!.line, "Last message sent to the speaker" );
+
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+      expect( o.lastOutcome!.line, "Last message spoken" );
+      expect( o.lastOutcome!.problem, isFalse );
+
+      // No utterance in flight, so a stray completion must not rewrite the line.
+      final before = o.lastOutcome;
+      await o.stopAll();
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+      expect( o.lastOutcome!.line, before!.line );
+    } );
+
+    test( "each remaining wording is exactly what Rick reads", () async {
+      final o = await fresh( withStopList: true );
+
+      await prefs.muteSender( "key-1", "Some Worker" );
+      o.enqueueAlways( priority: "high", message: "hi", senderKey: "key-1" );
+      expect( o.lastOutcome!.line, "Last message not spoken: that sender is muted" );
+      await prefs.unmuteSender( "key-1" );
+
+      await prefs.setQuietEnabled( true );
+      final now = DateTime.now();
+      final m   = now.hour * 60 + now.minute;
+      await prefs.setQuietStartMinutes( m - 30 );
+      await prefs.setQuietEndMinutes( m + 30 );
+      await prefs.setQuietUrgentBypass( false );
+      o.enqueueAlways( priority: "high", message: "hi" );
+      expect( o.lastOutcome!.line, "Last message not spoken: quiet hours are on" );
+      await prefs.setQuietEnabled( false );
+
+      o.enqueueAlways( priority: "high", message: "Done: Bash ls -la" );
+      expect( o.lastOutcome!.line, "Last message not spoken: it matches the stop-list" );
+
+      await prefs.setSpeakSystemSenders( false );
+      o.enqueueAlways( priority: "high", message: "from a script" );
+      expect( o.lastOutcome!.line, "Last message not spoken: Speak system senders is off" );
+      await prefs.setSpeakSystemSenders( true );
+
+      o.setCaptureHold( true );
+      o.enqueueAlways( priority: "high", message: "mic is open" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: the microphone is recording (1 waiting)" );
+    } );
+
+    test( "the fallback and failure wordings", () async {
+      final o = await fresh();
+
+      when( () => ws.sessionId ).thenReturn( null );
+      o.enqueueAlways( priority: "high", message: "no connection" );
+      await pump();
+      expect( o.lastOutcome!.line, "Spoken on this phone's own voice: no server audio connection" );
+
+      when( () => ws.sessionId ).thenReturn( "wise penguin" );
+      when( () => player.speak(
+        text      : any( named: "text"      ),
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId"   ),
+      ) ).thenThrow( Exception( "network down" ) );
+      o.enqueueAlways( priority: "high", message: "post refused" );
+      await pump();
+      expect( o.lastOutcome!.line, "Spoken on this phone's own voice: the server did not take the request" );
     } );
   } );
 }

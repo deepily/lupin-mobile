@@ -86,7 +86,11 @@ class TtsOrchestrator {
   /// Emits each outcome as it is recorded; seed a listener from [lastOutcome].
   Stream<TtsOutcome> get outcomeStream => _outcomeCtrl.stream;
 
-  void _note( String line, { bool problem = true } ) {
+  /// True while [lastOutcome] is a "held" line, so emptying the queue can retire it.
+  bool _lastWasHeld = false;
+
+  void _note( String line, { bool problem = true, bool held = false } ) {
+    _lastWasHeld = held;
     final o = TtsOutcome( line: line, problem: problem, at: DateTime.now() );
     _lastOutcome = o;
     if ( !_outcomeCtrl.isClosed ) _outcomeCtrl.add( o );
@@ -157,7 +161,7 @@ class TtsOrchestrator {
        _prefs     = prefs,
        _ws        = ws,
        _stopList  = stopList {
-    _completeSub = _player.completeStream.listen( ( _ )  => _onUtteranceFinished() );
+    _completeSub = _player.completeStream.listen( ( _ )  => _onPlayerComplete() );
     _errorSub    = _player.errorStream   .listen( _onElevenLabsError );
   }
 
@@ -211,6 +215,13 @@ class TtsOrchestrator {
   /// dispatch is withdrawn at the DI seam, and nothing the user must act on arrives through it.
   Stream<TtsSuppression> get suppressedStream => _suppressedCtrl.stream;
 
+  /// Replaces a "held" line with a plain one once the user has emptied the queue it described.
+  void _retireHeldLine() {
+    if ( _lastWasHeld && _fifo.isEmpty && _current == null ) {
+      _note( "Speech queue emptied: nothing is waiting", problem: false );
+    }
+  }
+
   /// Emits the new queue depth on every enqueue and dequeue, and on the destructive clears.
   ///
   /// The destructive clears are the legacy urgent flush and [stopAll]. It is the live held-count signal for the
@@ -250,7 +261,10 @@ class TtsOrchestrator {
     final before = _fifo.length;
     _fifo.removeWhere( ( u ) => u.id == id );
     final removed = _fifo.length != before;
-    if ( removed ) _emitQueueDepth();
+    if ( removed ) {
+      _emitQueueDepth();
+      _retireHeldLine();
+    }
     return removed;
   }
 
@@ -261,6 +275,7 @@ class TtsOrchestrator {
     if ( _fifo.isEmpty ) return;
     _fifo.clear();
     _emitQueueDepth();
+    _retireHeldLine();
   }
 
   /// Holds the queue until [resume]; nothing further dequeues.
@@ -541,6 +556,7 @@ class TtsOrchestrator {
     _emitQueueDepth();
     _current = null;
     _emitQueue();
+    _retireHeldLine();
     await _player.stop();
     await _fallback.stopFallbackSpeech();
   }
@@ -682,7 +698,7 @@ class TtsOrchestrator {
         Logger.info( "dispatch outcome=held paused=$_paused capture=$_captureHeld queued=${_fifo.length}", tag: "Tts" );
         _note( _paused
             ? "Held, not spoken yet: speech is paused (${_fifo.length} waiting)"
-            : "Held, not spoken yet: the microphone is recording (${_fifo.length} waiting)" );
+            : "Held, not spoken yet: the microphone is recording (${_fifo.length} waiting)", held: true );
       }
       return;
     }
@@ -891,6 +907,16 @@ class TtsOrchestrator {
     // Any other error: skip this utterance, continue queue (parks at the
     // pause gate when held).
     _tryStartNext();
+  }
+
+  /// The player reported that an utterance finished playing.
+  ///
+  /// A stale event (an abandoned stream, a skipped utterance) is ignored and says nothing. Otherwise the
+  /// "sent to the speaker" line is promoted to a quiet "spoken", so the sheet confirms what actually played.
+  void _onPlayerComplete() {
+    if ( _inFlightEpoch != _epoch ) return;
+    _note( "Last message spoken", problem: false );
+    _onUtteranceFinished();
   }
 
   void _onUtteranceFinished() {

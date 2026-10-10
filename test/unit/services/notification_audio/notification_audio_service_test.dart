@@ -48,6 +48,7 @@ void main() {
       when( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).thenAnswer( ( _ ) async {} );
       when( () => tts.stop() ).thenAnswer( ( _ ) async => 1 );
       when( () => tts.speak( any() ) ).thenAnswer( ( _ ) async => 1 );
+      when( () => tts.setQueueMode( any() ) ).thenAnswer( ( _ ) async => 1 );
     } );
 
     NotificationAudioService newService() => NotificationAudioService(
@@ -140,10 +141,29 @@ void main() {
       tts    : tts,
     );
 
-    test( "flutterTtsSpeak calls tts.stop then tts.speak with supplied text", () async {
+    test( "flutterTtsSpeak speaks the supplied text and never stops first", () async {
       await newService().flutterTtsSpeak( "hello world" );
-      verify( () => tts.stop() ).called( 1 );
       verify( () => tts.speak( "hello world" ) ).called( 1 );
+      verifyNever( () => tts.stop() );
+    } );
+
+    test( "two utterances in a row are queued, so the second does not cut the first off", () async {
+      final service = newService();
+      await service.flutterTtsSpeak( "first" );
+      await service.flutterTtsSpeak( "second" );
+
+      verify( () => tts.setQueueMode( 1 ) ).called( 1 );
+      verifyNever( () => tts.stop() );
+      verifyInOrder( [
+        () => tts.speak( "first" ),
+        () => tts.speak( "second" ),
+      ] );
+    } );
+
+    test( "an engine that refuses queue mode still speaks", () async {
+      when( () => tts.setQueueMode( any() ) ).thenThrow( Exception( "unsupported" ) );
+      await newService().flutterTtsSpeak( "still heard" );
+      verify( () => tts.speak( "still heard" ) ).called( 1 );
     } );
 
     test( "flutterTtsSpeak swallows errors from the underlying engine", () async {
