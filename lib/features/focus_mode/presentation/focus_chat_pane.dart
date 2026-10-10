@@ -21,6 +21,7 @@ import '../../notifications/presentation/persona_badge.dart';
 import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
+import 'speech_silenced_banner.dart';
 import 'tts_fraction_bar.dart';
 
 /// The chat half of the focus surface: header, the focused sender's window, inline prompts.
@@ -148,6 +149,8 @@ class _FocusChatPaneState extends State<FocusChatPane> {
           children: [
             // Pinned above everything else in the pane; it survives sender switches and
             // the loading and error states.
+            // Says so whenever a whole-phone silencer is active, so a muted phone never looks like a working one.
+            if ( _prefs != null ) SpeechSilencedBanner( prefs: _prefs! ),
             if ( _prefs != null ) TtsFractionBar( prefs: _prefs! ),
             if ( state.hydration == FocusHydration.error )
               _RetryBanner( userEmail: userEmail ),

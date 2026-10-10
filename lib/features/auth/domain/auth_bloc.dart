@@ -145,17 +145,27 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         // Best effort — a failed push unregister must not keep the user signed in.
       }
     }
-    final token   = readAccessToken();
-    final refresh = await _store.readRefreshToken( ctxId );
+    final token = readAccessToken();
     try {
+      // Inside the try: a keystore that cannot be read must not leave the user signed in.
+      final refresh = await _store.readRefreshToken( ctxId );
       if ( token != null ) await _repo.logout( token, refreshToken: refresh );
     } catch ( _ ) {
       // Swallow — local state must still clear.
     }
   }
 
+  /// The email to pre-fill after sign-out, or null when the keystore cannot be read.
+  Future<String?> _lastEmailOrNull( String ctxId ) async {
+    try {
+      return await _store.readLastEmail( ctxId );
+    } catch ( _ ) {
+      return null;
+    }
+  }
+
   Future<void> _onLogout( AuthLogoutRequested _, Emitter<AuthState> emit ) async {
-    final email = await _store.readLastEmail( _ctxId );
+    final email = await _lastEmailOrNull( _ctxId );
     await _endServerSession( _ctxId );
     clearAccessToken();
     await _store.clearContextSession( _ctxId );

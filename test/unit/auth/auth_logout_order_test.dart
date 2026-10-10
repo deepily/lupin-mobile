@@ -27,6 +27,14 @@ import 'package:lupin_mobile/services/auth/server_context_service.dart';
 class _MockRepo      extends Mock implements AuthRepository {}
 class _MockBiometric extends Mock implements BiometricGate {}
 
+/// A store whose refresh-token read throws, as a locked or corrupted keystore does.
+class _ThrowingReadStore extends SecureCredentialStore {
+  _ThrowingReadStore() : super( const FlutterSecureStorage() );
+
+  @override
+  Future<String?> readRefreshToken( String contextId ) async => throw Exception( "keystore unavailable" );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -113,6 +121,26 @@ void main() {
     await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
 
     expect( accessTokenSeenByHook, "fake-access-value" );
+    await bloc.close();
+  } );
+
+  test( "a throwing refresh-token read still completes the logout and clears local tokens", () async {
+    final bloc = AuthBloc( repo: repo, store: _ThrowingReadStore(), context: svc, biometric: _MockBiometric() );
+    bloc.add( const AuthLogoutRequested() );
+    final state = await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
+
+    expect( state, isA<AuthUnauthenticated>() );
+    expect( readAccessToken(), isNull, reason: "the user must not stay signed in because storage could not be read" );
+    await bloc.close();
+  } );
+
+  test( "a throwing refresh-token read still completes a server switch", () async {
+    final bloc = AuthBloc( repo: repo, store: _ThrowingReadStore(), context: svc, biometric: _MockBiometric() );
+    bloc.add( const AuthServerContextSwitchRequested( "lan-dev" ) );
+    await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
+
+    expect( svc.active, "lan-dev" );
+    expect( readAccessToken(), isNull );
     await bloc.close();
   } );
 }

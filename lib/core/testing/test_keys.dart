@@ -460,6 +460,16 @@ class TestKeys {
   static const focusTtsFractionBar             = 'focus.ttsFraction.bar';
   /// Key of the focus tts fraction slider.
   static const focusTtsFractionSlider          = 'focus.ttsFraction.slider';
+  /// Key of the marker shown on the conversation pane while any whole-phone silencer is active.
+  static const focusSilencedBanner             = 'focus.silenced.banner';
+  /// Key of the marker row for Notifications being off.
+  static const focusSilencedNotificationsOff   = 'focus.silenced.notificationsOff';
+  /// Key of the marker row for Master mute.
+  static const focusSilencedMasterMute         = 'focus.silenced.masterMute';
+  /// Key of the marker row for the TTS slider at 0%.
+  static const focusSilencedSliderZero         = 'focus.silenced.sliderZero';
+  /// Key of the marker row for quiet hours in effect.
+  static const focusSilencedQuietHours         = 'focus.silenced.quietHours';
   /// Key of the focus tts fraction value.
   static const focusTtsFractionValue           = 'focus.ttsFraction.value';
   // Lower-left timestamp on every notification bubble or card
