@@ -84,4 +84,4 @@ That second check is the redundancy. A missing schedule looks exactly like a qui
 
 ## Binding the deliverable names
 
-The names are portable; the procedures are per-repo. **In lupin-mobile**: `push` → the `/plan-session-end` push step · `backup` → `/plan-backup-write` (mirror `/mnt/DATA02/…/lupin/src/lupin-mobile/`) · `post-game` → `/plan-post-game` (this repo's wrapper; output in `src/rnd/`). Prefix `[LUPIN-MOBILE]`. The helper lives in planning-is-prompting: call it by `$PLANNING_IS_PROMPTING_ROOT/workflow/scripts/last_call.py`.
+The names are portable; the procedures are per-repo. **In lupin-mobile**: `push` → the `/plan-session-end` push step · `backup` → `/plan-backup-write` (mirror `/mnt/DATA02/…/lupin/src/lupin-mobile/`) · `post-game` → `/plan-post-game` (this repo's wrapper; output in `src/docs/post-games/`). Prefix `[LUPIN-MOBILE]`. The helper lives in planning-is-prompting: call it by `$PLANNING_IS_PROMPTING_ROOT/workflow/scripts/last_call.py`.

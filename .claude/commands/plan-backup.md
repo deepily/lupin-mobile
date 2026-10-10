@@ -1,7 +1,7 @@
 # Backup Command - Dry Run (Safe Default)
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
 
 ---
@@ -54,11 +54,11 @@ Execute the project's backup script located at `src/scripts/backup.sh` in **dry-
 
 ```
 ========================================
-  Planning is Prompting Backup Sync
+  Lupin Mobile Backup Sync
 ========================================
 Mode: DRY RUN
-Source: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
-Destination: /mnt/DATA02/include/www.deepily.ai/projects/planning-is-prompting/
+Source: /mnt/DATA01/include/www.deepily.ai/projects/lupin/src/lupin-mobile/
+Destination: /mnt/DATA02/include/www.deepily.ai/projects/lupin/src/lupin-mobile/
 Exclusions: src/scripts/conf/rsync-exclude.txt
 ========================================
 

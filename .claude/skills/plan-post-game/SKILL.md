@@ -29,7 +29,7 @@ Run the **post-game** — a first-class, scaled retrospective on a just-finished
 
 ## Project config
 
-- **[SHORT_PROJECT_PREFIX]**: [PLAN]
+- **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
 - **Canonical workflow**: planning-is-prompting → workflow/post-game.md
 - **Output location**: `src/docs/post-games/<version>/yyyy.mm.dd-<slug>-post-game.md` (the **tracked, per-version corpus**; register in `src/docs/post-games/README.md`) or `history.md` (lightweight)
 
