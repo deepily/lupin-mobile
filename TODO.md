@@ -1,14 +1,29 @@
 # TODO
 
-## ▶ START HERE — 2026-10-09 (Tiffany 💍)
+## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
-State at the 19:51 EDT checkpoint: tip `4e317c8` (comment fixes from the hand read, merge gate passed), APK built with FCM at `13882d9` and passed Rick's phone check (nothing but comments and docs changed since), nothing pushed. No seats running. The documentation plan (P0 row `b707f92f`) is closed. Live owed work is in the store, owner `tiffany`.
+State at the 00:26 EDT checkpoint: tip `bade1da` (transcript fixtures all captured, empty-thinking label, token check in the shared fixture write; three merges, each merge gate passed; full suite 2915 passed, 0 failed). APK built with FCM at `8e7132e` (nothing under `lib/` changed since); Rick has not deployed it. Nothing pushed. No seats running. Live owed work is in the store, owner `tiffany`.
 
 | Next | Waits on |
 |---|---|
-| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); 577 pairs were not read by hand | Rick admits the row; Cheech reports an extractor that passes the Dart gate |
+| Transcript console row `768e852f`: the work is merged; the row still reads parked | Rick's approver sign-in to move it out of parked, then close on `bade1da` |
+| Stop poke flip (`ee68d5e7`): steps in `src/docs/phone-checks/2026.10.09-stop-poke-switch-phone-check.md` | Rick runs the check on 2026-10-10 and says "muted"; Tiffany confirms the pokes stop |
+| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); 577 pairs were not read by hand | Rick admits the row (id sent 23:23 EDT); Cheech says the `final_absent` change has landed and sends the sha and command |
 | Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads (link sent 18:21 EDT) and rules |
-| Transcript fixtures (`768e852f`) and Stop poke flip (`ee68d5e7`), both parked with a passed chase date | Rick, at his convenience |
+
+### Decisions Log — 2026-10-10 (session `de4ce9d3` / `f6acc646`, Tiffany)
+
+- **The gate's known-failure list is empty** (`tool/data/test_failures_baseline.json`, rebuilt by the tool over three full runs at `9959202`). The one flaky entry it used to carry was the ASR AC-S4.7 live probe, which posts to port 7999 and failed once during a bounce of that server; it is server-dependent, and the code has no flake. If it fails in a gate, the checker answers RERUN_REQUIRED first.
+- **No fixture is rewritten outside `_fixture_lib.write_fixture`** (Tiffany, after Chloé's review): that function refuses any body holding a token, including one inside prose.
+
+### Decisions Log — 2026-10-09, late evening (Tiffany)
+
+- **Rick, on a card, about 23:20 EDT, first-hand.** Stop poke: "Build a transient link for me and I'll test it tomorrow But I need a document to point to". Transcript: "I don't have to create a test admin account It already exists Look in the environment variables in the BashRC file". Judge row: "Yeah I'll admit the held row, What is the ID?". Tonight: "I say that you work all night but you have to ascertain whether you have proper access to that test admin account".
+- **How a seat uses the test admin account** (María's method): `LUPIN_TEST_ADMIN_EMAIL` and `LUPIN_TEST_ADMIN_PASSWORD` are not in a seat's shell; they are set when a command runs as `bash -ic '<command>'`. Values are never printed or written.
+- **C5.22 reframed to the real contract** (Tiffany, standing authority, announced to Rick, his to overrule): Claude Code records most thinking with empty text (97.7% of blocks, Mr. Radio's count) and the server passes it through. An empty thinking block shows a dim "Thinking (not recorded)" label that cannot be expanded, as the web client does; a block with text keeps fold and expand.
+- **C5.18 was a stale fixture, and the server was right**: it has carried tool names since 2026-09-29; `append_mixed_kinds.json` predated names on tool results.
+- **The `pending-capture` test tag is retired**: every fixture exists, so a new fixture-dependent test lands together with its fixture.
+- **Relayed by Cheech, not heard first-hand**: Rick ruled at 23:24 EDT on Cheech's row `9ce53ec2` that the claim-judge vote rule is "all three must agree"; extractor A2 then passes its gate.
 
 ### Decisions Log — 2026-10-09 (sessions `de4ce9d3` / `f6acc646`, Tiffany)
 
