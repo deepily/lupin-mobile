@@ -86,10 +86,12 @@ apk_fcm_state() {
 build_counter_next() {
     local file="$1" day="$2" saved_day="" saved_n=""
     if [ -f "$file" ]; then read -r saved_day saved_n < "$file" || true; fi
+    # Digits only, and forced to base 10: "08" and "09" are invalid octal to bash arithmetic
+    # and would abort the build, so they are read as 8 and 9.
     case "$saved_n" in
         ''|*[!0-9]*) echo 1; return 0 ;;
     esac
-    if [ "$saved_day" = "$day" ]; then echo $(( saved_n + 1 )); else echo 1; fi
+    if [ "$saved_day" = "$day" ]; then echo $(( 10#$saved_n + 1 )); else echo 1; fi
 }
 
 # build_counter_commit <file> <yyyy.mm.dd> <n> — records that build n of that day succeeded.

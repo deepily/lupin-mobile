@@ -144,6 +144,54 @@ else
     failed=$(( failed + 1 )); printf '  FAIL could not set up the branch clone\n'
 fi
 
+# D1 (review of d689996): a stored "08" or "09" is invalid octal to bash arithmetic and
+# used to abort the build. Read through the REAL function the script uses.
+echo "counter file edge cases"
+cf="$TMP/edge-counter"
+for stored in 08 09 007 10 0; do
+    printf '2026.10.10 %s\n' "$stored" > "$cf"
+    check "a stored $stored is read as decimal" "$(( 10#$stored + 1 ))" "$( build_counter_next "$cf" 2026.10.10 )"
+done
+printf '2026.10.10 08\n' > "$cf"
+check "the dry run survives a stored 08 (exit 0)" "0" "$( APK_BUILD_COUNTER_FILE="$cf" APK_BUILD_NOW=2026-10-10T09:00:00-04:00 APK_BUILD_DRY_RUN=1 "$BUILD" >/dev/null 2>&1; echo $? )"
+contains "a stored 08 gives build 9" "BUILD_NUMBER: 9" "$( APK_BUILD_COUNTER_FILE="$cf" APK_BUILD_NOW=2026-10-10T09:00:00-04:00 build )"
+printf '2026.10.10 -3\n' > "$cf"
+check "a negative stored number restarts at 1" "1" "$( build_counter_next "$cf" 2026.10.10 )"
+printf '2026.10.10\n' > "$cf"
+check "a missing number restarts at 1"         "1" "$( build_counter_next "$cf" 2026.10.10 )"
+
+# D2 (review of d689996): the number must be read AFTER the build lock, not before. This
+# runs the REAL build path (no dry run) in the throwaway clone, with a stub flutter.sh and
+# a stub flock. The stub flock rewrites the counter to 5 just before locking, as a build
+# that finished between this build's read and its lock would have. Read after the lock the
+# build says 6; read before it (the defect) it says 1.
+echo "the build number is taken under the lock"
+if [ -d "$clone/.git" ]; then
+    real_flock="$( command -v flock )"
+    mkdir -p "$TMP/bin" "$TMP/jdk/bin" "$clone/android/app"
+    printf '#!/bin/sh\nexit 0\n' > "$TMP/jdk/bin/java"; chmod +x "$TMP/jdk/bin/java"
+    : > "$clone/android/app/google-services.json"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" > "%s/flutter-args"\n[ -n "${STUB_FAIL:-}" ] && exit 1\nsleep 0.05\nmkdir -p build/app/outputs/flutter-apk\ntouch build/app/outputs/flutter-apk/app-debug.apk\n' "$TMP" > "$clone/flutter.sh"
+    chmod +x "$clone/flutter.sh"
+    printf '#!/usr/bin/env bash\nprintf "2026.10.10 5\\n" > "$APK_BUILD_COUNTER_FILE"\nexec "%s" "$@"\n' "$real_flock" > "$TMP/bin/flock"
+    chmod +x "$TMP/bin/flock"
+    real_build() {   # real_build [env assignments via STUB_FAIL]: run the real path in the clone
+        PATH="$TMP/bin:$PATH" JAVA_HOME_OVERRIDE="$TMP/jdk" APK_BUILD_COUNTER_FILE="$TMP/lock-counter" \
+            APK_BUILD_NOW=2026-10-10T09:00:00-04:00 "$clone/src/scripts/build-apk-on-server.sh" >/dev/null 2>&1
+    }
+    printf '2026.10.10 1\n' > "$TMP/lock-counter"
+    STUB_FAIL=1 real_build
+    check "a failed real build exits 1"                 "1" "$?"
+    check "a failed real build leaves the count alone"  "2026.10.10 5" "$( cat "$TMP/lock-counter" )"
+    printf '2026.10.10 1\n' > "$TMP/lock-counter"
+    real_build
+    check "a good real build exits 0"                   "0" "$?"
+    contains "the number was read after the lock (6, not the stale 2)" "BUILD_NUMBER=6" "$( cat "$TMP/flutter-args" )"
+    check "and the count advanced to 6"                 "2026.10.10 6" "$( cat "$TMP/lock-counter" )"
+else
+    failed=$(( failed + 1 )); printf '  FAIL no clone to run the real build path in\n'
+fi
+
 echo "deploy-apk-to-device.sh"
 out="$( deploy --build )"
 lacks    "--build alone passes no opt-out (server default is FCM on)" "--no-fcm" "$out"

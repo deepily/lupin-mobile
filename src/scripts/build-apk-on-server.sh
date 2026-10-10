@@ -118,7 +118,6 @@ dirty=""
 build_now="${APK_BUILD_NOW:-$( date -Is )}"
 build_date="$( echo "${build_now%%T*}" | tr '-' '.' )"
 counter_file="${APK_BUILD_COUNTER_FILE:-$REPO_ROOT/io/build-counter}"
-build_number="$( build_counter_next "$counter_file" "$build_date" )"
 build_dirty="$( [ -n "$dirty" ] && echo true || echo false )"
 build_args+=(
     "--dart-define=BUILD_TIME=$build_now"
@@ -126,8 +125,16 @@ build_args+=(
     "--dart-define=BUILD_SHA=$sha"
     "--dart-define=BUILD_DIRTY=$build_dirty"
     "--dart-define=BUILD_BRANCH=$branch"
-    "--dart-define=BUILD_NUMBER=$build_number"
 )
+
+# Takes this build's number and adds it to the build arguments. Called AFTER the build lock
+# is held (or in the dry run, which holds none), so two overlapping builds cannot read the
+# same count: the second one never gets this far (exit 4).
+build_number=""
+take_build_number() {
+    build_number="$( build_counter_next "$counter_file" "$build_date" )"
+    build_args+=( "--dart-define=BUILD_NUMBER=$build_number" )
+}
 
 # Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
 # and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
@@ -139,6 +146,7 @@ stamp_built_apk() {
 # Test hook: print what would be built and stop, before any checkout, JDK or Gradle check.
 # src/scripts/test-apk-fcm-default.sh uses it to prove the default and the opt-out.
 if [ "${APK_BUILD_DRY_RUN:-}" = "1" ]; then
+    take_build_number
     echo "BUILD_ARGS: ${build_args[*]}"
     echo "FCM: $FCM"
     echo "BUILD_DATE: $build_date"
@@ -195,6 +203,10 @@ if ! flock -n 9; then
     print_info "Wait for it to finish, then run this again (or just deploy what it produces)."
     exit 4
 fi
+
+# The number is read only now that no other build can be between this read and the write
+# at the end. Reading it before the lock let two overlapping builds take the same number.
+take_build_number
 
 # ════════════════════════════════════════════════════════════════════════════════════
 # Build
