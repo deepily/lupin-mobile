@@ -1,7 +1,7 @@
 # Planning is Prompting - Start Here
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
 
 ---
@@ -11,7 +11,7 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - Do NOT proceed without this parameter
 
 2. **MUST read the canonical workflow document**:

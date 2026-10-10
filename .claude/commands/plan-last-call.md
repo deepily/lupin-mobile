@@ -7,7 +7,7 @@
 
 ---
 
-> **Activation**: this is the explicit fallback. The same workflow auto-activates from the **🔔 glyph** and from natural phrases — "**last call at X, closing time at Y**", "**set your timers for X and Y**", "**wrap-up signal at X, end of session at Y**", "**N minutes to wrap-up**", "**cancel last call**", "**move last call to HH:MM**", "**what's the last call?**" — via this repo's Agent Skill `.claude/skills/last-call/SKILL.md`.
+> **Activation**: this is the explicit fallback. The same workflow auto-activates from the **🔔 glyph** and from natural phrases — "**last call at X, closing time at Y**", "**set your timers for X and Y**", "**wrap-up signal at X, end of session at Y**", "**N minutes to wrap-up**", "**cancel last call**", "**move last call to HH:MM**", "**what's the last call?**" — via the Agent Skill `.claude/skills/last-call/SKILL.md`.
 
 > **🫡 on receipt, one line on delivery.** 🔔 alone asks for the current Last Call's status.
 
@@ -32,7 +32,7 @@
 
 2. **MUST use project configuration**:
    - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
-   - **Working directory**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile
+   - **Working directory**: .
    - **Deliverable bindings**: `push` → the `/plan-session-end` push step · `backup` → `/plan-backup-write` · `post-game` → `/plan-post-game`
 
 3. **MUST extract all four elements** — `wrap_at`, `close_at`, `participants`, `deliverables` — and **read them back in one line before filing**. If the roster or the deliverable set is missing, ask once via `ask_multiple_choice` / `converse`. **Never infer a deliverable**: element 4 is the payload, and a generic "wrap up now" poke is the exact failure this exists to prevent.

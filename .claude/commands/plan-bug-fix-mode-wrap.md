@@ -1,8 +1,12 @@
 # Bug Fix Mode - Wrap Fix
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
+
+---
+
+> **⚠️ Note**: This command's canonical workflow uses cosa-voice notifications and includes a commit-approval gate. In conversation mode (`get_session_info().conversation_mode_active=true`), all gates are voice-driven AND spoken responses follow the **TTS Brevity Mandate** — re-crafted conversational prose, NOT verbatim copies of markdown terminal replies. Speak the 1-line commit subject only; full body and file list stay in `abstract`. See `workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -32,11 +36,11 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **History file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history.md
-   - **Bug fix queue file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/bug-fix-queue.md
-   - **TODO file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/TODO.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **History file**: ./history.md
+   - **Bug fix queue file**: ./bug-fix-queue.md
+   - **TODO file**: ./TODO.md
+   - **Project root**: ./
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:
@@ -46,7 +50,7 @@
 
 3. **MUST execute WRAP mode workflow**:
    - Execute the "Fix Wrap (`wrap` mode)" section
-   - Steps 18-25 from the canonical workflow
+   - Steps 18-25 from the canonical workflow (Steps 19, 20, 22d and 23 refer back to Steps 8, 10, 9c and 9d for the history entry, queue move, commit message and hash capture; read those steps too)
    - Continue to next action based on user choice (next bug / clear context / close session)
 
 4. **Key Actions for WRAP mode**:

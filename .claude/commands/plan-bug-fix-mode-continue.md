@@ -1,8 +1,12 @@
 # Bug Fix Mode - Continue Session
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
+
+---
+
+> **⚠️ Note**: This command's canonical workflow uses cosa-voice notifications. In conversation mode (`get_session_info().conversation_mode_active=true`), all gates are voice-driven AND spoken responses follow the **TTS Brevity Mandate** — re-crafted conversational prose, NOT verbatim copies of markdown terminal replies. See `workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -26,10 +30,10 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **History file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history.md
-   - **Bug fix queue file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/bug-fix-queue.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **History file**: ./history.md
+   - **Bug fix queue file**: ./bug-fix-queue.md
+   - **Project root**: ./
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:

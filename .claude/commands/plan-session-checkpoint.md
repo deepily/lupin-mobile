@@ -1,8 +1,12 @@
 # Session Checkpoint - Mid-Session Commit
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
+
+---
+
+> **⚠️ Note**: This command's canonical workflow uses cosa-voice notifications. In conversation mode (`get_session_info().conversation_mode_active=true`), the commit-approval gate is voice-driven; the **TTS Brevity Mandate** applies — speak the 1-line commit subject only, full body and file list stay in `abstract` and the terminal reply. See `workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -31,9 +35,9 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **History file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **History file**: ./history.md
+   - **Project root**: ./
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:

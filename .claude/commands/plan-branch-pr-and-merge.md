@@ -1,8 +1,12 @@
-# Branch PR and Merge Workflow for Planning-is-Prompting Project
+# Branch PR and Merge Workflow for Lupin Mobile
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
+
+---
+
+> **⚠️ Note**: This command's canonical workflow uses cosa-voice notifications and has destructive-or-shared-state gates (push, merge, force-push). In conversation mode (`get_session_info().conversation_mode_active=true`), each gate is a voice gate; the **TTS Brevity Mandate** applies — speak the PR title only, full body and diff stats stay in `abstract` and the terminal reply. Destructive operations require explicit voice confirmation, never silent default. See `workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -11,10 +15,10 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **History file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history.md
-   - **TODO file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/TODO.md
-   - **README file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/README.md
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **History file**: ./history.md
+   - **TODO file**: ./TODO.md
+   - **README file**: ./README.md
    - **Base branch**: main
    - **Branch naming pattern**: `wip-v{version}-{date}-{description}`
    - Do NOT proceed without these parameters
@@ -27,7 +31,7 @@
 
 3. **MUST execute the complete branch PR and merge workflow**:
    - Execute ALL steps exactly as described in the canonical workflow document (Steps 0-11)
-   - Do NOT skip any steps (including notifications, TaskCreate tracking, or verification checks)
+   - Do NOT skip any steps (including notifications or verification checks)
    - Do NOT substitute a shortened or summarized version
    - Do NOT merge without user confirmation
    - Follow the workflow exactly as documented using the configuration parameters from Step 1

@@ -1,12 +1,12 @@
 ---
-description: Run baseline test collection for Planning is Prompting project
-allowed-tools: Bash(.*), TodoWrite, Read, Write, Edit
+description: Run baseline test collection for Lupin Mobile project
+allowed-tools: Bash(.*), Read, Write, Edit
 ---
 
-# Baseline Testing for Planning is Prompting
+# Baseline Testing for Lupin Mobile
 
 **Purpose**: Establish baseline before workflow/documentation changes
-**Project**: Planning is Prompting (Meta-repository for workflow templates)
+**Project**: Lupin Mobile
 **Note**: This is a documentation-only project - tests validate document structure and links
 **Version**: 1.0
 
@@ -15,9 +15,9 @@ allowed-tools: Bash(.*), TodoWrite, Read, Write, Edit
 ## Project Configuration
 
 **Identity**:
-- **Prefix**: [PLAN]
-- **Project Name**: Planning is Prompting
-- **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting
+- **Prefix**: [LUPIN-MOBILE]
+- **Project Name**: Lupin Mobile
+- **Working Directory**: .
 
 **Paths**:
 - **Logs Directory**: tests/results/logs
@@ -39,9 +39,9 @@ allowed-tools: Bash(.*), TodoWrite, Read, Write, Edit
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **Project Name**: Planning is Prompting
-   - **Working Directory**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **Project Name**: Lupin Mobile
+   - **Working Directory**: .
    - **Paths**:
      - Logs Directory: tests/results/logs
      - Reports Directory: tests/results/reports
@@ -58,7 +58,7 @@ allowed-tools: Bash(.*), TodoWrite, Read, Write, Edit
 
 3. **MUST execute the complete baseline testing workflow**:
    - Execute ALL steps exactly as described in the canonical workflow document
-   - Do NOT skip any steps (including TodoWrite tracking, notifications, or test execution)
+   - Do NOT skip any steps (including notifications or test execution)
    - Do NOT substitute a shortened or summarized version
    - Follow the workflow exactly as documented using the configuration parameters from Step 1
    - For this documentation project, "smoke tests" means: verify workflow documents exist and are readable, check referenced paths are valid, validate markdown formatting, ensure cross-references work
