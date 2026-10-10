@@ -108,6 +108,17 @@ void main() {
       expect( captured.single, { 'token': 'tok-1' } );
     } );
 
+    test( 'AC-S5.2 — a second logout hook is a no-op, so the app-layer fallback cannot send a bearerless unregister', () async {
+      await service.onAuthenticated( 'rick@test.com' );
+      await service.onLoggedOut();
+      await service.onLoggedOut();
+
+      verify( () => dio.post<Map<String, dynamic>>(
+        any( that: equals( FcmWakeupService.unregisterPath ) ),
+        data: any( named: 'data' ),
+      ) ).called( 1 );
+    } );
+
     test( 'AC-S5.2 ext (F-S6-S2-1(b)) — WS reconnect fires a REPEAT registration POST (idempotent upsert)', () async {
       await service.onAuthenticated( 'rick@test.com' );
       await service.onWsReconnected();

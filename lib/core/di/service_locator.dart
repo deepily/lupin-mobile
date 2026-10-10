@@ -84,6 +84,7 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 
 // Notification audio (ding + TTS on high/urgent)
 import '../../services/notification_audio/notification_audio_service.dart';
+import '../../services/push/fcm_bootstrap.dart' show fcmOnLoggedOut;
 import '../../services/push/notification_tap_binding.dart';
 import '../../services/push/notification_tap_router.dart';
 import '../../services/notification_audio/notification_delivery_policy.dart';
@@ -573,6 +574,8 @@ class ServiceLocator {
         store     : _getIt<SecureCredentialStore>(),
         context   : _getIt<ServerContextService>(),
         biometric : _getIt<BiometricGate>(),
+        // The push token is unregistered with the JWT still set; after the token is cleared it is a 401.
+        onBeforeSignOut : fcmOnLoggedOut,
       ),
     );
 

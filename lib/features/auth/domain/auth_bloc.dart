@@ -14,17 +14,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SecureCredentialStore  _store;
   final ServerContextService   _context;
   final BiometricGate          _biometric;
+  final Future<void> Function()? _onBeforeSignOut;
 
   /// Creates the bloc over its four services, starting in [AuthInitial].
+  ///
+  /// [onBeforeSignOut] runs on every sign-out and server switch while the access token is still set; it is how
+  /// the push token is unregistered with a bearer. Its failure never stops the sign-out.
   AuthBloc( {
     required AuthRepository         repo,
     required SecureCredentialStore  store,
     required ServerContextService   context,
     required BiometricGate          biometric,
-  } )  : _repo      = repo,
-         _store     = store,
-         _context   = context,
-         _biometric = biometric,
+    Future<void> Function()?        onBeforeSignOut,
+  } )  : _repo            = repo,
+         _store           = store,
+         _context         = context,
+         _biometric       = biometric,
+         _onBeforeSignOut = onBeforeSignOut,
          super( const AuthInitial() ) {
     on<AuthStarted>( _onStarted );
     on<AuthLoginRequested>( _onLogin );
@@ -124,14 +130,33 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onLogout( AuthLogoutRequested _, Emitter<AuthState> emit ) async {
-    final email = await _store.readLastEmail( _ctxId );
-    final token = readAccessToken();
+  /// Runs the server-side end of a sign-out, in the order the server needs, before local state is cleared.
+  ///
+  /// Ensures:
+  ///   - [_onBeforeSignOut] runs first, while the access token is still set
+  ///   - the server logout then receives the stored refresh token as its body
+  ///   - neither step's failure propagates: the caller clears local state either way
+  Future<void> _endServerSession( String ctxId ) async {
+    final hook = _onBeforeSignOut;
+    if ( hook != null ) {
+      try {
+        await hook();
+      } catch ( _ ) {
+        // Best effort — a failed push unregister must not keep the user signed in.
+      }
+    }
+    final token   = readAccessToken();
+    final refresh = await _store.readRefreshToken( ctxId );
     try {
-      if ( token != null ) await _repo.logout( token );
+      if ( token != null ) await _repo.logout( token, refreshToken: refresh );
     } catch ( _ ) {
       // Swallow — local state must still clear.
     }
+  }
+
+  Future<void> _onLogout( AuthLogoutRequested _, Emitter<AuthState> emit ) async {
+    final email = await _store.readLastEmail( _ctxId );
+    await _endServerSession( _ctxId );
     clearAccessToken();
     await _store.clearContextSession( _ctxId );
     emit( AuthUnauthenticated( lastEmail: email ) );
@@ -178,12 +203,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final oldId = _ctxId;
     if ( event.contextId == oldId ) return;
 
-    final token = readAccessToken();
-    try {
-      if ( token != null ) await _repo.logout( token );
-    } catch ( _ ) {
-      // Swallow — local state must still clear.
-    }
+    await _endServerSession( oldId );
     clearAccessToken();
     await _store.clearContextSession( oldId );
 
