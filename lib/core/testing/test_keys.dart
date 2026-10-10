@@ -651,6 +651,9 @@ class TestKeys {
   /// A collapsible block's expanded monospace body, same suffixes.
   static const transcriptPlainPrefix    = 'transcript.plain.';
 
+  /// A `thinking` block the server sent with no text: a dim, non-expandable label.
+  static const transcriptUnrecordedThinking = 'transcript.unrecorded.thinking';
+
   /// Key of the transcript truncated marker.
   static const transcriptTruncatedMarker = 'transcript.truncated';
   /// Key of the unreachable state, distinct from the empty state.

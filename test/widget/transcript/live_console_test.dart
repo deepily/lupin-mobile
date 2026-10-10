@@ -280,6 +280,59 @@ void main() {
   } );
 
   // ---------------------------------------------------------------------------
+  group( "C5.22 — a `thinking` block with NO text is a dim label, not a chip", () {
+    testWidgets( "empty text shows 'Thinking (not recorded)' and offers no chip",
+        ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.thinking, text: "" ),
+      ] );
+
+      expect( find.text( "Thinking (not recorded)" ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.transcriptUnrecordedThinking ) ), findsOneWidget );
+      expect( find.byKey( const Key( "transcript.chip.thinking" ) ), findsNothing,
+          reason: "negative control: a build that kept the chip for an empty block opens "
+                  "onto a blank body, and fails exactly here" );
+      expect( find.text( "Thinking…" ), findsNothing );
+    } );
+
+    testWidgets( "it cannot be expanded: a tap opens nothing", ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.thinking, text: "   " ),
+      ] );
+
+      await tester.tap( find.byKey( const Key( TestKeys.transcriptUnrecordedThinking ) ) );
+      await tester.pump();
+
+      expect( find.byKey( const Key( "transcript.plain.thinking" ) ), findsNothing );
+      expect( find.byType( SelectableText ), findsNothing );
+    } );
+
+    testWidgets( "a block WITH text keeps its fold and has no 'not recorded' label",
+        ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.thinking, text: "scratch text here" ),
+      ] );
+
+      expect( find.text( "Thinking (not recorded)" ), findsNothing );
+      expect( find.byKey( const Key( "transcript.chip.thinking" ) ), findsOneWidget );
+
+      await tester.tap( find.byKey( const Key( "transcript.chip.thinking" ) ) );
+      await tester.pump();
+      expect( find.byKey( const Key( "transcript.plain.thinking" ) ), findsOneWidget );
+    } );
+
+    testWidgets( "an empty tool result is not mistaken for unrecorded thinking",
+        ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.toolResult, text: "", name: "Bash" ),
+      ] );
+
+      expect( find.text( "Thinking (not recorded)" ), findsNothing );
+      expect( find.byKey( const Key( "transcript.chip.tool_result" ) ), findsOneWidget );
+    } );
+  } );
+
+  // ---------------------------------------------------------------------------
   group( "C5.18 — ruling Q2's content model, not just the widget choice", () {
     testWidgets( "prose open, tool call a one-line chip, tool result collapsed",
         ( tester ) async {
