@@ -157,6 +157,21 @@ void main() {
       } );
     } );
 
+    // The original id of this test, restored: the AC-G2 gate keys on the exact name. It still asserts the same
+    // thing (stop, then speak), now through a speak that returns when the engine reports the utterance finished.
+    test( "flutterTtsSpeak calls tts.stop then tts.speak with supplied text", () async {
+      final order = <String>[];
+      when( () => tts.stop() ).thenAnswer( ( _ ) async { order.add( "stop" ); return 1; } );
+      when( () => tts.speak( any() ) ).thenAnswer( ( inv ) async { order.add( "speak:${inv.positionalArguments.first}" ); return 1; } );
+
+      final future = boundedService( done: const Duration( seconds: 5 ) ).flutterTtsSpeak( "hello world" );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      completion!();
+      await future;
+
+      expect( order, [ "stop", "speak:hello world" ], reason: "stop first, then speak, once each" );
+    } );
+
     test( "flutterTtsSpeak returns only when the engine reports the utterance finished", () async {
       final service = boundedService( done: const Duration( seconds: 5 ) );
       var finished  = false;
