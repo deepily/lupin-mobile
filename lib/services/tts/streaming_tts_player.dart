@@ -83,6 +83,7 @@ class StreamingTtsPlayer {
   bool            _isActive            = false;  // true between speak() send and complete/error
   bool            _isPlaying           = false;  // true while audio is actually playing
   Completer<void>? _activePlaybackCompleter;     // signals end of current playback
+  DateTime?        _lastActivityAt;              // last speak ack or routed WS event
 
   /// Creates a player that sends requests through [_dio].
   ///
@@ -119,6 +120,16 @@ class StreamingTtsPlayer {
   /// to decide when to advance the FIFO queue.
   bool get isPlaying => _isActive || _isPlaying;
 
+  /// True only while audio is actually playing, not while a request waits for its stream.
+  ///
+  /// `TtsOrchestrator`'s watchdog reads it: a long utterance that is playing is not a stalled one.
+  bool get isAudioPlaying => _isPlaying;
+
+  /// When the last speak acknowledgement or routed WebSocket event arrived, or null before the first.
+  ///
+  /// The watchdog measures silence from this, so a slow synthesis that is still sending chunks is not cut off.
+  DateTime? get lastActivityAt => _lastActivityAt;
+
   /// Sends a TTS request and returns when the HTTP POST is acknowledged.
   ///
   /// The backend then streams audio chunks on the WebSocket. Throws [DioException] on HTTP failure,
@@ -146,6 +157,7 @@ class StreamingTtsPlayer {
           if ( _simulateTtsError ) 'debug_simulate_error' : true,
         },
       );
+      _lastActivityAt = DateTime.now();
     } catch ( _ ) {
       _isActive = false;
       _pcmBuffer.clear();
@@ -178,6 +190,7 @@ class StreamingTtsPlayer {
       // Ignore stray events if we didn't initiate a speak request.
       return;
     }
+    _lastActivityAt = DateTime.now();
     switch ( type ) {
       case AppConstants.eventAudioStreamingStatus:
         final status = payload[ 'status' ] as String? ?? 'unknown';

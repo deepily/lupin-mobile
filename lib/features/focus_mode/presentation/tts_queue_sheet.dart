@@ -66,6 +66,7 @@ class TtsQueueSheet extends StatelessWidget {
                     ],
                   ),
                 ),
+                _LastOutcomeLine( tts: tts ),
                 if ( items.isEmpty )
                   Padding(
                     key     : const Key( TestKeys.ttsQueueEmpty ),
@@ -134,6 +135,33 @@ class _QueueRow extends StatelessWidget {
         icon      : Icon( actionIcon ),
         onPressed : onAction,
       ),
+    );
+  }
+}
+
+/// One plain line saying what became of the last message, or nothing before the first one.
+///
+/// A problem reads in the error colour so it is seen first; a normal send reads quietly.
+class _LastOutcomeLine extends StatelessWidget {
+  final TtsOrchestrator tts;
+  const _LastOutcomeLine( { required this.tts } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final theme = Theme.of( context );
+    return StreamBuilder<TtsOutcome>(
+      stream      : tts.outcomeStream,
+      initialData : tts.lastOutcome,
+      builder: ( context, snap ) {
+        final o = snap.data;
+        if ( o == null ) return const SizedBox.shrink();
+        final color = o.problem ? theme.colorScheme.error : theme.colorScheme.outline;
+        return Padding(
+          key     : const Key( TestKeys.ttsQueueLastOutcome ),
+          padding : const EdgeInsets.fromLTRB( 16, 0, 16, 8 ),
+          child   : Text( o.line, style: theme.textTheme.bodyMedium?.copyWith( color: color ) ),
+        );
+      },
     );
   }
 }

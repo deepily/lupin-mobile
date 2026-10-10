@@ -331,6 +331,8 @@ class TestKeys {
   static const ttsQueueSheet             = 'ttsQueue.sheet';
   /// Key of the tts queue empty.
   static const ttsQueueEmpty             = 'ttsQueue.empty';
+  /// The one-line "what happened to the last message" under the queue header.
+  static const ttsQueueLastOutcome       = 'ttsQueue.lastOutcome';
   /// Key of the tts queue skip.
   static const ttsQueueSkip              = 'ttsQueue.skip';
   /// Key of the tts queue clear.
