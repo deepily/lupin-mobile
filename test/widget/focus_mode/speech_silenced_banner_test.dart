@@ -164,6 +164,26 @@ void main() {
     } );
   } );
 
+  group( 'wording follows the switch, not only the row', () {
+    testWidgets( 'turning the urgent bypass off during quiet hours repaints the sentence within one tick, and back on', ( tester ) async {
+      await prefs.setQuietEnabled( true );
+      await prefs.setQuietStartMinutes( 22 * 60 );
+      await prefs.setQuietEndMinutes( 7 * 60 );
+      clock = DateTime( 2026, 10, 10, 23, 30 );
+      await tester.pumpWidget( host() );
+      expect( find.textContaining( 'urgent messages still speak' ), findsOneWidget );
+
+      await prefs.setQuietUrgentBypass( false );
+      await tester.pump( const Duration( seconds: 1 ) );
+      expect( quiet, findsOneWidget, reason: 'the row stays: quiet hours are still in effect' );
+      expect( find.textContaining( 'urgent' ), findsNothing );
+
+      await prefs.setQuietUrgentBypass( true );
+      await tester.pump( const Duration( seconds: 1 ) );
+      expect( find.textContaining( 'urgent messages still speak' ), findsOneWidget );
+    } );
+  } );
+
   group( 'one tap opens the screen that holds the switch', () {
     testWidgets( 'Master mute opens Settings', ( tester ) async {
       await prefs.setMasterMute( true );

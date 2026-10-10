@@ -44,7 +44,7 @@ class SpeechSilencer {
 /// Per-sender mutes, per-priority switches and the stop-list are not here: they silence some messages, not the phone.
 ///
 /// The preferences have no change notification, and quiet hours change with the clock, so the marker
-/// re-reads them once a second and repaints only when the set of active silencers changes.
+/// re-reads them once a second and repaints only when the active silencers or their wording change.
 class SpeechSilencedBanner extends StatefulWidget {
   /// Where the switches are read.
   final NotificationPreferences prefs;
@@ -121,7 +121,7 @@ class _SpeechSilencedBannerState extends State<SpeechSilencedBanner> {
   void _recheck() {
     final next = _read();
     final same = next.length == _active.length &&
-        Iterable<int>.generate( next.length ).every( ( i ) => next[ i ].key == _active[ i ].key );
+        Iterable<int>.generate( next.length ).every( ( i ) => next[ i ].key == _active[ i ].key && next[ i ].words == _active[ i ].words );
     if ( !same && mounted ) setState( () => _active = next );
   }
 
