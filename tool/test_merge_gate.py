@@ -118,7 +118,7 @@ class CommentsOnlyTest( unittest.TestCase ):
 class ToolPresenceTest( unittest.TestCase ):
 
     NEEDED = [ "flutter.sh", "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py",
-               "tool/check_test_failures.py", "tool/check_ac_g2.py" ]
+               "tool/check_test_failures.py", "tool/check_ac_g2.py", "tool/lint_dart_docs.py" ]
 
     def test_a_missing_binary_and_scripts_are_named_not_raised( self ):             # L3
         saved = os.environ.get( "DART" )
@@ -290,6 +290,122 @@ class ToolTestsCommandTest( unittest.TestCase ):
         self.assertEqual( p.returncode, 1, p.stdout[ -400: ] )          # 3 is pytest's INTERNALERROR
         self.assertIn( "1 failed", p.stdout )
         self.assertNotIn( "INTERNALERROR", p.stdout )
+
+
+class DocLintStepTest( unittest.TestCase ):
+    """The strict doc linter over lib/, in a throwaway repo that borrows this checkout's tool/ directory."""
+
+    CLEAN   = "/// Adds one.\nint f() => 1;\n"
+    PLANTED = "/// " + "A summary that runs on past the ninety character limit of the standard, " * 2 + "\nint f() => 1;\n"
+
+    def sh( self, *a ):
+        """
+        Run git in the throwaway repo.
+
+        Requires:
+            - a is a list of git arguments; self.d is the repo
+        Ensures:
+            - returns stdout; raises CalledProcessError on failure
+        """
+        return subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", *a ], cwd=self.d, capture_output=True, text=True, check=True ).stdout
+
+    def put( self, rel, text ):
+        """
+        Write and track one file in the throwaway repo.
+
+        Requires:
+            - rel is a repo-relative path
+        Ensures:
+            - the file exists with text and is added to the index
+        """
+        path = os.path.join( self.d, rel )
+        os.makedirs( os.path.dirname( path ), exist_ok=True )
+        with open( path, "w" ) as f: f.write( text )
+        self.sh( "add", rel )
+
+    def setUp( self ):
+        self.tmp = tempfile.TemporaryDirectory(); self.d = self.tmp.name
+        self.logs = tempfile.TemporaryDirectory()
+        self.sh( "init", "-q", "-b", "main" )
+        os.symlink( os.path.join( mg.ROOT, "tool" ), os.path.join( self.d, "tool" ) )
+        with open( os.path.join( self.d, ".git", "info", "exclude" ), "a" ) as f: f.write( "tool\n" )   # untracked inputs refuse the gate
+
+    def tearDown( self ):
+        self.tmp.cleanup(); self.logs.cleanup()
+
+    def test_a_clean_lib_passes( self ):                                     # negative control
+        self.put( "lib/a.dart", self.CLEAN )
+        code, detail = mg.check_doc_lint( self.logs.name, self.d )
+        self.assertEqual( ( code, detail ), ( 0, "1 files, 0 findings" ) )
+
+    def test_a_planted_finding_fails( self ):
+        self.put( "lib/a.dart", self.CLEAN )
+        self.put( "lib/b.dart", self.PLANTED )
+        code, detail = mg.check_doc_lint( self.logs.name, self.d )
+        self.assertEqual( code, 1 )
+        self.assertIn( "finding(s) in 2 files", detail )
+        with open( os.path.join( self.logs.name, "6-doc-lint.log" ) ) as log: self.assertIn( "lib/b.dart:1: summary-length", log.read() )
+
+    def test_an_empty_file_list_fails_instead_of_passing( self ):            # the linter reads nothing and reports 0
+        self.put( "test/a_test.dart", self.PLANTED )
+        code, detail = mg.check_doc_lint( self.logs.name, self.d )
+        self.assertEqual( code, 1 )
+        self.assertIn( "empty list", detail )
+
+    def test_findings_under_test_and_integration_test_do_not_count( self ):
+        self.put( "lib/a.dart", self.CLEAN )
+        self.put( "test/a_test.dart", self.PLANTED )
+        self.put( "integration_test/smoke_test.dart", self.PLANTED )
+        self.assertEqual( mg.check_doc_lint( self.logs.name, self.d )[ 0 ], 0 )
+
+    def test_a_nested_lib_file_and_a_non_dart_file_are_sorted_correctly( self ):
+        self.put( "lib/x/y/c.dart", self.CLEAN )
+        self.put( "lib/notes.txt", "not dart\n" )
+        self.assertEqual( mg.tracked_lib_dart( self.d ), [ "lib/x/y/c.dart" ] )
+
+    def test_a_linter_that_read_fewer_files_than_passed_fails( self ):
+        self.put( "lib/a.dart", self.CLEAN )
+        real = mg.run_logged
+        def fake( name, cmd, logdir, root=None, stdout_to=None ):
+            with open( os.path.join( logdir, name + ".log" ), "w" ) as f: f.write( "0 findings in 0 files\n" )
+            return 0
+        mg.run_logged = fake
+        try: code, detail = mg.check_doc_lint( self.logs.name, self.d )
+        finally: mg.run_logged = real
+        self.assertEqual( code, 1 )
+        self.assertIn( "read 0 of 1 files", detail )
+
+    def test_a_linter_that_prints_no_summary_line_fails( self ):             # a crash, or an empty log, is not a pass
+        self.put( "lib/a.dart", self.CLEAN )
+        real = mg.run_logged
+        for text in ( "Traceback (most recent call last):\nValueError: boom\n", "" ):
+            def fake( name, cmd, logdir, root=None, stdout_to=None, text=text ):
+                with open( os.path.join( logdir, name + ".log" ), "w" ) as f: f.write( text )
+                return 0
+            mg.run_logged = fake
+            try: code, detail = mg.check_doc_lint( self.logs.name, self.d )
+            finally: mg.run_logged = real
+            self.assertEqual( code, 1, repr( text ) )
+            self.assertIn( "no 'N findings in M files' summary", detail )
+
+    def test_main_lists_the_doc_lint_row_and_fails_the_verdict_on_a_finding( self ):
+        self.put( "lib/a.dart", self.PLANTED )
+        self.sh( "commit", "-q", "-m", "c0" )
+        self.put( "lib/a.dart", self.PLANTED + "// more\n" )
+        self.sh( "commit", "-q", "-m", "c1" )
+        real = ( mg.missing_tools, mg.check_analyzer, mg.run_logged )
+        real_run = mg.run_logged
+        def spy( name, cmd, logdir, root=None, stdout_to=None ):
+            return real_run( name, cmd, logdir, root ) if "lint_dart_docs.py" in " ".join( cmd ) else 0
+        mg.missing_tools, mg.check_analyzer, mg.run_logged = lambda root, skip: [], lambda *a, **k: ( 0, "stubbed" ), spy
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout( out ), contextlib.redirect_stderr( io.StringIO() ):
+                code = mg.main( [ "--skip-suite", "HEAD~1..HEAD", "--log-dir", self.logs.name ], root=self.d )
+        finally:
+            mg.missing_tools, mg.check_analyzer, mg.run_logged = real
+        self.assertEqual( code, 1 )
+        self.assertRegex( out.getvalue(), r"doc-lint\s+exit 1" )
 
 
 class GitRangeTest( unittest.TestCase ):

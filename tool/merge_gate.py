@@ -18,6 +18,9 @@ Checks, each an existing tool run as a subprocess, its output kept in a log dire
   3. ignores    tool/check_doc_ignores.py
   4. coverage   tool/doc_coverage.py
   5. tool tests python3 -m pytest tool/ -q -p no:structlog_config
+  5b. doc lint  tool/lint_dart_docs.py --strict over every tracked .dart file under lib/ (never test/ or
+                integration_test/); the file list is passed explicitly, because the linter reads no files
+                when given a directory, and an empty list or a file count the linter did not report fails
   6. suite      ./flutter.sh test --machine, judged by tool/check_test_failures.py (re-runs the suite
                 once when that script asks for it)
   7. ac-g2      tool/check_ac_g2.py on the suite's output
@@ -528,7 +531,7 @@ def missing_tools( root=ROOT, skip_suite=False ):
     missing = []
     dart = pcg.dart_cmd( ROOT )
     if not ( shutil.which( dart ) if os.sep not in dart else os.path.isfile( dart ) ): missing.append( f"dart binary {dart}" )
-    needed = [ "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py" ]
+    needed = [ "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py" ]
     if not skip_suite: needed += [ "flutter.sh", "tool/check_test_failures.py", "tool/check_ac_g2.py" ]
     return missing + [ f"{n} missing under {root}" for n in needed if not os.path.exists( os.path.join( root, n ) ) ]
 
@@ -678,6 +681,45 @@ def docs_gate_cmd( start ):
     return [ sys.executable, "tool/pre_commit_gate.py", "--docs-all", "--base", start ]
 
 
+def tracked_lib_dart( root=ROOT ):
+    """
+    List the tracked .dart files under lib/ at the checkout's index.
+
+    Requires:
+        - root is a git checkout
+    Ensures:
+        - returns repo-relative paths, sorted, each starting with lib/ and ending in .dart
+        - test/ and integration_test/ are never listed: the standard covers lib/ only
+    """
+    names = git( [ "ls-files", "-z", "--", "lib" ], root ).split( "\0" )
+    return sorted( n for n in names if n.startswith( "lib/" ) and n.endswith( ".dart" ) )
+
+
+def check_doc_lint( logdir, root=ROOT ):
+    """
+    Run the strict doc linter over every tracked .dart file under lib/.
+
+    Requires:
+        - root is the checkout the gate runs in; logdir exists
+    Ensures:
+        - returns ( 1, reason ) when no file is listed: an empty list would read zero files and report zero findings
+        - returns ( 1, reason ) when the linter does not report exactly as many files as were passed
+        - returns ( 1, "N finding(s) ..." ) when the linter exits non-zero, with its findings in <logdir>/6-doc-lint.log
+        - returns ( 0, "N files, 0 findings" ) otherwise
+    """
+    files = tracked_lib_dart( root )
+    if not files: return 1, "no tracked .dart file under lib/; an empty list reads zero files and would pass vacuously"
+    cmd  = [ sys.executable, os.path.join( "tool", "lint_dart_docs.py" ), "--strict", *files ]
+    code = run_logged( "6-doc-lint", cmd, logdir, root )
+    with open( os.path.join( logdir, "6-doc-lint.log" ) ) as log: lines = log.read().splitlines()
+    summary = re.match( r"(\d+) findings in (\d+) files$", lines[ -1 ] ) if lines else None
+    if summary is None: return 1, f"the linter printed no 'N findings in M files' summary (exit {code})"
+    found, read = int( summary.group( 1 ) ), int( summary.group( 2 ) )
+    if read != len( files ): return 1, f"the linter read {read} of {len( files )} files"
+    if code != 0 or found: return 1, f"{found} finding(s) in {len( files )} files; see {logdir}/6-doc-lint.log"
+    return 0, f"{len( files )} files, 0 findings"
+
+
 def check_comments_only( start, end, root=ROOT ):
     """
     Fail when any changed .dart file differs in more than comments.
@@ -820,6 +862,7 @@ def main( argv=None, root=ROOT ):
                        ( "tool-tests",  TOOL_TESTS_CMD ) ):
         code = run_logged( f"{len( results ) + 1}-{name}", cmd, logdir, root )
         results.append( ( name, code, " ".join( cmd[ 1: ] ) ) )
+    code, detail = check_doc_lint( logdir, root );  results.append( ( "doc-lint", code, detail ) )
     if args.skip_suite:
         results += [ ( "suite", None, "skipped by --skip-suite" ), ( "ac-g2", None, "skipped by --skip-suite" ) ]
     else:

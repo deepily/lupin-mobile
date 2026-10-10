@@ -85,7 +85,7 @@ src/scripts/build-apk-on-server.sh         # push wake-ups (FCM) are compiled IN
 # From the laptop: build on the server over ssh, then install to the phone (row f681440d)
 src/scripts/deploy-apk-to-device.sh --build
 
-# Manager's merge gate (analyzer vs base, docs gate, ignores, coverage, tool tests, full suite, AC-G2).
+# Manager's merge gate (analyzer vs base, docs gate, ignores, coverage, tool tests, strict doc lint over all of lib/, full suite, AC-G2).
 #   Run in the real checkout whose HEAD ends the range, with a clean tree and no untracked files.
 #   Verdicts: PASS, PASS-WITH-WARNING (exit 0; read the warning line), FAIL, QUICK (--skip-suite), CANNOT RUN.
 python3 tool/merge_gate.py --base <sha or branch> [--skip-suite] [--comments-only]
