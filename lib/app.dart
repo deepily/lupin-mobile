@@ -143,6 +143,9 @@ class WsBlocDispatcher {
   /// senders-visible 404'd on every reconnect (row 588c8dc9).
   String? lastAuthenticatedEmail;
 
+  /// Routes one WebSocket frame of [type] to the bloc that owns it.
+  ///
+  /// Blocs are resolved from the service locator at call time, not held, and a [type] that no case names is ignored.
   void dispatch( String type, Map<String, dynamic> data ) {
     switch ( type ) {
       case AppConstants.eventQueueTodoUpdate:
@@ -328,7 +331,11 @@ class WsBlocDispatcher {
   }
 }
 
+/// The root widget: connects the WebSocket to the blocs and routes notification taps.
+///
+/// It owns the [WsBlocDispatcher] and the tap subscription for the life of the process.
 class LupinMobileApp extends StatefulWidget {
+  /// Creates the root widget; `main` is the only caller.
   const LupinMobileApp( { super.key } );
 
   @override
