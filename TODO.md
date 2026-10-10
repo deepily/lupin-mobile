@@ -2,14 +2,25 @@
 
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
-State at the 00:26 EDT checkpoint: tip `bade1da` (transcript fixtures all captured, empty-thinking label, token check in the shared fixture write; three merges, each merge gate passed; full suite 2915 passed, 0 failed). APK built with FCM at `8e7132e` (nothing under `lib/` changed since); Rick has not deployed it. Nothing pushed. No seats running. Live owed work is in the store, owner `tiffany`.
+State at the 13:14 EDT checkpoint: merge tip `4c26045` (build line in the main menu; speech queue can no longer be held silently and names each outcome on screen; four merges, the last gate PASS over `259531c..4c26045`, suite 0 failing). APK built with FCM at `4c26045`, 13:12 EDT; Rick has not said it is installed. Nothing pushed. One seat up: Tiberius (`cc-author-tiffany-1`), holding for Rick's phone test. Rows `768e852f` and `ee68d5e7` are done.
 
 | Next | Waits on |
 |---|---|
-| Transcript console row `768e852f`: the work is merged; the row still reads parked | Rick's approver sign-in to move it out of parked, then close on `bade1da` |
-| Stop poke flip (`ee68d5e7`): steps in `src/docs/phone-checks/2026.10.09-stop-poke-switch-phone-check.md` | Rick runs the check on 2026-10-10 and says "muted"; Tiffany confirms the pokes stop |
-| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); 577 pairs were not read by hand | Rick admits the row (id sent 23:23 EDT); Cheech says the `final_absent` change has landed and sends the sha and command |
-| Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads (link sent 18:21 EDT) and rules |
+| No speech on the phone (Rick, 11:48 EDT): the cause is **not proven**; text arrives, the app refuses or holds it before any voice starts, the server sees no speech request | Rick installs the 13:12 build, says "installed", Tiffany sends a test; if silent he reads the top line of the Speech queue sheet |
+| Own store rows for the speech bug and the build line: new tickets were refused fleet-wide (ratio gate), so both are recorded as an amendment on row `79d49618` | the ticket gate opening; then file both and close the build-line one on `c07c65d` |
+| Full claim judge run over all 819 documentation pairs (row `79d49618`, held); the three-vote rule landed in lupin at `8f797ccb`, command in lupin `io/tmp/2026.10.09-krishna-three-vote-judge-run-command.md` | Rick admits the row (asked 10:03 EDT, timed out) |
+| Phone's own socket teardown loop (Tiberius's finding, section G): an old listener can drop the live socket; logout returns 422 and push-token unregister 401 | a row once the ticket gate opens; not started |
+| Version shown is `v1.0.0+1` from `pubspec.yaml`, while the branch is v0.2.2 | Rick's word on changing `pubspec.yaml` |
+| Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
+
+### Decisions Log — 2026-10-10, midday (Tiffany)
+
+- **Rick, by voice, first-hand**: 11:45 "Tiffany the stop-poke is now muted"; 11:47 "The stoppoke has been turned back on." Both read back from the Stop hook's reader at my seat; he then un-parked rows `ee68d5e7` and `768e852f` from approval cards and I closed them.
+- **Rick, by voice, 11:48 EDT**: "I'm not hearing any TTS on the mobile app." On a card: "Yes, text but no sound" and "I'm using the latest Build from last night and still nothing". On the 11:56 test: "I heard nothing".
+- **Rick, same card**: "we need to track build date build number version number ... easily parsable by a human ... obtainable from the main menu". Built as one pinned line at the foot of the drawer, stamped by `build-apk-on-server.sh`.
+- **On-device speech is serialized by the app, with no engine queue mode** (Tiffany, accepting Tiberius's change of approach after Chloé's NOT YET): an utterance stays in flight until the voice engine reports it finished, so skip, stop-all, pause, the microphone hold and an urgent message reach it.
+- **Known and accepted**: an engine cancelled from outside the app releases the speech queue only at the completion bound (30 s plus length / 8). A late completion from an abandoned server stream can still end the next utterance early; the real fix is an utterance id in the server's audio events.
+- **A retraction I made to Rick**: the 11:51 socket connect burst was fleet seats, not the phone; the microphone-hold theory was also wrong (the uploads I saw came from another client).
 
 ### Decisions Log — 2026-10-10 (session `de4ce9d3` / `f6acc646`, Tiffany)
 
