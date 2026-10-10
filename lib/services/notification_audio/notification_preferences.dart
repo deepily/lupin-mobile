@@ -102,7 +102,7 @@ class NotificationPreferences {
   /// Preference key for muted senders: a JSON object of sender key to display label.
   ///
   /// The label is kept beside the key because a person should not have to read the key (`persona:maya`).
-  /// An example label is "Maya" with the persona icon.
+  /// The key is what `notificationSenderKey( item )` returns. An example label is "Maya" with the persona icon.
   static const keyMutedSenders = 'notif.muted.senders';
 
   /// Preference key: an urgent notification from a muted sender still gets through.

@@ -6,7 +6,7 @@
 /// `{status: "unreachable", health_watcher: null, fleet_arbiter: null}`. Reading only the
 /// HTTP status would show a fleet with zero seats, so the pane checks
 /// [FleetComposite.isUnreachable]. That envelope omits `app_timezone`, which is nullable;
-/// the caller falls back to the device zone.
+/// the caller falls back to the device zone. It is display-only and must never block the table.
 library;
 
 /// The raw liveness ages plus the arbiter's verdict, per session.

@@ -626,10 +626,12 @@ class TtsOrchestrator {
   /// upstream of any TTS spend. [verbatim] skips the cut only. The title still leads, because it was never the truncated part.
   bool get _sliderAtZero => TtsPreviewTruncator.silences( _prefs.ttsFraction );
 
-  /// The focus path's master switches, which follow `NotificationDeliveryPolicy.allows`.
+  /// Whether a master switch silences the item on the focus path.
   ///
-  /// The urgent bypasses are the same. The surface and per-priority checkboxes do not apply, because the focus
-  /// path stays ungated by priority.
+  /// It is true when notifications are off, when master mute is on, when the sender is muted (unless the item is
+  /// urgent and the mute urgent bypass is on), or when quiet hours are active (unless the item is urgent and the
+  /// quiet urgent bypass is on). The surface and per-priority checkboxes do not apply, because the focus path
+  /// stays ungated by priority.
   bool _masterSilenced( { required String priority, String? senderKey } ) =>
       _silencedReason( priority: priority, senderKey: senderKey ) != null;
 

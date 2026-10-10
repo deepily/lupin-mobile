@@ -51,7 +51,7 @@ class NotificationAudioService {
   /// It lets a DI-level test assert that production injected the callback.
   ///
   /// Without it a test can only check that this class forwards whatever it was given, and a service constructed
-  /// with nothing forwards nothing without complaint. That uninjected-seam failure has happened before.
+  /// with nothing forwards nothing without complaint. That uninjected-seam failure has happened before (bug 9adff476).
   @visibleForTesting
   bool get hasTapCallback => _onNotificationTap != null;
 

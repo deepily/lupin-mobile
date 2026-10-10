@@ -87,7 +87,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   // Sorts oldest first, keeping wire order on equal timestamps, because the
   // group collapse needs chronological input. The render then reverses the
-  // result so the newest message is on top.
+  // result so the newest message is on top. It sorts ascending with an index
+  // tiebreak instead of sorting descending and reversing, because a reverse
+  // would flip tied messages out of wire order.
   static List<ConversationMessage> _oldestFirst( List<ConversationMessage> ms ) {
     final indexed = ms.asMap().entries.toList()
       ..sort( ( a, b ) {

@@ -463,6 +463,7 @@ class SenderSummary {
 /// Lists every seat the session bridges know, including seats that never notified.
 /// The mux broadcast card reads the same endpoint for its recipient chips.
 /// A null `senderId` means an older server, so the seat is listed but not addressable.
+/// Before the server projected the sender id, the roster carried only the session id.
 class ActiveSession {
   /// Bridge session id.
   final String        sessionId;
