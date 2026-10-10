@@ -184,6 +184,59 @@ void main() {
     } );
   } );
 
+  group( 'rebuilds', () {
+    /// Counts every build of the banner's own element, the first one included.
+    ///
+    /// Each test zeroes it after the first frame. [builtOnce] is not used: the framework only
+    /// maintains it while `debugPrintRebuildDirtyWidgets` is on.
+    int rebuilds = 0;
+
+    setUp( () {
+      rebuilds = 0;
+      debugOnRebuildDirtyWidget = ( Element e, bool builtOnce ) {
+        if ( e.widget is SpeechSilencedBanner ) rebuilds++;
+      };
+    } );
+
+    tearDown( () => debugOnRebuildDirtyWidget = null );
+
+    testWidgets( 'an unchanged banner is not rebuilt over several ticks', ( tester ) async {
+      await prefs.setMasterMute( true );
+      await tester.pumpWidget( host() );
+      expect( mute, findsOneWidget );
+      expect( rebuilds, greaterThan( 0 ), reason: 'the counter sees the first build, so a 0 later is a real 0' );
+      rebuilds = 0;
+
+      for ( var i = 0; i < 5; i++ ) {
+        await tester.pump( const Duration( seconds: 1 ) );
+      }
+      expect( rebuilds, 0, reason: 'five ticks with nothing changed must not repaint' );
+    } );
+
+    testWidgets( 'each urgent-bypass toggle during quiet hours rebuilds exactly once', ( tester ) async {
+      await prefs.setQuietEnabled( true );
+      await prefs.setQuietStartMinutes( 22 * 60 );
+      await prefs.setQuietEndMinutes( 7 * 60 );
+      clock = DateTime( 2026, 10, 10, 23, 30 );
+      await tester.pumpWidget( host() );
+      rebuilds = 0;
+      await tester.pump( const Duration( seconds: 1 ) );
+      expect( rebuilds, 0 );
+
+      await prefs.setQuietUrgentBypass( false );
+      await tester.pump( const Duration( seconds: 1 ) );
+      await tester.pump( const Duration( seconds: 1 ) );
+      await tester.pump( const Duration( seconds: 1 ) );
+      expect( rebuilds, 1, reason: 'one toggle, one repaint, then quiet' );
+
+      await prefs.setQuietUrgentBypass( true );
+      await tester.pump( const Duration( seconds: 1 ) );
+      await tester.pump( const Duration( seconds: 1 ) );
+      await tester.pump( const Duration( seconds: 1 ) );
+      expect( rebuilds, 2 );
+    } );
+  } );
+
   group( 'one tap opens the screen that holds the switch', () {
     testWidgets( 'Master mute opens Settings', ( tester ) async {
       await prefs.setMasterMute( true );
