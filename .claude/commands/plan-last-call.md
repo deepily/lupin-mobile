@@ -7,7 +7,7 @@
 
 ---
 
-> **Activation**: this is the explicit fallback. The same workflow auto-activates from the **🔔 glyph** and from natural phrases — "**last call at X, closing time at Y**", "**set your timers for X and Y**", "**wrap-up signal at X, end of session at Y**", "**N minutes to wrap-up**", "**cancel last call**", "**move last call to HH:MM**", "**what's the last call?**" — via this repo's Agent Skill `.claude/skills/last-call/SKILL.md`.
+> **Activation**: this is the explicit fallback. The same workflow auto-activates from the **🔔 glyph** and from natural phrases — "**last call at X, closing time at Y**", "**set your timers for X and Y**", "**wrap-up signal at X, end of session at Y**", "**N minutes to wrap-up**", "**cancel last call**", "**move last call to HH:MM**", "**what's the last call?**" — via the Agent Skill `.claude/skills/last-call/SKILL.md`.
 
 > **🫡 on receipt, one line on delivery.** 🔔 alone asks for the current Last Call's status.
 

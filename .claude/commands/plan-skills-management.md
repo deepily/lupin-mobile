@@ -1,10 +1,14 @@
 # Skills Management Workflow
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.1
 
 **Canonical Workflow**: planning-is-prompting → workflow/skills-management.md
+
+---
+
+> **⚠️ Note**: This command's canonical workflow uses cosa-voice notifications. In conversation mode (`get_session_info().conversation_mode_active=true`), all gates are voice-driven AND spoken responses follow the **TTS Brevity Mandate** — re-crafted conversational prose, NOT verbatim copies of markdown terminal replies. See `workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -47,8 +51,8 @@ This command supports all five modes via arguments. For discoverability in the s
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
    - **Skills location**: .claude/skills/
    - Do NOT proceed without these parameters
 
@@ -131,12 +135,12 @@ This command supports all five modes via arguments. For discoverability in the s
 This workflow uses cosa-voice MCP for all notifications:
 - `notify()` for progress updates
 - `ask_multiple_choice()` for skill selection
-- `ask_yes_no()` for deletion confirmation
+- `ask_yes_no()` for deletion confirmation. **CRITICAL** on `neither`: do NOT delete — re-frame and re-ask (typically "delete which specific skill files?" via `ask_multiple_choice()`). See `workflow/cosa-voice-integration.md` → "Handling Neither".
 
 ## Project Prefix
 
-Use `[PLAN]` prefix for this repository.
-For other repositories, use their configured `[LUPIN-MOBILE]`.
+Use `[LUPIN-MOBILE]` prefix for this repository.
+For other repositories, use their configured `[SHORT_PROJECT_PREFIX]`.
 
 ---
 

@@ -1,7 +1,7 @@
 # Skills Management - Create Mode
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
 
 ---
@@ -41,8 +41,8 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
    - **Skills location**: .claude/skills/
    - Do NOT proceed without these parameters
 

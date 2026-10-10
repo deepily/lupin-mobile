@@ -1,7 +1,7 @@
 # Planning is Prompting - Step 2: Document the Implementation
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
 
 ---
@@ -11,11 +11,11 @@
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
    - **Optional arguments**:
      - `--pattern=A|B|C` (if provided, skip pattern determination)
      - `--project-name=NAME` (for directory naming)
-   - Do NOT proceed without the [LUPIN-MOBILE] parameter
+   - Do NOT proceed without the [SHORT_PROJECT_PREFIX] parameter
 
 2. **MUST read the canonical workflow document**:
    - Location: planning-is-prompting → workflow/p-is-p-02-documenting-the-implementation.md
@@ -51,6 +51,8 @@ Invoke this command when:
 **Skip this command** when:
 - Pattern from Step 1 is Pattern 3 or 4 (small/simple work)
 - Use history.md for tracking instead
+
+> **Skipping the documentation step does *not* exempt any plan document you do write** — if a plan document exists, it enters `/plan-review` (see `workflow/plan-review.md` §4a). The gate is keyed to the **document**, not to the pattern.
 
 ---
 

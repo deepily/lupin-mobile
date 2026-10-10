@@ -1,8 +1,12 @@
-# Bug Fix Mode for Planning-is-Prompting Project
+# Bug Fix Mode for Lupin Mobile
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: [LUPIN-MOBILE]
 **Version**: 1.0
+
+---
+
+> **⚠️ Note**: This command's canonical workflow uses cosa-voice notifications and emits per-bug status updates throughout the lifecycle. In conversation mode (`get_session_info().conversation_mode_active=true`), all gates are voice-driven AND spoken responses follow the **TTS Brevity Mandate** — re-crafted conversational prose, NOT verbatim copies of markdown terminal replies (per-bug updates spoken as "bug N fixed, smoke tests green", not the full diff). See `workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -24,10 +28,10 @@ This command supports all four modes via arguments. For discoverability in the s
 **On every invocation of this command:**
 
 1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **History file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history.md
-   - **Bug fix queue file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/bug-fix-queue.md
-   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
+   - **[SHORT_PROJECT_PREFIX]**: [LUPIN-MOBILE]
+   - **History file**: ./history.md
+   - **Bug fix queue file**: ./bug-fix-queue.md
+   - **Project root**: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
    - Do NOT proceed without these parameters
 
 2. **MUST read the canonical workflow document**:
@@ -43,7 +47,7 @@ This command supports all four modes via arguments. For discoverability in the s
 
 4. **MUST execute the complete workflow for the selected mode**:
    - Execute ALL steps exactly as described in the canonical workflow document
-   - Do NOT skip any steps (including TodoWrite tracking, notifications, file tracking)
+   - Do NOT skip any steps (including notifications, file tracking)
    - Do NOT commit without following the selective staging protocol
    - Follow the workflow exactly as documented using the configuration parameters from Step 1
 
