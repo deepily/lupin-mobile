@@ -939,7 +939,11 @@ class TtsOrchestrator {
     if ( _inFlightEpoch != _epoch ) return;   // stale event
     _watchdog?.cancel();
     Logger.info( "dispatch outcome=error code=${event.errorCode}", tag: "Tts" );
-    _note( "Last message failed: ${event.errorCode}" );
+    final quota = event.errorCode == 'quota_exceeded';
+    // A quota error is not a failure Rick has to act on: the message is re-spoken on-device, and the line says so.
+    _note( quota
+        ? "Spoken on this phone's own voice: the voice service is over quota"
+        : "Last message failed: ${event.errorCode}" );
 
     final wasCurrent = _current;
 
