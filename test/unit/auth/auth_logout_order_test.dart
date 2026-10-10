@@ -27,6 +27,22 @@ import 'package:lupin_mobile/services/auth/server_context_service.dart';
 class _MockRepo      extends Mock implements AuthRepository {}
 class _MockBiometric extends Mock implements BiometricGate {}
 
+/// A store whose session delete throws, as a keystore that fails writes does.
+class _ThrowingClearStore extends SecureCredentialStore {
+  _ThrowingClearStore() : super( const FlutterSecureStorage() );
+
+  @override
+  Future<void> clearContextSession( String contextId ) async => throw Exception( "keystore delete failed" );
+}
+
+/// A store whose last-email read throws for every context.
+class _ThrowingEmailStore extends SecureCredentialStore {
+  _ThrowingEmailStore() : super( const FlutterSecureStorage() );
+
+  @override
+  Future<String?> readLastEmail( String contextId ) async => throw Exception( "keystore unavailable" );
+}
+
 /// A store whose refresh-token read throws, as a locked or corrupted keystore does.
 class _ThrowingReadStore extends SecureCredentialStore {
   _ThrowingReadStore() : super( const FlutterSecureStorage() );
@@ -141,6 +157,36 @@ void main() {
 
     expect( svc.active, "lan-dev" );
     expect( readAccessToken(), isNull );
+    await bloc.close();
+  } );
+
+  test( "a keystore that fails the delete still signs the user out", () async {
+    final bloc = AuthBloc( repo: repo, store: _ThrowingClearStore(), context: svc, biometric: _MockBiometric() );
+    bloc.add( const AuthLogoutRequested() );
+    final state = await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
+
+    expect( state, isA<AuthUnauthenticated>() );
+    expect( readAccessToken(), isNull );
+    await bloc.close();
+  } );
+
+  test( "a keystore that fails the delete still completes a server switch", () async {
+    final bloc = AuthBloc( repo: repo, store: _ThrowingClearStore(), context: svc, biometric: _MockBiometric() );
+    bloc.add( const AuthServerContextSwitchRequested( "lan-dev" ) );
+    await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
+
+    expect( svc.active, "lan-dev" );
+    expect( readAccessToken(), isNull );
+    await bloc.close();
+  } );
+
+  test( "a failing last-email read at the end of a server switch still emits the signed-out state", () async {
+    final bloc = AuthBloc( repo: repo, store: _ThrowingEmailStore(), context: svc, biometric: _MockBiometric() );
+    bloc.add( const AuthServerContextSwitchRequested( "lan-dev" ) );
+    final state = await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
+
+    expect( ( state as AuthUnauthenticated ).lastEmail, isNull );
+    expect( svc.active, "lan-dev" );
     await bloc.close();
   } );
 }

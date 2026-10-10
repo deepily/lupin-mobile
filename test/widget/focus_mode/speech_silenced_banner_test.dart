@@ -98,6 +98,36 @@ void main() {
       expect( quiet, findsNothing, reason: 'the window is re-evaluated against the clock, not read once' );
     } );
 
+    testWidgets( 'quiet hours with the urgent bypass on says urgent messages still speak', ( tester ) async {
+      await prefs.setQuietEnabled( true );
+      await prefs.setQuietStartMinutes( 22 * 60 );
+      await prefs.setQuietEndMinutes( 7 * 60 );
+      clock = DateTime( 2026, 10, 10, 23, 30 );
+      expect( prefs.quietUrgentBypass, isTrue, reason: 'the default' );
+
+      await tester.pumpWidget( host() );
+      expect( find.textContaining( 'urgent messages still speak' ), findsOneWidget );
+    } );
+
+    testWidgets( 'quiet hours with the urgent bypass off does not claim urgent still speaks', ( tester ) async {
+      await prefs.setQuietEnabled( true );
+      await prefs.setQuietStartMinutes( 22 * 60 );
+      await prefs.setQuietEndMinutes( 7 * 60 );
+      await prefs.setQuietUrgentBypass( false );
+      clock = DateTime( 2026, 10, 10, 23, 30 );
+
+      await tester.pumpWidget( host() );
+      expect( quiet, findsOneWidget );
+      expect( find.textContaining( 'urgent' ), findsNothing );
+    } );
+
+    testWidgets( 'Master mute has no bypass, so its row never mentions urgent', ( tester ) async {
+      await prefs.setMasterMute( true );
+      await tester.pumpWidget( host() );
+
+      expect( find.textContaining( 'urgent' ), findsNothing );
+    } );
+
     testWidgets( 'several at once: every one is named', ( tester ) async {
       await prefs.setEnabled( false );
       await prefs.setMasterMute( true );

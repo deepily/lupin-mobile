@@ -84,7 +84,14 @@ class SpeechSilencedBanner extends StatefulWidget {
       if ( prefs.ttsFraction <= 0 )
         const SpeechSilencer( TestKeys.focusSilencedSliderZero, 'the TTS slider is at 0%', SilencerHome.here ),
       if ( prefs.inQuietHours( now ) )
-        const SpeechSilencer( TestKeys.focusSilencedQuietHours, 'Quiet hours are in effect', SilencerHome.notifications ),
+        SpeechSilencer(
+          TestKeys.focusSilencedQuietHours,
+          // Urgent messages pass quiet hours while the bypass is on (the default), so the row must not overstate.
+          prefs.quietUrgentBypass
+              ? 'Quiet hours are in effect (urgent messages still speak)'
+              : 'Quiet hours are in effect',
+          SilencerHome.notifications,
+        ),
     ];
   }
 
