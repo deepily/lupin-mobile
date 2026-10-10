@@ -725,6 +725,8 @@ void main() {
       expect( line, findsOneWidget );
       expect( tester.widget<Text>( line ).data, BuildInfo.current.describe() );
       expect( tester.widget<Text>( line ).data, startsWith( 'Build' ) );
+      // Unstamped test run: one line, and no second line to be cut or blank.
+      expect( find.byKey( const Key( TestKeys.focusDrawerBuildDetail ) ), findsNothing );
       expect( tester.getBottomLeft( line ).dy, lessThanOrEqualTo( 700 ) );
       // Scrolling the entries does not move it.
       final before = tester.getTopLeft( line );

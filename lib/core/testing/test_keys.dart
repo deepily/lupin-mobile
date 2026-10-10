@@ -279,6 +279,8 @@ class TestKeys {
   static const focusDrawerHeader      = 'focus.drawerHeader';
   /// Key of the focus drawer build line.
   static const focusDrawerBuildLine   = 'focus.drawerBuildLine';
+  /// Key of the focus drawer build detail line (date, build number, time, commit, push).
+  static const focusDrawerBuildDetail = 'focus.drawerBuildDetail';
   /// Key prefix of focus drawer entry. The suffix is entry title.
   static const focusDrawerEntryPrefix = 'focus.drawerEntry.';
   /// Key of the focus composer scroll.

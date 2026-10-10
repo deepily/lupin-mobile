@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
 import '../../../core/build_info.dart';
+import '../../../core/build_info_footer.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../shared/widgets/tts_pause_control.dart';
 import '../../../services/asr/asr_service.dart';
@@ -516,18 +517,11 @@ class _FocusModeScreenState extends State<FocusModeScreen> {
       children: [
         Expanded( child: entries ),
         const Divider( height: 1 ),
-        SafeArea(
+        const SafeArea(
           top   : false,
           child : Padding(
-            padding : const EdgeInsets.symmetric( horizontal: 16, vertical: 10 ),
-            child   : Align(
-              alignment : Alignment.centerLeft,
-              child     : Text(
-                BuildInfo.current.describe(),
-                key   : const Key( TestKeys.focusDrawerBuildLine ),
-                style : Theme.of( context ).textTheme.bodySmall,
-              ),
-            ),
+            padding : EdgeInsets.symmetric( horizontal: 16, vertical: 10 ),
+            child   : BuildInfoFooter( info: BuildInfo.current ),
           ),
         ),
       ],

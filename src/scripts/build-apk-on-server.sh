@@ -67,6 +67,10 @@ build-apk-on-server.sh — build the debug APK on the dev server, main checkout 
   --fcm            Accepted and ignored (FCM is already the default); old commands work.
   --help, -h       This text.
 
+The drawer shows the branch built from, then "<yyyy.mm.dd> build N": N counts builds made
+that day, kept in io/build-counter (gitignored; survives `flutter clean`; restarts at 1
+each day; advanced only when a build succeeds).
+
 Environment:
   JAVA_HOME_OVERRIDE   JDK to use (default ~/opt/jdk-21)
   GRADLE_OPTS          Gradle memory settings (default: the 8 GiB-safe values)
@@ -106,23 +110,30 @@ branch="$( git branch --show-current )"
 dirty=""
 [ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
 
-# What the app shows on its drawer's build line (lib/core/build_info.dart reads these).
-# Version comes from pubspec.yaml; push comes from the ENABLE_FCM define above.
-build_version="$( sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1 | tr -d '[:space:]' )"
+# What the app shows on its drawer's build line (lib/core/build_info.dart reads these):
+# branch, date, that day's build number, time, commit, push. Push comes from ENABLE_FCM.
+# Date and number come from the SAME clock reading as the time, so they cannot disagree.
+# The counter file is io/build-counter (gitignored, outside build/ so `flutter clean`
+# cannot reset it); it is only advanced after the APK is verified, further down.
+build_now="${APK_BUILD_NOW:-$( date -Is )}"
+build_date="$( echo "${build_now%%T*}" | tr '-' '.' )"
+counter_file="${APK_BUILD_COUNTER_FILE:-$REPO_ROOT/io/build-counter}"
+build_number="$( build_counter_next "$counter_file" "$build_date" )"
+build_dirty="$( [ -n "$dirty" ] && echo true || echo false )"
 build_args+=(
-    "--dart-define=BUILD_TIME=$( date -Is )"
+    "--dart-define=BUILD_TIME=$build_now"
     "--dart-define=BUILD_TZ=$( date +%Z )"
     "--dart-define=BUILD_SHA=$sha"
-    "--dart-define=BUILD_DIRTY=$( [ -n "$dirty" ] && echo true || echo false )"
-    "--dart-define=BUILD_VERSION=$build_version"
+    "--dart-define=BUILD_DIRTY=$build_dirty"
+    "--dart-define=BUILD_BRANCH=$branch"
+    "--dart-define=BUILD_NUMBER=$build_number"
 )
 
 # Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
 # and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
 # compile-time flag needs writing down at all (row 8ff78c69, F3).
 stamp_built_apk() {
-    write_apk_stamp "$APK" "$sha" "$branch" "$FCM" \
-        "$( [ -n "$dirty" ] && echo true || echo false )"
+    write_apk_stamp "$APK" "$sha" "$branch" "$FCM" "$build_dirty" "$build_date" "$build_number"
 }
 
 # Test hook: print what would be built and stop, before any checkout, JDK or Gradle check.
@@ -130,6 +141,12 @@ stamp_built_apk() {
 if [ "${APK_BUILD_DRY_RUN:-}" = "1" ]; then
     echo "BUILD_ARGS: ${build_args[*]}"
     echo "FCM: $FCM"
+    echo "BUILD_DATE: $build_date"
+    echo "BUILD_NUMBER: $build_number"
+    # Test hook: act as if the build succeeded, so a test can see the count advance.
+    if [ "${APK_BUILD_DRY_RUN_COMMIT:-}" = "1" ]; then
+        build_counter_commit "$counter_file" "$build_date" "$build_number"
+    fi
     # With a throwaway APK path, also write the stamp through the SAME function the real
     # build uses, so a test can read back what the stamp says about this build.
     if [ -n "${APK_STAMP_TEST_APK:-}" ]; then
@@ -203,8 +220,13 @@ if [ ! -f "$APK" ] || [ ! "$APK" -nt "$marker" ]; then
     exit 1
 fi
 
+# Only now does the build count: it produced a new APK. A failed build exits above.
+if ! build_counter_commit "$counter_file" "$build_date" "$build_number"; then
+    print_info "Could not write $counter_file; the next build may repeat build $build_number."
+fi
 stamp_built_apk
 
 print_success "Built in $(( SECONDS - started ))s: $APK"
-print_success "Commit: $branch @ $sha$dirty$fcm_note"
+print_success "Commit: ${branch:-detached} @ $sha$dirty$fcm_note"
+print_success "Drawer reads: ${branch:-detached $sha} / $build_date build $build_number"
 print_info    "Stamped: $( basename "$( apk_stamp_path "$APK" )" ) (fcm=$FCM)"
