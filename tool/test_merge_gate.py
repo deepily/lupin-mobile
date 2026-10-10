@@ -375,6 +375,19 @@ class DocLintStepTest( unittest.TestCase ):
         self.assertEqual( code, 1 )
         self.assertIn( "read 0 of 1 files", detail )
 
+    def test_a_linter_that_prints_no_summary_line_fails( self ):             # a crash, or an empty log, is not a pass
+        self.put( "lib/a.dart", self.CLEAN )
+        real = mg.run_logged
+        for text in ( "Traceback (most recent call last):\nValueError: boom\n", "" ):
+            def fake( name, cmd, logdir, root=None, stdout_to=None, text=text ):
+                with open( os.path.join( logdir, name + ".log" ), "w" ) as f: f.write( text )
+                return 0
+            mg.run_logged = fake
+            try: code, detail = mg.check_doc_lint( self.logs.name, self.d )
+            finally: mg.run_logged = real
+            self.assertEqual( code, 1, repr( text ) )
+            self.assertIn( "no 'N findings in M files' summary", detail )
+
     def test_main_lists_the_doc_lint_row_and_fails_the_verdict_on_a_finding( self ):
         self.put( "lib/a.dart", self.PLANTED )
         self.sh( "commit", "-q", "-m", "c0" )
