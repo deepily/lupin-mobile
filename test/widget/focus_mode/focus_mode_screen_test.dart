@@ -295,6 +295,8 @@ void main() {
       final queueCtrl = StreamController<List<TtsQueueItem>>.broadcast();
       addTearDown( queueCtrl.close );
       when( () => tts.queueStream   ).thenAnswer( ( _ ) => queueCtrl.stream );
+      when( () => tts.lastOutcome   ).thenReturn( null );
+      when( () => tts.outcomeStream ).thenAnswer( ( _ ) => const Stream<TtsOutcome>.empty() );
       when( () => tts.queueSnapshot ).thenReturn( const [
         TtsQueueItem( id: 1, priority: 'high', text: 'playing now', sender: TtsSender( name: 'Tiffany', icon: '💍' ), isCurrent: true ),
         TtsQueueItem( id: 2, priority: 'low',  text: 'pytest chatter', sender: TtsSender( senderId: 'pytest@lupin#1' ), isCurrent: false ),
