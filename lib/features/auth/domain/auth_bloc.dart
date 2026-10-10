@@ -155,6 +155,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /// Deletes [ctxId]'s stored session, ignoring a keystore that refuses.
+  ///
+  /// Ensures:
+  ///   - never throws, so the caller still emits the signed-out state; a stale stored token is
+  ///     harmless once the in-memory access token is cleared and the user is shown the login screen
+  Future<void> _clearSessionOrIgnore( String ctxId ) async {
+    try {
+      await _store.clearContextSession( ctxId );
+    } catch ( _ ) {
+      // Best effort — the user must still be signed out.
+    }
+  }
+
   /// The email to pre-fill after sign-out, or null when the keystore cannot be read.
   Future<String?> _lastEmailOrNull( String ctxId ) async {
     try {
@@ -168,7 +181,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final email = await _lastEmailOrNull( _ctxId );
     await _endServerSession( _ctxId );
     clearAccessToken();
-    await _store.clearContextSession( _ctxId );
+    await _clearSessionOrIgnore( _ctxId );
     emit( AuthUnauthenticated( lastEmail: email ) );
   }
 
@@ -215,10 +228,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     await _endServerSession( oldId );
     clearAccessToken();
-    await _store.clearContextSession( oldId );
+    await _clearSessionOrIgnore( oldId );
 
     await _context.setActive( event.contextId );
-    final email = await _store.readLastEmail( event.contextId );
+    final email = await _lastEmailOrNull( event.contextId );
     emit( AuthUnauthenticated( lastEmail: email ) );
   }
 }
