@@ -163,7 +163,9 @@ abstract class LogDestination {
 class ConsoleLogDestination implements LogDestination {
   final bool _debugMode;
 
-  /// Creates a destination; [debugMode] defaults to `kDebugMode`, and false forces release output in tests.
+  /// Creates a destination.
+  ///
+  /// [debugMode] defaults to `kDebugMode`; false forces release output in tests.
   ConsoleLogDestination({ bool? debugMode }) : _debugMode = debugMode ?? kDebugMode;
 
   @override
@@ -183,9 +185,9 @@ class ConsoleLogDestination implements LogDestination {
 
 /// File log destination for persistent logging.
 ///
-/// Entries at error and above start a flush at once; others wait for the buffer size
-/// entries. At most one write runs at a time, and entries that arrive during it
-/// go out in a follow-up write, so no entry is written twice.
+/// Entries at error and above start a flush at once; others wait for the buffer size entries.
+/// At most one write runs at a time.
+/// Entries that arrive during a write go out in a follow-up write, so no entry is written twice.
 class FileLogDestination implements LogDestination {
   /// Name of the log file.
   final String fileName;
@@ -262,7 +264,9 @@ class FileLogDestination implements LogDestination {
     }
   }
 
-  /// Writes the buffered entries; returns false when the write failed and the entries were kept.
+  /// Writes the buffered entries.
+  ///
+  /// It returns false when the write failed and the entries were kept.
   Future<bool> _writeBatch() async {
     if (_buffer.isEmpty) return false;
 
@@ -290,7 +294,9 @@ class FileLogDestination implements LogDestination {
     }
   }
 
-  /// Encodes one entry; an entry that cannot be encoded becomes a stub line, so it never blocks the batch.
+  /// Encodes one entry.
+  ///
+  /// An entry that cannot be encoded becomes a stub line, so it never blocks the batch.
   String _encode( LogEntry entry ) {
     try {
       return jsonEncode( entry.toJson() );
@@ -486,9 +492,9 @@ class Logger {
 
   /// Log a message with specified level.
   ///
-  /// Every string that leaves the logger is masked by `redactSecrets`: the message,
-  /// tag, error text, stack trace, and every field of the context, including nested
-  /// metadata. Stack traces are masked too because a trace can quote a URL or argument.
+  /// `redactSecrets` masks every string that leaves the logger.
+  /// That covers the message, tag, error text, stack trace, and every field of the context, including nested
+  /// metadata. Stack traces are masked because a trace can quote a URL or argument.
   ///
   /// Ensures:
   ///   - never throws: a failure while building or delivering an entry is dropped
@@ -572,7 +578,7 @@ class Logger {
     return out;
   }
 
-  /// Masks [value], using [key] so a credential under a field name the redactor knows is caught.
+  /// Masks [value], using [key] to catch a credential under a field name the redactor knows.
   static dynamic _maskedValue( Object? key, Object? value, int depth ) {
     if (value == null || value is num || value is bool) return value;
     if (depth > _maxMaskDepth) return '<nested too deep>';

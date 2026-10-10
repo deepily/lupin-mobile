@@ -54,7 +54,9 @@ class AppLifecycleService with WidgetsBindingObserver {
   /// Set when a pause or detach arrives during a flush; the running flush then runs once more.
   bool _logFlushAgain = false;
 
-  /// Longest a pause or detach flush may run before it is abandoned, so a hung destination cannot block later flushes.
+  /// Longest a pause or detach flush may run before it is abandoned.
+  ///
+  /// The bound keeps a hung destination from blocking later flushes.
   @visibleForTesting
   static Duration logFlushTimeout = const Duration(seconds: 3);
   
@@ -239,7 +241,9 @@ class AppLifecycleService with WidgetsBindingObserver {
     // Similar to paused but potentially temporary
   }
   
-  /// Starts a log flush; one already running is asked to run once more when it ends. A failure is printed, never thrown.
+  /// Starts a log flush.
+  ///
+  /// A flush already running is asked to run once more when it ends. A failure is printed, never thrown.
   void _flushLogs() {
     if (_logFlush != null) {
       _logFlushAgain = true;

@@ -1,4 +1,4 @@
-/// Describes [error] by type, plus offset for a [FormatException], without quoting its message.
+/// Describes [error] by type, plus offset for a [FormatException], never its message.
 ///
 /// A [FormatException] quotes the text it failed to parse, so logging its message would copy stored user
 /// content into the log file. The type and offset are enough to find the fault.

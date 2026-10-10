@@ -41,7 +41,9 @@ abstract class WsReconnectTarget {
   /// True while the service's own retry timer is waiting to fire.
   bool get isRetryPending;
 
-  /// True when the service may open a socket on its own: signed in, not disconnected, not superseded.
+  /// True when the service may open a socket on its own.
+  ///
+  /// That means signed in, not disconnected and not superseded.
   bool get wantsConnection;
 
   /// Makes one guarded attempt; false means nothing was started.
@@ -126,7 +128,7 @@ class WsReconnectCoordinator {
     _cancelLoop();
   }
 
-  /// The foreground push trigger: the socket is down although a push says the server has something.
+  /// The foreground push trigger: the socket is down although a push says the server has news.
   Future<void> onForegroundPush() => _attempt( "foreground push" );
 
   void _onLifecycle( AppLifecycleState state ) {
@@ -143,7 +145,9 @@ class WsReconnectCoordinator {
     }
   }
 
-  /// An interface coming up counts, including `limited`: the server may be on a LAN with no internet.
+  /// An interface coming up counts, including `limited`.
+  ///
+  /// The server may be on a LAN with no internet.
   void _onNetwork( NetworkState state ) {
     if ( state != NetworkState.connected && state != NetworkState.limited ) return;
     _networkTimer?.cancel();

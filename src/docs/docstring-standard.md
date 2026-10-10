@@ -31,6 +31,7 @@ Status: approved by Rick on 2026-09-30 (D10; record `R5b-M1` in `src/docs/decisi
 4. **No typographic emphasis.** No all-caps words, no emoji or symbols such as ⚠️ 🔴 ⇒, no bold or italics for emphasis. Acronyms and code identifiers are fine.
 5. **No rhetoric.** No aphorisms, no "not X but Y" setups, and none of: deliberately, by construction, load-bearing, the point. State the constraint and its consequence.
 6. **Every reference resolves.** Use a file path or a `[Symbol]`. Don't cite a section number, row id, ruling label or acceptance-criterion id without a path that explains it.
+   When the code cannot show why it is written this way, state the reason in the comment. If the reason is long, cite the short sha of one commit that explains it.
 7. **Current state only.** No dates, no "used to", no quoted conversations. A ruling becomes a one-line record in `src/docs/decisions/`, and the code links to it. Other history goes to the `Design:` document, or else the commit message.
 8. **Fit the template.** A member doc follows the block shape above. A reference page is at most 1,500 words.
 

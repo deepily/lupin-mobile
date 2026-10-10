@@ -51,7 +51,8 @@ class NotificationAudioService {
   /// It lets a DI-level test assert that production injected the callback.
   ///
   /// Without it a test can only check that this class forwards whatever it was given, and a service constructed
-  /// with nothing forwards nothing without complaint. That uninjected-seam failure has happened before.
+  /// with nothing forwards nothing without complaint. That uninjected-seam failure has happened before: see the
+  /// Quick Ask fix in commit 153ac19.
   @visibleForTesting
   bool get hasTapCallback => _onNotificationTap != null;
 
@@ -149,19 +150,18 @@ class NotificationAudioService {
     // as the fallback through [flutterTtsSpeak]. `NotificationBloc._onExternalUpdate` wires it beside this ding call.
   }
 
-  /// Speaks [text] with `flutter_tts` and returns when the engine has finished it, for `TtsOrchestrator` when
-  /// ElevenLabs is unavailable.
+  /// Speaks [text] with `flutter_tts` and returns when the engine has finished it.
   ///
-  /// Unavailable means quota exceeded, a network error or a disconnected WebSocket. It lives here because this
-  /// service owns the `FlutterTts` singleton. A missing TTS engine is non-fatal.
+  /// `TtsOrchestrator` calls it when ElevenLabs is unavailable: quota exceeded, a network error or a disconnected
+  /// WebSocket. It lives here because this service owns the `FlutterTts` singleton. A missing TTS engine is non-fatal.
   ///
   /// Two bounds, so a wedged engine can never hold the caller for good:
   ///   - acceptance: [speakAcceptBudget] for the engine to take the text
   ///   - completion: [completionBoundFor] the text, for the engine's completion, cancel or error callback
   ///
-  /// The orchestrator keeps its in-flight utterance until this returns, which is what lets skip, stop-all,
-  /// pause, the microphone hold and an urgent arrival reach the speech. Returning on acceptance let a burst
-  /// pile up inside the engine where none of them could.
+  /// The orchestrator keeps its in-flight utterance until this returns.
+  /// That is what lets skip, stop-all, pause, the microphone hold and an urgent arrival reach the speech.
+  /// Returning on acceptance let a burst pile up inside the engine where none of them could.
   Future<void> flutterTtsSpeak( String text ) async {
     final done = Completer<void>();
     _utteranceDone = done;
@@ -191,7 +191,7 @@ class NotificationAudioService {
 
   /// How long the engine may take to finish [text] before it is presumed wedged.
   ///
-  /// It is 30 s plus the text at a deliberately slow 8 characters a second, unless a bound was injected.
+  /// It is 30 s plus the text at a slow 8 characters a second, unless a bound was injected.
   Duration completionBoundFor( String text ) =>
       _completionBound ?? Duration( seconds: 30 + text.length ~/ 8 );
 

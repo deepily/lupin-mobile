@@ -125,7 +125,9 @@ class StreamingTtsPlayer {
   /// `TtsOrchestrator`'s watchdog reads it: a long utterance that is playing is not a stalled one.
   bool get isAudioPlaying => _isPlaying;
 
-  /// When the last speak acknowledgement or routed WebSocket event arrived, or null before the first.
+  /// When the last speak acknowledgement or routed WebSocket event arrived.
+  ///
+  /// It is null before the first.
   ///
   /// The watchdog measures silence from this, so a slow synthesis that is still sending chunks is not cut off.
   DateTime? get lastActivityAt => _lastActivityAt;

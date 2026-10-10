@@ -5,8 +5,8 @@ import 'testing/test_keys.dart';
 
 /// The drawer's two-line build footer: branch above, date, build number and commit below.
 ///
-/// The branch line is cut with an ellipsis when it does not fit; the detail line shrinks
-/// to fit and is never cut, so the build number and commit are always readable.
+/// The branch line is cut with an ellipsis when it does not fit.
+/// The detail line shrinks to fit and is never cut, so the build number and commit stay readable.
 /// Design: src/scripts/build-apk-on-server.sh
 class BuildInfoFooter extends StatelessWidget {
   /// The build to describe; the app passes [BuildInfo.current], tests pass explicit values.

@@ -196,7 +196,9 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
 
   StreamSubscription<NetworkState>? _connectivitySub;
 
-  /// The network state before the latest edge; seeded from the service when [startConnectivityRefresh] first runs.
+  /// The network state before the latest edge.
+  ///
+  /// It is seeded from the service when [startConnectivityRefresh] first runs.
   NetworkState _previousNetworkState = NetworkState.unknown;
 
   /// Creates the bloc; [fleet] feeds the reassignment roster and may be null.
@@ -261,7 +263,9 @@ class TaskListBloc extends Bloc<TaskListEvent, TaskListState>
     add( TaskListRefreshRequested( cancelToken: token ) );
   }
 
-  /// Starts retrying unsent writes and refreshing when the connection is restored, `connected` or `limited`.
+  /// Starts retrying unsent writes and refreshing when the connection is restored.
+  ///
+  /// Restored means `connected` or `limited`.
   ///
   /// The retry trigger is connectivity-restored, which `NetworkConnectivityService` already
   /// streams. The focus chat bloc's unsent-write shape fires on WebSocket re-auth, and this
