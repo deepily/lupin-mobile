@@ -130,4 +130,50 @@ void main() {
     expect( onDevice, isEmpty, reason: "the utterance was abandoned on purpose; the watchdog must not resurrect it" );
     expect( o.isPlaying, isFalse );
   } );
+
+  group( "the plain outcome line for the speech-queue viewer", () {
+    late NotificationPreferences prefs;
+
+    Future<TtsOrchestrator> withPrefs() async {
+      final o = await newOrch();   // builds its own prefs; rebuild on shared ones to flip switches
+      await o.dispose();
+      SharedPreferences.setMockInitialValues( {} );
+      prefs = NotificationPreferences( await SharedPreferences.getInstance() );
+      orch = TtsOrchestrator( player: player, fallback: fallback, prefs: prefs, ws: ws, speakWatchdog: window );
+      return orch!;
+    }
+
+    test( "master mute, notifications off and a zero slider each name themselves", () async {
+      final o = await withPrefs();
+
+      await prefs.setMasterMute( true );
+      o.enqueueAlways( priority: "high", message: "hello there" );
+      expect( o.lastOutcome!.line, "Last message not spoken: Master mute is on" );
+      expect( o.lastOutcome!.problem, isTrue );
+
+      await prefs.setMasterMute( false );
+      await prefs.setEnabled( false );
+      o.enqueueAlways( priority: "high", message: "hello there" );
+      expect( o.lastOutcome!.line, "Last message not spoken: Notifications are switched off" );
+
+      await prefs.setEnabled( true );
+      await prefs.setTtsFraction( 0 );
+      o.enqueueAlways( priority: "high", message: "hello there" );
+      expect( o.lastOutcome!.line, "Last message not spoken: the TTS slider is at 0%" );
+      expect( posted, isEmpty );
+    } );
+
+    test( "a paused queue reports held with the count, and a normal send reports ok", () async {
+      final o = await withPrefs();
+
+      o.pause();
+      o.enqueueAlways( priority: "high", message: "waits" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (1 waiting)" );
+
+      o.resume();
+      await pump();
+      expect( o.lastOutcome!.line, "Last message sent to the speaker" );
+      expect( o.lastOutcome!.problem, isFalse );
+    } );
+  } );
 }

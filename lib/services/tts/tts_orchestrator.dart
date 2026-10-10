@@ -9,6 +9,20 @@ import 'tts_preview_truncator.dart';
 import '../websocket/websocket_service.dart';
 import 'streaming_tts_player.dart';
 
+/// What the orchestrator last did with a message, in one plain line for the speech-queue viewer.
+///
+/// Rick cannot read the phone log, so the reason a message stayed silent has to be on screen.
+class TtsOutcome {
+  /// One plain sentence, such as "Last message not spoken: Master mute is on".
+  final String   line;
+  /// True when the message was not spoken as asked: gated, held, failed or sent to the on-device voice.
+  final bool     problem;
+  /// When the outcome was recorded.
+  final DateTime at;
+  /// Creates an outcome.
+  const TtsOutcome( { required this.line, required this.problem, required this.at } );
+}
+
 /// Serializes speech through a FIFO queue, so only one voice plays at a time.
 ///
 /// It adds a priority gate, urgent preempt and quota fallback. Two entry points feed the queue:
@@ -48,6 +62,30 @@ class TtsOrchestrator {
 
   Timer?    _watchdog;
   DateTime? _dispatchedAt;
+
+  TtsOutcome? _lastOutcome;
+  final StreamController<TtsOutcome> _outcomeCtrl = StreamController<TtsOutcome>.broadcast();
+
+  /// The most recent outcome, or null before any message arrived.
+  TtsOutcome? get lastOutcome => _lastOutcome;
+
+  /// Emits each outcome as it is recorded; seed a listener from [lastOutcome].
+  Stream<TtsOutcome> get outcomeStream => _outcomeCtrl.stream;
+
+  void _note( String line, { bool problem = true } ) {
+    final o = TtsOutcome( line: line, problem: problem, at: DateTime.now() );
+    _lastOutcome = o;
+    if ( !_outcomeCtrl.isClosed ) _outcomeCtrl.add( o );
+  }
+
+  /// The plain-English reason for a master-switch refusal named by [_silencedReason].
+  static String _gateWords( String reason ) => switch ( reason ) {
+    'notifications_off' => "Notifications are switched off",
+    'master_mute'       => "Master mute is on",
+    'sender_muted'      => "that sender is muted",
+    'quiet_hours'       => "quiet hours are on",
+    _                   => reason,
+  };
 
   final Queue<_Utterance> _fifo    = Queue();
   _Utterance?             _current;
@@ -345,6 +383,7 @@ class TtsOrchestrator {
     final silencedBy = _silencedReason( priority: priority, senderKey: senderKey );
     if ( silencedBy != null ) {
       Logger.info( "dispatch outcome=gated reason=$silencedBy priority=$priority", tag: "Tts" );
+      _note( "Last message not spoken: ${_gateWords( silencedBy )}" );
       return null;
     }
 
@@ -352,6 +391,7 @@ class TtsOrchestrator {
     // is neither spoken nor offered back as speak-anyway.
     if ( _sliderAtZero ) {
       Logger.info( "dispatch outcome=gated reason=slider_zero priority=$priority", tag: "Tts" );
+      _note( "Last message not spoken: the TTS slider is at 0%" );
       return null;
     }
 
@@ -372,11 +412,13 @@ class TtsOrchestrator {
       );
       _emitSuppression( suppression );
       Logger.info( "dispatch outcome=gated reason=stop_list priority=$priority", tag: "Tts" );
+      _note( "Last message not spoken: it matches the stop-list" );
       return suppression;
     }
     // Gate 2 — a preference; `verbatim` overrides it (ruling 4).
     if ( !verbatim && _systemSenderMuted( sender ) ) {
       Logger.info( "dispatch outcome=gated reason=system_senders_off priority=$priority", tag: "Tts" );
+      _note( "Last message not spoken: Speak system senders is off" );
       return null;
     }
 
@@ -492,6 +534,7 @@ class TtsOrchestrator {
     await _completeSub?.cancel();
     await _errorSub?.cancel();
     await _pausedCtrl.close();
+    await _outcomeCtrl.close();
     await _depthCtrl.close();
     await _queueCtrl.close();
     await _suppressedCtrl.close();
@@ -618,6 +661,9 @@ class TtsOrchestrator {
     if ( _held ) {
       if ( _current == null && _fifo.isNotEmpty ) {
         Logger.info( "dispatch outcome=held paused=$_paused capture=$_captureHeld queued=${_fifo.length}", tag: "Tts" );
+        _note( _paused
+            ? "Held, not spoken yet: speech is paused (${_fifo.length} waiting)"
+            : "Held, not spoken yet: the microphone is recording (${_fifo.length} waiting)" );
       }
       return;
     }
@@ -640,6 +686,7 @@ class TtsOrchestrator {
       // WS not connected — can't do ElevenLabs. Fall back silently for
       // THIS utterance only (don't enter the 5-min quota window).
       Logger.info( "dispatch outcome=fallback reason=no_session chars=${utter.text.length}", tag: "Tts" );
+      _note( "Spoken on this phone's own voice: no server audio connection" );
       await _speakViaFallback( utter.text );
       _onUtteranceFinished();
       return;
@@ -647,6 +694,7 @@ class TtsOrchestrator {
 
     if ( _isElevenLabsInFallbackWindow() ) {
       Logger.info( "dispatch outcome=fallback reason=quota_window chars=${utter.text.length}", tag: "Tts" );
+      _note( "Spoken on this phone's own voice: the voice service is over quota" );
       await _speakViaFallback( utter.text );
       _onUtteranceFinished();
       return;
@@ -661,11 +709,13 @@ class TtsOrchestrator {
       // Audio events (status / chunk / complete / error) arrive via WS
       // and drive `_onUtteranceFinished` or `_onElevenLabsError`.
       Logger.info( "dispatch outcome=posted chars=${utter.text.length}", tag: "Tts" );
+      _note( "Last message sent to the speaker", problem: false );
       _armWatchdog( utter );
     } catch ( e ) {
       // Network/HTTP failure on POST — fall back for THIS utterance, do
       // not enter the 5-min quota window (this isn't a quota issue).
       Logger.warning( "dispatch outcome=fallback reason=post_failed chars=${utter.text.length}", tag: "Tts", error: e );
+      _note( "Spoken on this phone's own voice: the server did not take the request" );
       await _speakViaFallback( utter.text );
       _onUtteranceFinished();
     }
@@ -699,6 +749,7 @@ class TtsOrchestrator {
     }
 
     Logger.warning( "dispatch outcome=fallback reason=watchdog silent_ms=${since.inMilliseconds} chars=${utter.text.length}", tag: "Tts" );
+    _note( "Spoken on this phone's own voice: the server audio never arrived" );
     ++_epoch;   // stale-guard any late completion or error for the abandoned stream
     await _player.stop();
     if ( !identical( _current, utter ) ) return;   // skipped or stopped while stopping
@@ -733,6 +784,7 @@ class TtsOrchestrator {
     if ( _inFlightEpoch != _epoch ) return;   // stale event
     _watchdog?.cancel();
     Logger.info( "dispatch outcome=error code=${event.errorCode}", tag: "Tts" );
+    _note( "Last message failed: ${event.errorCode}" );
 
     final wasCurrent = _current;
     _current = null;
