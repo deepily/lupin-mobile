@@ -27,10 +27,8 @@ import '../../unit/_helpers/stub_dio.dart';
 ///
 /// §5 chose red over skipped on purpose: *"They are red, not skipped, until the capture
 /// lands… So phase 3 cannot close with any row still pending, and nothing can quietly pass
-/// without its fixture."* The gate for a slice is
-/// `./flutter.sh test --exclude-tags pending-capture` plus the roster from
-/// `./flutter.sh test --tags pending-capture`; **phase 3 closes only on a plain
-/// `./flutter.sh test` with zero exclusions.**
+/// without its fixture."* (History: the fixtures are captured and the tag retired 2026-10-10;
+/// the gate is now the plain `./flutter.sh test`.)
 ///
 /// ⚠️ MARÍA'S FIRST CONDITION KEEPS THE TAG HONEST: a test may carry it ONLY IF ITS SOLE
 /// FAILURE IS the missing-file `FileSystemException`. So every test below loads its fixture
