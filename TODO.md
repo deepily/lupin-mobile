@@ -2,15 +2,15 @@
 
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
-State at the 19:00 EDT checkpoint: merge tip `37a6b20`, every merge since `98a497e` reviewed by Chloé and gated (last gate PASS over `a672945..37a6b20`, suite 0 failing). APK build 7 made at `a672945`, 18:39 EDT, FCM on; `37a6b20` adds tests only, so build 7 is current. Rick has not said which build is on the phone. Nothing pushed. Seats up: Tiberius (author, re-spun 18:49 EDT), Chloé (reviewer); Maya released; seeds `io/mementos/{tiberius,maya,rio,chloe}.md`. I cleared my own context at 18:13 EDT (session `068dfb3b`, same seat). Rows closed this evening: speech bug `e0f0faf0`, wrapper refresh `08c4e586`.
+State at the Last Call close (row `79c6659f`: last call 20:00, closing 20:20 EDT; push then backup): the doc-comment rewrite is closed (row `79d49618`, merge `d1c1e6e`, gate PASS), and `lib/` reads 0 linter findings and 0 undocumented public members. The merge gate runs the doc linter since merge `45819e4` (gate PASS-WITH-WARNING, every check exit 0). APK is 2026.10.10 build 8 at `44f723c`, FCM on; nothing merged since changes the app. Rick has not said which build is on the phone. Session `de4ce9d3` died at about 19:20 EDT and `271cba01` took over the same seat. Tiberius and Chloé were spawned by the dead session, so this session could not reap them; both were released with mementos and may still be running.
 
 | Next | Waits on |
 |---|---|
-| Automated blind taste test of old against new doc comments (row `79d49618`, re-scoped; the claim-judge run is off). Brief `io/2026.10.10/tiffany/brief-blind-taste-test.md`; outputs `io/2026.10.10/taste-test/` | Tiberius's pilot report (60 pairs, 10 planted), then Chloé's check, then the numbers to Rick; all 819 only if the controls hold |
-| Check the new comments against the code on the risky symbols, rules that matter become tests, fix on contact elsewhere | the pilot report; Rick said "interested", not yet a go |
+| Merge gate warning on `b941543..45819e4`: "this range changes the gate's own inputs ... A human must read that diff" (row `27548910`, blocked on Rick). The card asking whether Chloé's review counts as that read timed out. Diff: `io/2026.10.10/tiffany/gate-self-change-45819e4.md` | Rick says yes, or reads the diff; ask again once on 2026-10-11 |
+| R&D ledger for mobile, Plan 1 Phase 6 (row `e40642c3`, held); spec pointers from Cheech are on the row | Rick admits the row; Cheech's coverage test lands in lupin |
 | Flaky test `notification_foreground_gate_test` (row `ff9cc9d3`, held): 4 failures of 10 under CPU load, fixed 50 ms waits; a sibling test passes without testing anything | Rick admits the row; then an author and a reviewer |
 | No test pins the banner's 1 s poll default (Chloé, on `a08be6c`) | folded into the next banner change |
-| Post-game for today's crew (`src/docs/post-games/v0.2.2/`) | session end |
+| Post-game rulings R19 to R25 (2026-10-10 post-game), the manager's and reversible | Rick overrules any he disagrees with |
 | Post-game rulings R12 to R18 (2026-10-09 post-game) | Rick reads and rules |
 | Whether `pubspec.yaml`'s `1.0.0+1` should change | Rick, at his convenience |
 
