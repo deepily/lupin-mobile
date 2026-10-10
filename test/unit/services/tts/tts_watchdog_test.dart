@@ -12,6 +12,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
+import 'package:lupin_mobile/services/notification_filter/notification_stop_list.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
@@ -35,7 +36,7 @@ void main() {
   late DateTime?    lastActivity;
   TtsOrchestrator? orch;
 
-  Future<TtsOrchestrator> newOrch( { Duration? fallbackBudget, Duration? maxPlayback } ) async {
+  Future<TtsOrchestrator> newOrch( { Duration? fallbackBudget, Duration? maxPlayback, Duration? outerMargin } ) async {
     SharedPreferences.setMockInitialValues( {} );
     final prefs  = NotificationPreferences( await SharedPreferences.getInstance() );
     player       = _MockPlayer();
@@ -69,6 +70,7 @@ void main() {
       player: player, fallback: fallback, prefs: prefs, ws: ws, speakWatchdog: window,
       fallbackSpeakBudget: fallbackBudget ?? TtsOrchestrator.defaultFallbackSpeakBudget,
       maxPlayback: maxPlayback,
+      fallbackOuterMargin: outerMargin ?? const Duration( seconds: 5 ),
     );
     return orch!;
   }
@@ -181,7 +183,7 @@ void main() {
 
   group( "review findings on edf2704 (Chloe)", () {
     test( "finding 2: an on-device speak that never returns is abandoned and the queue moves on", () async {
-      final o = await newOrch( fallbackBudget: const Duration( milliseconds: 50 ) );
+      final o = await newOrch( fallbackBudget: const Duration( milliseconds: 50 ), maxPlayback: const Duration( milliseconds: 50 ), outerMargin: const Duration( milliseconds: 20 ) );
       when( () => ws.sessionId ).thenReturn( null );   // every utterance takes the on-device path, no POST
       final hung = Completer<void>();
       var   calls = 0;
@@ -192,7 +194,7 @@ void main() {
 
       o.enqueueAlways( priority: "high", message: "first, engine hangs" );
       o.enqueueAlways( priority: "high", message: "second" );
-      await Future<void>.delayed( const Duration( milliseconds: 200 ) );
+      await Future<void>.delayed( const Duration( milliseconds: 300 ) );
 
       expect( onDevice, [ "first, engine hangs", "second" ], reason: "THE BUG: _current stayed set, zero POSTs, silence" );
       expect( o.lastOutcome!.line, isNot( contains( "did not respond" ) ), reason: "the second spoke fine afterwards" );
@@ -251,6 +253,277 @@ void main() {
 
       expect( posted, [ "first", "second" ], reason: "THE BUG: an unhandled throw left _current set" );
       expect( o.lastOutcome!.line, anyOf( contains( "watchdog hit an error" ), contains( "sent to the speaker" ) ) );
+    } );
+  } );
+
+  group( "round 2 (Chloe, 291777b): stale lines, completion, wordings", () {
+    late NotificationPreferences prefs;
+
+    Future<TtsOrchestrator> fresh( { bool withStopList = false } ) async {
+      final o = await newOrch();   // sets up the mocks; its own prefs are replaced below
+      await o.dispose();
+      SharedPreferences.setMockInitialValues( {} );
+      final sp = await SharedPreferences.getInstance();
+      prefs = NotificationPreferences( sp );
+      orch = TtsOrchestrator(
+        player: player, fallback: fallback, prefs: prefs, ws: ws, speakWatchdog: window,
+        stopList: withStopList ? NotificationStopList( sp ) : null,
+      );
+      return orch!;
+    }
+
+    const emptied = "Speech queue emptied: nothing is waiting";
+
+    test( "the held line retires when the queue is emptied: clearQueued, removeQueued and stopAll", () async {
+      final o = await fresh();
+      o.pause();
+
+      o.enqueueAlways( priority: "high", message: "one" );
+      o.enqueueAlways( priority: "high", message: "two" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (2 waiting)" );
+      o.clearQueued();
+      expect( o.lastOutcome!.line, emptied, reason: "THE BUG: it kept saying 2 waiting" );
+      expect( o.lastOutcome!.problem, isFalse );
+
+      o.enqueueAlways( priority: "high", message: "three" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (1 waiting)" );
+      final id = o.queueSnapshot.single.id;
+      expect( o.removeQueued( id ), isTrue );
+      expect( o.lastOutcome!.line, emptied );
+
+      o.enqueueAlways( priority: "high", message: "four" );
+      await o.stopAll();
+      expect( o.lastOutcome!.line, emptied );
+    } );
+
+    test( "a held line is kept while something is still waiting", () async {
+      final o = await fresh();
+      o.pause();
+      o.enqueueAlways( priority: "high", message: "one" );
+      o.enqueueAlways( priority: "high", message: "two" );
+      o.removeQueued( o.queueSnapshot.first.id );
+      expect( o.lastOutcome!.line, startsWith( "Held, not spoken yet" ) );
+    } );
+
+    test( "a finished utterance reads 'Last message spoken', quietly; a stale completion says nothing", () async {
+      final o = await fresh();
+
+      o.enqueueAlways( priority: "high", message: "say this" );
+      await pump();
+      expect( o.lastOutcome!.line, "Last message sent to the speaker" );
+
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+      expect( o.lastOutcome!.line, "Last message spoken" );
+      expect( o.lastOutcome!.problem, isFalse );
+
+      // No utterance in flight, so a stray completion must not rewrite the line.
+      final before = o.lastOutcome;
+      await o.stopAll();
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+      expect( o.lastOutcome!.line, before!.line );
+    } );
+
+    test( "each remaining wording is exactly what Rick reads", () async {
+      final o = await fresh( withStopList: true );
+
+      await prefs.muteSender( "key-1", "Some Worker" );
+      o.enqueueAlways( priority: "high", message: "hi", senderKey: "key-1" );
+      expect( o.lastOutcome!.line, "Last message not spoken: that sender is muted" );
+      await prefs.unmuteSender( "key-1" );
+
+      await prefs.setQuietEnabled( true );
+      final now = DateTime.now();
+      final m   = now.hour * 60 + now.minute;
+      await prefs.setQuietStartMinutes( m - 30 );
+      await prefs.setQuietEndMinutes( m + 30 );
+      await prefs.setQuietUrgentBypass( false );
+      o.enqueueAlways( priority: "high", message: "hi" );
+      expect( o.lastOutcome!.line, "Last message not spoken: quiet hours are on" );
+      await prefs.setQuietEnabled( false );
+
+      o.enqueueAlways( priority: "high", message: "Done: Bash ls -la" );
+      expect( o.lastOutcome!.line, "Last message not spoken: it matches the stop-list" );
+
+      await prefs.setSpeakSystemSenders( false );
+      o.enqueueAlways( priority: "high", message: "from a script" );
+      expect( o.lastOutcome!.line, "Last message not spoken: Speak system senders is off" );
+      await prefs.setSpeakSystemSenders( true );
+
+      o.setCaptureHold( true );
+      o.enqueueAlways( priority: "high", message: "mic is open" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: the microphone is recording (1 waiting)" );
+    } );
+
+    test( "the fallback and failure wordings", () async {
+      final o = await fresh();
+
+      when( () => ws.sessionId ).thenReturn( null );
+      o.enqueueAlways( priority: "high", message: "no connection" );
+      await pump();
+      expect( o.lastOutcome!.line, "Spoken on this phone's own voice: no server audio connection" );
+
+      when( () => ws.sessionId ).thenReturn( "wise penguin" );
+      when( () => player.speak(
+        text      : any( named: "text"      ),
+        sessionId : any( named: "sessionId" ),
+        voiceId   : any( named: "voiceId"   ),
+      ) ).thenThrow( Exception( "network down" ) );
+      o.enqueueAlways( priority: "high", message: "post refused" );
+      await pump();
+      expect( o.lastOutcome!.line, "Spoken on this phone's own voice: the server did not take the request" );
+    } );
+  } );
+
+  group( "round 3 (Chloe, 7b4e48d): on-device speech stays reachable", () {
+    late Completer<void> engineDone;
+    late List<String>    engineGot;
+    late int             stopCalls;
+
+    /// Every utterance takes the on-device path, and the engine "plays" until [engineDone] completes.
+    Future<TtsOrchestrator> onDeviceOnly() async {
+      final o = await newOrch();
+      when( () => ws.sessionId ).thenReturn( null );
+      engineDone = Completer<void>();
+      engineGot  = [];
+      stopCalls  = 0;
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        engineGot.add( inv.positionalArguments.first as String );
+        await engineDone.future;
+      } );
+      when( () => fallback.stopFallbackSpeech() ).thenAnswer( ( _ ) async {
+        stopCalls++;
+        if ( !engineDone.isCompleted ) engineDone.complete();   // what the real service does on stop
+      } );
+      return o;
+    }
+
+    test( "an on-device utterance stays in flight until the engine finishes, so Skip can reach it", () async {
+      final o = await onDeviceOnly();
+
+      o.enqueueAlways( priority: "high", message: "first" );
+      o.enqueueAlways( priority: "high", message: "second" );
+      await pump();
+      expect( engineGot, [ "first" ], reason: "THE BUG: the second was accepted at once and piled up in the engine" );
+      expect( o.queueSnapshot.where( ( i ) => i.isCurrent ).length, 1, reason: "Skip is available" );
+      expect( o.queueDepth, 1 );
+
+      await o.skipCurrent();
+      expect( stopCalls, greaterThanOrEqualTo( 1 ), reason: "skip reached the engine" );
+      await pump();
+      expect( engineGot, [ "first", "second" ] );
+    } );
+
+    test( "the microphone hold stops the engine even when nothing is in flight", () async {
+      final o = await onDeviceOnly();
+
+      await o.setCaptureHold( true );
+      expect( stopCalls, 1, reason: "THE BUG: with _current == null the hold returned before stopping the engine" );
+    } );
+
+    test( "an urgent arrival with nothing in flight stops the engine first; one in flight preempts it", () async {
+      final o = await onDeviceOnly();
+
+      o.enqueueAlways( priority: "urgent", message: "urgent while idle" );
+      await pump();
+      expect( stopCalls, greaterThanOrEqualTo( 1 ), reason: "an urgent never waits behind engine speech" );
+      expect( engineGot, [ "urgent while idle" ] );
+    } );
+
+    test( "only audio that really played reads 'Last message spoken'", () async {
+      final o = await newOrch();
+
+      o.enqueueAlways( priority: "high", message: "no audio came" );
+      await pump();
+      completeCtrl.add( const TtsCompleteEvent( played: false ) );
+      await pump();
+      expect( o.lastOutcome!.line, "Last message failed: the server sent no audio" );
+      expect( o.lastOutcome!.problem, isTrue );
+
+      o.enqueueAlways( priority: "high", message: "audio came" );
+      await pump();
+      completeCtrl.add( const TtsCompleteEvent() );
+      await pump();
+      expect( o.lastOutcome!.line, "Last message spoken" );
+    } );
+
+    test( "removing one of three held items re-states the count", () async {
+      final o = await newOrch();
+      o.pause();
+      o.enqueueAlways( priority: "high", message: "a" );
+      o.enqueueAlways( priority: "high", message: "b" );
+      o.enqueueAlways( priority: "high", message: "c" );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (3 waiting)" );
+
+      o.removeQueued( o.queueSnapshot.first.id );
+      expect( o.lastOutcome!.line, "Held, not spoken yet: speech is paused (2 waiting)", reason: "THE BUG: it said 3" );
+    } );
+  } );
+
+  group( "round 4 (Chloe, 3e6bd33): D1, R1, C2 and teardown", () {
+    test( "D1: releasing then re-taking the mic hold never waits for on-device speech", () async {
+      final o = await newOrch();
+      when( () => ws.sessionId ).thenReturn( null );
+      final engineBusy = Completer<void>();   // an engine that is mid-utterance and will not say otherwise
+      final got        = <String>[];
+      var   stops      = 0;
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        got.add( inv.positionalArguments.first as String );
+        await engineBusy.future;
+      } );
+      when( () => fallback.stopFallbackSpeech() ).thenAnswer( ( _ ) async { stops++; } );
+
+      await o.setCaptureHold( true );
+      o.enqueueAlways( priority: "high", message: "backlog" );
+      await pump();
+      expect( got, isEmpty, reason: "held" );
+
+      await o.setCaptureHold( false ).timeout( const Duration( milliseconds: 500 ),
+          onTimeout: () => fail( "THE BUG: the release waited for the on-device speech to end" ) );
+      await pump();
+      expect( got, [ "backlog" ] );
+
+      final stopsBefore = stops;
+      await o.setCaptureHold( true ).timeout( const Duration( milliseconds: 500 ),
+          onTimeout: () => fail( "THE BUG: the second hold waited behind the speech it had to stop" ) );
+      expect( stops, greaterThan( stopsBefore ), reason: "the second recording must not run over the speech" );
+      expect( o.queueDepth, 1, reason: "the interrupted utterance goes back to the head of the queue" );
+      engineBusy.complete();
+    } );
+
+    test( "C2: the outer bound is strictly longer than the service's accept plus completion bounds", () async {
+      TestWidgetsFlutterBinding.ensureInitialized();   // the real FlutterTts registers a platform channel
+      final o       = await newOrch();
+      final service = NotificationAudioService(
+        prefs: NotificationPreferences( await SharedPreferences.getInstance() ),
+      );
+      for ( final text in [ "", "short", "x" * 400, "y" * 10000 ] ) {
+        final inner = service.speakAcceptBudget + service.completionBoundFor( text );
+        expect( o.fallbackOuterBound( text ), greaterThan( inner ), reason: "${text.length} chars" );
+      }
+    } );
+
+    test( "teardown: a speak that ends after dispose does not dispatch the next utterance", () async {
+      final o = await newOrch();
+      when( () => ws.sessionId ).thenReturn( null );
+      final engineBusy = Completer<void>();
+      final got        = <String>[];
+      when( () => fallback.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) async {
+        got.add( inv.positionalArguments.first as String );
+        await engineBusy.future;
+      } );
+
+      o.enqueueAlways( priority: "high", message: "first" );
+      o.enqueueAlways( priority: "high", message: "second" );
+      await pump();
+      expect( got, [ "first" ] );
+
+      await o.dispose();
+      engineBusy.complete();
+      await pump();
+      await pump();
+      expect( got, [ "first" ], reason: "THE BUG: the continuation dispatched 'second' into a closed orchestrator" );
     } );
   } );
 }

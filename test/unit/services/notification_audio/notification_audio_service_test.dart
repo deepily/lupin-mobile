@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui' show VoidCallback;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -48,6 +50,7 @@ void main() {
       when( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).thenAnswer( ( _ ) async {} );
       when( () => tts.stop() ).thenAnswer( ( _ ) async => 1 );
       when( () => tts.speak( any() ) ).thenAnswer( ( _ ) async => 1 );
+      when( () => tts.setQueueMode( any() ) ).thenAnswer( ( _ ) async => 1 );
     } );
 
     NotificationAudioService newService() => NotificationAudioService(
@@ -140,10 +143,79 @@ void main() {
       tts    : tts,
     );
 
-    test( "flutterTtsSpeak calls tts.stop then tts.speak with supplied text", () async {
-      await newService().flutterTtsSpeak( "hello world" );
-      verify( () => tts.stop() ).called( 1 );
+    VoidCallback? completion;
+
+    NotificationAudioService boundedService( { Duration accept = const Duration( milliseconds: 60 ),
+                                               Duration done   = const Duration( milliseconds: 120 ) } ) =>
+        NotificationAudioService(
+          prefs: prefs, plugin: fln, tts: tts, speakAcceptBudget: accept, completionBound: done );
+
+    setUp( () {
+      completion = null;
+      when( () => tts.setCompletionHandler( any() ) ).thenAnswer( ( inv ) {
+        completion = inv.positionalArguments.first as VoidCallback;
+      } );
+    } );
+
+    test( "flutterTtsSpeak returns only when the engine reports the utterance finished", () async {
+      final service = boundedService( done: const Duration( seconds: 5 ) );
+      var finished  = false;
+      final future  = service.flutterTtsSpeak( "hello world" ).then( ( _ ) => finished = true );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
       verify( () => tts.speak( "hello world" ) ).called( 1 );
+      expect( finished, isFalse, reason: "accepted is not finished: the orchestrator must keep its utterance" );
+
+      completion!();
+      await future;
+      expect( finished, isTrue );
+      verifyNever( () => tts.setQueueMode( any() ) );
+    } );
+
+    test( "stopFallbackSpeech releases a speak that is waiting, even when the engine fires no cancel callback", () async {
+      final service = boundedService( done: const Duration( seconds: 5 ) );
+      final future  = service.flutterTtsSpeak( "long" );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
+      await service.stopFallbackSpeech();
+      await future.timeout( const Duration( seconds: 1 ) );   // would hang for 5 s without the release
+    } );
+
+    test( "R1: an engine's late cancel callback for a stopped utterance does not release the next one", () async {
+      VoidCallback? cancel;
+      when( () => tts.setCancelHandler( any() ) ).thenAnswer( ( inv ) {
+        cancel = inv.positionalArguments.first as VoidCallback;
+      } );
+      final service = boundedService( done: const Duration( seconds: 5 ) );
+
+      final first = service.flutterTtsSpeak( "skipped" );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await service.stopFallbackSpeech();            // the user skipped it
+      await first;
+
+      var secondFinished = false;
+      final second = service.flutterTtsSpeak( "next one" ).then( ( _ ) => secondFinished = true );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
+      cancel?.call();                                // the first one's cancel callback finally arrives
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      expect( secondFinished, isFalse, reason: "THE BUG: the stale cancel released the utterance that was speaking" );
+
+      completion!();
+      await second;
+      expect( cancel, isNull, reason: "no cancel handler is registered at all" );
+    } );
+
+    test( "an engine that never reports finishing is stopped at the completion bound", () async {
+      await boundedService().flutterTtsSpeak( "wedged engine" );
+      verify( () => tts.stop() ).called( greaterThanOrEqualTo( 2 ) );   // before the speak, and the bound's own stop
+    } );
+
+    test( "an engine that never accepts the text is abandoned at the acceptance budget", () async {
+      final never = Completer<dynamic>();
+      when( () => tts.speak( any() ) ).thenAnswer( ( _ ) => never.future );
+      await boundedService().flutterTtsSpeak( "never accepted" );
+      verify( () => tts.stop() ).called( greaterThanOrEqualTo( 2 ) );
     } );
 
     test( "flutterTtsSpeak swallows errors from the underlying engine", () async {

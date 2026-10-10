@@ -107,6 +107,7 @@ void main() {
       await Future<void>.delayed( const Duration( milliseconds: 10 ) );
 
       expect( emitted.length, 1 );
+      expect( emitted.single.played, isTrue );
     } );
 
     test( "complete IS fired after onComplete even if WS complete arrived much earlier", () async {
@@ -145,6 +146,7 @@ void main() {
       await Future<void>.delayed( const Duration( milliseconds: 10 ) );
 
       expect( emitted.length, 1 );
+      expect( emitted.single.played, isFalse, reason: "nothing was played, so it must not read as spoken" );
       // And audioPlayer.play was NOT called (nothing to play).
       verifyNever( () => audioPlayer.play( any() ) );
     } );
