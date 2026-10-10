@@ -1,5 +1,5 @@
-@Tags( [ "pending-capture" ] )
-library;
+// pending-capture tag REMOVED 2026-10-10: every fixture this file loads has been captured, so
+// C5.18, C5.21 and C5.22 run in the gate.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
