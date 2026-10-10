@@ -45,7 +45,16 @@ Crew (all Sonnet 5.5): Maya (reviewer), Clayton (author), Pocholo (author, then 
 
   - **Evening**: phone socket and logout fixes (Tiberius `0d6f56b`, Chloé PASS, merge `98a497e`, gate PASS over `5eaaa2a..98a497e`): listeners bound to their own channel, the previous channel closed, one failure one reconnect, logout sends the refresh token and unregisters push first. Rick installed build 4 and at 18:00 EDT read the cause off the Speech queue sheet: Master mute was on. A census of every control that silences speech: `io/2026.10.10/tiberius/census-speech-silencing-controls.md`. Extractor A2 failed the Dart dev 80 check, so the judge run (row `79d49618`) stays held. I cleared my own context at 18:13 EDT (session `068dfb3b`, same seat).
 
-**RESUME HERE (checkpoint, 2026-10-10 18:17 EDT; replaces the lines below):** (1) Chloé's verdict on the mute banner `0d6f56b..d5ccb9a` (Tiberius), then merge, gate, build 5. (2) Chloé's verdict on the wrappers `5eaaa2a..4db931e` (Maya), then merge, gate, the sha to María (row `08c4e586`, held). (3) Rick says Master mute is off; send a test; close `e0f0faf0` only when he says he heard speech. (4) Judge run: Rick's hold, run or drop. (5) Post-game for today's crew at session end. Seats up: Tiberius, Maya, Chloé; nothing pushed.
+  - **Late evening** (all Tiberius or Maya, each reviewed by Chloé, each merge gated, suite 0 failing):
+    - Speech-silenced banner and logout keystore read guard, merge `0dd0655`; logout delete guard and quiet-hours wording, `17750b7`; banner repaints on a bypass toggle, `a672945` (APK build 7, 18:39 EDT); tests pinning banner rebuilds, `37a6b20`.
+    - Command wrappers refreshed to planning-is-prompting `05ec88d` and backup paths corrected in the wrappers and `CLAUDE.md`, merge `cbe1854` (Maya; row `08c4e586` closed; sha sent to María).
+    - Rick heard the phone speak after turning Master mute off; speech bug `e0f0faf0` closed.
+    - Rick rejected the claim-judge premise and chose an automated blind taste test; brief `io/2026.10.10/tiffany/brief-blind-taste-test.md`, pilot running at this checkpoint (row `79d49618`).
+    - Flaky test found and reproduced under load (held row `ff9cc9d3`).
+
+**RESUME HERE (checkpoint, 2026-10-10 19:00 EDT; replaces the lines below):** (1) Tiberius's taste test pilot report in `io/2026.10.10/taste-test/`, Chloé's check, then the numbers and the code-check plan to Rick. (2) Flaky test row `ff9cc9d3` waits on Rick's admission. (3) Post-game for today's crew at session end. Seats up: Tiberius, Chloé; nothing pushed; APK build 7 ready.
+
+**RESUME HERE (superseded, 2026-10-10 18:17 EDT):** (1) Chloé's verdict on the mute banner `0d6f56b..d5ccb9a` (Tiberius), then merge, gate, build 5. (2) Chloé's verdict on the wrappers `5eaaa2a..4db931e` (Maya), then merge, gate, the sha to María (row `08c4e586`, held). (3) Rick says Master mute is off; send a test; close `e0f0faf0` only when he says he heard speech. (4) Judge run: Rick's hold, run or drop. (5) Post-game for today's crew at session end. Seats up: Tiberius, Maya, Chloé; nothing pushed.
 
 **RESUME HERE (superseded, 2026-10-10 16:02 EDT):** (1) Rick installs build 4 and says "installed"; respawn Tiberius from `io/mementos/tiberius.md`, send a test; if silent, Rick reads the top line of the Speech queue sheet (row `e0f0faf0`). (2) When Rick approves the admit request on `79d49618`, staff the judge run. (3) Phone socket defects are owed on `e0f0faf0`, not started. (4) Rick: rulings R12 to R18. No seats running; nothing pushed.
 
