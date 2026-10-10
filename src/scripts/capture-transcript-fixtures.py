@@ -433,28 +433,26 @@ def _write_selected( wsc: Any, collector: Any, name: str, reasons_for: Callable[
     _ok( name )
 
 
-_B64URL = re.compile( r"[A-Za-z0-9_-]+" )
-
-
 def _looks_like_jwt( body: Any ) -> bool:
-    """True when a string in [body] is shaped like a JWT: three dot-separated
-    base64url segments of 20+ characters, the first starting `eyJ`.
+    """True when [body] contains a JWT-shaped token ANYWHERE in any string: three
+    dot-separated base64url segments of 20+ characters, the first starting `eyJ`.
+
+    🔴 Searches inside longer strings. The earlier version tested each whole JSON
+    string as exactly three dotted parts, so a token embedded in prose (a Bash
+    tool_result printing `{'access_token': 'eyJ...'}`, measured 2026-10-09 on a live
+    seat) passed the guard and a frame holding real tokens was written.
 
     Stricter than `lib.assert_no_jwt_residue`, on purpose and only for the WS
     frames: a live seat prints free prose and source, and the shared guard's bare
     "three long dotted parts" test fires on any sentence with two dots (measured:
     a `<local-command-caveat>` boilerplate line). A real JWT header is base64 of
-    `{"`, so it always starts `eyJ`, and its segments never contain spaces.
+    `{"`, so it always starts `eyJ`, and its segments never contain spaces, so
+    dotted identifiers and file names do not match.
 
     Requires:
         - [body] is JSON-serialisable
     """
-    for chunk in json.dumps( body ).split( '"' ):
-        parts = chunk.split( "." )
-        if ( len( parts ) == 3 and parts[ 0 ].startswith( "eyJ" )
-             and all( len( p ) >= 20 and _B64URL.fullmatch( p ) for p in parts ) ):
-            return True
-    return False
+    return lib.contains_jwt( body )
 
 
 def _without_jwt_lookalikes( reasons_for: Callable[ [ dict ], list[ str ] ] ) -> Callable[ [ dict ], list[ str ] ]:
