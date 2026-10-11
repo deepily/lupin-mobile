@@ -2,7 +2,7 @@
 
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
-State at the Last Call close (row `79c6659f`: last call 20:00, closing 20:20 EDT; push then backup): the doc-comment rewrite is closed (row `79d49618`, merge `d1c1e6e`, gate PASS), and `lib/` reads 0 linter findings and 0 undocumented public members. The merge gate runs the doc linter since merge `45819e4` (gate PASS-WITH-WARNING, every check exit 0). APK is 2026.10.10 build 8 at `44f723c`, FCM on; nothing merged since changes the app. Rick has not said which build is on the phone. Session `de4ce9d3` died at about 19:20 EDT and `271cba01` took over the same seat. Tiberius and Chloé were spawned by the dead session, so this session could not reap them; both were released with mementos and may still be running.
+State at the Last Call close (row `79c6659f`: last call 20:00, closing 20:20 EDT; push then backup): the doc-comment rewrite is closed (row `79d49618`, merge `d1c1e6e`, gate PASS), and `lib/` reads 0 linter findings and 0 undocumented public members. The merge gate runs the doc linter since merge `45819e4` (gate PASS-WITH-WARNING, every check exit 0). APK is 2026.10.10 build 8 at `44f723c`, FCM on; nothing merged since changes the app. Rick has not said which build is on the phone. Session `de4ce9d3` died at about 19:20 EDT and `271cba01` took over the same seat. Tiberius and Chloé were reaped at the last call with verified mementos (`io/mementos/tiberius.md`, `io/mementos/chloe.md`); their two worktrees were kept because they hold ignored files.
 
 | Next | Waits on |
 |---|---|
