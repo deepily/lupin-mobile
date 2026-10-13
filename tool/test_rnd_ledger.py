@@ -1,5 +1,5 @@
 """
-The R&D ledger covers each document under src/rnd that was present at the ledger's sha.
+The R&D ledger covers each document under src/rnd that was present at the ledger's sha, and CLAUDE.md carries the read rule.
 
 Run: python3 -m pytest tool/test_rnd_ledger.py
 The ledger is src/docs/rnd-ledger.tsv, in the shape of lupin's ledger: columns path, class, reason, date, sha.
@@ -25,6 +25,7 @@ LEDGER_REL = "src/docs/rnd-ledger.tsv"
 RND_ROOT   = "src/rnd/"
 COLUMNS    = [ "path", "class", "reason", "date", "sha" ]
 CLASSES    = frozenset( { "in force", "superseded", "history", "new", "follows folder" } )
+RULE_HEADING = "## R&D read rule"
 DATE       = re.compile( r"^\d{4}-\d{2}-\d{2}$" )
 
 
@@ -118,6 +119,30 @@ def row_problems( header, rows ):
     return problems
 
 
+def rule_problems( claude_md ):
+    """
+    List what is missing from the R&D read rule in a CLAUDE.md text.
+
+    Requires:
+        - claude_md is the text of a CLAUDE.md
+
+    Ensures:
+        - names a missing rule heading; under the heading, names a section that does not point at the ledger,
+          does not name src/rnd/, or does not say that every other document is history
+        - returns an empty list when the rule is whole
+
+    Raises:
+        - nothing
+    """
+    if RULE_HEADING + "\n" not in claude_md: return [ f"CLAUDE.md has no '{RULE_HEADING}' section" ]
+    section  = claude_md.split( RULE_HEADING + "\n", 1 )[ 1 ].split( "\n## ", 1 )[ 0 ]
+    problems = []
+    if f"`{LEDGER_REL}`" not in section: problems.append( f"the rule does not point at {LEDGER_REL}" )
+    if f"`{RND_ROOT}`" not in section:   problems.append( f"the rule does not name {RND_ROOT}" )
+    if "human history" not in section:   problems.append( "the rule does not say that every other document is history" )
+    return problems
+
+
 def real_ledger():
     """
     Read the real ledger and the two git populations it is checked against.
@@ -149,6 +174,20 @@ def test_every_row_is_well_formed_and_names_one_sha():
 def test_the_population_is_not_empty():
     header, rows, now, then = real_ledger()
     assert len( set( now ) & set( then ) ) > 100
+
+
+def test_claude_md_carries_the_read_rule():
+    with open( os.path.join( ROOT, "CLAUDE.md" ), encoding="utf-8" ) as f: text = f.read()
+    assert rule_problems( text ) == []
+
+
+def test_a_claude_md_without_the_rule_or_with_a_gutted_rule_is_reported():
+    with open( os.path.join( ROOT, "CLAUDE.md" ), encoding="utf-8" ) as f: text = f.read()
+    assert rule_problems( text.replace( RULE_HEADING, "## Something else" ) ) == [ f"CLAUDE.md has no '{RULE_HEADING}' section" ]
+    assert rule_problems( text.replace( f"`{LEDGER_REL}`", "the ledger" ) ) == [ f"the rule does not point at {LEDGER_REL}" ]
+    assert rule_problems( text.replace( "human history", "old" ) ) == [ "the rule does not say that every other document is history" ]
+    moved = text.replace( RULE_HEADING + "\n", "" ) + "\n" + RULE_HEADING + "\n\nNothing here.\n"
+    assert len( rule_problems( moved ) ) == 3
 
 
 def test_a_removed_row_is_reported():

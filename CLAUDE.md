@@ -203,6 +203,14 @@ Installed via `installation-wizard.md` (full set, all 13 workflow groups).
 **Session Start**: Use `/plan-session-start` or see planning-is-prompting → workflow/session-start.md
 **Session End**: Use `/plan-session-end` or see planning-is-prompting → workflow/session-end.md
 
+## R&D read rule
+
+Read a document under `src/rnd/` only when it is on the active list. The active list is a plan whose `authorized_by:` names a live ticket, or a decision record under `src/docs/decisions/`. Every other R&D document is human history. Read it only when a person directs you to, and never as a source for what the code does now.
+
+The class of each document is in `src/docs/rnd-ledger.tsv`. Its columns are path, class, reason, date and sha, and its classes are in force, superseded, history, new and follows folder. A document added after the ledger's sha has no row and counts as in force until the next sweep. `history/` and `todo-archive/` follow the same rule.
+
+This rule is advisory: nothing blocks the read.
+
 ## Doc Viewer Scope
 
 When sending document viewer links from this repo, use:
