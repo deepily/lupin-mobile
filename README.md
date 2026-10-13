@@ -152,6 +152,9 @@ src/lupin-mobile/
 - [Quick Ask: push-to-talk Q&A screen (plan + implementation record)](src/rnd/2026.08.29-quick-ask-push-to-talk-screen.md) — hold to record, then `/api/v2/ask`, then live job states. Reviewed and built.
 - [Cascade Quick Ask recon checklist](src/rnd/2026.08.29-cascade-quick-ask-recon-checklist.md) — the reviewer's recon sheet for the review of the Quick Ask plan
 
+### Documentation Standard
+- [Markdown cleanup and blocking plan](src/rnd/2026.10.13-plan-1-mobile-markdown-cleanup-and-blocking-plan.md) — a proposal to clean the live markdown pages, then refuse a bad markdown line at commit.
+
 ### v0.1.7 — Bug Fixes & Lifecycle Wiring
 - **[Hot Bugs: URL-Encoding + Post-Login Investigation](src/rnd/v0.1.7/2026.04.19-hot-bugs-url-encoding-and-post-login-investigation.md)** - `NotificationRepository` path-param URL-encoding fix and post-login behavior audit findings
 - **[WS Lifecycle Auth Wiring Plan](src/rnd/v0.1.7/2026.04.19-ws-lifecycle-auth-wiring-plan.md)** - Design for driving `WebSocketService.connect/disconnect` from `AuthBloc` state transitions via a `WsLifecycleListener` widget
