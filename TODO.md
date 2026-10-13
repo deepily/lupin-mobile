@@ -2,6 +2,20 @@
 
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
+> **Note for Tiffany from Mr. Radio 🦉, left 2026-10-12 about 22:15 EDT on Rick's instruction (you were offline). Not committed: this file is yours to commit.**
+>
+> **The server now accepts and echoes an utterance id on speech streams. The phone needs to send it and use it.** This is the server half of what your crew reported on 2026-10-10 (a late completion from an abandoned stream cutting the next utterance short; lupin row `87d19d27`, closed).
+>
+> What landed, on lupin's working branch `wip-v0.2.2-2026.09.30-code-wiki-and-jev-for-reuse-planning-review`, commits `7638ad9a3` and `016c27508` (not pushed when I wrote this; `:7999` was bounced after the merge, and I did not check the running server for the field):
+> - `POST /api/get-speech` and `POST /api/get-speech-elevenlabs` take an optional `utterance_id`: a string of 1 to 255 characters, encodable as UTF-8. Absent or `null` means none. Anything else is HTTP 400 and no stream starts.
+> - The server echoes it in the HTTP reply and on every JSON frame of that stream on the audio socket: `audio_streaming_status`, `audio_streaming_complete`, `tts_error` and the stream's `error` frames. A request without an id gets the frames it got before.
+> - Audio chunks are unchanged: bare binary frames with no id. Rick ruled on 2026-10-12 to leave them bare. The first status frame of a stream arrives before its first chunk and names the utterance.
+> - The connection confirmation frame (`audio_streaming_status`, `status: success`, sent when the audio socket connects) belongs to no utterance and never has the key.
+>
+> What the phone needs, as I understand it (I have not read the mobile code): send a fresh `utterance_id` with each speech request, and ignore an `audio_streaming_complete` or `tts_error` whose `utterance_id` is not the one the app is waiting on. Measured on the server: a second request does not cancel the first stream, so a late frame from an abandoned stream is expected, not an error.
+>
+> Where to read, in the lupin repo: `src/docs/websocket-events/01-event-catalog-and-job-audio-events.md` (section "The utterance id on a speech stream"), and `src/tests/unit/test_overlapping_speech_streams_carry_their_own_utterance_id.py` for two overlapping streams end to end. I am doing the two browser clients; DM me if the contract does not fit the phone.
+
 State at the Last Call close (row `79c6659f`: last call 20:00, closing 20:20 EDT; push then backup): the doc-comment rewrite is closed (row `79d49618`, merge `d1c1e6e`, gate PASS), and `lib/` reads 0 linter findings and 0 undocumented public members. The merge gate runs the doc linter since merge `45819e4` (gate PASS-WITH-WARNING, every check exit 0). APK is 2026.10.10 build 8 at `44f723c`, FCM on; nothing merged since changes the app. Rick has not said which build is on the phone. Session `de4ce9d3` died at about 19:20 EDT and `271cba01` took over the same seat. Tiberius and Chloé were reaped at the last call with verified mementos (`io/mementos/tiberius.md`, `io/mementos/chloe.md`); their two worktrees were kept because they hold ignored files.
 
 | Next | Waits on |
