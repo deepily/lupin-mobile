@@ -28,7 +28,7 @@ Bypass with `git commit --no-verify`; the CI step in .github/workflows/flutter-c
 
 Exit 0 = every check passed · 1 = at least one check failed.
 """
-import argparse, os, re, shutil, subprocess, sys
+import argparse, os, re, shutil, signal, subprocess, sys
 
 sys.path.insert( 0, os.path.dirname( os.path.abspath( __file__ ) ) )
 import check_doc_ignores as ignores   # the weak-reason list lives there, once
@@ -537,6 +537,7 @@ def warn_check( name, cmd, root=ROOT ):
         - prints a one-line header naming the check
         - a missing tool, a tool that cannot start, a tool that runs past WARN_TIMEOUT_SECONDS and a non-zero exit
           each print one loud WARN line on stderr
+        - a tool that runs past the limit is killed together with every process it started
         - returns True always, so a crash in the tool leaves the commit open
     """
     print( f"== {name} (warn mode, never blocks)", flush=True )
@@ -544,11 +545,17 @@ def warn_check( name, cmd, root=ROOT ):
         print( f"WARN: {name}: {cmd[ 1 ]} is missing, check NOT run, commit allowed", file=sys.stderr )
         return True
     try:
-        code = subprocess.run( cmd, cwd=root, timeout=WARN_TIMEOUT_SECONDS ).returncode
+        proc = subprocess.Popen( cmd, cwd=root, start_new_session=True )
     except OSError as e:
         print( f"WARN: {name}: could not start ({e}), check NOT run, commit allowed", file=sys.stderr )
         return True
+    try:
+        code = proc.wait( timeout=WARN_TIMEOUT_SECONDS )
     except subprocess.TimeoutExpired:
+        # The tool runs in its own session so that one signal stops it and every process it started.
+        try: os.killpg( proc.pid, signal.SIGKILL )
+        except OSError: pass
+        proc.wait()
         print( f"WARN: {name}: still running after {WARN_TIMEOUT_SECONDS} s, stopped, commit allowed", file=sys.stderr )
         return True
     if code != 0: print( f"WARN: {name}: exited {code}, commit allowed (warn mode)", file=sys.stderr )

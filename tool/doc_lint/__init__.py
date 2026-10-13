@@ -1,1 +1,1 @@
-"""Vendored copy of lupin's Dart doc linter; see VENDORED.md for the source sha."""
+"""Vendored copy of lupin's Dart doc and markdown linters; see VENDORED.md for the source sha."""

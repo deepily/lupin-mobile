@@ -12,7 +12,7 @@
 # ─────────────────────────────────────────────────────────────────────────────────────
 # WHY THE SETTINGS LIVE HERE AND NOT IN SOMEONE'S HEAD (row f681440d)
 #
-# The build is one long command (CLAUDE.md § DEVELOPMENT COMMANDS). Without the GRADLE_OPTS
+# The build is one long command (CLAUDE.md § Development commands). Without the GRADLE_OPTS
 # override, android/gradle.properties asks Gradle for -Xmx8G plus 4G metaspace, the seat's
 # cap kills it, and all Gradle says is "Gradle build daemon disappeared unexpectedly". That
 # is not a message anyone connects to memory, so the override belongs in a script.
@@ -50,7 +50,7 @@ REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 source "$SCRIPT_DIR/lib/apk-build-stamp.sh"
 APK="$REPO_ROOT/build/app/outputs/flutter-apk/app-debug.apk"
 
-# Same values as CLAUDE.md § DEVELOPMENT COMMANDS. Overridable, but the defaults are the
+# Same values as CLAUDE.md § Development commands. Overridable, but the defaults are the
 # ones that are known to fit under 8 GiB.
 JAVA_HOME="${JAVA_HOME_OVERRIDE:-$HOME/opt/jdk-21}"
 GRADLE_OPTS="${GRADLE_OPTS:--Dorg.gradle.jvmargs=-Xmx4g\ -XX:MaxMetaspaceSize=1g\ -XX:ReservedCodeCacheSize=256m -Dkotlin.daemon.jvmargs=-Xmx1500m -Dorg.gradle.workers.max=6}"
@@ -187,7 +187,7 @@ fi
 
 if [ ! -x "$JAVA_HOME/bin/java" ]; then
     print_error "No JDK at $JAVA_HOME"
-    print_info "Set JAVA_HOME_OVERRIDE=/path/to/jdk-21, or see CLAUDE.md § DEVELOPMENT COMMANDS."
+    print_info "Set JAVA_HOME_OVERRIDE=/path/to/jdk-21, or see CLAUDE.md § Development commands."
     exit 3
 fi
 

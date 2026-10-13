@@ -26,6 +26,17 @@ RND_ROOT   = "src/rnd/"
 COLUMNS    = [ "path", "class", "reason", "date", "sha" ]
 CLASSES    = frozenset( { "in force", "superseded", "history", "new", "follows folder" } )
 RULE_HEADING = "## R&D read rule"
+# The sentences that carry the rule. A reworded rule changes this list in the same commit, on purpose:
+# a check for a few keywords passed a rule whose meaning had been reversed.
+RULE_SENTENCES = (
+    "Read a document under `src/rnd/` only when it is on the active list.",
+    "The active list is a plan whose `authorized_by:` names a live ticket, or a decision record under `src/docs/decisions/`.",
+    "Every other R&D document is human history.",
+    "Read it only when a person directs you to, and never as a source for what the code does now.",
+    "The class of each document is in `src/docs/rnd-ledger.tsv`.",
+    "The class `new` marks a document that would be history but is still cited by a file outside the archives.",
+)
+HTML_COMMENT = re.compile( r"<!--.*?-->", re.DOTALL )
 DATE       = re.compile( r"^\d{4}-\d{2}-\d{2}$" )
 
 
@@ -127,20 +138,17 @@ def rule_problems( claude_md ):
         - claude_md is the text of a CLAUDE.md
 
     Ensures:
-        - names a missing rule heading; under the heading, names a section that does not point at the ledger,
-          does not name src/rnd/, or does not say that every other document is history
+        - text inside an HTML comment does not count
+        - names a missing rule heading, and each sentence of RULE_SENTENCES the section under it lacks
         - returns an empty list when the rule is whole
 
     Raises:
         - nothing
     """
+    claude_md = HTML_COMMENT.sub( "", claude_md )
     if RULE_HEADING + "\n" not in claude_md: return [ f"CLAUDE.md has no '{RULE_HEADING}' section" ]
-    section  = claude_md.split( RULE_HEADING + "\n", 1 )[ 1 ].split( "\n## ", 1 )[ 0 ]
-    problems = []
-    if f"`{LEDGER_REL}`" not in section: problems.append( f"the rule does not point at {LEDGER_REL}" )
-    if f"`{RND_ROOT}`" not in section:   problems.append( f"the rule does not name {RND_ROOT}" )
-    if "human history" not in section:   problems.append( "the rule does not say that every other document is history" )
-    return problems
+    section = claude_md.split( RULE_HEADING + "\n", 1 )[ 1 ].split( "\n## ", 1 )[ 0 ]
+    return [ f"the rule lacks: {sentence}" for sentence in RULE_SENTENCES if sentence not in section ]
 
 
 def real_ledger():
@@ -184,10 +192,17 @@ def test_claude_md_carries_the_read_rule():
 def test_a_claude_md_without_the_rule_or_with_a_gutted_rule_is_reported():
     with open( os.path.join( ROOT, "CLAUDE.md" ), encoding="utf-8" ) as f: text = f.read()
     assert rule_problems( text.replace( RULE_HEADING, "## Something else" ) ) == [ f"CLAUDE.md has no '{RULE_HEADING}' section" ]
-    assert rule_problems( text.replace( f"`{LEDGER_REL}`", "the ledger" ) ) == [ f"the rule does not point at {LEDGER_REL}" ]
-    assert rule_problems( text.replace( "human history", "old" ) ) == [ "the rule does not say that every other document is history" ]
-    moved = text.replace( RULE_HEADING + "\n", "" ) + "\n" + RULE_HEADING + "\n\nNothing here.\n"
-    assert len( rule_problems( moved ) ) == 3
+    assert rule_problems( text.replace( f"`{LEDGER_REL}`", "the ledger" ) ) == [ f"the rule lacks: {RULE_SENTENCES[ 4 ]}" ]
+    assert rule_problems( text.replace( "only when it is on the active list", "whenever it helps" ) ) == [ f"the rule lacks: {RULE_SENTENCES[ 0 ]}" ]
+    assert rule_problems( text.replace( ", and never as a source for what the code does now", "" ) ) == [ f"the rule lacks: {RULE_SENTENCES[ 3 ]}" ]
+    assert rule_problems( text.replace( "Every other R&D document is human history.", "No R&D document is human history." ) ) == [ f"the rule lacks: {RULE_SENTENCES[ 2 ]}" ]
+    assert rule_problems( text.replace( RULE_SENTENCES[ 1 ] + " ", "" ) ) == [ f"the rule lacks: {RULE_SENTENCES[ 1 ]}" ]
+    start     = text.index( RULE_HEADING )
+    end       = text.index( "\n## ", start + 1 )
+    commented = text[ :start ] + "<!--\n" + text[ start:end ] + "\n-->" + text[ end: ]
+    assert rule_problems( commented ) == [ f"CLAUDE.md has no '{RULE_HEADING}' section" ]
+    keywords  = text[ :start ] + RULE_HEADING + "\n\n`src/docs/rnd-ledger.tsv` `src/rnd/` human history\n" + text[ end: ]
+    assert len( rule_problems( keywords ) ) == len( RULE_SENTENCES )
 
 
 def test_a_removed_row_is_reported():

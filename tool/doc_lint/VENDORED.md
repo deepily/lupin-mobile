@@ -9,7 +9,7 @@ Two edits from the original, both in the word-list lookup:
 - `word_list.py` reads `tool/data/` instead of the linted tree or `LUPIN_ROOT`; `configure_root` is removed.
 - `cli.py` no longer imports or calls `configure_root`.
 
-Everything else is byte-identical. Drift check: compare the sha256 of each source file below with
+`__init__.py` is this repository's own one-line file. Everything else is byte-identical. Drift check: compare the sha256 of each source file below with
 `sha256sum` of the lupin file at its current sha (word_list.py and cli.py differ by design).
 
 ```

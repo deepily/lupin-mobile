@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 TOOL = os.path.dirname( os.path.abspath( __file__ ) )
 ROOT = os.path.dirname( TOOL )
@@ -171,6 +172,33 @@ def test_a_linter_that_hangs_is_stopped_and_the_commit_goes_on( capfd ):
     _, err = capfd.readouterr()
     assert code == 0
     assert "still running after 1 s, stopped, commit allowed" in err
+
+
+def test_a_hung_linter_is_stopped_together_with_the_processes_it_started( capfd ):
+    root = make_repo( { "notes.md": BAD_PAGE } )
+    stub = ( "import subprocess, sys, time\n"
+             "child = subprocess.Popen( [ sys.executable, '-c', 'import time; time.sleep( 60 )' ] )\n"
+             "open( 'child.pid', 'w' ).write( str( child.pid ) )\n"
+             "time.sleep( 60 )\n" )
+    with open( os.path.join( root, "tool", "lint_markdown.py" ), "w", encoding="utf-8" ) as f: f.write( stub )
+    orig = gate.WARN_TIMEOUT_SECONDS
+    gate.WARN_TIMEOUT_SECONDS = 2
+    try:
+        code = run_main_with_blocking_checks_passing( root )
+    finally:
+        gate.WARN_TIMEOUT_SECONDS = orig
+    capfd.readouterr()
+    assert code == 0
+    with open( os.path.join( root, "child.pid" ), encoding="utf-8" ) as f: pid = int( f.read() )
+    alive = True
+    for _ in range( 50 ):
+        try:
+            with open( f"/proc/{pid}/stat", encoding="utf-8" ) as f: alive = f.read().split( ") ", 1 )[ 1 ][ 0 ] != "Z"
+        except OSError:
+            alive = False
+        if not alive: break
+        time.sleep( 0.1 )
+    assert not alive
 
 
 def test_the_linter_runs_with_this_repository_as_its_root():
