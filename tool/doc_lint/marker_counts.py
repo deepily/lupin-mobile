@@ -17,6 +17,8 @@ MARKER_COLUMNS = ( "em_dash", "caps_words", "section_refs", "id_refs", "tics", "
 
 WORD_REGEX       = re.compile( r"[A-Za-z0-9][\w'’\-]*" )
 CAPS_REGEX       = re.compile( r"\b[A-Z][A-Z0-9]+\b" )
+MEMBER_ACCESS    = re.compile( r"[A-Za-z_][A-Za-z0-9_]*\.$" )
+OPTION_ARGUMENT  = re.compile( r"(?<![A-Za-z0-9_-])-{1,2}[A-Za-z][A-Za-z0-9_-]*[ \t]+$" )
 FRONTMATTER      = re.compile( r"\A---\n.*?\n---\n", re.DOTALL )
 FENCED_BLOCK     = re.compile( r"^(```|~~~).*?^\1[^\n]*$", re.DOTALL | re.MULTILINE )
 INLINE_CODE      = re.compile( r"`[^`\n]*`" )
@@ -76,6 +78,31 @@ def strip_markdown( text ):
     return HTML_COMMENT.sub( "", text )
 
 
+LINK_LABEL_REST = re.compile( r"[^\[\]\n]*\]\(([^)\s]+)" )
+
+
+def link_target_of_label( text, match ):
+    """
+    Return the target of the markdown link whose label holds a section mark.
+
+    Requires:
+        - match is a SECTION_REGEX match over text
+
+    Ensures:
+        - returns the text between the parentheses of [label](target) when the mark sits in the label
+        - returns None when the mark is outside any link label, or the label is not followed by a target
+        - the target counts in full, however long, so a long split-page path is not cut
+
+    Raises:
+        - nothing
+    """
+    line_start = text.rfind( "\n", 0, match.start() ) + 1
+    before     = text[ line_start : match.start() ]
+    if before.rfind( "[" ) == -1 or before.rfind( "[" ) < before.rfind( "]" ): return None
+    rest = LINK_LABEL_REST.match( text, match.end() )
+    return None if rest is None else rest.group( 1 )
+
+
 def is_section_ref_resolved( text, match ):
     """
     Say whether a section mark has a path beside it in the same paragraph.
@@ -86,12 +113,15 @@ def is_section_ref_resolved( text, match ):
     Ensures:
         - True when a path occurs within SECTION_PATH_LOOKBACK characters before the mark or
           SECTION_PATH_LOOKAHEAD characters after it, without crossing a blank line
+        - a mark in the label of a markdown link is resolved when the link target holds a path, however long the target
         - a hard-wrapped line break does not separate the mark from its path
         - False otherwise, which makes the section mark a bare reference
 
     Raises:
         - nothing
     """
+    target = link_target_of_label( text, match )
+    if target is not None and PATH_REGEX.search( target ) is not None: return True
     para_start = text.rfind( "\n\n", 0, match.start() ) + 1
     para_end   = text.find( "\n\n", match.end() )
     if para_end == -1: para_end = len( text )
@@ -128,6 +158,12 @@ def caps_words( text, words=None ):
         - a word counts only when its lowercase form is in words and it is not in
           CAPS_WORD_EXCEPTIONS
         - words inside quotes or backticks, with a digit, next to an underscore or hyphen, are skipped
+        - a word that follows an identifier and a dot with no space, as in TaskType.BOUNDED, is a code member and is skipped
+        - both of those checks read only the text before the word on its own line, so the cost grows with line length and not with the page
+        - a capitalised word after a period and a space is still read as prose
+        - a word that follows a command-line option and a space, as in `--json OUT`, is the option's placeholder and is skipped
+        - a word after a bare double dash and a space is still read as prose, and so is a capitalised word after a plain word
+        - a prose sentence that puts a capitalised word right after an option name is skipped too; that is a chosen limit
 
     Raises:
         - OSError when words is None and the vendored list is missing
@@ -140,6 +176,9 @@ def caps_words( text, words=None ):
         before = text[ m.start() - 1 ] if m.start() > 0 else ""
         after  = text[ m.end() ] if m.end() < len( text ) else ""
         if before in ( "_", "-" ) or after in ( "_", "-" ): continue
+        line_head = text[ text.rfind( "\n", 0, m.start() ) + 1 : m.start() ]
+        if before == "." and MEMBER_ACCESS.search( line_head ) is not None: continue
+        if before in ( " ", "\t" ) and OPTION_ARGUMENT.search( line_head ) is not None: continue
         if any( c.isdigit() for c in word ) or word in CAPS_WORD_EXCEPTIONS: continue
         if word.lower() in words: found.append( word )
     return found
@@ -191,3 +230,37 @@ def rates_per_thousand( counts ):
     """
     words = counts[ "words" ]
     return { c : ( round( counts[ c ] * 1000.0 / words, 1 ) if words else 0.0 ) for c in MARKER_COLUMNS }
+
+
+def add_counts( total, counts ):
+    """
+    Add one count_markers result into a running total.
+
+    Requires:
+        - total and counts are dicts with the "words" key and every MARKER_COLUMNS key
+
+    Ensures:
+        - total is updated in place and returned
+        - the sum of rates is never taken; rates are computed once, from the summed counts
+
+    Raises:
+        - nothing
+    """
+    for key in ( "words", *MARKER_COLUMNS ): total[ key ] += counts[ key ]
+    return total
+
+
+def empty_counts():
+    """
+    Return a zeroed count_markers result.
+
+    Requires:
+        - nothing
+
+    Ensures:
+        - returns { "words": 0, <each MARKER_COLUMNS name>: 0 }
+
+    Raises:
+        - nothing
+    """
+    return { key : 0 for key in ( "words", *MARKER_COLUMNS ) }

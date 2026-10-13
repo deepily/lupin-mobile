@@ -1,14 +1,14 @@
-# LUPIN MOBILE DEVELOPMENT GUIDE
+# Lupin mobile development guide
 
-## PROJECT OVERVIEW
+## Project overview
 This is a standalone mobile application repository embedded as a subtree within the larger Lupin project ecosystem. The goal is to develop a quick Android app prototype with voice input/output, WebSocket updates, and HTTP calls to interface with the Lupin backend.
 
-## PROJECT IDENTIFIERS
+## Project identifiers
 - **SHORT_PROJECT_PREFIX**: [LUPIN-MOBILE]
 - **Repository Type**: Standalone mobile app (subtree within parent Lupin repo)
 - **Primary Platform**: Android (with potential for cross-platform expansion)
 
-## REPOSITORY STRUCTURE
+## Repository structure
 ```
 src/lupin-mobile/
 ├── src/
@@ -21,7 +21,7 @@ src/lupin-mobile/
 └── LICENSE                     # License file
 ```
 
-## DEVELOPMENT TECHNOLOGY STACK
+## Development technology stack
 Based on the mobile development options analysis, the following technologies are recommended:
 
 ### Primary Options (in order of preference):
@@ -38,7 +38,7 @@ Based on the mobile development options analysis, the following technologies are
 - **Device Integration**: Vibration, Bluetooth audio support
 - **Rapid Development**: Hot reload for fast iteration
 
-### TTS Technology Selection (Based on 2025.07.07 Research):
+### TTS Technology Selection
 - **Provider**: ElevenLabs (Flash v2.5 model)
 - **Latency**: ~75ms inference, 150-250ms total (meets 250-500ms target)
 - **Protocol**: WebSocket streaming with bidirectional support
@@ -50,7 +50,7 @@ Based on the mobile development options analysis, the following technologies are
   - Cross-platform audio format support
   - Connection pooling for scalability
 
-## BACKEND INTEGRATION
+## Backend integration
 - **Primary Backend**: Lupin FastAPI server (runs on port 7999)
 - **WebSocket Endpoint**: Real-time communication with Lupin agents
 - **HTTP API**: RESTful endpoints for data exchange
@@ -61,7 +61,7 @@ Based on the mobile development options analysis, the following technologies are
   - Connection pooling for concurrent TTS requests
   - Audio chunk caching for frequently used phrases
 
-## DEVELOPMENT COMMANDS
+## Development commands
 ```bash
 # Always use the wrapper; bare `flutter` is not on every seat's PATH.
 
@@ -91,23 +91,31 @@ src/scripts/deploy-apk-to-device.sh --build
 python3 tool/merge_gate.py --base <sha or branch> [--skip-suite] [--comments-only]
 ```
 
-**Always rebuild the APK after a client change (Rick, 2026-09-28).** Whenever a client change or bug fix merges into the main checkout and the suite is green, run `src/scripts/build-apk-on-server.sh` there and say the APK is ready. Rick then only runs `deploy-apk-to-device.sh` (no flags) from the laptop. **FCM is the default (row 58ec8260, Rick 2026-10-05)**: both scripts compile push wake-ups in unless you pass `--no-fcm`; `--fcm` is still accepted and does nothing. A `--no-fcm` build has no background wake-ups and nothing on the phone says so, so use it only on purpose (Pocholo's review F3, 2026-09-28).
+**Always rebuild the APK after a client change** (Rick's standing order):
 
-## CODE STYLE AND CONVENTIONS
+- The trigger is a client change or bug fix merged into the main checkout with a green suite.
+- Run `src/scripts/build-apk-on-server.sh` there, then say the APK is ready.
+- Rick then only runs `deploy-apk-to-device.sh` (no flags) from the laptop.
+- FCM is the default (Rick's ruling): both scripts compile push wake-ups in unless you pass `--no-fcm`.
+- `--fcm` is still accepted and does nothing.
+- A `--no-fcm` build has no background wake-ups, and nothing on the phone says so.
+- Use `--no-fcm` only when the task calls for a build without wake-ups.
+
+## Code style and conventions
 - **File Naming**: Use dashes for non-code files (e.g., `mobile-app-config.md`)
 - **Documentation**: Date prefixes use YYYY.MM.DD format
 - **Research Documents**: Store in `src/rnd/` directory with date prefixes
 - **Configuration**: Follow parent Lupin project conventions where applicable
 - **Doc comments**: Follow `src/docs/docstring-standard.md`; rulings go in `src/docs/decisions/README.md`
 
-## RAPID PROTOTYPING PRIORITIES
+## Rapid prototyping priorities
 1. **Voice Interface**: Primary user interaction method
 2. **Real-time Updates**: WebSocket communication with backend
 3. **Offline Capability**: Cache audio snippets for offline playback
 4. **Device Integration**: Vibration feedback, Bluetooth audio support
 5. **Performance**: Smooth UI interactions and audio playback
 
-## FRAMEWORK SELECTION CRITERIA
+## Framework selection criteria
 - **Development Speed**: Hot reload and fast iteration
 - **Audio Support**: Proven voice recording/playback libraries
 - **Network Capabilities**: WebSocket and HTTP support
@@ -115,31 +123,31 @@ python3 tool/merge_gate.py --base <sha or branch> [--skip-suite] [--comments-onl
 - **Device APIs**: Access to vibration, Bluetooth, etc.
 - **Community Support**: Active ecosystem and documentation
 
-## TESTING AND DEPLOYMENT
+## Testing and deployment
 - **Target Platform**: Android (minimum SDK TBD)
 - **Testing**: Device/emulator testing during development
 - **Distribution**: Development builds initially, Play Store consideration later
 - **Performance**: Voice UI responsiveness and audio quality focus
 
-## RESEARCH AND PLANNING
+## Research and planning
 - All research documents stored in `src/rnd/` directory
 - Planning documents use date prefixes (YYYY.MM.DD)
 - Technology evaluation and framework selection documented
 - Architecture decisions recorded for future reference
 
-## INTEGRATION NOTES
+## Integration notes
 - **Parent Repository**: This is a subtree within the larger Lupin ecosystem
 - **Git Management**: Local changes only, no git operations on parent repo
 - **Dependency Management**: Independent of parent project dependencies
 - **Configuration**: Standalone configuration files for mobile-specific settings
 
-## NOTIFICATION SYSTEM
+## Notification system
 - **Script Location**: `src/scripts/notify.sh`
 - **Target Email**: ricardo.felipe.ruiz@gmail.com
 - **API Key**: claude_code_simple_key
 - **Usage**: Progress updates, approvals, and blocked states
 
-## DEVELOPMENT WORKFLOW
+## Development workflow
 1. **Framework Selection**: Choose optimal technology stack
 2. **Basic Setup**: Initialize project with chosen framework
 3. **Core Features**: Implement voice, WebSocket, HTTP capabilities
@@ -147,16 +155,16 @@ python3 tool/merge_gate.py --base <sha or branch> [--skip-suite] [--comments-onl
 5. **Testing and Refinement**: Iterate based on testing feedback
 6. **Documentation**: Update planning and progress documents
 
-## REPOSITORY MANAGEMENT
+## Repository management
 - **Important**: This is a standalone repository that cannot be git-managed when working within the parent Lupin project
 - **Changes**: Can be made to files but git operations should be handled separately
 - **Dependencies**: Independent package management from parent project
 
 ---
 
-## PLANNING-IS-PROMPTING WORKFLOWS
+## Planning-is-prompting workflows
 
-Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow groups).
+Installed via `installation-wizard.md` (full set, all 13 workflow groups).
 
 **Configuration**:
 - Short Prefix: `[LUPIN-MOBILE]`
@@ -190,7 +198,7 @@ Installed via `installation-wizard.md` on 2026-04-15 (full set, all 13 workflow 
 
 **Canonical Workflows**: `$PLANNING_IS_PROMPTING_ROOT/workflow/*.md` — slash commands above are thin wrappers that load these.
 
-## SESSION WORKFLOWS
+## Session workflows
 
 **Session Start**: Use `/plan-session-start` or see planning-is-prompting → workflow/session-start.md
 **Session End**: Use `/plan-session-end` or see planning-is-prompting → workflow/session-end.md
@@ -206,4 +214,4 @@ When sending document viewer links from this repo, use:
 
 Example: `/app/docs?path=lupin-mobile/README.md`
 
-The project name is the **first segment of `path`**. The old `&scope=` parameter was retired on 2026-05-21: a link like `path=src/rnd/x.md&scope=lupin-mobile` reads `src` as the project and 404s (this happened on 2026-09-16).
+The project name is the **first segment of `path`**. The old `&scope=` parameter no longer exists: a link like `path=src/rnd/x.md&scope=lupin-mobile` reads `src` as the project and 404s.

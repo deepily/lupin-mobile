@@ -16,6 +16,10 @@ Runs these checks and blocks the commit when any one fails:
                                                  ANY finding fails, every options file that applies must be
                                                  the plain template, and no unexplained ignore comment)
 
+One more check reports and never blocks (warn mode; lupin plan 1, phase 1 step 10):
+  5. tool/lint_markdown.py --staged --strict    (markdown linter, staged lines of .md files; findings, a crash
+                                                 and a missing tool each print a WARN line and the commit goes on)
+
 The gated directories are listed in tool/data/gated_dirs.txt: every swept directory. A gated directory is
 strict (check 4) unless tool/data/strict_exempt.txt names it, with a reason and a row; the exempt ones keep
 the docs-only check 3 while their other findings are cleaned up (Rick, 2026-10-02: "Docs now, code clean-up later"). Set DART to
@@ -47,6 +51,8 @@ LEFT_OUT   = re.compile( r"#\s*left out:\s*(\S+)\s+(\d+)\b" )
 DOC_CODE   = "PUBLIC_MEMBER_API_DOCS"
 # One machine line: SEVERITY|TYPE|CODE|file|line|col|length|message, with a literal | escaped as \|
 PIPE       = re.compile( r"(?<!\\)\|" )
+# A warn-mode check that hangs must not hold the commit; the markdown linter takes under a second on this tree.
+WARN_TIMEOUT_SECONDS = 120
 
 
 def all_swept_dirs( root=ROOT ):
@@ -520,6 +526,35 @@ def run_check( name, cmd, root=ROOT ):
     return subprocess.run( cmd, cwd=root ).returncode == 0
 
 
+def warn_check( name, cmd, root=ROOT ):
+    """
+    Run one warn-mode check: report what it finds and never block the commit.
+
+    Requires:
+        - cmd is an argument list whose first item is the interpreter and second the tool's repo-relative path
+
+    Ensures:
+        - prints a one-line header naming the check
+        - a missing tool, a tool that cannot start, a tool that runs past WARN_TIMEOUT_SECONDS and a non-zero exit
+          each print one loud WARN line on stderr
+        - returns True always, so a crash in the tool leaves the commit open
+    """
+    print( f"== {name} (warn mode, never blocks)", flush=True )
+    if not os.path.isfile( os.path.join( root, cmd[ 1 ] ) ):
+        print( f"WARN: {name}: {cmd[ 1 ]} is missing, check NOT run, commit allowed", file=sys.stderr )
+        return True
+    try:
+        code = subprocess.run( cmd, cwd=root, timeout=WARN_TIMEOUT_SECONDS ).returncode
+    except OSError as e:
+        print( f"WARN: {name}: could not start ({e}), check NOT run, commit allowed", file=sys.stderr )
+        return True
+    except subprocess.TimeoutExpired:
+        print( f"WARN: {name}: still running after {WARN_TIMEOUT_SECONDS} s, stopped, commit allowed", file=sys.stderr )
+        return True
+    if code != 0: print( f"WARN: {name}: exited {code}, commit allowed (warn mode)", file=sys.stderr )
+    return True
+
+
 def main( argv=None, root=ROOT ):
     """
     Run the gate on the staged changes.
@@ -567,6 +602,7 @@ def main( argv=None, root=ROOT ):
     docs_only, strict = partition_touched( staged, root )
     results.append( check_docs( docs_only, root ) )
     results.append( check_strict( strict, root ) )
+    warn_check( "markdown linter (staged lines)", [ sys.executable, "tool/lint_markdown.py", "--staged", "--strict" ], root )
     if all( results ): return 0
     print( "\nBLOCKED: fix the failures above, or bypass once with `git commit --no-verify` (CI still checks).",
            file=sys.stderr )

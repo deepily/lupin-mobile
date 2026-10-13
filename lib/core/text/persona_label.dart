@@ -15,7 +15,7 @@ library;
 ///
 /// The `\s+` matters. A bare 8-hex id with no name before it is not a match, so it renders whole and not as the fallback.
 /// That looks odd, and the web client's JS-parity corpus pins it.
-/// Do not change the pattern to `\s*` or `(?:^|\s+)`: it looks like the obvious repair, but the two clients then diverge.
+/// Changing the pattern to `\s*` or `(?:^|\s+)` looks like the obvious repair, but the two clients then diverge.
 /// The parity corpus exists to prevent exactly that divergence.
 final RegExp _trailingSessionId = RegExp( r"\s+[0-9a-f]{8}$", caseSensitive: false );
 

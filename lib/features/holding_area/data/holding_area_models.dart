@@ -37,7 +37,7 @@ class FilerGroup {
 /// Groups held rows by the persona that filed them, one group per persona.
 ///
 /// The key is the persona with the hash stripped, in display case, so "Krishna" and
-/// "krishna" share a group. Do not use `split( " " ).first`: a persona can have two words.
+/// "krishna" share a group. `split( " " ).first` is wrong here: a persona can have two words.
 /// Design: src/docs/decisions/README.md
 ///
 /// Ensures:

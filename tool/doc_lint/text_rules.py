@@ -14,15 +14,17 @@ from .marker_counts import INLINE_CODE, blank_code, caps_words, is_section_ref_r
 from .rule_lists import (
     TIC_REGEX, EMPHASIS_GLYPHS, ID_REF_EXTENDED_REGEX, BARE_SHA_REGEX, RULING_REF_REGEX, AC_REF_REGEX,
     STEP_REF_REGEX, LABEL_REF_REGEX, SECTION_REGEX, DATED_BANNER_REGEX, ISO_DATE_REGEX, QUOTED_SPAN_REGEX,
-    AGENT_IMPERATIVE_REGEX, SUMMARY_MAX_CHARS, SENTENCE_MAX_WORDS, PREFACE_MAX_LINES
+    AGENT_IMPERATIVE_REGEX, DO_NOT_SENTENCE_REGEX, SUMMARY_MAX_CHARS, SENTENCE_MAX_WORDS, PREFACE_MAX_LINES
 )
 
 Finding = namedtuple( "Finding", [ "path", "line", "rule", "message" ] )
 
+CONTRACT_ITEMS  = re.compile( r"^(\s*)(?:Requires|Ensures|Raises)\s*:\s*$" )
 CONTRACT_HEADER = re.compile( r"^\s*(?:Requires|Ensures|Raises|Args|Arguments|Returns|Yields)\s*:\s*$" )
 BULLET_LINE     = re.compile( r"^\s*(?:[-*+]|\d+[.)])\s" )
 FIELD_HEADER    = re.compile( r"^\s*(?:Attributes|Parameters|Params|Examples?)\s*:\s*$" )
 SENTENCE_SPLIT  = re.compile( r"(?<=[.!?])\s+(?=[A-Z0-9`\"'(])" )
+CONFIG_KEY_LINE = re.compile( r"^[ \t]*([a-z][a-z0-9 _.:-]*?)[ \t]=[ \t]" )
 
 
 def line_of_offset( text, offset ):
@@ -254,14 +256,37 @@ def defined_steps( text ):
         - text is a str
 
     Ensures:
-        - returns the lowercase labels, such as "step 1", that start a line or heading and are
-          followed by a colon, dash, period or the end of the line
+        - returns the lowercase labels, such as the word step followed by a number, that start a line or
+          heading and are followed by a colon, dash, period or the end of the line
         - a reference to a label in this set is the page's own structure, not a pointer elsewhere
 
     Raises:
         - nothing
     """
     return { m.group( 1 ).lower() for m in STEP_DEFINITION.finditer( text ) }
+
+
+def is_config_key_match( text, match ):
+    """
+    Say whether a match sits inside the key of a configuration assignment line.
+
+    Requires:
+        - match is a regex match over text
+
+    Ensures:
+        - True when the match lies wholly within the key of a line shaped like "lowercase key words = value", such as an INI line
+        - the key must be all lowercase, so a capitalised step word before an equals sign in prose is still a match
+        - an all-lowercase prose line with " = " is also skipped; that is a chosen limit, since a lowercase key and lowercase prose cannot be told apart
+        - a match in the value, or on a line without " = ", gives False
+
+    Raises:
+        - nothing
+    """
+    start = text.rfind( "\n", 0, match.start() ) + 1
+    end   = text.find( "\n", match.start() )
+    line  = text[ start : len( text ) if end == -1 else end ]
+    key   = CONFIG_KEY_LINE.match( line )
+    return key is not None and match.end() - start <= key.end( 1 )
 
 
 def reference_findings( text, path, first_line ):
@@ -275,6 +300,7 @@ def reference_findings( text, path, first_line ):
         - one Finding per bare reference, at its line
         - a section mark is bare unless a path sits beside it in the same paragraph
         - a case label or step that the text defines itself is not a finding
+        - a match inside the key of a configuration line is not a finding
         - a bare git sha is reported under the same rule; whether it should be is pending Rick's ruling
         - a sha that sits inside an already reported row, bug or task reference is not reported twice
 
@@ -294,20 +320,68 @@ def reference_findings( text, path, first_line ):
             if regex is BARE_SHA_REGEX and any( a <= m.start() and m.end() <= b for a, b in id_spans ): continue
             if regex is LABEL_REF_REGEX and m.group( 0 ) in local: continue
             if regex is STEP_REF_REGEX and m.group( 0 ).lower() in steps: continue
+            if regex is STEP_REF_REGEX and is_config_key_match( text, m ): continue
             findings.append( Finding( path, first_line + line_of_offset( text, m.start() ), "bare-ref", f"bare reference {m.group( 0 )!r}" ) )
     return findings
 
 
-def history_findings( text, path, first_line ):
+def contract_item_lines( text ):
     """
-    Check rule 7 and the agent-imperative rule: current state only, nothing addressed to a model.
+    Return the 0-based indexes of the lines inside a Requires, Ensures or Raises section.
 
     Requires:
         - text is a str
 
     Ensures:
-        - one Finding per dated banner, per ISO date outside quotes and code, and per imperative
-          aimed at a model, at its line
+        - a section runs from its header to the next non-blank line indented no deeper than the header
+        - the header line itself is not in the set; blank lines are
+
+    Raises:
+        - nothing
+    """
+    inside, indent, found = False, 0, set()
+    for n, line in enumerate( text.split( "\n" ) ):
+        header = CONTRACT_ITEMS.match( line )
+        if header:
+            inside, indent = True, len( header.group( 1 ) )
+            continue
+        if inside and line.strip() and len( line ) - len( line.lstrip() ) <= indent: inside = False
+        if inside: found.add( n )
+    return found
+
+
+def do_not_starts( text ):
+    """
+    Find each sentence that starts with a Do not or Don't order to a model.
+
+    Requires:
+        - text is a str
+
+    Ensures:
+        - returns [ ( offset, phrase ) ] for each such sentence start, in text order
+        - nothing inside backticks or quotes, and nothing inside a Requires, Ensures or Raises section
+        - a mid-sentence "do not" and "Never ..." are not findings
+
+    Raises:
+        - nothing
+    """
+    blanked = QUOTED_SPAN_REGEX.sub( lambda q: " " * len( q.group( 0 ) ), text )
+    skip    = contract_item_lines( text )
+    return [ ( m.start( 1 ), m.group( 1 ) ) for m in DO_NOT_SENTENCE_REGEX.finditer( blanked )
+             if line_of_offset( blanked, m.start( 1 ) ) not in skip ]
+
+
+def history_findings( text, path, first_line, agent_rule=True ):
+    """
+    Check rule 7 and the agent-imperative rule: current state only, nothing aimed at a model.
+
+    Requires:
+        - text is a str
+
+    Ensures:
+        - one Finding per dated banner, per calendar date outside quotes and code, and per imperative
+          aimed at a model, at its line; a sentence that starts with Do not or Don't counts as one (do_not_starts)
+        - agent_rule=False skips the imperative check, for text that is meant to address a model
 
     Raises:
         - nothing
@@ -318,12 +392,13 @@ def history_findings( text, path, first_line ):
     unquoted = QUOTED_SPAN_REGEX.sub( lambda q: " " * len( q.group( 0 ) ), text )
     for m in ISO_DATE_REGEX.finditer( unquoted ):
         findings.append( Finding( path, first_line + line_of_offset( text, m.start() ), "iso-date", f"date {m.group( 0 )} in prose belongs in history" ) )
-    for m in AGENT_IMPERATIVE_REGEX.finditer( text ):
-        findings.append( Finding( path, first_line + line_of_offset( text, m.start() ), "agent-imperative", f"text addressed to a model: {m.group( 0 )!r}" ) )
+    orders = [ ( m.start(), m.group( 0 ) ) for m in AGENT_IMPERATIVE_REGEX.finditer( text ) ] + do_not_starts( text ) if agent_rule else []
+    for start, phrase in orders:
+        findings.append( Finding( path, first_line + line_of_offset( text, start ), "agent-imperative", f"text addressed to a model: {phrase!r}" ) )
     return findings
 
 
-def lint_text( text, path, first_line=1, structure=True, markdown=False, words=None ):
+def lint_text( text, path, first_line=1, structure=True, markdown=False, words=None, agent_rule=True ):
     """
     Run every text rule over one docstring, doc block or page.
 
@@ -332,6 +407,7 @@ def lint_text( text, path, first_line=1, structure=True, markdown=False, words=N
         - first_line is the 1-based file line of the first line of text
         - markdown is True when text is a markdown page
         - words is the English word set for rule 4, or None for the vendored list
+        - agent_rule is False for a registered tool description, which is meant for a model
 
     Ensures:
         - returns a list of Finding sorted by line, then rule
@@ -350,5 +426,5 @@ def lint_text( text, path, first_line=1, structure=True, markdown=False, words=N
     findings += emphasis_findings( text, path, first_line, words )
     findings += rhetoric_findings( text, path, first_line )
     findings += reference_findings( text, path, first_line )
-    findings += history_findings( text, path, first_line )
+    findings += history_findings( text, path, first_line, agent_rule )
     return sorted( findings, key=lambda f: ( f.line, f.rule, f.message ) )

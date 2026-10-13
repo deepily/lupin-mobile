@@ -77,7 +77,14 @@ SECTION_PATH_LOOKAHEAD = 60
 
 # Rule 7: dated banners and corrections belong in history. An ISO date in prose is the
 # predicate; the verb pattern and the banner-line pattern are kept as subsets that name the cause.
-ISO_DATE_REGEX     = re.compile( r"\b20\d\d-\d\d-\d\d\b" )
+# A calendar date is year, month 01-12, day 01-31, joined by one and the same separator, hyphen or dot
+# (YYYY.MM.DD is the repo's own form). It is a date only as a free-standing token: a date that
+# touches a word character, a path separator, or a trailing hyphen or dot-and-word is part of a
+# file or directory name such as 2026.09.30-foo.md, and does not fire. A leading hyphen is allowed,
+# so "pre-2026-06-05" is still a date.
+ISO_DATE_REGEX     = re.compile(
+    r"(?<![\w/.])(?:19|20)\d\d([-.])(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|3[01])(?![\w/\-]|\.\w)"
+)
 DATED_BANNER_REGEX = re.compile(
     r"\b(?:added|updated|fixed|measured|ruled|corrected|changed|landed|retired|re-measured)"
     r"\s+(?:on\s+)?20\d\d[-./]\d\d[-./]\d\d"
@@ -94,6 +101,14 @@ AGENT_IMPERATIVE_REGEX = re.compile(
     r"|\bas an? (?:ai|llm|assistant)\b"
     r"|\bnote to (?:the )?(?:model|agent|assistant|claude)\b",
     re.IGNORECASE
+)
+
+# Row e59bd0b3 (Rick, 2026-10-02): a sentence that STARTS with Do not / Don't / DO NOT also reads as an order to a model.
+# Sentence start is the start of the text, a line start, or the text after . ! ? and spaces. Capitalised on purpose, so a
+# wrapped line that continues "... and do not" is not a start; "Never" is not added. Group 1 is the phrase.
+DO_NOT_SENTENCE_REGEX = re.compile(
+    r"(?:^[ \t]*|(?<=[.!?])[ \t]+)(Do not|DO NOT|Don't|Don\u2019t)(?=[ \t]+\w)",
+    re.MULTILINE
 )
 
 # Provisional thresholds. Rick sets the real ones from pilot data at the Phase 3 sign-off.
