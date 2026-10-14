@@ -17,6 +17,8 @@ Checks, each an existing tool run as a subprocess, its output kept in a log dire
   2. docs gate  tool/pre_commit_gate.py --docs-all
   3. ignores    tool/check_doc_ignores.py
   4. coverage   tool/doc_coverage.py
+  4b. markdown  tool/markdown_gate.py --base <start of the range>: every markdown page by its class in
+                tool/data/markdown_scope.txt, and the lines the range changed on the pages checked by changed lines
   5. tool tests python3 -m pytest tool/ -q -p no:structlog_config
   5b. doc lint  tool/lint_dart_docs.py --strict over every tracked .dart file under lib/ (never test/ or
                 integration_test/); the file list is passed explicitly, because the linter reads no files
@@ -64,7 +66,7 @@ at the head and, separately, at the start of the range.
 Output: one verdict line, one line per check with its exit code, the log directory. Verdicts:
   PASS               every check ran and passed                                    exit 0
   PASS-WITH-WARNING  as PASS, but the range changes the gate's own inputs (this script, tool/check_*.py,
-                     tool/test_*.py, pre_commit_gate.py, doc_coverage.py, tool/data/, the AC-G2 baseline, flutter.sh,
+                     tool/test_*.py, pre_commit_gate.py, doc_coverage.py, markdown_gate.py, tool/data/, the AC-G2 baseline, flutter.sh,
                      pubspec files, CI workflows; the full list is GATE_FILES); a human must read that diff   exit 0
   QUICK              nothing failed but --skip-suite left checks 6 and 7 unrun        exit 3
   FAIL               a check that ran failed                                          exit 1
@@ -494,6 +496,7 @@ def analyzer_config_files( names ):
 
 
 GATE_FILES = ( "tool/merge_gate.py", "tool/pre_commit_gate.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py",
+               "tool/markdown_gate.py", "tool/data/markdown_scope.txt",
                "tool/conftest.py", "test/fixtures/ac_g2_passing_baseline.json", "flutter.sh", "dart_test.yaml", "pytest.ini",
                "pubspec.yaml", "pubspec.lock" )
 
@@ -506,7 +509,7 @@ def gate_input_files( names ):
         - names is a list of repo-relative paths
     Ensures:
         - returns sorted paths that decide what a check runs or accepts: this script, tool/check_*.py, tool/test_*.py,
-          pre_commit_gate.py, doc_coverage.py, lint_dart_docs.py, tool/conftest.py, anything under tool/data/ or
+          pre_commit_gate.py, doc_coverage.py, lint_dart_docs.py, markdown_gate.py, tool/conftest.py, anything under tool/data/ or
           .github/workflows/, the AC-G2 baseline, flutter.sh, dart_test.yaml, pytest.ini, pubspec.yaml, pubspec.lock
         - every other file is not listed
     """
@@ -531,7 +534,8 @@ def missing_tools( root=ROOT, skip_suite=False ):
     missing = []
     dart = pcg.dart_cmd( ROOT )
     if not ( shutil.which( dart ) if os.sep not in dart else os.path.isfile( dart ) ): missing.append( f"dart binary {dart}" )
-    needed = [ "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py" ]
+    needed = [ "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py", "tool/lint_dart_docs.py",
+              "tool/markdown_gate.py" ]
     if not skip_suite: needed += [ "flutter.sh", "tool/check_test_failures.py", "tool/check_ac_g2.py" ]
     return missing + [ f"{n} missing under {root}" for n in needed if not os.path.exists( os.path.join( root, n ) ) ]
 
@@ -693,6 +697,19 @@ def tracked_lib_dart( root=ROOT ):
     """
     names = git( [ "ls-files", "-z", "--", "lib" ], root ).split( "\0" )
     return sorted( n for n in names if n.startswith( "lib/" ) and n.endswith( ".dart" ) )
+
+
+def markdown_gate_cmd( start ):
+    """
+    Build the command for the markdown check.
+
+    Requires:
+        - start is the revision the range begins at
+
+    Ensures:
+        - returns an argument list that runs tool/markdown_gate.py against start, so the lines the range changed are judged
+    """
+    return [ sys.executable, "tool/markdown_gate.py", "--base", start ]
 
 
 def check_doc_lint( logdir, root=ROOT ):
@@ -859,6 +876,7 @@ def main( argv=None, root=ROOT ):
     for name, cmd in ( ( "docs-gate",   docs_gate_cmd( start ) ),
                        ( "ignores",     [ sys.executable, "tool/check_doc_ignores.py" ] ),
                        ( "coverage",    [ sys.executable, "tool/doc_coverage.py" ] ),
+                       ( "markdown",    markdown_gate_cmd( start ) ),
                        ( "tool-tests",  TOOL_TESTS_CMD ) ):
         code = run_logged( f"{len( results ) + 1}-{name}", cmd, logdir, root )
         results.append( ( name, code, " ".join( cmd[ 1: ] ) ) )

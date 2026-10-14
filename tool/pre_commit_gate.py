@@ -15,10 +15,9 @@ Runs these checks and blocks the commit when any one fails:
   4. dart analyze --fatal-infos --format=machine <dirs>  (every other gated directory the commit touches:
                                                  ANY finding fails, every options file that applies must be
                                                  the plain template, and no unexplained ignore comment)
-
-One more check reports and never blocks (warn mode; lupin plan 1, phase 1 step 10):
-  5. tool/lint_markdown.py --staged --strict    (markdown linter, staged lines of .md files; findings, a crash
-                                                 and a missing tool each print a WARN line and the commit goes on)
+  5. tool/markdown_gate.py --staged             (markdown gate, by the page classes in tool/data/markdown_scope.txt;
+                                                 a finding, a missing tool, a tool that cannot start, a tool that
+                                                 runs past the time limit and any non-zero exit each refuse the commit)
 
 The gated directories are listed in tool/data/gated_dirs.txt: every swept directory. A gated directory is
 strict (check 4) unless tool/data/strict_exempt.txt names it, with a reason and a row; the exempt ones keep
@@ -51,8 +50,8 @@ LEFT_OUT   = re.compile( r"#\s*left out:\s*(\S+)\s+(\d+)\b" )
 DOC_CODE   = "PUBLIC_MEMBER_API_DOCS"
 # One machine line: SEVERITY|TYPE|CODE|file|line|col|length|message, with a literal | escaped as \|
 PIPE       = re.compile( r"(?<!\\)\|" )
-# A warn-mode check that hangs must not hold the commit; the markdown linter takes under a second on this tree.
-WARN_TIMEOUT_SECONDS = 120
+# A markdown check that hangs must not hold the commit open for ever; it takes under a second on this tree.
+MARKDOWN_TIMEOUT_SECONDS = 120
 
 
 def all_swept_dirs( root=ROOT ):
@@ -526,39 +525,41 @@ def run_check( name, cmd, root=ROOT ):
     return subprocess.run( cmd, cwd=root ).returncode == 0
 
 
-def warn_check( name, cmd, root=ROOT ):
+def block_check( name, cmd, root=ROOT ):
     """
-    Run one warn-mode check: report what it finds and never block the commit.
+    Run one blocking check whose tool might be absent or hang: every way it can fail refuses the commit.
 
     Requires:
         - cmd is an argument list whose first item is the interpreter and second the tool's repo-relative path
 
     Ensures:
         - prints a one-line header naming the check
-        - a missing tool, a tool that cannot start, a tool that runs past WARN_TIMEOUT_SECONDS and a non-zero exit
-          each print one loud WARN line on stderr
+        - a missing tool, a tool that cannot start, a tool that runs past MARKDOWN_TIMEOUT_SECONDS and a non-zero
+          exit each print one BLOCKED line on stderr that names the cause
         - a tool that runs past the limit is killed together with every process it started
-        - returns True always, so a crash in the tool leaves the commit open
+        - returns True only when the tool ran and exited 0
     """
-    print( f"== {name} (warn mode, never blocks)", flush=True )
+    print( f"== {name}", flush=True )
     if not os.path.isfile( os.path.join( root, cmd[ 1 ] ) ):
-        print( f"WARN: {name}: {cmd[ 1 ]} is missing, check NOT run, commit allowed", file=sys.stderr )
-        return True
+        print( f"BLOCKED: {name}: {cmd[ 1 ]} is missing, check NOT run", file=sys.stderr )
+        return False
     try:
         proc = subprocess.Popen( cmd, cwd=root, start_new_session=True )
     except OSError as e:
-        print( f"WARN: {name}: could not start ({e}), check NOT run, commit allowed", file=sys.stderr )
-        return True
+        print( f"BLOCKED: {name}: could not start ({e}), check NOT run", file=sys.stderr )
+        return False
     try:
-        code = proc.wait( timeout=WARN_TIMEOUT_SECONDS )
+        code = proc.wait( timeout=MARKDOWN_TIMEOUT_SECONDS )
     except subprocess.TimeoutExpired:
         # The tool runs in its own session so that one signal stops it and every process it started.
         try: os.killpg( proc.pid, signal.SIGKILL )
         except OSError: pass
         proc.wait()
-        print( f"WARN: {name}: still running after {WARN_TIMEOUT_SECONDS} s, stopped, commit allowed", file=sys.stderr )
-        return True
-    if code != 0: print( f"WARN: {name}: exited {code}, commit allowed (warn mode)", file=sys.stderr )
+        print( f"BLOCKED: {name}: still running after {MARKDOWN_TIMEOUT_SECONDS} s, stopped", file=sys.stderr )
+        return False
+    if code != 0:
+        print( f"BLOCKED: {name}: exited {code}", file=sys.stderr )
+        return False
     return True
 
 
@@ -609,7 +610,7 @@ def main( argv=None, root=ROOT ):
     docs_only, strict = partition_touched( staged, root )
     results.append( check_docs( docs_only, root ) )
     results.append( check_strict( strict, root ) )
-    warn_check( "markdown linter (staged lines)", [ sys.executable, "tool/lint_markdown.py", "--staged", "--strict" ], root )
+    results.append( block_check( "markdown gate (staged pages)", [ sys.executable, "tool/markdown_gate.py", "--staged" ], root ) )
     if all( results ): return 0
     print( "\nBLOCKED: fix the failures above, or bypass once with `git commit --no-verify` (CI still checks).",
            file=sys.stderr )

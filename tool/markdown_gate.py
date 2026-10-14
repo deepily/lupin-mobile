@@ -14,7 +14,7 @@ Exit 0 = nothing refused · 1 = at least one refused finding · 2 = the scope fi
 import argparse, os, subprocess, sys
 
 sys.path.insert( 0, os.path.dirname( os.path.abspath( __file__ ) ) )
-from doc_lint.changed_ranges import changed_line_ranges, filter_findings
+from doc_lint.changed_ranges import HUNK_HEADER, PAGE_LEVEL_RULES, in_ranges
 from doc_lint.md_lint import lint_source
 from doc_lint.text_rules import Finding
 
@@ -26,6 +26,7 @@ DEFAULT    = "reference"
 RECORD_ALLOWS = frozenset( { "iso-date", "bare-ref", "dated-banner", "reference-length" } )
 RECORDS       = frozenset( { "record", "record-lines" } )
 WHOLE_FILE    = frozenset( { "reference", "record" } )
+ALL_LINES     = [ ( 1, 10 ** 9 ) ]
 
 
 class ScopeError( Exception ):
@@ -44,7 +45,8 @@ def parse_scope( text ):
         - blank lines and lines that start with # are skipped
 
     Raises:
-        - ScopeError naming the line when a line is not a known class followed by one path, or a path is listed twice
+        - ScopeError naming the line when a line is not a known class followed by one path, when the path neither
+          ends in a slash nor in .md (a folder written without its slash would match nothing), or a path is listed twice
     """
     entries = []
     seen    = set()
@@ -54,27 +56,40 @@ def parse_scope( text ):
         parts = line.split()
         if len( parts ) != 2 or parts[ 0 ] not in CLASSES:
             raise ScopeError( f"{SCOPE_PATH}:{number}: expected a class ({', '.join( CLASSES )}) and one path, got: {line}" )
+        if not parts[ 1 ].endswith( ( "/", ".md" ) ):
+            raise ScopeError( f"{SCOPE_PATH}:{number}: {parts[ 1 ]} must be a .md file or a folder that ends in a slash" )
         if parts[ 1 ] in seen: raise ScopeError( f"{SCOPE_PATH}:{number}: {parts[ 1 ]} is listed twice" )
         seen.add( parts[ 1 ] )
         entries.append( ( parts[ 1 ], parts[ 0 ] ) )
     return entries
 
 
-def load_scope( root=ROOT ):
+def load_scope( root=ROOT, staged=False ):
     """
-    Read the scope file from the working tree.
+    Read the scope file.
 
     Requires:
         - root is the repo working tree
 
     Ensures:
-        - returns the entries from parse_scope
+        - returns ( entries, notice ): the entries from parse_scope and a line to print, or None
+        - staged=True reads the file as HEAD has it, so a commit cannot loosen the classes it is judged by; when the
+          staged changes touch the file, or HEAD has none, notice says which version was used
+        - otherwise reads the working tree's file, and notice is None
 
     Raises:
         - ScopeError when the file is missing or malformed
     """
+    notice = None
+    if staged:
+        touched = git( root, "diff", "--cached", "--name-only", "-z", "--", SCOPE_PATH ).strip( "\0" )
+        try:
+            return parse_scope( git( root, "show", f"HEAD:{SCOPE_PATH}" ) ), (
+                f"NOTICE  {SCOPE_PATH} is changed in this commit; this commit is judged by the classes in HEAD" if touched else None )
+        except RuntimeError:
+            notice = f"NOTICE  {SCOPE_PATH} is not in HEAD; this commit is judged by the working tree's copy"
     try:
-        with open( os.path.join( root, SCOPE_PATH ), encoding="utf-8" ) as handle: return parse_scope( handle.read() )
+        with open( os.path.join( root, SCOPE_PATH ), encoding="utf-8" ) as handle: return parse_scope( handle.read() ), notice
     except OSError as err:
         raise ScopeError( f"{SCOPE_PATH} could not be read: {err}" )
 
@@ -114,14 +129,16 @@ def apply_class( cls, findings, ranges ):
     Ensures:
         - exempt keeps nothing
         - a record class drops the rules in RECORD_ALLOWS
-        - a class outside WHOLE_FILE keeps only findings on changed lines
+        - a class outside WHOLE_FILE keeps only findings on changed lines, and drops the page-level rules
+          (length, runbook sections): one appended line must not be refused for the shape of the whole page
 
     Raises:
         - nothing
     """
     if cls == "exempt": return []
     if cls in RECORDS: findings = [ f for f in findings if f.rule not in RECORD_ALLOWS ]
-    if cls not in WHOLE_FILE: findings = filter_findings( findings, ranges )
+    if cls not in WHOLE_FILE:
+        findings = [ f for f in findings if f.rule not in PAGE_LEVEL_RULES and in_ranges( f.line, ranges.get( f.path, [] ) ) ]
     return findings
 
 
@@ -143,6 +160,44 @@ def git( root, *args ):
     return res.stdout
 
 
+def changed_pages( root, staged, base ):
+    """
+    Say which markdown pages changed, and on which lines.
+
+    Requires:
+        - root is a git working tree
+        - exactly one of staged and base is set, or neither (then nothing is reported)
+
+    Ensures:
+        - returns ( ranges, origins ): ranges maps each added, copied, modified or renamed page to its list of
+          ( first, last ) new-file lines, and origins maps a renamed page to its old path
+        - names come from NUL-separated git output and each page is diffed alone by a literal pathspec, so a name with a
+          space or a non-ASCII letter is the same key everywhere
+        - staged=True reads the index against HEAD; base reads the working tree against that revision
+
+    Raises:
+        - RuntimeError from git
+    """
+    if not staged and base is None: return {}, {}
+    where  = [ "--cached" ] if staged else [ base ]
+    tokens = git( root, "diff", "--name-status", "-z", "-M", "--diff-filter=ACMR", *where ).split( "\0" )
+    ranges, origins, i = {}, {}, 0
+    while i < len( tokens ) and tokens[ i ]:
+        if tokens[ i ][ 0 ] in "RC": old, new, i = tokens[ i + 1 ], tokens[ i + 2 ], i + 3
+        else:                        old, new, i = None, tokens[ i + 1 ], i + 2
+        if not new.endswith( ".md" ): continue
+        specs = [ f":(literal){p}" for p in ( new, old ) if p is not None ]
+        diff  = git( root, "diff", "-U0", "--no-color", "--no-ext-diff", "-M", *where, "--", *specs )
+        ranges[ new ] = []
+        if old is not None: origins[ new ] = old
+        for raw in diff.split( "\n" ):
+            m = HUNK_HEADER.match( raw )
+            if m is None: continue
+            start, count = int( m.group( 1 ) ), 1 if m.group( 2 ) is None else int( m.group( 2 ) )
+            if count > 0: ranges[ new ].append( ( start, start + count - 1 ) )
+    return ranges, origins
+
+
 def markdown_paths( root, staged ):
     """
     List the markdown files to check.
@@ -152,14 +207,17 @@ def markdown_paths( root, staged ):
 
     Ensures:
         - staged=True returns the staged files that are added, copied, modified or renamed
-        - staged=False returns every tracked file
+        - staged=False returns every tracked file that is still in the working tree, so a file deleted there is not read
+        - names are read NUL-separated, so a name with a space or a non-ASCII letter is not quoted by git
         - only paths that end in .md are returned, sorted
 
     Raises:
         - RuntimeError from git
     """
-    out = git( root, "diff", "--cached", "--name-only", "--diff-filter=ACMR" ) if staged else git( root, "ls-files" )
-    return sorted( p for p in out.split( "\n" ) if p.endswith( ".md" ) )
+    if staged: out = git( root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR" )
+    else:      out = git( root, "ls-files", "-z" )
+    paths = sorted( p for p in out.split( "\0" ) if p.endswith( ".md" ) )
+    return paths if staged else [ p for p in paths if os.path.isfile( os.path.join( root, p ) ) ]
 
 
 def read_page( root, path, staged ):
@@ -171,12 +229,16 @@ def read_page( root, path, staged ):
 
     Ensures:
         - staged=True returns the staged content, so an unstaged edit cannot hide a staged finding
+        - content that is not valid UTF-8 raises, in both modes, so neither mode reads it with bytes replaced
         - staged=False returns the working tree's content
 
     Raises:
         - RuntimeError from git, OSError or UnicodeDecodeError from the read
     """
-    if staged: return git( root, "show", f":{path}" )
+    if staged:
+        res = subprocess.run( [ "git", "-C", root, "show", f":{path}" ], capture_output=True )
+        if res.returncode != 0: raise RuntimeError( f"git show :{path} failed: {res.stderr.decode( 'utf-8', 'replace' ).strip()}" )
+        return res.stdout.decode( "utf-8" )
     with open( os.path.join( root, path ), encoding="utf-8" ) as handle: return handle.read()
 
 
@@ -189,22 +251,23 @@ def collect( root, staged, base ):
         - base is a revision, or None
 
     Ensures:
-        - returns ( refused, warned, checked ): two lists of ( class, Finding ) and the number of pages read
+        - returns ( refused, warned, checked, notice ): two lists of ( class, Finding ), the number of pages read and
+          the scope notice or None
+        - a page that enters a changed-lines class by rename from a page of another class is checked on every line
         - with staged=False and base=None, the classes that check changed lines have no lines to check and add nothing
         - a page that cannot be read is refused, whatever its class, unless the class is exempt
 
     Raises:
         - ScopeError from the scope file, RuntimeError from git
     """
-    entries = load_scope( root )
-    if staged:           ranges = changed_line_ranges( root, None, cached=True )
-    elif base is not None: ranges = changed_line_ranges( root, base )
-    else:                ranges = {}
+    entries, notice = load_scope( root, staged )
+    ranges, origins = changed_pages( root, staged, base )
     refused, warned, checked = [], [], 0
     for path in markdown_paths( root, staged ):
         cls = class_of( path, entries )
         if cls == "exempt": continue
-        if cls not in WHOLE_FILE and path not in ranges: continue
+        if cls not in WHOLE_FILE and path in origins and class_of( origins[ path ], entries ) != cls: ranges[ path ] = ALL_LINES
+        if cls not in WHOLE_FILE and not ranges.get( path ): continue
         checked += 1
         try:
             source = read_page( root, path, staged )
@@ -213,7 +276,7 @@ def collect( root, staged, base ):
             continue
         kept = apply_class( cls, lint_source( path, source, root ), ranges )
         ( warned if cls == "warn" else refused ).extend( ( cls, f ) for f in kept )
-    return refused, warned, checked
+    return refused, warned, checked, notice
 
 
 def main( argv=None, root=ROOT, out=None ):
@@ -239,10 +302,11 @@ def main( argv=None, root=ROOT, out=None ):
     args = ap.parse_args( argv )
     if args.staged and args.base: ap.error( "--staged and --base cannot be used together" )
     try:
-        refused, warned, checked = collect( args.repo_root, args.staged, args.base )
+        refused, warned, checked, notice = collect( args.repo_root, args.staged, args.base )
     except ScopeError as err:
         print( f"BLOCKED: {err}", file=sys.stderr )
         return 2
+    if notice: out.write( notice + "\n" )
     for cls, f in warned:  out.write( f"WARN    {f.path}:{f.line}: {f.rule}: {f.message}  [{cls}]\n" )
     for cls, f in refused: out.write( f"REFUSED {f.path}:{f.line}: {f.rule}: {f.message}  [{cls}]\n" )
     out.write( f"{len( refused )} refused, {len( warned )} warned, {checked} pages checked\n" )
