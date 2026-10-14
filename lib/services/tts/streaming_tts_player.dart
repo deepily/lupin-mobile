@@ -160,9 +160,9 @@ class StreamingTtsPlayer {
       await _dio.post<Map<String, dynamic>>(
         AppConstants.apiGetAudioElevenLabs,
         data: {
-          'session_id': sessionId,
-          'text'      : text,
-          'utterance_id'      : utteranceId,
+          'session_id'  : sessionId,
+          'text'        : text,
+          'utterance_id': utteranceId,
           if ( voiceId != null )  'voice_id'            : voiceId,
           if ( _simulateTtsError ) 'debug_simulate_error' : true,
         },
