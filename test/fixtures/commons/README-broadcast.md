@@ -1,6 +1,6 @@
-# Broadcast fixtures and where each one came from
+# Broadcast (Phase 5) fixtures, and where each one came from
 
-Two of these were captured from a live `:7999`. Three were **transcribed** from the
+Two of these were captured from a live `:7999`. Five were **transcribed** from the
 producer source. Capturing them was either outward-facing or impossible from this seat.
 The table below records that distinction per file, and recording it is the purpose of
 this README. A fixture labelled "captured" gets trusted without re-checking, so one that
@@ -41,7 +41,7 @@ capture at the default pulled 144 KB of real fleet traffic into the repo. The pa
 pass an explicit limit for the same family of reason the ack drain must. The capture
 tooling follows the rule it tests, so the fixture passes one too.
 
-## The transcribed three, and exactly what determines each
+## The transcribed five, and exactly what determines each
 
 **`broadcast_history_disabled.json`** — `commons.py`, `get_broadcast_history`. The
 `disabled` key is emitted **only** when the INI flag
@@ -83,7 +83,7 @@ A reader that goes looking in `message` finds nothing and reports zero acks.
 
 This frame arrives **only** over the socket. It is not recoverable from
 `GET /api/notifications/undelivered`. That is the finding behind the broadcast
-acceptance clause. Two independent code traces support it, and so does a measurement.
+acceptance clause (store row `384591dd`). Two independent code traces support it, and so does a measurement.
 The measurement is that `_log_to_io_tbl` never receives `payload` at all. So the io_tbl
 row for an ack is a type label and an empty string. The surrounding envelope fields here
 follow the shape of `test/fixtures/notifications/notification-with-persona.json`, which

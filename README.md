@@ -164,7 +164,7 @@ src/lupin-mobile/
 
 - **[Session History](history.md)** - Detailed development session summaries and progress tracking
 - **[Development Configuration](CLAUDE.md)** - Claude Code configuration and development guidelines
-- **[Private Configuration](CLAUDE.local.md)** - Local development settings and preferences
+- **Private Configuration** (`CLAUDE.local.md`) - Local development settings and preferences
 
 ## v0.1.6 Resync Implementation Status
 
