@@ -2,9 +2,9 @@
 
 One line per ruling. Code links here instead of quoting the conversation (rule 7 of `src/docs/docstring-standard.md`).
 
-Format: `- YYYY-MM-DD · ID · Ruling in one sentence. · Who ruled · Source (path or row) · Applies to (paths)`
+Format: `- YYYY-MM-DD · ID · Ruling in a few short sentences. · Who ruled · Source (path or row) · Applies to (paths)`
 
-Rules: add a line, never edit an old one; to reverse a ruling, add a new line that names the old ID. Anything longer than one sentence belongs in a design document, linked from the Source field.
+Rules: add a line, never edit an old one; to reverse a ruling, add a new line that names the old ID. Anything longer than a few short sentences belongs in a design document, linked from the Source field.
 
 ## Records
 

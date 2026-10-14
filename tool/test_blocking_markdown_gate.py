@@ -240,3 +240,33 @@ def test_the_committed_hook_runs_the_gate():
     hook = os.path.join( TOOL, "hooks", "pre-commit" )
     assert os.access( hook, os.X_OK )
     with open( hook, encoding="utf-8" ) as f: assert "tool/pre_commit_gate.py" in f.read()
+
+
+def test_the_decisions_record_refuses_a_new_long_line_and_keeps_an_old_one( capfd ):
+    # Refuted if an old long line refuses the commit, or if a new long line gets through: the page is record-lines.
+    page = "src/docs/decisions/README.md"
+    old  = "- 2026-10-02 · R-old · " + " ".join( [ "word" ] * 40 ) + ". · Rick · row · paths\n"
+    new  = "- 2026-10-14 · R-new · " + " ".join( [ "word" ] * 40 ) + ". · Rick · row · paths\n"
+    with open( os.path.join( ROOT, "tool", "data", "markdown_scope.txt" ), encoding="utf-8" ) as f: real_scope = f.read()
+    assert "record-lines  " + page in real_scope
+    root = make_repo( {} )
+    os.makedirs( os.path.join( root, "src", "docs", "decisions" ) )
+    with open( os.path.join( root, "tool", "data", "markdown_scope.txt" ), "w", encoding="utf-8" ) as f: f.write( real_scope )
+    with open( os.path.join( root, page ), "w", encoding="utf-8" ) as f: f.write( "# Decision records\n\n" + old )
+    subprocess.run( [ "git", "add", "-A" ], cwd=root, check=True )
+    subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--no-verify", "-m", "base" ], cwd=root, check=True )
+    names = ( "staged_paths", )
+    keep  = { n: getattr( gate, n ) for n in names }
+    gate.staged_paths = lambda root=None: [ page ]
+    try:
+        # a line that is added, an old line left alone: the old one is not judged
+        with open( os.path.join( root, page ), "a", encoding="utf-8" ) as f: f.write( "- 2026-10-14 · R-short · A short ruling. · Rick · row · paths\n" )
+        subprocess.run( [ "git", "add", page ], cwd=root, check=True )
+        assert run_main_with_dart_checks_passing( root ) == 0
+        # a new long line is judged and refused
+        with open( os.path.join( root, page ), "a", encoding="utf-8" ) as f: f.write( new )
+        subprocess.run( [ "git", "add", page ], cwd=root, check=True )
+        capfd.readouterr()
+        assert run_main_with_dart_checks_passing( root ) == 1
+    finally:
+        for n in names: setattr( gate, n, keep[ n ] )
