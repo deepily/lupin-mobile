@@ -17,6 +17,7 @@ import 'package:lupin_mobile/features/notifications/data/notification_models.dar
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
+import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_delivery_policy.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
@@ -77,18 +78,39 @@ void main() {
         NotificationPreferences( await SharedPreferences.getInstance() ) );
   }
 
-  /// Drive one notification through the bloc and let the async handler settle.
-  Future<void> deliver( NotificationBloc bloc, String priority ) async {
-    bloc.add( NotificationsExternalUpdate( notification: _item( priority: priority ) ) );
-    await Future.delayed( const Duration( milliseconds: 50 ) );
+  /// Polls until `done()` holds, or fails after 2 s.
+  ///
+  /// Checks every 5 ms. A fixed sleep assumed the bloc handler had run by
+  /// then, which a loaded host does not guarantee. Under 64 busy loops the old
+  /// sleep failed 4 runs in 10.
+  Future<void> waitFor( bool Function() done, String what ) async {
+    final deadline = DateTime.now().add( const Duration( seconds: 2 ) );
+    while ( !done() ) {
+      if ( DateTime.now().isAfter( deadline ) ) fail( 'timed out after 2 s waiting for $what' );
+      await Future.delayed( const Duration( milliseconds: 5 ) );
+    }
   }
 
-  /// Load the inbox first. `_refreshCurrent` returns early while
-  /// `_activeUserEmail` is null, so without this the refresh cannot be
-  /// observed at all and a test asserting it would pass for the wrong reason.
+  /// Loads the inbox and waits until the bloc reports it loaded.
+  ///
+  /// `_refreshCurrent` does nothing unless the state is `NotificationsInboxLoaded`.
+  /// Without this the refresh cannot be observed, and a test asserting it
+  /// would pass for the wrong reason.
   Future<void> loadInbox( NotificationBloc bloc ) async {
     bloc.add( const NotificationsLoadInbox( userEmail: 'rick@test.com' ) );
-    await Future.delayed( const Duration( milliseconds: 50 ) );
+    await waitFor( () => bloc.state is NotificationsInboxLoaded, 'the inbox to load' );
+  }
+
+  /// Delivers one notification and waits until its handler has run.
+  ///
+  /// The handler ends in `_refreshCurrent`, which re-reads the inbox, so that
+  /// request is the completion signal. A negative assertion made afterwards
+  /// is meaningful: it runs after the delivery, not before it.
+  Future<void> deliver( NotificationBloc bloc, String priority ) async {
+    if ( bloc.state is! NotificationsInboxLoaded ) await loadInbox( bloc );
+    final before = adapter.captured.length;
+    bloc.add( NotificationsExternalUpdate( notification: _item( priority: priority ) ) );
+    await waitFor( () => adapter.captured.length > before, 'the delivery to refresh the inbox' );
   }
 
   setUp( () {
@@ -202,8 +224,13 @@ void main() {
       final bloc = NotificationBloc( repo, audio: audio, tts: tts, policy: policy );
 
       await loadInbox( bloc );
+      final afterLoad = adapter.captured.length;
       await deliver( bloc, 'high' );
 
+      // Prove the delivery ran before asserting an absence: an empty list under
+      // a delivery that never happened would pass for the wrong reason.
+      expect( adapter.captured.length, greaterThan( afterLoad ),
+              reason: 'the delivery must have been handled before checking /played' );
       expect(
         adapter.captured.where( ( r ) => r.path.contains( '/played' ) ),
         isEmpty,
