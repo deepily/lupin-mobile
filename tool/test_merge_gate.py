@@ -118,7 +118,7 @@ class CommentsOnlyTest( unittest.TestCase ):
 class ToolPresenceTest( unittest.TestCase ):
 
     NEEDED = [ "flutter.sh", "flutter/bin/flutter", "tool/pre_commit_gate.py", "tool/check_doc_ignores.py", "tool/doc_coverage.py",
-               "tool/check_test_failures.py", "tool/check_ac_g2.py", "tool/lint_dart_docs.py" ]
+               "tool/check_test_failures.py", "tool/check_ac_g2.py", "tool/lint_dart_docs.py", "tool/markdown_gate.py" ]
 
     def test_a_missing_binary_and_scripts_are_named_not_raised( self ):             # L3
         saved = os.environ.get( "DART" )
@@ -147,6 +147,43 @@ class ToolPresenceTest( unittest.TestCase ):
     def test_skip_suite_does_not_need_flutter_sh( self ):
         with tempfile.TemporaryDirectory() as d:
             self.assertFalse( any( "flutter.sh" in m for m in mg.missing_tools( d, skip_suite=True ) ) )
+
+
+class MarkdownCheckTest( unittest.TestCase ):
+
+    def test_the_markdown_check_reads_the_range_from_its_start( self ):
+        start = "b" * 40
+        self.assertEqual( mg.markdown_gate_cmd( start )[ 1: ], [ "tool/markdown_gate.py", "--base", start ] )
+
+    def test_the_markdown_gate_and_its_scope_file_are_gate_inputs( self ):
+        # Refuted if either path is missing from the warning list: a range could loosen the gate silently.
+        names = [ "tool/markdown_gate.py", "tool/data/markdown_scope.txt" ]
+        self.assertEqual( mg.gate_input_files( names ), sorted( names ) )
+
+    def test_main_runs_the_markdown_check_and_a_failure_fails_the_verdict( self ):
+        # Refuted if the verdict is PASS, or no markdown row is printed, when only the markdown check exits 1.
+        real = ( mg.run_logged, mg.missing_tools, mg.check_analyzer, mg.check_doc_lint )
+        seen = []
+        def spy( name, cmd, logdir, root=None, stdout_to=None ):
+            seen.append( cmd )
+            return 1 if "tool/markdown_gate.py" in cmd else 0
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as logs:
+            sh = lambda *a: subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", *a ], cwd=d, check=True, capture_output=True, text=True ).stdout.strip()
+            sh( "init", "-q", "-b", "main" )
+            for n in range( 2 ):
+                with open( os.path.join( d, "a.md" ), "w" ) as f: f.write( f"line {n}\n" )
+                sh( "add", "-A" ); sh( "commit", "-q", "-m", f"c{n}" )
+            start = sh( "rev-parse", "HEAD~1" )
+            mg.run_logged, mg.missing_tools, mg.check_analyzer, mg.check_doc_lint = spy, lambda root, skip: [], lambda *a, **k: ( 0, "stubbed" ), lambda *a, **k: ( 0, "stubbed" )
+            try:
+                with contextlib.redirect_stdout( out ), contextlib.redirect_stderr( io.StringIO() ):
+                    code = mg.main( [ "--skip-suite", f"{start}..HEAD", "--log-dir", logs ], root=d )
+            finally:
+                mg.run_logged, mg.missing_tools, mg.check_analyzer, mg.check_doc_lint = real
+        self.assertEqual( code, 1 )
+        self.assertRegex( out.getvalue(), r"markdown\s+exit 1" )
+        self.assertIn( [ sys.executable, "tool/markdown_gate.py", "--base", start ], seen )
 
 
 class AnalyzerExitTest( unittest.TestCase ):
