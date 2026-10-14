@@ -686,6 +686,15 @@ class TestKeys {
   static const fleetStatusCapValue    = 'fleetStatus.capValue';
   /// Key of the fleet status cap apply.
   static const fleetStatusCapApply    = 'fleetStatus.capApply';
+  // The skeleton crew switch, a real write, PUT /api/arbiter/skeleton-crew.
+  /// Key of the skeleton crew switch.
+  static const fleetStatusSkeletonCrewSwitch  = 'fleetStatus.skeletonCrewSwitch';
+  /// Key of the skeleton crew state text.
+  static const fleetStatusSkeletonCrewLabel   = 'fleetStatus.skeletonCrewLabel';
+  /// Key of the skeleton crew settings-mute warning line.
+  static const fleetStatusSkeletonCrewWarning = 'fleetStatus.skeletonCrewWarning';
+  /// Key of the skeleton crew refusal text.
+  static const fleetStatusSkeletonCrewError   = 'fleetStatus.skeletonCrewError';
 
   // ── Fleet panes: the shared task row ──
   //

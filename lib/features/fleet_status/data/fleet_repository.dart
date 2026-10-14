@@ -17,6 +17,9 @@ class FleetRepository {
   /// The fleet-size-cap path.
   static const String fleetSizeCapEndpoint = "/api/arbiter/fleet-size-cap";
 
+  /// The skeleton crew switch path; the PUT is administrator login only.
+  static const String skeletonCrewEndpoint = "/api/arbiter/skeleton-crew";
+
   /// The admin-gated watchable-roster projection path.
   ///
   /// The path is not final: the REST naming is an open question with the lupin server,
@@ -161,6 +164,36 @@ class FleetRepository {
       return body is Map ? Map<String, Object?>.from( body ) : <String, Object?>{};
     } on DioException catch ( e ) {
       throw FleetApiException( "Fleet cap not saved: ${ e.message ?? e.type.name }" );
+    }
+  }
+
+  /// Turns skeleton crew on or off and returns the server's re-read of the file.
+  ///
+  /// The answer is the file's state, never an echo of [on], so the caller paints from it.
+  /// An API-key caller always gets a 403 and nothing changes; only an administrator login
+  /// can flip it.
+  ///
+  /// Ensures:
+  ///     - PUTs `{"on": <on>}` to [skeletonCrewEndpoint], one request
+  ///     - returns the body on a 2xx
+  ///     - raises [FleetApiException] on 401, 403, 409, 422, 500 or a transport failure,
+  ///       carrying the server's `detail` sentence verbatim when it sent a string; the
+  ///       caller must then re-read so the switch snaps back to what the server holds
+  Future<Map<String, Object?>> setSkeletonCrew( bool on ) async {
+    try {
+      final res = await _dio.put<Object?>(
+        skeletonCrewEndpoint,
+        data   : <String, Object?>{ "on": on },
+        options: Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      if ( status < 200 || status >= 300 ) {
+        throw FleetApiException( _detailFrom( res.data, status ), statusCode: status );
+      }
+      final body = res.data;
+      return body is Map ? Map<String, Object?>.from( body ) : <String, Object?>{};
+    } on DioException catch ( e ) {
+      throw FleetApiException( "Skeleton crew not saved: ${ e.message ?? e.type.name }" );
     }
   }
 

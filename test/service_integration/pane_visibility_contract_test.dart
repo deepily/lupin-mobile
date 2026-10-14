@@ -190,6 +190,10 @@ class _FakeFleetRepo implements FleetRepository {
       FleetWatchableRoster.none;
 
   @override
+  Future<Map<String, Object?>> setSkeletonCrew( bool on ) async =>
+      throw UnimplementedError( "not exercised by this test" );
+
+  @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async =>
       { "cap" : cap, "maximum" : 20 };
 }

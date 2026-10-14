@@ -202,15 +202,17 @@ void main() {
       return NotificationPreferences( await SharedPreferences.getInstance() );
     }
 
-    testWidgets( 'the switch sits above the master switch', ( t ) async {
+    // Hidden since the skeleton crew switch shipped ; the section itself is
+    // still exercised above, mounted directly.
+    testWidgets( 'the switch is hidden on the screen, not deleted', ( t ) async {
       final p = await prefs();
       await t.pumpWidget( MaterialApp(
         home: NotificationManagementScreen( prefs: p, heartbeatPoke: fake ),
       ) );
       await t.pumpAndSettle();
-      final top    = t.getTopLeft( sw() ).dy;
-      final master = t.getTopLeft( find.byKey( const Key( TestKeys.notifMgmtMaster ) ) ).dy;
-      expect( top, lessThan( master ) );
+      expect( kShowHeartbeatPokeSwitch, isFalse );
+      expect( sw(), findsNothing );
+      expect( find.byKey( const Key( TestKeys.notifMgmtMaster ) ), findsOneWidget );
     } );
 
     testWidgets( 'no repository, no switch', ( t ) async {

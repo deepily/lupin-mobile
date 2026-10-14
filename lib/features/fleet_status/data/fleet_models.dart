@@ -357,3 +357,61 @@ List<String> activeReassignTargets( FleetComposite? fleet ) {
   out.sort( ( a, b ) => a.toLowerCase().compareTo( b.toLowerCase() ) );
   return out;
 }
+
+/// The skeleton crew switch, from the cap body's `skeleton_crew` object.
+///
+/// On: managers may not spawn or ask for seats, and the stop poke is muted. The state is
+/// one boolean in the server's configuration file, so every client shows the same value.
+class SkeletonCrew {
+  /// True when skeleton crew is on.
+  final bool    on;
+
+  /// Time of the last flip, ISO-8601, or null.
+  final String? since;
+
+  /// Who flipped it, or null.
+  ///
+  /// The server says `unknown (file edited)` after a hand edit.
+  final String? setBy;
+
+  /// True when the settings.json poke mute is set while [on] is false.
+  ///
+  /// That is the one case that needs a warning line. Null means the server could not read
+  /// the file, and no warning is shown.
+  final bool?   settingsMuteWhileOff;
+
+  /// Creates the switch state.
+  const SkeletonCrew( {
+    required this.on,
+    required this.since,
+    required this.setBy,
+    required this.settingsMuteWhileOff,
+  } );
+
+  /// Reads the switch from a fleet-size-cap body or a skeleton-crew PUT answer.
+  ///
+  /// Requires:
+  ///     - body is the decoded JSON of either route, or anything else
+  ///
+  /// Ensures:
+  ///     - returns null when `skeleton_crew` is absent (an older server), is not an
+  ///       object, or its `on` is not a boolean, so the switch stays hidden
+  ///     - a mute flag that is not a boolean reads as null (unknown), never as a warning
+  ///     - never throws
+  static SkeletonCrew? fromCapBody( Object? body ) {
+    if ( body is! Map ) return null;
+    final raw = body[ "skeleton_crew" ];
+    if ( raw is! Map ) return null;
+    final on = raw[ "on" ];
+    if ( on is! bool ) return null;
+    final since = raw[ "since" ];
+    final setBy = raw[ "set_by" ];
+    final mute  = raw[ "settings_mute_while_off" ];
+    return SkeletonCrew(
+      on                   : on,
+      since                : since is String ? since : null,
+      setBy                : setBy is String ? setBy : null,
+      settingsMuteWhileOff : mute is bool ? mute : null,
+    );
+  }
+}
