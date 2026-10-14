@@ -541,15 +541,37 @@ def test_b4b_two_commits_cannot_loosen_the_scope_for_the_merge_gate():
     assert "NOTICE" in out and "merge base" in out
 
 
-def test_b4b_a_base_with_no_scope_file_falls_back_to_the_working_tree_and_says_so():
-    # Refuted if exit 2 (the bootstrap range that adds the scope file could never merge) or no NOTICE is printed.
+def test_b4b_a_base_with_no_scope_file_uses_the_first_version_the_range_adds():
+    # Refuted if exit 2 (the bootstrap range could never merge), no NOTICE, or the bad page passes under the second
+    # version, which exempts src/docs/: a branch forked before the file existed must not supply its own classes.
     root = make_repo( None, {} )
     base = sh( root, "rev-parse", "HEAD" ).strip()
     write( root, mg.SCOPE_PATH, "" )
     sh( root, "add", mg.SCOPE_PATH ); sh( root, "commit", "-q", "--no-verify", "-m", "scope" )
+    write( root, mg.SCOPE_PATH, "exempt src/docs/\n" )
+    write( root, "src/docs/page.md", CAPS )
+    sh( root, "add", mg.SCOPE_PATH, "src/docs/page.md" ); sh( root, "commit", "-q", "--no-verify", "-m", "loosen" )
     code, out, _ = run_gate( root, "--base", base )
-    assert code == 0, out
-    assert "NOTICE" in out
+    assert code == 1, out
+    assert "src/docs/page.md:3: caps" in out
+    assert "NOTICE" in out and "first version this change adds" in out
+
+
+def test_b4b_a_base_with_no_scope_file_and_no_commit_adding_one_exits_2():
+    # Refuted if the working tree's untracked scope file is read and the run exits 0 or 1.
+    root = make_repo( None, {} )
+    base = sh( root, "rev-parse", "HEAD" ).strip()
+    write( root, mg.SCOPE_PATH, "exempt src/docs/\n" )
+    assert run_gate( root, "--base", base )[ 0 ] == 2
+
+
+def test_b4_staged_with_no_scope_in_head_uses_the_staged_file_not_the_working_tree():
+    # Refuted if the commit passes: the working tree's copy exempts the page, the staged copy does not.
+    root = make_repo( None, {} )
+    stage( root, { mg.SCOPE_PATH: "", "notes.md": CAPS } )
+    write( root, mg.SCOPE_PATH, "exempt notes.md\n" )
+    code, out, _ = run_gate( root, "--staged" )
+    assert code == 1, out
 
 
 def test_w4_a_marker_inside_a_code_span_does_not_waive():

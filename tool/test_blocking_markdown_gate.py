@@ -48,7 +48,7 @@ def make_repo( pages, with_gate=True ):
     with open( os.path.join( root, "tool", "data", "markdown_scope.txt" ), "w", encoding="utf-8" ) as f: f.write( "" )
     for rel, text in pages.items():
         with open( os.path.join( root, rel ), "w", encoding="utf-8" ) as f: f.write( text )
-    subprocess.run( [ "git", "add", *pages ], cwd=root, check=True )
+    subprocess.run( [ "git", "add", "tool/data/markdown_scope.txt", *pages ], cwd=root, check=True )
     return root
 
 
@@ -218,6 +218,7 @@ def test_only_staged_lines_of_a_record_lines_page_are_refused( capfd ):
     # Refuted if the commit is refused for the old bad line: history.md is listed record-lines in this repo.
     root = make_repo( { "history.md": BAD_PAGE } )
     with open( os.path.join( root, "tool", "data", "markdown_scope.txt" ), "w", encoding="utf-8" ) as f: f.write( "record-lines history.md\n" )
+    subprocess.run( [ "git", "add", "tool/data/markdown_scope.txt" ], cwd=root, check=True )
     subprocess.run( [ "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--no-verify", "-m", "base" ], cwd=root, check=True )
     with open( os.path.join( root, "history.md" ), "a", encoding="utf-8" ) as f: f.write( "\nA second line that is fine.\n" )
     subprocess.run( [ "git", "add", "history.md" ], cwd=root, check=True )

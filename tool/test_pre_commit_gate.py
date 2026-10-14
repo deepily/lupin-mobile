@@ -60,33 +60,35 @@ class PreCommitGateTest( unittest.TestCase ):
 
     def test_main_blocks_when_any_check_fails_but_runs_all( self ):
         calls = []
-        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict )
+        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict, gate.block_check )
         gate.run_check    = lambda name, cmd, root=None: calls.append( name ) or name.startswith( "ignore" )
         gate.check_docs   = lambda dirs, root=None: calls.append( "docs" ) or True
         gate.check_strict = lambda dirs, root=None: calls.append( "strict" ) or True
         gate.staged_paths = lambda root=None: [ "lib/core/a.dart" ]
         gate.swept_dirs   = lambda root=None: [ "lib/core" ]
         gate.exempt_dirs  = lambda root=None: []
+        gate.block_check  = lambda name, cmd, root=None: True   # else the real markdown gate reads this repo's real index
         try:
             code = gate.main( [] )
         finally:
-            gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict = orig
+            gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict, gate.block_check = orig
         self.assertEqual( code, 1 )
         self.assertEqual( calls, [ "doc linter (staged lines)", "ignore checker", "docs", "strict" ] )
 
     def test_main_passes_when_all_checks_pass_and_skips_untouched_dirs( self ):
         calls = []
-        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict )
+        orig  = ( gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict, gate.block_check )
         gate.run_check    = lambda name, cmd, root=None: calls.append( name ) or True
         gate.check_docs   = lambda dirs, root=None: calls.append( f"docs {dirs}" ) or True
         gate.check_strict = lambda dirs, root=None: calls.append( f"strict {dirs}" ) or True
         gate.staged_paths = lambda root=None: [ "README.md" ]
         gate.swept_dirs   = lambda root=None: [ "lib/core" ]
         gate.exempt_dirs  = lambda root=None: []
+        gate.block_check  = lambda name, cmd, root=None: True   # else the real markdown gate reads this repo's real index
         try:
             code = gate.main( [] )
         finally:
-            gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict = orig
+            gate.run_check, gate.staged_paths, gate.swept_dirs, gate.exempt_dirs, gate.check_docs, gate.check_strict, gate.block_check = orig
         self.assertEqual( code, 0 )
         self.assertEqual( calls[2:], [ "docs []", "strict []" ] )
 

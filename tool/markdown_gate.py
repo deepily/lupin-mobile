@@ -84,10 +84,13 @@ def load_scope( root=ROOT, staged=False, base=None ):
         - staged=True reads the file as HEAD has it, and base reads it as it was at the merge base of HEAD and base, so
           neither a commit nor a run of commits can loosen the classes it is judged by
         - when the change touches the file, or the revision has none, notice says which version was used
-        - with neither, reads the working tree's file and notice is None
+        - when the revision has no scope file, reads it from the first commit in the range that adds it (staged: the
+          index), never from the working tree, and says so in notice
+        - with neither staged nor base, reads the working tree's file and notice is None
 
     Raises:
-        - ScopeError when the file is missing or malformed, or when base has no merge base with HEAD
+        - ScopeError when the file is missing or malformed, when base has no merge base with HEAD, or when a revision has
+          no scope file and no commit in the range (nor the index) adds one
     """
     notice, rev = None, None
     if staged:
@@ -102,7 +105,17 @@ def load_scope( root=ROOT, staged=False, base=None ):
             notice = f"NOTICE  {SCOPE_PATH} is changed since the merge base {rev[ :7 ]}; the range is judged by the classes there"
     if rev is not None:
         try: return parse_scope( git( root, "show", f"{rev}:{SCOPE_PATH}" ) ), notice
-        except RuntimeError: notice = f"NOTICE  {SCOPE_PATH} is not in {rev[ :7 ]}; judged by the working tree's copy"
+        except RuntimeError: pass
+        # The revision has no scope file: take the first version the range itself adds, so a branch forked before the
+        # file existed cannot supply its own classes through the working tree.
+        if staged: source, where = "show", f":{SCOPE_PATH}"
+        else:
+            added = git( root, "log", "--diff-filter=A", "--reverse", "--format=%H", f"{rev}..HEAD", "--", SCOPE_PATH ).split()
+            if not added: raise ScopeError( f"{SCOPE_PATH} is not in {rev[ :7 ]} and no commit in the range adds it" )
+            source, where = "show", f"{added[ 0 ]}:{SCOPE_PATH}"
+        try: text = git( root, source, where )
+        except RuntimeError: raise ScopeError( f"{SCOPE_PATH} is not in {rev[ :7 ]} and is not staged" )
+        return parse_scope( text ), f"NOTICE  {SCOPE_PATH} is not in {rev[ :7 ]}; judged by the first version this change adds"
     try:
         with open( os.path.join( root, SCOPE_PATH ), encoding="utf-8" ) as handle: return parse_scope( handle.read() ), notice
     except OSError as err:
