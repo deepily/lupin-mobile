@@ -21,6 +21,7 @@ warn          .claude/
 record        src/docs/decisions/README.md
 record        src/docs/post-games/README.md
 record        bug-fix-queue.md
+record        test/fixtures/commons/README-broadcast.md
 
 # Logs whose old entries move to the archives, and records that are written once.
 record-lines  history.md
