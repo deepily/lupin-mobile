@@ -187,7 +187,6 @@ Installed via `installation-wizard.md` (full set, all 13 workflow groups).
 | Testing Workflows | `/plan-test-baseline`, `/plan-test-remediation`, `/plan-test-harness-update` |
 | Skills Management | `/plan-skills-management[-discover/-create/-edit/-audit/-delete]` |
 | Branch / PR / Merge | `/plan-branch-pr-and-merge` |
-| Workflow Audit | `/plan-workflow-audit` |
 | About | `/plan-about` |
 | Session Close | `/plan-last-call` (🔔 — two-stage close; deliverables `push` → `/plan-session-end` push step · `backup` → `/plan-backup-write` · `post-game` → `/plan-post-game`), `/plan-post-game` |
 | Install / Uninstall Wizards | `/plan-install-wizard`, `/plan-uninstall-wizard` |
