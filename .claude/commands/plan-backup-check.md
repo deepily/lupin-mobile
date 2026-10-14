@@ -1,7 +1,7 @@
 # Backup Script - Version Check
 
 **Project**: Lupin Mobile
-**Prefix**: [LUPIN-MOBILE]
+**Prefix**: `[LUPIN-MOBILE]`
 **Version**: 1.0
 
 ---

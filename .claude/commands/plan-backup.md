@@ -1,7 +1,7 @@
 # Backup Command - Dry Run (Safe Default)
 
 **Project**: Lupin Mobile
-**Prefix**: [LUPIN-MOBILE]
+**Prefix**: `[LUPIN-MOBILE]`
 **Version**: 1.0
 
 ---
