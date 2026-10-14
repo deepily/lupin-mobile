@@ -214,11 +214,12 @@ class _FleetCapDialState extends State<FleetCapDial> {
               _error!,
               style: theme.textTheme.bodySmall?.copyWith( color: theme.colorScheme.error ),
             ),
-          // Hidden unless the server sent a usable switch and the cap is readable: a
-          // switch that does nothing is worse than none.
+          // Hidden unless the server sent a usable switch and both the cap and the ceiling
+          // are readable: a switch that does nothing is worse than none.
           if ( widget.skeletonCrew != null &&
                widget.onSetSkeletonCrew != null &&
-               widget.cap != null )
+               widget.cap != null &&
+               widget.capMaximum != null )
             _skeletonCrewSwitch( context, widget.skeletonCrew! ),
         ],
       ),

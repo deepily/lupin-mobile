@@ -179,6 +179,16 @@ void main() {
       expect( warnF, findsNothing );
     } );
 
+    testWidgets( "cap present but no ceiling: the switch is hidden too", ( t ) async {
+      await pumpPane( t, skeletonCrew: crew( "put_on" ), cap: 8, capMaximum: null );
+      expect( switchF, findsNothing );
+    } );
+
+    testWidgets( "ceiling present but no cap: the switch is hidden too", ( t ) async {
+      await pumpPane( t, skeletonCrew: crew( "put_on" ), cap: null, capMaximum: 18 );
+      expect( switchF, findsNothing );
+    } );
+
     testWidgets( "cap payload unusable (no cap): the whole cluster, switch included, is hidden",
         ( t ) async {
       await pumpPane( t, skeletonCrew: crew( "put_on" ), cap: null, capMaximum: null );
