@@ -33,6 +33,7 @@ ALL_LINES     = [ ( 1, 10 ** 9 ) ]
 # <!-- doc-lint: waive <rule> -- <reason> --> : drops that one rule on the line that carries it. The reason must hold
 # a word of three letters or more; a marker without one waives nothing.
 WAIVER        = re.compile( r"<!--\s*doc-lint:\s*waive\s+(?P<rule>[a-z0-9-]+)\s*--\s*(?P<reason>.*?)\s*-->" )
+CODE_SPAN     = re.compile( r"(`+)(?:(?!\1).)+?\1" )
 REASON_WORD   = re.compile( r"[A-Za-z]{3,}" )
 
 
@@ -71,7 +72,7 @@ def parse_scope( text ):
     return entries
 
 
-def load_scope( root=ROOT, staged=False ):
+def load_scope( root=ROOT, staged=False, base=None ):
     """
     Read the scope file.
 
@@ -80,21 +81,28 @@ def load_scope( root=ROOT, staged=False ):
 
     Ensures:
         - returns ( entries, notice ): the entries from parse_scope and a line to print, or None
-        - staged=True reads the file as HEAD has it, so a commit cannot loosen the classes it is judged by; when the
-          staged changes touch the file, or HEAD has none, notice says which version was used
-        - otherwise reads the working tree's file, and notice is None
+        - staged=True reads the file as HEAD has it, and base reads it as it was at the merge base of HEAD and base, so
+          neither a commit nor a run of commits can loosen the classes it is judged by
+        - when the change touches the file, or the revision has none, notice says which version was used
+        - with neither, reads the working tree's file and notice is None
 
     Raises:
-        - ScopeError when the file is missing or malformed
+        - ScopeError when the file is missing or malformed, or when base has no merge base with HEAD
     """
-    notice = None
+    notice, rev = None, None
     if staged:
+        rev     = "HEAD"
         touched = git( root, "diff", "--cached", "--name-only", "-z", "--", SCOPE_PATH ).strip( "\0" )
-        try:
-            return parse_scope( git( root, "show", f"HEAD:{SCOPE_PATH}" ) ), (
-                f"NOTICE  {SCOPE_PATH} is changed in this commit; this commit is judged by the classes in HEAD" if touched else None )
-        except RuntimeError:
-            notice = f"NOTICE  {SCOPE_PATH} is not in HEAD; this commit is judged by the working tree's copy"
+        if touched: notice = f"NOTICE  {SCOPE_PATH} is changed in this commit; this commit is judged by the classes in HEAD"
+    elif base is not None:
+        proc = subprocess.run( [ "git", "-C", root, "merge-base", "HEAD", base ], capture_output=True, text=True )
+        if proc.returncode != 0 or not proc.stdout.strip(): raise ScopeError( f"--base {base}: no merge base with HEAD" )
+        rev = proc.stdout.strip()
+        if git( root, "diff", "--name-only", "-z", rev, "--", SCOPE_PATH ).strip( "\0" ):
+            notice = f"NOTICE  {SCOPE_PATH} is changed since the merge base {rev[ :7 ]}; the range is judged by the classes there"
+    if rev is not None:
+        try: return parse_scope( git( root, "show", f"{rev}:{SCOPE_PATH}" ) ), notice
+        except RuntimeError: notice = f"NOTICE  {SCOPE_PATH} is not in {rev[ :7 ]}; judged by the working tree's copy"
     try:
         with open( os.path.join( root, SCOPE_PATH ), encoding="utf-8" ) as handle: return parse_scope( handle.read() ), notice
     except OSError as err:
@@ -160,12 +168,18 @@ def waivers( source ):
         - returns { ( line, rule ): reason } for each marker whose reason holds a word of three letters or more
         - a marker with no such word is not returned, so it waives nothing
         - a marker covers its own line and its own rule, and nothing else
+        - a marker inside a code span or a fenced block is text, not a waiver
 
     Raises:
         - nothing
     """
-    found = {}
+    found, fenced = {}, False
     for number, text in enumerate( source.split( "\n" ), 1 ):
+        if text.lstrip().startswith( ( "```", "~~~" ) ):
+            fenced = not fenced
+            continue
+        if fenced: continue
+        text = CODE_SPAN.sub( lambda m: " " * len( m.group( 0 ) ), text )
         for m in WAIVER.finditer( text ):
             if REASON_WORD.search( m.group( "reason" ) ): found[ ( number, m.group( "rule" ) ) ] = m.group( "reason" )
     return found
@@ -290,7 +304,7 @@ def collect( root, staged, base ):
     Raises:
         - ScopeError from the scope file, RuntimeError from git
     """
-    entries, notice = load_scope( root, staged )
+    entries, notice = load_scope( root, staged, base )
     ranges, origins = changed_pages( root, staged, base )
     refused, warned, waived, checked = [], [], [], 0
     for path in markdown_paths( root, staged ):

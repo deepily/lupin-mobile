@@ -523,3 +523,45 @@ def test_n5_a_waiver_on_a_line_that_has_no_finding_is_not_counted():
     code, out, _ = run_gate( root, "--staged" )
     assert code == 0
     assert "0 waived" in out
+
+
+# ---------------------------------------------------------------- B4b and W4
+
+def test_b4b_two_commits_cannot_loosen_the_scope_for_the_merge_gate():
+    # Refuted if --base passes: commit 1 exempts src/docs/ and commit 2 adds the bad page; the base scope has no entry.
+    root = make_repo( "", {} )
+    base = sh( root, "rev-parse", "HEAD" ).strip()
+    write( root, mg.SCOPE_PATH, "exempt src/docs/\n" )
+    sh( root, "add", mg.SCOPE_PATH ); sh( root, "commit", "-q", "--no-verify", "-m", "loosen" )
+    write( root, "src/docs/page.md", CAPS )
+    sh( root, "add", "src/docs/page.md" ); sh( root, "commit", "-q", "--no-verify", "-m", "page" )
+    code, out, _ = run_gate( root, "--base", base )
+    assert code == 1, out
+    assert "src/docs/page.md:3: caps" in out
+    assert "NOTICE" in out and "merge base" in out
+
+
+def test_b4b_a_base_with_no_scope_file_falls_back_to_the_working_tree_and_says_so():
+    # Refuted if exit 2 (the bootstrap range that adds the scope file could never merge) or no NOTICE is printed.
+    root = make_repo( None, {} )
+    base = sh( root, "rev-parse", "HEAD" ).strip()
+    write( root, mg.SCOPE_PATH, "" )
+    sh( root, "add", mg.SCOPE_PATH ); sh( root, "commit", "-q", "--no-verify", "-m", "scope" )
+    code, out, _ = run_gate( root, "--base", base )
+    assert code == 0, out
+    assert "NOTICE" in out
+
+
+def test_w4_a_marker_inside_a_code_span_does_not_waive():
+    # Refuted if the caps finding is dropped by a marker that sits inside backticks.
+    root = make_repo( "", {} )
+    stage( root, { "notes.md": "# Notes\n\nThe value is NEVER cached `<!-- doc-lint: waive caps -- quoted marker -->` here.\n" } )
+    code, out, _ = run_gate( root, "--staged" )
+    assert code == 1
+    assert "0 waived" in out
+
+
+def test_w4_a_marker_inside_a_fenced_block_does_not_waive():
+    # Refuted if a marker inside a fence waives a finding on its own line; the finding sits on the fence line below it.
+    assert mg.waivers( "```\n<!-- doc-lint: waive caps -- inside fence -->\n```\n" ) == {}
+    assert mg.waivers( "Text <!-- doc-lint: waive caps -- real reason -->\n" ) == { ( 1, "caps" ): "real reason" }
