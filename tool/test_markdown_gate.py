@@ -587,3 +587,29 @@ def test_w4_a_marker_inside_a_fenced_block_does_not_waive():
     # Refuted if a marker inside a fence waives a finding on its own line; the finding sits on the fence line below it.
     assert mg.waivers( "```\n<!-- doc-lint: waive caps -- inside fence -->\n```\n" ) == {}
     assert mg.waivers( "Text <!-- doc-lint: waive caps -- real reason -->\n" ) == { ( 1, "caps" ): "real reason" }
+
+
+# ---------------------------------------------------------------- R1 and R2
+
+def test_r1_the_scope_at_the_base_tip_beats_the_one_an_old_fork_adds():
+    # Refuted if the range passes: main's tip classes src/docs/ as reference, the fork added its own file that exempts it.
+    root = make_repo( None, {} )
+    sh( root, "branch", "fork" )
+    write( root, mg.SCOPE_PATH, "" )
+    sh( root, "add", mg.SCOPE_PATH ); sh( root, "commit", "-q", "--no-verify", "-m", "main adds scope" )
+    sh( root, "checkout", "-q", "fork" )
+    write( root, mg.SCOPE_PATH, "exempt src/docs/\n" )
+    write( root, "src/docs/page.md", CAPS )
+    sh( root, "add", mg.SCOPE_PATH, "src/docs/page.md" ); sh( root, "commit", "-q", "--no-verify", "-m", "fork loosens" )
+    code, out, _ = run_gate( root, "--base", "main" )
+    assert code == 1, out
+    assert "src/docs/page.md:3: caps" in out
+
+
+def test_r2_a_staged_deletion_of_the_scope_file_is_refused():
+    # Refuted if the commit passes or exits 0: with the file deleted, the classes it held would vanish with it.
+    root = make_repo( "exempt src/docs/\n", {} )
+    sh( root, "rm", "-q", mg.SCOPE_PATH )
+    code, out, err = run_gate( root, "--staged" )
+    assert code != 0
+    assert "deleted in this commit" in err

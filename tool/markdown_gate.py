@@ -81,26 +81,32 @@ def load_scope( root=ROOT, staged=False, base=None ):
 
     Ensures:
         - returns ( entries, notice ): the entries from parse_scope and a line to print, or None
-        - staged=True reads the file as HEAD has it, and base reads it as it was at the merge base of HEAD and base, so
-          neither a commit nor a run of commits can loosen the classes it is judged by
+        - staged=True reads the file as HEAD has it, and base reads it as the tip of base has it, else as it was at the
+          merge base of HEAD and base, so neither a commit nor a run of commits can loosen the classes it is judged by
         - when the change touches the file, or the revision has none, notice says which version was used
         - when the revision has no scope file, reads it from the first commit in the range that adds it (staged: the
           index), never from the working tree, and says so in notice
         - with neither staged nor base, reads the working tree's file and notice is None
 
     Raises:
-        - ScopeError when the file is missing or malformed, when base has no merge base with HEAD, or when a revision has
+        - ScopeError when the file is missing or malformed, when the staged changes delete it, when base has no merge
+          base with HEAD, or when a revision has
           no scope file and no commit in the range (nor the index) adds one
     """
     notice, rev = None, None
     if staged:
         rev     = "HEAD"
+        if git( root, "diff", "--cached", "--name-only", "-z", "--diff-filter=D", "--", SCOPE_PATH ).strip( "\0" ):
+            raise ScopeError( f"{SCOPE_PATH} is deleted in this commit; the classes cannot be removed by the commit they judge" )
         touched = git( root, "diff", "--cached", "--name-only", "-z", "--", SCOPE_PATH ).strip( "\0" )
         if touched: notice = f"NOTICE  {SCOPE_PATH} is changed in this commit; this commit is judged by the classes in HEAD"
     elif base is not None:
         proc = subprocess.run( [ "git", "-C", root, "merge-base", "HEAD", base ], capture_output=True, text=True )
         if proc.returncode != 0 or not proc.stdout.strip(): raise ScopeError( f"--base {base}: no merge base with HEAD" )
         rev = proc.stdout.strip()
+        # The tip of the base is the target's own state: when it has a scope file, an old fork cannot supply its own.
+        has = subprocess.run( [ "git", "-C", root, "cat-file", "-e", f"{base}:{SCOPE_PATH}" ], capture_output=True )
+        if has.returncode == 0: rev = base
         if git( root, "diff", "--name-only", "-z", rev, "--", SCOPE_PATH ).strip( "\0" ):
             notice = f"NOTICE  {SCOPE_PATH} is changed since the merge base {rev[ :7 ]}; the range is judged by the classes there"
     if rev is not None:
