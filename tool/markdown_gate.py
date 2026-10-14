@@ -9,9 +9,12 @@ Blocking markdown gate: refuse a markdown page that breaks the documentation sta
 Each page has a class, listed in tool/data/markdown_scope.txt. The class decides which rules apply and
 whether the whole file or only the changed lines are checked. A page with no entry is a reference page.
 
+A line that carries `<!-- doc-lint: waive <rule> -- <reason> -->` drops that one rule on that line; the reason needs a word
+of three letters or more, and each honoured waiver is printed and counted.
+
 Exit 0 = nothing refused · 1 = at least one refused finding · 2 = the scope file is wrong.
 """
-import argparse, os, subprocess, sys
+import argparse, os, re, subprocess, sys
 
 sys.path.insert( 0, os.path.dirname( os.path.abspath( __file__ ) ) )
 from doc_lint.changed_ranges import HUNK_HEADER, PAGE_LEVEL_RULES, in_ranges
@@ -27,6 +30,10 @@ RECORD_ALLOWS = frozenset( { "iso-date", "bare-ref", "dated-banner", "reference-
 RECORDS       = frozenset( { "record", "record-lines" } )
 WHOLE_FILE    = frozenset( { "reference", "record" } )
 ALL_LINES     = [ ( 1, 10 ** 9 ) ]
+# <!-- doc-lint: waive <rule> -- <reason> --> : drops that one rule on the line that carries it. The reason must hold
+# a word of three letters or more; a marker without one waives nothing.
+WAIVER        = re.compile( r"<!--\s*doc-lint:\s*waive\s+(?P<rule>[a-z0-9-]+)\s*--\s*(?P<reason>.*?)\s*-->" )
+REASON_WORD   = re.compile( r"[A-Za-z]{3,}" )
 
 
 class ScopeError( Exception ):
@@ -142,6 +149,28 @@ def apply_class( cls, findings, ranges ):
     return findings
 
 
+def waivers( source ):
+    """
+    Read the same-line waivers on a page.
+
+    Requires:
+        - source is the page's text
+
+    Ensures:
+        - returns { ( line, rule ): reason } for each marker whose reason holds a word of three letters or more
+        - a marker with no such word is not returned, so it waives nothing
+        - a marker covers its own line and its own rule, and nothing else
+
+    Raises:
+        - nothing
+    """
+    found = {}
+    for number, text in enumerate( source.split( "\n" ), 1 ):
+        for m in WAIVER.finditer( text ):
+            if REASON_WORD.search( m.group( "reason" ) ): found[ ( number, m.group( "rule" ) ) ] = m.group( "reason" )
+    return found
+
+
 def git( root, *args ):
     """
     Run one git command in the working tree and return its output.
@@ -251,8 +280,9 @@ def collect( root, staged, base ):
         - base is a revision, or None
 
     Ensures:
-        - returns ( refused, warned, checked, notice ): two lists of ( class, Finding ), the number of pages read and
-          the scope notice or None
+        - returns ( refused, warned, checked, notice, waived ): two lists of ( class, Finding ), the number of pages read,
+          the scope notice or None, and a list of ( Finding, reason ) for each finding a same-line waiver dropped
+        - a waiver drops only a finding that the page's class would otherwise have refused or warned about
         - a page that enters a changed-lines class by rename from a page of another class is checked on every line
         - with staged=False and base=None, the classes that check changed lines have no lines to check and add nothing
         - a page that cannot be read is refused, whatever its class, unless the class is exempt
@@ -262,7 +292,7 @@ def collect( root, staged, base ):
     """
     entries, notice = load_scope( root, staged )
     ranges, origins = changed_pages( root, staged, base )
-    refused, warned, checked = [], [], 0
+    refused, warned, waived, checked = [], [], [], 0
     for path in markdown_paths( root, staged ):
         cls = class_of( path, entries )
         if cls == "exempt": continue
@@ -274,9 +304,12 @@ def collect( root, staged, base ):
         except ( OSError, UnicodeDecodeError, RuntimeError ) as err:
             refused.append( ( cls, Finding( path, 1, "unreadable", f"could not read: {err}" ) ) )
             continue
-        kept = apply_class( cls, lint_source( path, source, root ), ranges )
+        kept   = apply_class( cls, lint_source( path, source, root ), ranges )
+        found  = waivers( source )
+        waived.extend( ( f, found[ ( f.line, f.rule ) ] ) for f in kept if ( f.line, f.rule ) in found )
+        kept   = [ f for f in kept if ( f.line, f.rule ) not in found ]
         ( warned if cls == "warn" else refused ).extend( ( cls, f ) for f in kept )
-    return refused, warned, checked, notice
+    return refused, warned, checked, notice, waived
 
 
 def main( argv=None, root=ROOT, out=None ):
@@ -287,7 +320,7 @@ def main( argv=None, root=ROOT, out=None ):
         - argv is a list of arguments, or None for sys.argv
 
     Ensures:
-        - prints one line per finding with its class, then one summary line
+        - prints one line per finding with its class, one WAIVED line per honoured waiver, then one summary line
         - returns 1 when any finding is refused, 2 when the scope file is wrong, else 0
         - a warned finding is printed and never changes the exit code
 
@@ -302,14 +335,15 @@ def main( argv=None, root=ROOT, out=None ):
     args = ap.parse_args( argv )
     if args.staged and args.base: ap.error( "--staged and --base cannot be used together" )
     try:
-        refused, warned, checked, notice = collect( args.repo_root, args.staged, args.base )
+        refused, warned, checked, notice, waived = collect( args.repo_root, args.staged, args.base )
     except ScopeError as err:
         print( f"BLOCKED: {err}", file=sys.stderr )
         return 2
     if notice: out.write( notice + "\n" )
     for cls, f in warned:  out.write( f"WARN    {f.path}:{f.line}: {f.rule}: {f.message}  [{cls}]\n" )
     for cls, f in refused: out.write( f"REFUSED {f.path}:{f.line}: {f.rule}: {f.message}  [{cls}]\n" )
-    out.write( f"{len( refused )} refused, {len( warned )} warned, {checked} pages checked\n" )
+    for f, reason in waived: out.write( f"WAIVED  {f.path}:{f.line}: {f.rule} -- {reason}\n" )
+    out.write( f"{len( refused )} refused, {len( warned )} warned, {checked} pages checked, {len( waived )} waived\n" )
     if refused:
         print( f"BLOCKED: {len( refused )} markdown finding(s). The class of each page is in {SCOPE_PATH}.", file=sys.stderr )
         return 1

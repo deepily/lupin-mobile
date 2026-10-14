@@ -470,3 +470,56 @@ def test_n3_a_staged_page_that_is_not_utf8_is_refused():
     code, out, _ = run_gate( root, "--staged" )
     assert code == 1, out
     assert "unreadable" in out
+
+
+# ---------------------------------------------------------------- n5: same-line waivers
+
+WAIVE_CAPS = "<!-- doc-lint: waive caps -- verbatim quote of Rick -->"
+
+
+def test_n5_a_waiver_drops_its_rule_on_its_line_and_is_printed_and_counted():
+    # Refuted if the commit is refused, or no WAIVED line / "1 waived" is printed.
+    root = make_repo( "", {} )
+    stage( root, { "notes.md": f"# Notes\n\nThe value is NEVER cached. {WAIVE_CAPS}\n" } )
+    code, out, _ = run_gate( root, "--staged" )
+    assert code == 0, out
+    assert "WAIVED  notes.md:3: caps -- verbatim quote of Rick" in out
+    assert "1 waived" in out
+
+
+def test_n5_a_waiver_cannot_cover_another_rule_on_the_same_line():
+    # Refuted if the iso-date finding is dropped by a waiver that names caps.
+    root = make_repo( "", {} )
+    stage( root, { "notes.md": f"# Notes\n\nThe value is NEVER cached on 2026-10-13. {WAIVE_CAPS}\n" } )
+    code, out, _ = run_gate( root, "--staged" )
+    assert code == 1
+    assert "iso-date" in out and "REFUSED notes.md:3: caps" not in out
+
+
+def test_n5_a_waiver_cannot_cover_another_line():
+    # Refuted if the waiver on line 3 drops the caps finding on line 5.
+    root = make_repo( "", {} )
+    stage( root, { "notes.md": f"# Notes\n\nA fine line. {WAIVE_CAPS}\n\nThe value is NEVER cached.\n" } )
+    code, out, _ = run_gate( root, "--staged" )
+    assert code == 1
+    assert "REFUSED notes.md:5: caps" in out
+    assert "0 waived" in out
+
+
+def test_n5_a_marker_without_a_reason_word_waives_nothing():
+    # Refuted if either marker, with an empty reason or a two-letter reason, drops the finding.
+    for reason in ( "", "ok" ):
+        root = make_repo( "", {} )
+        stage( root, { "notes.md": f"# Notes\n\nThe value is NEVER cached. <!-- doc-lint: waive caps -- {reason} -->\n" } )
+        code, out, _ = run_gate( root, "--staged" )
+        assert code == 1, reason
+        assert "0 waived" in out
+
+
+def test_n5_a_waiver_on_a_line_that_has_no_finding_is_not_counted():
+    # Refuted if the summary says "1 waived" for a waiver that dropped nothing.
+    root = make_repo( "", {} )
+    stage( root, { "notes.md": f"# Notes\n\nThe value is read once. {WAIVE_CAPS}\n" } )
+    code, out, _ = run_gate( root, "--staged" )
+    assert code == 0
+    assert "0 waived" in out
