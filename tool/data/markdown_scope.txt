@@ -20,7 +20,7 @@ exempt        src/rnd/
 warn          .claude/
 reference     .claude/commands/
 
-record        src/docs/decisions/README.md
+record-lines  src/docs/decisions/README.md
 record        src/docs/post-games/README.md
 record        bug-fix-queue.md
 record        test/fixtures/commons/README-broadcast.md
