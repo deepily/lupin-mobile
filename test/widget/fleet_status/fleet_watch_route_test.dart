@@ -229,6 +229,10 @@ class _RosterRepo implements FleetRepository {
   /// The server RE-READS and answers with what it found; it does not echo. A fake that
   /// echoed could not fail the assertion that the dial shows the server's number.
   @override
+  Future<Map<String, Object?>> setSkeletonCrew( bool on ) async =>
+      throw UnimplementedError( "not exercised by this test" );
+
+  @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async {
     serverCap = cap + 1;
     return { "cap": serverCap, "maximum": 20 };

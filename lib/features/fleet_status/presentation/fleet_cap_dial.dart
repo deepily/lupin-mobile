@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
+import '../data/fleet_models.dart';
+import '../data/fleet_repository.dart';
 
 /// The fleet-size cap dial, the one write this pane owns.
 ///
@@ -23,12 +25,22 @@ class FleetCapDial extends StatefulWidget {
   /// Applies a new cap; resolves once the parent holds the server's re-read.
   final Future<void> Function( int )  onSetCap;
 
+  /// The switch's state; null when the server sent none, which hides it.
+  final SkeletonCrew?                 skeletonCrew;
+
+  /// Flips skeleton crew; null hides the switch.
+  ///
+  /// Resolves once the parent holds the server's answer, and throws on a refusal.
+  final Future<void> Function( bool )? onSetSkeletonCrew;
+
   /// Creates the dial.
   const FleetCapDial( {
     super.key,
     required this.cap,
     required this.capMaximum,
     required this.onSetCap,
+    this.skeletonCrew,
+    this.onSetSkeletonCrew,
   } );
 
   @override
@@ -39,6 +51,10 @@ class _FleetCapDialState extends State<FleetCapDial> {
   int?   _pending;
   bool   _saving = false;
   String? _error;
+
+  // The skeleton crew flip in flight: the requested value, else null.
+  bool?   _crewPending;
+  String? _crewError;
 
   // The slider's ceiling: the server's reported maximum when given, else a display-only
   // fallback that is never a validation rule.
@@ -61,6 +77,72 @@ class _FleetCapDialState extends State<FleetCapDial> {
     if ( old.cap != widget.cap ) _pending = null;
   }
 
+  // The words to show for a failure: the server's own sentence when it sent one, so a 403
+  // reads "Only an administrator may …" and not an exception class name.
+  static String _say( Object e ) => e is FleetApiException ? e.message : "$e";
+
+  Future<void> _flip( bool want ) async {
+    setState( () { _crewPending = want; _crewError = null; } );
+    try {
+      await widget.onSetSkeletonCrew!( want );
+    } catch ( e ) {
+      if ( mounted ) setState( () => _crewError = _say( e ) );
+    } finally {
+      // The parent holds the server's answer; the switch paints from it again.
+      if ( mounted ) setState( () => _crewPending = null );
+    }
+  }
+
+  Widget _skeletonCrewSwitch( BuildContext context, SkeletonCrew crew ) {
+    final theme   = Theme.of( context );
+    final pending = _crewPending;
+    final shown   = pending ?? crew.on;
+    final text    = pending == null
+        ? "Skeleton crew: ${ crew.on ? "ON" : "OFF" }"
+        : "Skeleton crew: turning ${ pending ? "ON" : "OFF" }…";
+    final warn    = !crew.on && crew.settingsMuteWhileOff == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text( text, key: const Key( TestKeys.fleetStatusSkeletonCrewLabel ),
+                           style: theme.textTheme.labelMedium ),
+            ),
+            // The text names the switch for a screen reader, and carries the state in
+            // words so colour is never the only cue.
+            Semantics(
+              label   : text,
+              toggled : shown,
+              child   : ExcludeSemantics(
+                child: Switch(
+                  key       : const Key( TestKeys.fleetStatusSkeletonCrewSwitch ),
+                  value     : shown,
+                  onChanged : pending == null ? _flip : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if ( warn )
+          Text(
+            "Warning: the stop poke is still muted by ~/.claude/settings.json "
+            "while skeleton crew is off.",
+            key   : const Key( TestKeys.fleetStatusSkeletonCrewWarning ),
+            style : theme.textTheme.bodySmall,
+          ),
+        if ( _crewError != null )
+          Text(
+            _crewError!,
+            key   : const Key( TestKeys.fleetStatusSkeletonCrewError ),
+            style : theme.textTheme.bodySmall?.copyWith( color: theme.colorScheme.error ),
+          ),
+      ],
+    );
+  }
+
   Future<void> _apply() async {
     final target = _handle;
     setState( () { _saving = true; _error = null; } );
@@ -72,7 +154,7 @@ class _FleetCapDialState extends State<FleetCapDial> {
     } catch ( e ) {
       // On a refusal the handle snaps back to the live value instead of sitting on a
       // number the operator never got.
-      if ( mounted ) setState( () { _pending = null; _error = "$e"; } );
+      if ( mounted ) setState( () { _pending = null; _error = _say( e ); } );
     } finally {
       if ( mounted ) setState( () => _saving = false );
     }
@@ -132,6 +214,12 @@ class _FleetCapDialState extends State<FleetCapDial> {
               _error!,
               style: theme.textTheme.bodySmall?.copyWith( color: theme.colorScheme.error ),
             ),
+          // Hidden unless the server sent a usable switch and the cap is readable: a
+          // switch that does nothing is worse than none.
+          if ( widget.skeletonCrew != null &&
+               widget.onSetSkeletonCrew != null &&
+               widget.cap != null )
+            _skeletonCrewSwitch( context, widget.skeletonCrew! ),
         ],
       ),
     );

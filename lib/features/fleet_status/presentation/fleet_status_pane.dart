@@ -23,6 +23,12 @@ class FleetStatusPane extends StatefulWidget {
   /// Applies a new cap; null hides the dial.
   final Future<void> Function( int cap )? onSetCap;
 
+  /// The skeleton crew switch, or null when the server sent none (the switch is hidden).
+  final SkeletonCrew?             skeletonCrew;
+
+  /// Flips skeleton crew; null hides the switch.
+  final Future<void> Function( bool on )? onSetSkeletonCrew;
+
   /// Called on pull-to-refresh.
   final Future<void> Function()?  onRefresh;
 
@@ -45,6 +51,8 @@ class FleetStatusPane extends StatefulWidget {
     this.cap,
     this.capMaximum,
     this.onSetCap,
+    this.skeletonCrew,
+    this.onSetSkeletonCrew,
     this.onRefresh,
     this.watchableSessionIds = const <String>{},
     this.onWatch,
@@ -180,6 +188,8 @@ class _FleetStatusPaneState extends State<FleetStatusPane> {
               cap        : widget.cap,
               capMaximum : widget.capMaximum,
               onSetCap   : widget.onSetCap!,
+              skeletonCrew      : widget.skeletonCrew,
+              onSetSkeletonCrew : widget.onSetSkeletonCrew,
             ),
         ],
       ),

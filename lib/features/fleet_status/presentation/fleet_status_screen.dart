@@ -165,6 +165,9 @@ class _FleetStatusViewState extends State<_FleetStatusView> {
             cap        : state.cap,
             capMaximum : state.capMaximum,
             onSetCap   : ( cap ) => context.read<FleetStatusBloc>().setCap( cap ),
+            skeletonCrew      : state.skeletonCrew,
+            onSetSkeletonCrew : ( on ) =>
+                context.read<FleetStatusBloc>().setSkeletonCrew( on ),
             onRefresh  : () async => context
                 .read<FleetStatusBloc>()
                 .add( const FleetStatusRefreshRequested() ),

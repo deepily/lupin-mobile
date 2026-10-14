@@ -32,6 +32,15 @@ class FleetStatusLoaded extends FleetStatusEvent {
   /// The server's ceiling for the cap, or null when unknown.
   final int?           capMaximum;
 
+  /// The skeleton crew switch from this read, or null when the server sent none.
+  ///
+  /// Null is an answer here, and an older server shows no switch. [keepSkeletonCrew] is for
+  /// events that did not read it. A cap write and a failed dial read are two.
+  final SkeletonCrew? skeletonCrew;
+
+  /// True when this event carries no reading of the switch and the held one stays.
+  final bool          keepSkeletonCrew;
+
   /// Which seats this caller may watch, or null meaning "keep what you have".
   ///
   /// Null and `FleetWatchableRoster.none` are different answers. `none` means the
@@ -46,12 +55,16 @@ class FleetStatusLoaded extends FleetStatusEvent {
     this.composite, {
     this.cap,
     this.capMaximum,
+    this.skeletonCrew,
+    this.keepSkeletonCrew = false,
     this.watchable,
   } );
 
   @override
-  List<Object?> get props =>
-      [ composite, cap, capMaximum, watchable?.watchableSessionIds ];
+  List<Object?> get props => [
+    composite, cap, capMaximum, skeletonCrew?.on, skeletonCrew?.settingsMuteWhileOff,
+    keepSkeletonCrew, watchable?.watchableSessionIds,
+  ];
 }
 
 /// A fetch failed. Distinct from the composite's own "unreachable".
@@ -86,6 +99,9 @@ class FleetStatusState extends Equatable {
   /// The server's ceiling for the cap, or null when unknown.
   final int?            capMaximum;
 
+  /// The skeleton crew switch, or null when the server sent none (hidden).
+  final SkeletonCrew?   skeletonCrew;
+
   /// The latest failure text, or null.
   final String?         error;
 
@@ -104,6 +120,7 @@ class FleetStatusState extends Equatable {
     this.composite,
     this.cap,
     this.capMaximum,
+    this.skeletonCrew,
     this.error,
     this.loading = false,
     this.watchableSessionIds = const <String>{},
@@ -114,6 +131,8 @@ class FleetStatusState extends Equatable {
     FleetComposite? composite,
     int?            cap,
     int?            capMaximum,
+    SkeletonCrew?   skeletonCrew,
+    bool            keepSkeletonCrew = true,
     String?         error,
     bool?           loading,
     bool            clearError = false,
@@ -123,6 +142,7 @@ class FleetStatusState extends Equatable {
       composite  : composite  ?? this.composite,
       cap        : cap        ?? this.cap,
       capMaximum : capMaximum ?? this.capMaximum,
+      skeletonCrew : keepSkeletonCrew ? ( skeletonCrew ?? this.skeletonCrew ) : skeletonCrew,
       error      : clearError ? null : ( error ?? this.error ),
       loading    : loading    ?? this.loading,
       watchableSessionIds : watchableSessionIds ?? this.watchableSessionIds,
@@ -130,8 +150,10 @@ class FleetStatusState extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [ composite, cap, capMaximum, error, loading, watchableSessionIds ];
+  List<Object?> get props => [
+    composite, cap, capMaximum, skeletonCrew?.on, skeletonCrew?.settingsMuteWhileOff,
+    skeletonCrew?.since, error, loading, watchableSessionIds,
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +178,8 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
       composite  : event.composite,
       cap        : event.cap,
       capMaximum : event.capMaximum,
+      skeletonCrew     : event.skeletonCrew,
+      keepSkeletonCrew : event.keepSkeletonCrew,
       loading    : false,
       clearError : true,
       // Null means nothing to say: keep the set the last poll established.
@@ -198,17 +222,21 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
       // is the pane, so they are fetched together but fail apart.
       int? cap;
       int? capMaximum;
+      SkeletonCrew? skeletonCrew;
+      bool keepSkeletonCrew = false;
       try {
         final dial  = await _repo.fetchSizeCap( cancelToken: token );
         final rawC  = dial[ "cap" ];
-        final rawM  = dial[ "maximum" ] ?? dial[ "cap_maximum" ];
-        cap         = rawC is num ? rawC.toInt() : null;
-        capMaximum  = rawM is num ? rawM.toInt() : null;
+        final rawM  = dial[ "ceiling" ] ?? dial[ "maximum" ] ?? dial[ "cap_maximum" ];
+        cap          = rawC is num ? rawC.toInt() : null;
+        capMaximum   = rawM is num ? rawM.toInt() : null;
+        skeletonCrew = SkeletonCrew.fromCapBody( dial );
         debugPrint( '[FleetStatus] poll: loaded, cap=$cap' );
       } on FleetApiException catch ( e ) {
         // Keep the dial's last known numbers instead of zeroing a control in use.
         cap        = state.cap;
         capMaximum = state.capMaximum;
+        keepSkeletonCrew = true;
         debugPrint( '[FleetStatus] poll: loaded, dial failed (${e.message}) — kept cap=$cap' );
       } on DioException catch ( e ) {
         // Only a cancel is caught here. The table is in hand, so it fails apart as for an
@@ -216,6 +244,7 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
         if ( e.type != DioExceptionType.cancel ) rethrow;
         cap        = state.cap;
         capMaximum = state.capMaximum;
+        keepSkeletonCrew = true;
         debugPrint( '[FleetStatus] poll: loaded, dial CANCELLED — kept cap=$cap' );
       }
 
@@ -244,6 +273,8 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
         composite,
         cap        : cap,
         capMaximum : capMaximum,
+        skeletonCrew     : skeletonCrew,
+        keepSkeletonCrew : keepSkeletonCrew,
         watchable  : watchable,
       ) );
     } on FleetApiException catch ( e ) {
@@ -277,16 +308,52 @@ class FleetStatusBloc extends Bloc<FleetStatusEvent, FleetStatusState>
     try {
       final answer   = await _repo.setSizeCap( cap );
       final rawC     = answer[ "cap" ];
-      final rawM     = answer[ "maximum" ] ?? answer[ "cap_maximum" ];
+      final rawM     = answer[ "ceiling" ] ?? answer[ "maximum" ] ?? answer[ "cap_maximum" ];
       if ( isClosed ) return;
       add( FleetStatusLoaded(
         state.composite ?? const FleetComposite(),
         cap        : rawC is num ? rawC.toInt() : state.cap,
         capMaximum : rawM is num ? rawM.toInt() : state.capMaximum,
+        // A cap write says nothing new about the switch; keep the last reading.
+        keepSkeletonCrew : true,
       ) );
     } catch ( _ ) {
       // Re-read rather than guess. The mixin's token is not used: this is an operator
       // action, not a poll, and it should complete even if the pane is mid-transition.
+      await pollOnce( CancelToken() );
+      rethrow;
+    }
+  }
+
+  /// Turns skeleton crew on or off and adopts the server's answer.
+  ///
+  /// The state written is the file's re-read from the 200 body, never the requested value.
+  /// A 200 with no usable switch in it is not trusted, so the GET is read again.
+  ///
+  /// Ensures:
+  ///     - one PUT per call
+  ///     - on success, state carries the server's `skeleton_crew`
+  ///     - on any refusal (403, 409, 422, 500, transport), re-reads live state so the
+  ///       switch snaps back to what the server holds, and rethrows so the switch can show
+  ///       the server's sentence
+  Future<void> setSkeletonCrew( bool on ) async {
+    try {
+      final answer = await _repo.setSkeletonCrew( on );
+      final crew   = SkeletonCrew.fromCapBody( answer );
+      if ( crew == null ) {
+        await pollOnce( CancelToken() );
+        return;
+      }
+      final rawC = answer[ "cap" ];
+      final rawM = answer[ "ceiling" ] ?? answer[ "maximum" ] ?? answer[ "cap_maximum" ];
+      if ( isClosed ) return;
+      add( FleetStatusLoaded(
+        state.composite ?? const FleetComposite(),
+        cap          : rawC is num ? rawC.toInt() : state.cap,
+        capMaximum   : rawM is num ? rawM.toInt() : state.capMaximum,
+        skeletonCrew : crew,
+      ) );
+    } catch ( _ ) {
       await pollOnce( CancelToken() );
       rethrow;
     }

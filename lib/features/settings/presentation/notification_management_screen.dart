@@ -64,6 +64,12 @@ class NotificationManagementScreen extends StatefulWidget {
       _NotificationManagementScreenState();
 }
 
+/// Whether the stop poke switch shows on this screen.
+///
+/// False since the skeleton crew switch shipped. The section, its repository and its route
+/// stay, so showing it again is this one constant.
+const bool kShowHeartbeatPokeSwitch = false;
+
 class _NotificationManagementScreenState
     extends State<NotificationManagementScreen> {
 
@@ -76,7 +82,9 @@ class _NotificationManagementScreenState
         children: [
           if ( widget.pushPause != null )
             PushPauseSection( repository: widget.pushPause! ),
-          if ( widget.heartbeatPoke != null )
+          // Hidden, not deleted: the skeleton crew switch on Fleet Status now mutes the
+          // poke too. Flip the flag to show this switch again.
+          if ( kShowHeartbeatPokeSwitch && widget.heartbeatPoke != null )
             HeartbeatPokeSection( repository: widget.heartbeatPoke! ),
           SwitchListTile(
             key       : const Key( TestKeys.notifMgmtMaster ),
