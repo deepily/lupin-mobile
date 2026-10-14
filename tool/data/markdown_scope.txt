@@ -15,8 +15,10 @@ exempt        history/
 exempt        todo-archive/
 exempt        src/rnd/
 
-# Installed from planning-is-prompting. They move to reference when row 8b32de78 lands them clean.
+# Installed from planning-is-prompting. The command wrappers were reinstalled clean and are held at zero.
+# The rest of the folder still carries old findings and only warns.
 warn          .claude/
+reference     .claude/commands/
 
 record        src/docs/decisions/README.md
 record        src/docs/post-games/README.md
