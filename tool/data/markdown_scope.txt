@@ -1,0 +1,29 @@
+# The class of each markdown page, read by tool/markdown_gate.py.
+#
+# One entry per line: a class, a tab or spaces, then a file or a folder that ends in a slash.
+# The longest matching entry wins. A page that matches no entry is a reference page.
+#
+#   reference     every rule, on every line of the file
+#   record        the language rules, on every line; dates and ticket ids are allowed
+#   record-lines  the language rules, on the lines a commit adds or changes
+#   warn          every rule, on the lines a commit adds or changes; printed, never refused
+#   exempt        not checked
+#
+# Rick ruled the classes on 2026-10-13 (row 696b6744).
+
+exempt        history/
+exempt        todo-archive/
+exempt        src/rnd/
+
+# Installed from planning-is-prompting. They move to reference when row 8b32de78 lands them clean.
+warn          .claude/
+
+record        src/docs/decisions/README.md
+record        src/docs/post-games/README.md
+record        bug-fix-queue.md
+
+# Logs whose old entries move to the archives, and records that are written once.
+record-lines  history.md
+record-lines  TODO.md
+record-lines  src/docs/post-games/
+record-lines  src/docs/phone-checks/

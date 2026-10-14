@@ -10,7 +10,7 @@ Two edits from the original, both in the word-list lookup:
 - `cli.py` no longer imports or calls `configure_root`.
 
 `__init__.py` is this repository's own one-line file. Everything else is byte-identical. Drift check: compare the sha256 of each source file below with
-`sha256sum` of the lupin file at its current sha (word_list.py and cli.py differ by design).
+`sha256sum` of the lupin file at its current sha. `word_list.py` and `cli.py` are edited here, as listed above.
 
 ```
 f31b34f18f6fbc19468d8c8d771cef17d22da14d055e7ffe6f141fa718e3711f  dartdoc_lint.py (lupin original)

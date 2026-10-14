@@ -1,6 +1,6 @@
 # Dart doc-comment standard
 
-Status: approved by Rick on 2026-09-30 (D10; record `R5b-M1` in `src/docs/decisions/README.md`). Applies to every `///` block and `//` comment in `lib/`. It adapts the eight rules of the lupin documentation rewrite plan to Effective Dart and `flutter_lints`.
+Status: approved by Rick. The ruling is recorded in `src/docs/decisions/README.md`. Applies to every `///` block and `//` comment in `lib/`. It adapts the eight rules of the lupin documentation rewrite plan to Effective Dart and `flutter_lints`.
 
 ## Block shape
 
@@ -20,7 +20,7 @@ Status: approved by Rick on 2026-09-30 (D10; record `R5b-M1` in `src/docs/decisi
 - The summary is one sentence on one line, followed by a blank `///` line. The symbol index reads only that line.
 - The why section is optional and never longer than four lines.
 - `Design:` names a path that exists in this repo, with an anchor if needed. Omit the line when no design document or decision record exists.
-- To name one decision record, add its ID in parentheses after the path: `Design: src/docs/decisions/README.md (R-HA-accordion)`. This works for word-form IDs only. The doc linter reads an ID such as `R1=B` or `AC-S1.10` as a bare reference, so cite those records by path alone, and give every new record a word-form ID.
+- To name one decision record, add its ID in parentheses after the path: `Design: src/docs/decisions/README.md (R-HA-accordion)`. This works for word-form IDs only. The doc linter reads an ID built from a letter and digits as a bare reference. Cite those records by path alone, and give every new record a word-form ID.
 - Write Dart doc references as `[Name]` only for symbols that resolve.
 
 ## The eight rules, in Dart
@@ -28,16 +28,16 @@ Status: approved by Rick on 2026-09-30 (D10; record `R5b-M1` in `src/docs/decisi
 1. **Lead with the claim.** The first line states what the member does, in 90 characters or fewer.
 2. **Say only what the signature does not.** Don't restate the name or the types. Effective Dart: don't write a comment that repeats what the code already says.
 3. **One idea per sentence**, under 25 words.
-4. **No typographic emphasis.** No all-caps words, no emoji or symbols such as ⚠️ 🔴 ⇒, no bold or italics for emphasis. Acronyms and code identifiers are fine.
-5. **No rhetoric.** No aphorisms, no "not X but Y" setups, and none of: deliberately, by construction, load-bearing, the point. State the constraint and its consequence.
-6. **Every reference resolves.** Use a file path or a `[Symbol]`. Don't cite a section number, row id, ruling label or acceptance-criterion id without a path that explains it.
+4. **No typographic emphasis.** No all-caps words. No emoji or symbols, such as a warning sign or an arrow. No bold or italics for emphasis. Acronyms and code identifiers are fine.
+5. **No rhetoric.** No aphorisms, no "not X but Y" setups, and none of the stock phrases in `tool/doc_lint/rule_lists.py`. State the constraint and its consequence.
+6. **Every reference resolves.** Use a file path or a `[Symbol]`. A section number, row id, ruling label or acceptance-criterion id is not cited without a path that explains it.
    When the code cannot show why it is written this way, state the reason in the comment. If the reason is long, cite the short sha of one commit that explains it.
 7. **Current state only.** No dates, no "used to", no quoted conversations. A ruling becomes a one-line record in `src/docs/decisions/`, and the code links to it. Other history goes to the `Design:` document, or else the commit message.
 8. **Fit the template.** A member doc follows the block shape above. A reference page is at most 1,500 words.
 
 ## When Requires and Ensures are required
 
-Contracts are required only where behaviour is not obvious (D8). A contract is needed when a member:
+Contracts are required only where behaviour is not obvious. A contract is needed when a member:
 
 - orders, filters, groups or de-duplicates its input in a way the name does not say;
 - returns a value for a failure case instead of throwing, or throws on a case the caller might not expect;
@@ -63,13 +63,19 @@ Mobile uses Bloc and Equatable; no file in `lib/` uses `@freezed` today, so the 
 
 ## Ignores
 
-`// ignore: public_member_api_docs` is allowed only with a reason on the same line: `// ignore: public_member_api_docs - generated override, see x.dart`. A reason names a fact (generated code, override of a documented member, platform callback), not a wish ("TODO", "obvious", "later"). `ignore_for_file` for this rule is never allowed. The coverage bar is zero `public_member_api_docs` hits per swept directory (D8).
+`// ignore: public_member_api_docs` is allowed only with a reason on the same line: `// ignore: public_member_api_docs - generated override, see x.dart`. A reason names a fact (generated code, override of a documented member, platform callback), not a wish ("TODO", "obvious", "later"). `ignore_for_file` for this rule is never allowed. The coverage bar is zero `public_member_api_docs` hits per swept directory.
 
 ## Strict directories
 
-Every gated directory in `tool/data/gated_dirs.txt` is strict unless `tool/data/strict_exempt.txt` names it. In a strict directory ANY analyzer finding (error, warning, style note) blocks the commit (`dart analyze --fatal-infos`), every `analysis_options.yaml` that applies (the root one, the directory's own, any nested one) must be the plain template (`include:` of the root file, then `public_member_api_docs: true`; the root file as committed), so no rule can be switched off, no severity lowered and no path excluded, and an ignore comment in any form (`//`, `///`, `/* */`, trailing, indented) needs a real reason after ` - ` (`ignore_for_file` is refused). An exempt directory keeps the docs-only check. Each exempt line carries a reason and a row; delete the line when the directory analyzes clean. A new gated directory is strict from its first commit.
+Every gated directory in `tool/data/gated_dirs.txt` is strict unless `tool/data/strict_exempt.txt` names it. A strict directory has three rules:
 
-The hook analyzes only the directories a commit touches, so a commit that only deletes a file, or changes code another strict directory uses, can break a strict directory and still pass the hook; CI runs `--docs-all` over every gated directory and catches both. `test/` is not gated: a style note there blocks nothing.
+- Any analyzer finding (error, warning, style note) blocks the commit (`dart analyze --fatal-infos`).
+- Every `analysis_options.yaml` that applies must be the plain template. That covers the root one, the directory's own and any nested one. The template is an `include:` of the root file, then `public_member_api_docs: true`, with the root file as committed. No rule can be switched off, no severity lowered and no path excluded.
+- An ignore comment in any form (`//`, `///`, `/* */`, trailing, indented) needs a real reason after ` - `. `ignore_for_file` is refused.
+
+An exempt directory keeps the docs-only check. Each exempt line carries a reason and a row; delete the line when the directory analyzes clean. A new gated directory is strict from its first commit.
+
+The hook analyzes only the directories a commit touches. A commit that only deletes a file can break a strict directory and still pass the hook. So can a commit that changes code another strict directory uses. CI runs `--docs-all` over every gated directory and catches both. `test/` is not gated: a style note there blocks nothing.
 
 ## Examples from lib/
 
@@ -109,7 +115,11 @@ The wide-blast-radius point survives in the decision record, and `FilerGroup.cou
 
 ### 2. `JobStatus`, `lib/shared/models/job.dart`
 
-Before (excerpt): `/// DISPOSITION (AC-S1.10, 2026-08-29): **LEFT ALONE — not superseded by [JobLane], and not quarantined.**` followed by 19 lines.
+Before (excerpt, followed by 19 lines):
+
+```dart
+/// DISPOSITION (AC-S1.10, 2026-08-29): **LEFT ALONE — not superseded by [JobLane], and not quarantined.**
+```
 
 After:
 
@@ -124,7 +134,7 @@ After:
 enum JobStatus {
 ```
 
-Dependency: `test/unit/queue/lane_vocabulary_test.dart` (line 64) reads this block and asserts it contains `AC-S1.10` and one of `superseded`, `LEFT ALONE`, `left alone` or `quarantined`. The rewrite keeps "not replaced" but drops both asserted phrases, so the test goes red. The M0 census must give that test a disposition (keep-and-update, convert-to-behaviour or retire) before this block changes.
+Dependency: `test/unit/queue/lane_vocabulary_test.dart` (line 64) reads this block. It asserts the block contains the acceptance-criterion id shown in the excerpt and one of `superseded`, `LEFT ALONE`, `left alone` or `quarantined`. The rewrite keeps "not replaced" but drops both asserted phrases, so the test goes red. The census of such tests must give that test a disposition (keep-and-update, convert-to-behaviour or retire) before this block changes.
 
 ### 3. `holdingWontFixAllHint`, same file
 
@@ -146,7 +156,11 @@ After:
 
 ### 4. `HoldingAreaBloc`, `lib/features/holding_area/domain/holding_area_bloc.dart`
 
-Before: `/// ⚠️ ROUTE-SCOPED, NOT AN APP-ROOT SINGLETON, for the reason the Task List's bloc records: …`
+Before:
+
+```dart
+/// ⚠️ ROUTE-SCOPED, NOT AN APP-ROOT SINGLETON, for the reason the Task List's bloc records: …
+```
 
 After:
 
@@ -171,4 +185,4 @@ Most of the work in `lib/core`, `lib/services` and `lib/shared` is this kind: a 
 
 ## Tests that read doc text
 
-A test that asserts a phrase inside a `///` block means the test fails when that block's wording changes. The census in M0 lists these tests and gives each one disposition: keep-and-update, convert-to-behaviour, or retire with a reason. No sweep touches such a block before its test has a disposition.
+A test that asserts a phrase inside a `///` block means the test fails when that block's wording changes. The census lists these tests and gives each one disposition: keep-and-update, convert-to-behaviour, or retire with a reason. No sweep touches such a block before its test has a disposition.

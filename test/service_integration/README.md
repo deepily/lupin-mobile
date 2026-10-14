@@ -3,7 +3,7 @@
 Legacy service-level integration notes. **Not** the canonical Flutter
 `integration_test/` directory (that lives at project root and is driven
 by `IntegrationTestWidgetsFlutterBinding`). Renamed from `test/integration/`
-on 2026-04-17 to avoid confusion during the 2026 testing playbook adoption.
+to avoid confusion during the 2026 testing playbook adoption.
 
 This directory contains comprehensive integration test notes that verify the interaction between different services and components in the Lupin Mobile application.
 
