@@ -373,9 +373,9 @@ void main() {
       ) ).captured;
       final data = captured.first as Map<String, dynamic>;
 
-      // Body keys: session_id, text, voice_id. No "borrowed", no persona-name,
-      // no decoration metadata. Only the voice_id is on the wire.
-      expect( data.keys.toSet(), { 'session_id', 'text', 'voice_id' } );
+      // Body keys: session_id, text, utterance_id, voice_id. No "borrowed", no persona-name,
+      // no decoration metadata. Only the voice_id is persona data on the wire.
+      expect( data.keys.toSet(), { 'session_id', 'text', 'utterance_id', 'voice_id' } );
       expect( data[ 'voice_id' ], 'pNInz6obpgDQGcFmaJgB' );
     } );
   } );
