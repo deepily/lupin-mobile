@@ -14,6 +14,19 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.13 | Session `5f30c269` (Tiffany) — markdown blocks at commit, wrappers clean, R&D ledger
+
+Crew: Chloé (author), Maya (author) and Tiberius (reviewer), all Sonnet 5.5, all reaped with mementos. Two Claude Code helper jobs ran first; Rick had them stopped and replaced by Lupin workers.
+
+- **Plan 1, mobile steps** (lupin row `ec1854b7`, closed at `8dd037b`). `CLAUDE.md` and `README.md` are at 0 lint findings. An R&D ledger of 115 rows and the R&D read rule, with its test, are in.
+- **Markdown gate blocks** (row `696b6744`, open): Rick ruled R1 to R5 on the plan. Each page has a class in `tool/data/markdown_scope.txt`, and the hook and the merge gate refuse by class. Merged `982172b`.
+- **Reviews** (rows `ecd452ac`, `9d66ab24`, `105a343f`): Tiberius found nine holes in the gate by running them. All were fixed and re-run before the merge.
+- **Command wrappers** (rows `afad632f`, `37fec485`, closed): reinstalled twice from María's cleaned sources, 992 findings to 0, then held at zero. Merged `2f60db8`, `7885efd`, `51333e5`.
+- **Open, with Rick**: the decisions record holds 81 findings, and its header forbids editing old lines. Plan section 8 gives the two choices.
+- **Plan**: `src/rnd/2026.10.13-plan-1-mobile-markdown-cleanup-and-blocking-plan.md`.
+- **Tool tests**: 249 passed at `51333e5`. There is no full merge gate verdict yet; it cannot pass until the decisions record is ruled.
+- **Mementos**: Chloé, Maya and Tiberius each left one in `io/mementos/`; the sweep was not run tonight.
+
 ## 2026.10.10 | Sessions `de4ce9d3` then `271cba01` (Tiffany 💍) — silent phone found, build line, doc rewrite closed
 
 Crew: Tiberius (author), Chloé (reviewer), Maya (author) and Rio (reviewer), both released in the afternoon. Session `de4ce9d3` died at about 19:20 EDT; `271cba01` picked up from row `79d49618` and Rick's pasted notes. Everything before 19:21 EDT below is from commits, gate logs and `TODO.md`, not from memory.

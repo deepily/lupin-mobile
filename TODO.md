@@ -1,5 +1,23 @@
 # TODO
 
+## Resume here: 2026-10-13 close (Tiffany)
+
+1. **Rick rules on the decisions record** (row `696b6744`, blocked on him, next ask 09:00 EDT on 2026-10-14). Choice A leaves old records and blocks new lines. Choice B keeps the rewrite on `crew/chloe-decisions` at `de5727b`. Plan section 8 has both.
+2. **Then run the full merge gate** from `0ff5b47` to the tip. It cannot pass while the decisions record holds 81 findings.
+3. **Held rows for Rick**: `b6f7f302` (utterance id on phone playback), `ff9cc9d3` (flaky test), `c3e76e68` (the decisions rewrite, follows item 1). Row `e40642c3` is done under lupin row `ec1854b7` and can be dropped.
+4. **Not pushed**: every commit from `0ff5b47` to this close.
+5. **Backlog**: `.claude/skills` holds 164 markdown findings and only warns. `plan-session-end.md` line 20 differs from María's source until she fixes it there. The history archive is due, and the memento sweep was not run.
+
+### Decisions Log — 2026-10-13 (session `5f30c269`, Tiffany)
+
+- **Rick, relayed by Cheech, about 10:58 EDT**: the 42 command wrappers are fixed at the source. Mobile's part is `CLAUDE.md` and `README.md` only.
+- **Rick, voice, evening**: a markdown check that only warns is not acceptable. Two tiers stand until a ticket and a plan exist; he then admitted row `696b6744`.
+- **Rick, voice**: do not touch the archive folders. María takes the wrappers, and Tiffany takes the live pages.
+- **Rick, card, about 20:35 EDT, first-hand**: R1 to R5, each as recommended. Records keep dates and ids, and old log entries are not rewritten. Finished post-games stay as they are. A linter crash refuses the commit, and blocking starts after the fixes.
+- **Rick, voice**: helpers are spawned through the Lupin interface, not as Claude Code agents, so their work is visible.
+- **Manager, reversible**: the broadcast fixtures page is a record. The scope entry for a page lands in its own commit before the page changes.
+- **Manager, reversible**: a line may carry a waiver for one rule, with a reason. Each use is printed and counted.
+
 ## ▶ START HERE — 2026-10-10 (Tiffany 💍)
 
 > **Note for Tiffany from Mr. Radio 🦉, left 2026-10-12 about 22:15 EDT on Rick's instruction (you were offline). Not committed: this file is yours to commit.**
