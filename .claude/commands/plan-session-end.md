@@ -17,7 +17,7 @@
 1. **Must use the following project-specific configuration**:
    - **[SHORT_PROJECT_PREFIX]**: `[LUPIN-MOBILE]`
    - **History file**: ./history.md
-   - **Planning documents**: $PLANNING_IS_PROMPTING_ROOT/workflow/
+   - **Planning documents**: ./src/rnd/
    - **Archive directory**: ./history/
    - Never proceed without these parameters
 
