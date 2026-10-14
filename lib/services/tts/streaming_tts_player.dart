@@ -59,8 +59,8 @@ class _RealStreamingTtsAudioPlayer implements StreamingTtsAudioPlayer {
 /// Event contract (matches backend `src/cosa/rest/routers/speech.py`):
 ///   - `audio_streaming_status`: `{status: "loading"|"streaming", text}`
 ///   - `audio_streaming_chunk`: binary PCM, wrapped by WebSocketService into `{type, data: List<int>}`
-///   - `audio_streaming_complete`: `{status: "success", text}`
-///   - `tts_error`: `{error_code: "quota_exceeded"|..., text, details}`
+///   - `audio_streaming_complete`: `{status: "success", text, utterance_id?}`
+///   - `tts_error`: `{error_code: "quota_exceeded"|..., text, details, utterance_id?}`
 class StreamingTtsPlayer {
   final Dio                      _dio;
   final StreamingTtsAudioPlayer  _player;
@@ -84,6 +84,9 @@ class StreamingTtsPlayer {
   bool            _isPlaying           = false;  // true while audio is actually playing
   Completer<void>? _activePlaybackCompleter;     // signals end of current playback
   DateTime?        _lastActivityAt;              // last speak ack or routed WS event
+  String?          _currentUtteranceId;          // id sent with the latest speak(); null before the first
+  int              _utteranceCounter    = 0;     // makes ids unique within this player
+  final String     _utteranceIdPrefix   = DateTime.now().microsecondsSinceEpoch.toRadixString( 36 );
 
   /// Creates a player that sends requests through [_dio].
   ///
@@ -140,6 +143,8 @@ class StreamingTtsPlayer {
   /// [voiceId] is the persona pass-through. The body's `voice_id` tells the backend which per-session
   /// persona voice to render with. When null the key is omitted, not sent as null, so the server's
   /// "absent means the default voice" fallback holds.
+  ///
+  /// Each call sends a fresh `utterance_id` in the body and makes it the id this player waits on.
   /// Design: src/docs/decisions/README.md (R-TTS-voice-id)
   Future<void> speak( {
     required String text,
@@ -148,6 +153,8 @@ class StreamingTtsPlayer {
   } ) async {
     _pcmBuffer.clear();
     _isActive = true;
+    final utteranceId   = _nextUtteranceId();
+    _currentUtteranceId = utteranceId;
 
     try {
       await _dio.post<Map<String, dynamic>>(
@@ -155,6 +162,7 @@ class StreamingTtsPlayer {
         data: {
           'session_id': sessionId,
           'text'      : text,
+          'utterance_id'      : utteranceId,
           if ( voiceId != null )  'voice_id'            : voiceId,
           if ( _simulateTtsError ) 'debug_simulate_error' : true,
         },
@@ -192,6 +200,7 @@ class StreamingTtsPlayer {
       // Ignore stray events if we didn't initiate a speak request.
       return;
     }
+    if ( _namesAnotherUtterance( type, payload ) ) return;
     _lastActivityAt = DateTime.now();
     switch ( type ) {
       case AppConstants.eventAudioStreamingStatus:
@@ -222,6 +231,21 @@ class StreamingTtsPlayer {
         _errorCtrl.add( TtsErrorEvent( errorCode: code, message: text ) );
         break;
     }
+  }
+
+  /// Returns a new id of 1 to 255 characters that no earlier request from this player used.
+  String _nextUtteranceId() => 'utt-$_utteranceIdPrefix-${ ++_utteranceCounter }';
+
+  /// True when [payload] is a complete or error frame that names another utterance.
+  ///
+  /// "Another" means its `utterance_id` is not the one being waited on.
+  ///
+  /// A frame with no `utterance_id` returns false, which keeps the behaviour of a server that does not echo it.
+  /// Status and chunk frames are never filtered: chunks carry no id, and a status frame only updates the display.
+  bool _namesAnotherUtterance( String type, Map<String, dynamic> payload ) {
+    if ( type != AppConstants.eventAudioStreamingComplete && type != 'tts_error' ) return false;
+    final id = payload[ 'utterance_id' ];
+    return id != null && id != _currentUtteranceId;
   }
 
   Future<void> _playPcmBuffer() async {
