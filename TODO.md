@@ -1,6 +1,21 @@
 # TODO
 
-## Resume here: 2026-10-13 close (Tiffany)
+## Resume here: 2026-10-14 close (Tiffany)
+
+1. **Board is empty.** One held row is left: `5970956a`, the post-game for the markdown gate crew, which waits on Rick.
+2. **Not pushed**: every mobile commit from `0ff5b47` to this close. Push only on Rick's word.
+3. **Deploy**: APK 2026.10.14 build 2 at `937d880` is built; Rick runs `deploy-apk-to-device.sh` from the laptop.
+4. **Backlog**: the history archive is due, since `history.md` is near 70k characters. The memento sweep was not run.
+
+### Decisions Log — 2026-10-14 (session `8e50c76c`, Tiffany)
+
+- **Rick, card**: decisions record choice A. Old records stay, and new or changed lines are checked.
+- **Rick, card**: markdownlint goes on the host now and in the container later. The container already sees it through a bind mount.
+- **Rick, card**: wire real votes into the multiplexer cards.
+- **Rick, card**: a bug with a measured cause and fix is ours to land, without asking him. He ruled both verifier fixes.
+- **Rick, broadcast**: freed seats go to Mr. Radio, and managers with an empty board hold until 09:00.
+
+## Earlier: 2026-10-13 close (Tiffany)
 
 1. **Rick rules on the decisions record** (row `696b6744`, blocked on him, next ask 09:00 EDT on 2026-10-14). Choice A leaves old records and blocks new lines. Choice B keeps the rewrite on `crew/chloe-decisions` at `de5727b`. Plan section 8 has both.
 2. **Then run the full merge gate** from `0ff5b47` to the tip. It cannot pass while the decisions record holds 81 findings.

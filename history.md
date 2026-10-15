@@ -14,6 +14,20 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.14 | Session `8e50c76c` (Tiffany) — Plan 1 mobile done, then lupin rows from Cheech's list
+
+Crew: Chloé, Pocholo, Tiberius, Rio, John and Extra 1, all Sonnet 5.5, all reaped with mementos. The last two seats went to Mr. Radio, by Rick's ruling.
+
+- **Plan 1 mobile, 100%**: decisions record ruled A, scope class first (`2f422bb`), then the page (`1fd23e8`). María's wrappers merged `90fa022`.
+- **Phone fixes**: speech requests carry an utterance id, merged `32f75fd` (row `b6f7f302`). The flaky gate test waits on its condition, merged `9e78016`.
+- **Skeleton crew switch** (row `5da989df`): it sits beside the cap dial, and the poke switch is hidden. Merged `40c9d72` and `937d880`; APK 2026.10.14 build 2.
+- **Lupin rows from Cheech's list**: Rick split the list among the managers. Landed on the lupin working branch:
+  - `4007b4466`: tic rule skips code spans (`07d6d4c7`), dead vote buttons removed (`2650df28`), Retry-now test (`5a8bd0c6`).
+  - `ef7256e58`: verifier fixes (`df767922`), real card votes (`ed6db05a`), markdownlint test fix.
+- **markdownlint 0.18.1**: installed in lupin's main node_modules (row `47f8c955`). The test container sees it through a bind mount (row `2ac183c2`).
+- **Gates**: mobile full gate PASS-WITH-WARNING at `937d880`. Lupin landings ran the unit tier and the bundle test.
+- **Not pushed**: every mobile commit since `0ff5b47`.
+
 ## 2026.10.13 | Session `5f30c269` (Tiffany) — markdown blocks at commit, wrappers clean, R&D ledger
 
 Crew: Chloé (author), Maya (author) and Tiberius (reviewer), all Sonnet 5.5, all reaped with mementos. Two Claude Code helper jobs ran first; Rick had them stopped and replaced by Lupin workers.
