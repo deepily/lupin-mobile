@@ -30,3 +30,6 @@ record-lines  history.md
 record-lines  TODO.md
 record-lines  src/docs/post-games/
 record-lines  src/docs/phone-checks/
+
+# The code wiki: reference pages the librarian rewrites, so every rule holds on every line.
+reference     src/docs/wiki/
