@@ -13,6 +13,9 @@ pins:
   - lupin-mobile:lib.features.docs.data.doc_upload.tokenHasAdminRole@16c14af818
   - lupin-mobile:lib.features.docs.data.doc_upload.DocUploadConflict@3b7a4da05c
   - lupin-mobile:lib.features.docs.presentation.abstract_body.AbstractBody@0ebcb6b10d
+  - lupin-mobile:lib.features.docs.presentation.doc_split_host.DocSplitHostState@bc10e3006e
+  - lupin-mobile:lib.features.docs.data.doc_link.DocLink@7b51c86621
+  - lupin-mobile:lib.features.docs.data.doc_models.DocApiException@5c7e686ceb
 ---
 # Doc viewer client
 

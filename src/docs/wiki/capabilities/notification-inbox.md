@@ -12,6 +12,10 @@ pins:
   - lupin-mobile:lib.features.notifications.presentation.conversation_screen.ConversationScreen@e4ceb036c8
   - lupin-mobile:lib.features.notifications.presentation.message_stamp.MessageStamp@2c4e251136
   - lupin-mobile:lib.shared.models.notification_item.NotificationItem@1d49a35e14
+  - lupin-mobile:lib.features.notifications.data.voice_persona.VoicePersona@9c2345238e
+  - lupin-mobile:lib.features.notifications.presentation.persona_badge.PersonaBadge@410907e6e4
+  - lupin-mobile:lib.features.notifications.data.ask_resolution.AskResolution@0c773b28d4
+  - lupin-mobile:lib.features.notifications.domain.notification_state.PersonaSnapshotMixin@5712b8cd77
 ---
 # Notification inbox
 

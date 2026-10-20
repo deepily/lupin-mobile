@@ -10,6 +10,10 @@ pins:
   - lupin-mobile:lib.features.agentic.data.agentic_common_models.AgenticApiException@526a8f9255
   - lupin-mobile:lib.features.agentic.presentation.test_fix_expediter_form.TestFixExpediterForm@ec4a880f1d
   - lupin-mobile:lib.features.agentic.data.deep_research_models.DeepResearchReport@7ef3ea7d3e
+  - lupin-mobile:lib.features.agentic.data.bug_fix_expediter_models.BugFixExpediterRequest@2ae8190e8d
+  - lupin-mobile:lib.features.agentic.data.chained_models.ResearchToPodcastRequest@a264a3d81b
+  - lupin-mobile:lib.features.agentic.data.chained_models.ResearchToPresentationRequest@9479cff0b4
+  - lupin-mobile:lib.features.agentic.data.deep_research_models.DeepResearchRequest@8fcbeef01b
 ---
 # Agentic job forms
 

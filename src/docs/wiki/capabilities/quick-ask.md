@@ -10,6 +10,12 @@ pins:
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskPrompt@8e6e208321
   - lupin-mobile:lib.services.quick_ask.quick_ask_preferences.QuickAskPreferences@521d092cc4
   - lupin-mobile:lib.features.quick_ask.presentation.quick_ask_screen.QuickAskScreen@32c1de85b1
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskConnectionChanged@b2e64c032f
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskEntryDismissed@8e8a0d98bc
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskEvent@fd3d3913c7
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskInterviewAnswered@b2a1074931
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskNotificationReceived@ce655cf04e
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskPromptAnswered@62a0e92cff
 ---
 # Quick ask
 

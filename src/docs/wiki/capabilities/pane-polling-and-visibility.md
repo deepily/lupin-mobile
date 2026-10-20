@@ -5,6 +5,10 @@ pins:
   - lupin-mobile:lib.features.fleet.domain.pane_visibility_mixin.PaneVisibilityMixin@20f02d89c9
   - lupin-mobile:lib.features.fleet.domain.pane_polling_mixin.PanePollingMixin@96f1fe861f
   - lupin-mobile:lib.features.fleet.presentation.pane_host_screen.PaneHostScreen@1f6963acab
+  - lupin-mobile:lib.features.fleet.domain.unsent_write.UnsentWrite@0b2cd7cedd
+  - lupin-mobile:lib.features.fleet.domain.unsent_write.RetryOutcome@d30c79cff4
+  - lupin-mobile:lib.features.fleet.domain.unsent_write.isTransportFailure@b8ae9f8800
+  - lupin-mobile:lib.features.fleet.domain.unsent_write.retryUnsentWrites@1eb083c904
 ---
 # Pane polling and visibility
 

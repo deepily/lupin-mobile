@@ -13,6 +13,9 @@ pins:
   - lupin-mobile:lib.features.queue.presentation.job_detail_screen.JobDetailScreen@44cb0a1c77
   - lupin-mobile:lib.features.queue.presentation.submit_job_sheet.SubmitJobSheet@9cd80c768b
   - lupin-mobile:lib.shared.models.job.Job@859b5b3783
+  - lupin-mobile:lib.features.queue.data.queue_models.PushAgenticRequest@0b8370c5a7
+  - lupin-mobile:lib.features.queue.data.queue_models.SpokenAskCutOff@21c935fe01
+  - lupin-mobile:lib.features.queue.data.queue_models.SpokenAskFailed@a73b39e33b
 ---
 # Job queue client
 

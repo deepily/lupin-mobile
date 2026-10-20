@@ -13,6 +13,8 @@ pins:
   - lupin-mobile:lib.shared.widgets.tts_pause_control.TtsPauseToggle@deeeaf37a9
   - lupin-mobile:lib.features.focus_mode.domain.focus_chat_state.FocusFilter@83effe6d51
   - lupin-mobile:lib.features.focus_mode.domain.focus_chat_state.FocusSenderScope@89c1a31fab
+  - lupin-mobile:lib.features.focus_mode.domain.focus_chat_state.FocusChatState@8799c1afc4
+  - lupin-mobile:lib.features.focus_mode.domain.focus_chat_state.FocusMessage@b5d90cb0bb
 ---
 # Focus mode chat
 

@@ -11,6 +11,11 @@ pins:
   - lupin-mobile:lib.features.transcript.data.transcript_repository.TranscriptRefused@01cca107ff
   - lupin-mobile:lib.features.transcript.presentation.live_console_screen.LiveConsoleScreen@eac7a393fa
   - lupin-mobile:lib.features.transcript.presentation.transcript_block_view.TranscriptBlockView@b39bb7625f
+  - lupin-mobile:lib.features.transcript.domain.transcript_stream_bloc.TranscriptViewState@c531ad5541
+  - lupin-mobile:lib.features.transcript.data.transcript_models.TranscriptStreamState@815a780632
+  - lupin-mobile:lib.features.transcript.data.transcript_repository.TranscriptApiException@19502d0360
+  - lupin-mobile:lib.features.transcript.domain.transcript_stream_bloc.TranscriptAppendReceived@5e950caf2e
+  - lupin-mobile:lib.features.transcript.domain.transcript_stream_bloc.TranscriptBacklogLoaded@65aec088ad
 ---
 # Live transcript
 
