@@ -22,7 +22,7 @@ pins:
 The inbox lists the senders who notified the user, opens one sender's conversation and stays fresh from WebSocket frames. Card answers are [[interactive-prompts]]; badges are [[voice-personas]]. The server half is lupin's `notification-delivery` page.
 
 ## What it does
-- `NotificationRepository` wraps the `/api/notifications/...` routes on the shared Dio. Every failure becomes `NotificationApiException` with the server's `detail` text. Path segments are percent-encoded.
+- `NotificationRepository` wraps the `/api/notifications/...` routes on the shared Dio. Every failure becomes `NotificationApiException` with the server's `detail` text. Most path segments are percent-encoded; `markPlayed` and `deleteOne` put the notification id in raw.
 - `NotificationBloc` loads four views: the sender list, one flat conversation, a sender's dates and a conversation grouped by date. Each emits `NotificationsLoading`, then a loaded state or `NotificationsError`.
 - `NotificationsExternalUpdate` is the WebSocket path. It routes by type, then refetches the current view. A failed refresh keeps the last good state.
 - Ordinary types pass the foreground delivery gate and ding through `NotificationAudioService.handleIncoming`; see [[notification-audio-playback]]. The three commons types do nothing here.

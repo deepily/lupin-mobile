@@ -21,11 +21,11 @@ The row widget, the seven status verbs and the write repository that Task List a
 
 ## What it does
 - `TaskRowModel` maps one `/api/tasks` row onto the cells of `RowSchema`. A terse pull drops `detail`, so those fields arrive null.
-- `RowSchema` fixes three lines of cells in render order. Line 1 is the title alone, so it does not truncate at 360 dp.
+- `RowSchema` fixes three lines of cells in render order. Line 1 holds the title and its disclosure control, so the title gets about 12 characters at 360 dp and ellipsizes.
 - `TaskRow` takes no pane parameter, so both panes render identical cells. `VerbReasonSheet` shares that rule, and `TaskFieldControls` edits priority and owner.
 - `kTaskVerbs` lists park, drop, demote, wont_fix, fixed, unpark and approve, in that order. `VerbNeeds` says which need a reason, a date or an arm-then-confirm step.
 - `verbLegality( status )` returns all seven verbs, each enabled or disabled with a reason. A terminal row disables every verb.
-- `buildTaskVerb` makes the payload. Park sends `park_reason`, others `reason`. Unpark sends an explicit null `next_chase_ts`. Fixed sends the `operator (mobile)` receipt.
+- `buildTaskVerb` makes the payload. Park sends `park_reason`; demote, drop and wont-fix send `reason`; unpark sends none. Unpark sends an explicit null `next_chase_ts`. Fixed sends the `operator (mobile)` receipt.
 - `TaskWriteRepository` has two doors. `patchFields` PATCHes priority or owner and cannot send status. `transition` POSTs a verb to `/api/tasks/{id}/transition`.
 - Every write carries `authority: user_direct` and an `actor` of the signed-in email plus `(mobile)`.
 

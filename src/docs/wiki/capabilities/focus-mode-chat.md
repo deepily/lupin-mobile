@@ -21,10 +21,10 @@ pins:
 The phone's main screen: a rail of sessions beside the focused session's conversation, plus the controls that decide what is spoken. Lupin's `websocket-events` page covers the frames it reads. See [[notification-inbox]], [[tts-streaming]] and [[asr-dictation]].
 
 ## What it does
-- `FocusChatBloc` keeps senders in establishment order, the last 7 messages per sender, unread counts and the focused sender. It is separate from the older notification bloc.
+- `FocusChatBloc` keeps one registry of senders, the last 7 messages per sender, unread counts and the focused sender. It is separate from the older notification bloc.
 - It is the only speech dispatcher here. Every inbound notification goes to `TtsOrchestrator.enqueueAlways`, and the stop-list decides what is dropped.
 - A stop-list match is not stored, counted unread or spoken. A muted question is stored with its rule named, and `FocusSpeakAnywayRequested` speaks it.
-- The rail is built once from `senders-visible` and never re-sorts. A reconnect merges and keeps positions. Only a user tap or a notification tap moves focus.
+- The rail is built once from `senders-visible`, sorted by last activity. Live arrivals then keep establishment order and the rail never re-sorts. A reconnect merges and keeps positions. Only a user tap or a notification tap moves focus.
 - `FocusRespondRequested` answers an open ask. With none open it sends a direct message through `POST /api/notify`, not `/api/dm/send`. An unsent answer is resent on reconnect.
 - `FocusFilter` is Live or 24h and `FocusSenderScope` is Personas or All. They change what the rail shows, never what is stored.
 - `FocusChatPane` shows the focused window newest first. A progress group collapses to one row, but an open ask never does.

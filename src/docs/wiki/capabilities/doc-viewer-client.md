@@ -24,7 +24,7 @@ Opens a repo document or an `io/` file from a notification's abstract link, and 
 ## What it does
 - `parseDocLinks` finds markdown links in an abstract. `classifyDocHref` sorts each href into a `DocLinkKind`: docs, io, external or unknown. It never throws.
 - `/app/docs?path=<project>/<rel>` becomes a docs link that fetches `/api/docs/file`. A bare `path=README.md` names no project, so it is unknown. A href with the retired `scope` parameter is also unknown.
-- `DocRepository.fetch` picks a `DocContentKind` from the `content-type` header, not the extension. Binary types are never decoded as text. JSON that parses as a listing is a directory.
+- `DocRepository.fetch` picks a `DocContentKind` from the `content-type` header, not the extension. Audio, video, PDF, octet-stream, vnd and zip types are never decoded as text; gzip and tar are. JSON that parses as a listing is a directory.
 - `DocRepository.upload` posts a multipart form to `/api/docs/upload`. A 409 raises `DocUploadConflict` with the server's suggested name, and the sheet offers Replace, Rename or Cancel.
 - `DocViewerScreen` shows one place at a time and keeps its own back history. Download shares the bytes already held. A binary file shows no preview.
 - Upload shows only when `tokenHasAdminRole` says the token is admin. That hides the button; the server's check decides.

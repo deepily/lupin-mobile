@@ -28,7 +28,7 @@ The operator pane that sends one message to every live seat and tallies acknowle
 
 ## Don't
 - Don't poll, and don't read ack content from `message`. It is always empty.
-- Don't show "n of m acked". After a resume it reads as seats ignoring the operator.
+- Don't read "n of m acked" after a resume as seats ignoring the operator. The recovered tally appends a read-back note.
 - Don't recover acks through `/api/notifications/undelivered`. It skips acks already handed to a socket.
 
 ## Invariants

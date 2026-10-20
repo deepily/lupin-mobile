@@ -18,7 +18,7 @@ pins:
 The trust dashboard and trust-state screens for the decision proxy. The server side is lupin's `decision-proxy` page.
 
 ## What it does
-- `DecisionProxyRepository` wraps eight calls under `/api/proxy/`. Failures become `DecisionProxyApiException` with the server's `detail` text, else a fixed fallback.
+- `DecisionProxyRepository` wraps nine calls under `/api/proxy/`. Failures become `DecisionProxyApiException` with the server's `detail` text, else a fixed fallback.
 - `DecisionProxyBloc` loads mode, pending decisions and batch id. A failed batch lookup is swallowed and leaves `batch` null.
 - Ratify, delete and acknowledge call the server, then reload the dashboard. `DecisionProxySetMode` reloads only if a dashboard was loaded first.
 - `TrustMode` has four modes plus `unknown`. `trustModeFromString` maps null or any unrecognized string to `unknown`.

@@ -17,8 +17,8 @@ A voice persona is the named voice and badge the server gives each Claude Code s
 ## What it does
 - `VoicePersona` is a passive carrier. `fromJson` never throws, missing fields become null, and `borrowed` and `overflow` default to false. Two personas are equal when `voiceId` matches.
 - `PersonaBadge` draws the icon on its colour in a circle. Overflow gets a dotted border and an asterisk, borrowed gets a dashed border, and overflow wins. A null persona draws nothing.
-- `PersonaBadge.colorOf` parses `#RRGGBB` or `#AARRGGBB`. A bad hex falls back to the theme's primary colour.
-- `personaLabel` turns a stored `<persona> <8-hex session>` string into the persona name and keeps two-word names. With no session suffix the string comes back untouched.
+- `PersonaBadge.colorOf` parses `#RRGGBB` or `#AARRGGBB` and returns null on a bad hex. The badge then uses the theme's primary colour.
+- `personaLabel` turns a stored `<persona> <8-hex session>` string into the persona name and keeps two-word names. With no session suffix the trimmed string comes back.
 - `personaDisplayLabel` also upper-cases each word start, the web rule, so it is safe as a grouping key.
 - `NotificationBloc` keeps a persona per sender and copies a frozen snapshot into each loaded state. `PersonaSnapshotMixin` adds `personaFor`; `SpeakerphoneSnapshotMixin` adds `speakerphoneFor`.
 

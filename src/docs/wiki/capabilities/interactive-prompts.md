@@ -21,7 +21,7 @@ When a notification asks the user a question, four shared widgets draw the answe
 - `multiple_choice` gets `MultipleChoicePromptBody`. It gets `MultiQuestionPromptBody` when the options carry a nested `questions` list, wrapped as `{"answers": {header: value}}`.
 - `open_ended_batch` uses `MultiQuestionPromptBody` but submits the map unwrapped. `open_ended` and any unknown type get `OpenEndedPromptBody`.
 - `AskResolution` has `expired`, `answeredElsewhere` and `failed`. The first two close the card instead of raising an error.
-- `classifyRespondFailure` reads a 400 message by case-insensitive substring. `classifyResumeStatus` reads the resume route's `status`. Quick ask and the focus chat bloc use both.
+- `classifyRespondFailure` reads a 400 message by case-insensitive substring. `classifyResumeStatus` reads the resume route's `status`. Quick ask uses both; the focus chat bloc uses only `classifyRespondFailure`.
 
 ## Don't
 - Don't put an endpoint inside a body. The host passes an `onRespond` callback.

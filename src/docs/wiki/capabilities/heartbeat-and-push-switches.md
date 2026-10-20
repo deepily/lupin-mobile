@@ -24,7 +24,7 @@ Two settings sections flip fleet-wide server switches from the phone: the heartb
 
 ## Don't
 - Don't cache either state. Any client can flip the poke, and a server restart clears the push pause. Both sections re-read on open and on each foreground.
-- Don't read a good GET as proof of admin rights. After one admin-only refusal the section stays disabled until the screen reopens.
+- Don't read a good GET as proof of admin rights. After one admin-only refusal the heartbeat section stays disabled until the screen reopens. The push pause section clears it after any successful action.
 - Don't read `muted` or `paused` as anything but a JSON `true`. A malformed body reads as not muted and not paused.
 
 ## Invariants

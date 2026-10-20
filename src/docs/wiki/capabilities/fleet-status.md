@@ -34,6 +34,6 @@ The Fleet Status destination: one card per seat, an offline toggle, the fleet-si
 - Don't read a failed watchable call as an error. It returns the empty roster and every button hides.
 
 ## Invariants
-- A cancelled request is rethrown as a cancel, never as a failure.
+- The three reads rethrow a cancelled request as a cancel, never as a failure. The two writes wrap it.
 - A missing `skeleton_crew` object (an older server) hides the switch.
 - Open item: `watchableRosterEndpoint` is a provisional path, marked TODO in `FleetRepository`.

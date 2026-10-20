@@ -20,7 +20,7 @@ Three panes show the task store: Task List, Holding Area and Finished Tasks. The
 ## Task List
 - `TaskListRepository.fetch` pulls 500 terse rows with `hide_parked=false` and `char_budget=0`. A page that is truncated or has more rows shows a banner.
 - `groupTasksByOwner` drops terminal rows and groups by `owner_persona`, not the accountable manager. Unassigned comes last. Rows sort priority first, then status, then title.
-- The headline reads `Live: n · Parked: p · Total: t`. A park counts only until its chase time passes.
+- The headline reads `Live: n`, plus `Parked: p · Total: t` when a park is active. A park counts only until its chase time passes.
 - Lookup uses `classifyTaskRef` and then `GET /api/tasks/<ref>`. The `id_prefix` query would hide held rows. Four hex characters is the minimum.
 - `buildNewTicketPayload` builds the New Ticket card's body: P2, approved, type `task`, epic `epic:unassigned`. A 2xx with a `petition` field is its own outcome, because the row sits at P1 in the holding area.
 
