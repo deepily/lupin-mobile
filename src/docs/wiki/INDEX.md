@@ -10,7 +10,7 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 - [[settings-store]] — typed settings definitions, validation, quick presets and change events. `core/settings`
 - [[local-caches]] — the generic, network and audio caches, their policy and eviction, and key-value storage. `core/cache`, `core/storage`
 - [[offline-queue]] — queueing requests while offline and replaying them when the network returns. `core/cache/offline_manager.dart`, `services/network/network_connectivity_service.dart`
-- [[error-handling-and-recovery]] — typed app errors, recovery strategies and the HTTP error interceptor. `core/error_handling`
+- [[error-handling-and-recovery]] — typed app errors, recovery strategies and the global error handler. `core/error_handling`
 - [[logging-and-redaction]] — the leveled logger, its console, file and remote sinks, and secret redaction. `core/logging`
 - [[http-client]] — the HTTP layer, its cached variant and the auth interceptor. `services/network`, `services/auth/auth_interceptor.dart`
 - [[app-lifecycle]] — foreground and background state and the connection strategy that follows it. `services/lifecycle`, `features/auth/presentation/ws_lifecycle_listener.dart`
