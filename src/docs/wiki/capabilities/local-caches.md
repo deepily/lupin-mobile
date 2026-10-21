@@ -19,7 +19,7 @@ pins:
 ---
 # Local caches
 
-`CacheManager<T>` is the one generic cache: a memory map backed by `StorageManager`, governed by a `CachePolicy`. `NetworkCache` and `AudioCache` are typed wrappers over it, and `StorageManager` is the key-value and file store under all of it. See [[offline-queue]] and [[http-client]].
+`CacheManager<T>` is the one generic cache: a memory map backed by `StorageManager`, governed by a `CachePolicy`. `NetworkCache` and `AudioCache` are typed wrappers over it, and `StorageManager` is the key-value and file store under all of it. See [[offline-queue]] and [[http-client]]. The events each cache emits are on [[local-caches-events]], [[network-cache-events]] and [[audio-cache-events]].
 
 ## What it does
 - `CacheManager` needs a `cacheKey`, `toJson`, `fromJson` and a `StorageManager`. `get` reads memory first, then persistent storage, and returns null for a missing or expired entry.

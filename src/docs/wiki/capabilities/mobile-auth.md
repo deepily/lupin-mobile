@@ -22,7 +22,7 @@ pins:
 ---
 # Mobile auth
 
-`AuthBloc` runs login, logout, biometric unlock, session checks and server switching over `AuthRepository`. `AuthGate` shows the login screen, the biometric prompt or the app from the bloc's state. See [[biometric-and-credential-store]], [[server-context]] and [[http-client]].
+`AuthBloc` runs login, logout, biometric unlock, session checks and server switching over `AuthRepository`. `AuthGate` shows the login screen, the biometric prompt or the app from the bloc's state. See [[biometric-and-credential-store]], [[server-context]] and [[http-client]]. The bloc's events and quiet states are on [[mobile-auth-events-and-states]].
 
 ## What it does
 - `AuthRepository` is the only client of `/auth/login`, `/auth/refresh`, `/auth/logout` and `/auth/me`. It returns `AuthTokens` and `AuthUser`, and throws `AuthException` with the HTTP status.
