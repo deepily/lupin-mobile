@@ -18,9 +18,11 @@ Ported from lupin's `.claude/skills/reuse-reviewer/SKILL.md`. Advisory: the gati
 1. **List the new definitions.** Index the base and the head with lupin's tool, then diff them. `--all` includes private classes and nested helpers, where unplanned duplicates usually live.
 
    ```bash
-   cd "$LUPIN_ROOT" && PYTHONPATH=src python -m cosa.repo.symindex build --root <mobile tree>      # once per side; note the generation path it prints
+   cd "$LUPIN_ROOT" && PYTHONPATH=src python -m cosa.repo.symindex build --root <mobile tree> --out <scratch dir>      # once per side; note the generation path it prints
    cd "$LUPIN_ROOT" && PYTHONPATH=src python -m cosa.repo.symindex diff <OLD_GEN> <NEW_GEN> --all > diff.json
    ```
+
+   Always pass `--out` with a directory of your own, one per side. Without it builds from different seats share one directory per root name and overwrite each other.
 
    The new definitions are `added` in `diff.json`. If it holds `algorithm_changed`, rebuild both sides with one tool version and diff again. Treat a `changed` entry whose body grew a new nested helper as a new definition.
 
@@ -83,9 +85,9 @@ Ported from lupin's `.claude/skills/reuse-reviewer/SKILL.md`. Advisory: the gati
 - A reuse miss is a symbol that should have been on the shortlist and was not. Baseline misses so far: three `*ApiException` classes (twelve look-alikes, ten slots).
 - The id changes when the definition's signature or first doc line changes.
 - Cite the id from the call you made on the final head. An id from an earlier edit still replays, but it describes the older text.
-- Report a miss to the manager as a task-store row (project `lupin-mobile`) with the receipt id and the symbol.
+- Report a miss to the manager as a task-store row (project `lupin`, title prefix `[LUPIN-MOBILE]`) with the receipt id and the symbol.
 - The counter-reviewer replays your receipts with `replay( receipt_id, root )` and reads the source of any candidate you dismissed.
-- The baseline (set, scoring script, receipts) is in `/mnt/DATA01/include/www.deepily.ai/projects-data/lupin-mobile/reuse-review/negatives-2026.10.20/` once it is copied there; until then it is in the T5 report from row 318bd87a.
+- The baseline (set, scoring script, receipts) is in `/mnt/DATA01/include/www.deepily.ai/projects-data/lupin-mobile/reuse-review/negatives-2026.10.20/`.
 
 ## Counter-reviewer brief
 
@@ -121,7 +123,7 @@ This brief is for the second reviewer. The first reviewer's rulings are claims. 
    - `UNVERIFIED <cause>`: a named replay error or an unreadable source stopped the check. Give the error name.
    - `NOTHING_TO_REPLAY`: the ruling cites `excluded`; it is not a failed check.
 
-5. **Log each miss.** A symbol the receipt should have listed is a miss. Report it to the manager as a task-store row with the receipt id and the symbol. The librarian repairs the wiki from that row.
+5. **Log each miss.** A symbol the receipt should have listed is a miss. Report it to the manager as a task-store row (project `lupin`, title prefix `[LUPIN-MOBILE]`) with the receipt id and the symbol. The librarian repairs the wiki from that row.
 
 ### Limits
 
