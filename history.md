@@ -14,6 +14,20 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.20 | Session `31cd100e` (Tiffany) — Plans 1 and 2 on mobile, from zero to done
+
+Rick's broadcast `be6e2010`: finish both plans and work with María on code reuse. Crew: Tiberius, Pocholo, Maya, Rachel and Rio, all Sonnet 5.5, all reaped with mementos.
+
+- **Plan** `src/rnd/2026.10.20-plans-1-2-mobile-parity-plan.md` (`2cb4e0b`, status `caa2291`). Rick ruled exact lookups now, vectors later.
+- **Dart index** (row `dad36ae1`): lupin's indexer, 2609 entries, two hand checks of 30 modules each.
+- **Lookups** (row `55013536`): María's lupin `fc0517fc6` lets the reuse tools answer for mobile. I reviewed it, and a live `check_exists` returned Dart classes.
+- **Wiki** (row `f45cf2cb`): 39 pages plus 28 sub-pages, merged `d2d5f03`, `a2ce0a5`, `5464459`, `dee7e11`. The gate passed. 16 of 2609 names have no page.
+- **Recall baseline**: 37 of 40 known twins found, 0 of 200 random negatives. The set is in `projects-data/lupin-mobile/reuse-review/negatives-2026.10.20/`. The misses are lupin row `74d0db47`.
+- **Reviewer skill** `.claude/skills/reuse-reviewer/SKILL.md`, merged `d925b94`.
+- **Queue bug** `45140e2e`: deleting a job now re-fetches the queue, with a test that fails first. Merged `d19bfd8`; APK 2026.10.20 build 1.
+- **Handed off**: the librarian tick to Cheech (row `874dff1a`). The cache duplicate `f3d4fc00` is parked until 2026-10-28.
+- **Lesson**: check a claimed ruling against the card. Maya's row said P2, but the card said "a finding for later".
+
 ## 2026.10.14 | Session `8e50c76c` (Tiffany) — Plan 1 mobile done, then lupin rows from Cheech's list
 
 Crew: Chloé, Pocholo, Tiberius, Rio, John and Extra 1, all Sonnet 5.5, all reaped with mementos. The last two seats went to Mr. Radio, by Rick's ruling.

@@ -1,6 +1,20 @@
 # TODO
 
-## Resume here: 2026-10-14 close (Tiffany)
+## Resume here: 2026-10-20 close (Tiffany)
+
+Plans 1 and 2 are done on mobile. The plan is `src/rnd/2026.10.20-plans-1-2-mobile-parity-plan.md`. Open: Cheech's librarian tick (`874dff1a`); the cache duplicate `f3d4fc00` is parked until 2026-10-28; lupin row `74d0db47` (shortlist slots) is María's.
+
+- [ ] Archive history.md (about 18.3k tokens after tonight; Rick chose "next session" on 2026-10-20).
+
+### Decisions Log — 2026-10-20 (session `31cd100e`, Tiffany)
+
+- Rick: exact lookups for mobile now; vectors stay lupin only (R13).
+- Rick: 39 slug names approved, no prefix, one local-caches page plus a duplicate finding "for later".
+- Rick: add the 28 sub-pages; accept the `src/docs/wiki/` line in `tool/data/markdown_scope.txt`.
+- Rick: fix the queue delete bug tonight (`45140e2e`).
+- Cheech and Tiffany: the librarian's mobile rollup rows go to Tiffany.
+
+## Earlier: 2026-10-14 close (Tiffany)
 
 1. **Board is empty.** One held row is left: `5970956a`, the post-game for the markdown gate crew, which waits on Rick.
 2. **Not pushed**: every mobile commit from `0ff5b47` to this close. Push only on Rick's word.
