@@ -17,7 +17,7 @@ pins:
 ---
 # Task row and verbs
 
-The row widget, the seven status verbs and the write repository that Task List and Holding Area share. Finished Tasks does not use them.
+The row widget, the seven status verbs and the write repository that Task List and Holding Area share. Finished Tasks does not use them. Detail pages: [[task-verbs-and-write-repository]].
 
 ## What it does
 - `TaskRowModel` maps one `/api/tasks` row onto the cells of `RowSchema`. A terse pull drops `detail`, so those fields arrive null.

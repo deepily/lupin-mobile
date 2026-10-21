@@ -17,7 +17,7 @@ pins:
 ---
 # Agentic job forms
 
-The nine forms that submit long-running agentic jobs from the phone, the request model behind each, and one bloc that runs them all. The server contract is lupin's `agentic-job-contract` page.
+The nine forms that submit long-running agentic jobs from the phone, the request model behind each, and one bloc that runs them all. The server contract is lupin's `agentic-job-contract` page. Detail pages: [[agentic-requests-and-forms]].
 
 ## What it does
 - `AgenticHubScreen` lists nine cards and opens a form from each, passing the shared `AgenticSubmissionBloc` down. `AgenticJobType` names the same nine kinds.

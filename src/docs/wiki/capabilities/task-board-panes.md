@@ -15,7 +15,7 @@ pins:
 ---
 # Task board panes
 
-Three panes show the task store: Task List, Holding Area and Finished Tasks. The first two share the row in [[task-row-and-verbs]]. Each pane has a bloc and a repository, and polls only while visible.
+Three panes show the task store: Task List, Holding Area and Finished Tasks. The first two share the row in [[task-row-and-verbs]]. Each pane has a bloc and a repository, and polls only while visible. Detail pages: [[finished-tasks-pane]], [[holding-area-pane]], [[task-list-data]], [[task-list-bloc-and-widgets]].
 
 ## Task List
 - `TaskListRepository.fetch` pulls 500 terse rows with `hide_parked=false` and `char_budget=0`. A page that is truncated or has more rows shows a banner.

@@ -19,7 +19,7 @@ pins:
 ---
 # Quick ask
 
-Quick ask is the one-shot question screen: tap, speak, tap again, send, read the answer. `QuickAskBloc` runs the capture and follows the job. It is separate from the queue bloc, whose single slot a refresh would wipe. See [[job-queue-client]] and [[asr-dictation]].
+Quick ask is the one-shot question screen: tap, speak, tap again, send, read the answer. `QuickAskBloc` runs the capture and follows the job. It is separate from the queue bloc, whose single slot a refresh would wipe. See [[job-queue-client]] and [[asr-dictation]]. Detail pages: [[quick-ask-events-and-state]].
 
 ## What it does
 - Record is a tap toggle. Release transcribes into `draftTranscript` for review, and nothing leaves the phone until `QuickAskDraftSent`. `QuickAskPreferences` can switch to send immediately.

@@ -16,7 +16,7 @@ pins:
 ---
 # Fleet status
 
-The Fleet Status destination: one card per seat, an offline toggle, the fleet-size cap dial and the skeleton crew switch. It reads the arbiter's state through the Lupin server.
+The Fleet Status destination: one card per seat, an offline toggle, the fleet-size cap dial and the skeleton crew switch. It reads the arbiter's state through the Lupin server. Detail pages: [[fleet-status-models-and-bloc]].
 
 ## What it does
 - `FleetRepository.fetchState` reads `/api/arbiter/fleet-state` into a `FleetComposite`. A 200 with `status: "unreachable"` means the arbiter is down, not that the fleet is empty. Check `isUnreachable`.

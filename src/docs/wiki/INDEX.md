@@ -43,26 +43,48 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 ## Notifications, conversations and decisions
 
 - [[notification-inbox]] — the inbox, conversations by sender and date, and the repository, bloc and models behind them. `features/notifications`, `shared/models`
+  - [[notification-wire-models]] — The notification, sender, date and gist response models and the ask-ending enum. `features/notifications`, `shared/models`
+  - [[notification-bloc-events]] — The events the notification bloc accepts, from inbox load to gist request. `features/notifications`, `shared/models`
+  - [[notification-bloc-states]] — The states the notification bloc emits, loaded views, gist and response states. `features/notifications`, `shared/models`
 - [[interactive-prompts]] — the yes or no, multiple-choice, open-ended and multi-question answer sheets. `features/notifications/presentation`, `shared/widgets`
 - [[voice-personas]] — persona identity, the badge, labels and the speakerphone snapshot. `features/notifications/data`, `core/text`
 - [[quick-ask]] — a one-shot voice or text question to the server. `features/quick_ask`, `services/quick_ask`
+  - [[quick-ask-events-and-state]] — The quick ask bloc's events, phases and block reasons. `features/quick_ask`, `services/quick_ask`
 - [[decision-proxy-client]] — the trust dashboard and trust state screens. `features/decision_proxy`
+  - [[decision-proxy-models]] — Trust modes, status, decision and trust-state models. `features/decision_proxy`
+  - [[decision-proxy-events-and-states]] — The decision proxy bloc's events and states. `features/decision_proxy`
 - [[broadcast-pane]] — the operator broadcasts list and the acknowledgements. `features/broadcast`
+  - [[broadcast-bloc-and-models]] — Broadcast events, states and the ack models not covered by the parent. `features/broadcast`
 
 ## Queue, tasks and fleet
 
 - [[job-queue-client]] — job models and lifecycle, the queue dashboard, job detail and the submit sheet. `features/queue`, `shared/models`
+  - [[job-queue-models]] — Queue request and response models and the shared Job vocabulary. `features/queue`, `shared/models`
+  - [[job-queue-events]] — The queue bloc's events: loads, submits and job actions. `features/queue`, `shared/models`
+  - [[job-queue-states]] — The queue bloc's states: snapshot, history, submit and action results. `features/queue`, `shared/models`
 - [[agentic-job-forms]] — the nine submit forms and their request models, behind one bloc. `features/agentic`
+  - [[agentic-requests-and-forms]] — The nine request models, nine form widgets and the bloc's events and states. `features/agentic`
 - [[task-board-panes]] — the task list, the holding area, finished tasks and the new-ticket sheet. `features/task_list`, `features/holding_area`, `features/finished_tasks`
+  - [[finished-tasks-pane]] — Finished-task models, repository, bloc and screen. `features/task_list`, `features/holding_area`, `features/finished_tasks`
+  - [[holding-area-pane]] — Holding-area models, repository, bloc, pane and filer header. `features/task_list`, `features/holding_area`, `features/finished_tasks`
+  - [[task-list-data]] — The task list model, lookup, new-ticket model and repository. `features/task_list`, `features/holding_area`, `features/finished_tasks`
+  - [[task-list-bloc-and-widgets]] — The task list bloc, its sheet and headers. `features/task_list`, `features/holding_area`, `features/finished_tasks`
 - [[task-row-and-verbs]] — the shared task row, schema-driven field controls, verbs and the write repository. `features/fleet`
+  - [[task-verbs-and-write-repository]] — The verb table, the row and schema models, write repository and reason sheet. `features/fleet`
 - [[pane-polling-and-visibility]] — mixins that poll a pane only while it is visible. `features/fleet/domain`, `features/fleet/presentation`
 - [[fleet-status]] — fleet rows, watchables, the cap dial and the status screen. `features/fleet_status`
+  - [[fleet-status-models-and-bloc]] — Fleet row and watchable models, repository and bloc events. `features/fleet_status`
 - [[heartbeat-and-push-switches]] — the settings sections for the heartbeat poke and the push pause. `features/settings`
 
 ## Sessions, docs and artifacts
 
 - [[claude-code-sessions]] — listing and dispatching Claude Code seats from the phone. `features/claude_code`
 - [[focus-mode-chat]] — the per-session chat pane, session rail, filter bar and TTS queue sheet. `features/focus_mode`, `shared/widgets`
+  - [[focus-chat-events]] — The focus chat bloc's events, from selection to ask expiry. `features/focus_mode`, `shared/widgets`
+  - [[focus-mode-screen-parts]] — The focus screen's drawer data, repositories, silencer types, pause banner and state. `features/focus_mode`, `shared/widgets`
 - [[live-transcript]] — streaming another seat's transcript as a backlog plus live frames. `features/transcript`
+  - [[transcript-stream-events-and-frames]] — The transcript bloc's events and the remaining frame models. `features/transcript`
 - [[doc-viewer-client]] — opening repo documents by path, the split panel, link taps and upload. `features/docs`
+  - [[doc-links-models-and-upload]] — Link helpers, content models and upload helpers. `features/docs`
+  - [[doc-directory-panel-and-sheets]] — The directory view, roots panel, panel placement and upload sheet. `features/docs`
 - [[artifact-viewers]] — the markdown report, slide deck and audio artifact viewers and the io file fetch. `features/artifacts`, `services/artifacts`

@@ -18,7 +18,7 @@ pins:
 ---
 # Focus mode chat
 
-The phone's main screen: a rail of sessions beside the focused session's conversation, plus the controls that decide what is spoken. Lupin's `websocket-events` page covers the frames it reads. See [[notification-inbox]], [[tts-streaming]] and [[asr-dictation]].
+The phone's main screen: a rail of sessions beside the focused session's conversation, plus the controls that decide what is spoken. Lupin's `websocket-events` page covers the frames it reads. See [[notification-inbox]], [[tts-streaming]] and [[asr-dictation]]. Detail pages: [[focus-chat-events]], [[focus-mode-screen-parts]].
 
 ## What it does
 - `FocusChatBloc` keeps one registry of senders, the last 7 messages per sender, unread counts and the focused sender. It is separate from the older notification bloc.
