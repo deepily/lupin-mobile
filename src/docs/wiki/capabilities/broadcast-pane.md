@@ -14,7 +14,7 @@ pins:
 ---
 # Broadcast pane
 
-The operator pane that sends one message to every live seat and tallies acknowledgements. The server side is lupin's `commons-and-dm` page.
+The operator pane that sends one message to every live seat and tallies acknowledgements. The server side is lupin's `commons-and-dm` page. Detail pages: [[broadcast-bloc-and-models]].
 
 ## What it does
 - `BroadcastRepository` has four doors: active sessions, send, a five-entry history and a saved-acks read. None is polled.

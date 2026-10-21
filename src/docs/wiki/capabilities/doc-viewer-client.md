@@ -19,7 +19,7 @@ pins:
 ---
 # Doc viewer client
 
-Opens a repo document or an `io/` file from a notification's abstract link, and browses folders. It renders the server's raw bytes natively. The server half is lupin's `doc-viewer` page. Links come from [[notification-inbox]] and [[focus-mode-chat]].
+Opens a repo document or an `io/` file from a notification's abstract link, and browses folders. It renders the server's raw bytes natively. The server half is lupin's `doc-viewer` page. Links come from [[notification-inbox]] and [[focus-mode-chat]]. Detail pages: [[doc-links-models-and-upload]], [[doc-directory-panel-and-sheets]].
 
 ## What it does
 - `parseDocLinks` finds markdown links in an abstract. `classifyDocHref` sorts each href into a `DocLinkKind`: docs, io, external or unknown. It never throws.

@@ -15,7 +15,7 @@ pins:
 ---
 # Decision proxy client
 
-The trust dashboard and trust-state screens for the decision proxy. The server side is lupin's `decision-proxy` page.
+The trust dashboard and trust-state screens for the decision proxy. The server side is lupin's `decision-proxy` page. Detail pages: [[decision-proxy-models]], [[decision-proxy-events-and-states]].
 
 ## What it does
 - `DecisionProxyRepository` wraps nine calls under `/api/proxy/`. Failures become `DecisionProxyApiException` with the server's `detail` text, else a fixed fallback.

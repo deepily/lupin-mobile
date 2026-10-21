@@ -19,7 +19,7 @@ pins:
 ---
 # Live transcript
 
-The Live Console: one Claude Code seat's transcript, read-only, as display blocks. It reads a REST backlog, then follows a WebSocket tail. Lupin's server half is the `session-transcript-console` page. The Watch button on a seat's row in [[fleet-status]] opens it.
+The Live Console: one Claude Code seat's transcript, read-only, as display blocks. It reads a REST backlog, then follows a WebSocket tail. Lupin's server half is the `session-transcript-console` page. The Watch button on a seat's row in [[fleet-status]] opens it. Detail pages: [[transcript-stream-events-and-frames]].
 
 ## What it does
 - `TranscriptRepository` reads `/api/cc-transcript/...`: the opening tail, a forward read from an offset, a backwards page and one block's full text. A 403 raises `TranscriptRefused`.

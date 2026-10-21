@@ -19,7 +19,7 @@ pins:
 ---
 # Job queue client
 
-The phone's view of lupin's job queue: a four-tab dashboard, a job detail screen, a submit sheet and the job state vocabulary. The server half is lupin's `cj-flow-queue` page.
+The phone's view of lupin's job queue: a four-tab dashboard, a job detail screen, a submit sheet and the job state vocabulary. The server half is lupin's `cj-flow-queue` page. Detail pages: [[job-queue-models]], [[job-queue-events]], [[job-queue-states]].
 
 ## What it does
 - `QueueRepository` wraps the queue and v2 flow doors: ask, spoken ask, submit, resume, listings, history, interactions, and cancel, pause, resume, delete, inject and retry.

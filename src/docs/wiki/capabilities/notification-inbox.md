@@ -19,7 +19,7 @@ pins:
 ---
 # Notification inbox
 
-The inbox lists the senders who notified the user, opens one sender's conversation and stays fresh from WebSocket frames. Card answers are [[interactive-prompts]]; badges are [[voice-personas]]. The server half is lupin's `notification-delivery` page.
+The inbox lists the senders who notified the user, opens one sender's conversation and stays fresh from WebSocket frames. Card answers are [[interactive-prompts]]; badges are [[voice-personas]]. The server half is lupin's `notification-delivery` page. Detail pages: [[notification-wire-models]], [[notification-bloc-events]], [[notification-bloc-states]].
 
 ## What it does
 - `NotificationRepository` wraps the `/api/notifications/...` routes on the shared Dio. Every failure becomes `NotificationApiException` with the server's `detail` text. Most path segments are percent-encoded; `markPlayed` and `deleteOne` put the notification id in raw.
