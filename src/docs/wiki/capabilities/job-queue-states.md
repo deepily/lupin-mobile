@@ -23,7 +23,7 @@ The states `QueueBloc` emits, all subclasses of `QueueState`. The bloc is on [[j
 - `QueueSnapshotLoaded` holds a `QueueResponse`, `QueueHistoryLoaded` a `JobHistoryPage` and `QueueInteractionsLoaded` a `JobInteractionsResponse`.
 - `QueueSubmitting` covers both submit paths. `QueueAnswered` holds the `AskResponse` of a synchronous ask, which has nothing to poll. `QueueSubmitted` holds the `PushJobResponse` of an agentic submit.
 - `QueueActionComplete` holds a confirmation: `Cancel requested`, `Job paused`, `Job resumed`, `Job deleted`, `Message delivered`, a retry summary or the phase resumed from.
-- Every `QueueApiException` in a handler becomes `QueueError` with its message.
+- A `QueueApiException` becomes `QueueError` with its message in every handler except `QueueExternalUpdate`, which keeps the last state.
 
 ## Don't
 - Don't rely on equality to see changed content. A snapshot state compares by queue name and job count. A history state compares by total and offset, and an interactions state by job id and count.

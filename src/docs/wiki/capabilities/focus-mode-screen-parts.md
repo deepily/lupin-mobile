@@ -21,7 +21,7 @@ pins:
 The helper functions, enums and widgets around the focus screen, beyond the pane and rail on [[focus-mode-chat]]. The events are on [[focus-chat-events]].
 
 ## What it does
-- `sessionHashOf` returns the 8 hex characters after the last `#` of a sender id, or null. `senderWithSessionHash` returns the first sender in an order with that hash. Two ids with one hash are the same session.
+- `sessionHashOf` returns the text after the last `#` of a sender id, or null when there is no `#` or nothing follows it. It does not check the length or that the text is hex. `senderWithSessionHash` returns the first sender in an order with that hash. Two ids with one hash are the same session.
 - `FocusHydration` is idle, loading, ready or error. `FocusBand` is live (last hour), history (last 24 hours) or stale, which leaves the rail.
 - `focusDrawerSurfaces` lists the drawer's screens as data: Agentic Jobs, Claude Code, Broadcast, Fleet Status, Finished Tasks, Task List and Holding Area. Broadcast takes the app-root bloc by value; the four polling panes build their bloc inside the route.
 - `focusDrawerTools` lists Notifications, Settings and the stop-list entry, which is disabled when no stop list is registered. `FocusDrawerSurface` is one row: icon, title, builder and an enabled flag.
