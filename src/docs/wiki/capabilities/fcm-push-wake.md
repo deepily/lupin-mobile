@@ -22,7 +22,7 @@ pins:
 ---
 # Push wake-up
 
-A Firebase message wakes the app so it can show unplayed notifications while no WebSocket is open. `FcmWakeupService` registers the device token, `FcmWakeChain` does the background work, and `NotificationTapRouter` holds a tap until the app can route it. See [[notification-audio-playback]] and [[ws-connection]].
+A Firebase message wakes the app so it can show unplayed notifications while no WebSocket is open. `FcmWakeupService` registers the device token, `FcmWakeChain` does the background work, and `NotificationTapRouter` holds a tap until the app can route it. See [[notification-audio-playback]] and [[ws-connection]]. The background helper functions are on [[fcm-wake-background-helpers]].
 
 ## What it does
 - The code flag `kEnableFcm` defaults to off. The build scripts pass `ENABLE_FCM=true` unless given `--no-fcm`. `initFcmIfEnabled` does nothing when it is off.

@@ -9,6 +9,9 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 - [[app-bootstrap-and-di]] — start-up order, the service locator, the root widget and the build stamp. `main.dart`, `app.dart`, `core/app_initialization.dart`, `core/di`, `core/build_info.dart`
 - [[settings-store]] — typed settings definitions, validation, quick presets and change events. `core/settings`
 - [[local-caches]] — the generic, network and audio caches, their policy and eviction, and key-value storage. `core/cache`, `core/storage`
+- [[local-caches-events]] — the events `CacheManager` emits on each put, hit, miss, removal and cleanup. `core/cache/cache_manager.dart`
+- [[network-cache-events]] — the events `NetworkCache` emits per cached HTTP response. `core/cache/network_cache.dart`
+- [[audio-cache-events]] — the events `AudioCache` emits per cached utterance. `core/cache/audio_cache.dart`
 - [[offline-queue]] — queueing requests while offline and replaying them when the network returns. `core/cache/offline_manager.dart`, `services/network/network_connectivity_service.dart`
 - [[error-handling-and-recovery]] — typed app errors, recovery strategies and the global error handler. `core/error_handling`
 - [[logging-and-redaction]] — the leveled logger, its console, file and remote sinks, and secret redaction. `core/logging`
@@ -20,6 +23,7 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 ## Auth
 
 - [[mobile-auth]] — login, token refresh, session persistence, the auth gate and the auth bloc. `services/auth`, `features/auth`
+- [[mobile-auth-events-and-states]] — the auth bloc's input events, its two quiet states, and the user role and status enums. `features/auth/domain`, `shared/models/user.dart`
 - [[biometric-and-credential-store]] — biometric unlock and the secure credential vault. `services/auth`, `features/auth/presentation`
 - [[server-context]] — which server the app talks to and the toggle that switches it. `services/auth/server_context_service.dart`, `features/settings/presentation`
 
@@ -27,8 +31,10 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 
 - [[ws-connection]] — the WebSocket client, reconnect coordination and the resume cursor. `services/websocket`
 - [[fcm-push-wake]] — Firebase wake-ups, the token source, the wake chain and notification taps. `services/push`
+- [[fcm-wake-background-helpers]] — the helpers the background isolate runs during a wake: credentials, token exchange, fetch, notification id and details. `services/push/fcm_bootstrap.dart`
 - [[notification-audio-playback]] — deciding whether a notification is spoken, playing it, and the unplayed order. `services/notification_audio`, `services/push`
 - [[tts-streaming]] — speech intent, the orchestrator, the streaming player and preview truncation. `services/tts`
+- [[tts-audio-chunk-model]] — the audio chunk record and its type and status enums. `shared/models/audio_chunk.dart`
 - [[asr-dictation]] — microphone capture, speech to text, dictation splicing and the microphone permission. `services/asr`, `services/permissions`, `shared/widgets`
 - [[round-trip-probe]] — measuring the voice round trip with a probe WAV. `services/diagnostics`, `features/settings/presentation`
 - [[notification-filtering]] — the stop list, progress-group collapse, muting a sender and the filter settings. `services/notification_filter`, `features/notifications/presentation`

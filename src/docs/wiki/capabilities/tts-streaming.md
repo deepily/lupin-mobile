@@ -15,11 +15,10 @@ pins:
   - lupin-mobile:lib.services.tts.tts_orchestrator.TtsSuppression@179de0276e
   - lupin-mobile:lib.services.tts.tts_orchestrator.TtsQueueItem@dc045be064
   - lupin-mobile:lib.services.tts.tts_preview_truncator.TtsPreviewTruncator@3b95515188
-  - lupin-mobile:lib.shared.models.audio_chunk.AudioChunk@1fcaca318c
 ---
 # Text-to-speech playback
 
-`TtsOrchestrator` is the single queue every spoken message goes through, so only one voice plays at a time. `StreamingTtsPlayer` fetches ElevenLabs audio from the server and plays it. When ElevenLabs fails, the orchestrator speaks on the device. See [[notification-audio-playback]], [[focus-mode-chat]] and [[asr-dictation]].
+`TtsOrchestrator` is the single queue every spoken message goes through, so only one voice plays at a time. `StreamingTtsPlayer` fetches ElevenLabs audio from the server and plays it. When ElevenLabs fails, the orchestrator speaks on the device. See [[notification-audio-playback]], [[focus-mode-chat]] and [[asr-dictation]]. The chunk record for cached audio is on [[tts-audio-chunk-model]].
 
 ## What it does
 - `enqueueAlways` is the focus-surface entry point and speaks every notification. `enqueueIfSpeakable` is the legacy gated one, whose production dispatch is withdrawn at the DI seam.
@@ -29,7 +28,7 @@ pins:
 - `pause()` holds the queue without dropping anything. `setCaptureHold( true )` also holds it while the microphone records.
 - An urgent message preempts a non-urgent one that is playing, and the interrupted one requeues behind it. While paused it only queues.
 - `StreamingTtsPlayer.speak( text )` posts to `/api/get-speech-elevenlabs`. The audio arrives as WebSocket chunks and plays once as one PCM blob. `TtsCompleteEvent` fires after playback ends.
-- A `quota_exceeded` error switches to `flutter_tts` for 5 minutes. `queueStream` feeds the queue viewer with skip, remove and clear. `AudioChunk` models one piece of audio.
+- A `quota_exceeded` error switches to `flutter_tts` for 5 minutes. `queueStream` feeds the queue viewer with skip, remove and clear.
 
 ## Don't
 - Don't fire completion before playback ends. The next `play()` would cut the current utterance.
