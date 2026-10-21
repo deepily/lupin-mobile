@@ -11,7 +11,7 @@ pins:
 `AudioChunk` is the record for one piece of streamed or cached audio, with the bytes and the playback state. Part of [[tts-streaming]]. The cache that stores it is in [[local-caches]].
 
 ## What it does
-- It holds `data` (the encoded bytes), `type`, `status`, and optional `text`, `provider`, `voiceId`, `sequenceNumber`, `totalChunks`, `duration`, `sampleRate`, `bitRate`, `format` and `metadata`.
+- It requires `id`, `type`, `data` and `timestamp`. `status` defaults to `pending`. The optional fields are `text`, `provider`, `voiceId`, `sequenceNumber`, `totalChunks`, `duration`, `sampleRate`, `bitRate`, `format` and `metadata`.
 - `AudioChunkType` is `tts`, `voice`, `notification` or `system`. `AudioChunkStatus` is `pending`, `playing`, `completed`, `failed` or `cached`, and defaults to `pending`.
 - `fromJson` and `toJson` use snake_case keys and write `data` as a list of integers. An unknown type reads as `tts` and an unknown status as `pending`.
 - `isFirstChunk` is true at sequence 0. `isLastChunk` is false when the sequence number or the total is unknown.

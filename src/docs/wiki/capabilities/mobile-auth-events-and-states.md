@@ -19,7 +19,7 @@ The six inputs `AuthBloc` accepts, the two states that carry no data, and the ro
 
 ## What it does
 - `AuthGate` sends `AuthStarted` once, when it is created. `AuthLoginRequested( email, password )` comes from `LoginScreen`.
-- `AuthLogoutRequested` and `AuthBiometricUnlockRequested` come from `BiometricPromptScreen`. `AuthServerContextSwitchRequested( contextId )` comes from `ServerContextToggle`.
+- `AuthBiometricUnlockRequested` comes from `BiometricPromptScreen`. `AuthLogoutRequested` comes from there too, and from `LupinHomeScreen` and `FocusModeScreen`. `AuthServerContextSwitchRequested( contextId )` comes from `ServerContextToggle`.
 - `AuthSessionValidationRequested` re-checks the held access token with `/auth/me`. With no token it ends in `AuthUnauthenticated`, and a rejected token ends in `AuthError`.
 - `AuthInitial` is the state the bloc starts in. `AuthLoading` is emitted at the start of the start-up, login and biometric handlers.
 - `UserRole` is `user`, `admin` or `moderator`. `UserStatus` is `active`, `inactive`, `suspended` or `pending`.
