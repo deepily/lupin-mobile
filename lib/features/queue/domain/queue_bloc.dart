@@ -85,8 +85,16 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) async {
     final target = _activeQueueName ?? event.queueName;
     if ( state is! QueueSnapshotLoaded ) return;
+    await _refreshSnapshot( target, emit );
+  }
+
+  // Re-fetches [queueName] and emits it, keeping the last good state if the fetch fails.
+  Future<void> _refreshSnapshot(
+    String queueName,
+    Emitter<QueueState> emit,
+  ) async {
     try {
-      final snapshot = await _repo.getQueue( target );
+      final snapshot = await _repo.getQueue( queueName );
       emit( QueueSnapshotLoaded( snapshot ) );
     } on QueueApiException catch ( _ ) {
       // Keeps the last good state, because the refresh is best-effort.
@@ -162,9 +170,9 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     try {
       await _repo.deleteJob( event.queueName, event.jobId );
       emit( const QueueActionComplete( 'Job deleted' ) );
-      if ( _activeQueueName != null ) {
-        add( QueueExternalUpdate( _activeQueueName! ) );
-      }
+      // Refreshes inline: the state is now QueueActionComplete, so a queued
+      // QueueExternalUpdate would return early.
+      if ( _activeQueueName != null ) await _refreshSnapshot( _activeQueueName!, emit );
     } on QueueApiException catch ( e ) {
       emit( QueueError( e.message ) );
     }

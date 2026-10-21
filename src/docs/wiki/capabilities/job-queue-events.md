@@ -32,5 +32,5 @@ The inputs `QueueBloc` accepts, all subclasses of `QueueEvent`. The bloc is on [
 - `QueueInjectMessage` sends text into a running job; priority defaults to `normal`.
 
 ## Don't
-- Don't expect `QueueDeleteJob` to refresh the list. It queues a `QueueExternalUpdate`, which returns early because the state is then `QueueActionComplete`.
+- Don't expect `QueueDeleteJob` to leave `QueueActionComplete` as the last state. It emits `QueueActionComplete`, then re-fetches the active queue and emits `QueueSnapshotLoaded`; the re-fetch is skipped when no queue snapshot was loaded.
 - Don't expect the server to retry a job. `QueueRetryJob` asks again with the question text it is given.
