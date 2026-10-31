@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import 'doc_link.dart';
 import 'doc_models.dart';
+import 'doc_podcast.dart';
 import 'doc_upload.dart';
 
 /// Fetches doc-viewer targets over the shared Dio.
@@ -168,6 +169,75 @@ class DocRepository {
         detail is String ? detail : "The upload failed with status $status.",
         statusCode: status,
       );
+    } on DioException catch ( e ) {
+      throw DocApiException(
+        e.message ?? "Could not reach the document server.",
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  /// Asks whether a podcast can be made of [scopePath].
+  ///
+  /// It calls `GET /api/podcast-proxy/from-viewer/check`.
+  ///
+  /// Requires:
+  ///   - [scopePath] is the document as `<scope>/<path within scope>`
+  ///
+  /// Ensures:
+  ///   - 200 returns the file's name and size
+  ///   - a refusal (400 with the door's code, 403 for an API key) raises [DocApiException]
+  ///     carrying the server's own sentence and the status
+  ///   - a transport failure raises [DocApiException] with no status
+  Future<DocPodcastFacts> checkPodcast( String scopePath ) async {
+    try {
+      final res = await _dio.get<dynamic>(
+        "/api/podcast-proxy/from-viewer/check",
+        queryParameters: { "path": scopePath },
+        options        : Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      if ( status >= 200 && status < 300 && res.data is Map ) {
+        return DocPodcastFacts.fromJson( Map<String, dynamic>.from( res.data as Map ) );
+      }
+      throw DocApiException( podcastRefusalText( status, res.data ), statusCode: status );
+    } on DioException catch ( e ) {
+      throw DocApiException(
+        e.message ?? "Could not reach the document server.",
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  /// Starts a podcast of [scopePath].
+  ///
+  /// It calls `POST /api/podcast-proxy/from-viewer`.
+  ///
+  /// Requires:
+  ///   - [scopePath] is the document as `<scope>/<path within scope>`
+  ///   - the caller confirmed: this call is the yes
+  ///
+  /// Ensures:
+  ///   - 200 returns the new job id
+  ///   - 409 `spent` returns the earlier job id with `alreadyStarted` set
+  ///   - any other refusal raises [DocApiException] in the server's own words
+  Future<DocPodcastStarted> startPodcast( String scopePath ) async {
+    try {
+      final res = await _dio.post<dynamic>(
+        "/api/podcast-proxy/from-viewer",
+        data   : { "path": scopePath },
+        options: Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      final data   = res.data;
+      if ( status >= 200 && status < 300 && data is Map && data[ "job_id" ] is String ) {
+        return DocPodcastStarted( jobId: data[ "job_id" ] as String );
+      }
+      final detail = data is Map ? data[ "detail" ] : null;
+      if ( status == 409 && detail is Map && detail[ "job_id" ] is String ) {
+        return DocPodcastStarted( jobId: detail[ "job_id" ] as String, alreadyStarted: true );
+      }
+      throw DocApiException( podcastRefusalText( status, data ), statusCode: status );
     } on DioException catch ( e ) {
       throw DocApiException(
         e.message ?? "Could not reach the document server.",

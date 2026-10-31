@@ -5,6 +5,7 @@ import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/abstract_body.dart';
+import 'podcast_done_actions.dart';
 import '../data/notification_models.dart';
 import '../domain/notification_bloc.dart';
 import '../domain/notification_event.dart';
@@ -216,6 +217,7 @@ class _NotificationItemCard extends StatelessWidget {
                 abstractText : item.abstractText,
                 repository   : ServiceLocator.instance<DocRepository>(),
               ),
+              PodcastDoneActions( abstractText: item.abstractText ),
             ],
             if ( showRespond ) ...[
               const SizedBox( height: 12 ),

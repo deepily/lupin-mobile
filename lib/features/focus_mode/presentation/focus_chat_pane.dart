@@ -12,6 +12,7 @@ import '../../../services/tts/speech_intent.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/abstract_body.dart';
+import '../../notifications/presentation/podcast_done_actions.dart';
 import '../../notifications/data/ask_resolution.dart';
 import '../../notifications/data/voice_persona.dart';
 import '../../notifications/presentation/interactive_prompt_sheet.dart';
@@ -451,6 +452,7 @@ class _MessageBubble extends StatelessWidget {
             abstractText : msg.item.abstractText,
             repository   : ServiceLocator.instance<DocRepository>(),
           ),
+          PodcastDoneActions( abstractText: msg.item.abstractText ),
         ],
         // A question the stop-list suppressed says so, names the rule, and offers
         // speak-anyway. It renders above the prompt zone so the normal answer controls
