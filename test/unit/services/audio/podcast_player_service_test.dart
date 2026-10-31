@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:lupin_mobile/services/artifacts/io_file_service.dart';
+import 'package:lupin_mobile/services/audio/podcast_link.dart';
 import 'package:lupin_mobile/services/audio/podcast_player_service.dart';
+import '../../../helpers/fake_podcast_cache.dart';
 import '../../../helpers/fake_podcast_engine.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 
-class _MockIo  extends Mock implements IoFileService {}
 class _MockTts extends Mock implements TtsOrchestrator {}
 class _FakeFile extends Fake implements File {
   final String name;
@@ -20,7 +20,8 @@ class _FakeFile extends Fake implements File {
 
 void main() {
   late FakeEngine engine;
-  late _MockIo    io;
+  late FakePodcastCache cache;
+  late PodcastLink      link;
   late _MockTts   tts;
   late PodcastPlayerService svc;
   var built = 0;
@@ -28,12 +29,14 @@ void main() {
   setUp( () {
     built  = 0;
     engine = FakeEngine();
-    io     = _MockIo();
+    cache  = FakePodcastCache();
+    link   = PodcastLink.unmetered;
     tts    = _MockTts();
     when( () => tts.stopAll() ).thenAnswer( ( _ ) async {} );
     svc = PodcastPlayerService(
       engineFactory : () { built++; return engine; },
-      ioFactory     : () => io,
+      cacheFactory  : () => cache,
+      linkProbe     : () async => link,
       ttsFactory    : () => tts,
     );
   } );
@@ -104,20 +107,69 @@ void main() {
   } );
 
   test( "play downloads by job id then plays", () async {
-    when( () => io.downloadToCache( any(), any() ) ).thenAnswer( ( _ ) async => _FakeFile() );
     final seen = <PodcastPlayerStatus>[];
     svc.addListener( () => seen.add( svc.status ) );
     await svc.play( "/io/p/podcast.mp3", "Ep", id: "pg-9" );
-    verify( () => io.downloadToCache( "/io/p/podcast.mp3", "pg-9.mp3" ) ).called( 1 );
+    expect( cache.fetched, [ [ "/io/p/podcast.mp3", "pg-9" ] ] );
     expect( seen.first, PodcastPlayerStatus.loading );
+    expect( svc.status, PodcastPlayerStatus.playing );
+    expect( svc.trackDownloaded, isTrue );
+  } );
+
+  test( "play of a downloaded podcast makes no network call, whatever the link", () async {
+    cache.files[ "pg-9" ] = PathFile( "/kept/pg-9.mp3" );
+    for ( final l in PodcastLink.values ) {
+      link = l;
+      await svc.stop();
+      await svc.play( "/io/p/podcast.mp3", "Ep", id: "pg-9" );
+      expect( svc.status, PodcastPlayerStatus.playing, reason: "$l" );
+      expect( svc.file!.path, "/kept/pg-9.mp3" );
+    }
+    expect( cache.fetched, isEmpty );
+  } );
+
+  test( "play on mobile data asks first and downloads only on yes", () async {
+    link = PodcastLink.metered;
+    var asked = 0;
+    await svc.play( "/io/x.mp3", "Ep", id: "pg-1", confirmMobileData: () async { asked++; return true; } );
+    expect( asked, 1 );
+    expect( cache.fetched, [ [ "/io/x.mp3", "pg-1" ] ] );
     expect( svc.status, PodcastPlayerStatus.playing );
   } );
 
+  test( "play on mobile data does nothing when declined, and keeps the current track", () async {
+    await svc.playFile( PathFile( "/tmp/cur.mp3" ), "Current", id: "cur" );
+    link = PodcastLink.metered;
+    await svc.play( "/io/x.mp3", "Ep", id: "pg-1", confirmMobileData: () async => false );
+    expect( cache.fetched, isEmpty );
+    expect( svc.trackId, "cur" );
+    expect( svc.status, PodcastPlayerStatus.playing );
+  } );
+
+  test( "play on mobile data with nobody to ask declines", () async {
+    link = PodcastLink.metered;
+    await svc.play( "/io/x.mp3", "Ep", id: "pg-1" );
+    expect( cache.fetched, isEmpty );
+    expect( svc.status, PodcastPlayerStatus.idle );
+  } );
+
+  test( "play offline with nothing downloaded fails without a download", () async {
+    link = PodcastLink.offline;
+    await svc.play( "/io/x.mp3", "Ep", id: "pg-1" );
+    expect( cache.fetched, isEmpty );
+    expect( svc.status, PodcastPlayerStatus.error );
+    expect( svc.error, contains( "no connection" ) );
+  } );
+
+  test( "trackDownloaded is false with nothing loaded", () {
+    expect( svc.trackDownloaded, isFalse );
+  } );
+
   test( "play of the loaded track resumes without downloading", () async {
-    await svc.playFile( _FakeFile(), "E", id: "pg-1" );
+    await svc.playFile( PathFile( "/tmp/a.mp3" ), "E", id: "pg-1" );
     await svc.pause();
     await svc.play( "/io/x.mp3", "E", id: "pg-1" );
-    verifyNever( () => io.downloadToCache( any(), any() ) );
+    expect( cache.fetched, isEmpty );
     expect( svc.status, PodcastPlayerStatus.playing );
   } );
 
@@ -125,11 +177,11 @@ void main() {
     await svc.play( "", "E", id: "pg-1" );
     expect( svc.status, PodcastPlayerStatus.error );
     expect( svc.error,  contains( "No audio path" ) );
-    verifyNever( () => io.downloadToCache( any(), any() ) );
+    expect( cache.fetched, isEmpty );
   } );
 
   test( "play reports a download failure", () async {
-    when( () => io.downloadToCache( any(), any() ) ).thenThrow( StateError( "offline" ) );
+    cache.failWith = StateError( "dropped" );
     await svc.play( "/io/x.mp3", "E", id: "pg-1" );
     expect( svc.status, PodcastPlayerStatus.error );
     expect( svc.error,  contains( "Download failed" ) );

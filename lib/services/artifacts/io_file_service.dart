@@ -52,6 +52,23 @@ class IoFileService {
     return file;
   }
 
+  /// Streams the server file at [path] straight into [destination].
+  ///
+  /// Requires the folder of [destination] exists.
+  ///
+  /// Throws [IoFileException] when the request fails, carrying the HTTP status if any. [destination] may
+  /// hold a partial file then; the caller owns removing it.
+  Future<void> downloadTo( String path, File destination ) async {
+    try {
+      await _dio.download( '/api/io/file', destination.path, queryParameters: { 'path': path } );
+    } on DioException catch ( e ) {
+      throw IoFileException(
+        'downloadTo($path) failed',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
   // ─────────────────────────────────────────────
   // Share via OS share sheet
   // ─────────────────────────────────────────────

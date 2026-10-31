@@ -34,6 +34,7 @@ import 'services/permissions/notification_permission.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_payload.dart';
 import 'services/push/notification_tap_router.dart';
+import 'features/artifacts/podcast_prefetch.dart';
 import 'services/audio/podcast_player_service.dart';
 import 'features/audio/mini_player_bar.dart';
 import 'services/tts/streaming_tts_player.dart';
@@ -186,6 +187,10 @@ class WsBlocDispatcher {
         // same frames; speech ownership lives with FocusChatBloc alone (the
         // legacy bloc's `tts` is not injected — F-S2-1 DI withdrawal).
         if ( notif != null ) _dispatchToFocus( notif );
+        // A finished podcast is downloaded in the background when the phone is on Wi-Fi (row 24a39e97).
+        if ( notif != null && ServiceLocator.isRegistered<PodcastPrefetcher>() ) {
+          unawaited( ServiceLocator.get<PodcastPrefetcher>().prefetch( notif.abstractText ) );
+        }
         // Belt channel (S1 §3): a notification whose `jobId` matches the live
         // Quick Ask job is independent completion evidence, and a
         // `response_requested` one is proof of life in the pre-job-id window

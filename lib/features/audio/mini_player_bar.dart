@@ -35,6 +35,13 @@ class MiniPlayerBar extends StatelessWidget {
               dense  : true,
               leading: const Icon( Icons.audiotrack_outlined ),
               title  : Text( service.title ?? "", maxLines: 1, overflow: TextOverflow.ellipsis ),
+              subtitle: service.trackDownloaded
+                  ? const Row( key: Key( TestKeys.miniPlayerDownloaded ), children: [
+                      Icon( Icons.download_done, size: 14 ),
+                      SizedBox( width: 4 ),
+                      Text( "Downloaded" ),
+                    ] )
+                  : null,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
