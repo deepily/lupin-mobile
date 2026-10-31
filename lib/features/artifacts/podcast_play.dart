@@ -8,7 +8,7 @@ typedef PodcastPlay = Future<void> Function( String url, String title );
 
 /// The one place a podcast card's Play goes: the app-wide [PodcastPlayerService].
 ///
-/// The track id is the audio's server path, made filename-safe.
+/// The track id is the audio's server path, percent-encoded to be filename-safe.
 /// The service uses the id as the cache file name, and a label is not unique.
 /// Playing the same path again resumes it; a different path replaces it.
 ///
@@ -37,14 +37,13 @@ String audioPathOf( String url ) {
 
 /// The track id and cache file name for the audio at [url], one per server path.
 ///
-/// The service appends `.mp3`, so a trailing `.mp3` is dropped here.
+/// The service appends `.mp3` to it.
 ///
 /// Ensures:
-///   - two different server paths never share a name for the same extension
-///   - the name holds only letters, digits, dot, underscore and dash
-///   - a path with nothing usable yields "podcast"
+///   - two different server paths never share a name
+///   - the name is the percent-encoded path, so it holds no slash
+///   - a path with nothing in it yields "podcast"
 String podcastCacheName( String url ) {
-  final path = audioPathOf( url ).replaceAll( RegExp( r'\.mp3$' ), "" );
-  final name = path.replaceAll( RegExp( r'[^A-Za-z0-9._-]+' ), "-" );
+  final name = Uri.encodeComponent( audioPathOf( url ) );
   return name.isEmpty ? "podcast" : name;
 }

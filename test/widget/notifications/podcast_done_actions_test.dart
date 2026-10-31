@@ -98,8 +98,8 @@ void main() {
       await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) ) );
       await tester.pump();
 
-      verify( () => io.downloadToCache( "io/a.mp3", "io-a.mp3" ) ).called( 1 );
-      expect( svc.trackId, "io-a" );
+      verify( () => io.downloadToCache( "io/a.mp3", "io%2Fa.mp3.mp3" ) ).called( 1 );
+      expect( svc.trackId, "io%2Fa.mp3" );
       expect( svc.title, "English" );
       expect( svc.isPlaying, isTrue );
     } );
@@ -109,12 +109,12 @@ void main() {
 
       await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) ) );
       await tester.pump();
-      expect( svc.trackId, "io-first" );
+      expect( svc.trackId, "io%2Ffirst.mp3" );
 
       await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}1" ) ) );
       await tester.pump();
-      expect( svc.trackId, "io-second" );
-      verify( () => io.downloadToCache( "io/second.mp3", "io-second.mp3" ) ).called( 1 );
+      expect( svc.trackId, "io%2Fsecond.mp3" );
+      verify( () => io.downloadToCache( "io/second.mp3", "io%2Fsecond.mp3.mp3" ) ).called( 1 );
       expect( engine.calls.where( ( c ) => c.startsWith( "load:" ) ).length, 2 );
     } );
 
@@ -139,10 +139,12 @@ void main() {
       expect( bare.single.url, "io/z.mp3" );
     } );
 
-    test( "the cache name follows the server path, not the title", () {
-      expect( podcastCacheName( "io/podcast/a.mp3" ), "io-podcast-a" );
-      expect( podcastCacheName( "io/podcast/b.mp3" ), "io-podcast-b" );
-      expect( podcastCacheName( "/api/io/file?path=io%2Fpodcast%2Fa.mp3" ), "io-podcast-a" );
+    test( "the cache name is one-to-one with the server path", () {
+      expect( podcastCacheName( "io/a-b.mp3" ), isNot( podcastCacheName( "io/a/b.mp3" ) ) );
+      expect( podcastCacheName( "io/a.mp3" ), isNot( podcastCacheName( "io/a" ) ) );
+      expect( podcastCacheName( "io/u@x.y/pg-1/podcast.mp3" ), "io%2Fu%40x.y%2Fpg-1%2Fpodcast.mp3" );
+      expect( podcastCacheName( "/api/io/file?path=io%2Fa.mp3" ), podcastCacheName( "io/a.mp3" ) );
+      expect( podcastCacheName( "io/a.mp3" ), isNot( contains( "/" ) ) );
       expect( podcastCacheName( "" ), "podcast" );
     } );
 
