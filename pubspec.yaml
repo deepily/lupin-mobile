@@ -28,6 +28,8 @@ dependencies:
   audioplayers: ^5.2.1
   # Podcast playback with a media session + foreground service (P2/P3, row 3469e9db)
   just_audio: ^0.9.40
+  # Session config so a duck from a short spoken alert arrives as a pause (row 049d914a)
+  audio_session: ^0.1.25
   just_audio_background: ^0.0.1-beta.13
   permission_handler: ^11.0.1
   # One-shot push-to-talk WAV capture for the focus-mode voice reply (S4).

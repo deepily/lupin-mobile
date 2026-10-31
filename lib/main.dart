@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
@@ -9,6 +10,7 @@ import 'services/push/notification_tap_router.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/websocket/ws_reconnect_coordinator.dart';
 import 'app.dart';
+import 'services/audio/podcast_audio_session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +32,9 @@ void main() async {
       androidNotificationChannelName : 'Podcast playback',
       androidNotificationOngoing     : true,
     );
+
+    // A duck from a short spoken alert must arrive as a pause (audio-focus ruling, row 049d914a).
+    await configurePodcastAudioSession( await AudioSession.instance );
 
     // Row b69dbf0b: the socket's reconnect triggers. The lifecycle and connectivity services must be running for
     // them to see anything; the connectivity check does DNS lookups, so it is not awaited.
