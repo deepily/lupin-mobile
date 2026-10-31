@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -206,6 +207,38 @@ void main() {
   } );
 
   group( "audio focus for spoken TTS", () {
+    test( "followSpeech pauses on speaking and resumes when it ends", () async {
+      final speaking = StreamController<bool>.broadcast();
+      svc.followSpeech( speaking.stream );
+      await svc.playFile( _FakeFile(), "E", id: "pg-1" );
+
+      speaking.add( true );
+      await Future<void>.delayed( Duration.zero );
+      expect( svc.status, PodcastPlayerStatus.paused );
+
+      speaking.add( false );
+      await Future<void>.delayed( Duration.zero );
+      expect( svc.status, PodcastPlayerStatus.playing );
+      await speaking.close();
+    } );
+
+    test( "a second followSpeech replaces the first", () async {
+      final first  = StreamController<bool>.broadcast();
+      final second = StreamController<bool>.broadcast();
+      svc.followSpeech( first.stream );
+      svc.followSpeech( second.stream );
+      await svc.playFile( _FakeFile(), "E", id: "pg-1" );
+
+      first.add( true );
+      await Future<void>.delayed( Duration.zero );
+      expect( svc.status, PodcastPlayerStatus.playing, reason: "the replaced source is ignored" );
+      second.add( true );
+      await Future<void>.delayed( Duration.zero );
+      expect( svc.status, PodcastPlayerStatus.paused );
+      await first.close();
+      await second.close();
+    } );
+
     test( "pauseForSpeech pauses a playing track and resumeAfterSpeech continues it without cutting the speech", () async {
       await svc.playFile( _FakeFile(), "E", id: "pg-1" );
       clearInteractions( tts );

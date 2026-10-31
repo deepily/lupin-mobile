@@ -544,7 +544,9 @@ Future<FcmWakeChain> buildBackgroundWakeChain() async {
       // The Phase-0 probe measures whether playback also survives handler completion, which informs the 30 s budget posture.
       final tts = FlutterTts();
       await tts.awaitSpeakCompletion( true );
-      await tts.speak( text );
+      // `focus: true` asks Android for transient audio focus, so a podcast in the main isolate pauses for the
+      // utterance and resumes after it. This isolate cannot reach the player service directly.
+      await tts.speak( text, focus: true );
     },
     // The two gates, both answered from SharedPreferences, the only store this isolate can read.
     backgroundAllowsAnyPriority: () async =>

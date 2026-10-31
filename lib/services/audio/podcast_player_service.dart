@@ -56,6 +56,7 @@ class PodcastPlayerService extends ChangeNotifier {
 
   PodcastPlaybackEngine? _engine;
   final List<StreamSubscription<dynamic>> _subs = [];
+  StreamSubscription<bool>? _speechSub;
 
   PodcastPlayerStatus _status   = PodcastPlayerStatus.idle;
   String?             _trackId;
@@ -165,6 +166,14 @@ class PodcastPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Pauses the podcast whenever [speaking] emits true and resumes it when it emits false.
+  ///
+  /// Call once at startup with the TTS orchestrator's `speakingStream`. A second call replaces the first.
+  void followSpeech( Stream<bool> speaking ) {
+    _speechSub?.cancel();
+    _speechSub = speaking.listen( ( on ) => on ? pauseForSpeech() : resumeAfterSpeech() );
+  }
+
   /// Pauses the podcast so spoken TTS or a wake item can be heard.
   ///
   /// This is the audio-focus ruling: the podcast never talks over speech.
@@ -240,6 +249,7 @@ class PodcastPlayerService extends ChangeNotifier {
   @override
   void dispose() {
     for ( final s in _subs ) { s.cancel(); }
+    _speechSub?.cancel();
     super.dispose();
   }
 }
