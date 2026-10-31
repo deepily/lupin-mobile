@@ -1,8 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/artifacts/podcast_play.dart';
 import 'package:lupin_mobile/features/notifications/presentation/podcast_done_actions.dart';
+import 'package:lupin_mobile/services/artifacts/io_file_service.dart';
+import 'package:lupin_mobile/services/audio/podcast_player_service.dart';
+import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import 'package:mocktail/mocktail.dart';
+import '../../helpers/fake_podcast_engine.dart';
 
 /// P4: Play on a podcast-done card.
 
@@ -14,6 +21,17 @@ const String _oneLanguage =
 const String _twoLanguages =
     "$_oneLanguage"
     "**Mexican Spanish**: [▶️ Play Here](/app/audio?path=io%2Fb.mp3&embed=1)\n";
+
+const String _twoSameLabel =
+    "**English**: [▶️ Play Here](/app/audio?path=io%2Ffirst.mp3&embed=1)\n"
+    "**English**: [▶️ Play Here](/app/audio?path=io%2Fsecond.mp3&embed=1)\n";
+
+class _MockIo  extends Mock implements IoFileService {}
+class _MockTts extends Mock implements TtsOrchestrator {}
+class _File    extends Fake implements File {
+  @override final String path;
+  _File( this.path );
+}
 
 void main() {
   Future<List<List<String>>> pump(
@@ -54,14 +72,62 @@ void main() {
     expect( find.byType( FilledButton ), findsNothing );
   } );
 
-  testWidgets( "the default Play opens the player page for the audio path", ( tester ) async {
-    await tester.pumpWidget( const MaterialApp(
-      home: Scaffold( body: PodcastDoneActions( abstractText: _oneLanguage ) ),
+  group( "Play through the app-wide player", () {
+    late FakeEngine           engine;
+    late _MockIo              io;
+    late _MockTts             tts;
+    late PodcastPlayerService svc;
+
+    setUp( () {
+      engine = FakeEngine();
+      io     = _MockIo();
+      tts    = _MockTts();
+      svc    = PodcastPlayerService( engineFactory: () => engine, ioFactory: () => io, ttsFactory: () => tts );
+      when( () => tts.stopAll() ).thenAnswer( ( _ ) async {} );
+      when( () => io.downloadToCache( any(), any() ) ).thenAnswer( ( inv ) async => _File( "/tmp/${inv.positionalArguments[ 1 ]}" ) );
+    } );
+
+    tearDown( () => svc.dispose() );
+
+    Future<void> pumpCards( WidgetTester tester, String abstractText ) => tester.pumpWidget( MaterialApp(
+      home: Scaffold( body: PodcastDoneActions( abstractText: abstractText, onPlay: podcastPlayFor( service: svc ) ) ),
     ) );
-    await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) ) );
-    await tester.pump();
-    await tester.pump( const Duration( milliseconds: 400 ) );
-    expect( find.text( "Audio — io-a" ), findsOneWidget );
+
+    testWidgets( "Play downloads the server path and plays it under the path's own id", ( tester ) async {
+      await pumpCards( tester, _oneLanguage );
+      await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) ) );
+      await tester.pump();
+
+      verify( () => io.downloadToCache( "io/a.mp3", "io-a.mp3" ) ).called( 1 );
+      expect( svc.trackId, "io-a" );
+      expect( svc.title, "English" );
+      expect( svc.isPlaying, isTrue );
+    } );
+
+    testWidgets( "two cards with the same label play two different podcasts", ( tester ) async {
+      await pumpCards( tester, _twoSameLabel );
+
+      await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) ) );
+      await tester.pump();
+      expect( svc.trackId, "io-first" );
+
+      await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}1" ) ) );
+      await tester.pump();
+      expect( svc.trackId, "io-second" );
+      verify( () => io.downloadToCache( "io/second.mp3", "io-second.mp3" ) ).called( 1 );
+      expect( engine.calls.where( ( c ) => c.startsWith( "load:" ) ).length, 2 );
+    } );
+
+    testWidgets( "tapping the same card again resumes without a second download", ( tester ) async {
+      await pumpCards( tester, _oneLanguage );
+      final play = find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) );
+      await tester.tap( play );
+      await tester.pump();
+      await tester.tap( play );
+      await tester.pump();
+
+      verify( () => io.downloadToCache( any(), any() ) ).called( 1 );
+    } );
   } );
 
   group( "parsing", () {

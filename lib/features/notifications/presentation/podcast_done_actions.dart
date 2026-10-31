@@ -48,7 +48,7 @@ class PodcastDoneActions extends StatelessWidget {
   /// The card's abstract, which holds the audio links.
   final String? abstractText;
 
-  /// Plays an audio link; null plays through [podcastPlayFor], the app's one Play route.
+  /// Plays an audio link; null plays through [podcastPlayFor].
   final PodcastPlay? onPlay;
 
   /// Creates the actions row for one card.
@@ -59,7 +59,7 @@ class PodcastDoneActions extends StatelessWidget {
     final audio = parsePodcastAudio( abstractText );
     if ( audio.isEmpty ) return const SizedBox.shrink();
 
-    final play  = onPlay ?? podcastPlayFor( context );
+    final play  = onPlay ?? podcastPlayFor();
     return Wrap(
       spacing   : 8,
       runSpacing: 4,

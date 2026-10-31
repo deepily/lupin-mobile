@@ -1,31 +1,27 @@
-import 'package:flutter/material.dart';
-
-import 'audio_artifact_player.dart';
+import '../../core/di/service_locator.dart';
+import '../../services/audio/podcast_player_service.dart';
 
 /// Plays a podcast from its audio [url], showing [title].
 ///
-/// This is the shape the app-wide player service will expose.
-/// Repointing is then one line.
+/// This is the shape the app-wide player service exposes.
 typedef PodcastPlay = Future<void> Function( String url, String title );
 
-/// The one place a podcast card's Play goes.
-/// Today it opens [AudioArtifactPlayer] as a page.
+/// The one place a podcast card's Play goes: the app-wide [PodcastPlayerService].
 ///
-/// To repoint it, make the returned closure call the app-wide player service's `play( url, title )`.
-/// No card needs to change.
+/// The track id is the audio's server path, made filename-safe.
+/// The service uses the id as the cache file name, and a label is not unique.
+/// Playing the same path again resumes it; a different path replaces it.
 ///
 /// Requires:
-///   - [context] stays mounted until the returned function is called
+///   - [service] is null in production, which resolves the registered service
 ///
 /// Ensures:
-///   - the returned function pushes the player page for the audio the [url] names
+///   - the returned function plays the audio the [url] names under [title]
 ///   - [url] is a bare server path; a link with a `path` query also works
-PodcastPlay podcastPlayFor( BuildContext context ) {
-  final navigator = Navigator.of( context );
-  return ( url, title ) async {
-    await navigator.push( MaterialPageRoute<void>(
-      builder: ( _ ) => AudioArtifactPlayer( jobId: podcastCacheName( url ), audioPath: audioPathOf( url ) ),
-    ) );
+PodcastPlay podcastPlayFor( { PodcastPlayerService? service } ) {
+  return ( url, title ) {
+    final player = service ?? ServiceLocator.instance<PodcastPlayerService>();
+    return player.play( audioPathOf( url ), title, id: podcastCacheName( url ) );
   };
 }
 
@@ -39,9 +35,9 @@ String audioPathOf( String url ) {
   return path ?? url;
 }
 
-/// The cache file name for the audio at [url], one per server path.
+/// The track id and cache file name for the audio at [url], one per server path.
 ///
-/// The player appends `.mp3`, so a trailing `.mp3` is dropped here.
+/// The service appends `.mp3`, so a trailing `.mp3` is dropped here.
 ///
 /// Ensures:
 ///   - two different server paths never share a name for the same extension
