@@ -71,6 +71,57 @@ void main() {
       await errorCtrl   .close();
     } );
 
+    group( "speakingStream", () {
+      test( "emits true when an utterance starts and false when the queue goes quiet", () async {
+        await setUpMocks();
+        final o      = newOrch();
+        final states = <bool>[];
+        final sub    = o.speakingStream.listen( states.add );
+
+        o.enqueueIfSpeakable( priority: "high", message: "One.", title: null );
+        await Future<void>.delayed( Duration.zero );
+        expect( states, [ true ] );
+
+        completeCtrl.add( const TtsCompleteEvent( played: true ) );
+        await Future<void>.delayed( Duration.zero );
+        expect( states, [ true, false ] );
+        await sub.cancel();
+      } );
+
+      test( "back-to-back utterances do not flicker false between them", () async {
+        await setUpMocks();
+        final o      = newOrch();
+        final states = <bool>[];
+        final sub    = o.speakingStream.listen( states.add );
+
+        o.enqueueIfSpeakable( priority: "high", message: "One.", title: null );
+        o.enqueueIfSpeakable( priority: "high", message: "Two.", title: null );
+        await Future<void>.delayed( Duration.zero );
+        completeCtrl.add( const TtsCompleteEvent( played: true ) );
+        await Future<void>.delayed( Duration.zero );
+        expect( states, [ true ], reason: "second utterance started in the same turn" );
+
+        completeCtrl.add( const TtsCompleteEvent( played: true ) );
+        await Future<void>.delayed( Duration.zero );
+        expect( states, [ true, false ] );
+        await sub.cancel();
+      } );
+
+      test( "stopAll while speaking emits false", () async {
+        await setUpMocks();
+        final o      = newOrch();
+        final states = <bool>[];
+        final sub    = o.speakingStream.listen( states.add );
+
+        o.enqueueIfSpeakable( priority: "high", message: "One.", title: null );
+        await Future<void>.delayed( Duration.zero );
+        await o.stopAll();
+        await Future<void>.delayed( Duration.zero );
+        expect( states, [ true, false ] );
+        await sub.cancel();
+      } );
+    } );
+
     test( "low priority — never speaks, never enqueues", () async {
       await setUpMocks();
       final o = newOrch();

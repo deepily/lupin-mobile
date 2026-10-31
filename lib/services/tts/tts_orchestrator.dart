@@ -146,6 +146,9 @@ class TtsOrchestrator {
   final StreamController<TtsSuppression> _suppressedCtrl =
       StreamController<TtsSuppression>.broadcast();
   final StreamController<int>  _depthCtrl  = StreamController<int>.broadcast();
+  final StreamController<bool> _speakingCtrl = StreamController<bool>.broadcast();
+  bool _lastSpeaking = false;
+  bool _speakingCheckPending = false;
   final StreamController<List<TtsQueueItem>> _queueCtrl = StreamController<List<TtsQueueItem>>.broadcast();
 
   static const _quotaFallbackWindow = Duration( minutes: 5 );
@@ -181,6 +184,12 @@ class TtsOrchestrator {
   ///
   /// The fallback is a `flutter_tts` speak. Callers use this to suppress other speech.
   bool get isPlaying => _current != null || _player.isPlaying;
+
+  /// Emits true when an utterance starts being spoken and false when the queue goes quiet.
+  ///
+  /// Only transitions are emitted. Back-to-back utterances stay true, so a listener that pauses a
+  /// podcast for speech does not resume it between two messages.
+  Stream<bool> get speakingStream => _speakingCtrl.stream;
 
   /// Number of pending utterances, not counting the in-flight one.
   int get queueDepth => _fifo.length;
@@ -604,6 +613,7 @@ class TtsOrchestrator {
     await _outcomeCtrl.close();
     await _depthCtrl.close();
     await _queueCtrl.close();
+    await _speakingCtrl.close();
     await _suppressedCtrl.close();
   }
 
@@ -672,6 +682,22 @@ class TtsOrchestrator {
 
   void _emitQueue() {
     if ( !_queueCtrl.isClosed ) _queueCtrl.add( queueSnapshot );
+    _emitSpeaking();
+  }
+
+  /// Re-reads the speaking state one microtask later and emits only a real change.
+  ///
+  /// The wait absorbs the gap between one utterance ending and the next starting in the same turn.
+  void _emitSpeaking() {
+    if ( _speakingCheckPending ) return;
+    _speakingCheckPending = true;
+    scheduleMicrotask( () {
+      _speakingCheckPending = false;
+      final speaking = _current != null;
+      if ( speaking == _lastSpeaking || _speakingCtrl.isClosed ) return;
+      _lastSpeaking = speaking;
+      _speakingCtrl.add( speaking );
+    } );
   }
 
   /// Inserts [utter] behind the contiguous block of urgents at the queue front.

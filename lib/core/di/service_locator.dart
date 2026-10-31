@@ -554,12 +554,13 @@ class ServiceLocator {
 
     // App-wide podcast player (row 3469e9db, P2/P3). Everything is looked up on first
     // use, so no platform channel is touched at startup and registration order is moot.
+    // The podcast pauses while the app speaks and resumes afterwards (Tiffany's audio-focus ruling).
     _getIt.registerSingleton<PodcastPlayerService>(
       PodcastPlayerService(
         engineFactory : JustAudioPlaybackEngine.new,
         ioFactory     : () => _getIt<IoFileService>(),
         ttsFactory    : () => _getIt<TtsOrchestrator>(),
-      ),
+      )..followSpeech( _getIt<TtsOrchestrator>().speakingStream ),
     );
   }
 
