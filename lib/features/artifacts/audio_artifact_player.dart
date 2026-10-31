@@ -13,8 +13,8 @@ enum _PlaybackState { idle, loading, ready, error }
 /// In-app audio playback for podcast / research-podcast artifacts.
 ///
 /// Downloads the MP3 once via [IoFileService.downloadToCache], then plays
-/// in-app through the app-wide [PodcastPlayerService], which keeps playing after this
-/// screen is popped and owns the lock-screen media session. The original
+/// in-app through the app-wide [PodcastPlayerService]. That service keeps playing after
+/// this screen is popped and owns the lock-screen media session. The original
 /// download-and-share flow remains accessible as a Share overflow action.
 class AudioArtifactPlayer extends StatefulWidget {
   /// The id of the job that produced the audio.
