@@ -8,7 +8,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/artifacts/audio_artifact_player.dart';
 import 'package:lupin_mobile/services/artifacts/io_file_service.dart';
+import 'package:lupin_mobile/services/audio/podcast_link.dart';
 import 'package:lupin_mobile/services/audio/podcast_player_service.dart';
+import '../../helpers/fake_podcast_cache.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import '../../helpers/fake_podcast_engine.dart';
 
@@ -36,7 +38,8 @@ void main() {
       tts    = _MockTtsOrchestrator();
       svc    = PodcastPlayerService(
         engineFactory : () => engine,
-        ioFactory     : () => io,
+        cacheFactory  : FakePodcastCache.new,
+        linkProbe     : () async => PodcastLink.unmetered,
         ttsFactory    : () => tts,
       );
       when( () => tts.stopAll() ).thenAnswer( ( _ ) async {} );

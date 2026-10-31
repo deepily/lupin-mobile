@@ -1,5 +1,8 @@
+import 'package:flutter/widgets.dart';
+
 import '../../core/di/service_locator.dart';
 import '../../services/audio/podcast_player_service.dart';
+import 'podcast_download_sheet.dart';
 
 /// Plays a podcast from its audio [url], showing [title].
 ///
@@ -14,14 +17,20 @@ typedef PodcastPlay = Future<void> Function( String url, String title );
 ///
 /// Requires:
 ///   - [service] is null in production, which resolves the registered service
+///   - [context] is the screen that asks; null means a download on mobile data is declined, not asked
 ///
 /// Ensures:
 ///   - the returned function plays the audio the [url] names under [title]
 ///   - [url] is a bare server path; a link with a `path` query also works
-PodcastPlay podcastPlayFor( { PodcastPlayerService? service } ) {
+///   - audio that is not downloaded and would need mobile data asks first in an in-app sheet
+PodcastPlay podcastPlayFor( { PodcastPlayerService? service, BuildContext? context } ) {
   return ( url, title ) {
     final player = service ?? ServiceLocator.instance<PodcastPlayerService>();
-    return player.play( audioPathOf( url ), title, id: podcastCacheName( url ) );
+    return player.play(
+      audioPathOf( url ), title,
+      id               : podcastCacheName( url ),
+      confirmMobileData: context == null ? null : () async => context.mounted && await showPodcastDataSheet( context, title ),
+    );
   };
 }
 

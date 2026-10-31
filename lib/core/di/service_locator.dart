@@ -78,7 +78,10 @@ import '../../features/finished_tasks/domain/finished_tasks_bloc.dart';
 
 import '../../services/artifacts/io_file_service.dart';
 import '../../services/audio/just_audio_playback_engine.dart';
+import '../../services/audio/podcast_cache.dart';
+import '../../services/audio/podcast_link.dart';
 import '../../services/audio/podcast_player_service.dart';
+import '../../features/artifacts/podcast_prefetch.dart';
 import '../../services/asr/voice_capture_session.dart';
 
 // Tier 4 BLoCs
@@ -555,10 +558,24 @@ class ServiceLocator {
     // App-wide podcast player (row 3469e9db, P2/P3). Everything is looked up on first
     // use, so no platform channel is touched at startup and registration order is moot.
     // The podcast pauses while the app speaks and resumes afterwards (Tiffany's audio-focus ruling).
+    // Downloads live in the app support folder and play with no network (row 24a39e97).
+    _getIt.registerSingleton<PodcastCache>(
+      PodcastCache(
+        ioFactory  : () => _getIt<IoFileService>(),
+        dirFactory : podcastCacheDirectory,
+      ),
+    );
+    _getIt.registerSingleton<PodcastPrefetcher>(
+      PodcastPrefetcher(
+        cacheFactory : () => _getIt<PodcastCache>(),
+        linkProbe    : currentPodcastLink,
+      ),
+    );
     _getIt.registerSingleton<PodcastPlayerService>(
       PodcastPlayerService(
         engineFactory : JustAudioPlaybackEngine.new,
-        ioFactory     : () => _getIt<IoFileService>(),
+        cacheFactory  : () => _getIt<PodcastCache>(),
+        linkProbe     : currentPodcastLink,
         ttsFactory    : () => _getIt<TtsOrchestrator>(),
       )..followSpeech( _getIt<TtsOrchestrator>().speakingStream ),
     );

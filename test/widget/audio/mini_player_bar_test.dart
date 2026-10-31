@@ -6,12 +6,12 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/audio/mini_player_bar.dart';
-import 'package:lupin_mobile/services/artifacts/io_file_service.dart';
+import 'package:lupin_mobile/services/audio/podcast_link.dart';
 import 'package:lupin_mobile/services/audio/podcast_player_service.dart';
+import '../../helpers/fake_podcast_cache.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import '../../helpers/fake_podcast_engine.dart';
 
-class _MockIo  extends Mock implements IoFileService {}
 class _MockTts extends Mock implements TtsOrchestrator {}
 class _F extends Fake implements File {
   @override
@@ -21,12 +21,14 @@ class _F extends Fake implements File {
 void main() {
   late FakeEngine           engine;
   late PodcastPlayerService svc;
+  late FakePodcastCache     cache;
 
   setUp( () {
+    cache  = FakePodcastCache();
     engine = FakeEngine();
     final tts = _MockTts();
     when( () => tts.stopAll() ).thenAnswer( ( _ ) async {} );
-    svc = PodcastPlayerService( engineFactory: () => engine, ioFactory: _MockIo.new, ttsFactory: () => tts );
+    svc = PodcastPlayerService( engineFactory: () => engine, cacheFactory: () => cache, linkProbe: () async => PodcastLink.unmetered, ttsFactory: () => tts );
   } );
 
   tearDown( () => svc.dispose() );
@@ -36,6 +38,19 @@ void main() {
   testWidgets( "hidden while nothing is loaded", ( tester ) async {
     await tester.pumpWidget( host() );
     expect( find.byKey( const Key( TestKeys.miniPlayerToggle ) ), findsNothing );
+  } );
+
+  testWidgets( "shows a Downloaded marker only for a track kept on the phone", ( tester ) async {
+    await tester.pumpWidget( host() );
+    await svc.playFile( _F(), "Streamed", id: "pg-1" );
+    await tester.pump();
+    expect( find.byKey( const Key( TestKeys.miniPlayerDownloaded ) ), findsNothing );
+
+    cache.files[ "pg-2" ] = _F();
+    await svc.playFile( _F(), "Kept", id: "pg-2" );
+    await tester.pump();
+    expect( find.byKey( const Key( TestKeys.miniPlayerDownloaded ) ), findsOneWidget );
+    expect( find.text( "Downloaded" ), findsOneWidget );
   } );
 
   testWidgets( "shows the title and progress, pauses and resumes", ( tester ) async {

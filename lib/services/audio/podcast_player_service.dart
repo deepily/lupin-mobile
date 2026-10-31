@@ -3,8 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../artifacts/io_file_service.dart';
 import '../tts/tts_orchestrator.dart';
+import 'podcast_cache.dart';
+import 'podcast_link.dart';
 
 /// Thin seam over the platform audio player so the service can be unit-tested.
 ///
@@ -51,7 +52,8 @@ enum PodcastPlayerStatus {
 /// engine's job; this class owns what the app shows and which track is current.
 class PodcastPlayerService extends ChangeNotifier {
   final PodcastPlaybackEngine Function() _engineFactory;
-  final IoFileService Function()          _ioFactory;
+  final PodcastCache Function()           _cacheFactory;
+  final Future<PodcastLink> Function()    _linkProbe;
   final TtsOrchestrator Function()        _ttsFactory;
 
   PodcastPlaybackEngine? _engine;
@@ -70,10 +72,12 @@ class PodcastPlayerService extends ChangeNotifier {
   /// Creates the service; every collaborator is built on first use.
   PodcastPlayerService( {
     required PodcastPlaybackEngine Function() engineFactory,
-    required IoFileService Function()         ioFactory,
+    required PodcastCache Function()          cacheFactory,
+    required Future<PodcastLink> Function()   linkProbe,
     required TtsOrchestrator Function()       ttsFactory,
   } ) : _engineFactory = engineFactory,
-        _ioFactory     = ioFactory,
+        _cacheFactory  = cacheFactory,
+        _linkProbe     = linkProbe,
         _ttsFactory    = ttsFactory;
 
   /// What the player is doing now.
@@ -95,12 +99,18 @@ class PodcastPlayerService extends ChangeNotifier {
   /// True while audio is coming out.
   bool                get isPlaying => _status == PodcastPlayerStatus.playing;
 
-  /// Downloads the server file at [audioPath] (cached by [id]) and plays it.
+  /// True when the loaded track is a download kept on the phone.
+  bool                get trackDownloaded => _trackId != null && _cacheFactory().isCached( _trackId! );
+
+  /// Plays the server file at [audioPath], from the phone's downloads when it is there.
   ///
-  /// Requires [audioPath] non-empty. Sets [status] to error with a message otherwise,
-  /// or when the download fails. Plays nothing and changes nothing if [id] is
-  /// already loaded and playing.
-  Future<void> play( String audioPath, String title, {required String id} ) async {
+  /// A downloaded file plays with no network call. Otherwise the file is downloaded and kept under
+  /// [id]: at once on Wi-Fi, and on mobile data only after [confirmMobileData] returns true.
+  ///
+  /// Requires [audioPath] non-empty. Sets [status] to error with a message otherwise, when
+  /// there is no connection, or when the download fails. Plays nothing and changes nothing if [id] is
+  /// already loaded and playing, or if the listener declines mobile data (a null [confirmMobileData] declines).
+  Future<void> play( String audioPath, String title, {required String id, Future<bool> Function()? confirmMobileData} ) async {
     if ( audioPath.isEmpty ) {
       _fail( "No audio path available for this job." );
       return;
@@ -109,12 +119,21 @@ class PodcastPlayerService extends ChangeNotifier {
       await resume();
       return;
     }
+    final cache = _cacheFactory();
+    File? file  = await cache.lookup( id );
+    if ( file == null ) {
+      final link = await _linkProbe();
+      if ( link == PodcastLink.offline ) {
+        _fail( "Not downloaded, and there is no connection." );
+        return;
+      }
+      if ( link == PodcastLink.metered && !( await ( confirmMobileData?.call() ?? Future.value( false ) ) ) ) return;
+    }
     _status = PodcastPlayerStatus.loading;
     _title  = title;
     notifyListeners();
-    File file;
     try {
-      file = await _ioFactory().downloadToCache( audioPath, "$id.mp3" );
+      file ??= await cache.fetch( audioPath, id );
     } catch ( e ) {
       _fail( "Download failed: $e" );
       return;

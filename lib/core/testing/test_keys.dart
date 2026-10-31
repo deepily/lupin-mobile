@@ -542,6 +542,16 @@ class TestKeys {
   static const miniPlayerToggle          = 'miniPlayer.toggle';
   /// Key of the mini-player stop button.
   static const miniPlayerClose           = 'miniPlayer.close';
+  /// Key of the "Downloaded" line the mini-player shows for a track kept on the phone.
+  static const miniPlayerDownloaded      = 'miniPlayer.downloaded';
+  /// Prefix of the downloaded marker on a done card's Play button; the language index follows.
+  static const podcastDownloadedPrefix   = 'podcast.downloaded.';
+  /// Key of the "Download over mobile data?" bottom sheet.
+  static const podcastDataSheet          = 'podcast.data.sheet';
+  /// Key of the Download button on that sheet.
+  static const podcastDataYes            = 'podcast.data.yes';
+  /// Key of the Cancel button on that sheet.
+  static const podcastDataNo             = 'podcast.data.no';
 
   // ── Quick Ask ──
   /// Key of the quick ask record button.
