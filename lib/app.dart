@@ -34,6 +34,8 @@ import 'services/permissions/notification_permission.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_payload.dart';
 import 'services/push/notification_tap_router.dart';
+import 'services/audio/podcast_player_service.dart';
+import 'features/audio/mini_player_bar.dart';
 import 'services/tts/streaming_tts_player.dart';
 import 'services/websocket/websocket_service.dart';
 
@@ -477,7 +479,12 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
             asr   : ServiceLocator.isRegistered<AsrService>()
                 ? ServiceLocator.get<AsrService>()
                 : null,
-            child : child!,
+            // The podcast mini-player rides under every screen (row 3469e9db, P2).
+            child : Column( children: [
+              Expanded( child: child! ),
+              if ( ServiceLocator.isRegistered<PodcastPlayerService>() )
+                MiniPlayerBar( service: ServiceLocator.get<PodcastPlayerService>() ),
+            ] ),
           ),
           home     : AuthGate(
             serverContext     : ServiceLocator.get<ServerContextService>(),
