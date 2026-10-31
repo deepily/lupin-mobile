@@ -17,6 +17,7 @@ import 'doc_upload_sheet.dart';
 import 'doc_link_tap.dart';
 import 'doc_panel.dart';
 import 'doc_split_host.dart';
+import 'podcast_confirm_sheet.dart';
 
 /// Full-screen viewer for a document reached from a notification abstract.
 ///
@@ -98,6 +99,9 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
   /// Back walks [_history] first and leaves only when it is empty.
   DocLink?            _link;
   final List<DocLink> _history = [];
+
+  /// True while a podcast request is out, so a second tap cannot start a second job.
+  bool _podcastBusy = false;
 
   @override
   void initState() {
@@ -237,6 +241,40 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     }
   }
 
+  /// Offers a podcast of the document on screen.
+  ///
+  /// A sheet asks "Podcast <name>?". Nothing goes to the server before Yes. Yes asks the
+  /// server whether the file can be podcast, then starts the job with the document as
+  /// `<scope>/<path>`. Every refusal shows the server's own sentence.
+  Future<void> _podcast( DocLink link ) async {
+    if ( _podcastBusy ) return;
+    final messenger = ScaffoldMessenger.of( context );
+    final repo      = widget.repository!;
+    final scopePath = "${link.project}/${link.relPath}";
+    if ( !await showPodcastConfirmSheet( context, link.displayName ) ) return;
+    if ( !mounted ) return;
+
+    setState( () => _podcastBusy = true );
+    try {
+      await repo.checkPodcast( scopePath );
+      final started = await repo.startPodcast( scopePath );
+      messenger.showSnackBar( SnackBar(
+        key    : const Key( TestKeys.podcastQueued ),
+        content: Text( started.alreadyStarted
+            ? "Already started: job ${started.jobId}"
+            : "Podcast queued: job ${started.jobId}" ),
+      ) );
+    } on DocApiException catch ( e ) {
+      messenger.showSnackBar( SnackBar(
+        key            : const Key( TestKeys.podcastError ),
+        content        : Text( e.message ),
+        backgroundColor: Colors.red,
+      ) );
+    } finally {
+      if ( mounted ) setState( () => _podcastBusy = false );
+    }
+  }
+
   /// Shares the text of [content] as a file, since only text is shareable today.
   Future<void> _share( DocContent content ) async {
     if ( content.text == null ) return;
@@ -299,6 +337,14 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
               icon     : const Icon( Icons.download_outlined ),
               tooltip  : "Download the original file",
               onPressed: () => _download( link, content ),
+            ),
+          // Podcast needs a project document: the server takes it as <scope>/<path>.
+          if ( isFile && link.kind == DocLinkKind.docs && link.project != null && link.relPath != null )
+            IconButton(
+              key      : const Key( TestKeys.docViewerPodcastButton ),
+              icon     : const Icon( Icons.podcasts ),
+              tooltip  : "Make a podcast of this document",
+              onPressed: _podcastBusy ? null : () => _podcast( link ),
             ),
           // The Folder button, beside Download, shows the listing of the file's folder.
           if ( folder != null )

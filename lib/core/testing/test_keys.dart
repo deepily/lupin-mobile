@@ -509,6 +509,22 @@ class TestKeys {
   /// Key of the voice reply append cancel.
   static const voiceReplyAppendCancel = 'voiceReply.appendCancel';
 
+  // Podcast from the doc viewer, and Play on the podcast-done card
+  /// Key of the doc viewer's Podcast button.
+  static const docViewerPodcastButton = 'docs.viewer.podcast';
+  /// Key of the Podcast confirmation sheet.
+  static const podcastConfirmSheet    = 'podcast.confirm.sheet';
+  /// Key of the Podcast sheet's Yes button.
+  static const podcastConfirmYes      = 'podcast.confirm.yes';
+  /// Key of the Podcast sheet's No button.
+  static const podcastConfirmNo       = 'podcast.confirm.no';
+  /// Key of the error snackbar a refused podcast shows.
+  static const podcastError           = 'podcast.error';
+  /// Key of the success snackbar a queued podcast shows.
+  static const podcastQueued          = 'podcast.queued';
+  /// Prefix of a podcast-done card's Play button; the language index follows.
+  static const podcastPlayPrefix      = 'podcast.play.';
+
   // Audio artifact player: in-app playback for pg-* and rp- jobs
   /// Key of the audio player download button.
   static const audioPlayerDownloadButton = 'audio.download';

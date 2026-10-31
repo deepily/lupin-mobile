@@ -5,6 +5,7 @@ import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/abstract_body.dart';
+import 'podcast_done_actions.dart';
 import '../../../services/notification_filter/notification_stop_list.dart';
 import '../../../services/notification_filter/progress_group_collapse.dart';
 import '../data/notification_models.dart';
@@ -323,6 +324,7 @@ class _MessageCard extends StatelessWidget {
                 abstractText : message.abstractText,
                 repository   : ServiceLocator.instance<DocRepository>(),
               ),
+              PodcastDoneActions( abstractText: message.abstractText ),
             ],
             if ( hasResponse ) ...[
               const SizedBox( height: 12 ),
