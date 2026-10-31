@@ -522,6 +522,10 @@ class TestKeys {
   static const audioPlayerShareButton    = 'audio.share';
   /// Key of the audio player slider.
   static const audioPlayerSlider         = 'audio.slider';
+  /// Key of the mini-player play/pause button.
+  static const miniPlayerToggle          = 'miniPlayer.toggle';
+  /// Key of the mini-player stop button.
+  static const miniPlayerClose           = 'miniPlayer.close';
 
   // ── Quick Ask ──
   /// Key of the quick ask record button.

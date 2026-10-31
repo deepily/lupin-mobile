@@ -77,6 +77,8 @@ import '../../features/finished_tasks/data/finished_tasks_repository.dart';
 import '../../features/finished_tasks/domain/finished_tasks_bloc.dart';
 
 import '../../services/artifacts/io_file_service.dart';
+import '../../services/audio/just_audio_playback_engine.dart';
+import '../../services/audio/podcast_player_service.dart';
 import '../../services/asr/voice_capture_session.dart';
 
 // Tier 4 BLoCs
@@ -547,6 +549,16 @@ class ServiceLocator {
         prefs    : _getIt<NotificationPreferences>(),
         ws       : _getIt<WebSocketService>(),
         stopList : _getIt<NotificationStopList>(),
+      ),
+    );
+
+    // App-wide podcast player (row 3469e9db, P2/P3). Everything is looked up on first
+    // use, so no platform channel is touched at startup and registration order is moot.
+    _getIt.registerSingleton<PodcastPlayerService>(
+      PodcastPlayerService(
+        engineFactory : JustAudioPlaybackEngine.new,
+        ioFactory     : () => _getIt<IoFileService>(),
+        ttsFactory    : () => _getIt<TtsOrchestrator>(),
       ),
     );
   }

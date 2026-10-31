@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
 import 'core/di/service_locator.dart';
@@ -21,6 +22,14 @@ void main() async {
     );
 
     Logger.info('Lupin Mobile app starting...');
+
+    // Media session + foreground service for podcast playback (row 3469e9db, P3). Must run
+    // before any AudioPlayer is created; the player itself is built lazily on first play.
+    await JustAudioBackground.init(
+      androidNotificationChannelId   : 'ai.deepily.lupin_mobile.podcast',
+      androidNotificationChannelName : 'Podcast playback',
+      androidNotificationOngoing     : true,
+    );
 
     // Row b69dbf0b: the socket's reconnect triggers. The lifecycle and connectivity services must be running for
     // them to see anything; the connectivity check does DNS lookups, so it is not awaited.
