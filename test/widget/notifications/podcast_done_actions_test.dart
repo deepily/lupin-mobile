@@ -61,7 +61,7 @@ void main() {
     await tester.tap( find.byKey( const Key( "${TestKeys.podcastPlayPrefix}0" ) ) );
     await tester.pump();
     await tester.pump( const Duration( milliseconds: 400 ) );
-    expect( find.text( "Audio — English" ), findsOneWidget );
+    expect( find.text( "Audio — io-a" ), findsOneWidget );
   } );
 
   group( "parsing", () {
@@ -71,6 +71,13 @@ void main() {
       final bare = parsePodcastAudio( "[⬇️ Download](/api/io/file?path=io%2Fz.mp3&download=true)" );
       expect( bare.single.label, "Podcast" );
       expect( bare.single.url, "io/z.mp3" );
+    } );
+
+    test( "the cache name follows the server path, not the title", () {
+      expect( podcastCacheName( "io/podcast/a.mp3" ), "io-podcast-a" );
+      expect( podcastCacheName( "io/podcast/b.mp3" ), "io-podcast-b" );
+      expect( podcastCacheName( "/api/io/file?path=io%2Fpodcast%2Fa.mp3" ), "io-podcast-a" );
+      expect( podcastCacheName( "" ), "podcast" );
     } );
 
     test( "audioPathOf decodes the path query and leaves a bare path alone", () {

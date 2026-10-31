@@ -24,7 +24,7 @@ PodcastPlay podcastPlayFor( BuildContext context ) {
   final navigator = Navigator.of( context );
   return ( url, title ) async {
     await navigator.push( MaterialPageRoute<void>(
-      builder: ( _ ) => AudioArtifactPlayer( jobId: _cacheName( title ), audioPath: audioPathOf( url ) ),
+      builder: ( _ ) => AudioArtifactPlayer( jobId: podcastCacheName( url ), audioPath: audioPathOf( url ) ),
     ) );
   };
 }
@@ -39,8 +39,16 @@ String audioPathOf( String url ) {
   return path ?? url;
 }
 
-/// A title safe to use as the cached file's name, which the player appends `.mp3` to.
-String _cacheName( String title ) {
-  final name = title.replaceAll( RegExp( r'[^A-Za-z0-9._-]+' ), '-' );
+/// The cache file name for the audio at [url], one per server path.
+///
+/// The player appends `.mp3`, so a trailing `.mp3` is dropped here.
+///
+/// Ensures:
+///   - two different server paths never share a name for the same extension
+///   - the name holds only letters, digits, dot, underscore and dash
+///   - a path with nothing usable yields "podcast"
+String podcastCacheName( String url ) {
+  final path = audioPathOf( url ).replaceAll( RegExp( r'\.mp3$' ), "" );
+  final name = path.replaceAll( RegExp( r'[^A-Za-z0-9._-]+' ), "-" );
   return name.isEmpty ? "podcast" : name;
 }

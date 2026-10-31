@@ -252,6 +252,7 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     final repo      = widget.repository!;
     final scopePath = "${link.project}/${link.relPath}";
     if ( !await showPodcastConfirmSheet( context, link.displayName ) ) return;
+    if ( !mounted ) return;
 
     setState( () => _podcastBusy = true );
     try {
