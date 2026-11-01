@@ -6,13 +6,18 @@ import '../../services/audio/podcast_player_service.dart';
 /// Slim bar at the bottom of every screen showing the podcast that is loaded.
 ///
 /// Hidden while nothing is loaded. Back 15 seconds (long-press: to the start), play/pause and close act on the app-wide
-/// [PodcastPlayerService], so they work from any screen.
+/// [PodcastPlayerService], so they work from any screen. A list button shows when [onOpenList] is set.
 class MiniPlayerBar extends StatelessWidget {
   /// The service the bar mirrors and controls.
   final PodcastPlayerService service;
 
+  /// Opens the Podcasts screen; null hides the list button.
+  ///
+  /// The bar sits above the Navigator, so the caller supplies the navigation.
+  final VoidCallback? onOpenList;
+
   /// Creates the bar for [service].
-  const MiniPlayerBar( {super.key, required this.service} );
+  const MiniPlayerBar( {super.key, required this.service, this.onOpenList} );
 
   @override
   Widget build( BuildContext context ) {
@@ -45,6 +50,12 @@ class MiniPlayerBar extends StatelessWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if ( onOpenList != null )
+                    IconButton(
+                      key      : const Key( TestKeys.miniPlayerList ),
+                      icon     : const Icon( Icons.list, semanticLabel: "Podcasts" ),
+                      onPressed: onOpenList,
+                    ),
                   // Tap backs up 15 seconds; long-press goes to the start. IconButton has no long-press, so wrap it.
                   GestureDetector(
                     onLongPress: service.restart,

@@ -544,6 +544,8 @@ class TestKeys {
   static const miniPlayerBack            = 'miniPlayer.back';
   /// Key of the mini-player stop button.
   static const miniPlayerClose           = 'miniPlayer.close';
+  /// Key of the mini-player's Podcasts list button.
+  static const miniPlayerList            = 'miniPlayer.list';
   /// Key of the "Downloaded" line the mini-player shows for a track kept on the phone.
   static const miniPlayerDownloaded      = 'miniPlayer.downloaded';
   /// Prefix of the downloaded marker on a done card's Play button; the language index follows.

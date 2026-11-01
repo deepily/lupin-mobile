@@ -6,6 +6,8 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/audio/mini_player_bar.dart';
+import 'package:lupin_mobile/features/podcasts/podcast_list_screen.dart';
+import 'package:lupin_mobile/services/audio/podcast_catalog.dart';
 import 'package:lupin_mobile/services/audio/podcast_link.dart';
 import 'package:lupin_mobile/services/audio/podcast_player_service.dart';
 import '../../helpers/fake_podcast_cache.dart';
@@ -128,5 +130,37 @@ void main() {
   testWidgets( "back button is absent while nothing is loaded", ( tester ) async {
     await tester.pumpWidget( host() );
     expect( find.byKey( const Key( TestKeys.miniPlayerBack ) ), findsNothing );
+  } );
+
+  testWidgets( "the list button shows only when a handler is given and calls it", ( tester ) async {
+    var opened = 0;
+    await tester.pumpWidget( MaterialApp( home: Scaffold( bottomNavigationBar: MiniPlayerBar( service: svc ) ) ) );
+    await svc.playFile( _F(), "My podcast", id: "pg-1" );
+    await tester.pump();
+    expect( find.byKey( const Key( TestKeys.miniPlayerList ) ), findsNothing );
+
+    await tester.pumpWidget( MaterialApp( home: Scaffold( bottomNavigationBar: MiniPlayerBar( service: svc, onOpenList: () => opened++ ) ) ) );
+    await tester.pump();
+    await tester.tap( find.byKey( const Key( TestKeys.miniPlayerList ) ) );
+    expect( opened, 1 );
+  } );
+
+  testWidgets( "above the Navigator, the list button opens the Podcasts screen through the navigator key", ( tester ) async {
+    final key = GlobalKey<NavigatorState>();
+    await tester.pumpWidget( MaterialApp(
+      navigatorKey: key,
+      builder     : ( context, child ) => Column( children: [
+        Expanded( child: child! ),
+        MiniPlayerBar( service: svc, onOpenList: () => key.currentState!.push( MaterialPageRoute<void>(
+          builder: ( _ ) => PodcastListScreen( catalog: PodcastCatalog( cache ) ),
+        ) ) ),
+      ] ),
+      home: const Scaffold( body: Text( "screen" ) ),
+    ) );
+    await svc.playFile( _F(), "My podcast", id: "pg-1" );
+    await tester.pump();
+    await tester.tap( find.byKey( const Key( TestKeys.miniPlayerList ) ) );
+    await tester.pumpAndSettle();
+    expect( find.byType( PodcastListScreen ), findsOneWidget );
   } );
 }
