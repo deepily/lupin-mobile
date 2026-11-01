@@ -38,5 +38,8 @@ class JustAudioPlaybackEngine implements PodcastPlaybackEngine {
   Future<void> rewind() => _player.seek( Duration.zero );
 
   @override
+  Future<void> seek( Duration position ) => _player.seek( position );
+
+  @override
   Future<void> stop() => _player.stop();
 }

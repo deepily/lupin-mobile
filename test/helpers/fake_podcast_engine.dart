@@ -25,5 +25,6 @@ class FakeEngine implements PodcastPlaybackEngine {
   @override Future<void> play()   async => calls.add( "play" );
   @override Future<void> pause()  async => calls.add( "pause" );
   @override Future<void> rewind() async => calls.add( "rewind" );
+  @override Future<void> seek( Duration position ) async => calls.add( "seek:${position.inSeconds}" );
   @override Future<void> stop()   async => calls.add( "stop" );
 }
