@@ -95,4 +95,16 @@ void main() {
     final rows = await catalog.entries();
     expect( rows.single.title, "Second" );
   } );
+
+  test( "rememberTitle names a later Drive download, and a blank title saves nothing", () async {
+    const stream = "/api/podcast-drive/stream/d1";
+    await catalog.rememberTitle( stream, "  " );
+    expect( cache.savedTitles, isEmpty );
+
+    await catalog.rememberTitle( stream, " Desktop explainer " );
+    cache.files[ podcastCacheName( stream ) ] = PathFile( "/x" );
+    final rows = await catalog.entries();
+    expect( rows.single.title, "Desktop explainer" );
+    expect( rows.single.audioPath, stream );
+  } );
 }

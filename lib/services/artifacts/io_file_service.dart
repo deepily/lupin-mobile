@@ -56,11 +56,18 @@ class IoFileService {
   ///
   /// Requires the folder of [destination] exists.
   ///
+  /// A [path] that starts with `/api/` is a server endpoint, such as the Drive stream proxy, and is
+  /// downloaded as it is. Any other [path] is a file under the io folder, read through `/api/io/file`.
+  ///
   /// Throws [IoFileException] when the request fails, carrying the HTTP status if any. [destination] may
   /// hold a partial file then; the caller owns removing it.
   Future<void> downloadTo( String path, File destination ) async {
     try {
-      await _dio.download( '/api/io/file', destination.path, queryParameters: { 'path': path } );
+      if ( path.startsWith( '/api/' ) ) {
+        await _dio.download( path, destination.path );
+      } else {
+        await _dio.download( '/api/io/file', destination.path, queryParameters: { 'path': path } );
+      }
     } on DioException catch ( e ) {
       throw IoFileException(
         'downloadTo($path) failed',

@@ -570,6 +570,16 @@ class TestKeys {
   static const podcastListPlayPrefix     = 'podcast.list.play.';
   /// Prefix of a row's downloaded mark; the cache name follows.
   static const podcastListDownloadedPrefix = 'podcast.list.downloaded.';
+  /// Key of the Google Drive section header on the Podcasts list.
+  static const podcastDriveHeader        = 'podcast.drive.header';
+  /// Key of the message shown when the Drive list could not load.
+  static const podcastDriveError         = 'podcast.drive.error';
+  /// Key of the message shown when Drive holds no podcasts.
+  static const podcastDriveEmpty         = 'podcast.drive.empty';
+  /// Prefix of a Drive row; `<job folder>/<Drive file id>` follows.
+  static const podcastDriveRowPrefix     = 'podcast.drive.row.';
+  /// Prefix of a Drive row's Play button; `<job folder>/<Drive file id>` follows.
+  static const podcastDrivePlayPrefix    = 'podcast.drive.play.';
 
   // ── Quick Ask ──
   /// Key of the quick ask record button.
