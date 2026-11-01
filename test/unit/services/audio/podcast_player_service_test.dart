@@ -384,6 +384,35 @@ void main() {
       expect( svc.status, PodcastPlayerStatus.paused );
     } );
   } );
+  group( "a play() that rejects", () {
+    test( "an old track's late failure does not fail the current track", () async {
+      final first = Completer<void>();
+      engine.playEnds = first;
+      await svc.playFile( _FakeFile( "/tmp/a.mp3" ), "A", id: "a" );
+      engine.playEnds = Completer<void>();
+      await svc.playFile( _FakeFile( "/tmp/b.mp3" ), "B", id: "b" );
+
+      first.completeError( StateError( "old track died" ) );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( svc.status, PodcastPlayerStatus.playing );
+      expect( svc.trackId, "b" );
+      expect( svc.error, isNull );
+    } );
+
+    test( "the current track's own failure still fails it", () async {
+      final ends = Completer<void>();
+      engine.playEnds = ends;
+      await svc.playFile( _FakeFile(), "A", id: "a" );
+
+      ends.completeError( StateError( "device gone" ) );
+      await Future<void>.delayed( Duration.zero );
+
+      expect( svc.status, PodcastPlayerStatus.error );
+      expect( svc.error, contains( "device gone" ) );
+    } );
+  } );
+
 }
 
 extension on List<String> {
