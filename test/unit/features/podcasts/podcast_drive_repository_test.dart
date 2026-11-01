@@ -1,6 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lupin_mobile/features/podcasts/data/podcast_drive_repository.dart';
+import 'package:lupin_mobile/services/auth/auth_interceptor.dart';
+import 'package:lupin_mobile/services/auth/auth_repository.dart';
+import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
+import '../../../_helpers/fixture_loader.dart';
 import '../../_helpers/stub_dio.dart';
 
 Map<String, dynamic> folder( String job, { String? created, String title = "", List<Map<String, dynamic>> files = const [] } ) => {
@@ -50,5 +55,45 @@ void main() {
     final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( [ { "title": "no folder name" } ] ) } );
 
     await expectLater( repoFor( a ).list(), throwsA( isA<PodcastDriveException>() ) );
+  } );
+
+  group( "an expired login", () {
+    tearDown( clearAccessToken );
+
+    Dio authDio( StubAdapter a, { required String? refreshToken } ) {
+      final dio = makeDio( a );
+      dio.interceptors.add( AuthInterceptor(
+        dio              : dio,
+        repo             : AuthRepository( dio ),
+        readRefreshToken : () async => refreshToken,
+        onTokensRotated  : ( _ ) async {},
+        onRefreshFailed  : () async {},
+      ) );
+      return dio;
+    }
+
+    test( "a 401 refreshes the token and the retry's list is returned", () async {
+      setAccessToken( "stale" );
+      var calls = 0;
+      final a = StubAdapter( {
+        "GET /api/podcast-drive/list": ( _ ) => ++calls == 1 ? jsonBody( { "detail": "expired" }, status: 401 ) : jsonBody( [ folder( "pg-1", files: [ file( "a" ) ] ) ] ),
+        "POST /auth/refresh"         : ( _ ) => jsonBodyFromFixture( "auth/refresh_response.json" ),
+      } );
+
+      final folders = await PodcastDriveRepository( authDio( a, refreshToken: "old-ref" ) ).list();
+
+      expect( folders.single.jobFolder, "pg-1" );
+      expect( calls, 2 );
+      expect( a.captured.last.headers[ "Authorization" ], "Bearer fixture_access_token" );
+    } );
+
+    test( "a 401 that the refresh cannot fix asks to sign in again", () async {
+      setAccessToken( "stale" );
+      final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( { "detail": "expired" }, status: 401 ) } );
+
+      await expectLater( PodcastDriveRepository( authDio( a, refreshToken: null ) ).list(), throwsA( isA<PodcastDriveException>()
+          .having( ( e ) => e.statusCode, "status", 401 )
+          .having( ( e ) => e.message, "message", contains( "Sign in again" ) ) ) );
+    } );
   } );
 }

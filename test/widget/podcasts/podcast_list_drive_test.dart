@@ -56,7 +56,7 @@ void main() {
     await open( t, _FakeDrive( [ [ _folder( "pg-07ffadef", "Desktop explainer", [ _audio( "d1" ) ] ) ] ] ) );
 
     expect( find.byKey( const Key( TestKeys.podcastDriveHeader ) ), findsOneWidget );
-    expect( find.byKey( const Key( "${TestKeys.podcastDriveRowPrefix}d1" ) ), findsOneWidget );
+    expect( find.byKey( const Key( "${TestKeys.podcastDriveRowPrefix}pg-07ffadef/d1" ) ), findsOneWidget );
     final phoneY  = t.getTopLeft( find.text( "On the phone" ) ).dy;
     final headerY = t.getTopLeft( find.byKey( const Key( TestKeys.podcastDriveHeader ) ) ).dy;
     final driveY  = t.getTopLeft( find.text( "Desktop explainer" ) ).dy;
@@ -67,7 +67,7 @@ void main() {
   testWidgets( "Play on a Drive row plays its stream path and saves its title for the download", ( t ) async {
     await open( t, _FakeDrive( [ [ _folder( "pg-1", "Desktop explainer", [ _audio( "d1" ) ] ) ] ] ) );
 
-    await t.tap( find.byKey( const Key( "${TestKeys.podcastDrivePlayPrefix}d1" ) ) );
+    await t.tap( find.byKey( const Key( "${TestKeys.podcastDrivePlayPrefix}pg-1/d1" ) ) );
     await t.pumpAndSettle();
 
     expect( played, [ [ "/api/podcast-drive/stream/d1", "Desktop explainer" ] ] );
@@ -112,6 +112,14 @@ void main() {
 
     expect( find.text( "Two parts (p1.mp3)" ), findsOneWidget );
     expect( find.text( "Two parts (p2.mp3)" ), findsOneWidget );
-    expect( find.byKey( const Key( "${TestKeys.podcastDriveRowPrefix}notes" ) ), findsNothing );
+    expect( find.byKey( const Key( "${TestKeys.podcastDriveRowPrefix}pg-1/notes" ) ), findsNothing );
+  } );
+
+  testWidgets( "the same Drive file in two folders gets two distinct rows", ( t ) async {
+    await open( t, _FakeDrive( [ [ _folder( "pg-a", "First", [ _audio( "same" ) ] ), _folder( "pg-b", "Second", [ _audio( "same" ) ] ) ] ] ) );
+
+    expect( t.takeException(), isNull );
+    expect( find.byKey( const Key( "${TestKeys.podcastDriveRowPrefix}pg-a/same" ) ), findsOneWidget );
+    expect( find.byKey( const Key( "${TestKeys.podcastDriveRowPrefix}pg-b/same" ) ), findsOneWidget );
   } );
 }

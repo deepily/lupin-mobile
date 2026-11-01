@@ -133,15 +133,21 @@ class PodcastDriveRepository {
   ///   - folders are sorted newest first; folders with no time go last
   ///
   /// Raises:
+  ///   - a 401 goes through the auth interceptor's token refresh and retry first
+  ///   - PodcastDriveException on a 401 that survives the refresh, asking to sign in again
   ///   - PodcastDriveException on a 403, saying only the Drive owner's login may list it
   ///   - PodcastDriveException on any other failure, carrying the server's `detail` when it sent one
   ///   - PodcastDriveException when the reply is not the expected list
   Future<List<DrivePodcastFolder>> list() async {
     final Response<dynamic> res;
     try {
-      res = await _dio.get<dynamic>( listPath, options: Options( validateStatus: ( _ ) => true ) );
+      // A 401 stays an error so the auth interceptor refreshes the token and retries; every other
+      // status reaches the checks below, so the server's own `detail` text survives.
+      res = await _dio.get<dynamic>( listPath, options: Options( validateStatus: ( s ) => s != null && s != 401 ) );
     } on DioException catch ( e ) {
-      throw PodcastDriveException( "Could not reach the server: ${e.message ?? "no connection"}" );
+      final status = e.response?.statusCode;
+      if ( status == 401 ) throw const PodcastDriveException( "Your login has expired. Sign in again to see the Drive podcasts.", statusCode: 401 );
+      throw PodcastDriveException( "Could not reach the server: ${e.message ?? "no connection"}", statusCode: status );
     }
     final status = res.statusCode ?? 0;
     final data   = res.data;

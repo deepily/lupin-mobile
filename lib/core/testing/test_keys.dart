@@ -576,9 +576,9 @@ class TestKeys {
   static const podcastDriveError         = 'podcast.drive.error';
   /// Key of the message shown when Drive holds no podcasts.
   static const podcastDriveEmpty         = 'podcast.drive.empty';
-  /// Prefix of a Drive row; the Drive file id follows.
+  /// Prefix of a Drive row; `<job folder>/<Drive file id>` follows.
   static const podcastDriveRowPrefix     = 'podcast.drive.row.';
-  /// Prefix of a Drive row's Play button; the Drive file id follows.
+  /// Prefix of a Drive row's Play button; `<job folder>/<Drive file id>` follows.
   static const podcastDrivePlayPrefix    = 'podcast.drive.play.';
 
   // ── Quick Ask ──

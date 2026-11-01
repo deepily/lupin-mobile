@@ -152,12 +152,12 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       final many  = folder.files.where( ( x ) => x.isAudio ).length > 1;
       final title = many ? "${folder.title} (${file.name})" : folder.title;
       out.add( ListTile(
-        key     : Key( "${TestKeys.podcastDriveRowPrefix}${file.driveFileId}" ),
+        key     : Key( "${TestKeys.podcastDriveRowPrefix}${folder.jobFolder}/${file.driveFileId}" ),
         leading : const Icon( Icons.cloud_outlined, semanticLabel: "In Google Drive" ),
         title   : Text( title, maxLines: 2, overflow: TextOverflow.ellipsis ),
         subtitle: Text( folder.created == null ? folder.jobFolder : _dateText( folder.created! ) ),
         trailing: IconButton(
-          key      : Key( "${TestKeys.podcastDrivePlayPrefix}${file.driveFileId}" ),
+          key      : Key( "${TestKeys.podcastDrivePlayPrefix}${folder.jobFolder}/${file.driveFileId}" ),
           icon     : const Icon( Icons.play_arrow ),
           tooltip  : "Play",
           onPressed: () => play( file.streamUrl, title ),
