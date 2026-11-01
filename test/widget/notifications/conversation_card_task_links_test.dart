@@ -147,7 +147,7 @@ void main() {
     } );
 
     testWidgets( 'a refusal with an entity and markdown characters shows as typed', ( tester ) async {
-      const reason = 'Rick &amp; Tiffany must approve <b>this</b> row: *gated* [see](x) _now_';
+      const reason = 'Rick &amp; Tiffany must approve <b>this</b> row: *gated* [see](x) _now_\nTitle\n=====\nnext';
       await openCard( tester, _line( _a, 'Ship it' ), {
         'GET /api/tasks/$_a'             : ( _ ) => jsonBody( _row( _a, 'not_approved' ) ),
         'POST /api/tasks/$_a/transition' : ( _ ) => _detail( 403, reason ),
@@ -156,7 +156,8 @@ void main() {
       await _tapHref( tester, '/app/tasks/approve?row=$_a' );
       await tester.pumpAndSettle();
 
-      expect( find.textContaining( reason, findRichText: true ), findsOneWidget );
+      final shown = tester.widgetList<EditableText>( find.byType( EditableText ) ).map( ( e ) => e.controller.text ).join( '|' );
+      expect( shown, contains( reason ), reason: 'markdown would turn the = line into a heading and eat the newline' );
       expect( _approvedText(), findsNothing );
     } );
 
