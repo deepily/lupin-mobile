@@ -52,6 +52,21 @@ void main() {
     expect( await reopened.titles(), { "a": "Alpha", "b": "Beta" } );
   } );
 
+  test( "a save writes through a .part file and leaves none behind", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    final names = dir.listSync().map( ( e ) => e.path.split( "/" ).last ).toList();
+    expect( names, [ "titles.json" ] );
+  } );
+
+  test( "a leftover titles.json.part does not touch the whole index and is cleared on load", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    File( "${dir.path}/titles.json.part" ).writeAsStringSync( "{\"a\":" );
+    expect( await cache.titles(), { "a": "Alpha" } );
+    await cache.load();
+    expect( File( "${dir.path}/titles.json.part" ).existsSync(), isFalse );
+    expect( await cache.titles(), { "a": "Alpha" } );
+  } );
+
   test( "an unreadable title index gives no titles and does not throw", () async {
     dir.createSync( recursive: true );
     File( "${dir.path}/titles.json" ).writeAsStringSync( "{not json" );

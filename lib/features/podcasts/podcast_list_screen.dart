@@ -38,8 +38,16 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   }
 
   /// Reloads the rows; the old rows stay on screen until the new ones arrive.
+  ///
+  /// A failed read shows the empty state instead of a spinner that never stops.
   Future<void> _reload() async {
-    final rows = await widget.catalog.entries();
+    List<PodcastListEntry> rows;
+    try {
+      rows = await widget.catalog.entries();
+    } catch ( e ) {
+      debugPrint( "[PodcastList] could not load the list: $e" );
+      rows = const [];
+    }
     if ( mounted ) setState( () => _rows = rows );
   }
 

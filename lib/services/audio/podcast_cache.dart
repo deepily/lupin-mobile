@@ -109,6 +109,7 @@ class PodcastCache extends ChangeNotifier {
   ///
   /// Ensures:
   ///   - saves are applied one after another, so none overwrites another
+  ///   - the index is written to a `.part` file and renamed, so a cut-off write leaves the old index whole
   ///   - never throws; a failed save is printed and the list falls back to the file name
   Future<void> saveTitle( String name, String title ) {
     return _titleWrites = _titleWrites.then( ( _ ) async {
@@ -116,7 +117,10 @@ class PodcastCache extends ChangeNotifier {
         final all = await titles();
         if ( all[ name ] == title ) return;
         all[ name ] = title;
-        await File( "${( await _dir() ).path}/$kPodcastTitleIndex" ).writeAsString( jsonEncode( all ) );
+        final dir  = ( await _dir() ).path;
+        final part = File( "$dir/$kPodcastTitleIndex.part" );
+        await part.writeAsString( jsonEncode( all ), flush: true );
+        await part.rename( "$dir/$kPodcastTitleIndex" );
       } catch ( e ) {
         debugPrint( "[PodcastCache] title save failed: $e" );
       }

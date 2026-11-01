@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/artifacts/podcast_play.dart';
 import 'package:lupin_mobile/features/podcasts/podcast_list_screen.dart';
+import 'package:lupin_mobile/services/audio/podcast_cache.dart';
 import 'package:lupin_mobile/services/audio/podcast_catalog.dart';
 
 import '../../helpers/fake_podcast_cache.dart';
@@ -74,4 +77,17 @@ void main() {
     await t.pumpAndSettle();
     expect( find.text( "Two" ), findsOneWidget );
   } );
+
+  testWidgets( "a failed load shows the empty state, not a spinner that never stops", ( t ) async {
+    final broken = PodcastCatalog( _ThrowingCache() );
+    await t.pumpWidget( MaterialApp( home: PodcastListScreen( catalog: broken, onPlay: ( u, s ) async {} ) ) );
+    await t.pumpAndSettle();
+    expect( find.byType( CircularProgressIndicator ), findsNothing );
+    expect( find.byKey( const Key( TestKeys.podcastListEmpty ) ), findsOneWidget );
+  } );
+}
+
+class _ThrowingCache extends FakePodcastCache {
+  @override
+  Future<List<CachedPodcast>> entries() async => throw const FileSystemException( "gone" );
 }
