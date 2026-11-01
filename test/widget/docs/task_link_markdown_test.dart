@@ -73,6 +73,12 @@ Future<void> _tapLink( WidgetTester tester, String href, [ String label = '' ] )
   await tester.pump( const Duration( milliseconds: 50 ) );
 }
 
+// The plain-text note under the card; its text is the server's, byte for byte.
+String? _note( WidgetTester tester ) {
+  final f = find.byKey( const Key( '${TestKeys.taskLinkNotePrefix}$_id' ) );
+  return f.evaluate().isEmpty ? null : tester.widget<SelectableText>( f ).data;
+}
+
 Finder _label() => find.textContaining( 'approve ☐', findRichText: true );
 
 void main() {
@@ -101,7 +107,7 @@ void main() {
       await _tapLink( tester, _approveHref );
       await tester.pumpAndSettle();
 
-      expect( find.textContaining( 'Only Rick may approve P0 rows.', findRichText: true ), findsOneWidget );
+      expect( _note( tester ), 'Only Rick may approve P0 rows.' );
       expect( find.textContaining( 'approved ✅', findRichText: true ), findsNothing );
     } );
 
@@ -122,7 +128,7 @@ void main() {
     } );
 
     testWidgets( 'a reason with HTML entities is shown exactly as sent', ( tester ) async {
-      const reason = 'Rows need &amp; review &lt;b&gt; &#35;1 <i>now</i> [x](y)';
+      const reason = 'Rows need &amp; review &lt;b&gt; &#35;1 <i>now</i> [x](y)\nline two a=b\n=== \n\n  indented *x* _y_ `z`';
       await _mount( tester, _md(), ( o ) async {
         if ( o.method == 'GET' ) return _ok( o, _row( 'not_approved' ) );
         throw _refuse( o, 403, { 'detail': reason } );
@@ -131,7 +137,7 @@ void main() {
       await _tapLink( tester, _approveHref );
       await tester.pumpAndSettle();
 
-      expect( find.textContaining( reason, findRichText: true ), findsOneWidget );
+      expect( _note( tester ), reason );
     } );
 
     testWidgets( 'a held-for-approval answer is shown, not painted approved', ( tester ) async {
@@ -143,7 +149,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect( find.textContaining( 'approved ✅', findRichText: true ), findsNothing );
-      expect( find.textContaining( 'awaiting_human_approval', findRichText: true ), findsOneWidget );
+      expect( _note( tester ), 'awaiting_human_approval' );
     } );
   } );
 
@@ -167,7 +173,7 @@ void main() {
     for ( final closed in <String>[ 'dropped', 'wont_fix' ] ) {
       testWidgets( 'a $closed row shows that status, never approved', ( tester ) async {
         await _mount( tester, _md(), ( o ) async => _ok( o, _row( closed ) ) );
-        expect( find.textContaining( closed, findRichText: true ), findsOneWidget );
+        expect( _note( tester ), closed );
         expect( find.textContaining( 'approved ✅', findRichText: true ), findsNothing );
       } );
     }

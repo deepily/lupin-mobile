@@ -100,6 +100,8 @@ class TestKeys {
   static const docSplitColumn       = 'docs.split.column';
   /// Key of the doc viewer markdown.
   static const docViewerMarkdown    = 'docs.viewer.markdown';
+  /// Key prefix of the plain-text note under a card for a refused or closed approve link. The suffix is the row id.
+  static const taskLinkNotePrefix = 'docs.task-link.note.';
   /// The dialog that shows a row's text.
   static const taskViewDialog         = 'docs.task-link.view-dialog';
   /// Key of the doc viewer source.

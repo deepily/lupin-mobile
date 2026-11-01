@@ -139,16 +139,15 @@ class TaskLinkSession extends ChangeNotifier {
 /// Matches a markdown inline link, the same shape `doc_link.dart` parses.
 final RegExp _markdownLink = RegExp( r'\[([^\]]*)\]\(([^)\s]+)\)' );
 
-/// Escapes markdown punctuation so server text shows exactly as sent.
-String escapeMarkdown( String text ) =>
-    text.replaceAllMapped( RegExp( r'[\\`*_{}\[\]()#+\-.!|<>~$&]' ), ( m ) => '\\${m[ 0 ]}' );
-
 /// Draws markdown whose approve and view links act in place.
 ///
-/// A task link is recognised by its address, never by its label. An approve link is
-/// redrawn from the session's state, as live link, plain label, "approved ✅", status or
-/// refusal. A view link opens the row's text in a dialog. Every other link is left to
-/// [onTapLink]. With no [repository] the task links stay ordinary links.
+/// A task link is recognised by its address, never by its label.
+/// An approve link is redrawn from the session's state: live link, plain label, "approved ✅" or a marker.
+/// A refusal or closed status never goes through markdown, which would change the server's words.
+/// It is drawn as selectable plain text under the document.
+/// A view link opens the row's text in a dialog.
+/// Every other link is left to [onTapLink].
+/// With no [repository] the task links stay ordinary links.
 class TaskLinkMarkdown extends StatefulWidget {
   /// The markdown source.
   final String data;
@@ -210,12 +209,26 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
         final state = session.stateFor( link.id );
         switch ( state.phase ) {
           case TaskLinkPhase.live     : return m[ 0 ]!;
-          case TaskLinkPhase.sending  : return escapeMarkdown( m.group( 1 ) ?? "" );
+          case TaskLinkPhase.sending  : return m.group( 1 ) ?? "";
           case TaskLinkPhase.approved : return approvedText;
-          case TaskLinkPhase.closed   :
-          case TaskLinkPhase.refused  : return escapeMarkdown( state.text ?? "" );
+          case TaskLinkPhase.closed   : return "closed (see note below)";
+          case TaskLinkPhase.refused  : return "not approved (see note below)";
         }
       } );
+
+  // The server's words for every settled-but-not-approved link, once per row, in document order.
+  List<MapEntry<String, String>> _notes( TaskLinkSession session ) {
+    final notes = <String, String>{};
+    for ( final m in _markdownLink.allMatches( widget.data ) ) {
+      final link = classifyTaskHref( m.group( 2 ) );
+      if ( link == null || link.kind != TaskLinkKind.approve ) continue;
+      final state = session.stateFor( link.id );
+      if ( state.phase == TaskLinkPhase.closed || state.phase == TaskLinkPhase.refused ) {
+        notes[ link.id ] = state.text ?? "";
+      }
+    }
+    return notes.entries.toList();
+  }
 
   void _onTap( String text, String? href, String title ) {
     final link = classifyTaskHref( href );
@@ -248,13 +261,41 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
     }
     return ListenableBuilder(
       listenable: session,
-      builder: ( context, _ ) => Markdown(
-        key        : const Key( TestKeys.docViewerMarkdown ),
-        data       : _display( session ),
-        selectable : true,
-        padding    : const EdgeInsets.all( 16 ),
-        onTapLink  : _onTap,
-      ),
+      builder: ( context, _ ) {
+        final notes = _notes( session );
+        final md    = Markdown(
+          key        : const Key( TestKeys.docViewerMarkdown ),
+          data       : _display( session ),
+          selectable : true,
+          padding    : const EdgeInsets.all( 16 ),
+          onTapLink  : _onTap,
+        );
+        if ( notes.isEmpty ) return md;
+        return Column(
+          children: [
+            Expanded( child: md ),
+            ConstrainedBox(
+              constraints: BoxConstraints( maxHeight: MediaQuery.sizeOf( context ).height * 0.4 ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all( 16 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for ( final n in notes ) ...[
+                      Text( n.key.substring( 0, 8 ), style: Theme.of( context ).textTheme.labelSmall ),
+                      SelectableText(
+                        n.value,
+                        key   : Key( "${TestKeys.taskLinkNotePrefix}${n.key}" ),
+                        style : TextStyle( color: Theme.of( context ).colorScheme.error ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
