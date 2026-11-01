@@ -22,6 +22,8 @@ abstract class PodcastPlaybackEngine {
   /// Loads [file] and labels it with [id] and [title] for the media session.
   Future<void> load( File file, String id, String title );
   /// Starts or continues playback.
+  ///
+  /// A platform engine may keep this pending until playback ends, so callers must not wait on it.
   Future<void> play();
   /// Pauses playback, keeping the position.
   Future<void> pause();
@@ -163,13 +165,13 @@ class PodcastPlayerService extends ChangeNotifier {
     _error    = null;
     try {
       await engine.load( file, id, title );
-      await engine.play();
     } catch ( e ) {
       _fail( "Playback failed: $e" );
       return;
     }
     _status = PodcastPlayerStatus.playing;
     notifyListeners();
+    _startPlayback( engine );
   }
 
   /// Pauses the current track, keeping its position.
@@ -185,9 +187,9 @@ class PodcastPlayerService extends ChangeNotifier {
     _heldForSpeech = false;
     if ( _status != PodcastPlayerStatus.paused ) return;
     await _ttsFactory().stopAll();
-    await _engine!.play();
     _status = PodcastPlayerStatus.playing;
     notifyListeners();
+    _startPlayback( _engine! );
   }
 
   /// Pauses the podcast whenever [speaking] emits true and resumes it when it emits false.
@@ -218,9 +220,9 @@ class PodcastPlayerService extends ChangeNotifier {
     if ( !_heldForSpeech ) return;
     _heldForSpeech = false;
     if ( _status != PodcastPlayerStatus.paused ) return;
-    await _engine!.play();
     _status = PodcastPlayerStatus.playing;
     notifyListeners();
+    _startPlayback( _engine! );
   }
 
   /// Backs up [skipBackInterval] in the loaded track, stopping at the start.
@@ -257,6 +259,14 @@ class PodcastPlayerService extends ChangeNotifier {
     _position = Duration.zero;
     _duration = Duration.zero;
     notifyListeners();
+  }
+
+  /// Starts [engine] without waiting for it to finish.
+  ///
+  /// The platform player's play() completes when playback ends or pauses, not when it starts.
+  /// Awaiting it would keep [status] at loading, and the mini-player bar hidden, for the whole track.
+  void _startPlayback( PodcastPlaybackEngine engine ) {
+    engine.play().catchError( ( Object e ) => _fail( "Playback failed: $e" ) );
   }
 
   void _fail( String message ) {

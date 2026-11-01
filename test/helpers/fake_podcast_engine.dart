@@ -11,6 +11,8 @@ class FakeEngine implements PodcastPlaybackEngine {
   final complete = StreamController<void>.broadcast();
   final calls    = <String>[];
   bool  failLoad = false;
+  /// When set, [play] stays pending until this completes, as just_audio's does.
+  Completer<void>? playEnds;
 
   @override Stream<Duration>  get onPosition => pos.stream;
   @override Stream<Duration?> get onDuration => dur.stream;
@@ -22,7 +24,10 @@ class FakeEngine implements PodcastPlaybackEngine {
     calls.add( "load:$id:$title:${file.path}" );
     if ( failLoad ) throw StateError( "bad codec" );
   }
-  @override Future<void> play()   async => calls.add( "play" );
+  @override Future<void> play() async {
+    calls.add( "play" );
+    if ( playEnds != null ) await playEnds!.future;
+  }
   @override Future<void> pause()  async => calls.add( "pause" );
   @override Future<void> rewind() async => calls.add( "rewind" );
   @override Future<void> seek( Duration position ) async => calls.add( "seek:${position.inSeconds}" );
