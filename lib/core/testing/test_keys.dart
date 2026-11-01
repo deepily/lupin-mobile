@@ -540,6 +540,8 @@ class TestKeys {
   static const audioPlayerSlider         = 'audio.slider';
   /// Key of the mini-player play/pause button.
   static const miniPlayerToggle          = 'miniPlayer.toggle';
+  /// Key of the mini-player back-15-seconds button (long-press goes to the start).
+  static const miniPlayerBack            = 'miniPlayer.back';
   /// Key of the mini-player stop button.
   static const miniPlayerClose           = 'miniPlayer.close';
   /// Key of the "Downloaded" line the mini-player shows for a track kept on the phone.

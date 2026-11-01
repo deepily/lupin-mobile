@@ -14,6 +14,7 @@ import 'services/websocket/ws_reconnect_coordinator.dart';
 import 'app.dart';
 import 'services/audio/podcast_audio_session.dart';
 import 'services/audio/podcast_cache.dart';
+import 'services/audio/podcast_player_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,8 @@ void main() async {
       androidNotificationChannelId   : 'ai.deepily.lupin_mobile.podcast',
       androidNotificationChannelName : 'Podcast playback',
       androidNotificationOngoing     : true,
+      // The media-button rewind key (earbuds, car, watch) backs up as far as the mini-player's back button (row 807a4ed0).
+      rewindInterval                 : PodcastPlayerService.skipBackInterval,
     );
 
     // A duck from a short spoken alert must arrive as a pause (audio-focus ruling, row 049d914a).

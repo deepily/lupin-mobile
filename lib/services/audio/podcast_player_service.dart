@@ -27,6 +27,8 @@ abstract class PodcastPlaybackEngine {
   Future<void> pause();
   /// Moves to the start of the loaded audio.
   Future<void> rewind();
+  /// Moves to [position] in the loaded audio.
+  Future<void> seek( Duration position );
   /// Stops playback and releases the media session.
   Future<void> stop();
 }
@@ -68,6 +70,9 @@ class PodcastPlayerService extends ChangeNotifier {
   bool                _heldForSpeech = false;
   Duration            _position = Duration.zero;
   Duration            _duration = Duration.zero;
+
+  /// How far [skipBack] backs up, and how far the media-button rewind key goes.
+  static const Duration skipBackInterval = Duration( seconds: 15 );
 
   /// Creates the service; every collaborator is built on first use.
   PodcastPlayerService( {
@@ -215,6 +220,29 @@ class PodcastPlayerService extends ChangeNotifier {
     if ( _status != PodcastPlayerStatus.paused ) return;
     await _engine!.play();
     _status = PodcastPlayerStatus.playing;
+    notifyListeners();
+  }
+
+  /// Backs up [skipBackInterval] in the loaded track, stopping at the start.
+  ///
+  /// Keeps playing or stays paused, as it was. Does nothing when no track is loaded.
+  Future<void> skipBack() async {
+    if ( !hasTrack ) return;
+    final target = _position - skipBackInterval;
+    await _seekTo( target < Duration.zero ? Duration.zero : target );
+  }
+
+  /// Goes back to the start of the loaded track, keeping the play or pause state.
+  ///
+  /// Does nothing when no track is loaded.
+  Future<void> restart() async {
+    if ( !hasTrack ) return;
+    await _seekTo( Duration.zero );
+  }
+
+  Future<void> _seekTo( Duration target ) async {
+    await _engine!.seek( target );
+    _position = target;
     notifyListeners();
   }
 

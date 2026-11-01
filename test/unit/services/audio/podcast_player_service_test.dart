@@ -43,6 +43,56 @@ void main() {
 
   tearDown( () => svc.dispose() );
 
+  group( "skipBack and restart", () {
+    Future<void> loaded( int seconds ) async {
+      await svc.playFile( _FakeFile(), "Episode 1", id: "pg-1" );
+      engine.pos.add( Duration( seconds: seconds ) );
+      await Future<void>.delayed( Duration.zero );
+      engine.calls.clear();
+    }
+
+    test( "skipBack backs up 15 seconds", () async {
+      await loaded( 100 );
+      await svc.skipBack();
+      expect( engine.calls, [ "seek:85" ] );
+      expect( svc.position, const Duration( seconds: 85 ) );
+    } );
+
+    test( "skipBack clamps at the start", () async {
+      await loaded( 10 );
+      await svc.skipBack();
+      expect( engine.calls, [ "seek:0" ] );
+      expect( svc.position, Duration.zero );
+    } );
+
+    test( "skipBack keeps a paused track paused", () async {
+      await loaded( 60 );
+      await svc.pause();
+      engine.calls.clear();
+      await svc.skipBack();
+      expect( engine.calls, [ "seek:45" ] );
+      expect( svc.status, PodcastPlayerStatus.paused );
+    } );
+
+    test( "restart goes to the start", () async {
+      await loaded( 100 );
+      await svc.restart();
+      expect( engine.calls, [ "seek:0" ] );
+      expect( svc.position, Duration.zero );
+    } );
+
+    test( "both do nothing with no track loaded", () async {
+      await svc.skipBack();
+      await svc.restart();
+      expect( engine.calls, isEmpty );
+      expect( built, 0 );
+    } );
+
+    test( "the media-button interval matches the button", () {
+      expect( PodcastPlayerService.skipBackInterval, const Duration( seconds: 15 ) );
+    } );
+  } );
+
   test( "starts idle and builds no engine", () {
     expect( svc.status,   PodcastPlayerStatus.idle );
     expect( svc.hasTrack, isFalse );

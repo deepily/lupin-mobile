@@ -107,4 +107,26 @@ void main() {
     expect( find.text( "second" ), findsOneWidget );
     expect( find.byKey( const Key( TestKeys.miniPlayerToggle ) ), findsOneWidget );
   } );
+
+  testWidgets( "back button: tap backs up 15 seconds, long-press goes to the start", ( tester ) async {
+    await tester.pumpWidget( host() );
+    await svc.playFile( _F(), "My podcast", id: "pg-1" );
+    engine.pos.add( const Duration( seconds: 100 ) );
+    await tester.pump();
+    engine.calls.clear();
+
+    await tester.tap( find.byKey( const Key( TestKeys.miniPlayerBack ) ) );
+    await tester.pump();
+    expect( engine.calls, [ "seek:85" ] );
+    expect( svc.isPlaying, isTrue );
+
+    await tester.longPress( find.byKey( const Key( TestKeys.miniPlayerBack ) ) );
+    await tester.pump();
+    expect( engine.calls, [ "seek:85", "seek:0" ] );
+  } );
+
+  testWidgets( "back button is absent while nothing is loaded", ( tester ) async {
+    await tester.pumpWidget( host() );
+    expect( find.byKey( const Key( TestKeys.miniPlayerBack ) ), findsNothing );
+  } );
 }

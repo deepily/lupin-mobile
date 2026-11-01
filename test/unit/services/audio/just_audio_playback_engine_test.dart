@@ -70,4 +70,10 @@ void main() {
     verify( () => player.seek( Duration.zero ) ).called( 1 );
     verify( () => player.stop() ).called( 1 );
   } );
+
+  test( "seek passes the position to the player", () async {
+    when( () => player.seek( const Duration( seconds: 7 ) ) ).thenAnswer( ( _ ) async {} );
+    await engine.seek( const Duration( seconds: 7 ) );
+    verify( () => player.seek( const Duration( seconds: 7 ) ) ).called( 1 );
+  } );
 }
