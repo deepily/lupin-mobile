@@ -16,6 +16,8 @@ class FakePodcastCache extends PodcastCache {
   final Map<String, File>   files   = {};
   /// File write times by name; a name missing here counts as the epoch.
   final Map<String, DateTime> modified = {};
+  /// Saved titles by name, standing in for the title index on disk.
+  final Map<String, String> savedTitles = {};
   /// Every fetch as `[serverPath, name]`, in order.
   final List<List<String>>  fetched = [];
   /// When set, [fetch] throws it instead of downloading.
@@ -29,6 +31,10 @@ class FakePodcastCache extends PodcastCache {
   Future<List<CachedPodcast>> entries() async => [
     for ( final n in files.keys ) CachedPodcast( name: n, modified: modified[ n ] ?? DateTime.fromMillisecondsSinceEpoch( 0 ) ),
   ]..sort( ( a, b ) => b.modified.compareTo( a.modified ) );
+
+  @override Future<Map<String, String>> titles() async => Map.of( savedTitles );
+
+  @override Future<void> saveTitle( String name, String title ) async { savedTitles[ name ] = title; }
 
   @override Future<File?> lookup( String name ) async => files[ name ];
 

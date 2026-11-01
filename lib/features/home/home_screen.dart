@@ -283,7 +283,7 @@ class LupinHomeScreen extends StatelessWidget {
           key        : const Key( TestKeys.homePodcastsCard ),
           icon       : Icons.podcasts,
           title      : 'Podcasts',
-          subtitle   : 'Recent and downloaded, plays offline',
+          subtitle   : 'Recent and downloaded; downloaded ones play offline',
           onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
             builder: ( _ ) => PodcastListScreen( catalog: ServiceLocator.get<PodcastCatalog>() ),
           ) ),

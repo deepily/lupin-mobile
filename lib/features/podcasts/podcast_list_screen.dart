@@ -7,7 +7,7 @@ import '../artifacts/podcast_play.dart';
 /// The Podcasts screen: recent and downloaded podcasts, newest first, each with Play.
 ///
 /// Reads the catalog and the download folder only, so it opens and plays with no network.
-class PodcastListScreen extends StatelessWidget {
+class PodcastListScreen extends StatefulWidget {
   /// The podcasts to list.
   final PodcastCatalog catalog;
 
@@ -18,28 +18,46 @@ class PodcastListScreen extends StatelessWidget {
   const PodcastListScreen( { super.key, required this.catalog, this.onPlay } );
 
   @override
+  State<PodcastListScreen> createState() => _PodcastListScreenState();
+}
+
+class _PodcastListScreenState extends State<PodcastListScreen> {
+  List<PodcastListEntry>? _rows;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.catalog.addListener( _reload );
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    widget.catalog.removeListener( _reload );
+    super.dispose();
+  }
+
+  /// Reloads the rows; the old rows stay on screen until the new ones arrive.
+  Future<void> _reload() async {
+    final rows = await widget.catalog.entries();
+    if ( mounted ) setState( () => _rows = rows );
+  }
+
+  @override
   Widget build( BuildContext context ) {
-    final play = onPlay ?? podcastPlayFor( context: context );
+    final play = widget.onPlay ?? podcastPlayFor( context: context );
+    final rows = _rows;
     return Scaffold(
       appBar: AppBar( title: const Text( "Podcasts" ) ),
-      body  : ListenableBuilder(
-        listenable: catalog,
-        builder   : ( _, __ ) => FutureBuilder<List<PodcastListEntry>>(
-          future : catalog.entries(),
-          builder: ( context, snap ) {
-            final rows = snap.data;
-            if ( rows == null ) return const Center( child: CircularProgressIndicator() );
-            if ( rows.isEmpty ) {
-              return const Center( key: Key( TestKeys.podcastListEmpty ), child: Text( "No podcasts yet" ) );
-            }
-            return ListView.builder(
-              key        : const Key( TestKeys.podcastList ),
-              itemCount  : rows.length,
-              itemBuilder: ( _, i ) => _row( rows[ i ], play ),
-            );
-          },
-        ),
-      ),
+      body  : rows == null
+          ? const Center( child: CircularProgressIndicator() )
+          : rows.isEmpty
+              ? const Center( key: Key( TestKeys.podcastListEmpty ), child: Text( "No podcasts yet" ) )
+              : ListView.builder(
+                  key        : const Key( TestKeys.podcastList ),
+                  itemCount  : rows.length,
+                  itemBuilder: ( _, i ) => _row( rows[ i ], play ),
+                ),
     );
   }
 

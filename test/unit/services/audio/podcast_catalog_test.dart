@@ -47,6 +47,18 @@ void main() {
     expect( rows.single.downloaded, isTrue );
   } );
 
+  test( "a saved title is used for a downloaded file after a restart", () async {
+    final name = podcastCacheName( "io/podcast/my-show.mp3" );
+    cache.files[ name ]       = PathFile( "/x" );
+    cache.savedTitles[ name ] = "My Show, real title";
+    expect( ( await catalog.entries() ).single.title, "My Show, real title" );
+  } );
+
+  test( "recording a notification saves its title to the cache", () async {
+    catalog.record( abs( "io/a.mp3" ), title: "Quantum news", at: DateTime( 2026, 10, 31 ) );
+    expect( cache.savedTitles[ podcastCacheName( "io/a.mp3" ) ], "Quantum news" );
+  } );
+
   test( "a blank title falls back to the link label", () async {
     catalog.record( abs( "io/a.mp3", "Mexican Spanish" ), title: "  ", at: DateTime( 2026, 10, 31 ) );
     expect( ( await catalog.entries() ).single.title, "Mexican Spanish" );

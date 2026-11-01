@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../features/artifacts/podcast_play.dart';
@@ -33,8 +35,8 @@ class PodcastListEntry {
 
 /// The podcasts the Podcasts list shows: finished ones heard of, plus downloads.
 ///
-/// Notifications are held in memory only, so after a restart the list falls back to the
-/// downloaded files, titled from their file names. That keeps the list working offline.
+/// Notifications are held in memory only. Each title is also saved next to its file,
+/// so after a restart the list still shows real titles. A file with no saved title uses its name.
 class PodcastCatalog extends ChangeNotifier {
   final PodcastCache _cache;
   final Map<String, PodcastListEntry> _held = {};
@@ -50,6 +52,7 @@ class PodcastCatalog extends ChangeNotifier {
   ///   - [abstractText] may be null or hold no audio link
   ///
   /// Ensures:
+  ///   - each title is saved in the cache's title index
   ///   - one entry per audio link, titled [title] when it is not blank, else the link's label
   ///   - a second call for the same audio replaces the first
   ///   - notifies listeners only when an entry was added
@@ -65,6 +68,7 @@ class PodcastCatalog extends ChangeNotifier {
         date      : at,
         downloaded: false,
       );
+      if ( _held[ name ]!.title.isNotEmpty ) unawaited( _cache.saveTitle( name, _held[ name ]!.title ) );
     }
     notifyListeners();
   }
@@ -72,15 +76,17 @@ class PodcastCatalog extends ChangeNotifier {
   /// The list rows, newest first.
   ///
   /// Ensures:
-  ///   - a downloaded file with no held notification is listed, dated by its file time
+  ///   - a downloaded file with no held notification is listed, titled from the saved index, else its file name
+  ///   - dated by its file time
   ///   - a held notification whose file is not downloaded is listed with downloaded false
   ///   - makes no network call
   Future<List<PodcastListEntry>> entries() async {
     final merged = <String, PodcastListEntry>{};
+    final saved  = await _cache.titles();
     for ( final file in await _cache.entries() ) {
       final path = Uri.decodeComponent( file.name );
       merged[ file.name ] = PodcastListEntry(
-        name: file.name, audioPath: path, title: _titleOf( path ), date: file.modified, downloaded: true,
+        name: file.name, audioPath: path, title: saved[ file.name ] ?? _titleOf( path ), date: file.modified, downloaded: true,
       );
     }
     for ( final held in _held.values ) {

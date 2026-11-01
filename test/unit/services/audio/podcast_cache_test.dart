@@ -45,6 +45,27 @@ void main() {
     expect( rows.first.modified, DateTime( 2026, 10, 20 ) );
   } );
 
+  test( "saved titles survive a new cache over the same folder", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    await cache.saveTitle( "b", "Beta" );
+    final reopened = PodcastCache( ioFactory: () => io, dirFactory: () async => dir );
+    expect( await reopened.titles(), { "a": "Alpha", "b": "Beta" } );
+  } );
+
+  test( "an unreadable title index gives no titles and does not throw", () async {
+    dir.createSync( recursive: true );
+    File( "${dir.path}/titles.json" ).writeAsStringSync( "{not json" );
+    expect( await cache.titles(), isEmpty );
+  } );
+
+  test( "the age sweep keeps the title index and entries ignores it", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    File( "${dir.path}/titles.json" ).setLastModifiedSync( DateTime( 2020 ) );
+    expect( await cache.deleteOlderThan( kPodcastCacheMaxAge ), 0 );
+    expect( await cache.titles(), { "a": "Alpha" } );
+    expect( await cache.entries(), isEmpty );
+  } );
+
   test( "fetch writes a whole file under its final name and marks it downloaded", () async {
     downloadWrites( "mp3" );
     var heard = 0;

@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../artifacts/io_file_service.dart';
+
+/// The file in the podcast folder that maps a cache name to its title.
+const String kPodcastTitleIndex = "titles.json";
 
 /// How long a downloaded podcast is kept before startup deletes it.
 const Duration kPodcastCacheMaxAge = Duration( days: 30 );
@@ -38,6 +43,7 @@ class PodcastCache extends ChangeNotifier {
 
   final Set<String>                  _names    = {};
   final Map<String, Future<File>>    _inFlight = {};
+  Future<void>                       _titleWrites = Future<void>.value();
 
   /// Creates the cache; [ioFactory] and [dirFactory] run on first use, and [now] is the clock.
   PodcastCache( {
@@ -83,6 +89,40 @@ class PodcastCache extends ChangeNotifier {
     return null;
   }
 
+  /// The saved titles by cache name; empty when none are saved or the index is unreadable.
+  ///
+  /// Reads the folder only; makes no network call.
+  Future<Map<String, String>> titles() async {
+    try {
+      final file = File( "${( await _dir() ).path}/$kPodcastTitleIndex" );
+      if ( !await file.exists() ) return {};
+      final decoded = jsonDecode( await file.readAsString() );
+      if ( decoded is! Map ) return {};
+      return { for ( final e in decoded.entries ) if ( e.value is String ) e.key.toString(): e.value as String };
+    } catch ( e ) {
+      debugPrint( "[PodcastCache] title index unreadable: $e" );
+      return {};
+    }
+  }
+
+  /// Saves [title] for the podcast called [name], next to its file.
+  ///
+  /// Ensures:
+  ///   - saves are applied one after another, so none overwrites another
+  ///   - never throws; a failed save is printed and the list falls back to the file name
+  Future<void> saveTitle( String name, String title ) {
+    return _titleWrites = _titleWrites.then( ( _ ) async {
+      try {
+        final all = await titles();
+        if ( all[ name ] == title ) return;
+        all[ name ] = title;
+        await File( "${( await _dir() ).path}/$kPodcastTitleIndex" ).writeAsString( jsonEncode( all ) );
+      } catch ( e ) {
+        debugPrint( "[PodcastCache] title save failed: $e" );
+      }
+    } );
+  }
+
   /// Every downloaded podcast with the time its file was written, newest first.
   ///
   /// Reads the folder only; makes no network call.
@@ -116,6 +156,7 @@ class PodcastCache extends ChangeNotifier {
     var   removed = 0;
     await for ( final entry in ( await _dir() ).list() ) {
       if ( entry is! File ) continue;
+      if ( _baseName( entry.path ) == kPodcastTitleIndex ) continue;
       if ( ( await entry.lastModified() ).isBefore( cutoff ) ) {
         await entry.delete();
         final base = _baseName( entry.path );

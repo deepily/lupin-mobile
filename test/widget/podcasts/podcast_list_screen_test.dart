@@ -63,4 +63,15 @@ void main() {
     await t.pumpAndSettle();
     expect( find.byKey( Key( "${TestKeys.podcastListDownloadedPrefix}$name" ) ), findsOneWidget );
   } );
+
+  testWidgets( "a reload keeps the old rows on screen instead of showing a spinner", ( t ) async {
+    catalog.record( "**Podcast**: [x](/app/audio?path=io/new.mp3)", title: "New one", at: DateTime( 2026, 10, 31 ) );
+    await open( t );
+    catalog.record( "**Podcast**: [x](/app/audio?path=io/two.mp3)", title: "Two", at: DateTime( 2026, 10, 30 ) );
+    await t.pump();
+    expect( find.byType( CircularProgressIndicator ), findsNothing );
+    expect( find.text( "New one" ), findsOneWidget );
+    await t.pumpAndSettle();
+    expect( find.text( "Two" ), findsOneWidget );
+  } );
 }
