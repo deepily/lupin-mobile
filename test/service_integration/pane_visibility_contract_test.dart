@@ -212,10 +212,6 @@ class _NoWrites implements TaskWriteRepository {
   @override
   Future<void> transition( { required String id, required TaskVerb verb } ) =>
       throw UnimplementedError( "the visibility contract never writes" );
-
-  @override
-  Future<TaskRowModel> fetchRow( String id ) =>
-      throw UnimplementedError( "the visibility contract never reads one row" );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

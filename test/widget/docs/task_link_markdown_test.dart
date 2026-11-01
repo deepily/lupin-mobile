@@ -10,6 +10,7 @@ import 'package:lupin_mobile/features/docs/data/doc_repository.dart';
 import 'package:lupin_mobile/features/docs/presentation/abstract_body.dart';
 import 'package:lupin_mobile/features/docs/presentation/task_link_markdown.dart';
 import 'package:lupin_mobile/features/fleet/data/task_write_repository.dart';
+import 'package:lupin_mobile/features/task_list/data/task_list_repository.dart';
 
 const _id  = 'a25f51b3-8c0e-4f58-a1f8-f189e250d36c';
 
@@ -52,7 +53,11 @@ Future<_Wire> _mount( WidgetTester tester, String md, Future<Response<dynamic>> 
   final wire = _Wire( answer );
   final dio  = Dio( BaseOptions( baseUrl: 'http://test' ) )..interceptors.add( wire );
   await tester.pumpWidget( MaterialApp( home: Scaffold(
-    body: TaskLinkMarkdown( data: md, repository: TaskWriteRepository( dio, actorEmail: () => 'rick@example.com' ) ),
+    body: TaskLinkMarkdown(
+      data       : md,
+      repository : TaskWriteRepository( dio, actorEmail: () => 'rick@example.com' ),
+      reader     : TaskListRepository( dio ),
+    ),
   ) ) );
   await tester.pumpAndSettle();
   return wire;
@@ -114,6 +119,19 @@ void main() {
       gate.complete( _ok( wire.posts.single, { 'status': 'queued' } ) );
       await tester.pumpAndSettle();
       expect( find.textContaining( 'approved ✅', findRichText: true ), findsOneWidget );
+    } );
+
+    testWidgets( 'a reason with HTML entities is shown exactly as sent', ( tester ) async {
+      const reason = 'Rows need &amp; review &lt;b&gt; &#35;1 <i>now</i> [x](y)';
+      await _mount( tester, _md(), ( o ) async {
+        if ( o.method == 'GET' ) return _ok( o, _row( 'not_approved' ) );
+        throw _refuse( o, 403, { 'detail': reason } );
+      } );
+
+      await _tapLink( tester, _approveHref );
+      await tester.pumpAndSettle();
+
+      expect( find.textContaining( reason, findRichText: true ), findsOneWidget );
     } );
 
     testWidgets( 'a held-for-approval answer is shown, not painted approved', ( tester ) async {
@@ -197,6 +215,7 @@ void main() {
         body: TaskLinkMarkdown(
           data       : '[Open: x](/app/docs?path=lupin/x.md)',
           repository : TaskWriteRepository( dio ),
+          reader     : TaskListRepository( dio ),
           onTapLink  : ( text, href, title ) => tapped = href,
         ),
       ) ) );
@@ -210,7 +229,11 @@ void main() {
       final wire = _Wire( ( o ) async => _ok( o, _row( 'not_approved' ) ) );
       final dio  = Dio( BaseOptions( baseUrl: 'http://test' ) )..interceptors.add( wire );
       ServiceLocator.instance.registerSingleton<TaskWriteRepository>( TaskWriteRepository( dio ) );
-      addTearDown( () => ServiceLocator.instance.unregister<TaskWriteRepository>() );
+      ServiceLocator.instance.registerSingleton<TaskListRepository>( TaskListRepository( dio ) );
+      addTearDown( () {
+        ServiceLocator.instance.unregister<TaskWriteRepository>();
+        ServiceLocator.instance.unregister<TaskListRepository>();
+      } );
 
       await tester.pumpWidget( MaterialApp( home: Scaffold(
         body: AbstractBody( abstractText: _md(), repository: DocRepository( dio ) ),

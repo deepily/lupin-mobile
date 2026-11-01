@@ -4,6 +4,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../fleet/data/task_row_model.dart';
 import '../../fleet/data/task_write_repository.dart';
+import '../../task_list/data/task_list_repository.dart';
+import '../../task_list/data/task_lookup.dart';
 import '../data/task_link.dart';
 
 /// What an approve link shows right now.
@@ -61,12 +63,15 @@ class TaskLinkSession extends ChangeNotifier {
   /// The shared write surface; this class adds no second HTTP path.
   final TaskWriteRepository repository;
 
+  /// The shared single-row read, `TaskListRepository.lookup`.
+  final TaskListRepository reader;
+
   final Map<String, TaskLinkState> _states = <String, TaskLinkState>{};
   final Set<String>                _read   = <String>{};
   bool _disposed = false;
 
   /// Creates a session over [repository].
-  TaskLinkSession( this.repository );
+  TaskLinkSession( this.repository, this.reader );
 
   /// The current state of [id]; live until something says otherwise.
   TaskLinkState stateFor( String id ) =>
@@ -77,6 +82,12 @@ class TaskLinkSession extends ChangeNotifier {
     _states[ id ] = state;
     notifyListeners();
   }
+
+  /// Reads [id] in full through the shared lookup door.
+  ///
+  /// Raises:
+  ///   - TaskLookupException when the read fails
+  Future<TaskRowModel> readRow( String id ) => reader.lookup( taskLookupPath( id )! );
 
   /// Reads [id] once for the drawn card and settles the link by the row's status.
   ///
@@ -89,8 +100,8 @@ class TaskLinkSession extends ChangeNotifier {
     if ( !_read.add( id ) ) return;
     final TaskRowModel row;
     try {
-      row = await repository.fetchRow( id );
-    } on TaskWriteException {
+      row = await readRow( id );
+    } on TaskLookupException {
       return;
     }
     if ( stateFor( id ).phase != TaskLinkPhase.live ) return;
@@ -130,7 +141,7 @@ final RegExp _markdownLink = RegExp( r'\[([^\]]*)\]\(([^)\s]+)\)' );
 
 /// Escapes markdown punctuation so server text shows exactly as sent.
 String escapeMarkdown( String text ) =>
-    text.replaceAllMapped( RegExp( r'[\\`*_{}\[\]()#+\-.!|<>~$]' ), ( m ) => '\\${m[ 0 ]}' );
+    text.replaceAllMapped( RegExp( r'[\\`*_{}\[\]()#+\-.!|<>~$&]' ), ( m ) => '\\${m[ 0 ]}' );
 
 /// Draws markdown whose approve and view links act in place.
 ///
@@ -145,11 +156,14 @@ class TaskLinkMarkdown extends StatefulWidget {
   /// The write surface for the task links; null leaves them inert.
   final TaskWriteRepository? repository;
 
+  /// The row reader for the task links; null leaves them inert.
+  final TaskListRepository? reader;
+
   /// Handles a tap on any other link.
   final MarkdownTapLinkCallback? onTapLink;
 
   /// Creates the markdown view.
-  const TaskLinkMarkdown( { super.key, required this.data, this.repository, this.onTapLink } );
+  const TaskLinkMarkdown( { super.key, required this.data, this.repository, this.reader, this.onTapLink } );
 
   @override
   State<TaskLinkMarkdown> createState() => _TaskLinkMarkdownState();
@@ -167,14 +181,15 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
   @override
   void didUpdateWidget( TaskLinkMarkdown old ) {
     super.didUpdateWidget( old );
-    if ( old.data != widget.data || old.repository != widget.repository ) _rebuildSession();
+    if ( old.data != widget.data || old.repository != widget.repository || old.reader != widget.reader ) _rebuildSession();
   }
 
   // One session per drawn card: it reads each approve row once, however often it is named.
   void _rebuildSession() {
     _session?.dispose();
-    final repo = widget.repository;
-    final next = repo == null ? null : TaskLinkSession( repo );
+    final repo   = widget.repository;
+    final reader = widget.reader;
+    final next   = repo == null || reader == null ? null : TaskLinkSession( repo, reader );
     _session = next;
     if ( next == null ) return;
     for ( final m in _markdownLink.allMatches( widget.data ) ) {
@@ -215,7 +230,7 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
     }
     showDialog<void>(
       context : context,
-      builder : ( _ ) => _TaskBodyDialog( repository: session.repository, id: link.id ),
+      builder : ( _ ) => _TaskBodyDialog( session: session, id: link.id ),
     );
   }
 
@@ -246,18 +261,18 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
 
 // Reads the row on open and shows it as selectable plain text, never as markdown or HTML.
 class _TaskBodyDialog extends StatefulWidget {
-  final TaskWriteRepository repository;
-  final String              id;
+  final TaskLinkSession session;
+  final String          id;
 
-  const _TaskBodyDialog( { required this.repository, required this.id } );
+  const _TaskBodyDialog( { required this.session, required this.id } );
 
   @override
   State<_TaskBodyDialog> createState() => _TaskBodyDialogState();
 }
 
 class _TaskBodyDialogState extends State<_TaskBodyDialog> {
-  late final Future<String> _text = widget.repository
-      .fetchRow( widget.id )
+  late final Future<String> _text = widget.session
+      .readRow( widget.id )
       .then( taskOverlayText )
       .catchError( ( Object _ ) => "Could not read this ticket." );
 

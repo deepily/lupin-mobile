@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../fleet/data/task_write_repository.dart';
+import '../../task_list/data/task_list_repository.dart';
 import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
@@ -420,6 +421,9 @@ class _ContentView extends StatelessWidget {
           data       : content.text ?? "",
           repository : ServiceLocator.isRegistered<TaskWriteRepository>()
               ? ServiceLocator.instance<TaskWriteRepository>()
+              : null,
+          reader     : ServiceLocator.isRegistered<TaskListRepository>()
+              ? ServiceLocator.instance<TaskListRepository>()
               : null,
           // Links are live here. An abstract's doc link lives only in the viewer, so a tap
           // opens the document in place of the abstract. Approve and view links act in place.

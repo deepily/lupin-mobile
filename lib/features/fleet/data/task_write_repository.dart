@@ -2,8 +2,6 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
-import 'task_row_model.dart';
-
 /// The shared write surface for the task panes; both write doors live here.
 ///
 /// Which door a control uses depends on what it changes, not which pane it is in.
@@ -56,27 +54,6 @@ class TaskWriteRepository {
   /// A raw and an encoded id are identical until the id contains `/`, `?` or `#`, and
   /// then the request lands on a different route. The test drives this with `a/b?c#d`.
   static String encodeId( String id ) => Uri.encodeComponent( id );
-
-  // ─── Read door ───────────────────────────────────────────────────────────────
-  //
-  /// Reads one row, in full, with its body.
-  ///
-  /// The approve and view links in a card abstract use it.
-  /// The view link shows the row, and a redrawn card checks whether the row has left `not_approved`.
-  ///
-  /// Raises:
-  ///   - TaskWriteException when the request fails or the answer has no body
-  Future<TaskRowModel> fetchRow( String id ) async {
-    final Response<Map<String, dynamic>> res;
-    try {
-      res = await _dio.get<Map<String, dynamic>>( '/api/tasks/${encodeId( id )}' );
-    } on DioException catch ( e ) {
-      throw TaskWriteException( 'read failed for $id', cause: e );
-    }
-    final data = res.data;
-    if ( data == null ) throw TaskWriteException( 'read of $id returned no body' );
-    return TaskRowModel.fromJson( data );
-  }
 
   // ─── Door 1: fields ──────────────────────────────────────────────────────────
   //
