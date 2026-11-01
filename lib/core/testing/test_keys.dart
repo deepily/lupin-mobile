@@ -544,6 +544,8 @@ class TestKeys {
   static const miniPlayerBack            = 'miniPlayer.back';
   /// Key of the mini-player stop button.
   static const miniPlayerClose           = 'miniPlayer.close';
+  /// Key of the mini-player's Podcasts list button.
+  static const miniPlayerList            = 'miniPlayer.list';
   /// Key of the "Downloaded" line the mini-player shows for a track kept on the phone.
   static const miniPlayerDownloaded      = 'miniPlayer.downloaded';
   /// Prefix of the downloaded marker on a done card's Play button; the language index follows.
@@ -554,6 +556,20 @@ class TestKeys {
   static const podcastDataYes            = 'podcast.data.yes';
   /// Key of the Cancel button on that sheet.
   static const podcastDataNo             = 'podcast.data.no';
+
+  // Podcasts list screen
+  /// Key of the home screen's Podcasts card.
+  static const homePodcastsCard          = 'home.podcasts';
+  /// Key of the Podcasts list.
+  static const podcastList               = 'podcast.list';
+  /// Key of the empty message on the Podcasts list.
+  static const podcastListEmpty          = 'podcast.list.empty';
+  /// Prefix of a Podcasts list row; the cache name follows.
+  static const podcastListRowPrefix      = 'podcast.list.row.';
+  /// Prefix of a row's Play button; the cache name follows.
+  static const podcastListPlayPrefix     = 'podcast.list.play.';
+  /// Prefix of a row's downloaded mark; the cache name follows.
+  static const podcastListDownloadedPrefix = 'podcast.list.downloaded.';
 
   // ── Quick Ask ──
   /// Key of the quick ask record button.

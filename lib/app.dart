@@ -35,6 +35,8 @@ import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_payload.dart';
 import 'services/push/notification_tap_router.dart';
 import 'features/artifacts/podcast_prefetch.dart';
+import 'features/podcasts/podcast_list_screen.dart';
+import 'services/audio/podcast_catalog.dart';
 import 'services/audio/podcast_player_service.dart';
 import 'features/audio/mini_player_bar.dart';
 import 'services/tts/streaming_tts_player.dart';
@@ -188,6 +190,9 @@ class WsBlocDispatcher {
         // legacy bloc's `tts` is not injected — F-S2-1 DI withdrawal).
         if ( notif != null ) _dispatchToFocus( notif );
         // A finished podcast is downloaded in the background when the phone is on Wi-Fi (row 24a39e97).
+        if ( notif != null && ServiceLocator.isRegistered<PodcastCatalog>() ) {
+          ServiceLocator.get<PodcastCatalog>().record( notif.abstractText, title: notif.title, at: notif.timestamp );
+        }
         if ( notif != null && ServiceLocator.isRegistered<PodcastPrefetcher>() ) {
           unawaited( ServiceLocator.get<PodcastPrefetcher>().prefetch( notif.abstractText ) );
         }
@@ -350,6 +355,9 @@ class LupinMobileApp extends StatefulWidget {
 }
 
 class _LupinMobileAppState extends State<LupinMobileApp> {
+  /// The app's one Navigator, so the mini-player bar (above it) can open the Podcasts screen.
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   StreamSubscription<dynamic>? _wsSubscription;
   StreamSubscription<NotificationTapPayload>? _tapSubscription;
   final WsBlocDispatcher _dispatcher = WsBlocDispatcher();
@@ -405,6 +413,15 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
     _wsSubscription?.cancel();
     _tapSubscription?.cancel();
     super.dispose();
+  }
+
+  /// Opens the Podcasts screen on the app Navigator.
+  ///
+  /// The mini-player bar sits above the Navigator, so it has no context of its own.
+  void _openPodcasts() {
+    _navigatorKey.currentState?.push( MaterialPageRoute<void>(
+      builder: ( _ ) => PodcastListScreen( catalog: ServiceLocator.get<PodcastCatalog>() ),
+    ) );
   }
 
   @override
@@ -475,6 +492,7 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
           await fcmOnLoggedOut();
         },
         child: MaterialApp(
+          navigatorKey: _navigatorKey,
           title    : AppConstants.appName,
           theme    : AppThemes.lightTheme,
           darkTheme: AppThemes.darkTheme,
@@ -488,7 +506,10 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
             child : Column( children: [
               Expanded( child: child! ),
               if ( ServiceLocator.isRegistered<PodcastPlayerService>() )
-                MiniPlayerBar( service: ServiceLocator.get<PodcastPlayerService>() ),
+                MiniPlayerBar(
+                  service   : ServiceLocator.get<PodcastPlayerService>(),
+                  onOpenList: ServiceLocator.isRegistered<PodcastCatalog>() ? _openPodcasts : null,
+                ),
             ] ),
           ),
           home     : AuthGate(

@@ -35,6 +35,52 @@ void main() {
     await ( inv.positionalArguments[ 1 ] as File ).writeAsString( bytes );
   } );
 
+  test( "entries lists whole mp3 files newest first and skips .part files", () async {
+    dir.createSync( recursive: true );
+    File( "${dir.path}/old.mp3" )..writeAsStringSync( "x" )..setLastModifiedSync( DateTime( 2026, 10, 1 ) );
+    File( "${dir.path}/new.mp3" )..writeAsStringSync( "x" )..setLastModifiedSync( DateTime( 2026, 10, 20 ) );
+    File( "${dir.path}/half.mp3.part" ).writeAsStringSync( "x" );
+    final rows = await cache.entries();
+    expect( rows.map( ( e ) => e.name ), [ "new", "old" ] );
+    expect( rows.first.modified, DateTime( 2026, 10, 20 ) );
+  } );
+
+  test( "saved titles survive a new cache over the same folder", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    await cache.saveTitle( "b", "Beta" );
+    final reopened = PodcastCache( ioFactory: () => io, dirFactory: () async => dir );
+    expect( await reopened.titles(), { "a": "Alpha", "b": "Beta" } );
+  } );
+
+  test( "a save writes through a .part file and leaves none behind", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    final names = dir.listSync().map( ( e ) => e.path.split( "/" ).last ).toList();
+    expect( names, [ "titles.json" ] );
+  } );
+
+  test( "a leftover titles.json.part does not touch the whole index and is cleared on load", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    File( "${dir.path}/titles.json.part" ).writeAsStringSync( "{\"a\":" );
+    expect( await cache.titles(), { "a": "Alpha" } );
+    await cache.load();
+    expect( File( "${dir.path}/titles.json.part" ).existsSync(), isFalse );
+    expect( await cache.titles(), { "a": "Alpha" } );
+  } );
+
+  test( "an unreadable title index gives no titles and does not throw", () async {
+    dir.createSync( recursive: true );
+    File( "${dir.path}/titles.json" ).writeAsStringSync( "{not json" );
+    expect( await cache.titles(), isEmpty );
+  } );
+
+  test( "the age sweep keeps the title index and entries ignores it", () async {
+    await cache.saveTitle( "a", "Alpha" );
+    File( "${dir.path}/titles.json" ).setLastModifiedSync( DateTime( 2020 ) );
+    expect( await cache.deleteOlderThan( kPodcastCacheMaxAge ), 0 );
+    expect( await cache.titles(), { "a": "Alpha" } );
+    expect( await cache.entries(), isEmpty );
+  } );
+
   test( "fetch writes a whole file under its final name and marks it downloaded", () async {
     downloadWrites( "mp3" );
     var heard = 0;

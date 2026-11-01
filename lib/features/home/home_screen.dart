@@ -24,6 +24,8 @@ import '../finished_tasks/presentation/finished_tasks_screen.dart';
 import '../broadcast/domain/broadcast_bloc.dart';
 import '../broadcast/presentation/broadcast_pane.dart';
 import '../notifications/presentation/inbox_screen.dart';
+import '../podcasts/podcast_list_screen.dart';
+import '../../services/audio/podcast_catalog.dart';
 import '../queue/domain/queue_bloc.dart';
 import '../queue/presentation/queue_dashboard_screen.dart';
 import '../settings/presentation/notification_audio_settings_screen.dart';
@@ -274,6 +276,16 @@ class LupinHomeScreen extends StatelessWidget {
               value: context.read<QueueBloc>(),
               child: const QueueDashboardScreen(),
             ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          key        : const Key( TestKeys.homePodcastsCard ),
+          icon       : Icons.podcasts,
+          title      : 'Podcasts',
+          subtitle   : 'Recent and downloaded; downloaded ones play offline',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => PodcastListScreen( catalog: ServiceLocator.get<PodcastCatalog>() ),
           ) ),
         ),
         // Back-burnered and therefore hidden — see `_kShowTrustDashboard`. The spacer is
