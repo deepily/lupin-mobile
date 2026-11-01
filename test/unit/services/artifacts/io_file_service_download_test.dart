@@ -33,4 +33,16 @@ void main() {
       throwsA( isA<IoFileException>().having( ( e ) => e.statusCode, "statusCode", 404 ) ),
     );
   } );
+
+  test( "downloadTo fetches a server endpoint path as it is, not through the io folder", () async {
+    final adapter = StubAdapter( {
+      "GET /api/podcast-drive/stream/abc": ( _ ) => ResponseBody.fromBytes( Uint8List.fromList( [ 7, 8 ] ), 200 ),
+    } );
+    final dest = File( "${tmp.path}/d.mp3.part" );
+
+    await IoFileService( makeDio( adapter ) ).downloadTo( "/api/podcast-drive/stream/abc", dest );
+
+    expect( dest.readAsBytesSync(), [ 7, 8 ] );
+    expect( adapter.captured.single.queryParameters, isEmpty );
+  } );
 }

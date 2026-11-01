@@ -1,0 +1,54 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:lupin_mobile/features/podcasts/data/podcast_drive_repository.dart';
+import '../../_helpers/stub_dio.dart';
+
+Map<String, dynamic> folder( String job, { String? created, String title = "", List<Map<String, dynamic>> files = const [] } ) => {
+  "job_folder": job, "title": title, if ( created != null ) "created_ts": created, "files": files,
+};
+
+Map<String, dynamic> file( String id, { String mime = "audio/mpeg" } ) => {
+  "name": "$id.mp3", "mime": mime, "size": 1234, "drive_file_id": id, "stream_url": "/api/podcast-drive/stream/$id",
+};
+
+void main() {
+  PodcastDriveRepository repoFor( StubAdapter a ) => PodcastDriveRepository( makeDio( a ) );
+
+  test( "lists folders newest first, undated last, with their files", () async {
+    final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( [
+      folder( "pg-old", created: "2026-10-01T10:00:00Z", files: [ file( "a" ) ] ),
+      folder( "pg-none" ),
+      folder( "pg-new", created: "2026-11-01T10:00:00Z", title: "Explainer", files: [ file( "b" ) ] ),
+    ] ) } );
+
+    final folders = await repoFor( a ).list();
+
+    expect( folders.map( ( f ) => f.jobFolder ), [ "pg-new", "pg-old", "pg-none" ] );
+    expect( folders.first.title, "Explainer" );
+    expect( folders[ 1 ].title, "pg-old", reason: "a blank title falls back to the folder name" );
+    expect( folders.first.files.single.streamUrl, "/api/podcast-drive/stream/b" );
+    expect( folders.first.files.single.isAudio, isTrue );
+  } );
+
+  test( "a 403 says only the Drive owner's login may list it", () async {
+    final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( { "detail": "forbidden" }, status: 403 ) } );
+
+    await expectLater( repoFor( a ).list(), throwsA( isA<PodcastDriveException>()
+        .having( ( e ) => e.statusCode, "status", 403 )
+        .having( ( e ) => e.message, "message", contains( "owns the Drive link" ) ) ) );
+  } );
+
+  test( "another failure carries the server's detail", () async {
+    final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( { "detail": "Drive token expired" }, status: 502 ) } );
+
+    await expectLater( repoFor( a ).list(), throwsA( isA<PodcastDriveException>()
+        .having( ( e ) => e.statusCode, "status", 502 )
+        .having( ( e ) => e.message, "message", "Drive token expired" ) ) );
+  } );
+
+  test( "a reply that is not the expected list is a PodcastDriveException, not a crash", () async {
+    final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( [ { "title": "no folder name" } ] ) } );
+
+    await expectLater( repoFor( a ).list(), throwsA( isA<PodcastDriveException>() ) );
+  } );
+}

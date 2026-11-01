@@ -73,6 +73,17 @@ class PodcastCatalog extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Saves [title] for the audio at [audioPath], so its download lists under that title.
+  ///
+  /// Used for podcasts played from Drive, which arrive with no notification.
+  ///
+  /// Ensures:
+  ///   - a blank [title] saves nothing
+  Future<void> rememberTitle( String audioPath, String title ) async {
+    if ( title.trim().isEmpty ) return;
+    await _cache.saveTitle( podcastCacheName( audioPath ), title.trim() );
+  }
+
   /// The list rows, newest first.
   ///
   /// Ensures:

@@ -80,6 +80,7 @@ import '../../services/artifacts/io_file_service.dart';
 import '../../services/audio/just_audio_playback_engine.dart';
 import '../../services/audio/podcast_cache.dart';
 import '../../services/audio/podcast_catalog.dart';
+import '../../features/podcasts/data/podcast_drive_repository.dart';
 import '../../services/audio/podcast_link.dart';
 import '../../services/audio/podcast_player_service.dart';
 import '../../features/artifacts/podcast_prefetch.dart';
@@ -567,6 +568,8 @@ class ServiceLocator {
       ),
     );
     _getIt.registerSingleton<PodcastCatalog>( PodcastCatalog( _getIt<PodcastCache>() ) );
+    // Podcasts kept in Google Drive, listed live by the server (row dc0dafdc).
+    _getIt.registerLazySingleton<PodcastDriveRepository>( () => PodcastDriveRepository( _getIt<Dio>() ) );
     _getIt.registerSingleton<PodcastPrefetcher>(
       PodcastPrefetcher(
         cacheFactory : () => _getIt<PodcastCache>(),
