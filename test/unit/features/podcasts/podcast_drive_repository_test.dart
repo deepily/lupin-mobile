@@ -96,4 +96,30 @@ void main() {
           .having( ( e ) => e.message, "message", contains( "Sign in again" ) ) ) );
     } );
   } );
+
+  test( "parses a real reply captured from the live server (2026-11-01): one audio file, the script is not audio", () async {
+    final real = [ {
+      "job_folder": "2026-11-01-192026-2026.10.31-google-drive-sign-in-explainer",
+      "title"     : "2026.10.31 Google Drive Sign In Explainer",
+      "created_ts": "2026-11-01T19:20:28.213Z",
+      "files"     : [
+        { "name": "2026.10.31-google-drive-sign-in-explainer.md", "mime": "text/markdown", "size": 5566,
+          "drive_file_id": "1wxSCnha8otJh1Mar9C1v8FQXlEYQq--d", "stream_url": "/api/podcast-drive/stream/1wxSCnha8otJh1Mar9C1v8FQXlEYQq--d" },
+        { "name": "2026.11.01-192023-the-name-tag-problem-what-a-google-driv.mp3", "mime": "audio/mpeg", "size": 13363245,
+          "drive_file_id": "1cpP6Bl6V0D-8dVaDaWkcBWX93sALP97I", "stream_url": "/api/podcast-drive/stream/1cpP6Bl6V0D-8dVaDaWkcBWX93sALP97I" },
+      ],
+    } ];
+    final a = StubAdapter( { "GET /api/podcast-drive/list": ( _ ) => jsonBody( real ) } );
+
+    final f = ( await repoFor( a ).list() ).single;
+
+    expect( f.created, DateTime.utc( 2026, 11, 1, 19, 20, 28, 213 ).toLocal() );
+    expect( f.files.where( ( x ) => x.isAudio ).single.streamUrl, "/api/podcast-drive/stream/1cpP6Bl6V0D-8dVaDaWkcBWX93sALP97I" );
+    expect( f.files.first.isAudio, isFalse );
+  } );
+
+  test( "a null size, as the server sends for a file Drive gives no size, reads as zero", () {
+    final f = DrivePodcastFile.fromJson( { ...file( "z" ), "size": null } );
+    expect( f.size, 0 );
+  } );
 }
