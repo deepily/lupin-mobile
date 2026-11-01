@@ -70,6 +70,7 @@ class PodcastPlayerService extends ChangeNotifier {
   String?             _error;
   File?               _file;
   bool                _heldForSpeech = false;
+  int                 _generation    = 0;
   Duration            _position = Duration.zero;
   Duration            _duration = Duration.zero;
 
@@ -157,6 +158,7 @@ class PodcastPlayerService extends ChangeNotifier {
     await _ttsFactory().stopAll();
     _heldForSpeech = false;
     final engine = _ensureEngine();
+    _generation++;
     _trackId  = id;
     _title    = title;
     _file     = file;
@@ -253,6 +255,7 @@ class PodcastPlayerService extends ChangeNotifier {
     _heldForSpeech = false;
     if ( _engine != null ) await _engine!.stop();
     _status   = PodcastPlayerStatus.idle;
+    _generation++;
     _trackId  = null;
     _title    = null;
     _file     = null;
@@ -266,7 +269,11 @@ class PodcastPlayerService extends ChangeNotifier {
   /// The platform player's play() completes when playback ends or pauses, not when it starts.
   /// Awaiting it would keep [status] at loading, and the mini-player bar hidden, for the whole track.
   void _startPlayback( PodcastPlaybackEngine engine ) {
-    engine.play().catchError( ( Object e ) => _fail( "Playback failed: $e" ) );
+    final started = _generation;
+    // A failure that arrives after the track changed or stopped belongs to the old track; ignore it.
+    engine.play().catchError( ( Object e ) {
+      if ( started == _generation ) _fail( "Playback failed: $e" );
+    } );
   }
 
   void _fail( String message ) {
