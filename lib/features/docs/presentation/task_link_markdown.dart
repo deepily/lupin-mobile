@@ -101,7 +101,8 @@ class TaskLinkSession extends ChangeNotifier {
     final TaskRowModel row;
     try {
       row = await readRow( id );
-    } on TaskLookupException {
+    } catch ( _ ) {
+      // Any failed read, including a body that is not a row, leaves the live link.
       return;
     }
     if ( stateFor( id ).phase != TaskLinkPhase.live ) return;
@@ -170,6 +171,7 @@ class TaskLinkMarkdown extends StatefulWidget {
 
 class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
   TaskLinkSession? _session;
+  bool _dialogOpen = false;
 
   @override
   void initState() {
@@ -241,10 +243,13 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
       session.approve( link.id );
       return;
     }
+    // A second tap while a dialog is open would stack another on top of it.
+    if ( _dialogOpen ) return;
+    _dialogOpen = true;
     showDialog<void>(
       context : context,
       builder : ( _ ) => _TaskBodyDialog( session: session, id: link.id ),
-    );
+    ).whenComplete( () => _dialogOpen = false );
   }
 
   @override
@@ -270,11 +275,12 @@ class _TaskLinkMarkdownState extends State<TaskLinkMarkdown> {
           padding    : const EdgeInsets.all( 16 ),
           onTapLink  : _onTap,
         );
-        if ( notes.isEmpty ) return md;
+        // One tree shape whether or not there are notes, so the Markdown keeps its scroll
+        // position when the first note appears.
         return Column(
           children: [
             Expanded( child: md ),
-            ConstrainedBox(
+            if ( notes.isNotEmpty ) ConstrainedBox(
               constraints: BoxConstraints( maxHeight: MediaQuery.sizeOf( context ).height * 0.4 ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all( 16 ),
