@@ -10,6 +10,7 @@ import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/docs/data/doc_repository.dart';
 import 'package:lupin_mobile/features/fleet/data/task_write_repository.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
+import 'package:lupin_mobile/features/task_list/data/task_list_repository.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
 import 'package:lupin_mobile/features/notifications/presentation/conversation_screen.dart';
@@ -68,9 +69,11 @@ void main() {
     final dio = makeDio( adapter );
     final sl  = ServiceLocator.instance;
     sl.registerSingleton<TaskWriteRepository>( TaskWriteRepository( dio, actorEmail: () => 'rick@example.com' ) );
+    sl.registerSingleton<TaskListRepository>( TaskListRepository( dio ) );
     sl.registerSingleton<DocRepository>( DocRepository( dio ) );
     addTearDown( () async {
       await sl.unregister<TaskWriteRepository>();
+      await sl.unregister<TaskListRepository>();
       await sl.unregister<DocRepository>();
     } );
 
