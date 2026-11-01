@@ -14,6 +14,23 @@ Most recent entries (2026-09-19 onward) are retained below.
 
 ---
 
+## 2026.10.31 | Session `e3be888f` (Tiffany) — Explainer to podcast to playback on the phone
+
+Rick's broadcast `ed04ca86`: row `3469e9db` (P0), coordinated with Mr. Radio. The crew was Krishna, Chloé and Tiberius, all Sonnet 5.5, all reaped with mementos. APK builds 1 to 7 were made; the last is `243aea6`.
+
+- **Plan** `src/rnd/2026.10.31-explainer-to-podcast-phone-loop-plan.md` (`c9906e4`). Tiberius reviewed it. The afternoon explainer was added in `a12ec46`, and the earbud research in `39907c0`.
+- **Player** (row `049d914a`): an app-wide player, lock-screen and earbud play/pause, and a pause while the app speaks. Merged `152146a` and `f8f5e27`.
+- **Button and Play** (row `0c23edab`): a Podcast button in the doc viewer, using the server's from-viewer route, and Play on the done card. Merged `65ef6d8`.
+- **Offline** (row `24a39e97`): a persistent cache, Wi-Fi prefetch, and an ask before mobile data. Merged `7aaeeaa`.
+- **Rick passed the loop on the phone**, and row `3469e9db` closed.
+- **Rewind** (row `807a4ed0`): back 15 seconds, with a long press to go to the start. Merged `dffeb1d`.
+- **Podcasts list** (row `f13143d5`, `fe84492`), and its Surfaces entry (row `e12f5649`, `5fe702c`).
+- **Bar on first Play** (row `a5c251e5`): just_audio's `play()` returns only when playback ends, so the player is no longer awaited. Merged `0cd7649` and `243aea6`.
+- **Earbud research** (row `3d1bb844`): a double tap sends "next track", which does nothing on a one-item queue. A single tap works; the earlier failure was the laptop-paired buds.
+- **Lessons**:
+  - I merged one branch before its gate finished, and it failed; every merge after that was gated first.
+  - Chloé's home card landed on the hidden Home grid. Surfaces is a separate list.
+
 ## 2026.10.20 | Session `31cd100e` (Tiffany) — Plans 1 and 2 on mobile, from zero to done
 
 Rick's broadcast `be6e2010`: finish both plans and work with María on code reuse. Crew: Tiberius, Pocholo, Maya, Rachel and Rio, all Sonnet 5.5, all reaped with mementos.

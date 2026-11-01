@@ -1,6 +1,23 @@
 # TODO
 
-## Resume here: 2026-10-20 close (Tiffany)
+## Resume here: 2026-10-31 close (Tiffany)
+
+The podcast loop on the phone is done: seven rows closed, APK build 7 at `243aea6`. The plan and the explainer are in `src/rnd/2026.10.31-explainer-to-podcast-phone-loop-plan.md`. No live rows on my board.
+
+- [ ] Archive history.md: about 18.4k tokens after tonight, deferred twice now. Do it first next session.
+- [ ] Possible next step, not yet a row: a podcasts list that shows **every** generated podcast. It would need a server listing endpoint or a query of past notifications. Today the list shows only what the phone heard while open, plus downloads.
+- [ ] Possible next step, not yet a row: double tap on the earbuds to rewind. It needs our own audio_service handler in place of just_audio_background (medium cost, research at `39907c0`).
+
+### Decisions Log — 2026-10-31 (session `e3be888f`, Tiffany)
+
+- Rick: Google Drive is for the desktop only. The phone plays the podcasts it starts straight from the Lupin server.
+- Rick: cache podcasts on Wi-Fi and play them offline; ask before using mobile data (row `24a39e97`).
+- Rick: the rewind is back 15 seconds, with a long press to go back to the start. Ship it without a lock-screen rewind button, because just_audio_background fixes those buttons.
+- Rick: add a Podcasts list, reached from Surfaces and the player bar (rows `f13143d5`, `e12f5649`).
+- Rick: research the earbuds before building anything. A single tap was confirmed working once he had the phone-paired Pixel Buds Pro 2 in.
+- Tiffany: the podcast pauses while the app speaks and then resumes; it does not just dip in volume.
+
+## Earlier: 2026-10-20 close (Tiffany)
 
 Plans 1 and 2 are done on mobile. The plan is `src/rnd/2026.10.20-plans-1-2-mobile-parity-plan.md`. Open: Cheech's librarian tick (`874dff1a`); the cache duplicate `f3d4fc00` is parked until 2026-10-28; lupin row `74d0db47` (shortlist slots) is María's.
 
