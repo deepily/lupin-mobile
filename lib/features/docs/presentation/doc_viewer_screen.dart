@@ -2,11 +2,12 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../fleet/data/task_write_repository.dart';
 import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
@@ -18,6 +19,7 @@ import 'doc_link_tap.dart';
 import 'doc_panel.dart';
 import 'doc_split_host.dart';
 import 'podcast_confirm_sheet.dart';
+import 'task_link_markdown.dart';
 
 /// Full-screen viewer for a document reached from a notification abstract.
 ///
@@ -414,14 +416,14 @@ class _ContentView extends StatelessWidget {
   Widget build( BuildContext context ) {
     switch ( content.kind ) {
       case DocContentKind.markdown:
-        return Markdown(
-          key       : const Key( TestKeys.docViewerMarkdown ),
-          data      : content.text ?? "",
-          selectable: true,
-          padding   : const EdgeInsets.all( 16 ),
+        return TaskLinkMarkdown(
+          data       : content.text ?? "",
+          repository : ServiceLocator.isRegistered<TaskWriteRepository>()
+              ? ServiceLocator.instance<TaskWriteRepository>()
+              : null,
           // Links are live here. An abstract's doc link lives only in the viewer, so a tap
-          // opens the document in place of the abstract.
-          onTapLink : ( text, href, title ) {
+          // opens the document in place of the abstract. Approve and view links act in place.
+          onTapLink  : ( text, href, title ) {
             if ( href != null ) openMarkdownHref( context: context, href: href, repository: repository );
           },
         );
