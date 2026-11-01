@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// The shared write surface for the task panes; both write doors live here.
@@ -242,6 +244,22 @@ class TaskWriteException implements Exception {
 
   /// Creates the exception.
   const TaskWriteException( this.message, { this.cause } );
+
+  /// The server's own words for the refusal, or null when it sent none.
+  ///
+  /// It reads the `detail` of the error response; a structured detail is shown as JSON,
+  /// so nothing is paraphrased.
+  String? get serverMessage {
+    final c = cause;
+    if ( c is! DioException ) return null;
+    final data = c.response?.data;
+    if ( data is Map && data[ 'detail' ] != null ) {
+      final detail = data[ 'detail' ];
+      return detail is String ? detail : jsonEncode( detail );
+    }
+    if ( data is String && data.isNotEmpty ) return data;
+    return null;
+  }
 
   @override
   String toString() => 'TaskWriteException: $message'
