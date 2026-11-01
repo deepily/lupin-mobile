@@ -14,6 +14,18 @@ const Duration kPodcastCacheMaxAge = Duration( days: 30 );
 Future<Directory> podcastCacheDirectory() async =>
     Directory( "${( await getApplicationSupportDirectory() ).path}/podcasts" );
 
+/// One finished download: its cache [name] and when its file was written.
+class CachedPodcast {
+  /// The cache file name without `.mp3`, the percent-encoded server path.
+  final String name;
+
+  /// When the file was written.
+  final DateTime modified;
+
+  /// Creates one entry.
+  const CachedPodcast( { required this.name, required this.modified } );
+}
+
 /// Podcasts downloaded to the phone, so they play again without a network.
 ///
 /// A file counts as downloaded only once it is whole: a download goes to a `.part` file and is
@@ -69,6 +81,21 @@ class PodcastCache extends ChangeNotifier {
     }
     if ( _names.remove( name ) ) notifyListeners();
     return null;
+  }
+
+  /// Every downloaded podcast with the time its file was written, newest first.
+  ///
+  /// Reads the folder only; makes no network call.
+  Future<List<CachedPodcast>> entries() async {
+    final found = <CachedPodcast>[];
+    await for ( final entry in ( await _dir() ).list() ) {
+      if ( entry is! File ) continue;
+      final base = _baseName( entry.path );
+      if ( !base.endsWith( ".mp3" ) ) continue;
+      found.add( CachedPodcast( name: base.substring( 0, base.length - 4 ), modified: await entry.lastModified() ) );
+    }
+    found.sort( ( a, b ) => b.modified.compareTo( a.modified ) );
+    return found;
   }
 
   /// Downloads the server file at [serverPath] as [name] and returns it.

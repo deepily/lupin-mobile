@@ -79,6 +79,7 @@ import '../../features/finished_tasks/domain/finished_tasks_bloc.dart';
 import '../../services/artifacts/io_file_service.dart';
 import '../../services/audio/just_audio_playback_engine.dart';
 import '../../services/audio/podcast_cache.dart';
+import '../../services/audio/podcast_catalog.dart';
 import '../../services/audio/podcast_link.dart';
 import '../../services/audio/podcast_player_service.dart';
 import '../../features/artifacts/podcast_prefetch.dart';
@@ -565,6 +566,7 @@ class ServiceLocator {
         dirFactory : podcastCacheDirectory,
       ),
     );
+    _getIt.registerSingleton<PodcastCatalog>( PodcastCatalog( _getIt<PodcastCache>() ) );
     _getIt.registerSingleton<PodcastPrefetcher>(
       PodcastPrefetcher(
         cacheFactory : () => _getIt<PodcastCache>(),

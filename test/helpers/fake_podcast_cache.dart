@@ -14,6 +14,8 @@ class PathFile extends Fake implements File {
 class FakePodcastCache extends PodcastCache {
   /// Downloaded files by name; fill it to start with a podcast already on the phone.
   final Map<String, File>   files   = {};
+  /// File write times by name; a name missing here counts as the epoch.
+  final Map<String, DateTime> modified = {};
   /// Every fetch as `[serverPath, name]`, in order.
   final List<List<String>>  fetched = [];
   /// When set, [fetch] throws it instead of downloading.
@@ -22,6 +24,11 @@ class FakePodcastCache extends PodcastCache {
   FakePodcastCache() : super( ioFactory: () => throw StateError( "no io" ), dirFactory: () => throw StateError( "no dir" ) );
 
   @override bool isCached( String name ) => files.containsKey( name );
+
+  @override
+  Future<List<CachedPodcast>> entries() async => [
+    for ( final n in files.keys ) CachedPodcast( name: n, modified: modified[ n ] ?? DateTime.fromMillisecondsSinceEpoch( 0 ) ),
+  ]..sort( ( a, b ) => b.modified.compareTo( a.modified ) );
 
   @override Future<File?> lookup( String name ) async => files[ name ];
 

@@ -555,6 +555,20 @@ class TestKeys {
   /// Key of the Cancel button on that sheet.
   static const podcastDataNo             = 'podcast.data.no';
 
+  // Podcasts list screen
+  /// Key of the home screen's Podcasts card.
+  static const homePodcastsCard          = 'home.podcasts';
+  /// Key of the Podcasts list.
+  static const podcastList               = 'podcast.list';
+  /// Key of the empty message on the Podcasts list.
+  static const podcastListEmpty          = 'podcast.list.empty';
+  /// Prefix of a Podcasts list row; the cache name follows.
+  static const podcastListRowPrefix      = 'podcast.list.row.';
+  /// Prefix of a row's Play button; the cache name follows.
+  static const podcastListPlayPrefix     = 'podcast.list.play.';
+  /// Prefix of a row's downloaded mark; the cache name follows.
+  static const podcastListDownloadedPrefix = 'podcast.list.downloaded.';
+
   // ── Quick Ask ──
   /// Key of the quick ask record button.
   static const quickAskRecordButton   = 'quickAsk.record';

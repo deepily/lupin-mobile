@@ -35,6 +35,16 @@ void main() {
     await ( inv.positionalArguments[ 1 ] as File ).writeAsString( bytes );
   } );
 
+  test( "entries lists whole mp3 files newest first and skips .part files", () async {
+    dir.createSync( recursive: true );
+    File( "${dir.path}/old.mp3" )..writeAsStringSync( "x" )..setLastModifiedSync( DateTime( 2026, 10, 1 ) );
+    File( "${dir.path}/new.mp3" )..writeAsStringSync( "x" )..setLastModifiedSync( DateTime( 2026, 10, 20 ) );
+    File( "${dir.path}/half.mp3.part" ).writeAsStringSync( "x" );
+    final rows = await cache.entries();
+    expect( rows.map( ( e ) => e.name ), [ "new", "old" ] );
+    expect( rows.first.modified, DateTime( 2026, 10, 20 ) );
+  } );
+
   test( "fetch writes a whole file under its final name and marks it downloaded", () async {
     downloadWrites( "mp3" );
     var heard = 0;
