@@ -40,9 +40,13 @@ import 'package:lupin_mobile/features/notifications/data/notification_models.dar
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
+import 'package:lupin_mobile/features/podcasts/podcast_list_screen.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
+import 'package:lupin_mobile/services/audio/podcast_catalog.dart';
 import 'package:lupin_mobile/services/auth/server_context_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+
+import '../../helpers/fake_podcast_cache.dart';
 
 class _MockFocusBloc extends MockBloc<FocusChatEvent, FocusChatState>
     implements FocusChatBloc {}
@@ -699,7 +703,7 @@ void main() {
     /// The row's stated sequence, item 2, verbatim.
     const surfaceOrder = <String>[
       'Agentic Jobs', 'Claude Code', 'Broadcast', 'Fleet Status',
-      'Finished Tasks', 'Task List', 'Holding Area',
+      'Finished Tasks', 'Task List', 'Holding Area', 'Podcasts',
     ];
 
     testWidgets( 'the header is the one string, and Quick Ask + Lupin AF Focus head the drawer', ( tester ) async {
@@ -824,6 +828,7 @@ void main() {
       // Registered because two builders read the locator; nothing here is mounted,
       // so a stub instance is all the builders need.
       GetIt.instance.registerSingleton<BroadcastBloc>( _MockBroadcastBloc() );
+      GetIt.instance.registerSingleton<PodcastCatalog>( PodcastCatalog( FakePodcastCache() ) );
       // ⚠️ Registering prefs also hands them to `FocusChatPane`'s fraction bar and
       // to `DocSplitHost`, which read them on build — an unstubbed mock returns
       // null into a `double` there. Found by running this, not by reading it.
@@ -860,6 +865,7 @@ void main() {
       expect( ( built[ 'Finished Tasks' ]! as BlocProvider ).child, isA<FinishedTasksScreen>() );
       expect( built[ 'Task List' ], isA<PaneHostScreen<TaskListBloc>>() );
       expect( built[ 'Holding Area' ], isA<PaneHostScreen<HoldingAreaBloc>>() );
+      expect( built[ 'Podcasts' ], isA<PodcastListScreen>() );
       expect( built[ 'Settings' ], isA<NotificationAudioSettingsScreen>() );
       expect( built[ 'Notification stop-list' ], isA<NotificationFilterSettingsScreen>() );
 

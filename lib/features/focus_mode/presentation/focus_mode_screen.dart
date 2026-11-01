@@ -31,6 +31,8 @@ import '../../task_list/presentation/task_list_pane.dart';
 import '../../docs/data/doc_repository.dart';
 import '../../docs/presentation/doc_split_host.dart';
 import '../../home/home_screen.dart';
+import '../../podcasts/podcast_list_screen.dart';
+import '../../../services/audio/podcast_catalog.dart';
 import '../../notifications/presentation/inbox_screen.dart';
 import '../../queue/presentation/queue_dashboard_screen.dart';
 import '../../quick_ask/presentation/quick_ask_screen.dart';
@@ -101,6 +103,9 @@ List<FocusDrawerSurface> focusDrawerSurfaces( BuildContext context ) {
       title       : 'Holding Area',
       pane        : const HoldingAreaPane(),
       blocFactory : ( _ ) => ServiceLocator.buildHoldingAreaBloc(),
+    ) ),
+    FocusDrawerSurface( Icons.podcasts, 'Podcasts', ( _ ) => PodcastListScreen(
+      catalog: ServiceLocator.get<PodcastCatalog>(),
     ) ),
   ];
 }
