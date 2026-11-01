@@ -184,6 +184,48 @@ void main() {
     } );
   } );
 
+  group( 'follow-ups', () {
+    testWidgets( 'a body that is not a row leaves the live link', ( tester ) async {
+      await _mount( tester, _md(), ( o ) async => _ok( o, { 'title': 5, 'status': 7 } ) );
+      expect( _label(), findsOneWidget );
+    } );
+
+    testWidgets( 'tapping 📄 again while its dialog is open stacks nothing', ( tester ) async {
+      final wire = await _mount( tester, _md(), ( o ) async => _ok( o, _row( 'not_approved' ) ) );
+      await _tapLink( tester, _viewHref );
+      await tester.pumpAndSettle();
+      await _tapLink( tester, _viewHref );
+      await tester.pumpAndSettle();
+
+      expect( find.byKey( const Key( TestKeys.taskViewDialog ) ), findsOneWidget );
+      expect( wire.gets, hasLength( 2 ), reason: 'one redraw read plus one view read' );
+
+      await tester.tap( find.text( 'Close' ) );
+      await tester.pumpAndSettle();
+      await _tapLink( tester, _viewHref );
+      await tester.pumpAndSettle();
+      expect( find.byKey( const Key( TestKeys.taskViewDialog ) ), findsOneWidget, reason: 'opens again after close' );
+    } );
+
+    testWidgets( 'the first note keeps the scroll position', ( tester ) async {
+      final long = '${List.generate( 80, ( i ) => 'filler line $i\n' ).join( '\n' )}\n${_md()}';
+      await _mount( tester, long, ( o ) async {
+        if ( o.method == 'GET' ) return _ok( o, _row( 'not_approved' ) );
+        throw _refuse( o, 403, { 'detail': 'No.' } );
+      } );
+      final scrollable = find.descendant( of: find.byType( Markdown ), matching: find.byType( Scrollable ) ).first;
+      tester.state<ScrollableState>( scrollable ).position.jumpTo( 400 );
+      await tester.pump();
+
+      await _tapLink( tester, _approveHref );
+      await tester.pumpAndSettle();
+
+      expect( _note( tester ), 'No.' );
+      final after = find.descendant( of: find.byType( Markdown ), matching: find.byType( Scrollable ) ).first;
+      expect( tester.state<ScrollableState>( after ).position.pixels, 400 );
+    } );
+  } );
+
   group( 'view link', () {
     testWidgets( 'a tap GETs the row and shows its fields as plain text', ( tester ) async {
       final wire = await _mount( tester, _md(), ( o ) async =>
