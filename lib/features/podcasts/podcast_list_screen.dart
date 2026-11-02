@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/di/service_locator.dart';
 import '../../core/testing/test_keys.dart';
+import '../../services/audio/podcast_cache.dart';
 import '../../services/audio/podcast_catalog.dart';
+import '../../services/audio/podcast_link.dart';
+import '../artifacts/podcast_download_sheet.dart';
 import '../artifacts/podcast_play.dart';
 import 'data/podcast_drive_repository.dart';
 
@@ -13,6 +16,9 @@ import 'data/podcast_drive_repository.dart';
 /// The phone's own rows come from the catalog and the download folder, so they open and play
 /// with no network. The Drive rows are listed live by the server; when that list fails, the
 /// phone's rows still show and the Drive section says why.
+///
+/// Each Drive row has a download button that keeps the podcast on the phone, so Play needs no
+/// network later. On mobile data it asks first, with the same sheet Play uses.
 class PodcastListScreen extends StatefulWidget {
   /// The podcasts to list.
   final PodcastCatalog catalog;
@@ -25,8 +31,16 @@ class PodcastListScreen extends StatefulWidget {
   /// With none registered, the screen shows no Drive section.
   final PodcastDriveRepository? drive;
 
+  /// Keeps downloaded Drive podcasts; null uses the registered cache.
+  ///
+  /// With none registered, the Drive rows have no download button.
+  final PodcastCache? cache;
+
+  /// Reads how the phone is connected before a download; null reads the real connection.
+  final Future<PodcastLink> Function()? linkProbe;
+
   /// Creates the screen.
-  const PodcastListScreen( { super.key, required this.catalog, this.onPlay, this.drive } );
+  const PodcastListScreen( { super.key, required this.catalog, this.onPlay, this.drive, this.cache, this.linkProbe } );
 
   @override
   State<PodcastListScreen> createState() => _PodcastListScreenState();
@@ -37,11 +51,14 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   List<DrivePodcastFolder>? _driveFolders;
   String?                   _driveError;
   PodcastDriveRepository?   _drive;
+  PodcastCache?             _cache;
+  final Set<String>         _downloading = {};
 
   @override
   void initState() {
     super.initState();
     _drive = widget.drive ?? ( ServiceLocator.isRegistered<PodcastDriveRepository>() ? ServiceLocator.get<PodcastDriveRepository>() : null );
+    _cache = widget.cache ?? ( ServiceLocator.isRegistered<PodcastCache>() ? ServiceLocator.get<PodcastCache>() : null );
     widget.catalog.addListener( _reload );
     _reload();
     unawaited( _reloadDrive() );
@@ -81,6 +98,39 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   }
 
   Future<void> _refreshAll() => Future.wait( [ _reload(), _reloadDrive() ] );
+
+  /// Downloads the Drive podcast at [url] onto the phone under [title].
+  ///
+  /// Ensures:
+  ///   - on Wi-Fi it downloads at once; on mobile data only after the listener taps Download
+  ///   - with no connection, or when the download fails, a message says so and nothing is kept
+  ///   - the title is saved, so the phone's list shows it
+  ///   - a second tap while the same podcast downloads does nothing
+  Future<void> _download( PodcastCache cache, String url, String title ) async {
+    final name = podcastCacheName( url );
+    if ( _downloading.contains( name ) ) return;
+    final messenger = ScaffoldMessenger.of( context );
+    final link      = await ( widget.linkProbe ?? currentPodcastLink )();
+    if ( link == PodcastLink.offline ) {
+      messenger.showSnackBar( const SnackBar( content: Text( "There is no connection, so nothing can download." ) ) );
+      return;
+    }
+    if ( link == PodcastLink.metered ) {
+      if ( !mounted ) return;
+      if ( !await showPodcastDataSheet( context, title ) ) return;
+    }
+    if ( !mounted ) return;
+    setState( () => _downloading.add( name ) );
+    try {
+      await widget.catalog.rememberTitle( url, title );
+      await cache.fetch( audioPathOf( url ), name );
+    } catch ( e ) {
+      debugPrint( "[PodcastList] download of $url failed: $e" );
+      messenger.showSnackBar( SnackBar( content: Text( "Could not download $title. Tap download to try again." ) ) );
+    } finally {
+      if ( mounted ) setState( () => _downloading.remove( name ) );
+    }
+  }
 
   @override
   Widget build( BuildContext context ) {
@@ -149,22 +199,54 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       out.add( const ListTile( key: Key( TestKeys.podcastDriveEmpty ), title: Text( "No podcasts in Drive yet" ) ) );
     }
     for ( final ( folder, file ) in audio ) {
-      final many  = folder.files.where( ( x ) => x.isAudio ).length > 1;
-      final title = many ? "${folder.title} (${file.name})" : folder.title;
+      final many    = folder.files.where( ( x ) => x.isAudio ).length > 1;
+      final title   = many ? "${folder.title} (${file.name})" : folder.title;
+      final id      = "${folder.jobFolder}/${file.driveFileId}";
+      final onPhone = _cache?.isCached( podcastCacheName( file.streamUrl ) ) ?? false;
       out.add( ListTile(
-        key     : Key( "${TestKeys.podcastDriveRowPrefix}${folder.jobFolder}/${file.driveFileId}" ),
-        leading : const Icon( Icons.cloud_outlined, semanticLabel: "In Google Drive" ),
+        key     : Key( "${TestKeys.podcastDriveRowPrefix}$id" ),
+        leading : onPhone
+            ? Icon( Icons.download_done, key: Key( "${TestKeys.podcastDriveDownloadedPrefix}$id" ), semanticLabel: "On this phone" )
+            : const Icon( Icons.cloud_outlined, semanticLabel: "In Google Drive" ),
         title   : Text( title, maxLines: 2, overflow: TextOverflow.ellipsis ),
         subtitle: Text( folder.created == null ? folder.jobFolder : _dateText( folder.created! ) ),
-        trailing: IconButton(
-          key      : Key( "${TestKeys.podcastDrivePlayPrefix}${folder.jobFolder}/${file.driveFileId}" ),
-          icon     : const Icon( Icons.play_arrow ),
-          tooltip  : "Play",
-          onPressed: () => play( file.streamUrl, title ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children    : [
+            if ( !onPhone ) _downloadButton( id, file.streamUrl, title ),
+            IconButton(
+              key      : Key( "${TestKeys.podcastDrivePlayPrefix}$id" ),
+              icon     : const Icon( Icons.play_arrow ),
+              tooltip  : "Play",
+              onPressed: () => play( file.streamUrl, title ),
+            ),
+          ],
         ),
       ) );
     }
     return out;
+  }
+
+  /// The download button of the Drive row [id], or a spinner while it downloads.
+  ///
+  /// Nothing when there is no cache to download into.
+  Widget _downloadButton( String id, String url, String title ) {
+    final cache = _cache;
+    if ( cache == null ) return const SizedBox.shrink();
+    if ( _downloading.contains( podcastCacheName( url ) ) ) {
+      return SizedBox(
+        key   : Key( "${TestKeys.podcastDriveDownloadingPrefix}$id" ),
+        width : 48,
+        height: 48,
+        child : const Padding( padding: EdgeInsets.all( 14 ), child: CircularProgressIndicator( strokeWidth: 2, semanticsLabel: "Downloading" ) ),
+      );
+    }
+    return IconButton(
+      key      : Key( "${TestKeys.podcastDriveDownloadPrefix}$id" ),
+      icon     : const Icon( Icons.download ),
+      tooltip  : "Download to this phone",
+      onPressed: () => _download( cache, url, title ),
+    );
   }
 
   Widget _row( PodcastListEntry e, PodcastPlay play ) {
