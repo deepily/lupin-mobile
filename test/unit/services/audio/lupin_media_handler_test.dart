@@ -76,6 +76,18 @@ void main() {
       expect( handler.playbackState.value.playing, isFalse );
     } );
 
+    test( 'a failed track does not show as playing', () {
+      playing( true );
+      handler.reportPodcast( playing: true, processingState: AudioProcessingState.error, position: Duration.zero );
+      expect( handler.playbackState.value.playing, isFalse );
+      expect( handler.playbackState.value.processingState, AudioProcessingState.error );
+    } );
+
+    test( 'only a plain seek is offered, since nothing handles held seek buttons', () {
+      playing( true );
+      expect( handler.playbackState.value.systemActions, { MediaAction.seek } );
+    } );
+
     test( 'the track shows as the card', () {
       handler.showTrack( _episode );
       expect( handler.mediaItem.value, _episode );
@@ -107,8 +119,28 @@ void main() {
       playing( true );
       await handler.claim( _Claimant(), card: _card );
       expect( transport.calls, [ 'pause' ] );
+      playing( false );   // the player reports the pause
       expect( handler.mediaItem.value, _card );
       expect( handler.playbackState.value.playing, isTrue );
+    } );
+
+    test( 'a podcast that starts under the claim gets the presses until it pauses', () async {
+      final quickAsk = _Claimant();
+      handler.showTrack( _episode );
+      await handler.claim( quickAsk, card: _card );
+
+      // Started from the mini-player, or resumed after the app finished speaking.
+      playing( true );
+      expect( handler.mediaItem.value, _episode );
+      expect( handler.playbackState.value.controls.first, MediaControl.pause );
+      await handler.click();
+      expect( transport.calls, [ 'pause' ] );
+      expect( quickAsk.presses, isEmpty );
+
+      playing( false );
+      expect( handler.mediaItem.value, _card );
+      await handler.click();
+      expect( quickAsk.presses, [ MediaButton.media ] );
     } );
 
     test( 'podcast updates are kept but not shown until release', () async {

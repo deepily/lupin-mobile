@@ -12,7 +12,8 @@ import '../domain/quick_ask_bloc.dart';
 /// Quick Ask's hands-free mode: while [child] is mounted, the earbuds work record and send.
 ///
 /// A tap starts or stops recording and a double tap sends the held transcript, each with a tone.
-/// Mounting takes the earbud presses from the podcast player, and unmounting gives them back.
+/// It holds the earbuds only while Quick Ask is the top screen and the app is on screen.
+/// A screen pushed on top, the home button or a locked phone gives them back to the podcast player.
 /// With no [handler], as in tests that don't exercise it, this is only [child].
 class EarbudHandsFree extends StatefulWidget {
   /// The app's media session; null leaves the earbuds alone.
@@ -37,17 +38,52 @@ class EarbudHandsFree extends StatefulWidget {
 }
 
 class _EarbudHandsFreeState extends State<EarbudHandsFree> implements MediaButtonClaimant {
-  late final EarbudTapReader _reader = EarbudTapReader( onGesture: _onGesture );
+  late final EarbudTapReader      _reader = EarbudTapReader( onGesture: _onGesture );
+  late final AppLifecycleListener _life;
+  bool _onTop     = true;
+  bool _appShown  = true;
+  bool _holding   = false;
+
+  static bool _shown( AppLifecycleState? s ) =>
+      s == null || s == AppLifecycleState.resumed || s == AppLifecycleState.inactive;
 
   @override
   void initState() {
     super.initState();
+    _appShown = _shown( WidgetsBinding.instance.lifecycleState );
+    _life     = AppLifecycleListener( onStateChange: ( s ) {
+      _appShown = _shown( s );
+      _sync();
+    } );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // `ModalRoute.of` rebuilds this when a route is pushed on top or popped back off.
+    _onTop = ModalRoute.of( context )?.isCurrent ?? true;
+    _sync();
+  }
+
+  /// Takes or gives back the earbuds to match whether Quick Ask is in front of the user.
+  void _sync() {
     final handler = widget.handler;
-    if ( handler != null ) unawaited( handler.claim( this, card: EarbudHandsFree.card ) );
+    final want    = handler != null && _onTop && _appShown;
+    if ( handler == null || want == _holding ) return;
+    _holding = want;
+    if ( want ) {
+      unawaited( handler.claim( this, card: EarbudHandsFree.card ) );
+      final cues = widget.cues;
+      if ( cues != null ) unawaited( cues.play( HandsFreeCue.ready ) );
+    } else {
+      _reader.dispose();
+      handler.release( this );
+    }
   }
 
   @override
   void dispose() {
+    _life.dispose();
     _reader.dispose();
     widget.handler?.release( this );
     super.dispose();

@@ -113,6 +113,16 @@ void main() {
     expect( handler.playbackState.value.playing, isFalse );
   } );
 
+  test( "a player error shows the track as failed, not playing", () async {
+    when( () => player.playing ).thenReturn( true );
+    playingCtl.add( true );
+    await Future<void>.delayed( Duration.zero );
+    events.addError( PlayerException( 0, "decode failed" ) );
+    await Future<void>.delayed( Duration.zero );
+    expect( handler.playbackState.value.processingState, AudioProcessingState.error );
+    expect( handler.playbackState.value.playing, isFalse );
+  } );
+
   test( "the earbud and lock-screen buttons reach the player through the handler", () async {
     when( () => player.play() ).thenAnswer( ( _ ) async {} );
     when( () => player.seek( Duration.zero ) ).thenAnswer( ( _ ) async {} );

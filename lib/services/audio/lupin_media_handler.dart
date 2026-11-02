@@ -25,8 +25,12 @@ abstract interface class MediaButtonClaimant {
 /// The app's one media session: the lock-screen card, and where earbud presses go.
 ///
 /// By default a press drives the podcast, as a media player's should.
-/// While a claimant holds the presses (Quick Ask's hands-free mode), every press goes to it instead.
+/// While a claimant holds the presses (Quick Ask's hands-free mode), presses go to it instead.
 /// The session then shows the claimant's card in place of the podcast's.
+///
+/// A playing podcast always wins: while one plays, a press pauses it and the session shows it.
+/// A podcast can start under a claim, from the mini-player or after the app finishes speaking.
+/// It can still be paused from the earbuds and the lock screen.
 class LupinMediaHandler extends BaseAudioHandler {
   /// How far the media rewind key backs up.
   final Duration rewindInterval;
@@ -35,6 +39,7 @@ class LupinMediaHandler extends BaseAudioHandler {
 
   MediaTransport?      _transport;
   MediaButtonClaimant? _claimant;
+  MediaItem?           _card;
   MediaItem?           _podcastItem;
   PlaybackState        _podcastState = PlaybackState();
 
@@ -50,16 +55,32 @@ class LupinMediaHandler extends BaseAudioHandler {
   /// Connects the podcast player that play, pause and seek act on.
   void attach( MediaTransport transport ) => _transport = transport;
 
-  /// Shows [item] as the podcast's card, unless a claimant's card is showing.
-  void showTrack( MediaItem item ) {
-    _podcastItem = item;
-    if ( _claimant == null ) mediaItem.add( item );
+  /// Whether presses go to the claimant: one holds them and no podcast is playing.
+  bool get _claimantActs => _claimant != null && !_podcastState.playing;
+
+  /// Shows the claimant's card, or the podcast's.
+  ///
+  /// The claimant's card is shown as playing. That keeps this the session Android sends presses to.
+  void _show() {
+    if ( _claimantActs ) {
+      mediaItem.add( _card );
+      playbackState.add( PlaybackState( processingState: AudioProcessingState.ready, playing: true ) );
+    } else {
+      mediaItem.add( _podcastItem );
+      playbackState.add( _podcastState );
+    }
   }
 
-  /// Records the podcast player's state, and shows it unless a claimant holds the session.
+  /// Records [item] as the podcast's card, and shows it unless the claimant's card is showing.
+  void showTrack( MediaItem item ) {
+    _podcastItem = item;
+    _show();
+  }
+
+  /// Records the podcast player's state, and shows it unless the claimant's card is showing.
   ///
   /// Ensures:
-  ///   - the reported state is not "playing" once the track is idle or finished
+  ///   - the reported state is not "playing" once the track is idle, finished or failed
   void reportPodcast( {
     required bool                 playing,
     required AudioProcessingState processingState,
@@ -67,33 +88,34 @@ class LupinMediaHandler extends BaseAudioHandler {
     Duration                      bufferedPosition = Duration.zero,
   } ) {
     final stopped  = processingState == AudioProcessingState.idle
-        || processingState == AudioProcessingState.completed;
+        || processingState == AudioProcessingState.completed
+        || processingState == AudioProcessingState.error;
     final controls = [ playing ? MediaControl.pause : MediaControl.play, MediaControl.stop ];
     _podcastState  = PlaybackState(
       controls                   : controls,
-      systemActions              : const { MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward },
+      systemActions              : const { MediaAction.seek },
       androidCompactActionIndices: const [ 0 ],
       processingState            : processingState,
       playing                    : playing && !stopped,
       updatePosition             : position,
       bufferedPosition           : bufferedPosition,
     );
-    if ( _claimant == null ) playbackState.add( _podcastState );
+    _show();
   }
 
-  /// Gives every earbud press to [claimant] until [release], and shows [card].
+  /// Gives the earbud presses to [claimant] until [release], and shows [card].
   ///
   /// A playing podcast pauses, so one tap means one thing.
-  /// The session reports itself as playing while claimed. That keeps it the session Android sends presses to.
   ///
   /// Ensures:
   ///   - [isClaimed] is true
   ///   - a later claim replaces this one
   Future<void> claim( MediaButtonClaimant claimant, { required MediaItem card } ) async {
     _claimant = claimant;
-    mediaItem.add( card );
-    playbackState.add( PlaybackState( processingState: AudioProcessingState.ready, playing: true ) );
-    if ( _podcastState.playing ) await _transport?.pause();
+    _card     = card;
+    final playing = _podcastState.playing;
+    _show();
+    if ( playing ) await _transport?.pause();
   }
 
   /// Gives the presses back to the podcast, if [claimant] still holds them.
@@ -103,14 +125,14 @@ class LupinMediaHandler extends BaseAudioHandler {
   void release( MediaButtonClaimant claimant ) {
     if ( !identical( _claimant, claimant ) ) return;
     _claimant = null;
-    mediaItem.add( _podcastItem );
-    playbackState.add( _podcastState );
+    _card     = null;
+    _show();
   }
 
   @override
   Future<void> click( [ MediaButton button = MediaButton.media ] ) async {
     final claimant = _claimant;
-    if ( claimant != null ) {
+    if ( claimant != null && _claimantActs ) {
       claimant.onMediaButton( button );
       return;
     }

@@ -38,8 +38,9 @@ class ToneCuePlayer implements HandsFreeCuePlayer {
 
 /// The tones, as mono 16-bit PCM WAV bytes.
 ///
-/// Started rises, stopped falls, sent climbs three steps, and refused is one low buzz,
-/// so each can be told apart without looking.
+/// Ready is one short beep, started rises and stopped falls.
+/// Sent climbs three steps, and refused is one low buzz.
+/// So each can be told apart without looking.
 class CueTones {
   CueTones._();
 
@@ -51,6 +52,7 @@ class CueTones {
 
   /// The ( Hz, seconds ) notes of each cue; a 0 Hz note is silence.
   static const Map<HandsFreeCue, List<( double, double )>> notes = {
+    HandsFreeCue.ready   : [ ( 880, 0.06 ) ],
     HandsFreeCue.started : [ ( 660, _beep ), ( 0, _gap ), ( 880, _beep ) ],
     HandsFreeCue.stopped : [ ( 880, _beep ), ( 0, _gap ), ( 660, _beep ) ],
     HandsFreeCue.sent    : [ ( 660, 0.07 ), ( 0, _gap ), ( 880, 0.07 ), ( 0, _gap ), ( 1100, 0.07 ) ],

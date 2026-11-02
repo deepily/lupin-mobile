@@ -1,6 +1,8 @@
 /// Quick Ask hands-free: while the screen is open, the earbuds work record and send.
 library;
 
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
@@ -84,10 +86,52 @@ void main() {
   const idle = QuickAskState( connected: true );
   const held = QuickAskState( connected: true, phase: QuickAskPhase.review, draftTranscript: 'what time is it' );
 
-  testWidgets( 'opening the screen takes the earbuds and shows the Quick Ask card', ( tester ) async {
+  testWidgets( 'opening the screen takes the earbuds, shows the Quick Ask card and beeps once', ( tester ) async {
     await mount( tester, idle );
     expect( handler.isClaimed, isTrue );
     expect( handler.mediaItem.value, EarbudHandsFree.card );
+    expect( cues.played, [ HandsFreeCue.ready ] );
+  } );
+
+  testWidgets( 'a screen pushed on top gets the earbuds back for the podcast, and popping it retakes them',
+      ( tester ) async {
+    await mount( tester, idle );
+    final nav = tester.state<NavigatorState>( find.byType( Navigator ) );
+    unawaited( nav.push( MaterialPageRoute<void>( builder: ( _ ) => const Text( 'podcasts' ) ) ) );
+    await tester.pumpAndSettle();
+    expect( handler.isClaimed, isFalse );
+    await handler.click();
+    expect( podcast.calls, [ 'play' ] );
+
+    nav.pop();
+    await tester.pumpAndSettle();
+    expect( handler.isClaimed, isTrue );
+    expect( cues.played, [ HandsFreeCue.ready, HandsFreeCue.ready ] );
+  } );
+
+  testWidgets( 'leaving the app gives the earbuds back, and coming back retakes them', ( tester ) async {
+    await mount( tester, idle );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.inactive );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.hidden );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
+    expect( handler.isClaimed, isFalse );
+
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.hidden );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.inactive );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
+    expect( handler.isClaimed, isTrue );
+  } );
+
+  testWidgets( 'a press still waiting when the app is left does nothing', ( tester ) async {
+    await mount( tester, idle );
+    await handler.click();
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.inactive );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.hidden );
+    await tester.pump( EarbudTapReader.defaultWindow );
+
+    verifyNever( () => bloc.add( any() ) );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.inactive );
+    tester.binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
   } );
 
   testWidgets( 'leaving the screen gives the earbuds back to the podcast', ( tester ) async {
@@ -104,7 +148,7 @@ void main() {
     await tester.pump( EarbudTapReader.defaultWindow );
 
     expect( sent(), [ const QuickAskRecordPressed() ] );
-    expect( cues.played, [ HandsFreeCue.started ] );
+    expect( cues.played, [ HandsFreeCue.ready, HandsFreeCue.started ] );
     expect( podcast.calls, isEmpty );
   } );
 
@@ -114,7 +158,7 @@ void main() {
     await tester.pump( EarbudTapReader.defaultWindow );
 
     expect( sent(), [ const QuickAskRecordReleased() ] );
-    expect( cues.played, [ HandsFreeCue.stopped ] );
+    expect( cues.played, [ HandsFreeCue.ready, HandsFreeCue.stopped ] );
   } );
 
   testWidgets( 'a double tap sends the held transcript, with the sent tone', ( tester ) async {
@@ -125,7 +169,7 @@ void main() {
     await tester.pump( EarbudTapReader.defaultWindow );
 
     expect( sent(), [ const QuickAskDraftSent() ] );
-    expect( cues.played, [ HandsFreeCue.sent ] );
+    expect( cues.played, [ HandsFreeCue.ready, HandsFreeCue.sent ] );
   } );
 
   testWidgets( 'an earbud "next track" press sends too', ( tester ) async {
@@ -142,7 +186,7 @@ void main() {
     await tester.pump();
 
     verifyNever( () => bloc.add( any() ) );
-    expect( cues.played, [ HandsFreeCue.refused ] );
+    expect( cues.played, [ HandsFreeCue.ready, HandsFreeCue.refused ] );
   } );
 
   testWidgets( 'a press still waiting when the screen closes does nothing', ( tester ) async {
@@ -152,6 +196,6 @@ void main() {
     await tester.pump( EarbudTapReader.defaultWindow );
 
     verifyNever( () => bloc.add( any() ) );
-    expect( cues.played, isEmpty );
+    expect( cues.played, [ HandsFreeCue.ready ] );
   } );
 }

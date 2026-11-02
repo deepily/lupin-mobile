@@ -23,7 +23,12 @@ class JustAudioPlaybackEngine implements PodcastPlaybackEngine, MediaTransport {
       : _handler = handler,
         _player  = player ?? AudioPlayer() {
     _handler.attach( this );
-    _player.playbackEventStream.listen( ( _ ) => _report(), onError: ( Object _ ) {} );
+    // A failed track shows as failed, not as still playing, which would also keep the wake lock.
+    _player.playbackEventStream.listen( ( _ ) => _report(), onError: ( Object _ ) => _handler.reportPodcast(
+      playing         : false,
+      processingState : AudioProcessingState.error,
+      position        : _player.position,
+    ) );
     _player.playingStream.listen( ( _ ) => _report() );
     _player.durationStream.listen( ( d ) {
       final item = _item;

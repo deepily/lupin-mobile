@@ -15,6 +15,10 @@ enum EarbudGesture {
 
 /// The tone that says what an earbud gesture did, since the phone may not be in view.
 enum HandsFreeCue {
+  /// Quick Ask has the earbuds.
+  ///
+  /// Playing it also makes this app the one Android sends the next earbud press to.
+  ready,
   /// Recording started.
   started,
   /// Recording stopped.
@@ -90,6 +94,7 @@ typedef EarbudAction = ( { QuickAskEvent? event, HandsFreeCue cue } );
 ///
 /// Ensures:
 ///   - `event` is null exactly when `cue` is [HandsFreeCue.refused]
+///   - `cue` is never [HandsFreeCue.ready], which only the claim plays
 EarbudAction earbudAction( EarbudGesture gesture, QuickAskState state ) {
   if ( state.phase == QuickAskPhase.recording ) {
     return ( event: const QuickAskRecordReleased(), cue: HandsFreeCue.stopped );
