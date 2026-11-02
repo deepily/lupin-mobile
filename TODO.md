@@ -1,6 +1,22 @@
 # TODO
 
-## Resume here: 2026-11-01 close (Tiffany)
+## Resume here: 2026-11-02 close (Tiffany)
+
+Five rows were done or merged today; APK build 4 is at `bd27502`. Two new bugs are filed for tonight, and both wait for Rick's approval.
+
+- [ ] Tonight: Quick Ask tap to start and stop recording works only intermittently (row `0f29b56e`). First find which tap fails: the on-screen button or the earbud.
+- [ ] Tonight: Quick Ask speech recognition returns no transcript (row `bcc9cba3`). First find whether the phone or the server loses it.
+- [ ] Rick's earbud check on build 3 or later closes hands-free step 1 (row `c643b1b0`, blocked on him). Step 2, earbuds with the phone locked, is row `3a8005c1`, waiting for approval.
+- [ ] Archive TODO.md horizon: the file is over 500 lines. Rick's archive question dropped in the 17:00 server bounce, so it defaulted to next session.
+- [ ] Possible flake: `test/unit/services/websocket/ws_stale_channel_test.dart` failed once in a full run (Sam, 11-01).
+
+### Decisions Log — 2026-11-02 (session `cfdbef0b`, Tiffany)
+
+- Rick: every multiple-choice ask shows "Other" with a text field, single- and multi-select, and answers in the web client's shape (row `50ce6d46`).
+- Rick: hands-free Quick Ask is built with the screen on first; the phone-locked step comes second (row `3a8005c1`).
+- Rick: by default a notification doesn't pop up at the system level while the app is open, and the ding stays on. There is no setting for either (row `66f6cf2f`).
+
+## Earlier: 2026-11-01 close (Tiffany)
 
 Drive podcasts, approve links and offline download are done: three rows closed, APK build 3 at `fefb4f4`. One held row on my board waits for Rick: `50ce6d46`, the missing "Other" option on multiple-choice asks.
 

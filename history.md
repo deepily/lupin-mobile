@@ -15,6 +15,27 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.02 | Session `cfdbef0b` (Tiffany) — "Other" on choice asks, hands-free Quick Ask, no banner while the app is open
+
+The work came from Rick by voice and from rows on my board. APK builds 1 to 4 were made; the last is `bd27502`, and the drawer reads "2026.11.02 build 4". Each change had an independent review, and every defect it found was fixed with a test that fails without the fix.
+
+- **"Other" on every multiple-choice ask** (row `50ce6d46`): single- and multi-select, in the notification sheet and the focus pane. A typed answer is sent as the web client sends it. The review found that a cursor move re-ticked "Other" over a later pick; fixed. Merged `8048669`.
+- **📋 view links** (row `3310b925`): the parser already keyed on the address, so tests now cover both 📋 and 📄. Merged `8048669`.
+- **Quick Ask multiple choice** (row `6fd3ec4e`): Quick Ask shows the options and "Other", and answers `{"answers": ...}`. The review found that a replacing prompt reused the old one's state; the fix keys the prompt by id. Merged `63eadc5`.
+- **Hands-free Quick Ask, screen on** (row `c643b1b0`, plan `src/rnd/2026.11.02-quick-ask-hands-free-earbud-taps-plan.md`): an earbud tap starts and stops recording, and a double tap sends, each with a tone.
+  - The app now owns its media session: `LupinMediaHandler` on `audio_service`, replacing `just_audio_background`, which kept the press handler private.
+  - The review found four defects, all fixed in `138f095`. The claim outlived the screen, and a podcast started under it couldn't be paused. The first tap could go to another app, and player errors were dropped.
+  - Merged `174d54b`; the row waits on Rick's earbud check. The locked-screen step is row `3a8005c1`.
+- **No system banner while the app is open** (row `66f6cf2f`, Rick's ruling): with the app in front, a notification dings and vibrates in-app. Nothing is posted to Android. The review found that two quick dings leaked audio focus and kept a podcast paused. It also found that vibrate mode got no signal. Both are fixed. Merged `bd27502`.
+- **Filed for tonight**: the intermittent tap to start and stop (row `0f29b56e`), and ASR returning no transcript (row `bcc9cba3`).
+- **Lessons**:
+  - A TextEditingController notifies on cursor and composing changes too, so a listener must compare the text.
+  - audioplayers takes audio focus on every `play()` and releases only the latest request, so stop before each play.
+  - Renaming a test is a missing id to AC-G2; rename it in `test/fixtures/ac_g2_passing_baseline.json` in the same branch.
+- **Memento sweep**: Sam's two 11-01 mementos (tester, row `a25f51b3`) were summarized and trashed.
+  - `ws_stale_channel_test.dart` failed once in a full run and passed alone, so it may be flaky.
+  - `Markdown( selectable: true )` draws no RichText; read the EditableText instead.
+
 ## 2026.11.01 | Session `6b2f0ab0` (Tiffany) — Drive podcasts on the phone, one-click approve links, download for offline
 
 The work came from Mr. Radio's handoff and from Rick by voice. APK builds 1 to 3 were made; the last is `fefb4f4`, and the drawer reads "2026.11.01 build 3".
