@@ -224,6 +224,27 @@ void main() {
       expect( submitted()![ 'Database' ], 'Postgres' );
     } );
 
+    testWidgets( 'single-select: a cursor move in the box with no new text keeps the later pick',
+                 ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.enterText( find.byKey( otherField( 0 ) ), 'DuckDB' );
+      await tester.pump();
+      await tester.tap( find.text( 'Postgres' ) );
+      await tester.pump();
+
+      // The keyboard closing its word, or a cursor move, notifies the controller
+      // with the same text; it must not tick Other again over the pick.
+      final field = tester.widget<EditableText>( find.descendant(
+          of: find.byKey( otherField( 0 ) ), matching: find.byType( EditableText ) ) );
+      field.controller.selection = const TextSelection.collapsed( offset: 2 );
+      field.controller.value     = field.controller.value.copyWith( composing: TextRange.empty );
+      await tester.pump();
+
+      expect( tester.widget<RadioListTile<String>>( find.byKey( otherTick( 0 ) ) ).checked, isFalse );
+      await submit( tester );
+      expect( submitted()![ 'Database' ], 'Postgres' );
+    } );
+
     testWidgets( 'multi-select: the Other text is added to the ticked labels', ( tester ) async {
       final submitted = await mount( tester );
       await tester.tap( find.text( 'us-east' ) );

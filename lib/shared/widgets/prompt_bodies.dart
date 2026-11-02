@@ -309,6 +309,7 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
   final Map<int, Set<String>>           _multi   = {};
   final Map<int, TextEditingController> _other   = {};
   final Set<int>                        _multiOther = {};
+  final Map<int, String>                _otherSeen  = {};
 
   // The radio value of the "Other" tick; the web client's `MC_OTHER_VALUE`, never sent.
   static const String _otherValue = "__other__";
@@ -339,9 +340,14 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
     super.dispose();
   }
 
-  // Text in the Other box, typed or dictated, ticks Other; clearing it unticks nothing.
+  // New text in the Other box, typed or dictated, ticks Other; clearing it unticks nothing.
+  // The controller also fires on cursor moves and on the keyboard closing its word, so
+  // only a change to the trimmed text counts; otherwise a later pick would be overridden.
   void _tickOtherOnText( int i ) {
-    if ( !mounted || _other[ i ]!.text.trim().isEmpty ) return;
+    final text = _other[ i ]!.text.trim();
+    if ( text == ( _otherSeen[ i ] ?? '' ) ) return;
+    _otherSeen[ i ] = text;
+    if ( !mounted || text.isEmpty ) return;
     if ( _isMulti( widget.questions[ i ] ) ) {
       if ( _multiOther.contains( i ) ) return;
       setState( () => _multiOther.add( i ) );
