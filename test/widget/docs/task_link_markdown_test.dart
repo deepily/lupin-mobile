@@ -46,8 +46,9 @@ DioException _refuse( RequestOptions o, int code, Object data ) => DioException(
       type           : DioExceptionType.badResponse,
     );
 
-String _md( { String second = '' } ) =>
-    '- Ship [approve ☐](/app/tasks/approve?row=$_id) [📄](/app/tasks/view?row=$_id)\n$second';
+// Lines from 2026-11-02 label the view link 📋; older lines in history still say 📄.
+String _md( { String second = '', String viewLabel = '📄' } ) =>
+    '- Ship [approve ☐](/app/tasks/approve?row=$_id) [$viewLabel](/app/tasks/view?row=$_id)\n$second';
 
 Future<_Wire> _mount( WidgetTester tester, String md, Future<Response<dynamic>> Function( RequestOptions ) answer ) async {
   final wire = _Wire( answer );
@@ -241,6 +242,33 @@ void main() {
       expect( find.textContaining( 'Ship the thing' ), findsWidgets );
       expect( find.textContaining( 'Priority: P1 · Owner: rio' ), findsOneWidget );
       expect( find.textContaining( 'a <b>bold</b> **claim**' ), findsOneWidget );
+    } );
+
+    // Row 3310b925: the server now writes 📋; the label never decides what a link does.
+    for ( final label in const [ '📋', '📄' ] ) {
+      testWidgets( 'a view link labelled $label opens the row', ( tester ) async {
+        final wire = await _mount( tester, _md( viewLabel: label ), ( o ) async => _ok( o, _row( 'not_approved' ) ) );
+        final md   = tester.widget<Markdown>( find.byType( Markdown ) );
+        expect( md.data, contains( '[$label](/app/tasks/view?row=$_id)' ) );
+        final readsBefore = wire.gets.length;
+
+        await _tapLink( tester, _viewHref, label );
+        await tester.pumpAndSettle();
+
+        expect( wire.gets.length, readsBefore + 1 );
+        expect( find.byKey( const Key( TestKeys.taskViewDialog ) ), findsOneWidget );
+      } );
+    }
+
+    testWidgets( 'an old 📄 line and a new 📋 line in one card both stay task links', ( tester ) async {
+      const other = 'c65e449a-0000-4000-8000-000000000001';
+      final md = _md( viewLabel: '📋',
+          second: '- Old [approve ☐](/app/tasks/approve?row=$other) [📄](/app/tasks/view?row=$other)\n' );
+      final wire = await _mount( tester, md, ( o ) async => _ok( o, _row( 'queued' ) ) );
+
+      // Both approve rows were read on mount, so both lines were recognised.
+      expect( wire.gets.map( ( o ) => o.path ).toSet(), { '/api/tasks/$_id', '/api/tasks/$other' } );
+      expect( find.textContaining( 'approved ✅', findRichText: true ), findsNWidgets( 2 ) );
     } );
 
     testWidgets( 'a failed read says so', ( tester ) async {

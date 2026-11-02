@@ -47,6 +47,10 @@ class TestKeys {
   static const promptCommentField      = 'prompt.comment';
   /// Submit button of the promoted multi-question body.
   static const promptMultiQuestionSubmit = 'prompt.multiQuestion.submit';
+  /// Prefix of the multi-question body's "Other" tick; append the question index.
+  static const promptMultiQuestionOtherPrefix      = 'prompt.multiQuestion.other.';
+  /// Prefix of the multi-question body's "Other" text field; append the question index.
+  static const promptMultiQuestionOtherFieldPrefix = 'prompt.multiQuestion.otherField.';
   // Dictate into the "Your response" box on a prompt card, appending rather than replacing.
   /// Key of the prompt response field.
   static const promptResponseField       = 'prompt.response';

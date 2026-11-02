@@ -274,6 +274,9 @@ class _OpenEndedPromptBodyState extends State<OpenEndedPromptBody> {
 /// It reads the nested `response_options.questions[]` shape and keys each answer
 /// by the question's `header`. A question with its own `options` renders as a
 /// choice control; a question without options renders as a text box.
+/// Every choice control ends with an "Other" tick and a text box, as on the web client.
+/// A ticked Other answers with its trimmed text: the whole answer for single-select,
+/// one more list entry for multi-select. Typing or dictating into the box ticks Other.
 /// It takes questions and a callback, and the host decides where the value goes.
 /// Design: src/docs/decisions/README.md (R-prompt-bodies-shared)
 class MultiQuestionPromptBody extends StatefulWidget {
@@ -304,6 +307,12 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
   final Map<int, TextEditingController> _text    = {};
   final Map<int, String>                _single  = {};
   final Map<int, Set<String>>           _multi   = {};
+  final Map<int, TextEditingController> _other   = {};
+  final Set<int>                        _multiOther = {};
+  final Map<int, String>                _otherSeen  = {};
+
+  // The radio value of the "Other" tick; the web client's `MC_OTHER_VALUE`, never sent.
+  static const String _otherValue = "__other__";
 
   @override
   void initState() {
@@ -311,9 +320,12 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
     for ( var i = 0; i < widget.questions.length; i++ ) {
       if ( _optionsOf( widget.questions[ i ] ).isEmpty ) {
         _text[ i ] = TextEditingController();
-      } else if ( _isMulti( widget.questions[ i ] ) ) {
-        _multi[ i ] = <String>{};
+        continue;
       }
+      if ( _isMulti( widget.questions[ i ] ) ) _multi[ i ] = <String>{};
+      final other = TextEditingController();
+      other.addListener( () => _tickOtherOnText( i ) );
+      _other[ i ] = other;
     }
   }
 
@@ -322,7 +334,40 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
     for ( final c in _text.values ) {
       c.dispose();
     }
+    for ( final c in _other.values ) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  // New text in the Other box, typed or dictated, ticks Other; clearing it unticks nothing.
+  // The controller also fires on cursor moves and on the keyboard closing its word, so
+  // only a change to the trimmed text counts; otherwise a later pick would be overridden.
+  void _tickOtherOnText( int i ) {
+    final text = _other[ i ]!.text.trim();
+    if ( text == ( _otherSeen[ i ] ?? '' ) ) return;
+    _otherSeen[ i ] = text;
+    if ( !mounted || text.isEmpty ) return;
+    if ( _isMulti( widget.questions[ i ] ) ) {
+      if ( _multiOther.contains( i ) ) return;
+      setState( () => _multiOther.add( i ) );
+    } else {
+      if ( _single[ i ] == _otherValue ) return;
+      setState( () => _single[ i ] = _otherValue );
+    }
+  }
+
+  /// The answer to choice question [i]; a ticked Other contributes its trimmed text.
+  dynamic _choiceAnswer( int i, dynamic q ) {
+    final other = _other[ i ]!.text.trim();
+    if ( _isMulti( q ) ) {
+      return [
+        ..._multi[ i ]!,
+        if ( _multiOther.contains( i ) && other.isNotEmpty ) other,
+      ];
+    }
+    final picked = _single[ i ] ?? '';
+    return picked == _otherValue ? other : picked;
   }
 
   String _question( dynamic q ) {
@@ -405,6 +450,37 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
             onChanged  : ( v ) => setState( () => _single[ i ] = v ?? '' ),
           );
         } ),
+        if ( multi )
+          CheckboxListTile(
+            key       : Key( '${TestKeys.promptMultiQuestionOtherPrefix}$i' ),
+            dense     : true,
+            title     : const Text( "Other" ),
+            value     : _multiOther.contains( i ),
+            onChanged : ( v ) => setState( () {
+              if ( v == true ) {
+                _multiOther.add( i );
+              } else {
+                _multiOther.remove( i );
+              }
+            } ),
+          )
+        else
+          RadioListTile<String>(
+            key        : Key( '${TestKeys.promptMultiQuestionOtherPrefix}$i' ),
+            dense      : true,
+            title      : const Text( "Other" ),
+            value      : _otherValue,
+            groupValue : _single[ i ],
+            onChanged  : ( v ) => setState( () => _single[ i ] = v ?? '' ),
+          ),
+        DictationTextField(
+          controller : _other[ i ]!,
+          fieldKey   : Key( '${TestKeys.promptMultiQuestionOtherFieldPrefix}$i' ),
+          decoration : const InputDecoration(
+            hintText : "Type or speak custom answer...",
+            border   : OutlineInputBorder(),
+          ),
+        ),
       ],
     );
   }
@@ -424,9 +500,7 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
             final answers = <String, dynamic>{};
             for ( var i = 0; i < widget.questions.length; i++ ) {
               final q = widget.questions[ i ];
-              answers[ _key( q, i ) ] = _text.containsKey( i )
-                  ? _text[ i ]!.text
-                  : ( _isMulti( q ) ? _multi[ i ]!.toList() : ( _single[ i ] ?? '' ) );
+              answers[ _key( q, i ) ] = _text.containsKey( i ) ? _text[ i ]!.text : _choiceAnswer( i, q );
             }
             widget.onRespond( answers );
           },

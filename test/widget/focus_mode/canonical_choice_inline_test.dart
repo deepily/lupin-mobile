@@ -7,10 +7,13 @@
 /// down, in the sheet) in `prompt_payload_test.dart`.
 library;
 
+import 'dart:convert';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/core/testing/test_keys.dart';
@@ -92,6 +95,31 @@ void main() {
             findsNothing,
             reason: 'today optionsRenderable is false for a nested payload, '
                     'so every canonical ask took the fallback' );
+  } );
+
+  // Row 50ce6d46: the inline nested body shows Other, and a typed answer reaches the bloc
+  // as the server's {"answers": {header: value}} string.
+  testWidgets( 'a canonical ask shows Other inline, and a typed answer is sent as answers',
+               ( tester ) async {
+    registerFallbackValue( const FocusRespondRequested(
+      senderId: 'x', text: '', promptContext: FocusPromptContext( notificationId: 'x', promptType: null ) ) );
+    await arrange( _ask( 'a4', _canonical ) );
+    await tester.pumpWidget( host() );
+    await tester.pump();
+
+    expect( find.text( 'Other' ), findsOneWidget );
+    final field = find.byKey( const Key( '${TestKeys.promptMultiQuestionOtherFieldPrefix}0' ) );
+    await tester.ensureVisible( field );
+    await tester.enterText( field, 'MySQL' );
+    await tester.pump();
+    final submit = find.byKey( const Key( TestKeys.promptMultiQuestionSubmit ) );
+    await tester.ensureVisible( submit );
+    await tester.tap( submit );
+    await tester.pump();
+
+    final sent = verify( () => bloc.add( captureAny( that: isA<FocusRespondRequested>() ) ) )
+        .captured.single as FocusRespondRequested;
+    expect( jsonDecode( sent.text ), { 'answers': { 'Database': 'MySQL' } } );
   } );
 
   testWidgets( 'the LEGACY top-level shape still renders inline, unchanged',
