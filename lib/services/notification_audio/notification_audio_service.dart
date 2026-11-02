@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -52,8 +53,14 @@ class InAppDingPlayer {
   /// The asset path of [channelId]'s sound, under `assets/`.
   static String assetFor( String channelId ) => 'audio/$channelId.mp3';
 
-  /// Plays [channelId]'s sound.
-  Future<void> play( String channelId ) => _player.play( AssetSource( assetFor( channelId ) ) );
+  /// Plays [channelId]'s sound, cutting off one still playing.
+  ///
+  /// The stop matters: each `play` takes audio focus again, and audioplayers releases only the latest request.
+  /// Without it two overlapping dings left focus held, and a podcast paused by the first never resumed.
+  Future<void> play( String channelId ) async {
+    await _player.stop();
+    await _player.play( AssetSource( assetFor( channelId ) ) );
+  }
 }
 
 /// Plays a ding for each incoming notification, one sound per priority tier.
@@ -70,6 +77,7 @@ class NotificationAudioService {
   final NotificationPreferences         _prefs;
   final bool Function()?                _isForeground;
   final Future<void> Function( String channelId )? _playInApp;
+  final Future<void> Function()                    _vibrate;
   bool _initialized = false;
   bool _handlersSet = false;
   Completer<void>? _utteranceDone;
@@ -107,6 +115,7 @@ class NotificationAudioService {
   /// [isForeground] says whether the app is on screen; production passes [appIsInForeground].
   /// With none, every ding posts to Android. [playInApp] plays a channel's sound inside the app;
   /// it defaults to an [InAppDingPlayer], built on first use.
+  /// [vibrate] buzzes with the in-app ding, as the system notification did, so vibrate mode still gets a signal.
   NotificationAudioService( {
     required NotificationPreferences prefs,
     FlutterLocalNotificationsPlugin? plugin,
@@ -114,12 +123,14 @@ class NotificationAudioService {
     DidReceiveNotificationResponseCallback? onNotificationTap,
     bool Function()?                 isForeground,
     Future<void> Function( String channelId )? playInApp,
+    Future<void> Function()?         vibrate,
     this.speakAcceptBudget = const Duration( seconds: 10 ),
     Duration? completionBound,
   } ) : _completionBound = completionBound,
        _prefs = prefs,
        _isForeground = isForeground,
        _playInApp = playInApp,
+       _vibrate   = vibrate ?? HapticFeedback.vibrate,
        _onNotificationTap = onNotificationTap,
        _fln   = plugin ?? FlutterLocalNotificationsPlugin(),
        _tts   = tts    ?? FlutterTts();
@@ -192,6 +203,7 @@ class NotificationAudioService {
 
     if ( shouldDing ) {
       if ( _isForeground?.call() ?? false ) {
+        await _vibrate();
         await ( _playInApp ?? _defaultPlayInApp )( _channelFor( priority ) );
       } else {
         await _showDing(

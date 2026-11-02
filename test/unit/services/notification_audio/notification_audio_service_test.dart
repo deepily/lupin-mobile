@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show AppLifecycleState, VoidCallback;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -25,8 +26,12 @@ class _FakeNotifDetails extends Fake implements NotificationDetails {}
 ///     exposes for the orchestrator's fallback path:
 ///       * `flutterTtsSpeak(text)` — explicit fallback call
 ///       * `stopFallbackSpeech()` — preempt/cancel fallback
+class _MockAudioPlayer extends Mock implements AudioPlayer {}
+
 void main() {
   setUpAll( () {
+    registerFallbackValue( AssetSource( 'audio/x.mp3' ) );
+    registerFallbackValue( const AudioContext() );
     registerFallbackValue( _FakeInitSettings() );
     registerFallbackValue( _FakeNotifDetails() );
   } );
@@ -113,7 +118,11 @@ void main() {
 
     group( "while the app is on screen", () {
       late List<String> played;
-      setUp( () => played = [] );
+      late int          buzzes;
+      setUp( () {
+        played = [];
+        buzzes = 0;
+      } );
 
       NotificationAudioService onScreen( bool shown ) => NotificationAudioService(
         prefs        : prefs,
@@ -121,6 +130,7 @@ void main() {
         tts          : tts,
         isForeground : () => shown,
         playInApp    : ( channel ) async => played.add( channel ),
+        vibrate      : () async => buzzes++,
       );
 
       for ( final ( priority, channel ) in const [
@@ -129,6 +139,7 @@ void main() {
         test( "$priority dings inside the app and posts nothing to Android", () async {
           await onScreen( true ).handleIncoming( priority: priority, message: "m", suppressDing: false );
           expect( played, [ channel ] );
+          expect( buzzes, 1, reason: 'vibrate mode must still get a signal, as the system notification gave' );
           verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
         } );
       }
@@ -136,6 +147,7 @@ void main() {
       test( "in the background the notification posts to Android as before", () async {
         await onScreen( false ).handleIncoming( priority: "high", message: "m", suppressDing: false );
         expect( played, isEmpty );
+        expect( buzzes, 0 );
         verify( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).called( 1 );
       } );
 
@@ -147,7 +159,26 @@ void main() {
         await prefs.setMasterMute( true );
         await onScreen( true ).handleIncoming( priority: "medium", message: "m", suppressDing: false );
         expect( played, isEmpty );
+        expect( buzzes, 0 );
         verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
+      } );
+
+      test( "a ding stops the one still playing first, so two close together don't leave audio focus held", () async {
+        final player = _MockAudioPlayer();
+        when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) async {} );
+        when( () => player.stop() ).thenAnswer( ( _ ) async {} );
+        when( () => player.play( any() ) ).thenAnswer( ( _ ) async {} );
+        final ding = InAppDingPlayer( player: player );
+
+        await ding.play( "lupin_high" );
+        await ding.play( "lupin_urgent" );
+
+        final calls = verifyInOrder( [
+          () => player.stop(), () => player.play( captureAny() ),
+          () => player.stop(), () => player.play( captureAny() ),
+        ] );
+        final sources = calls.expand( ( c ) => c.captured ).cast<AssetSource>().map( ( a ) => a.path );
+        expect( sources, [ "audio/lupin_high.mp3", "audio/lupin_urgent.mp3" ] );
       } );
 
       test( "each channel's in-app sound is a bundled asset", () {
