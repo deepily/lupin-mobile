@@ -113,9 +113,9 @@ class NotificationAudioService {
   /// Creates the service; [plugin] and [tts] default to the platform singletons.
   ///
   /// [isForeground] says whether the app is on screen; production passes [appIsInForeground].
-  /// With none, every ding posts to Android. [playInApp] plays a channel's sound inside the app;
-  /// it defaults to an [InAppDingPlayer], built on first use.
-  /// [vibrate] buzzes with the in-app ding, as the system notification did, so vibrate mode still gets a signal.
+  /// With none, every ding posts to Android.
+  /// [playInApp] plays a channel's sound inside the app. It defaults to an [InAppDingPlayer], built on first use.
+  /// [vibrate] buzzes with the in-app ding, as the system notification did. So vibrate mode still gets a signal.
   NotificationAudioService( {
     required NotificationPreferences prefs,
     FlutterLocalNotificationsPlugin? plugin,
