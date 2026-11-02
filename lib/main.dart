@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:audio_session/audio_session.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
 import 'core/di/service_locator.dart';
@@ -12,6 +12,7 @@ import 'services/push/notification_tap_router.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/websocket/ws_reconnect_coordinator.dart';
 import 'app.dart';
+import 'services/audio/lupin_media_handler.dart';
 import 'services/audio/podcast_audio_session.dart';
 import 'services/audio/podcast_cache.dart';
 import 'services/audio/podcast_player_service.dart';
@@ -29,15 +30,20 @@ void main() async {
 
     Logger.info('Lupin Mobile app starting...');
 
-    // Media session + foreground service for podcast playback (row 3469e9db, P3). Must run
-    // before any AudioPlayer is created; the player itself is built lazily on first play.
-    await JustAudioBackground.init(
-      androidNotificationChannelId   : 'ai.deepily.lupin_mobile.podcast',
-      androidNotificationChannelName : 'Podcast playback',
-      androidNotificationOngoing     : true,
-      // The media-button rewind key (earbuds, car, watch) backs up as far as the mini-player's back button (row 807a4ed0).
-      rewindInterval                 : PodcastPlayerService.skipBackInterval,
-    );
+    // The app's one media session: podcast playback with the screen locked (row 3469e9db, P3), and where
+    // earbud presses go. Quick Ask takes the presses while it's on screen (row c643b1b0). Must run before
+    // any AudioPlayer is created; the player itself is built lazily on first play.
+    ServiceLocator.instance.registerSingleton<LupinMediaHandler>( await AudioService.init(
+      builder : () => LupinMediaHandler(
+        // The media-button rewind key (earbuds, car, watch) backs up as far as the mini-player's back button (row 807a4ed0).
+        rewindInterval : PodcastPlayerService.skipBackInterval,
+      ),
+      config  : const AudioServiceConfig(
+        androidNotificationChannelId   : 'ai.deepily.lupin_mobile.podcast',
+        androidNotificationChannelName : 'Podcast playback',
+        androidNotificationOngoing     : true,
+      ),
+    ) );
 
     // A duck from a short spoken alert must arrive as a pause (audio-focus ruling, row 049d914a).
     await configurePodcastAudioSession( await AudioSession.instance );

@@ -30,7 +30,8 @@ dependencies:
   just_audio: ^0.9.40
   # Session config so a duck from a short spoken alert arrives as a pause (row 049d914a)
   audio_session: ^0.1.25
-  just_audio_background: ^0.0.1-beta.13
+  # The app's own media session: the podcast's lock-screen card, and earbud presses for Quick Ask (row c643b1b0)
+  audio_service: ^0.18.19
   permission_handler: ^11.0.1
   # One-shot push-to-talk WAV capture for the focus-mode voice reply (S4).
   # Chosen over the in-tree flutter_sound per OSQ-2 as amended 2026-06-12

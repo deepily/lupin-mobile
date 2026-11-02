@@ -5,14 +5,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/di/service_locator.dart';
 import '../../../core/testing/test_keys.dart';
+import '../../../services/audio/lupin_media_handler.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 import '../../../shared/widgets/prompt_bodies.dart';
 import '../../../shared/widgets/tts_pause_control.dart';
 import '../../queue/domain/job_lifecycle.dart';
+import '../data/hands_free_cues.dart';
 import '../data/quick_ask_models.dart';
 import '../domain/quick_ask_bloc.dart';
 import '../domain/quick_ask_event.dart';
 import '../domain/quick_ask_state.dart';
+import 'earbud_hands_free.dart';
 
 /// Quick Ask: tap, speak a question, tap again to stop, send it, and read the answer.
 ///
@@ -22,6 +25,8 @@ import '../domain/quick_ask_state.dart';
 ///
 /// The record button is a fixed header, not the first list item, so the list below stays a plain scrollback.
 /// The scrollback sits below it with the newest pair on top.
+///
+/// While the screen is open the earbuds drive it too: a tap records or stops and a double tap sends.
 class QuickAskScreen extends StatelessWidget {
   /// Creates the screen.
   const QuickAskScreen( { super.key } );
@@ -32,37 +37,42 @@ class QuickAskScreen extends StatelessWidget {
     // A third stream builder over `pausedStream` in this file would be the defect that sharing prevents.
     final tts = ServiceLocator.get<TtsOrchestrator>();
 
-    return Scaffold(
-      appBar : AppBar(
-        title   : const Text( 'Quick Ask' ),
-        actions : [ TtsPauseToggle(
-          tts       : tts,
-          toggleKey : const Key( TestKeys.quickAskPauseToggle ),
-        ) ],
-      ),
-      body   : BlocBuilder<QuickAskBloc, QuickAskState>(
-        builder: ( context, state ) {
-          return Column(
-            children: [
-              // A user who paused in focus mode arrives here to a stated reason, not a bare icon.
-              // The banner renders nothing when speech is not held.
-              TtsPausedBanner(
-                tts       : tts,
-                bannerKey : const Key( TestKeys.quickAskPausedBanner ),
-                reason    : 'Tap replay on an answer to resume.',
-              ),
-              _RecordHeader( state: state ),
-              // Everything below the fixed header scrolls together.
-              // The interlock surfaces were once fixed children of this column.
-              // On a 320x568 phone the header plus a confirm prompt was already 10 px taller than the body,
-              // and a prompt plus an error was 114 px taller.
-              // A `Column` cannot shrink a non-flexible child, so it overflowed instead of scrolling.
-              // They are now the leading items of the scrollback list, the only arrangement that cannot overflow
-              // whatever combination of them is live.
-              Expanded( child: _Scrollback( state: state, tts: tts ) ),
-            ],
-          );
-        },
+    // The earbuds work here only when the app's media session exists; widget tests that don't register one get none.
+    return EarbudHandsFree(
+      handler : ServiceLocator.isRegistered<LupinMediaHandler>()  ? ServiceLocator.get<LupinMediaHandler>()  : null,
+      cues    : ServiceLocator.isRegistered<HandsFreeCuePlayer>() ? ServiceLocator.get<HandsFreeCuePlayer>() : null,
+      child   : Scaffold(
+        appBar : AppBar(
+          title   : const Text( 'Quick Ask' ),
+          actions : [ TtsPauseToggle(
+            tts       : tts,
+            toggleKey : const Key( TestKeys.quickAskPauseToggle ),
+          ) ],
+        ),
+        body   : BlocBuilder<QuickAskBloc, QuickAskState>(
+          builder: ( context, state ) {
+            return Column(
+              children: [
+                // A user who paused in focus mode arrives here to a stated reason, not a bare icon.
+                // The banner renders nothing when speech is not held.
+                TtsPausedBanner(
+                  tts       : tts,
+                  bannerKey : const Key( TestKeys.quickAskPausedBanner ),
+                  reason    : 'Tap replay on an answer to resume.',
+                ),
+                _RecordHeader( state: state ),
+                // Everything below the fixed header scrolls together.
+                // The interlock surfaces were once fixed children of this column.
+                // On a 320x568 phone the header plus a confirm prompt was already 10 px taller than the body,
+                // and a prompt plus an error was 114 px taller.
+                // A `Column` cannot shrink a non-flexible child, so it overflowed instead of scrolling.
+                // They are now the leading items of the scrollback list, the only arrangement that cannot overflow
+                // whatever combination of them is live.
+                Expanded( child: _Scrollback( state: state, tts: tts ) ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
