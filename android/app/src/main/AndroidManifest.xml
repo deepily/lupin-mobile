@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Podcast playback with the screen locked (just_audio_background): wake lock, foreground service of type mediaPlayback. -->
+    <!-- Podcast playback with the screen locked (audio_service, LupinMediaHandler): wake lock, foreground service of type mediaPlayback. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>

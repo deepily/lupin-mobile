@@ -78,6 +78,8 @@ import '../../features/finished_tasks/domain/finished_tasks_bloc.dart';
 
 import '../../services/artifacts/io_file_service.dart';
 import '../../services/audio/just_audio_playback_engine.dart';
+import '../../services/audio/lupin_media_handler.dart';
+import '../../features/quick_ask/data/hands_free_cues.dart';
 import '../../services/audio/podcast_cache.dart';
 import '../../services/audio/podcast_catalog.dart';
 import '../../features/podcasts/data/podcast_drive_repository.dart';
@@ -578,12 +580,14 @@ class ServiceLocator {
     );
     _getIt.registerSingleton<PodcastPlayerService>(
       PodcastPlayerService(
-        engineFactory : JustAudioPlaybackEngine.new,
+        engineFactory : () => JustAudioPlaybackEngine( handler: _getIt<LupinMediaHandler>() ),
         cacheFactory  : () => _getIt<PodcastCache>(),
         linkProbe     : currentPodcastLink,
         ttsFactory    : () => _getIt<TtsOrchestrator>(),
       )..followSpeech( _getIt<TtsOrchestrator>().speakingStream ),
     );
+    // The tones Quick Ask's hands-free mode plays for each earbud gesture (row c643b1b0).
+    _getIt.registerLazySingleton<HandsFreeCuePlayer>( ToneCuePlayer.new );
   }
 
   /// Registers repositories; the legacy stack is disabled, so there is nothing to do.

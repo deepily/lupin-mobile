@@ -1439,7 +1439,7 @@
     "test/unit/services/asr/voice_capture_session_test.dart::stopAndTranscribe a failed upload surfaces the message and is not stale",
     "test/unit/services/asr/voice_capture_session_test.dart::stopAndTranscribe speech comes back as the transcript",
     "test/unit/services/audio/just_audio_playback_engine_test.dart::default constructor builds its own player lazily-safe",
-    "test/unit/services/audio/just_audio_playback_engine_test.dart::load sets a tagged file source; transport calls pass through",
+    "test/unit/services/audio/just_audio_playback_engine_test.dart::load sets a file source and shows the track; transport calls pass through",
     "test/unit/services/audio/just_audio_playback_engine_test.dart::streams map to the player's streams",
     "test/unit/services/audio/podcast_player_service_test.dart::a load failure becomes an error state",
     "test/unit/services/audio/podcast_player_service_test.dart::audio focus for spoken TTS a listener who resumes, stops or switches during speech is not overridden",
