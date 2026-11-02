@@ -52,6 +52,7 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   String?                   _driveError;
   PodcastDriveRepository?   _drive;
   PodcastCache?             _cache;
+  final Set<String>         _busy        = {};
   final Set<String>         _downloading = {};
 
   @override
@@ -103,31 +104,41 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   ///
   /// Ensures:
   ///   - on Wi-Fi it downloads at once; on mobile data only after the listener taps Download
-  ///   - with no connection, or when the download fails, a message says so and nothing is kept
+  ///   - with no connection, an unreadable connection, or a failed download, a message says so
+  ///     and nothing is kept
   ///   - the title is saved, so the phone's list shows it
-  ///   - a second tap while the same podcast downloads does nothing
+  ///   - a second tap before the first one ends does nothing
+  ///   - the row shows a spinner while the file downloads
   Future<void> _download( PodcastCache cache, String url, String title ) async {
     final name = podcastCacheName( url );
-    if ( _downloading.contains( name ) ) return;
+    if ( !_busy.add( name ) ) return;
     final messenger = ScaffoldMessenger.of( context );
-    final link      = await ( widget.linkProbe ?? currentPodcastLink )();
-    if ( link == PodcastLink.offline ) {
-      messenger.showSnackBar( const SnackBar( content: Text( "There is no connection, so nothing can download." ) ) );
-      return;
-    }
-    if ( link == PodcastLink.metered ) {
-      if ( !mounted ) return;
-      if ( !await showPodcastDataSheet( context, title ) ) return;
-    }
-    if ( !mounted ) return;
-    setState( () => _downloading.add( name ) );
     try {
+      final PodcastLink link;
+      try {
+        link = await ( widget.linkProbe ?? currentPodcastLink )();
+      } catch ( e ) {
+        debugPrint( "[PodcastList] connection check failed: $e" );
+        messenger.showSnackBar( const SnackBar( content: Text( "Could not check the connection, so nothing downloaded." ) ) );
+        return;
+      }
+      if ( link == PodcastLink.offline ) {
+        messenger.showSnackBar( const SnackBar( content: Text( "There is no connection, so nothing can download." ) ) );
+        return;
+      }
+      if ( link == PodcastLink.metered ) {
+        if ( !mounted ) return;
+        if ( !await showPodcastDataSheet( context, title ) ) return;
+      }
+      if ( !mounted ) return;
+      setState( () => _downloading.add( name ) );
       await widget.catalog.rememberTitle( url, title );
       await cache.fetch( audioPathOf( url ), name );
     } catch ( e ) {
       debugPrint( "[PodcastList] download of $url failed: $e" );
       messenger.showSnackBar( SnackBar( content: Text( "Could not download $title. Tap download to try again." ) ) );
     } finally {
+      _busy.remove( name );
       if ( mounted ) setState( () => _downloading.remove( name ) );
     }
   }

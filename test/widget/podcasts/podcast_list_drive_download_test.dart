@@ -80,6 +80,44 @@ void main() {
     expect( cache.savedTitles[ name ], "Desktop explainer" );
     expect( _key( TestKeys.podcastDriveDownloadedPrefix ), findsOneWidget );
     expect( _key( TestKeys.podcastDriveDownloadPrefix ), findsNothing );
+    expect( find.byKey( Key( "${TestKeys.podcastListRowPrefix}$name" ) ), findsOneWidget );
+  } );
+
+  testWidgets( "the mark appears as soon as the cache reports the file", ( t ) async {
+    await open( t );
+
+    await cache.fetch( _stream, podcastCacheName( _stream ) );
+    await t.pumpAndSettle();
+
+    expect( _key( TestKeys.podcastDriveDownloadedPrefix ), findsOneWidget );
+  } );
+
+  testWidgets( "two quick taps on mobile data open one sheet, not two", ( t ) async {
+    link = PodcastLink.metered;
+    await open( t );
+
+    await t.tap( _key( TestKeys.podcastDriveDownloadPrefix ) );
+    await t.tap( _key( TestKeys.podcastDriveDownloadPrefix ) );
+    await t.pumpAndSettle();
+    expect( find.byKey( const Key( TestKeys.podcastDataSheet ) ), findsOneWidget );
+  } );
+
+  testWidgets( "a connection check that throws says so and the button comes back", ( t ) async {
+    await t.pumpWidget( MaterialApp( home: PodcastListScreen(
+      catalog  : PodcastCatalog( cache ),
+      drive    : _FakeDrive( _folders ),
+      cache    : cache,
+      linkProbe: () async => throw Exception( "no plugin" ),
+      onPlay   : ( _, __ ) async {},
+    ) ) );
+    await t.pumpAndSettle();
+
+    await t.tap( _key( TestKeys.podcastDriveDownloadPrefix ) );
+    await t.pumpAndSettle();
+
+    expect( find.textContaining( "Could not check the connection" ), findsOneWidget );
+    expect( _key( TestKeys.podcastDriveDownloadPrefix ), findsOneWidget );
+    expect( cache.fetched, isEmpty );
   } );
 
   testWidgets( "a podcast already on the phone shows the mark and no download button", ( t ) async {

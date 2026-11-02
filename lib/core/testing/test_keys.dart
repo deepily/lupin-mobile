@@ -586,7 +586,7 @@ class TestKeys {
   static const podcastDrivePlayPrefix    = 'podcast.drive.play.';
   /// Prefix of a Drive row's download button; `<job folder>/<Drive file id>` follows.
   static const podcastDriveDownloadPrefix    = 'podcast.drive.download.';
-  /// Prefix of the spinner a Drive row shows while it downloads; `<job folder>/<Drive file id>` follows.
+  /// Prefix of a Drive row's download spinner; `<job folder>/<Drive file id>` follows.
   static const podcastDriveDownloadingPrefix = 'podcast.drive.downloading.';
   /// Prefix of a Drive row's on-this-phone mark; `<job folder>/<Drive file id>` follows.
   static const podcastDriveDownloadedPrefix  = 'podcast.drive.downloaded.';
