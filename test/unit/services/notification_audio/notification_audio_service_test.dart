@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:ui' show VoidCallback;
+import 'dart:io';
+import 'dart:ui' show AppLifecycleState, VoidCallback;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -110,6 +111,56 @@ void main() {
       verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
     } );
 
+    group( "while the app is on screen", () {
+      late List<String> played;
+      setUp( () => played = [] );
+
+      NotificationAudioService onScreen( bool shown ) => NotificationAudioService(
+        prefs        : prefs,
+        plugin       : fln,
+        tts          : tts,
+        isForeground : () => shown,
+        playInApp    : ( channel ) async => played.add( channel ),
+      );
+
+      for ( final ( priority, channel ) in const [
+        ( "medium", "lupin_medium" ), ( "high", "lupin_high" ), ( "urgent", "lupin_urgent" ),
+      ] ) {
+        test( "$priority dings inside the app and posts nothing to Android", () async {
+          await onScreen( true ).handleIncoming( priority: priority, message: "m", suppressDing: false );
+          expect( played, [ channel ] );
+          verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
+        } );
+      }
+
+      test( "in the background the notification posts to Android as before", () async {
+        await onScreen( false ).handleIncoming( priority: "high", message: "m", suppressDing: false );
+        expect( played, isEmpty );
+        verify( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) ).called( 1 );
+      } );
+
+      test( "the ding switches, master mute and suppress_ding still silence it", () async {
+        await prefs.setDingOnHigh( false );
+        await onScreen( true ).handleIncoming( priority: "high", message: "m", suppressDing: false );
+        await onScreen( true ).handleIncoming( priority: "urgent", message: "m", suppressDing: true );
+        await onScreen( true ).handleIncoming( priority: "low", message: "m", suppressDing: false );
+        await prefs.setMasterMute( true );
+        await onScreen( true ).handleIncoming( priority: "medium", message: "m", suppressDing: false );
+        expect( played, isEmpty );
+        verifyNever( () => fln.show( any(), any(), any(), any(), payload: any( named: 'payload' ) ) );
+      } );
+
+      test( "each channel's in-app sound is a bundled asset", () {
+        for ( final channel in const [ "lupin_medium", "lupin_high", "lupin_urgent" ] ) {
+          final asset = InAppDingPlayer.assetFor( channel );
+          expect( File( "assets/$asset" ).existsSync(), isTrue, reason: asset );
+          expect( File( "assets/$asset" ).readAsBytesSync(),
+              File( "android/app/src/main/res/raw/$channel.mp3" ).readAsBytesSync(),
+              reason: "the in-app ding must sound like the notification" );
+        }
+      } );
+    } );
+
     test( "handleIncoming never calls tts.speak() directly anymore", () async {
       // Speech dispatch has moved to TtsOrchestrator. Protect against
       // regression: if anyone re-adds a speech branch here, this test
@@ -119,6 +170,23 @@ void main() {
       );
       await Future<void>.delayed( const Duration( milliseconds: 350 ) );
       verifyNever( () => tts.speak( any() ) );
+    } );
+  } );
+
+  group( "appIsInForeground", () {
+    testWidgets( "on screen when resumed or under the shade, not when hidden or paused", ( tester ) async {
+      final b = tester.binding;
+      b.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
+      expect( appIsInForeground(), isTrue );
+      b.handleAppLifecycleStateChanged( AppLifecycleState.inactive );
+      expect( appIsInForeground(), isTrue );
+      b.handleAppLifecycleStateChanged( AppLifecycleState.hidden );
+      expect( appIsInForeground(), isFalse );
+      b.handleAppLifecycleStateChanged( AppLifecycleState.paused );
+      expect( appIsInForeground(), isFalse );
+      b.handleAppLifecycleStateChanged( AppLifecycleState.hidden );
+      b.handleAppLifecycleStateChanged( AppLifecycleState.inactive );
+      b.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
     } );
   } );
 
