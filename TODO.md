@@ -1,11 +1,24 @@
 # TODO
 
-## Resume here: 2026-10-31 close (Tiffany)
+## Resume here: 2026-11-01 close (Tiffany)
+
+Drive podcasts, approve links and offline download are done: three rows closed, APK build 3 at `fefb4f4`. One held row on my board waits for Rick: `50ce6d46`, the missing "Other" option on multiple-choice asks.
+
+- [x] Archive history.md: done, 2026-09-19 to 10-05 moved to `history/`.
+- [x] A podcasts list showing every generated podcast: done through Google Drive (row `dc0dafdc`).
+- [ ] Possible next step, not yet a row: a "Download all" button for the Drive section, and playing while the file downloads. Rick heard both offered and asked only for the per-row button.
+- [ ] Watch for Mr. Radio's server fix that removes the date prefix from Drive titles. The phone leaves it as the server sends it.
+
+### Decisions Log — 2026-11-01 (session `6b2f0ab0`, Tiffany)
+
+- Rick: the phone lists Drive through a server endpoint that uses the desktop's Google token, with no Google sign-in on the phone. The phone's Firebase project differs from the desktop's Drive project. This replaces the 10-31 ruling that Drive was for the desktop only.
+- Rick: use the one-click approve link for every new held row, with the 📄 view link beside it (task-store-discipline §3.2).
+- Rick: a download button on every Drive podcast, so it can be kept on the phone over Wi-Fi and played without mobile data (row `6430afac`).
+
+## Earlier: 2026-10-31 close (Tiffany)
 
 The podcast loop on the phone is done: seven rows closed, APK build 7 at `243aea6`. The plan and the explainer are in `src/rnd/2026.10.31-explainer-to-podcast-phone-loop-plan.md`. No live rows on my board.
 
-- [ ] Archive history.md: about 18.4k tokens after tonight, deferred twice now. Do it first next session.
-- [ ] Possible next step, not yet a row: a podcasts list that shows **every** generated podcast. It would need a server listing endpoint or a query of past notifications. Today the list shows only what the phone heard while open, plus downloads.
 - [ ] Possible next step, not yet a row: double tap on the earbuds to rewind. It needs our own audio_service handler in place of just_audio_background (medium cost, research at `39907c0`).
 
 ### Decisions Log — 2026-10-31 (session `e3be888f`, Tiffany)
