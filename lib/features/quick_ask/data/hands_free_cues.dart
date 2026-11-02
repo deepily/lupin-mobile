@@ -32,8 +32,14 @@ class ToneCuePlayer implements HandsFreeCuePlayer {
     ) );
   }
 
+  /// Plays [cue], cutting off one still playing.
+  ///
+  /// Each `play` takes audio focus again and audioplayers releases only the latest request, so the stop keeps focus from leaking.
   @override
-  Future<void> play( HandsFreeCue cue ) => _player.play( BytesSource( _tones[ cue ]! ) );
+  Future<void> play( HandsFreeCue cue ) async {
+    await _player.stop();
+    await _player.play( BytesSource( _tones[ cue ]! ) );
+  }
 }
 
 /// The tones, as mono 16-bit PCM WAV bytes.

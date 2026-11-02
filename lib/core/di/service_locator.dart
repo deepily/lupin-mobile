@@ -206,6 +206,8 @@ class ServiceLocator {
       NotificationAudioService(
         prefs             : _getIt<NotificationPreferences>(),
         onNotificationTap : notificationTapSink( _getIt<NotificationTapRouter>() ),
+        // While the app is on screen a notification only dings; it doesn't drop a banner over the app.
+        isForeground      : appIsInForeground,
       );
 
   /// Builds a new [FleetStatusBloc] on every call; it is never a singleton.

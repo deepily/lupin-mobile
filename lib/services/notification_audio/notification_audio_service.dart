@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -21,7 +24,49 @@ class _Channels {
   static const urgent = 'lupin_urgent';
 }
 
+/// Whether the app is on screen: resumed, or inactive under the shade or a system dialog.
+///
+/// It is the production [NotificationAudioService.isForeground]. It needs the app's binding, so tests inject their own.
+bool appIsInForeground() {
+  final state = WidgetsBinding.instance.lifecycleState;
+  return state == AppLifecycleState.resumed || state == AppLifecycleState.inactive;
+}
+
+/// Plays a priority's ding inside the app, with no system notification.
+///
+/// The sounds are the channel sounds, bundled again as assets, because Android raw resources can't be played from Dart.
+/// They play on the notification stream, so the ringer's silent mode still silences them.
+class InAppDingPlayer {
+  final AudioPlayer _player;
+
+  /// Creates the player; [player] is a test seam, production passes nothing.
+  InAppDingPlayer( { AudioPlayer? player } ) : _player = player ?? AudioPlayer() {
+    _player.setAudioContext( const AudioContext(
+      android: AudioContextAndroid(
+        contentType : AndroidContentType.sonification,
+        usageType   : AndroidUsageType.notification,
+        audioFocus  : AndroidAudioFocus.gainTransientMayDuck,
+      ),
+    ) );
+  }
+
+  /// The asset path of [channelId]'s sound, under `assets/`.
+  static String assetFor( String channelId ) => 'audio/$channelId.mp3';
+
+  /// Plays [channelId]'s sound, cutting off one still playing.
+  ///
+  /// The stop matters: each `play` takes audio focus again, and audioplayers releases only the latest request.
+  /// Without it two overlapping dings left focus held, and a podcast paused by the first never resumed.
+  Future<void> play( String channelId ) async {
+    await _player.stop();
+    await _player.play( AssetSource( assetFor( channelId ) ) );
+  }
+}
+
 /// Plays a ding for each incoming notification, one sound per priority tier.
+///
+/// While the app is on screen the ding plays inside the app and nothing is posted to Android.
+/// So no banner drops over the screen the user is already looking at. In the background it posts as before.
 ///
 /// High and urgent notifications are also spoken, by `TtsOrchestrator`.
 /// Mirrors the Lupin web client (`src/fastapi_app/static/js/notifications.js`). `NotificationBloc._onExternalUpdate`
@@ -30,6 +75,9 @@ class NotificationAudioService {
   final FlutterLocalNotificationsPlugin _fln;
   final FlutterTts                      _tts;
   final NotificationPreferences         _prefs;
+  final bool Function()?                _isForeground;
+  final Future<void> Function( String channelId )? _playInApp;
+  final Future<void> Function()                    _vibrate;
   bool _initialized = false;
   bool _handlersSet = false;
   Completer<void>? _utteranceDone;
@@ -56,16 +104,33 @@ class NotificationAudioService {
   @visibleForTesting
   bool get hasTapCallback => _onNotificationTap != null;
 
+  /// Wiring probe for the foreground check, for the same reason as [hasTapCallback].
+  ///
+  /// A service built without one posts every ding to Android, banners included, and nothing else would notice.
+  @visibleForTesting
+  bool get hasForegroundProbe => _isForeground != null;
+
   /// Creates the service; [plugin] and [tts] default to the platform singletons.
+  ///
+  /// [isForeground] says whether the app is on screen; production passes [appIsInForeground].
+  /// With none, every ding posts to Android.
+  /// [playInApp] plays a channel's sound inside the app. It defaults to an [InAppDingPlayer], built on first use.
+  /// [vibrate] buzzes with the in-app ding, as the system notification did. So vibrate mode still gets a signal.
   NotificationAudioService( {
     required NotificationPreferences prefs,
     FlutterLocalNotificationsPlugin? plugin,
     FlutterTts?                      tts,
     DidReceiveNotificationResponseCallback? onNotificationTap,
+    bool Function()?                 isForeground,
+    Future<void> Function( String channelId )? playInApp,
+    Future<void> Function()?         vibrate,
     this.speakAcceptBudget = const Duration( seconds: 10 ),
     Duration? completionBound,
   } ) : _completionBound = completionBound,
        _prefs = prefs,
+       _isForeground = isForeground,
+       _playInApp = playInApp,
+       _vibrate   = vibrate ?? HapticFeedback.vibrate,
        _onNotificationTap = onNotificationTap,
        _fln   = plugin ?? FlutterLocalNotificationsPlugin(),
        _tts   = tts    ?? FlutterTts();
@@ -137,13 +202,18 @@ class NotificationAudioService {
     final shouldDing = !suppressDing && _dingEnabledFor( priority );
 
     if ( shouldDing ) {
-      await _showDing(
-        priority       : priority,
-        title          : title,
-        body           : message,
-        notificationId : notificationId,
-        senderId       : senderId,
-      );
+      if ( _isForeground?.call() ?? false ) {
+        await _vibrate();
+        await ( _playInApp ?? _defaultPlayInApp )( _channelFor( priority ) );
+      } else {
+        await _showDing(
+          priority       : priority,
+          title          : title,
+          body           : message,
+          notificationId : notificationId,
+          senderId       : senderId,
+        );
+      }
     }
 
     // Speech is not dispatched from here. `TtsOrchestrator` owns all speech, ElevenLabs first and `flutter_tts`
@@ -271,6 +341,10 @@ class NotificationAudioService {
       ).encode(),
     );
   }
+
+  InAppDingPlayer? _inAppPlayer;
+
+  Future<void> _defaultPlayInApp( String channelId ) => ( _inAppPlayer ??= InAppDingPlayer() ).play( channelId );
 
   String _channelFor( String priority ) {
     switch ( priority ) {

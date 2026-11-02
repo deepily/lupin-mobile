@@ -4,6 +4,8 @@ library;
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,6 +13,8 @@ import 'package:lupin_mobile/features/quick_ask/data/hands_free_cues.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/earbud_taps.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_event.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_state.dart';
+
+class _MockAudioPlayer extends Mock implements AudioPlayer {}
 
 void main() {
   group( 'EarbudTapReader', () {
@@ -110,6 +114,26 @@ void main() {
       expect( earbudAction( EarbudGesture.single, offline ), ( event: null, cue: HandsFreeCue.refused ) );
       const busy = QuickAskState( connected: true, liveJobId: 'job-1', phase: QuickAskPhase.waiting );
       expect( earbudAction( EarbudGesture.single, busy ), ( event: null, cue: HandsFreeCue.refused ) );
+    } );
+  } );
+
+  group( 'ToneCuePlayer', () {
+    test( 'a cue stops the one still playing first, so audio focus is not left held', () async {
+      registerFallbackValue( BytesSource( Uint8List( 0 ) ) );
+      registerFallbackValue( const AudioContext() );
+      final player = _MockAudioPlayer();
+      when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) async {} );
+      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
+      when( () => player.play( any() ) ).thenAnswer( ( _ ) async {} );
+      final cues = ToneCuePlayer( player: player );
+
+      await cues.play( HandsFreeCue.started );
+      await cues.play( HandsFreeCue.stopped );
+
+      verifyInOrder( [
+        () => player.stop(), () => player.play( any() ),
+        () => player.stop(), () => player.play( any() ),
+      ] );
     } );
   } );
 
