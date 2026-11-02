@@ -3,6 +3,7 @@
 /// It answers `{"answers": {header: value}}`, as the focus pane does.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:bloc_test/bloc_test.dart';
@@ -129,6 +130,58 @@ void main() {
     await mount( tester, _single );
     final body = tester.widget<MultiQuestionPromptBody>( find.byType( MultiQuestionPromptBody ) );
     expect( body.dictate, isFalse );
+  } );
+
+  // A new prompt can replace an unanswered one in place; nothing of the old one may carry over.
+  group( 'a new prompt replacing an unanswered one', () {
+    QuickAskState prompt( String id, Map<String, dynamic> options ) => QuickAskState( connected: true,
+        pendingPrompt: QuickAskPrompt(
+          id: id, question: 'Pick', responseType: 'multiple_choice', responseOptions: options ) );
+
+    const regions = {
+      'questions': [
+        { 'question': 'Where?', 'header': 'Region', 'options': [ { 'label': 'us' }, { 'label': 'eu' } ] },
+      ],
+    };
+    const two = {
+      'questions': [
+        { 'question': 'A?', 'header': 'A', 'options': [ { 'label': 'x' } ] },
+        { 'question': 'B?', 'header': 'B', 'options': [ { 'label': 'y' } ] },
+      ],
+    };
+
+    Future<StreamController<QuickAskState>> mountLive( WidgetTester tester, QuickAskState first ) async {
+      final ctrl = StreamController<QuickAskState>();
+      addTearDown( ctrl.close );
+      whenListen( bloc, ctrl.stream, initialState: first );
+      await tester.pumpWidget( MaterialApp(
+        home: BlocProvider<QuickAskBloc>.value( value: bloc, child: const QuickAskScreen() ),
+      ) );
+      await tester.pump();
+      return ctrl;
+    }
+
+    testWidgets( 'one with more questions draws without crashing', ( tester ) async {
+      final ctrl = await mountLive( tester, prompt( 'p1', _single ) );
+      ctrl.add( prompt( 'p2', two ) );
+      await tester.pump();
+      await tester.pump();
+
+      expect( tester.takeException(), isNull );
+      expect( find.text( 'A?' ), findsOneWidget );
+      expect( find.text( 'B?' ), findsOneWidget );
+    } );
+
+    testWidgets( 'the old pick is not sent under the new question', ( tester ) async {
+      final ctrl = await mountLive( tester, prompt( 'p1', _single ) );
+      await tapVisible( tester, find.text( 'SQLite' ) );
+      ctrl.add( prompt( 'p2', regions ) );
+      await tester.pump();
+      await tester.pump();
+      await tapVisible( tester, find.byKey( submit ) );
+
+      expect( sentAnswer(), { 'answers': { 'Region': '' } } );
+    } );
   } );
 
   testWidgets( 'a multiple-choice ask with no questions still gets the free-text box', ( tester ) async {

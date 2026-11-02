@@ -343,7 +343,7 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
 /// This host picks the endpoint.
 class _PendingPrompt extends StatelessWidget {
   final QuickAskPrompt prompt;
-  const _PendingPrompt( { required this.prompt } );
+  const _PendingPrompt( { super.key, required this.prompt } );
 
   @override
   Widget build( BuildContext context ) {
@@ -611,8 +611,11 @@ class _ScrollbackState extends State<_Scrollback> {
     //
     // Keep these in lockstep with `_leadingTags` above: same conditions, same order.
     // The tags drive the re-anchor and these draw it.
+    // The prompt is keyed by its id: a new prompt can replace an unanswered one at the same
+    // index, and reusing its state would carry the old picks and text into the new question.
     final leading = <Widget>[
-      if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
+      if ( state.pendingPrompt != null )
+        _PendingPrompt( key: ValueKey( state.pendingPrompt!.id ), prompt: state.pendingPrompt! ),
       if ( state.interview != null )     _InterviewPrompt( interview: state.interview! ),
       if ( state.errorMessage != null )  _InlineError( message: state.errorMessage! ),
       if ( state.lost )                  const _LostBanner(),
