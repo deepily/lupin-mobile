@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -341,13 +343,16 @@ class _PulsingMicState extends State<_PulsingMic> with SingleTickerProviderState
 /// This host picks the endpoint.
 class _PendingPrompt extends StatelessWidget {
   final QuickAskPrompt prompt;
-  const _PendingPrompt( { required this.prompt } );
+  const _PendingPrompt( { super.key, required this.prompt } );
 
   @override
   Widget build( BuildContext context ) {
     final scheme = Theme.of( context ).colorScheme;
     void respond( String v ) =>
         context.read<QuickAskBloc>().add( QuickAskPromptAnswered( v ) );
+    final questions = prompt.responseType == 'multiple_choice'
+        ? ( prompt.responseOptions?[ 'questions' ] as List? )?.cast<dynamic>() ?? const <dynamic>[]
+        : const <dynamic>[];
 
     return Container(
       key     : const Key( TestKeys.quickAskPrompt ),
@@ -380,10 +385,18 @@ class _PendingPrompt extends StatelessWidget {
             ],
           ),
           // The near-match confirm is always yes or no.
+          // A canonical multiple-choice ask nests its questions under `questions[]`; it gets
+          // its options and Other, and answers `{"answers": {header: value}}` like the focus pane.
           // Anything else on this channel gets a free-text box rather than a dead end,
           // because a string is a valid `response_value` for every type.
           if ( prompt.isYesNo )
             YesNoPromptBody( onRespond: respond, dictate: false )
+          else if ( questions.isNotEmpty )
+            MultiQuestionPromptBody(
+              questions : questions,
+              dictate   : false,
+              onRespond : ( v ) => respond( jsonEncode( { 'answers': v } ) ),
+            )
           else
             OpenEndedPromptBody( onRespond: respond, dictate: false ),
         ],
@@ -598,8 +611,11 @@ class _ScrollbackState extends State<_Scrollback> {
     //
     // Keep these in lockstep with `_leadingTags` above: same conditions, same order.
     // The tags drive the re-anchor and these draw it.
+    // The prompt is keyed by its id: a new prompt can replace an unanswered one at the same
+    // index, and reusing its state would carry the old picks and text into the new question.
     final leading = <Widget>[
-      if ( state.pendingPrompt != null ) _PendingPrompt( prompt: state.pendingPrompt! ),
+      if ( state.pendingPrompt != null )
+        _PendingPrompt( key: ValueKey( state.pendingPrompt!.id ), prompt: state.pendingPrompt! ),
       if ( state.interview != null )     _InterviewPrompt( interview: state.interview! ),
       if ( state.errorMessage != null )  _InlineError( message: state.errorMessage! ),
       if ( state.lost )                  const _LostBanner(),
