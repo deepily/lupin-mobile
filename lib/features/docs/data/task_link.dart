@@ -1,6 +1,7 @@
 /// Recognises the task links a session writes into a card abstract.
 ///
-/// The line is `- <title> [approve ☐](/app/tasks/approve?row=<uuid>) [📄](/app/tasks/view?row=<uuid>)`.
+/// The line is `- <title> [approve ☐](/app/tasks/approve?row=<uuid>) [📋](/app/tasks/view?row=<uuid>)`.
+/// Older lines still in notification history label the view link 📄 instead; both work.
 /// A link is recognised by its address, never by its label. It imports neither Flutter nor IO.
 
 library;
