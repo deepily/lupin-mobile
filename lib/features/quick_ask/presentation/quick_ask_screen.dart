@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -348,6 +350,9 @@ class _PendingPrompt extends StatelessWidget {
     final scheme = Theme.of( context ).colorScheme;
     void respond( String v ) =>
         context.read<QuickAskBloc>().add( QuickAskPromptAnswered( v ) );
+    final questions = prompt.responseType == 'multiple_choice'
+        ? ( prompt.responseOptions?[ 'questions' ] as List? )?.cast<dynamic>() ?? const <dynamic>[]
+        : const <dynamic>[];
 
     return Container(
       key     : const Key( TestKeys.quickAskPrompt ),
@@ -380,10 +385,18 @@ class _PendingPrompt extends StatelessWidget {
             ],
           ),
           // The near-match confirm is always yes or no.
+          // A canonical multiple-choice ask nests its questions under `questions[]`; it gets
+          // its options and Other, and answers `{"answers": {header: value}}` like the focus pane.
           // Anything else on this channel gets a free-text box rather than a dead end,
           // because a string is a valid `response_value` for every type.
           if ( prompt.isYesNo )
             YesNoPromptBody( onRespond: respond, dictate: false )
+          else if ( questions.isNotEmpty )
+            MultiQuestionPromptBody(
+              questions : questions,
+              dictate   : false,
+              onRespond : ( v ) => respond( jsonEncode( { 'answers': v } ) ),
+            )
           else
             OpenEndedPromptBody( onRespond: respond, dictate: false ),
         ],

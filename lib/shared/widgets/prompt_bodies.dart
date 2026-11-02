@@ -292,11 +292,17 @@ class MultiQuestionPromptBody extends StatefulWidget {
   /// `List<String>` for a multi-select one.
   final void Function( Map<String, dynamic> ) onRespond;
 
-  /// Creates the body over [questions].
+  /// Whether the text boxes offer dictation; false gives plain text boxes.
+  ///
+  /// Quick Ask passes false, because its bloc owns a recorder on the same screen.
+  final bool dictate;
+
+  /// Creates the body over [questions]; [dictate] defaults to true.
   const MultiQuestionPromptBody( {
     super.key,
     required this.questions,
     required this.onRespond,
+    this.dictate = true,
   } );
 
   @override
@@ -411,6 +417,7 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
       // box's mic while one records.
       return DictationTextField(
         controller: _text[ i ]!,
+        dictate   : widget.dictate,
         decoration: InputDecoration(
           labelText: _question( q ),
           border   : const OutlineInputBorder(),
@@ -475,6 +482,7 @@ class _MultiQuestionPromptBodyState extends State<MultiQuestionPromptBody> {
           ),
         DictationTextField(
           controller : _other[ i ]!,
+          dictate    : widget.dictate,
           fieldKey   : Key( '${TestKeys.promptMultiQuestionOtherFieldPrefix}$i' ),
           decoration : const InputDecoration(
             hintText : "Type or speak custom answer...",
