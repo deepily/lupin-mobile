@@ -38,6 +38,16 @@ class FakePodcastCache extends PodcastCache {
 
   @override Future<File?> lookup( String name ) async => files[ name ];
 
+  /// Every name passed to [delete], in order.
+  final List<String>        deleted = [];
+
+  @override
+  Future<void> delete( String name ) async {
+    deleted.add( name );
+    files.remove( name );
+    notifyListeners();
+  }
+
   @override
   Future<File> fetch( String serverPath, String name ) async {
     fetched.add( [ serverPath, name ] );

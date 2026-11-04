@@ -7,6 +7,7 @@ import '../../core/testing/test_keys.dart';
 import '../../services/audio/podcast_cache.dart';
 import '../../services/audio/podcast_catalog.dart';
 import '../../services/audio/podcast_link.dart';
+import '../../services/audio/podcast_player_service.dart';
 import '../artifacts/podcast_download_sheet.dart';
 import '../artifacts/podcast_play.dart';
 import 'data/podcast_drive_repository.dart';
@@ -17,8 +18,11 @@ import 'data/podcast_drive_repository.dart';
 /// with no network. The Drive rows are listed live by the server; when that list fails, the
 /// phone's rows still show and the Drive section says why.
 ///
-/// Each Drive row has a download button that keeps the podcast on the phone, so Play needs no
-/// network later. On mobile data it asks first, with the same sheet Play uses.
+/// Each Drive row has one button. Download keeps the podcast on the phone, so Play needs no
+/// network later; on mobile data it asks first, with the same sheet Play uses. Once the podcast
+/// is on the phone the button is Delete, which removes only the phone's copy, never the Drive file.
+/// Delete asks nothing; it shows a snackbar with Undo, and the copy goes when the snackbar ends.
+/// A podcast that is playing keeps playing and its copy goes when the player stops or moves on.
 class PodcastListScreen extends StatefulWidget {
   /// The podcasts to list.
   final PodcastCatalog catalog;
@@ -39,8 +43,13 @@ class PodcastListScreen extends StatefulWidget {
   /// Reads how the phone is connected before a download; null reads the real connection.
   final Future<PodcastLink> Function()? linkProbe;
 
+  /// The app-wide player, asked which podcast is playing; null uses the registered player.
+  ///
+  /// With none registered, a delete never waits for playback.
+  final PodcastPlayerService? player;
+
   /// Creates the screen.
-  const PodcastListScreen( { super.key, required this.catalog, this.onPlay, this.drive, this.cache, this.linkProbe } );
+  const PodcastListScreen( { super.key, required this.catalog, this.onPlay, this.drive, this.cache, this.linkProbe, this.player } );
 
   @override
   State<PodcastListScreen> createState() => _PodcastListScreenState();
@@ -54,12 +63,19 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   PodcastCache?             _cache;
   final Set<String>         _busy        = {};
   final Set<String>         _downloading = {};
+  PodcastPlayerService?     _player;
+
+  /// Names deleted but not yet gone; the row shows Download for each.
+  ///
+  /// A name stays here through the Undo window and, when it is playing, until playback ends.
+  final Set<String>         _pending     = {};
 
   @override
   void initState() {
     super.initState();
     _drive = widget.drive ?? ( ServiceLocator.isRegistered<PodcastDriveRepository>() ? ServiceLocator.get<PodcastDriveRepository>() : null );
     _cache = widget.cache ?? ( ServiceLocator.isRegistered<PodcastCache>() ? ServiceLocator.get<PodcastCache>() : null );
+    _player = widget.player ?? ( ServiceLocator.isRegistered<PodcastPlayerService>() ? ServiceLocator.get<PodcastPlayerService>() : null );
     widget.catalog.addListener( _reload );
     _reload();
     unawaited( _reloadDrive() );
@@ -143,6 +159,52 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
     }
   }
 
+  /// Hides the phone's copy of [name] at once and deletes it after the Undo window.
+  ///
+  /// Ensures:
+  ///   - the row shows Download straight away and a snackbar offers Undo
+  ///   - Undo keeps the copy; so does tapping Download before the copy is gone
+  ///   - the Drive file is never touched
+  void _delete( PodcastCache cache, String name, String title ) {
+    if ( !_pending.add( name ) ) return;
+    setState( () {} );
+    final messenger = ScaffoldMessenger.of( context );
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar( SnackBar(
+      content : Text( "Deleted $title from this phone." ),
+      duration: const Duration( seconds: 5 ),
+      action  : SnackBarAction(
+        key    : const Key( TestKeys.podcastDriveDeleteUndo ),
+        label  : "Undo",
+        onPressed: () { if ( _pending.remove( name ) && mounted ) setState( () {} ); },
+      ),
+    ) ).closed.then( ( reason ) {
+      if ( reason != SnackBarClosedReason.action ) unawaited( _finishDelete( cache, name ) );
+    } );
+  }
+
+  /// Deletes the copy of [name] now, or after playback ends if it is playing.
+  Future<void> _finishDelete( PodcastCache cache, String name ) async {
+    if ( !_pending.contains( name ) ) return;
+    final player = _player;
+    if ( player != null && player.trackId == name && player.hasTrack ) {
+      void onChange() {
+        if ( player.trackId == name && player.hasTrack ) return;
+        player.removeListener( onChange );
+        unawaited( _finishDelete( cache, name ) );
+      }
+      player.addListener( onChange );
+      return;
+    }
+    try {
+      if ( _pending.contains( name ) ) await cache.delete( name );
+    } catch ( e ) {
+      debugPrint( "[PodcastList] delete of $name failed: $e" );
+    }
+    _pending.remove( name );
+    if ( mounted ) setState( () {} );
+  }
+
   @override
   Widget build( BuildContext context ) {
     final play = widget.onPlay ?? podcastPlayFor( context: context );
@@ -213,7 +275,7 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       final many    = folder.files.where( ( x ) => x.isAudio ).length > 1;
       final title   = many ? "${folder.title} (${file.name})" : folder.title;
       final id      = "${folder.jobFolder}/${file.driveFileId}";
-      final onPhone = _cache?.isCached( podcastCacheName( file.streamUrl ) ) ?? false;
+      final onPhone = ( _cache?.isCached( podcastCacheName( file.streamUrl ) ) ?? false ) && !_pending.contains( podcastCacheName( file.streamUrl ) );
       out.add( ListTile(
         key     : Key( "${TestKeys.podcastDriveRowPrefix}$id" ),
         leading : onPhone
@@ -224,7 +286,7 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children    : [
-            if ( !onPhone ) _downloadButton( id, file.streamUrl, title ),
+            _toggleButton( id, file.streamUrl, title, onPhone ),
             IconButton(
               key      : Key( "${TestKeys.podcastDrivePlayPrefix}$id" ),
               icon     : const Icon( Icons.play_arrow ),
@@ -238,13 +300,22 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
     return out;
   }
 
-  /// The download button of the Drive row [id], or a spinner while it downloads.
+  /// The one button of the Drive row [id]: Delete if [onPhone], else Download, else a ring.
   ///
   /// Nothing when there is no cache to download into.
-  Widget _downloadButton( String id, String url, String title ) {
+  Widget _toggleButton( String id, String url, String title, bool onPhone ) {
     final cache = _cache;
     if ( cache == null ) return const SizedBox.shrink();
-    if ( _downloading.contains( podcastCacheName( url ) ) ) {
+    final name = podcastCacheName( url );
+    if ( onPhone ) {
+      return IconButton(
+        key      : Key( "${TestKeys.podcastDriveDeletePrefix}$id" ),
+        icon     : const Icon( Icons.delete_outline ),
+        tooltip  : "Delete from this phone",
+        onPressed: () => _delete( cache, name, title ),
+      );
+    }
+    if ( _downloading.contains( name ) ) {
       return SizedBox(
         key   : Key( "${TestKeys.podcastDriveDownloadingPrefix}$id" ),
         width : 48,
@@ -256,7 +327,11 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       key      : Key( "${TestKeys.podcastDriveDownloadPrefix}$id" ),
       icon     : const Icon( Icons.download ),
       tooltip  : "Download to this phone",
-      onPressed: () => _download( cache, url, title ),
+      onPressed: () {
+        // The copy is still on disk during the Undo window or while it plays: keep it, download nothing.
+        if ( _pending.remove( name ) ) { setState( () {} ); return; }
+        _download( cache, url, title );
+      },
     );
   }
 
