@@ -40,7 +40,7 @@ void main() {
     testWidgets( "fires AgenticFormReset on mount and renders form fields", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
@@ -55,7 +55,7 @@ void main() {
     testWidgets( "empty task submit is a no-op", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
@@ -70,7 +70,7 @@ void main() {
     testWidgets( "valid submit dispatches with sweTeam type and task", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 

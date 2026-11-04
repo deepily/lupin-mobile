@@ -10,8 +10,14 @@ import 'conversation_screen.dart';
 import 'mute_sender_action.dart';
 import 'persona_badge.dart';
 
+/// Inbox listing one tile per sender, with swipe-to-delete and bulk clear.
+///
+/// Loads the inbox on open and on pull-to-refresh. Long-pressing a tile offers mute.
 class InboxScreen extends StatefulWidget {
+  /// Account whose inbox is loaded and whose conversations are deleted.
   final String userEmail;
+
+  /// Creates the inbox for [userEmail].
   const InboxScreen( { super.key, required this.userEmail } );
 
   @override
@@ -105,7 +111,7 @@ class _InboxScreenState extends State<InboxScreen> {
         ],
       ),
     );
-    if ( confirmed == true && context.mounted ) {
+    if ( confirmed == true && mounted ) {
       context.read<NotificationBloc>().add(
         NotificationsBulkDelete( userEmail: widget.userEmail ),
       );
@@ -134,7 +140,7 @@ class _SenderTile extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric( horizontal: 16 ),
-        color: Colors.red.withOpacity( 0.8 ),
+        color: Colors.red.withValues( alpha: 0.8 ),
         child: const Icon( Icons.delete, color: Colors.white ),
       ),
       onDismissed: ( _ ) {
@@ -160,10 +166,9 @@ class _SenderTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          "${sender.count} message${sender.count == 1 ? '' : 's'}"
-          + ( sender.lastActivity != null
+          "${sender.count} message${sender.count == 1 ? '' : 's'}${sender.lastActivity != null
               ? "  ·  ${_relativeTime( sender.lastActivity! )}"
-              : "" ),
+              : ""}",
         ),
         trailing: newCount > 0
           ? Container(

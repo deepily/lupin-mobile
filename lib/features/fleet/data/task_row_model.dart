@@ -2,32 +2,50 @@ import 'task_row_schema.dart';
 
 /// One task-store row, as the shared row widget consumes it.
 ///
-/// Maps the `/api/tasks` wire shape onto the twelve cells of [RowSchema]. Field names
-/// are the SERVER's, not re-spelled: `item_class` stays `itemClass`, `created_by` stays
-/// `createdBy`. One name at every layer is the rule the server's own terse projection
-/// follows, and a rename here would make a wire-shape question un-greppable.
+/// Maps the `/api/tasks` wire shape onto the twelve cells of [RowSchema].
+/// Field names follow the server's: `item_class` becomes `itemClass`, `created_by`
+/// becomes `createdBy`. Keeping one name per field makes a wire-shape question greppable.
 class TaskRowModel {
+  /// The task-store row id.
   final String  id;
+
+  /// The row title; empty when the server sent none.
   final String  title;
+
+  /// The row class (`item_class`); null on a terse pull.
   final String? itemClass;
+
+  /// The stored status string; empty when the server sent none.
   final String  status;
+
+  /// The priority label, or null.
   final String? priority;
+
+  /// The typed `blocked_by` references; empty when the row is not blocked.
   final List<TaskBlocker> blockedBy;
+
+  /// When the row is next due for a chase, or null when unset or unparseable.
   final DateTime? nextChaseTs;
+
+  /// The accountable manager, shown in the `accountable` cell.
   final String? accountableManager;
+
+  /// The persona that filed the row, shown in the `filer` cell.
   final String? createdBy;
+
+  /// The project the row belongs to.
   final String? project;
 
-  /// ⚠️ NOT A SCHEMA CELL, AND CARRIED ANYWAY. `ROW_SCHEMA` has `accountable` and
-  /// `filer` but no owner column, so this renders nowhere — the Task List GROUPS by it
-  /// (`taskListModel.ts:251-252`). Grouping by `accountable_manager` because it is the
-  /// one the row happens to display would produce a pane that renders, looks plausible,
-  /// and groups by the wrong thing.
+  /// The owning persona (`owner_persona`).
+  ///
+  /// Not a schema cell, so it renders nowhere; the Task List groups by it. Grouping by
+  /// [accountableManager] instead would group by a different person than the owner.
   final String? ownerPersona;
 
-  /// The task-store `body`. Absent on a terse pull — see the note on [fromJson].
+  /// The task-store `body`; null on a terse pull, see [TaskRowModel.fromJson].
   final String? detail;
 
+  /// Creates a row from already-parsed fields.
   const TaskRowModel( {
     required this.id,
     required this.title,
@@ -43,20 +61,14 @@ class TaskRowModel {
     this.detail,
   } );
 
-  /// Build from one `/api/tasks` row.
+  /// Builds a row from one `/api/tasks` row.
   ///
-  /// ⚠️ TERSE ROWS DO NOT CARRY EVERY CELL, AND THAT IS THE INTENDED QUERY SHAPE.
-  /// The panes pull with `terse=true` because a full 500-row page measures ~2.1 MB
-  /// against ~107 KB terse (`tasks.py:739` — *"21,379 chars terse and 424,209 chars
-  /// full"*). The terse projection carries ten of the twelve cells; `detail` (`body`) is
-  /// dropped deliberately because it is the multi-KB field that makes rows heavy, and
-  /// `class` (`item_class`) is a genuine gap in the projection tracked as its own
-  /// lupin-side row.
+  /// The panes pull with `terse=true`: a full 500-row page is about 2.1 MB, a terse one
+  /// about 107 KB. The terse projection drops `detail` (the multi-KB field) and `class`.
   ///
-  /// ⇒ Both arrive as null and the row renders them as absent. `detail` is fetched on
-  /// disclosure, which is the right phone shape regardless. A missing cell must never
-  /// throw: a pane that crashes on the query shape it is specified to use is a pane that
-  /// never ran.
+  /// Ensures:
+  ///   - a missing `detail` or `class` arrives as null and renders as absent
+  ///   - a missing cell never throws; `detail` is fetched when the row is disclosed
   factory TaskRowModel.fromJson( Map<String, dynamic> json ) {
     return TaskRowModel(
       id                 : json[ 'id' ] as String,
@@ -76,9 +88,8 @@ class TaskRowModel {
 
   /// The value for one schema cell, or null when this row does not carry it.
   ///
-  /// Keyed by [RowCell.key] so the widget can walk [RowSchema.all] rather than
-  /// hand-listing fields — which is what keeps the two panes cell-for-cell identical
-  /// without either of them knowing about the other.
+  /// Keyed by [RowCell.key], so a widget can walk [RowSchema.all] instead of listing
+  /// fields by hand. That keeps the two panes cell-for-cell identical.
   String? cell( String key ) {
     switch ( key ) {
       case 'id'          : return id;
@@ -105,21 +116,26 @@ class TaskRowModel {
         .toList( growable: false );
   }
 
-  /// ⚠️ A BAD TIMESTAMP IS NULL, NOT A THROW. `next_chase_ts` is operator-set and has
-  /// arrived malformed before; one unparseable date must not take down a 500-row pane.
+  // A malformed timestamp parses to null instead of throwing. `next_chase_ts` is
+  // operator-set and can arrive malformed, and one bad date must not fail a 500-row pane.
   static DateTime? _ts( dynamic raw ) {
     if ( raw is! String || raw.isEmpty ) return null;
     return DateTime.tryParse( raw );
   }
 }
 
-/// A typed `blocked_by` reference — `{kind, id}`, where kind is item | persona | user.
+/// A typed `blocked_by` reference, `{kind, id}`, where kind is item, persona or user.
 class TaskBlocker {
+  /// What the reference points at: `item`, `persona` or `user`.
   final String kind;
+
+  /// The id of the thing the row is blocked on.
   final String id;
 
+  /// Creates a blocker reference.
   const TaskBlocker( { required this.kind, required this.id } );
 
+  /// Builds a blocker from one `blocked_by` entry; a missing field becomes empty.
   factory TaskBlocker.fromJson( Map<String, dynamic> json ) => TaskBlocker(
         kind : ( json[ 'kind' ] as String? ) ?? '',
         id   : ( json[ 'id' ] as String? ) ?? '',

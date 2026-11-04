@@ -129,6 +129,28 @@ void main() {
       await repo.logout("dead-token"); // should not throw
     });
 
+    test("logout sends the refresh token in the body, which is what the server's /auth/logout requires", () async {
+      adapter.handlers["POST /auth/logout"] = (_) => _jsonBody({"message": "Logout successful"});
+
+      await repo.logout("acc-1", refreshToken: "fake-refresh-value");
+
+      final sent = adapter.captured.single;
+      expect(sent.data, {"refresh_token": "fake-refresh-value"});
+      expect(sent.headers["Authorization"], "Bearer acc-1");
+    });
+
+    test("logout with a refresh token still swallows a 401", () async {
+      adapter.handlers["POST /auth/logout"] = (_) => _jsonBody({"detail": "token expired"}, status: 401);
+
+      await repo.logout("dead-token", refreshToken: "fake-refresh-value"); // should not throw
+    });
+
+    test("logout with no refresh token sends nothing, because the server cannot act on a bodyless call", () async {
+      await repo.logout("acc-1");
+
+      expect(adapter.captured, isEmpty);
+    });
+
     test("me returns AuthUser with id + email (from real UserResponse shape)", () async {
       adapter.handlers["GET /auth/me"] = (opts) {
         expect(opts.headers["Authorization"], "Bearer acc-1");

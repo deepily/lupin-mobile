@@ -12,7 +12,11 @@ import 'swe_team_form.dart';
 import 'test_fix_expediter_form.dart';
 import 'test_suite_form.dart';
 
+/// Hub screen listing the nine agentic job forms.
+///
+/// Each card opens its form with the shared submission bloc.
 class AgenticHubScreen extends StatelessWidget {
+  /// Creates the hub screen.
   const AgenticHubScreen( { super.key } );
 
   @override

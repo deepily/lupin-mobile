@@ -403,7 +403,7 @@ void main() {
       await mount( tester );
       await scrollToEnd( tester );
 
-      final row = find.byKey( Key( '${TestKeys.broadcastHistoryRowPrefix}0' ) );
+      final row = find.byKey( const Key( '${TestKeys.broadcastHistoryRowPrefix}0' ) );
       expect( row, findsOneWidget );
       expect( find.descendant( of: row, matching: find.textContaining( 'heartbeat-arbiter' ) ), findsOneWidget );
       expect( find.descendant( of: row, matching: find.byType( MarkdownBody ) ), findsNothing,

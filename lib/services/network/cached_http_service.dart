@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../core/cache/network_cache.dart';
 import '../../core/cache/offline_manager.dart';
+import '../../core/logging/logger.dart';
 import 'http_service.dart';
 
 /// Enhanced HTTP service with intelligent caching and offline support.
@@ -23,7 +25,7 @@ class CachedHttpService extends HttpService {
   ///   - Service inherits all base HTTP functionality
   ///   - Caching and offline components are initialized asynchronously
   ///   - Service is ready for both online and offline operations
-  CachedHttpService(Dio dio) : super(dio) {
+  CachedHttpService(super.dio) {
     _initialize();
   }
 
@@ -118,7 +120,7 @@ class CachedHttpService extends HttpService {
       }
       
       return response;
-    } catch (e) {
+    } catch (e, st) {
       // On network error, try cache again with longer TTL tolerance
       if (useCache) {
         final cachedResponse = await _networkCache.getCachedGetResponse(
@@ -127,7 +129,7 @@ class CachedHttpService extends HttpService {
         );
         
         if (cachedResponse != null) {
-          print('[HTTP] Using stale cache due to network error');
+          Logger.warning( 'Using stale cache due to network error', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
           return cachedResponse.toDioResponse<T>();
         }
       }
@@ -214,7 +216,7 @@ class CachedHttpService extends HttpService {
       }
       
       return response;
-    } catch (e) {
+    } catch (e, st) {
       // On network error, try cache if available
       if (useCache) {
         final cachedResponse = await _networkCache.getCachedPostResponse(
@@ -223,7 +225,7 @@ class CachedHttpService extends HttpService {
         );
         
         if (cachedResponse != null) {
-          print('[HTTP] Using stale cache due to network error');
+          Logger.warning( 'Using stale cache due to network error', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
           return cachedResponse.toDioResponse<T>();
         }
       }
@@ -253,11 +255,11 @@ class CachedHttpService extends HttpService {
       final response = await get<Map<String, dynamic>>(
         '/api/get-session-id',
         useCache: true,
-        cacheTtl: Duration(minutes: 5),
+        cacheTtl: const Duration(minutes: 5),
       );
       return response.data ?? {};
-    } catch (e) {
-      print('[HTTP] Session ID request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-session-id' ) );
       rethrow;
     }
   }
@@ -298,11 +300,11 @@ class CachedHttpService extends HttpService {
           'similarity_boost': similarityBoost,
         },
         useCache: true,
-        cacheTtl: Duration(hours: 1),
+        cacheTtl: const Duration(hours: 1),
       );
       return response;
-    } catch (e) {
-      print('[HTTP] ElevenLabs TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech-elevenlabs' ) );
       rethrow;
     }
   }
@@ -336,11 +338,11 @@ class CachedHttpService extends HttpService {
           'text': text,
         },
         useCache: true,
-        cacheTtl: Duration(hours: 1),
+        cacheTtl: const Duration(hours: 1),
       );
       return response;
-    } catch (e) {
-      print('[HTTP] OpenAI TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech' ) );
       rethrow;
     }
   }
@@ -356,7 +358,7 @@ class CachedHttpService extends HttpService {
   ///   - Never throws exceptions (returns false on failure)
   /// 
   /// Raises:
-  ///   - No exceptions are raised (all errors result in false)
+  ///   - nothing is raised; every error results in false
   @override
   Future<bool> checkHealth() async {
     await _ensureInitialized();
@@ -365,11 +367,11 @@ class CachedHttpService extends HttpService {
       final response = await get(
         '/health',
         useCache: true,
-        cacheTtl: Duration(minutes: 2),
+        cacheTtl: const Duration(minutes: 2),
       );
       return response.statusCode == 200;
-    } catch (e) {
-      print('[HTTP] Health check failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/health' ) );
       return false;
     }
   }
@@ -385,7 +387,7 @@ class CachedHttpService extends HttpService {
   ///   - Cache statistics are updated to reflect removal
   /// 
   /// Raises:
-  ///   - No exceptions are raised (operation is always safe)
+  ///   - nothing is raised; the operation is always safe
   Future<void> clearCacheForUrl(String urlPattern) async {
     await _ensureInitialized();
     await _networkCache.invalidateUrl(urlPattern);
@@ -402,7 +404,7 @@ class CachedHttpService extends HttpService {
   ///   - Memory and disk cache are both cleared
   /// 
   /// Raises:
-  ///   - No exceptions are raised (operation is always safe)
+  ///   - nothing is raised; the operation is always safe
   Future<void> clearAllCache() async {
     await _ensureInitialized();
     await _networkCache.clearAll();
@@ -419,7 +421,7 @@ class CachedHttpService extends HttpService {
   ///   - Statistics reflect current cache state accurately
   /// 
   /// Raises:
-  ///   - No exceptions are raised (returns empty stats on error)
+  ///   - nothing is raised; an error returns empty stats
   Future<Map<String, dynamic>> getCacheStats() async {
     await _ensureInitialized();
     final stats = await _networkCache.getStats();
@@ -439,17 +441,17 @@ class CachedHttpService extends HttpService {
   /// 
   /// Raises:
   ///   - Individual request failures are logged but don't stop processing
-  ///   - No exceptions propagate from this method
+  ///   - nothing propagates out of this method
   Future<void> processQueuedRequests() async {
     await _ensureInitialized();
     
     if (_offlineManager.isOffline) {
-      print('[HTTP] Cannot process queued requests - still offline');
+      debugPrint('[HTTP] Cannot process queued requests - still offline');
       return;
     }
     
     final queuedRequests = _offlineManager.getQueuedRequests();
-    print('[HTTP] Processing ${queuedRequests.length} queued requests');
+    debugPrint('[HTTP] Processing ${queuedRequests.length} queued requests');
     
     for (final request in queuedRequests) {
       try {
@@ -487,9 +489,20 @@ class CachedHttpService extends HttpService {
         }
         
         await _offlineManager.removeFromQueue(request.key);
-        print('[HTTP] Successfully processed queued request: ${request.key}');
-      } catch (e) {
-        print('[HTTP] Failed to process queued request ${request.key}: $e');
+        // The queue key holds the query and the POST body, so only method and path are logged.
+        debugPrint('[HTTP] Successfully processed queued request: $method ${path.split( '?' ).first}');
+      } catch (e, st) {
+        final data = request.data;
+        Logger.error(
+          'Failed to process queued request',
+          tag       : 'HTTP',
+          error     : e,
+          stackTrace: st,
+          context   : LogContext( metadata: {
+            if ( data['method'] is String ) 'method': data['method'],
+            if ( data['path'] is String ) 'path'  : ( data['path'] as String ).split( '?' ).first,
+          } ),
+        );
       }
     }
   }

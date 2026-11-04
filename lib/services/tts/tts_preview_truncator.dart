@@ -1,19 +1,14 @@
-/// Port of the web client's TTS preview limiter
-/// (`notifications.js::_truncateAtBoundary`, 2026-05-22 boundary-scan
-/// rewrite; design `lupin/src/rnd/v0.1.7/2026.05.22-tts-limiter-boundary-scan.md`).
+/// Port of the web client's TTS preview limiter (`notifications.js::_truncateAtBoundary`).
 ///
-/// Truncate [text] to roughly [fraction] of its length, extending FORWARD
-/// from the fraction mark to the next natural boundary:
-///   1. targetPos = ceil( length x fraction )
-///   2. scan forward for the first boundary -- '\n', em/en-dash (never
-///      hyphen-minus), or `. ! ? ;` followed by whitespace/end (so "3.14",
-///      "v0.1.7", "file.py" are not boundaries)
-///   3. cut inclusive of the marker
-///   4. no boundary => next word boundary after targetPos (never silently
-///      expands back to 100%)
-/// Common abbreviations (Mr., e.g., a.m., ...) are masked length-preservingly
-/// so their periods are not false boundaries.
+/// Truncates text to roughly a fraction of its length, extending forward from the fraction mark to the next boundary:
+///   1. targetPos = ceil( length x fraction ).
+///   2. Scan forward for the first boundary: a newline, an em or en dash (never a hyphen-minus),
+///      or one of `. ! ? ;` followed by whitespace or the end. So "3.14", "v0.1.7" and "file.py" are not boundaries.
+///   3. Cut inclusive of the marker.
+///   4. With no boundary, cut at the next word boundary after targetPos; it never expands back to 100%.
+/// Common abbreviations (Mr., e.g., a.m. and so on) are masked, preserving length, so their periods are not boundaries.
 class TtsPreviewTruncator {
+  /// Abbreviations whose periods are masked so they are not read as sentence ends.
   static const List<String> abbreviations = [
     'Mr.', 'Mrs.', 'Ms.', 'Mx.', 'Dr.', 'Prof.', 'Sr.', 'Jr.', 'Rev.',
     'St.', 'Mt.', 'Ft.', 'Ave.', 'Blvd.', 'Rd.',
@@ -24,12 +19,14 @@ class TtsPreviewTruncator {
   static const String _terminal = '.!?;';
   static const String _dashes   = '—–';   // em-dash, en-dash (NOT hyphen-minus)
 
-  /// Messages shorter than this are always spoken in full (web parity:
-  /// `ttsPreviewMinChars`).
+  /// Messages shorter than this are always spoken in full, in characters.
+  ///
+  /// It matches the web client's `ttsPreviewMinChars`.
   static const int minChars = 80;
 
-  /// Returns the preview slice for [fraction] in [0,1]. `fraction >= 1` =>
-  /// the whole (trimmed) text. Empty input => ''.
+  /// Returns the preview slice for [fraction] in [0,1].
+  ///
+  /// A fraction of 1 or more returns the whole trimmed text, and empty input returns an empty string.
   static String truncateAtBoundary( String text, double fraction ) {
     if ( text.isEmpty ) return '';
     if ( fraction >= 1 ) return text.trim();
@@ -58,15 +55,17 @@ class TtsPreviewTruncator {
     return slice.replaceAll( _mask, '.' ).trim();
   }
 
-  /// Rick 2026-09-18: "0% playback. That is nothing." The slider at 0% is
-  /// silence — not the first sentence, not a short message spoken whole,
-  /// not a title, not an answer he asked for. Every speech path checks this
-  /// BEFORE it enqueues, the background FCM path included.
+  /// True when [fraction] is zero or less: the slider at 0% means silence.
+  ///
+  /// It is not the first sentence, a short message spoken whole, a title or an answer the user asked for.
+  /// Every speech path checks this before it enqueues, the background FCM path included.
+  /// Design: src/docs/decisions/README.md (R-TTS-zero-silence)
   static bool silences( double fraction ) => fraction <= 0;
 
-  /// The speech the orchestrator should send for [message] at [fraction]:
-  /// full text when the slider is at 100%, the message is under [minChars],
-  /// or the scan reaches the end anyway (web parity opt-outs).
+  /// The speech the orchestrator should send for [message] at [fraction].
+  ///
+  /// It is the full text when the slider is at 100%, the message is under [minChars], or the scan reaches the
+  /// end anyway. Those are the web-parity opt-outs.
   static String previewFor( String message, double fraction ) {
     final full = message.trim();
     if ( fraction >= 1 || full.length < minChars ) return full;

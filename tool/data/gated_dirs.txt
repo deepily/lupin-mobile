@@ -1,0 +1,28 @@
+# Directories the pre-commit hook and the CI step check for missing doc comments.
+# One shared list: tool/pre_commit_gate.py reads it for the hook and for `--list` / `--docs-all` (CI).
+# Meaning: every swept directory, i.e. each one with its own analysis_options.yaml enabling
+# public_member_api_docs. The check fails ONLY on that diagnostic; every other analyzer finding
+# (errors, warnings, style notes) is ignored here. Rick, 2026-10-02: "Docs now, code clean-up later".
+# One path per line. Add a directory here when it gets its own options file.
+lib/features/artifacts
+lib/features/auth
+lib/features/holding_area
+lib/features/home
+lib/features/fleet
+lib/features/fleet_status
+lib/features/task_list
+lib/features/transcript
+lib/features/broadcast
+lib/features/finished_tasks
+lib/features/quick_ask
+lib/features/docs
+lib/shared
+lib/features/focus_mode
+lib/features/notifications
+lib/features/queue
+lib/features/agentic
+lib/features/settings
+lib/features/decision_proxy
+lib/core
+lib/services
+lib/features/claude_code

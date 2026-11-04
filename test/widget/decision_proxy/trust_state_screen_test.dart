@@ -85,9 +85,9 @@ void main() {
         ),
       ) ) ).called( 1 );
 
-      expect( find.byKey( Key( '${TestKeys.trustStateRowPrefix}swe:edit'   ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.trustStateRowPrefix}swe:delete' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.trustStateRowPrefix}web:fetch'  ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.trustStateRowPrefix}swe:edit'   ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.trustStateRowPrefix}swe:delete' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.trustStateRowPrefix}web:fetch'  ) ), findsOneWidget );
     });
 
     testWidgets( "renders empty-state when trustStates is empty", ( tester ) async {
@@ -147,8 +147,8 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
-      expect( find.byKey( Key( '${TestKeys.trustStateDomainHeaderPrefix}swe' ) ), findsOneWidget );
-      expect( find.byKey( Key( '${TestKeys.trustStateDomainHeaderPrefix}web' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.trustStateDomainHeaderPrefix}swe' ) ), findsOneWidget );
+      expect( find.byKey( const Key( '${TestKeys.trustStateDomainHeaderPrefix}web' ) ), findsOneWidget );
     });
 
     testWidgets( "shows circuit-open chip when circuitBreakerState is open", ( tester ) async {

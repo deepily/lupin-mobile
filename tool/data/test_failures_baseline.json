@@ -1,0 +1,16 @@
+{
+  "_captured_at_sha": "9959202",
+  "runs": 3,
+  "passed_per_run": [
+    2915,
+    2915,
+    2915
+  ],
+  "failed_per_run": [
+    0,
+    0,
+    0
+  ],
+  "always_fail": [],
+  "sometimes_fail": []
+}

@@ -101,7 +101,7 @@ void main() {
     await tester.pump();
     expect( find.textContaining( 'Tap a session badge' ), findsOneWidget );
 
-    await tester.tap( find.byKey( Key( '${TestKeys.focusRailBadgePrefix}B' ) ) );
+    await tester.tap( find.byKey( const Key( '${TestKeys.focusRailBadgePrefix}B' ) ) );
     await tester.pump();
     await tester.pump( const Duration( milliseconds: 20 ) );
 

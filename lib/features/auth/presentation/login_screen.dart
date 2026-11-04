@@ -8,11 +8,16 @@ import '../domain/auth_bloc.dart';
 import '../domain/auth_event.dart';
 import '../domain/auth_state.dart';
 
+/// The email and password login form.
 class LoginScreen extends StatefulWidget {
+  /// Text to prefill the email field with, if any.
   final String? initialEmail;
+  /// Text to prefill the password field with, if any.
   final String? initialPassword;
+  /// The server context, used by the server switch on this screen.
   final ServerContextService serverContext;
 
+  /// Creates the screen; the server context is required.
   const LoginScreen( {
     super.key,
     this.initialEmail,

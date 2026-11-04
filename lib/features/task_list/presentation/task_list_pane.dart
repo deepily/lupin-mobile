@@ -12,10 +12,11 @@ import 'task_list_header.dart';
 
 /// The Task List pane.
 ///
-/// ⚠️ THE ROUTE OWNS THE VISIBILITY SIGNAL. `onPaneVisible` / `onPaneHidden` are what
-/// make foreground-pane-only polling a mechanism rather than an instruction — without
-/// them this pane's timer runs whichever destination is showing.
+/// The route owns the visibility signal. `onPaneVisible` and `onPaneHidden` make
+/// foreground-pane-only polling a mechanism, and without them this pane's timer runs
+/// whichever destination is showing.
 class TaskListPane extends StatefulWidget {
+  /// Creates the pane; it reads its [TaskListBloc] from the route.
   const TaskListPane( { super.key } );
 
   @override
@@ -23,16 +24,10 @@ class TaskListPane extends StatefulWidget {
 }
 
 class _TaskListPaneState extends State<TaskListPane> {
-  /// 🔴 HELD, NOT LOOKED UP IN `dispose()`. `context.read` walks the element tree, and by
-  /// the time `dispose` runs that element is being torn down — the lookup can throw, and
-  /// a throw there SKIPS the rest of dispose. The timer then survives the pane that owned
-  /// it: a poll firing against a screen nobody is looking at, for the life of the
-  /// process.
-  ///
-  /// ⚠️ THAT BUG IS ALMOST UNATTRIBUTABLE IN THE FIELD. It costs battery and data with no
-  /// visible symptom, on a pane the user has already left, and every pane in this plan
-  /// can grow its own copy. Found by Chloé in Phase 1 and it generalised straight to
-  /// here.
+  // Held as a field, not looked up in `dispose()`. `context.read` walks the element tree,
+  // which is being torn down by then, so the lookup can throw and skip the rest of
+  // dispose. The timer would then survive the pane, polling a screen nobody is looking at
+  // for the life of the process, with no visible symptom beyond battery and data.
   late final TaskListBloc _bloc;
 
   @override
@@ -41,12 +36,11 @@ class _TaskListPaneState extends State<TaskListPane> {
     _bloc = context.read<TaskListBloc>()
       ..startPolling()
       ..startConnectivityRefresh();
-    // This pane is on screen the moment it is built, because it is route-scoped.
+    // The pane is on screen the moment it is built, because it is route-scoped.
     _bloc.onPaneVisible();
-    // 🔴 ONCE ON MOUNT, NOT ON EVERY POLL. The roster changes when a seat is spawned or
-    // reaped — rare — while the board polls every 60 s on Wi-Fi. Riding the poll would
-    // double this pane's request count for a list that almost never moves, on the
-    // connection §6.5 costed in megabytes.
+    // Read the roster once on mount, not on every poll. It changes only when a seat is
+    // spawned or reaped, while the board polls every 60 s on Wi-Fi, so riding the poll
+    // would double the request count for a list that almost never moves.
     _bloc.add( const TaskListRosterRequested() );
   }
 
@@ -69,8 +63,8 @@ class _TaskListPaneState extends State<TaskListPane> {
           return Center( child: Text( state.error! ) );
         }
 
-        // M1/M3/M4 sit above the list AND above the empty state: a lookup is most
-        // useful exactly when the ticket is not on the board.
+        // The header sits above the list and above the empty state, because a lookup is
+        // most useful when the ticket is not on the board.
         final header = TaskListHeader(
           countLabel   : model == null ? null : taskListCountLabel( model, DateTime.now() ),
           lookup       : context.read<TaskListBloc>().lookupTask,
@@ -78,8 +72,8 @@ class _TaskListPaneState extends State<TaskListPane> {
           assignees    : context.read<TaskListBloc>().newTicketAssignees,
         );
 
-        // An empty list renders an EMPTY STATE, not a blank screen. A blank pane and a
-        // broken pane look identical, and only one of them is fine.
+        // An empty list renders an empty state, not a blank screen, because a blank pane
+        // and a broken pane look identical.
         if ( model == null || model.groups.isEmpty ) {
           return Column(
             children : [
@@ -106,32 +100,18 @@ class _TaskListPaneState extends State<TaskListPane> {
     );
   }
 
-  /// What the operator is told when a write did not land.
-  ///
-  /// 🔴 A ROLLED-BACK WRITE THAT SAYS NOTHING IS A ROW THAT SILENTLY UN-HAPPENS. The
-  /// bloc has always set `state.error` on a failed or 202'd write, and this pane rendered
-  /// it ONLY when there were no rows — so every write error on a populated board was
-  /// invisible. The row came back, the operator's typing was gone, and nothing on screen
-  /// said why.
-  ///
-  /// ⚠️ THAT WAS SURVIVABLE WHILE TWO VERBS COULD FAIL AND IS NOT NOW. Before this row
-  /// the only reachable writes were approve and un-park, neither of which asks the
-  /// operator for anything. Five of the seven now do, and each one costs a reason they
-  /// composed — a 202 on a park throws away a quoted decisive sentence and, without this,
-  /// looks exactly like a tap that missed.
-  ///
-  /// The 202 is the case that matters most: `TaskAwaitingApprovalException` is not a
-  /// failure. The request SUCCEEDED and the change did not happen, so the operator must
-  /// be told it is pending review — not that it failed, and not that it worked.
-  ///
-  /// A live region, because the notice appears in response to a press and a TalkBack user
-  /// whose focus is still on the button they pressed is told nothing otherwise.
-  /// ⚠️ THE FLAG MUST END UP ON THE NODE THAT CARRIES THE WORDS, which is why this is
-  /// `MergeSemantics` over `Semantics` over the container rather than a bare `Semantics`
-  /// around the text. A live region on a node with no label of its own fires on something
-  /// that says nothing while the sentence the user needs sits one level down. The same
-  /// trap `TaskRow._verbButton` documents, and the widget test asserts the flag on the
-  /// node the notice's own key resolves to.
+  // What the operator is told when a write did not land. A rolled-back write that says
+  // nothing is a row that silently un-happens: the bloc sets `state.error` on a failed or
+  // 202'd write, and without this notice the row would come back with no explanation on
+  // a populated board. It matters more now that most verbs ask the operator for a reason,
+  // since a 202 on a park throws away a quoted decisive sentence and would look like a
+  // tap that missed. The 202 is not a failure: the request succeeded and the change did
+  // not happen, so the operator is told it is pending review, neither failed nor done.
+  // The notice is a live region, because it appears after a press and a TalkBack user
+  // whose focus is still on the pressed button would otherwise hear nothing. The flag must
+  // sit on the node that carries the words, hence `MergeSemantics` over `Semantics` over
+  // the container, as `TaskRow._verbButton` does; the widget test asserts the flag on the
+  // node the notice's key resolves to.
   Widget _writeNotice( BuildContext context, String message ) {
     return MergeSemantics(
       child : Semantics(
@@ -147,10 +127,9 @@ class _TaskListPaneState extends State<TaskListPane> {
     );
   }
 
-  /// 🔴 A SHORT PAGE MUST SAY SO. `truncated` / `has_more` exist precisely so a partial
-  /// board cannot pass for a complete one, and the web learned the same lesson the hard
-  /// way — *"the row cap is now guarded by a VISIBLE banner rather than by hoping the
-  /// board stays small … Pagination was ruled out; noticing was not."*
+  // A short page must say so. `truncated` and `has_more` exist so a partial board cannot
+  // pass for a complete one, and the web guards its row cap with a visible banner
+  // instead of hoping the board stays small. Pagination was ruled out.
   Widget _incompleteBanner( BuildContext context, TaskListState state ) {
     return Container(
       key     : const Key( TestKeys.taskListIncompleteBanner ),
@@ -161,18 +140,16 @@ class _TaskListPaneState extends State<TaskListPane> {
     );
   }
 
-  /// 🔴 `ListView.builder`, NOT A COLUMN OF 500 BUILT WIDGETS. The query asks for up to
-  /// 500 rows and each carries a disclosure surface; building them all eagerly costs the
-  /// frame budget for rows nobody has scrolled to.
-  ///
-  /// Groups and their rows are flattened into ONE index space so the whole pane is lazy —
-  /// a `ListView` of `Column`s would build every row of every expanded group up front and
-  /// look identical from the outside.
+  // A `ListView.builder`, not a column of 500 built widgets. The query asks for up to 500
+  // rows and each carries a disclosure surface, so building them all costs frame budget
+  // for rows nobody has scrolled to. Groups and rows are flattened into one index space
+  // so the whole pane is lazy; a `ListView` of `Column`s would build every row of every
+  // expanded group up front.
   Widget _list( BuildContext context, TaskListState state, TaskListModel model ) {
     final items = _flatten( model, state.collapsed );
 
     return RefreshIndicator(
-      // Pull-to-refresh: the gesture a phone user reaches for, and it costs nothing.
+      // Pull-to-refresh: the gesture a phone user reaches for.
       onRefresh : () async =>
           context.read<TaskListBloc>().add( const TaskListRefreshRequested() ),
       child     : ListView.builder(
@@ -195,10 +172,8 @@ class _TaskListPaneState extends State<TaskListPane> {
       );
     }
 
-    // 🔴 INDENTED UNDER ITS PERSONA, NOT FLUSH LEFT. Rick, walking it on the emulator
-    // 2026-09-23: rows *"crushed up against the left hand side … they should be indented
-    // to reflect containment by each persona."* The left inset is the header's own text
-    // start, so a row lines up under the name it belongs to rather than under the chevron.
+    // Indented under its persona, not flush left: the left inset is the header's own text
+    // start, so a row lines up under the name it belongs to and not under the chevron.
     return Padding(
       key     : Key( '${TestKeys.taskListRowIndentPrefix}${item.row!.id}' ),
       padding : const EdgeInsets.fromLTRB( TaskGroupHeader.textInset, 4, 16, 4 ),
@@ -206,22 +181,19 @@ class _TaskListPaneState extends State<TaskListPane> {
         model        : item.row!,
         verbs        : _verbsFor( item.row! ),
         ownerOptions : state.reassignTargets,
-        // G6: the row wears what the operator did that has not landed. Visible state,
-        // not only a notice — the notice says "something failed" while they are looking
-        // at fifty rows, and the question they are asking is whether THEIRS landed.
+        // The row wears what the operator did that has not landed: visible state, not only
+        // a notice, because the notice says "something failed" while they look at fifty
+        // rows and their question is whether theirs landed.
         unsentLabel  : state.unsentLabelFor( item.row!.id ),
-        // The row owns arming; the BLOC owns the write and the rollback. Routing it through
-        // an event rather than calling the repository from here keeps the optimistic
-        // repaint and its undo in one place — a pane that wrote directly would have to
-        // reimplement rollback, and a second rollback is a second thing to get wrong.
+        // The row owns arming; the bloc owns the write and the rollback. Routing through an
+        // event keeps the optimistic repaint and its undo in one place; a pane that wrote
+        // directly would need a second rollback.
         onVerb : ( verb ) => context
             .read<TaskListBloc>()
             .add( TaskListVerbPressed( taskId: item.row!.id, verb: verb ) ),
-        // 🔴 THE OTHER DOOR, AND ITS OWN EVENT. `TaskListFieldChanged` has had a handler
-        // in the bloc since Phase 3 and NOTHING DISPATCHED IT — gap G2, a write path
-        // built, tested, and unreachable from the UI. Routing a field change through
-        // `TaskListVerbPressed` instead would post it to the TRANSITION endpoint, which
-        // is §4.2's named failure read backwards.
+        // The other door has its own event. Routing a field change through
+        // `TaskListVerbPressed` would post it to the transition endpoint, which does not
+        // understand a priority.
         onFieldChanged : ( { String? priority, String? ownerPersona } ) => context
             .read<TaskListBloc>()
             .add( TaskListFieldChanged(
@@ -233,25 +205,14 @@ class _TaskListPaneState extends State<TaskListPane> {
     );
   }
 
-  /// Which verbs a row offers. Passed as DATA — a list of verbs is not a pane
-  /// discriminator, and both task panes may pass the same list.
-  ///
-  /// 🔴 THE LEGALITY LIVES IN `verbLegality`, NOT HERE, and that is the web's rule
-  /// carried verbatim: *"Two derivations of one rule agree until the day they do not, and
-  /// the day they do not the cell offers a move the server refuses — which reads to the
-  /// operator as the board being broken rather than as the move being illegal."* This
-  /// method used to BE a second derivation — two hand-written `row.status ==` tests — and
-  /// it offered two of the seven verbs.
-  ///
-  /// ⚠️ ONLY THE LEGAL VERBS ARE RENDERED, WHERE THE WEB GREYS THE ILLEGAL ONES, AND THE
-  /// DIVERGENCE IS DELIBERATE. A greyed `<option>` inside a select costs nothing: it is
-  /// not on screen until the select is opened, and it teaches the operator why the move
-  /// is unavailable when it is. A greyed BUTTON in a 360 dp `Wrap` costs a line of
-  /// vertical space on every row and puts a dead 48 dp target next to a live one — on the
-  /// surface where §7.4 says a mis-tap is likelier than a mis-click. The reason each verb
-  /// is unavailable is still computed and still tested; what changes is that a phone does
-  /// not pay row height to display four sentences about moves the operator did not ask
-  /// for.
+  // Which verbs a row offers, passed as data; both task panes may pass the same list. The
+  // legality lives in `verbLegality`, not here, because two derivations of one rule agree
+  // until they do not, and then the row offers a move the server refuses, which reads as a
+  // broken board. Only the legal verbs are rendered, where the web greys the illegal
+  // ones. A greyed option in a web select costs nothing, but a greyed button in a 360 dp
+  // `Wrap` costs a line of height on every row and puts a dead 48 dp target beside a live
+  // one, on the surface where a mis-tap is likelier than a mis-click. The reason each verb
+  // is unavailable is still computed and tested.
   List<VerbNeeds> _verbsFor( TaskRowModel row ) {
     return verbLegality( row.status )
         .where( ( entry ) => entry.enabled )
@@ -259,7 +220,7 @@ class _TaskListPaneState extends State<TaskListPane> {
         .toList( growable: false );
   }
 
-  /// Flatten groups + rows into one lazy index space, honouring collapse.
+  // Flattens groups and rows into one lazy index space, honouring collapse.
   List<_Item> _flatten( TaskListModel model, Set<String> collapsed ) {
     final out = <_Item>[];
     for ( final group in model.groups ) {
@@ -274,6 +235,7 @@ class _TaskListPaneState extends State<TaskListPane> {
   }
 }
 
+// One entry in the flattened list: a group header or a row.
 class _Item {
   final TaskGroup? group;
   final TaskRowModel? row;

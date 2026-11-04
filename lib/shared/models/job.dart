@@ -1,42 +1,44 @@
 import 'package:equatable/equatable.dart';
 
-/// DISPOSITION (AC-S1.10, 2026-08-29): **LEFT ALONE — not superseded by
-/// [JobLane], and not quarantined.**
+/// Lifecycle state of a locally stored [Job]; never sent over the wire.
 ///
-/// Three lane vocabularies exist in this tree and this is one of them. They
-/// are not redundant copies of each other:
+/// [JobLane] is the wire vocabulary and is not replaced by this enum. They
+/// disagree on two of four members (`running`/`completed` here, `run`/`done`
+/// there), and nothing maps between them. If a mapping is needed, write one named
+/// adapter; do not assume the names match.
 ///
-///   * [JobLane] (`features/queue/domain/job_lifecycle.dart`) mirrors the
-///     SERVER's `STATE_TO_UI_CONTAINER` verbatim and is the wire vocabulary.
-///     Its member names are the correct ones for anything reading a
-///     `job_state_transition` frame or a `/api/get-queue/{name}` listing.
-///   * `JobStatus` (here) belongs to the LOCAL `Job` record persisted through
-///     `JobRepository` (`core/repositories/impl/job_repository_impl.dart`,
-///     wired in `use_case_registry.dart`). It never touches the wire.
-///
-/// ⚠️ They disagree on two of four members — `running`/`completed` here vs
-/// `run`/`done` there. That is stated rather than silently tolerated: renaming
-/// this enum to match would change a persisted local model's serialized values
-/// for no gain, since nothing maps between the two. **If a mapping is ever
-/// introduced, it goes in one named adapter — never by assuming the names
-/// line up.**
+/// Decision: src/docs/decisions/README.md (JobStatus-kept).
 enum JobStatus {
+  /// Queued and not yet started.
   todo,
+  /// In progress.
   running,
+  /// Finished successfully.
   completed,
+  /// Abandoned after a failure and not retried.
   dead,
 }
 
+/// One locally stored job and its outcome.
 class Job extends Equatable {
+  /// Unique job identifier.
   final String id;
+  /// The request text the job carries.
   final String text;
+  /// Current lifecycle state.
   final JobStatus status;
+  /// When the job was created.
   final DateTime createdAt;
+  /// When the job last changed, or null if it never has.
   final DateTime? updatedAt;
+  /// The outcome text, or null until the job finishes.
   final String? result;
+  /// The failure message, or null when the job has not failed.
   final String? error;
+  /// Free-form extra fields, or null.
   final Map<String, dynamic>? metadata;
 
+  /// Creates a job.
   const Job({
     required this.id,
     required this.text,
@@ -48,6 +50,7 @@ class Job extends Equatable {
     this.metadata,
   });
 
+  /// Returns a copy with the given fields replaced.
   Job copyWith({
     String? id,
     String? text,
@@ -70,6 +73,7 @@ class Job extends Equatable {
     );
   }
 
+  /// Builds a job from its wire map; an unknown status becomes todo.
   factory Job.fromJson(Map<String, dynamic> json) {
     return Job(
       id: json['id'] as String,
@@ -88,6 +92,7 @@ class Job extends Equatable {
     );
   }
 
+  /// Returns the wire map for this job.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

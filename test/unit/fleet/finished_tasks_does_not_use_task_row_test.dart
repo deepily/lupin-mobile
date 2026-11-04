@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../../_helpers/source_text.dart';
 
 /// 🔴 SOMETHING MUST HOLD THE PANES APART, AND NOTHING DID.
 ///
@@ -63,7 +64,7 @@ void main() {
         .whereType<File>()
         .where((f) => f.path.endsWith(".dart"))
         .where((f) {
-          final src = f.readAsStringSync();
+          final src = stripComments( f.readAsStringSync() );
           // 🔴 A WORD BOUNDARY, NOT A BARE SUBSTRING. `src.contains("TaskRow(")` also
           // matches `FinishedTaskRow(` — this pane's OWN four-cell row, whose name ends
           // in the string being searched for. The guard went red the moment Phase 2

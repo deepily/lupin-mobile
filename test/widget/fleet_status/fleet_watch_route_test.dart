@@ -8,7 +8,6 @@ import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
 import 'package:lupin_mobile/features/fleet_status/presentation/fleet_status_screen.dart';
-import 'package:lupin_mobile/features/transcript/data/transcript_models.dart';
 import 'package:lupin_mobile/features/transcript/data/transcript_repository.dart';
 import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.dart';
 import 'package:lupin_mobile/features/transcript/domain/transcript_stream_bloc.dart';
@@ -112,7 +111,7 @@ void main() {
   }
 
   Finder watchButton() =>
-      find.byKey( Key( "${ TestKeys.fleetStatusWatchPrefix }$who" ) );
+      find.byKey( const Key( "${ TestKeys.fleetStatusWatchPrefix }$who" ) );
 
   testWidgets( "the screen reads the roster and the button opens the console",
       ( tester ) async {
@@ -229,6 +228,10 @@ class _RosterRepo implements FleetRepository {
 
   /// The server RE-READS and answers with what it found; it does not echo. A fake that
   /// echoed could not fail the assertion that the dial shows the server's number.
+  @override
+  Future<Map<String, Object?>> setSkeletonCrew( bool on ) async =>
+      throw UnimplementedError( "not exercised by this test" );
+
   @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async {
     serverCap = cap + 1;

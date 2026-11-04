@@ -2,24 +2,33 @@ import 'package:dio/dio.dart';
 
 import 'claude_code_models.dart';
 
-/// Typed wrapper over `POST /api/claude-code/submit` — canonical Claude Code
-/// job submission endpoint after the 2026-05-05 dispatch-cluster retirement.
-/// Uses the shared Dio (auth interceptor injects Bearer automatically).
+/// Submits Claude Code jobs through the server's `/api/v2/submit` door.
 ///
-/// Retired endpoints: see <lupin>/src/rnd/v0.1.7/2026.05.05-claude-code-dispatch-retirement/01-plan.md
-/// Mobile-side breadcrumbs: src/rnd/v0.1.6-migration/2026.04.15-{tier-3-queue-and-claude-code-plan,resync-mobile-with-lupin-api-v0.1.6}.md
-/// Canonical successor: POST /api/claude-code/submit (this file)
+/// It uses the shared Dio, whose auth interceptor adds the bearer token.
+/// The older `/api/claude-code/submit` route is retired and answers 410.
 class ClaudeCodeRepository {
+  /// The server path every submission goes to.
+  static const String path = "/api/v2/submit";
+
   final Dio _dio;
+  /// Creates the repository over [_dio].
   const ClaudeCodeRepository( this._dio );
 
+  /// Queues [req] as a Claude Code job and returns the created job.
+  ///
+  /// Ensures:
+  ///   - a reply with a job id and status `waiting` or `done` is a success
+  ///
+  /// Raises:
+  ///   - [ClaudeCodeApiException] when the request fails
+  ///   - [ClaudeCodeApiException] when the server answers 200 but created no job
   Future<ClaudeCodeSubmitResponse> submit( ClaudeCodeSubmitRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
-        "/api/claude-code/submit",
-        data: req.toJson(),
+        path,
+        data: req.toSubmitRequest().toJson(),
       );
-      return ClaudeCodeSubmitResponse.fromJson( res.data! );
+      return ClaudeCodeSubmitResponse.fromAsk( res.data! );
     } on DioException catch ( e ) {
       throw _err( e, "submit failed" );
     }

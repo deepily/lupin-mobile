@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import '../../core/logging/logger.dart';
 
-/// App lifecycle management service for mobile applications.
-/// 
-/// Handles app state transitions (foreground/background/paused), provides
-/// adaptive behavior for WebSocket connections, and manages resource optimization
-/// based on app visibility and user interaction patterns.
+/// Tracks whether the app is foreground, inactive or backgrounded, and for how long.
+///
+/// App-wide singleton and [WidgetsBindingObserver]. It derives an [AppUsageState] from lifecycle
+/// transitions and user interaction, and maps that state to WebSocket connection settings.
 class AppLifecycleService with WidgetsBindingObserver {
   static final AppLifecycleService _instance = AppLifecycleService._internal();
+  /// Returns the shared instance.
   factory AppLifecycleService() => _instance;
   AppLifecycleService._internal();
 
@@ -31,55 +32,107 @@ class AppLifecycleService with WidgetsBindingObserver {
   Duration _currentSessionDuration = Duration.zero;
   
   // Configuration
+  /// Foreground time without user interaction before the state becomes inactive.
   static const Duration inactivityThreshold = Duration(minutes: 2);
+  /// Time in the background before the state becomes long-background.
+  ///
+  /// Resuming after more than this also counts as a short-background recovery.
   static const Duration backgroundThreshold = Duration(minutes: 5);
+  /// Background time past which resuming starts a full recovery and [isLongBackground] is true.
   static const Duration longBackgroundThreshold = Duration(minutes: 30);
   
   // Timers for state management
   Timer? _inactivityTimer;
   Timer? _backgroundTimer;
   Timer? _sessionTimer;
+
+  bool _initialized = false;
+
+  /// The log flush started by the last pause or detach, null when none is running.
+  Future<void>? _logFlush;
+
+  /// Set when a pause or detach arrives during a flush; the running flush then runs once more.
+  bool _logFlushAgain = false;
+
+  /// Longest a pause or detach flush may run before it is abandoned.
+  ///
+  /// The bound keeps a hung destination from blocking later flushes.
+  @visibleForTesting
+  static Duration logFlushTimeout = const Duration(seconds: 3);
   
   // Public getters
+  /// Latest framework lifecycle state.
   AppLifecycleState get currentLifecycleState => _currentLifecycleState;
+  /// Usage state derived from the lifecycle state and user interaction.
   AppUsageState get currentUsageState => _currentUsageState;
+  /// Emits every lifecycle transition.
   Stream<AppLifecycleState> get lifecycleStream => _lifecycleController.stream;
+  /// Emits [currentUsageState] each time it changes.
   Stream<AppUsageState> get usageStateStream => _usageStateController.stream;
+  /// Time since the app was last paused, or zero when it is not backgrounded.
   Duration get backgroundDuration => _backgroundTime != null ? 
       DateTime.now().difference(_backgroundTime!) : Duration.zero;
+  /// Time since the app last resumed, or zero when it is not in the foreground.
   Duration get foregroundDuration => _foregroundTime != null ?
       DateTime.now().difference(_foregroundTime!) : Duration.zero;
+  /// Whole minutes elapsed since [initialize]; updated once a minute.
   Duration get sessionDuration => _currentSessionDuration;
+  /// True for any lifecycle state other than resumed.
   bool get isInBackground => _currentLifecycleState != AppLifecycleState.resumed;
+  /// True when [backgroundDuration] exceeds [longBackgroundThreshold].
   bool get isLongBackground => backgroundDuration > longBackgroundThreshold;
+  /// True when the usage state is active.
   bool get isUserActive => _currentUsageState == AppUsageState.active;
   
-  /// Initialize app lifecycle monitoring
+  /// Registers as a lifecycle observer and starts the session and inactivity timers.
   void initialize() {
-    print('[LifecycleService] Initializing app lifecycle monitoring');
+    if ( _initialized ) return;
+    _initialized = true;
+    debugPrint('[LifecycleService] Initializing app lifecycle monitoring');
     
     // Register as observer
     WidgetsBinding.instance.addObserver(this);
     
     // Initialize state
-    _currentLifecycleState = AppLifecycleState.resumed;
+    // The binding already knows the real state when a pause came before this call; null means no event yet.
+    _currentLifecycleState = WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     _currentUsageState = AppUsageState.active;
     _lastStateChange = DateTime.now();
     _lastUserInteraction = DateTime.now();
-    _foregroundTime = DateTime.now();
     
     // Start session timer
     _startSessionTimer();
     
-    // Start inactivity monitoring
-    _startInactivityMonitoring();
+    if ( _currentLifecycleState == AppLifecycleState.resumed || _currentLifecycleState == AppLifecycleState.inactive ) {
+      // On screen: the foreground bookkeeping and the inactivity timer
+      _foregroundTime = DateTime.now();
+      _startInactivityMonitoring();
+    } else {
+      // Started in the background: run what the transition into this state would have run
+      switch (_currentLifecycleState) {
+        case AppLifecycleState.paused:
+          _handleAppPaused();
+          break;
+        case AppLifecycleState.detached:
+          _handleAppDetached();
+          break;
+        case AppLifecycleState.hidden:
+          _handleAppHidden();
+          break;
+        case AppLifecycleState.resumed:
+        case AppLifecycleState.inactive:
+          break;
+      }
+      _updateUsageState();
+    }
     
-    print('[LifecycleService] App lifecycle monitoring initialized');
+    debugPrint('[LifecycleService] App lifecycle monitoring initialized');
   }
   
+  /// Totals the time spent in the previous state, then handles and broadcasts [state].
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    print('[LifecycleService] Lifecycle state changed: $_currentLifecycleState -> $state');
+    debugPrint('[LifecycleService] Lifecycle state changed: $_currentLifecycleState -> $state');
     
     final previousState = _currentLifecycleState;
     final now = DateTime.now();
@@ -126,14 +179,14 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle app resuming to foreground
   void _handleAppResumed() {
-    print('[LifecycleService] App resumed to foreground');
+    debugPrint('[LifecycleService] App resumed to foreground');
     
     final now = DateTime.now();
     
     // Calculate background duration if coming from background
     if (_backgroundTime != null) {
       final backgroundDuration = now.difference(_backgroundTime!);
-      print('[LifecycleService] Was in background for ${backgroundDuration.inSeconds}s');
+      debugPrint('[LifecycleService] Was in background for ${backgroundDuration.inSeconds}s');
       
       // Trigger background recovery actions based on duration
       if (backgroundDuration > longBackgroundThreshold) {
@@ -152,10 +205,13 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle app going to background
   void _handleAppPaused() {
-    print('[LifecycleService] App paused to background');
+    debugPrint('[LifecycleService] App paused to background');
     
     _backgroundTime = DateTime.now();
     _foregroundTime = null;
+
+    // A background kill gives no later chance to write buffered log entries.
+    _flushLogs();
     
     // Stop inactivity monitoring in background
     _inactivityTimer?.cancel();
@@ -166,31 +222,58 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle app becoming inactive (e.g., during phone calls)
   void _handleAppInactive() {
-    print('[LifecycleService] App became inactive');
+    debugPrint('[LifecycleService] App became inactive');
     // App is still visible but not interactive
     // Keep connections alive but reduce activity
   }
   
   /// Handle app being detached (rare, usually during shutdown)
   void _handleAppDetached() {
-    print('[LifecycleService] App detached');
+    debugPrint('[LifecycleService] App detached');
     // Prepare for shutdown
+    _flushLogs();
     _prepareForShutdown();
   }
   
   /// Handle app being hidden (iOS specific)
   void _handleAppHidden() {
-    print('[LifecycleService] App hidden');
+    debugPrint('[LifecycleService] App hidden');
     // Similar to paused but potentially temporary
   }
   
+  /// Starts a log flush.
+  ///
+  /// A flush already running is asked to run once more when it ends. A failure is printed, never thrown.
+  void _flushLogs() {
+    if (_logFlush != null) {
+      _logFlushAgain = true;
+      return;
+    }
+    _logFlush = _runLogFlush();
+  }
+
+  Future<void> _runLogFlush() async {
+    try {
+      do {
+        _logFlushAgain = false;
+        try {
+          await Logger.flush().timeout( logFlushTimeout );
+        } catch (e) {
+          debugPrint('[LifecycleService] Log flush failed: $e');
+        }
+      } while (_logFlushAgain);
+    } finally {
+      _logFlush = null;
+    }
+  }
+
   /// Start monitoring user inactivity
   void _startInactivityMonitoring() {
     _inactivityTimer?.cancel();
     
     _inactivityTimer = Timer(inactivityThreshold, () {
       if (_currentUsageState == AppUsageState.active) {
-        print('[LifecycleService] User inactive for ${inactivityThreshold.inMinutes} minutes');
+        debugPrint('[LifecycleService] User inactive for ${inactivityThreshold.inMinutes} minutes');
         _setUsageState(AppUsageState.inactive);
       }
     });
@@ -201,7 +284,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     _backgroundTimer?.cancel();
     
     _backgroundTimer = Timer(backgroundThreshold, () {
-      print('[LifecycleService] App in background for ${backgroundThreshold.inMinutes} minutes');
+      debugPrint('[LifecycleService] App in background for ${backgroundThreshold.inMinutes} minutes');
       _setUsageState(AppUsageState.backgroundLong);
     });
   }
@@ -215,7 +298,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     });
   }
   
-  /// Record user interaction to reset inactivity timer
+  /// Marks the user as active and restarts the inactivity timer; call it on every user input.
   void recordUserInteraction() {
     _lastUserInteraction = DateTime.now();
     
@@ -230,7 +313,7 @@ class AppLifecycleService with WidgetsBindingObserver {
     }
   }
   
-  /// Update usage state based on current conditions
+  /// Sets the usage state from the lifecycle state and the time since the last interaction.
   void _updateUsageState() {
     switch (_currentLifecycleState) {
       case AppLifecycleState.resumed:
@@ -263,7 +346,7 @@ class AppLifecycleService with WidgetsBindingObserver {
   /// Set usage state and broadcast if changed
   void _setUsageState(AppUsageState newState) {
     if (_currentUsageState != newState) {
-      print('[LifecycleService] Usage state changed: $_currentUsageState -> $newState');
+      debugPrint('[LifecycleService] Usage state changed: $_currentUsageState -> $newState');
       _currentUsageState = newState;
       _usageStateController.add(newState);
     }
@@ -271,32 +354,32 @@ class AppLifecycleService with WidgetsBindingObserver {
   
   /// Handle recovery from long background duration
   void _triggerLongBackgroundRecovery() {
-    print('[LifecycleService] Triggering long background recovery');
+    debugPrint('[LifecycleService] Triggering long background recovery');
     // Full reconnection and state refresh required
     _setUsageState(AppUsageState.recovering);
   }
   
   /// Handle recovery from short background duration
   void _triggerShortBackgroundRecovery() {
-    print('[LifecycleService] Triggering short background recovery');
+    debugPrint('[LifecycleService] Triggering short background recovery');
     // Quick state validation and reconnection
     _setUsageState(AppUsageState.active);
   }
   
   /// Prepare app for shutdown
   void _prepareForShutdown() {
-    print('[LifecycleService] Preparing for app shutdown');
+    debugPrint('[LifecycleService] Preparing for app shutdown');
     _setUsageState(AppUsageState.shutdown);
   }
   
-  /// Get connection strategy based on current app state
+  /// Connection settings for the current [AppUsageState].
   AppStateConnectionStrategy getConnectionStrategy() {
     switch (_currentUsageState) {
       case AppUsageState.active:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(seconds: 30),
+          heartbeatInterval: Duration(seconds: 30),
           reconnectImmediately: true,
           maxConcurrentConnections: 2,
           enableAudioStreaming: true,
@@ -304,10 +387,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.inactive:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(minutes: 1),
+          heartbeatInterval: Duration(minutes: 1),
           reconnectImmediately: true,
           maxConcurrentConnections: 1,
           enableAudioStreaming: false,
@@ -315,10 +398,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.background:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(minutes: 2),
+          heartbeatInterval: Duration(minutes: 2),
           reconnectImmediately: false,
           maxConcurrentConnections: 1,
           enableAudioStreaming: false,
@@ -326,10 +409,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.backgroundLong:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: false,
           enableHeartbeat: false,
-          heartbeatInterval: const Duration(minutes: 5),
+          heartbeatInterval: Duration(minutes: 5),
           reconnectImmediately: false,
           maxConcurrentConnections: 0,
           enableAudioStreaming: false,
@@ -337,10 +420,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.recovering:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: true,
           enableHeartbeat: true,
-          heartbeatInterval: const Duration(seconds: 15),
+          heartbeatInterval: Duration(seconds: 15),
           reconnectImmediately: true,
           maxConcurrentConnections: 2,
           enableAudioStreaming: true,
@@ -348,10 +431,10 @@ class AppLifecycleService with WidgetsBindingObserver {
         );
         
       case AppUsageState.shutdown:
-        return AppStateConnectionStrategy(
+        return const AppStateConnectionStrategy(
           maintainConnection: false,
           enableHeartbeat: false,
-          heartbeatInterval: const Duration(minutes: 10),
+          heartbeatInterval: Duration(minutes: 10),
           reconnectImmediately: false,
           maxConcurrentConnections: 0,
           enableAudioStreaming: false,
@@ -360,10 +443,8 @@ class AppLifecycleService with WidgetsBindingObserver {
     }
   }
   
-  /// Get app usage statistics
+  /// Snapshot of states, accumulated durations and flags, with snake_case keys.
   Map<String, dynamic> getUsageStatistics() {
-    final now = DateTime.now();
-    
     return {
       'current_lifecycle_state': _currentLifecycleState.toString(),
       'current_usage_state': _currentUsageState.toString(),
@@ -379,9 +460,9 @@ class AppLifecycleService with WidgetsBindingObserver {
     };
   }
   
-  /// Dispose of resources
+  /// Unregisters the observer, cancels the timers and closes both streams.
   void dispose() {
-    print('[LifecycleService] Disposing app lifecycle service');
+    debugPrint('[LifecycleService] Disposing app lifecycle service');
     
     WidgetsBinding.instance.removeObserver(this);
     
@@ -394,25 +475,51 @@ class AppLifecycleService with WidgetsBindingObserver {
   }
 }
 
-/// App usage states for adaptive behavior
+/// How the app is being used, for choosing connection behavior.
 enum AppUsageState {
-  active,        // User actively using the app
-  inactive,      // App in foreground but user not interacting
-  background,    // App in background (short duration)
-  backgroundLong, // App in background for extended period
-  recovering,    // Recovering from background state
-  shutdown,      // App shutting down
+  /// The user is actively using the app.
+  active,
+
+  /// The app is in the foreground and the user is not interacting.
+  inactive,
+
+  /// The app has been in the background for a short time.
+  background,
+
+  /// The app has been in the background for an extended time.
+  backgroundLong,
+
+  /// The app is recovering from a long background stay.
+  recovering,
+
+  /// The app is shutting down.
+  shutdown,
 }
 
-/// Connection strategy based on app state
+/// WebSocket connection settings chosen for one [AppUsageState].
 class AppStateConnectionStrategy {
+  /// Whether the connection is kept open.
   final bool maintainConnection;
+
+  /// Whether heartbeat pings are sent.
   final bool enableHeartbeat;
+
+  /// Interval between heartbeat pings.
   final Duration heartbeatInterval;
+
+  /// Whether a dropped connection is retried without delay.
   final bool reconnectImmediately;
+
+  /// Upper bound on simultaneous connections; zero means none.
   final int maxConcurrentConnections;
+
+  /// Whether audio is streamed over the connection.
   final bool enableAudioStreaming;
+
+  /// Whether audio is buffered while the app is in the background.
   final bool bufferAudioInBackground;
+
+  /// Creates a strategy; every field is required.
   
   const AppStateConnectionStrategy({
     required this.maintainConnection,

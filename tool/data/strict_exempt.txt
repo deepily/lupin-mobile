@@ -1,0 +1,8 @@
+# Gated directories that are NOT yet strict: the gate checks them for missing doc comments only.
+# Every other gated directory in tool/data/gated_dirs.txt is strict: ANY analyzer finding
+# (error, warning, style note) blocks the commit, run as `dart analyze --fatal-infos`.
+# So a new gated directory is strict by default; listing it here is the only way to relax it.
+# Line format:  <directory>  # <why it is not clean yet> (row <8 hex>)
+# A line without a reason and a row is refused, and so is a directory that is not gated.
+# Remove a line when its directory analyzes clean. Measured 2026-10-03 at 138f79f.
+lib/services  # 1 avoid_print in network/http_service.dart:75, the debug-only LogInterceptor (row 5e5b4ad2)

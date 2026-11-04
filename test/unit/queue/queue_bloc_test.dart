@@ -212,5 +212,39 @@ void main() {
         isA<QueueSnapshotLoaded>().having( ( s ) => s.snapshot.jobs.length, 'count', 1 ),
       ],
     );
+
+    blocTest<QueueBloc, QueueState>(
+      'QueueDeleteJob re-fetches the active queue so the deleted job leaves the screen',
+      setUp: () {
+        // The first fetch returns the job; the fetch after the delete returns none.
+        var callCount = 0;
+        adapter.handlers[ 'GET /api/get-queue/todo' ] = ( _ ) {
+          callCount++;
+          if ( callCount == 1 ) {
+            return jsonBody( {
+              'total_jobs'        : 1,
+              'todo_jobs_metadata': [
+                { 'job_id': 'j-1', 'question_text': 'x', 'agent_type': 'A', 'status': 'todo', 'paused': false },
+              ],
+            } );
+          }
+          return jsonBody( { 'todo_jobs_metadata': [], 'total_jobs': 0 } );
+        };
+        adapter.handlers[ 'DELETE /api/queue/todo/j-1' ] = ( _ ) => jsonBody( {} );
+      },
+      build : () => QueueBloc( repo ),
+      act   : ( b ) async {
+        b.add( const QueueLoadSnapshot( 'todo' ) );
+        await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+        b.add( const QueueDeleteJob( queueName: 'todo', jobId: 'j-1' ) );
+      },
+      wait  : const Duration( milliseconds: 80 ),
+      expect: () => [
+        isA<QueueLoading>(),
+        isA<QueueSnapshotLoaded>().having( ( s ) => s.snapshot.jobs.length, 'before', 1 ),
+        isA<QueueActionComplete>(),
+        isA<QueueSnapshotLoaded>().having( ( s ) => s.snapshot.jobs.length, 'after', 0 ),
+      ],
+    );
   } );
 }

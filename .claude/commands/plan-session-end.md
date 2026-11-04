@@ -1,8 +1,12 @@
-# Session-End Ritual for Planning-is-Prompting Project
+# Session-End Ritual for Lupin Mobile
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: `[LUPIN-MOBILE]`
 **Version**: 1.0
+
+---
+
+> **Note**: This command's canonical workflow uses cosa-voice notifications. In conversation mode (`get_session_info().conversation_mode_active=true`), all gates are voice-driven. Spoken responses follow the **TTS Brevity Mandate**: re-crafted conversational prose, not verbatim copies of markdown terminal replies. See `planning-is-prompting/workflow/cosa-voice-integration.md` §Conversation Mode for full rules.
 
 ---
 
@@ -10,32 +14,49 @@
 
 **On every invocation of this command:**
 
-1. **MUST use the following project-specific configuration**:
-   - **[LUPIN-MOBILE]**: [PLAN]
-   - **History file**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history.md
-   - **Planning documents**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/workflow/
-   - **Archive directory**: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/history/
-   - Do NOT proceed without these parameters
+1. **Must use the following project-specific configuration**:
+   - **[SHORT_PROJECT_PREFIX]**: `[LUPIN-MOBILE]`
+   - **History file**: ./history.md
+   - **Planning documents**: ./src/rnd/
+   - **Archive directory**: ./history/
+   - Never proceed without these parameters
 
-2. **MUST read the canonical workflow document**:
+2. **Must read the canonical workflow document**:
    - Location: planning-is-prompting → workflow/session-end.md
-   - This is the ONLY authoritative source for ALL session-end steps
-   - Do NOT proceed without reading this document in full
-   - The canonical workflow contains: TodoWrite tracking list, token count check, history health check, history update, planning document updates, uncommitted changes summary, commit message proposal, and commit execution (with notifications throughout)
+   - This is the only authoritative source for all session-end steps
+   - Never proceed without reading this document in full
+   - The canonical workflow contains: token count check, history health check, history update, planning document updates, uncommitted changes summary, and commit message proposal. It also contains commit execution (with notifications throughout)
 
-3. **MUST execute the complete session-end ritual**:
-   - Execute ALL steps exactly as described in the canonical workflow document (Steps 0, 0.4, 0.5, 1-5)
-   - Do NOT skip any steps (including notifications, TodoWrite tracking, or health checks)
-   - Do NOT substitute a shortened or summarized version
-   - Do NOT commit without user approval
-   - Follow the workflow exactly as documented using the configuration parameters from Step 1
+3. **Must execute the complete session-end ritual**:
+   - Execute every step of `planning-is-prompting/workflow/session-end.md`, in order, first to last, exactly as described
+   - Never skip any steps (including notifications, health checks, or the **LoC Delta Summary** — canonical `planning-is-prompting/workflow/session-end.md` §6)
+   - Never substitute a shortened or summarized version
+   - Commit without asking once the quality gate is met (canonical Step 4.3); only the push waits for the user's word (Step 4.5)
+   - Follow the workflow exactly as documented using the configuration parameters from instruction 1
+
+4. **Must honor the LoC Delta Summary mandate** (canonical `planning-is-prompting/workflow/session-end.md` §6 — renamed from "Day's Work Summary"; the three obligations are non-optional):
+   - **Must fire**: Step 6 runs unless `--no-summary` was explicit or the §6.1 preflight in `planning-is-prompting/workflow/session-end.md` failed with an explicit skip line. Soft-skip ("we're wrapping up") is a violation.
+   - **Must surface the table**: the rendered markdown table (per `planning-is-prompting/workflow/session-end.md` §6.4) lands in the closing `notify()`'s `abstract` parameter — not terminal-only.
+   - **Must speak a one-line verdict**: the closing `notify()`'s spoken `message` parameter includes a single short LoC verdict (≈8-15 words) replacing the generic "session ended" sign-off.
+   - Parse `--summary` / `--no-summary` and `--baseline` / `--no-baseline` from the invocation arguments.
+   - **Defaults**: `--summary` on, `--baseline` on.
+   - `--baseline` on without `LUPIN_ROOT` set: skip the Repo Baseline subsection, which cannot be computed via the native fallback. Print `loc-delta: SKIPPED — repo baseline (LUPIN_ROOT unset)` and append the upgrade-path note to the rendered summary.
+   - The CSV doc-link in `abstract` must use canonical path-only URL form (`/app/docs?path={project}/io/git-loc-delta/...`); the legacy `&scope=` two-param form is dead syntax per `planning-is-prompting/workflow/doc-viewer-links.md`.
+
+5. **Must clear the Step-6 Accountability Checklist** before declaring session-end complete:
+   - Did Step 6 fire? Did the table land in abstract? Did the spoken message carry a LoC verdict? Does the CSV doc-link use canonical URL form?
+   - Full checklist: canonical workflow doc `planning-is-prompting/workflow/session-end.md` § Final Verification → Step-6 Accountability Checklist
+   - If any checkbox unchecked: re-fire Step 6, re-issue the closing notify() with the missing elements added.
 
 ---
 
 ## Usage
 
 ```bash
-/plan-session-end
+/plan-session-end                          # default: full ritual including LoC Delta Summary + baseline
+/plan-session-end --no-summary             # skip Step 6 entirely (fast wrap-up)
+/plan-session-end --no-baseline            # render summary without repo-baseline comparison
+/plan-session-end --no-summary --no-baseline  # equivalent to --no-summary alone
 ```
 
 Invoked when wrapping up a work session to ensure all documentation, history, and commits are properly managed.
@@ -49,3 +70,11 @@ This slash command is a **reference wrapper** that reads the canonical workflow 
 - Single source of truth for the session-end ritual
 - Demonstrates the workflow pattern for other projects
 - This file serves as a working example for other repos
+
+## Steps this command names
+
+Headings from `planning-is-prompting/workflow/session-end.md`:
+
+- Step 4.3 — Commit Autonomously (no approval gate)
+- Step 4.5 — Push Decision (the one retained user gate)
+- Step 6 — LoC Delta Summary

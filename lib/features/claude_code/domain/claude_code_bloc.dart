@@ -5,13 +5,14 @@ import '../data/claude_code_repository.dart';
 import 'claude_code_event.dart';
 import 'claude_code_state.dart';
 
-/// BLoC for Claude Code submissions to `POST /api/claude-code/submit`.
-/// Sole survivor of the 2026-05-05 dispatch-cluster retirement —
-/// INTERACTIVE controls (inject/interrupt/end_session) return when parent's
-/// ClaudeCodeJob gains them.
+/// Submits Claude Code jobs to the queue endpoint and reports the outcome.
+///
+/// Submission is the only operation. Interactive controls (inject, interrupt,
+/// end session) are not offered, because the server job has no such methods.
 class ClaudeCodeBloc extends Bloc<ClaudeCodeEvent, ClaudeCodeState> {
   final ClaudeCodeRepository _repo;
 
+  /// Creates the bloc over [_repo], starting in the initial state.
   ClaudeCodeBloc( this._repo ) : super( const ClaudeCodeInitial() ) {
     on<ClaudeCodeSubmit>( _onSubmit );
   }

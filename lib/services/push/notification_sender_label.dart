@@ -1,36 +1,29 @@
-/// WHO a wake notification is from, as one short line for its title
-/// (row d9bc6f6c; Tiffany's ruling, 2026-09-28 20:16Z).
+/// Who a wake notification is from, as one short line for its title.
 ///
-/// The problem this solves is the lock screen, not the app: a notification that
-/// arrives with the phone face down says what happened but not who said it, so
-/// the only way to find out is to open the app and start tabbing. The title is
-/// the one field a user reads before deciding whether to look at all.
+/// The problem is the lock screen, not the app. A notification that arrives with the phone face down says
+/// what happened but not who said it. The only way to find out is to open the app and start tabbing.
+/// The title is the one field a user reads before deciding whether to look at all.
+/// Design: src/docs/decisions/README.md (R-PUSH-sender-label)
 ///
-/// The ruled mapping, in order:
-///   1. a voice persona          → "🌻 Maya"      (icon + name)
-///   2. no persona, a sender id  → "lupin-mobile" (the PROJECT, and only that)
-///   3. neither                  → "Lupin"
+/// The mapping, in order:
+///   1. a voice persona is shown as icon and name, for example "🌻 Maya"
+///   2. no persona and a sender id is shown as the project only, for example "lupin-mobile"
+///   3. neither is shown as "Lupin"
 ///
-/// ⚠️ THE HASH IS DELIBERATELY DROPPED IN CASE 2. A sender id is
-/// `claude.code@lupin-mobile.deepily.ai#a1b2c3d4`, and the `#a1b2c3d4` is how the
-/// fleet tells two seats of one project apart — but it is eight hex characters,
-/// which nobody reads off a lock screen. Tiffany's call, in as many words: Rick
-/// cannot read a hash. So the project alone, even though that makes two seats of
-/// the same project indistinguishable in the title. The conversation the tap
-/// opens is keyed by the FULL sender id from the payload, so nothing about the
-/// routing depends on this string.
+/// The hash is dropped in case 2. A sender id looks like `claude.code@lupin-mobile.deepily.ai#<8 hex characters>`.
+/// The hash tells two seats of one project apart, but nobody reads eight hex characters off a lock screen.
+/// The project alone is shown, even though two seats of one project then look the same in the title.
+/// The conversation the tap opens is keyed by the full sender id from the payload, so routing does not use this string.
 library;
 
-/// Build the notification title for [item], the server's `notification` object.
+/// Builds the notification title for [item], the server's `notification` object.
 ///
 /// Requires:
 ///   - item is the `/next` notification map, or null
 ///
 /// Ensures:
-///   - returns a non-empty string, always — [fallback] when nothing identifies
-///     the sender, so a title is never blank
-///   - a persona's icon is included only when it has one; a persona with a name
-///     and no glyph yields just the name
+///   - returns a non-empty string: [fallback] when nothing identifies the sender, so a title is never blank
+///   - a persona's icon is included only when it has one; a persona with a name and no glyph yields the name
 ///   - never throws, for any shape of input
 String notificationSenderLabel(
   Map<String, dynamic>? item, {
@@ -47,13 +40,13 @@ String notificationSenderLabel(
   return fallback;
 }
 
-/// "🌻 Maya", "Maya", or null when the item carries no usable persona.
+/// Returns "🌻 Maya", "Maya", or null when the item carries no usable persona.
 String? _personaOf( Map<String, dynamic> item ) {
   final raw = item[ 'voice_persona' ];
   if ( raw is! Map ) return null;
 
-  // `display_name` first: it is what the persona is CALLED, and `name` is the
-  // allocation key — they agree today and there is no reason to prefer the key.
+  // Prefer `display_name`: it is what the persona is called, and `name` is the allocation key.
+  // They agree today and there is no reason to prefer the key.
   final name = ( raw[ 'display_name' ] ?? raw[ 'name' ] )?.toString().trim() ?? '';
   if ( name.isEmpty ) return null;
 
@@ -63,11 +56,11 @@ String? _personaOf( Map<String, dynamic> item ) {
 
 /// The project segment of a Claude Code sender id, or null.
 ///
-/// `claude.code@lupin-mobile.deepily.ai#a1b2c3d4` → `lupin-mobile`.
+/// `claude.code@lupin-mobile.deepily.ai#<hash>` gives `lupin-mobile`.
 ///
 /// Ensures:
-///   - null for null, for a string with no `@`, and for anything that leaves an
-///     empty project once the host and the `#hash` are stripped
+///   - null for null, for a string with no `@`, and for anything that leaves an empty project once the host
+///     and the `#hash` are stripped
 ///   - the `#hash` suffix is removed whether or not it is present
 ///   - never throws
 String? projectOfSenderId( String? senderId ) {
@@ -78,8 +71,8 @@ String? projectOfSenderId( String? senderId ) {
 
   var host = senderId.substring( at + 1 );
 
-  // Strip the session hash: it is not part of the host, and leaving it on would
-  // put `deepily.ai#a1b2c3d4` in the title for a hostless id.
+  // Strip the session hash. It is not part of the host, and leaving it on would put
+  // a `#hash` suffix in the title for a hostless id.
   final hash = host.indexOf( '#' );
   if ( hash >= 0 ) host = host.substring( 0, hash );
 
@@ -87,30 +80,29 @@ String? projectOfSenderId( String? senderId ) {
   return project.isEmpty ? null : project;
 }
 
-/// The key a MUTE is stored under for [item]'s sender (row f1e80e67, plan §7.3).
+/// The key a sender mute is stored under for [item]'s sender.
 ///
-/// Not the label and not the session: `sender_id` carries a `#hash` that changes
-/// every time a persona re-spins, so a mute keyed on it would quietly lapse the
-/// moment the seat it silenced was replaced. "Mute Maya" has to still mean Maya
-/// an hour later. So, in order:
-///   1. a voice persona  → `persona:maya`  (allocation `name`, lower-cased, accents folded)
-///   2. a sender id      → `project:lupin-mobile`  (the same project [projectOfSenderId] titles)
-///   3. anything else    → `sender:<raw sender_id>`, or null when there is none
+/// It is not the label and not the session: `sender_id` carries a `#hash` that changes when a persona re-spins.
+/// A mute keyed on it would lapse when the seat it silenced was replaced, so "Mute Maya" would stop meaning Maya.
+/// Design: src/docs/decisions/README.md (R-NA-mute-quiet)
 ///
 /// Requires:
 ///   - item is a server `notification` map, or null
 ///
 /// Ensures:
+///   - a voice persona gives `persona:maya`, the allocation `name` lower-cased with accents folded
+///   - otherwise a sender id gives `project:lupin-mobile`, the project [projectOfSenderId] titles
+///   - otherwise a raw sender id gives `sender:<raw sender_id>`
 ///   - the same sender always yields the same key, across sessions and re-spins
-///   - null only when the item identifies no sender at all (nothing to mute)
+///   - null only when the item identifies no sender at all, so there is nothing to mute
 ///   - never throws
 String? notificationSenderKey( Map<String, dynamic>? item ) {
   if ( item == null ) return null;
 
   final raw = item[ 'voice_persona' ];
   if ( raw is Map ) {
-    // `name` here, NOT `display_name`: the allocation key is the stable one, and
-    // a display name is free to gain a flourish without un-muting anybody.
+    // Use `name` here, not `display_name`. The allocation key is the stable one, and a display name
+    // is free to gain a flourish without un-muting anybody.
     final name = foldSenderName( ( raw[ 'name' ] ?? raw[ 'display_name' ] )?.toString() ?? '' );
     if ( name.isNotEmpty ) return 'persona:$name';
   }
@@ -122,11 +114,12 @@ String? notificationSenderKey( Map<String, dynamic>? item ) {
   return senderId.isEmpty ? null : 'sender:$senderId';
 }
 
-/// Lower-case [name] and fold the accents persona names actually carry, so
-/// "María" and "maria" are one sender. Same fold the server uses for DM recipients.
+/// Lower-cases [name] and folds the accents persona names carry.
+///
+/// "María" and "maria" are therefore one sender. The fold matches the one the server uses for DM recipients.
 ///
 /// Ensures:
-///   - trimmed, lower-cased, with á é í ó ú ü ñ (and their grave/circumflex kin) folded
+///   - trimmed and lower-cased, with a, e, i, o, u, u-umlaut and n-tilde (and their grave and circumflex forms) folded
 ///   - never throws
 String foldSenderName( String name ) {
   const folds = {

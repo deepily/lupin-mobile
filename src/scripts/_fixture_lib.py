@@ -12,6 +12,7 @@ See test/fixtures/README.md for the pattern overview and redaction contract.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -112,17 +113,35 @@ def redact_timestamp_fields( body: dict[str, Any], fields: tuple[str, ...] ) -> 
             body[ f ] = REDACT_TIMESTAMP
 
 
+# A JWT is three base64url segments and its header is base64 of `{"`, so it always
+# starts `eyJ`. Searched ANYWHERE in a string: a token printed inside prose (a tool
+# result, a log line, a shell command) is as live as a bare one. Anchoring on `eyJ`
+# and forbidding spaces keeps dotted identifiers and file names from matching.
+JWT_SHAPE = re.compile( r"eyJ[A-Za-z0-9_-]{17,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}" )
+
+
+def contains_jwt( body: Any ) -> bool:
+    """True when any string anywhere in [body] contains a JWT-shaped token.
+
+    Requires:
+        - body is JSON-serialisable
+
+    Ensures:
+        - finds a token embedded in a longer string, not only a whole-string one
+        - dotted prose and identifiers do not match
+    """
+    return JWT_SHAPE.search( json.dumps( body ) ) is not None
+
+
 def assert_no_jwt_residue( body: Any, label: str ) -> None:
-    """Naive three-dot check. If any string in the serialized body looks like
-    a JWT (three base64-ish segments separated by dots, each ≥20 chars), bail
-    with a security-incident-style error. Called after redaction as a safety
-    net — a positive here means the capture script's redaction has a gap."""
-    text = json.dumps( body )
-    for chunk in text.split( '"' ):
-        parts = chunk.split( "." )
-        if len( parts ) == 3 and all( len( p ) >= 20 for p in parts ):
-            print( f"ERROR: possible unredacted JWT in {label}: {chunk[:60]}...", file=sys.stderr )
-            sys.exit( 3 )
+    """If any string in the serialized body contains a JWT-shaped token (see
+    `contains_jwt`), bail with a security-incident-style error. Called after
+    redaction as a safety net — a positive here means the capture script's
+    redaction has a gap. `write_fixture` applies the same matcher itself, so a
+    call site that forgets this call still cannot write a token."""
+    if contains_jwt( body ):
+        print( f"ERROR: possible unredacted JWT in {label}", file=sys.stderr )
+        sys.exit( 3 )
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +151,15 @@ def assert_no_jwt_residue( body: Any, label: str ) -> None:
 def write_fixture( domain: str, filename: str, body: Any ) -> Path:
     """Write `body` to test/fixtures/<domain>/<filename> with stable key order
     and two-space indent so diffs stay readable. Returns the path for
-    logging."""
+    logging.
+
+    Raises:
+        - ValueError if [body] contains a JWT-shaped token anywhere in a string;
+          nothing is written, so no call site can skip the check
+    """
+    if contains_jwt( body ):
+        raise ValueError( f"refusing to write {domain}/{filename}: the body contains a "
+                          f"JWT-shaped token. Redact it first; nothing was written." )
     path = fixtures_dir( domain ) / filename
     path.write_text(
         json.dumps( body, indent=2, sort_keys=True ) + "\n",

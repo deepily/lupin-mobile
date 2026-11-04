@@ -4,24 +4,24 @@ import 'package:dio/dio.dart';
 
 import 'doc_link.dart';
 import 'doc_models.dart';
+import 'doc_podcast.dart';
 import 'doc_upload.dart';
 
 /// Fetches doc-viewer targets over the shared Dio.
 ///
-/// The auth interceptor registered in `service_locator.dart` injects the Bearer
-/// token and refreshes on 401, so nothing here touches credentials.
+/// The auth interceptor registered in `service_locator.dart` injects the Bearer token and
+/// refreshes on 401, so nothing here touches credentials.
 ///
-/// The endpoint is polymorphic — the same URL answers with text, image bytes,
-/// or a JSON directory listing — so every response is fetched as raw bytes and
-/// dispatched on the `content-type` header rather than on the file extension.
-/// Extension-based dispatch would be wrong for exactly the case that matters:
-/// a directory has no extension at all.
+/// One URL answers with text, image bytes, or a JSON directory listing. Every response is
+/// fetched as raw bytes and dispatched on the `content-type` header, not the file
+/// extension, because a directory has no extension at all.
 class DocRepository {
   final Dio _dio;
 
+  /// Creates a repository over [_dio].
   const DocRepository( this._dio );
 
-  /// Fetch the document a [DocLink] points at.
+  /// Fetches the document a [DocLink] points at.
   ///
   /// Requires:
   ///     - link.isFetchable is true (kind is docs or io)
@@ -47,9 +47,7 @@ class DocRepository {
         queryParameters: link.query,
         options        : Options(
           responseType: ResponseType.bytes,
-          // Let every status through to our own handler so the server's
-          // `detail` text survives instead of being flattened into a Dio
-          // "status 400" string.
+          // Every status reaches our own handler so the server's `detail` text survives.
           validateStatus: ( _ ) => true,
         ),
       );
@@ -71,10 +69,9 @@ class DocRepository {
     }
   }
 
-  /// Map a media type plus its bytes onto a renderable DocContent.
+  /// Maps a media type plus its bytes onto a renderable DocContent.
   ///
-  /// Visible for testing — the dispatch is the interesting logic and deserves
-  /// direct coverage without a live Dio.
+  /// It is public so tests can cover the dispatch without a live Dio.
   static DocContent toContent( String mediaType, List<int> bytes ) =>
       _toContent( mediaType, bytes );
 
@@ -85,17 +82,15 @@ class DocRepository {
       return DocContent( kind: DocContentKind.image, mediaType: mediaType, bytes: bytes );
     }
 
-    // PDF, audio, video and office files (row 61ecfb22). The server streams
-    // them as bytes since 2026-09-24; decoding them as UTF-8 painted garbage.
+    // PDF, audio, video and office files arrive as bytes; decoding them as text paints garbage.
     if ( _isBinary( lower ) ) {
       return DocContent( kind: DocContentKind.binary, mediaType: mediaType, bytes: bytes );
     }
 
     final text = _decode( bytes );
 
-    // A JSON body on this endpoint means a directory listing, not a .json
-    // document — the file branch serves .json as `application/json` too, so
-    // shape decides, not the header alone.
+    // A JSON body here means a directory listing, not a .json document.
+    // The file branch serves .json as `application/json` too, so shape decides.
     if ( lower.startsWith( "application/json" ) ) {
       final listing = _tryListing( text );
       if ( listing != null ) {
@@ -117,9 +112,8 @@ class DocRepository {
       return DocContent( kind: DocContentKind.html, mediaType: mediaType, text: text, bytes: bytes );
     }
 
-    // Everything else the endpoint serves is source-ish text: .py, .yaml, .sh,
-    // .sql, .toml, .ini, .xml, and plain .txt. Rendering these as markdown
-    // would turn `# comment` into a heading, so they get the source branch.
+    // Everything else is source-like text (.py, .yaml, .sh, .sql, .toml, .ini, .xml, .txt).
+    // Markdown rendering would turn `# comment` into a heading, so it gets the source branch.
     return DocContent( kind: DocContentKind.source, mediaType: mediaType, text: text, bytes: bytes );
   }
 
@@ -132,7 +126,7 @@ class DocRepository {
       lower.startsWith( "application/vnd." ) ||
       lower.startsWith( "application/zip" );
 
-  /// ⬆ Store [file] in the folder [dir] (see `uploadDirFor`) — row 61ecfb22.
+  /// Stores [file] in the folder [dir] (see `uploadDirFor`).
   ///
   /// Requires:
   ///   - [dir] is `<scope>/<rel-dir>`, `<scope>`, or `io[/<rel-dir>]`
@@ -183,11 +177,80 @@ class DocRepository {
     }
   }
 
-  /// The browsable roots, from `GET /api/docs/scopes` (row 61ecfb22).
+  /// Asks whether a podcast can be made of [scopePath].
+  ///
+  /// It calls `GET /api/podcast-proxy/from-viewer/check`.
+  ///
+  /// Requires:
+  ///   - [scopePath] is the document as `<scope>/<path within scope>`
+  ///
+  /// Ensures:
+  ///   - 200 returns the file's name and size
+  ///   - a refusal (400 with the door's code, 403 for an API key) raises [DocApiException]
+  ///     carrying the server's own sentence and the status
+  ///   - a transport failure raises [DocApiException] with no status
+  Future<DocPodcastFacts> checkPodcast( String scopePath ) async {
+    try {
+      final res = await _dio.get<dynamic>(
+        "/api/podcast-proxy/from-viewer/check",
+        queryParameters: { "path": scopePath },
+        options        : Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      if ( status >= 200 && status < 300 && res.data is Map ) {
+        return DocPodcastFacts.fromJson( Map<String, dynamic>.from( res.data as Map ) );
+      }
+      throw DocApiException( podcastRefusalText( status, res.data ), statusCode: status );
+    } on DioException catch ( e ) {
+      throw DocApiException(
+        e.message ?? "Could not reach the document server.",
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  /// Starts a podcast of [scopePath].
+  ///
+  /// It calls `POST /api/podcast-proxy/from-viewer`.
+  ///
+  /// Requires:
+  ///   - [scopePath] is the document as `<scope>/<path within scope>`
+  ///   - the caller confirmed: this call is the yes
+  ///
+  /// Ensures:
+  ///   - 200 returns the new job id
+  ///   - 409 `spent` returns the earlier job id with `alreadyStarted` set
+  ///   - any other refusal raises [DocApiException] in the server's own words
+  Future<DocPodcastStarted> startPodcast( String scopePath ) async {
+    try {
+      final res = await _dio.post<dynamic>(
+        "/api/podcast-proxy/from-viewer",
+        data   : { "path": scopePath },
+        options: Options( validateStatus: ( _ ) => true ),
+      );
+      final status = res.statusCode ?? 0;
+      final data   = res.data;
+      if ( status >= 200 && status < 300 && data is Map && data[ "job_id" ] is String ) {
+        return DocPodcastStarted( jobId: data[ "job_id" ] as String );
+      }
+      final detail = data is Map ? data[ "detail" ] : null;
+      if ( status == 409 && detail is Map && detail[ "job_id" ] is String ) {
+        return DocPodcastStarted( jobId: detail[ "job_id" ] as String, alreadyStarted: true );
+      }
+      throw DocApiException( podcastRefusalText( status, data ), statusCode: status );
+    } on DioException catch ( e ) {
+      throw DocApiException(
+        e.message ?? "Could not reach the document server.",
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  /// The browsable roots, from `GET /api/docs/scopes`.
   ///
   /// Ensures:
   ///   - one [DocScope] per registered scope, in the server's order
-  ///   - does NOT include `io`; the Roots panel adds that root itself
+  ///   - does not include `io`; the Roots panel adds that root itself
   ///   - failures raise [DocApiException] in the server's own words
   Future<List<DocScope>> fetchScopes() async {
     try {
@@ -218,9 +281,7 @@ class DocRepository {
     }
   }
 
-  /// Decode UTF-8, tolerating malformed bytes rather than throwing — a viewer
-  /// that shows replacement characters is more useful than one that shows a
-  /// crash.
+  /// Decodes UTF-8, tolerating malformed bytes: replacement characters beat a crash.
   static String _decode( List<int> bytes ) {
     try {
       return utf8.decode( bytes, allowMalformed: true );
@@ -229,31 +290,28 @@ class DocRepository {
     }
   }
 
-  /// Parse a directory listing, or null when the JSON is not one.
+  /// Parses a directory listing, or null when the JSON is not one.
   static DocDirectoryListing? _tryListing( String text ) {
     try {
       final decoded = jsonDecode( text );
-      // 🔴 `kind == "directory"` DECIDES when present (Mr. Radio, 2026-09-24):
-      // a .json FILE is also application/json and could carry an `entries` key.
-      // Bodies without `kind` keep the older shape test.
+      // `kind == "directory"` decides when present, because a .json file is also
+      // application/json and could carry an `entries` key. Bodies without `kind` keep
+      // the older shape test.
       if ( decoded is Map<String, dynamic> &&
            decoded[ "entries" ] is List &&
            ( !decoded.containsKey( "kind" ) || decoded[ "kind" ] == "directory" ) ) {
         return DocDirectoryListing.fromJson( decoded );
       }
     } catch ( _ ) {
-      // Not JSON, or not a listing — fall through to the caller's default.
+      // Not JSON, or not a listing: fall through to the caller's default.
     }
     return null;
   }
 
-  /// Pull the server's `detail` string out of an error body.
+  /// Pulls the server's `detail` string out of an error body.
   ///
-  /// The doc endpoint's refusals draw a distinction worth preserving verbatim:
-  /// "this file's CONTENT is credential material" is a fact about the file,
-  /// while "it could not be read or decoded" is a fact about the disk or the
-  /// bind-mount. Paraphrasing them sends the reader hunting for key material
-  /// that was never there, so the server's own words are what we surface.
+  /// The server's words are surfaced unedited. "Credential material" is a fact about the
+  /// file, while "could not be read or decoded" is a fact about the disk or the mount.
   static String _detailFrom( List<int> bytes, int status ) {
     try {
       final decoded = jsonDecode( _decode( bytes ) );
@@ -261,7 +319,7 @@ class DocRepository {
         return decoded[ "detail" ].toString();
       }
     } catch ( _ ) {
-      // Non-JSON error body; fall through to the generic message.
+      // A non-JSON error body falls through to the generic message.
     }
     return "The document server returned status $status.";
   }

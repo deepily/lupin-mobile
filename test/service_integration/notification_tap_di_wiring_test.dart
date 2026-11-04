@@ -51,6 +51,13 @@ void main() {
       expect( ServiceLocator.buildNotificationAudioService().hasTapCallback, isTrue );
     } );
 
+    test( 'PRODUCTION builds the audio service WITH the foreground check, so no banner while the app is open', () {
+      expect( ServiceLocator.buildNotificationAudioService().hasForegroundProbe, isTrue );
+      expect(
+        NotificationAudioService( prefs: getIt<NotificationPreferences>() ).hasForegroundProbe,
+        isFalse );
+    } );
+
     test( 'NEGATIVE CONTROL: the same class built without one reports false', () {
       // Proof the probe above reads the injection and is not true either way.
       expect(

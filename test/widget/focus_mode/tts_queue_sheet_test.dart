@@ -35,6 +35,8 @@ void main() {
     when( () => tts.stopAll()     ).thenAnswer( ( _ ) async {} );
     when( () => tts.removeQueued( any() ) ).thenReturn( true );
     when( () => tts.clearQueued() ).thenReturn( null );
+    when( () => tts.lastOutcome   ).thenReturn( null );
+    when( () => tts.outcomeStream ).thenAnswer( ( _ ) => const Stream<TtsOutcome>.empty() );
   } );
   tearDown( () => ctrl.close() );
 
@@ -77,5 +79,45 @@ void main() {
     await tester.pump();
     expect( find.text( 'noisy test line' ), findsOneWidget );
     expect( find.byKey( const Key( TestKeys.ttsQueueSkip ) ), findsNothing, reason: 'nothing playing ⇒ no Skip' );
+  } );
+
+  group( 'the last-message line', () {
+    testWidgets( 'shows nothing before any message has arrived', ( tester ) async {
+      await tester.pumpWidget( host() );
+      await tester.pump();
+      expect( find.byKey( const Key( TestKeys.ttsQueueLastOutcome ) ), findsNothing );
+    } );
+
+    testWidgets( 'a message that was not spoken says why, in the error colour', ( tester ) async {
+      when( () => tts.lastOutcome ).thenReturn( TtsOutcome(
+        line: 'Last message not spoken: Master mute is on', problem: true, at: DateTime( 2026, 10, 10 ) ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+
+      expect( find.text( 'Last message not spoken: Master mute is on' ), findsOneWidget );
+      final text = tester.widget<Text>( find.text( 'Last message not spoken: Master mute is on' ) );
+      final ctx  = tester.element( find.byKey( const Key( TestKeys.ttsQueueSheet ) ) );
+      expect( text.style?.color, Theme.of( ctx ).colorScheme.error );
+    } );
+
+    testWidgets( 'a new outcome replaces the line live; a normal send reads quietly', ( tester ) async {
+      final out = StreamController<TtsOutcome>.broadcast();
+      addTearDown( out.close );
+      final stream = out.stream;
+      when( () => tts.outcomeStream ).thenAnswer( ( _ ) => stream );
+      when( () => tts.lastOutcome ).thenReturn( TtsOutcome(
+        line: 'Held, not spoken yet: speech is paused (1 waiting)', problem: true, at: DateTime( 2026, 10, 10 ) ) );
+      await tester.pumpWidget( host() );
+      await tester.pump();
+      expect( find.textContaining( 'speech is paused' ), findsOneWidget );
+
+      out.add( TtsOutcome( line: 'Last message sent to the speaker', problem: false, at: DateTime( 2026, 10, 10 ) ) );
+      await tester.pump();
+      await tester.pump();
+      expect( find.textContaining( 'speech is paused' ), findsNothing );
+      final text = tester.widget<Text>( find.text( 'Last message sent to the speaker' ) );
+      final ctx  = tester.element( find.byKey( const Key( TestKeys.ttsQueueSheet ) ) );
+      expect( text.style?.color, isNot( Theme.of( ctx ).colorScheme.error ) );
+    } );
   } );
 }

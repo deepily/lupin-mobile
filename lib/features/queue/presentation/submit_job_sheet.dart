@@ -7,7 +7,9 @@ import '../domain/queue_event.dart';
 import '../domain/queue_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Bottom sheet for typing or dictating a question and submitting it to the queue.
 class SubmitJobSheet extends StatefulWidget {
+  /// Creates the sheet.
   const SubmitJobSheet( { super.key } );
 
   @override

@@ -1,39 +1,68 @@
 import 'dart:typed_data';
 import 'package:equatable/equatable.dart';
 
+/// Where one voice-input attempt is in its life.
 enum VoiceInputStatus {
+  /// Nothing is happening.
   idle,
+  /// The microphone is capturing.
   recording,
+  /// The recording is being prepared.
   processing,
+  /// The recording is being turned into text.
   transcribing,
+  /// The transcription is ready.
   completed,
+  /// The attempt failed.
   error,
+  /// The user cancelled the attempt.
   cancelled,
 }
 
+/// The encoding of recorded audio.
 enum AudioFormat {
+  /// Uncompressed WAV.
   wav,
+  /// MP3.
   mp3,
+  /// M4A.
   m4a,
+  /// WebM.
   webm,
+  /// Ogg.
   ogg,
 }
 
+/// One voice-input attempt, from recording to transcription.
 class VoiceInput extends Equatable {
+  /// Unique attempt identifier.
   final String id;
+  /// The session the attempt belongs to.
   final String sessionId;
+  /// Where the attempt is now.
   final VoiceInputStatus status;
+  /// When recording started.
   final DateTime startedAt;
+  /// When the attempt ended, or null while it is running.
   final DateTime? completedAt;
+  /// Length of the recording, or null when not known.
   final Duration? duration;
+  /// The recognized text, or null until it is ready.
   final String? transcription;
+  /// The recognizer's confidence, or null.
   final double? confidence;
+  /// The encoded recording, or null when it was not kept.
   final Uint8List? audioData;
+  /// The encoding of [audioData], or null.
   final AudioFormat? audioFormat;
+  /// Sample rate in hertz, or null.
   final int? sampleRate;
+  /// The failure message, or null when there is none.
   final String? error;
+  /// Free-form extra fields, or null.
   final Map<String, dynamic>? metadata;
 
+  /// Creates a voice-input attempt.
   const VoiceInput({
     required this.id,
     required this.sessionId,
@@ -50,6 +79,7 @@ class VoiceInput extends Equatable {
     this.metadata,
   });
 
+  /// Returns a copy with the given fields replaced.
   VoiceInput copyWith({
     String? id,
     String? sessionId,
@@ -82,14 +112,20 @@ class VoiceInput extends Equatable {
     );
   }
 
+  /// Whether the transcription is ready.
   bool get isCompleted => status == VoiceInputStatus.completed;
+  /// Whether the attempt failed.
   bool get hasError => status == VoiceInputStatus.error;
+  /// Whether the attempt is recording, processing or transcribing.
   bool get isProcessing => [
         VoiceInputStatus.recording,
         VoiceInputStatus.processing,
         VoiceInputStatus.transcribing,
       ].contains(status);
 
+  /// Builds an attempt from its wire map.
+  ///
+  /// An unknown status becomes idle and an unknown format becomes wav.
   factory VoiceInput.fromJson(Map<String, dynamic> json) {
     return VoiceInput(
       id: json['id'] as String,
@@ -119,6 +155,7 @@ class VoiceInput extends Equatable {
     );
   }
 
+  /// Returns the wire map for this attempt.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

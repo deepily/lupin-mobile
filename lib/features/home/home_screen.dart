@@ -24,36 +24,37 @@ import '../finished_tasks/presentation/finished_tasks_screen.dart';
 import '../broadcast/domain/broadcast_bloc.dart';
 import '../broadcast/presentation/broadcast_pane.dart';
 import '../notifications/presentation/inbox_screen.dart';
+import '../podcasts/podcast_list_screen.dart';
+import '../../services/audio/podcast_catalog.dart';
 import '../queue/domain/queue_bloc.dart';
 import '../queue/presentation/queue_dashboard_screen.dart';
 import '../settings/presentation/notification_audio_settings_screen.dart';
 
 /// Whether the Trust Dashboard is offered anywhere on the home screen.
 ///
-/// 🔴 FALSE ON RICK'S ORDER, 2026-09-22: *"go ahead and disable visibility of the trust
-/// Dashboard it's currently back burnered so I don't need to see it as an option."*
+/// False: the dashboard is back-burnered, so both entry points are closed.
+/// The screen, its bloc, its repository and its tests are kept and still pass.
+/// Setting this to true brings both entry points back unchanged.
 ///
-/// ⚠️ BACK-BURNERED IS NOT KILLED, which is why this is a flag and not a deletion. The
-/// screen, its bloc, its repository and its 3 widget tests all still build and pass —
-/// only the two doors are closed. Flip this to `true` and both come back, unchanged.
-///
-/// There is a second reason not to delete it: the dashboard has a known defect that is
-/// filed and deliberately unfixed — `decision_proxy_state.dart:45` has
-/// `props => [ trust.trustStates.length ]`, a length standing in for a value, so the
-/// screen silently stops updating when trust changes in place at a constant count.
-/// Hiding the door means nobody meets that defect by accident while it waits its turn.
-/// It does NOT fix it, and this comment is not a substitute for the fix.
+/// The flag exists because the dashboard has a known, unfixed defect, and
+/// hiding it keeps anyone from meeting the defect by accident.
 const bool _kShowTrustDashboard = false;
+// The defect: DecisionProxyState.props compares a length ( trust.trustStates.length )
+// instead of the values, so the screen stops updating when trust changes in place
+// at a constant count. The flag hides the screen; it does not fix that.
 
 /// Whether the Notifications inbox is offered anywhere on the home screen.
 ///
-/// 🔴 FALSE ON RICK'S ORDER, 2026-09-23: the inbox is superfluous — it has been replaced
-/// by the Lupin Focus tab. Hidden, not deleted, exactly like `_kShowTrustDashboard`:
-/// `InboxScreen` and its tests still build and pass, only the doors are closed. There are
-/// **two** doors — the grid card and the app-bar Inbox icon — and both close together.
+/// False: the Lupin Focus tab replaced the inbox, so it is hidden, not deleted.
+/// `InboxScreen` and its tests are kept and still pass. There are two entry
+/// points, the grid card and the app-bar Inbox icon, and both close together.
 const bool _kShowNotificationsInbox = false;
 
+/// The home screen: a grid of entry points to the app's main features.
+///
+/// Shows the signed-in user's cards and the app-bar actions.
 class LupinHomeScreen extends StatelessWidget {
+  /// Creates the home screen.
   const LupinHomeScreen( { super.key } );
 
   @override
@@ -275,6 +276,16 @@ class LupinHomeScreen extends StatelessWidget {
               value: context.read<QueueBloc>(),
               child: const QueueDashboardScreen(),
             ),
+          ) ),
+        ),
+        const SizedBox( height: 12 ),
+        _NavCard(
+          key        : const Key( TestKeys.homePodcastsCard ),
+          icon       : Icons.podcasts,
+          title      : 'Podcasts',
+          subtitle   : 'Recent and downloaded; downloaded ones play offline',
+          onTap      : () => Navigator.of( context ).push( MaterialPageRoute(
+            builder: ( _ ) => PodcastListScreen( catalog: ServiceLocator.get<PodcastCatalog>() ),
           ) ),
         ),
         // Back-burnered and therefore hidden — see `_kShowTrustDashboard`. The spacer is

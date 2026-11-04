@@ -7,25 +7,24 @@ import '../data/doc_repository.dart';
 import 'doc_split_host.dart';
 import 'doc_viewer_screen.dart';
 
-/// A notification's `abstract`, disclosed on request.
+/// A notification's abstract, disclosed on request.
 ///
-/// Rick 2026-09-18: "the whole idea behind using abstracts as a notion is
-/// progressive disclosure." The bubble no longer renders the abstract inline.
-/// It shows one compact row — an icon and a label — and a tap opens the WHOLE
-/// abstract in the document viewer: in the 50/50 split beside the
-/// conversation where the surface has one (focus mode), else as a page. The
-/// viewer renders it as a full markdown document, and its links (doc links
-/// included) are live there.
-///
-/// Conditional by contract: a null or empty abstract renders NOTHING.
+/// The bubble shows one compact row, an icon and a label, and a tap opens the whole
+/// abstract in the document viewer. Where the surface has a split (focus mode) it opens
+/// beside the conversation, otherwise as a page.
+/// The viewer renders it as a full markdown document with live links.
+/// A null or empty abstract renders nothing.
+/// Design: src/docs/decisions/README.md (R-DOC-abstract-disclosure)
 class AbstractBody extends StatelessWidget {
   /// The abstract text. Null or empty renders nothing.
   final String? abstractText;
 
   /// Repository the viewer uses when a doc link inside the abstract is tapped.
-  /// Injected so widget tests can supply a fake without a live server.
+  ///
+  /// It is injected so widget tests can supply a fake without a live server.
   final DocRepository repository;
 
+  /// Creates an abstract row.
   const AbstractBody( {
     super.key,
     required this.abstractText,
@@ -51,7 +50,7 @@ class AbstractBody extends StatelessWidget {
   Widget build( BuildContext context ) {
     final text = abstractText;
 
-    // The conditional Rick specified: no abstract, no widget, no chrome.
+    // No abstract means no widget and no chrome.
     if ( text == null || text.isEmpty ) return const SizedBox.shrink();
 
     final theme  = Theme.of( context );

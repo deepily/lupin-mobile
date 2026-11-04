@@ -57,6 +57,12 @@ class _FakeNetwork implements NetworkConnectivityService {
 
   bool mobile = false;
 
+  /// What `currentState` reports to a bloc that starts now.
+  NetworkState current = NetworkState.unknown;
+
+  @override
+  NetworkState get currentState => current;
+
   @override
   Stream<NetworkState> get networkStateStream => controller.stream;
 
@@ -66,6 +72,7 @@ class _FakeNetwork implements NetworkConnectivityService {
   /// The restored edge. Anything else must not act.
   void restore() => controller.add( NetworkState.connected );
   void drop()    => controller.add( NetworkState.disconnected );
+  void limited() => controller.add( NetworkState.limited );
 
   @override
   dynamic noSuchMethod( Invocation invocation ) => super.noSuchMethod( invocation );
@@ -224,6 +231,7 @@ void main() {
 
       network.restore();
       await settle();
+      network.drop();
       network.restore();
       await settle();
 
@@ -244,6 +252,109 @@ void main() {
 
       expect( writesTo( transitionKey ) - afterPress, 1,
           reason: 'a loop inside one edge hammers a connection that just came back' );
+    } );
+
+    // Rick, 2026-10-09 (row 1b192f22): a network that is up but cannot reach the server's
+    // internet side is usable, the way ws_reconnect_coordinator already treats it.
+    // Round 2 (Maya's finding 2, Tiffany's table): connected -> limited is the moment the server stopped
+    // answering, so nothing is sent into it; limited -> connected is the server confirmed answering.
+    test( 'connected -> limited fires no retry and no refetch', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      network.restore();
+      await settle();
+      final writes = writesTo( transitionKey );
+      final reads  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ), writes, reason: 'the server just stopped answering' );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length, reads );
+    } );
+
+    test( 'limited -> connected fires exactly one retry and one refetch', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      network.limited();
+      await settle();
+      final writes = writesTo( transitionKey );
+      final reads  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      network.restore();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writes, 1 );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length - reads, 1 );
+    } );
+
+    // Round 3 (Maya, Tiffany): a pane opens after the service is already connected, so the first edge down
+    // to limited must not retry either.
+    test( 'a bloc started while connected: the first connected -> limited edge fires nothing', () async {
+      await bloc.close();
+      network.current = NetworkState.connected;
+      final late = TaskListBloc(
+        TaskListRepository( makeDio( adapter ) ),
+        TaskWriteRepository( makeDio( adapter ), actorEmail: () => 'rick@example.com' ),
+        network : network,
+      )..startConnectivityRefresh();
+      addTearDown( late.close );
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      late.add( TaskListVerbPressed(
+        taskId : 'row-1',
+        verb   : buildTaskVerb( 'park', reason: 'not this quarter', chaseTs: DateTime.utc( 2026, 10, 1 ) ),
+      ) );
+      await settle();
+      final writes = writesTo( transitionKey );
+      final reads  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ), writes, reason: 'the server just stopped answering' );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length, reads );
+    } );
+
+    test( 'the same usable state repeated fires once, not twice', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      final writes = writesTo( transitionKey );
+
+      network.limited();
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writes, 1 );
+    } );
+
+    test( 'disconnected -> limited fires once', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      network.restore();
+      network.drop();
+      await settle();
+      final writes = writesTo( transitionKey );
+
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writes, 1 );
+    } );
+
+    test( 'a limited edge retries the unsent write and refetches, like a connected one', () async {
+      adapter.handlers[ transitionKey ] = _neverAnswered;
+      await pressPark();
+      final writesAfterPress = writesTo( transitionKey );
+      final readsAfterPress  = adapter.captured.where( ( c ) => c.method == 'GET' ).length;
+
+      adapter.handlers[ transitionKey ] = ( _ ) => jsonBody( { 'status' : 'ok' } );
+      network.limited();
+      await settle();
+
+      expect( writesTo( transitionKey ) - writesAfterPress, 1, reason: 'one retry on the limited edge' );
+      expect( bloc.state.unsent, isEmpty );
+      expect( adapter.captured.where( ( c ) => c.method == 'GET' ).length - readsAfterPress, 1,
+          reason: 'and one refetch' );
     } );
 
     // ⚠️ ONLY THE RESTORED EDGE ACTS. Firing on every state change would also fire on the

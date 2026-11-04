@@ -11,13 +11,15 @@ import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
-/// Bug Fix Expediter submission form.
+/// Form that submits a job to fix a dead job's bug.
 ///
-/// Primary entry point: [JobDetailScreen] when job status == 'dead' — passes
-/// [deadJobId] pre-filled. Also reachable from AgenticHub for manual entry.
+/// [JobDetailScreen] opens it for a dead job with [deadJobId] filled in.
+/// The hub screen opens it empty for manual entry.
 class BugFixExpediterForm extends StatefulWidget {
-  final String? deadJobId;  // pre-filled when navigated from a dead job
+  /// Id of the dead job to pre-fill; null leaves the field empty.
+  final String? deadJobId;
 
+  /// Creates the form, optionally with [deadJobId] pre-filled.
   const BugFixExpediterForm( { super.key, this.deadJobId } );
 
   @override

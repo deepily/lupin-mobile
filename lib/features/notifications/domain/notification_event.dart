@@ -2,20 +2,30 @@ import 'package:equatable/equatable.dart';
 
 import '../data/notification_models.dart';
 
+/// Base class of every input event of the notification bloc.
 abstract class NotificationEvent extends Equatable {
+  /// Creates an event.
   const NotificationEvent();
 
   @override
   List<Object?> get props => [];
 }
 
-/// Load the multi-sender inbox for the given user.
+/// Loads the multi-sender inbox for a user.
 class NotificationsLoadInbox extends NotificationEvent {
+  /// Account whose inbox is loaded.
   final String userEmail;
+
+  /// Only senders active in the last this-many hours; null means no limit.
   final int?   hours;
+
+  /// Whether senders the user has hidden are included.
   final bool   includeHidden;
+
+  /// Whether senders that are the user's own jobs are left out.
   final bool   excludeOwnJobs;
 
+  /// Creates a load-inbox request.
   const NotificationsLoadInbox( {
     required this.userEmail,
     this.hours,
@@ -27,13 +37,21 @@ class NotificationsLoadInbox extends NotificationEvent {
   List<Object?> get props => [ userEmail, hours, includeHidden, excludeOwnJobs ];
 }
 
-/// Open a single sender's conversation thread.
+/// Opens one sender's conversation thread.
 class NotificationsLoadConversation extends NotificationEvent {
+  /// Sender whose thread is opened.
   final String senderId;
+
+  /// Account that owns the thread.
   final String userEmail;
+
+  /// Only messages from the last this-many hours; null means no limit.
   final int?   hours;
+
+  /// Whether hidden messages are included; the repository call does not use it.
   final bool   includeHidden;
 
+  /// Creates a load-conversation request.
   const NotificationsLoadConversation( {
     required this.senderId,
     required this.userEmail,
@@ -45,18 +63,27 @@ class NotificationsLoadConversation extends NotificationEvent {
   List<Object?> get props => [ senderId, userEmail, hours, includeHidden ];
 }
 
+/// Marks one notification as played and refreshes the current view.
 class NotificationsMarkPlayed extends NotificationEvent {
+  /// Notification to mark.
   final String notificationId;
+
+  /// Creates a mark-played request for [notificationId].
   const NotificationsMarkPlayed( this.notificationId );
 
   @override
   List<Object?> get props => [ notificationId ];
 }
 
+/// Sends the user's answer to a notification that asked a question.
 class NotificationsRespond extends NotificationEvent {
+  /// Notification being answered.
   final String  notificationId;
+
+  /// Answer the user chose or typed.
   final dynamic responseValue;
 
+  /// Creates a response to [notificationId].
   const NotificationsRespond( {
     required this.notificationId,
     required this.responseValue,
@@ -66,11 +93,18 @@ class NotificationsRespond extends NotificationEvent {
   List<Object?> get props => [ notificationId, responseValue ];
 }
 
+/// Deletes a user's notifications in bulk, then reloads the inbox.
 class NotificationsBulkDelete extends NotificationEvent {
+  /// Account whose notifications are deleted.
   final String userEmail;
+
+  /// Only notifications from the last this-many hours; null means all.
   final int?   hours;
+
+  /// Whether notifications from the user's own jobs are kept.
   final bool   excludeOwnJobs;
 
+  /// Creates a bulk-delete request.
   const NotificationsBulkDelete( {
     required this.userEmail,
     this.hours,
@@ -81,10 +115,15 @@ class NotificationsBulkDelete extends NotificationEvent {
   List<Object?> get props => [ userEmail, hours, excludeOwnJobs ];
 }
 
+/// Deletes one sender's whole conversation, then reloads the inbox.
 class NotificationsDeleteConversation extends NotificationEvent {
+  /// Sender whose conversation is deleted.
   final String senderId;
+
+  /// Account that owns the conversation.
   final String userEmail;
 
+  /// Creates a delete-conversation request.
   const NotificationsDeleteConversation( {
     required this.senderId,
     required this.userEmail,
@@ -94,33 +133,46 @@ class NotificationsDeleteConversation extends NotificationEvent {
   List<Object?> get props => [ senderId, userEmail ];
 }
 
-/// Used by the WebSocket bridge to nudge a refresh when a queue update
-/// event lands on the wire. When the event carries a full notification
-/// payload (the common case — backend `notification_queue_update` always
-/// includes the NotificationItem), the [notification] field is populated
-/// and the bloc dispatches audio on top of the standard refresh path.
+/// Tells the bloc that a queue update arrived over the WebSocket.
+///
+/// The backend update normally carries the full [notification]. The bloc then
+/// routes it by type, plays audio for ordinary notifications, and refreshes
+/// the current view.
 class NotificationsExternalUpdate extends NotificationEvent {
+  /// Payload of the update; null when the update carried none.
   final NotificationItem? notification;
+
+  /// Creates an update event, with [notification] when the wire message had one.
   const NotificationsExternalUpdate( { this.notification } );
 
   @override
   List<Object?> get props => [ notification?.id ];
 }
 
-/// Request a LLM-generated gist/summary of the currently-loaded conversation.
-/// Only valid while a [NotificationsConversationLoaded] state holds messages;
-/// the bloc pulls messages straight from that state so the UI doesn't have to
-/// pass them in.
+/// Requests an LLM summary of the conversation currently on screen.
+///
+/// Requires:
+///   - the bloc state is a [NotificationsConversationLoaded] with messages
+///
+/// Ensures:
+///   - the messages are read from that state, so the UI passes nothing
 class NotificationsGenerateGistRequested extends NotificationEvent {
+  /// Creates a gist request.
   const NotificationsGenerateGistRequested();
 }
 
-/// List dates (with per-date counts) for a single sender's conversation.
+/// Lists the dates, with per-date counts, of one sender's conversation.
 class NotificationsLoadSenderDates extends NotificationEvent {
+  /// Sender whose dates are listed.
   final String senderId;
+
+  /// Account that owns the conversation.
   final String userEmail;
+
+  /// Whether hidden notifications are counted.
   final bool   includeHidden;
 
+  /// Creates a load-dates request.
   const NotificationsLoadSenderDates( {
     required this.senderId,
     required this.userEmail,
@@ -131,14 +183,24 @@ class NotificationsLoadSenderDates extends NotificationEvent {
   List<Object?> get props => [ senderId, userEmail, includeHidden ];
 }
 
-/// Load a sender's conversation grouped by date (YYYY-MM-DD keys).
+/// Loads one sender's conversation grouped by date, keyed YYYY-MM-DD.
 class NotificationsLoadConversationByDate extends NotificationEvent {
+  /// Sender whose conversation is loaded.
   final String  senderId;
+
+  /// Account that owns the conversation.
   final String  userEmail;
+
+  /// Only notifications from the last this-many hours; null means no limit.
   final int?    hours;
+
+  /// Server-side anchor point for the time window; null means none.
   final String? anchor;
+
+  /// Whether hidden notifications are included.
   final bool    includeHidden;
 
+  /// Creates a load-by-date request.
   const NotificationsLoadConversationByDate( {
     required this.senderId,
     required this.userEmail,
@@ -151,21 +213,20 @@ class NotificationsLoadConversationByDate extends NotificationEvent {
   List<Object?> get props => [ senderId, userEmail, hours, anchor, includeHidden ];
 }
 
-/// Per-session voice/persona allocation arrived for [senderId]. Source of
-/// truth is the server bridge; mobile mirrors the persona into bloc state
-/// for header rendering only (per Q1 — TTS reads persona straight off the
-/// originating notification, not from this map).
+/// A voice persona was allocated to the session of [senderId].
 ///
-/// Triggered via two paths:
-/// 1. Real WS: `notification_queue_update` envelope with inner
-///    `notification.type == "voice_persona_assigned"` — `_onExternalUpdate`
-///    dispatch routes here.
-/// 2. Test/programmatic: blocTest fires this event directly to verify the
-///    persona-map mutation contract (Phase 1 Task 2.4 cases).
+/// The server bridge owns the allocation. The bloc mirrors the persona into
+/// its state for header display only; speech reads the persona off each
+/// notification instead. The event comes from a `voice_persona_assigned`
+/// WebSocket notification, or directly from tests.
 class NotificationsVoicePersonaAssigned extends NotificationEvent {
+  /// Session the persona belongs to.
   final String       senderId;
+
+  /// Persona allocated to that session.
   final VoicePersona persona;
 
+  /// Creates an assignment of [persona] to [senderId].
   const NotificationsVoicePersonaAssigned( {
     required this.senderId,
     required this.persona,
@@ -175,13 +236,19 @@ class NotificationsVoicePersonaAssigned extends NotificationEvent {
   List<Object?> get props => [ senderId, persona.voiceId ];
 }
 
-/// Per-session persona was released (server-side SessionEnd cleared the
-/// bridge for this sender). Removes the entry from the bloc's persona map.
-/// Idempotent — released for a sender with no current persona is a no-op.
+/// The persona of [senderId] was released when its server session ended.
+///
+/// Ensures:
+///   - the entry for [senderId] leaves the persona map
+///   - a sender with no persona is a no-op and emits nothing
 class NotificationsVoicePersonaReleased extends NotificationEvent {
+  /// Session whose persona was released.
   final String  senderId;
-  final String? personaName;  // informational only; bloc keys removal by senderId
 
+  /// Name of the released persona; informational, the bloc removes by [senderId].
+  final String? personaName;
+
+  /// Creates a release for [senderId].
   const NotificationsVoicePersonaReleased( {
     required this.senderId,
     this.personaName,
@@ -191,20 +258,18 @@ class NotificationsVoicePersonaReleased extends NotificationEvent {
   List<Object?> get props => [ senderId, personaName ];
 }
 
-/// Per-session speakerphone state changed for [senderId]. Used for test
-/// injection of the `on`-state ACs (AC-B2/B3/B4) — mirrors
-/// `NotificationsVoicePersonaAssigned`.
+/// The speakerphone state of the session [senderId] changed.
 ///
-/// Kept 2-field (senderId, on) per Section B / F-Krishna-B1 resolution:
-/// the `displaced`/`displaced_by` raw-payload diagnostic fields are tested
-/// via raw `_onExternalUpdate` injection (AC-B6), NOT via this typed event.
-/// The bloc's typed-event handler builds a `SpeakerphoneRecord(on: event.on)`
-/// with null displaced fields; the WS-path case in `_onExternalUpdate`
-/// extracts the full payload via `n.raw[...]`.
+/// Carries only the on/off flag, so the resulting record has no displaced
+/// fields. The WebSocket path reads those from the raw payload instead.
 class NotificationsSpeakerphoneChanged extends NotificationEvent {
+  /// Session whose speakerphone changed.
   final String senderId;
+
+  /// Whether the speakerphone is now on.
   final bool   on;
 
+  /// Creates a speakerphone change for [senderId].
   const NotificationsSpeakerphoneChanged( {
     required this.senderId,
     required this.on,

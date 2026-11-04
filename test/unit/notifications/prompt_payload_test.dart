@@ -17,6 +17,7 @@ import 'package:lupin_mobile/features/notifications/presentation/interactive_pro
 import 'package:lupin_mobile/shared/widgets/prompt_bodies.dart';
 
 import '../../_harness/test_app.dart';
+import '../../_helpers/source_text.dart';
 
 /// A canonical `ask_multiple_choice` payload as the server actually emits
 /// it: questions NESTED under `response_options.questions[]`, each with its
@@ -63,8 +64,9 @@ void main() {
       expect( find.text( 'Postgres' ), findsOneWidget );
       expect( find.text( 'SQLite'   ), findsOneWidget );
       expect( find.text( 'us-east'  ), findsOneWidget );
-      expect( find.byType( RadioListTile<String> ), findsNWidgets( 2 ) );
-      expect( find.byType( CheckboxListTile ),      findsNWidgets( 2 ) );
+      // Each choice question also ends with the automatic "Other" tick.
+      expect( find.byType( RadioListTile<String> ), findsNWidgets( 3 ) );
+      expect( find.byType( CheckboxListTile ),      findsNWidgets( 3 ) );
     } );
 
     testWidgets( 'answers are keyed by HEADER, not by label or position',
@@ -155,9 +157,148 @@ void main() {
     } );
   } );
 
+  // Row 50ce6d46: every choice question shows "Other" with a text box, single- and
+  // multi-select, and answers in the web client's shape.
+  group( 'every choice question has an "Other" answer', () {
+    Key otherTick( int i )  => Key( '${TestKeys.promptMultiQuestionOtherPrefix}$i' );
+    Key otherField( int i ) => Key( '${TestKeys.promptMultiQuestionOtherFieldPrefix}$i' );
+
+    Future<Map<String, dynamic>? Function()> mount( WidgetTester tester ) async {
+      Map<String, dynamic>? submitted;
+      await tester.pumpWidget( MaterialApp( home: Scaffold( body: SingleChildScrollView(
+        child: MultiQuestionPromptBody(
+          questions : canonical[ 'questions' ]!,
+          onRespond : ( v ) => submitted = v,
+        ),
+      ) ) ) );
+      return () => submitted;
+    }
+
+    Future<void> submit( WidgetTester tester ) async {
+      await tester.ensureVisible( find.byKey( const Key( TestKeys.promptMultiQuestionSubmit ) ) );
+      await tester.tap( find.byKey( const Key( TestKeys.promptMultiQuestionSubmit ) ) );
+      await tester.pump();
+    }
+
+    testWidgets( 'both a single-select and a multi-select question show Other and a text box',
+                 ( tester ) async {
+      await mount( tester );
+      expect( find.text( 'Other' ), findsNWidgets( 2 ) );
+      expect( find.byKey( otherTick( 0 ) ),  findsOneWidget );
+      expect( find.byKey( otherTick( 1 ) ),  findsOneWidget );
+      expect( find.byKey( otherField( 0 ) ), findsOneWidget );
+      expect( find.byKey( otherField( 1 ) ), findsOneWidget );
+    } );
+
+    testWidgets( 'single-select: a ticked Other answers with its trimmed text, a string',
+                 ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.tap( find.byKey( otherTick( 0 ) ) );
+      await tester.pump();
+      await tester.enterText( find.byKey( otherField( 0 ) ), '  MySQL  ' );
+      await tester.pump();
+      await submit( tester );
+      expect( submitted()![ 'Database' ], 'MySQL' );
+    } );
+
+    testWidgets( 'single-select: typing in the box ticks Other over a picked option',
+                 ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.tap( find.text( 'Postgres' ) );
+      await tester.pump();
+      await tester.enterText( find.byKey( otherField( 0 ) ), 'DuckDB' );
+      await tester.pump();
+      expect( tester.widget<RadioListTile<String>>( find.byKey( otherTick( 0 ) ) ).checked, isTrue );
+      await submit( tester );
+      expect( submitted()![ 'Database' ], 'DuckDB' );
+    } );
+
+    testWidgets( 'single-select: a picked option with text left in an unticked box sends the option',
+                 ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.enterText( find.byKey( otherField( 0 ) ), 'DuckDB' );
+      await tester.pump();
+      await tester.tap( find.text( 'Postgres' ) );
+      await tester.pump();
+      await submit( tester );
+      expect( submitted()![ 'Database' ], 'Postgres' );
+    } );
+
+    testWidgets( 'single-select: a cursor move in the box with no new text keeps the later pick',
+                 ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.enterText( find.byKey( otherField( 0 ) ), 'DuckDB' );
+      await tester.pump();
+      await tester.tap( find.text( 'Postgres' ) );
+      await tester.pump();
+
+      // The keyboard closing its word, or a cursor move, notifies the controller
+      // with the same text; it must not tick Other again over the pick.
+      final field = tester.widget<EditableText>( find.descendant(
+          of: find.byKey( otherField( 0 ) ), matching: find.byType( EditableText ) ) );
+      field.controller.selection = const TextSelection.collapsed( offset: 2 );
+      field.controller.value     = field.controller.value.copyWith( composing: TextRange.empty );
+      await tester.pump();
+
+      expect( tester.widget<RadioListTile<String>>( find.byKey( otherTick( 0 ) ) ).checked, isFalse );
+      await submit( tester );
+      expect( submitted()![ 'Database' ], 'Postgres' );
+    } );
+
+    testWidgets( 'multi-select: the Other text is added to the ticked labels', ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.tap( find.text( 'us-east' ) );
+      await tester.pump();
+      await tester.enterText( find.byKey( otherField( 1 ) ), ' ap-south ' );
+      await tester.pump();
+      expect( tester.widget<CheckboxListTile>( find.byKey( otherTick( 1 ) ) ).value, isTrue );
+      await submit( tester );
+      expect( submitted()![ 'Regions' ], [ 'us-east', 'ap-south' ] );
+    } );
+
+    testWidgets( 'multi-select: unticking Other leaves its text out', ( tester ) async {
+      final submitted = await mount( tester );
+      await tester.enterText( find.byKey( otherField( 1 ) ), 'ap-south' );
+      await tester.pump();
+      await tester.ensureVisible( find.byKey( otherTick( 1 ) ) );
+      await tester.tap( find.byKey( otherTick( 1 ) ) );
+      await tester.pump();
+      await submit( tester );
+      expect( submitted()![ 'Regions' ], <String>[] );
+    } );
+
+    testWidgets( 'the SHEET sends typed Other answers as {"answers": {header: value}}',
+                 ( tester ) async {
+      final bloc = MockNotificationBloc();
+      await tester.pumpWidget( MaterialApp( home: BlocProvider<NotificationBloc>.value(
+        value : bloc,
+        child : const Scaffold( body: InteractivePromptSheet(
+          notificationId : 'msg-other',
+          responseType   : 'multiple_choice',
+          options        : canonical,
+        ) ),
+      ) ) );
+
+      await tester.enterText( find.byKey( otherField( 0 ) ), 'MySQL' );
+      await tester.pump();
+      await tester.enterText( find.byKey( otherField( 1 ) ), 'ap-south' );
+      await tester.pump();
+      await tester.ensureVisible( find.byKey( const Key( TestKeys.promptMultiQuestionSubmit ) ) );
+      await tester.tap( find.byKey( const Key( TestKeys.promptMultiQuestionSubmit ) ) );
+      await tester.pump();
+
+      final captured = verify( () => bloc.add( captureAny(
+        that: isA<NotificationsRespond>() ) ) ).captured;
+      final event = captured.single as NotificationsRespond;
+      expect( event.responseValue, {
+        'answers': { 'Database': 'MySQL', 'Regions': [ 'ap-south' ] },
+      } );
+    } );
+  } );
+
   group( 'AC-S4.16 — the body was MOVED, not duplicated', () {
-    final sheet  = File( 'lib/features/notifications/presentation/interactive_prompt_sheet.dart' )
-        .readAsStringSync();
+    final sheet  = stripComments( File( 'lib/features/notifications/presentation/interactive_prompt_sheet.dart' )
+        .readAsStringSync() );
     final bodies = File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync();
 
     test( 'the private copy is GONE from the sheet', () {
@@ -184,8 +325,6 @@ void main() {
       // who trusts a stale comment over the plan has a citation for doing
       // the wrong thing.
       expect( bodies.contains( 'deliberately NOT extracted' ), isFalse );
-      expect( bodies.contains( 'AC-S4.16' ), isTrue,
-              reason: 'the reversal is named where the old claim lived' );
     } );
   } );
 
@@ -205,7 +344,7 @@ void main() {
     // `required`, which broke every call site: red, but red from the COMPILER,
     // which proves only that the mutant cannot exist. A source check is
     // falsified by a mutant the compiler accepts.
-    final src = File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync();
+    final src = stripComments( File( 'lib/shared/widgets/prompt_bodies.dart' ).readAsStringSync() );
 
     test( 'no repository import, and neither endpoint is named', () {
       expect( src.contains( 'repository' ), isFalse );

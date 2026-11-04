@@ -127,7 +127,8 @@ deploy-apk-to-device.sh — install the dev server's debug APK to whatever adb s
   --build            Build on the dev server over ssh first, then install the new APK.
                      Server: LUPIN_BUILD_HOST (default rruiz@192.168.1.21).
                      Checkout on the server: LUPIN_BUILD_REPO.
-  --fcm              With --build: compile in FCM push wake-ups (row 8ff78c69).
+  --no-fcm           With --build: compile FCM push wake-ups OUT. The default is IN.
+  --fcm              With --build: accepted and ignored (FCM is already the default).
   --device SERIAL    Install to this adb serial instead of choosing one.
   -s SERIAL          Short form of --device.
   --connect ADDR     `adb connect ADDR` first, for a wireless phone on the LAN.
@@ -171,7 +172,9 @@ PAIR_CODE=""
 APK_OVERRIDE=""
 ALLOW_STALE=false
 DO_BUILD=false
-BUILD_FCM=false
+BUILD_FCM=true
+SAW_FCM=false
+SAW_NO_FCM=false
 DO_LAUNCH=true
 DO_LOGCAT=false
 LIST_ONLY=false
@@ -195,7 +198,8 @@ while [ $# -gt 0 ]; do
             APK_OVERRIDE="$2"; shift ;;
         --allow-stale) ALLOW_STALE=true ;;
         --build)     DO_BUILD=true ;;
-        --fcm)       BUILD_FCM=true ;;
+        --fcm)       SAW_FCM=true ;;
+        --no-fcm)    SAW_NO_FCM=true; BUILD_FCM=false ;;
         --no-launch) DO_LAUNCH=false ;;
         --logcat)    DO_LOGCAT=true ;;
         --list)      LIST_ONLY=true ;;
@@ -210,9 +214,24 @@ done
 
 [ -n "$APK_OVERRIDE" ] && APK_SRC="$APK_OVERRIDE"
 
-if [ "$BUILD_FCM" = true ] && [ "$DO_BUILD" = false ]; then
-    print_error "--fcm only means something with --build (it changes what the server compiles)."
+if [ "$SAW_FCM" = true ] && [ "$SAW_NO_FCM" = true ]; then
+    print_error "--fcm and --no-fcm contradict each other; pass one."
     exit 2
+fi
+if { [ "$SAW_FCM" = true ] || [ "$SAW_NO_FCM" = true ]; } && [ "$DO_BUILD" = false ]; then
+    print_error "--fcm and --no-fcm only mean something with --build (they change what the server compiles)."
+    exit 2
+fi
+
+# FCM is the server script's default, so only the opt-out is passed along.
+build_cmd="$BUILD_REPO/src/scripts/build-apk-on-server.sh"
+[ "$BUILD_FCM" = false ] && build_cmd="$build_cmd --no-fcm"
+
+# Test hook: print the server command and stop, before adb, ssh or any device check.
+# src/scripts/test-apk-fcm-default.sh uses it to prove the default and the opt-out.
+if [ "${APK_DEPLOY_DRY_RUN:-}" = "1" ]; then
+    echo "BUILD_CMD: $build_cmd"
+    exit 0
 fi
 
 if [ -z "$ADB" ]; then
@@ -391,8 +410,6 @@ if [ "$DO_BUILD" = true ]; then
     print_step "Building on the dev server ($BUILD_HOST)"
     # -t so the build's colours and progress stream live; ConnectTimeout so a wrong
     # address fails in seconds instead of hanging. A password prompt still works.
-    build_cmd="$BUILD_REPO/src/scripts/build-apk-on-server.sh"
-    [ "$BUILD_FCM" = true ] && build_cmd="$build_cmd --fcm"
     build_rc=0
     ssh -t -o ConnectTimeout=10 "$BUILD_HOST" "$build_cmd" || build_rc=$?
     if [ "$build_rc" != 0 ]; then
@@ -438,11 +455,11 @@ case "$APK_FCM" in
          print_info "FCM:       ON — background wake-ups are compiled in" ;;
     off) print_info "Commit:    $( read_apk_stamp_field "$APK_SRC" branch ) @ $( read_apk_stamp_field "$APK_SRC" sha )"
          print_info "FCM:       OFF — NO background wake-ups in this build."
-         print_info "           Rebuild with --build --fcm if you are testing wake-ups." ;;
+         print_info "           Rebuild with --build (FCM is the default; drop --no-fcm) if you are testing wake-ups." ;;
     *)   # An APK from before the stamp existed, or from the other build script. Reported
          # as unknown rather than guessed: a guess presented as a fact is the defect.
          print_info "FCM:       unknown — no readable build stamp beside this APK."
-         print_info "           Rebuild with --build (optionally --fcm) to get one." ;;
+         print_info "           Rebuild with --build to get one." ;;
 esac
 
 # 🔴 A TIMESTAMP IS A DISCLOSURE, NOT A CONTROL, AND THIS IS THE CONTROL.

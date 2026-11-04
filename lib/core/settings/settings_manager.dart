@@ -6,41 +6,68 @@ import '../error_handling/error_handler.dart';
 
 /// Settings categories for organization
 enum SettingsCategory {
+  /// Settings of the app as a whole.
   general,
+  /// Voice input settings.
   voice,
+  /// Audio output and text-to-speech settings.
   audio,
+  /// Network behavior settings.
   network,
+  /// Analytics, crash reporting and data retention.
   privacy,
+  /// Contrast, font size and haptics.
   accessibility,
+  /// Debug and development settings.
   developer,
 }
 
 /// Setting types for validation and UI generation
 enum SettingType {
+  /// A true or false value.
   boolean,
+  /// A whole number.
   integer,
+  /// A decimal number.
   double,
+  /// Text.
   string,
+  /// A list of values.
   list,
+  /// A map of values.
   map,
+  /// One of a fixed set of values.
   enum_,
 }
 
 /// Individual setting definition
 class SettingDefinition<T> {
+  /// Dotted key the value is stored under, for example `voice.enabled`.
   final String key;
+  /// Group the setting belongs to.
   final SettingsCategory category;
+  /// Kind of value the setting holds.
   final SettingType type;
+  /// Value used until the user sets one.
   final T defaultValue;
+  /// Name shown to the user.
   final String title;
+  /// Explanation shown to the user, or null.
   final String? description;
+  /// Smallest allowed value, or null for no lower bound.
   final T? minValue;
+  /// Largest allowed value, or null for no upper bound.
   final T? maxValue;
+  /// The only values allowed, or null when any value is.
   final List<T>? allowedValues;
+  /// Whether a change takes effect only after an app restart.
   final bool requiresRestart;
+  /// Whether the setting is hidden from the basic settings screen.
   final bool isAdvanced;
+  /// Extra check a value must pass, or null.
   final bool Function(T value)? validator;
 
+  /// Creates a definition; the optional fields default to null or false.
   const SettingDefinition({
     required this.key,
     required this.category,
@@ -81,6 +108,7 @@ class SettingDefinition<T> {
     return true;
   }
 
+  /// Serializes the definition.
   Map<String, dynamic> toJson() {
     return {
       'key': key,
@@ -149,7 +177,7 @@ class SettingsManager {
   /// Register all default settings definitions
   void _registerDefaultSettings() {
     // General settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'general.first_launch',
       category: SettingsCategory.general,
       type: SettingType.boolean,
@@ -158,7 +186,7 @@ class SettingsManager {
       description: 'Whether this is the first time launching the app',
     ));
 
-    _registerSetting(SettingDefinition<String>(
+    _registerSetting(const SettingDefinition<String>(
       key: 'general.theme',
       category: SettingsCategory.general,
       type: SettingType.enum_,
@@ -168,7 +196,7 @@ class SettingsManager {
       allowedValues: ['light', 'dark', 'system'],
     ));
 
-    _registerSetting(SettingDefinition<String>(
+    _registerSetting(const SettingDefinition<String>(
       key: 'general.language',
       category: SettingsCategory.general,
       type: SettingType.enum_,
@@ -180,7 +208,7 @@ class SettingsManager {
     ));
 
     // Voice settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'voice.enabled',
       category: SettingsCategory.voice,
       type: SettingType.boolean,
@@ -189,7 +217,7 @@ class SettingsManager {
       description: 'Enable voice input functionality',
     ));
 
-    _registerSetting(SettingDefinition<double>(
+    _registerSetting(const SettingDefinition<double>(
       key: 'voice.sensitivity',
       category: SettingsCategory.voice,
       type: SettingType.double,
@@ -200,7 +228,7 @@ class SettingsManager {
       maxValue: 1.0,
     ));
 
-    _registerSetting(SettingDefinition<int>(
+    _registerSetting(const SettingDefinition<int>(
       key: 'voice.max_recording_duration',
       category: SettingsCategory.voice,
       type: SettingType.integer,
@@ -211,7 +239,7 @@ class SettingsManager {
       maxValue: 300,
     ));
 
-    _registerSetting(SettingDefinition<String>(
+    _registerSetting(const SettingDefinition<String>(
       key: 'voice.language',
       category: SettingsCategory.voice,
       type: SettingType.enum_,
@@ -222,7 +250,7 @@ class SettingsManager {
     ));
 
     // Audio settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'audio.tts_enabled',
       category: SettingsCategory.audio,
       type: SettingType.boolean,
@@ -231,7 +259,7 @@ class SettingsManager {
       description: 'Enable audio responses',
     ));
 
-    _registerSetting(SettingDefinition<double>(
+    _registerSetting(const SettingDefinition<double>(
       key: 'audio.tts_speed',
       category: SettingsCategory.audio,
       type: SettingType.double,
@@ -242,7 +270,7 @@ class SettingsManager {
       maxValue: 2.0,
     ));
 
-    _registerSetting(SettingDefinition<double>(
+    _registerSetting(const SettingDefinition<double>(
       key: 'audio.tts_pitch',
       category: SettingsCategory.audio,
       type: SettingType.double,
@@ -253,7 +281,7 @@ class SettingsManager {
       maxValue: 2.0,
     ));
 
-    _registerSetting(SettingDefinition<double>(
+    _registerSetting(const SettingDefinition<double>(
       key: 'audio.volume',
       category: SettingsCategory.audio,
       type: SettingType.double,
@@ -264,7 +292,7 @@ class SettingsManager {
       maxValue: 1.0,
     ));
 
-    _registerSetting(SettingDefinition<String>(
+    _registerSetting(const SettingDefinition<String>(
       key: 'audio.tts_voice',
       category: SettingsCategory.audio,
       type: SettingType.enum_,
@@ -275,7 +303,7 @@ class SettingsManager {
     ));
 
     // Network settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'network.offline_mode',
       category: SettingsCategory.network,
       type: SettingType.boolean,
@@ -284,7 +312,7 @@ class SettingsManager {
       description: 'Use cached data when possible',
     ));
 
-    _registerSetting(SettingDefinition<int>(
+    _registerSetting(const SettingDefinition<int>(
       key: 'network.timeout',
       category: SettingsCategory.network,
       type: SettingType.integer,
@@ -295,7 +323,7 @@ class SettingsManager {
       maxValue: 120,
     ));
 
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'network.wifi_only',
       category: SettingsCategory.network,
       type: SettingType.boolean,
@@ -305,7 +333,7 @@ class SettingsManager {
     ));
 
     // Privacy settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'privacy.analytics_enabled',
       category: SettingsCategory.privacy,
       type: SettingType.boolean,
@@ -314,7 +342,7 @@ class SettingsManager {
       description: 'Allow anonymous usage analytics',
     ));
 
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'privacy.crash_reporting',
       category: SettingsCategory.privacy,
       type: SettingType.boolean,
@@ -323,7 +351,7 @@ class SettingsManager {
       description: 'Send crash reports to help improve the app',
     ));
 
-    _registerSetting(SettingDefinition<int>(
+    _registerSetting(const SettingDefinition<int>(
       key: 'privacy.data_retention_days',
       category: SettingsCategory.privacy,
       type: SettingType.integer,
@@ -335,7 +363,7 @@ class SettingsManager {
     ));
 
     // Accessibility settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'accessibility.high_contrast',
       category: SettingsCategory.accessibility,
       type: SettingType.boolean,
@@ -344,7 +372,7 @@ class SettingsManager {
       description: 'Use high contrast colors',
     ));
 
-    _registerSetting(SettingDefinition<double>(
+    _registerSetting(const SettingDefinition<double>(
       key: 'accessibility.font_scale',
       category: SettingsCategory.accessibility,
       type: SettingType.double,
@@ -355,7 +383,7 @@ class SettingsManager {
       maxValue: 2.0,
     ));
 
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'accessibility.vibration_enabled',
       category: SettingsCategory.accessibility,
       type: SettingType.boolean,
@@ -365,7 +393,7 @@ class SettingsManager {
     ));
 
     // Developer settings
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'developer.debug_mode',
       category: SettingsCategory.developer,
       type: SettingType.boolean,
@@ -375,7 +403,7 @@ class SettingsManager {
       isAdvanced: true,
     ));
 
-    _registerSetting(SettingDefinition<bool>(
+    _registerSetting(const SettingDefinition<bool>(
       key: 'developer.verbose_logging',
       category: SettingsCategory.developer,
       type: SettingType.boolean,
@@ -385,7 +413,7 @@ class SettingsManager {
       isAdvanced: true,
     ));
 
-    _registerSetting(SettingDefinition<String>(
+    _registerSetting(const SettingDefinition<String>(
       key: 'developer.api_endpoint',
       category: SettingsCategory.developer,
       type: SettingType.string,
@@ -630,11 +658,16 @@ class SettingsManager {
 
 /// Settings change event
 class SettingsChangedEvent {
+  /// Key of the setting that changed.
   final String key;
+  /// Value before the change.
   final dynamic oldValue;
+  /// Value after the change.
   final dynamic newValue;
+  /// Whether the change takes effect only after an app restart.
   final bool requiresRestart;
 
+  /// Creates the event; every field is required.
   const SettingsChangedEvent({
     required this.key,
     required this.oldValue,

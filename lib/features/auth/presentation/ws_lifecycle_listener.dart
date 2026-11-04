@@ -4,24 +4,23 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../domain/auth_bloc.dart';
 import '../domain/auth_state.dart';
 
-/// Drives a transport-layer lifecycle (e.g. WebSocket connect / disconnect)
-/// from `AuthBloc` state transitions. Kept as a pure widget so callbacks can
-/// be injected by tests and the production wiring in `app.dart`.
+/// Connects and disconnects the websocket as the auth state changes.
 ///
-/// `onAuthenticated` receives BOTH identities because they are not
-/// interchangeable: `userId` is the account UUID from `/me`, while every
-/// email-keyed server route (senders-visible, FCM register-token) 404s or
-/// mis-keys on it. Passing only the UUID is how the reconnect cold start
-/// came to ask for a UUID's senders.
+/// It is a plain widget so tests and the app wiring can inject the callbacks.
+/// [onAuthenticated] receives both the user id and the email.
+/// Email-keyed server routes fail or mis-key when given the id.
 ///
-/// `listenWhen` filters on runtime-type change so successive
-/// `AuthAuthenticated` emissions (e.g. token refresh) do not trigger a
-/// redundant connect.
+/// Only a change of state type triggers a callback, so repeated authenticated
+/// states, such as a token refresh, do not reconnect.
 class WsLifecycleListener extends StatelessWidget {
+  /// The widget shown below the listener.
   final Widget child;
+  /// Called with the user id and email when the user becomes authenticated.
   final Future<void> Function( String userId, String email ) onAuthenticated;
+  /// Called when the user is no longer authenticated.
   final Future<void> Function()                              onSignedOut;
 
+  /// Creates the listener; all three arguments are required.
   const WsLifecycleListener( {
     super.key,
     required this.child,

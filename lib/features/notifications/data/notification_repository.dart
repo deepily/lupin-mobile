@@ -2,28 +2,35 @@ import 'package:dio/dio.dart';
 
 import 'notification_models.dart';
 
+/// Failure of a notifications API call, carrying the server's message.
 class NotificationApiException implements Exception {
+  /// Server `detail` text, or a fallback describing the failed call.
   final String message;
+
+  /// HTTP status, or null when the request got no response.
   final int?   statusCode;
+
+  /// Builds an exception from a [message] and optional [statusCode].
   const NotificationApiException( this.message, { this.statusCode } );
   @override
   String toString() => "NotificationApiException($statusCode): $message";
 }
 
-// Percent-encode a single path segment so values containing `/`, `@`, `+`,
-// spaces, etc. don't collapse into extra FastAPI path params.
-// Example: "peer-queue-watch/abc-def" -> "peer-queue-watch%2Fabc-def".
+// Percent-encodes one path segment so `/`, `@`, `+` and spaces do not split it
+// into extra path parameters. "a/b" becomes "a%2Fb".
 String _enc( String s ) => Uri.encodeComponent( s );
 
-/// Typed wrapper over the 17-endpoint Lupin notifications API.
-/// Uses the shared Dio (auth interceptor injects Bearer automatically).
+/// Typed wrapper over the Lupin notifications API.
+///
+/// Uses the shared Dio, whose auth interceptor adds the bearer token.
+/// Every method throws [NotificationApiException] on a failed request.
 class NotificationRepository {
   final Dio _dio;
+
+  /// Creates a repository that sends requests through [_dio].
   const NotificationRepository( this._dio );
 
-  // ---------------------------------------------------------------------
-  // POST /api/notify  (fire-and-forget; SSE mode requires a different call)
-  // ---------------------------------------------------------------------
+  /// Dispatches a notification through the server and does not wait for a reply.
   Future<NotifyDispatchResponse> notify( NotifyRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -36,9 +43,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // POST /api/notify/response
-  // ---------------------------------------------------------------------
+  /// Sends the user's answer to a notification that asked a question.
   Future<NotificationResponseAck> respond( NotificationResponsePayload p ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -51,9 +56,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/{user_id}
-  // ---------------------------------------------------------------------
+  /// Lists a user's notifications, optionally including ones already played.
   Future<NotificationListResponse> list(
     String userId, {
     bool includePlayed = false,
@@ -73,9 +76,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/{user_id}/next
-  // ---------------------------------------------------------------------
+  /// Fetches the next unplayed notification for a user.
   Future<NextNotificationResponse> next( String userId ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
@@ -87,9 +88,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // POST /api/notifications/{notification_id}/played
-  // ---------------------------------------------------------------------
+  /// Marks one notification as played.
   Future<StatusAckResponse> markPlayed( String notificationId ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -101,9 +100,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // DELETE /api/notifications/{notification_id}
-  // ---------------------------------------------------------------------
+  /// Deletes one notification.
   Future<StatusAckResponse> deleteOne( String notificationId ) async {
     try {
       final res = await _dio.delete<Map<String, dynamic>>(
@@ -115,9 +112,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // DELETE /api/notifications/bulk/{user_email}
-  // ---------------------------------------------------------------------
+  /// Deletes a user's notifications in bulk, optionally limited to the last [hours].
   Future<BulkDeleteResponse> bulkDelete(
     String userEmail, {
     int?  hours,
@@ -137,9 +132,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/senders/{user_email}
-  // ---------------------------------------------------------------------
+  /// Lists every sender who has notified the user.
   Future<List<SenderSummary>> senders(
     String userEmail, {
     int? hours,
@@ -158,9 +151,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/senders-visible/{user_email}
-  // ---------------------------------------------------------------------
+  /// Lists senders for the inbox, hiding hidden ones unless [includeHidden] is set.
   Future<List<SenderSummary>> sendersVisible(
     String userEmail, {
     int?  hours,
@@ -185,9 +176,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/conversation/{sender_id}/{user_email}
-  // ---------------------------------------------------------------------
+  /// Fetches the messages one sender has exchanged with the user.
   Future<List<ConversationMessage>> conversation(
     String senderId,
     String userEmail, {
@@ -211,9 +200,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // DELETE /api/notifications/conversation/{sender_id}/{user_email}
-  // ---------------------------------------------------------------------
+  /// Deletes the whole conversation with one sender.
   Future<ConversationDeleteResponse> deleteConversation(
     String senderId,
     String userEmail,
@@ -228,9 +215,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/conversation-by-date/{sender_id}/{user_email}
-  // ---------------------------------------------------------------------
+  /// Fetches one sender's conversation grouped by date, keyed by YYYY-MM-DD.
   Future<Map<String, List<NotificationItem>>> conversationByDate(
     String senderId,
     String userEmail, {
@@ -263,9 +248,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // DELETE /api/notifications/date/{sender_id}/{user_email}/{date_string}
-  // ---------------------------------------------------------------------
+  /// Deletes one sender's notifications for a single date.
   Future<DateDeleteResponse> deleteDate(
     String senderId,
     String userEmail,
@@ -281,9 +264,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/sender-dates/{sender_id}/{user_email}
-  // ---------------------------------------------------------------------
+  /// Lists the dates on which one sender has notifications, with counts.
   Future<List<DateSummary>> senderDates(
     String senderId,
     String userEmail, {
@@ -303,9 +284,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/active-conversation/{user_email}
-  // ---------------------------------------------------------------------
+  /// Fetches the conversation the user is currently active in.
   Future<ActiveConversationResponse> activeConversation( String userEmail ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
@@ -317,9 +296,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/notifications/project-sessions/{project}/{user_email}
-  // ---------------------------------------------------------------------
+  /// Lists the sessions of one project for the user.
   Future<List<ProjectSession>> projectSessions(
     String project,
     String userEmail,
@@ -337,9 +314,7 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // POST /api/notifications/generate-gist
-  // ---------------------------------------------------------------------
+  /// Asks the server for a summary of a set of messages.
   Future<GistResponse> generateGist( GistRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -352,12 +327,10 @@ class NotificationRepository {
     }
   }
 
-  // ---------------------------------------------------------------------
-  // GET /api/commons/active-sessions  (the live-seat roster, Rick 2026-09-17)
-  // ---------------------------------------------------------------------
-  /// Every live CC seat of the authenticated user, from the session bridges.
-  /// Unlike `sendersVisible`, a seat appears here even if it has never sent
-  /// the user anything — that is the whole point. Envelope: `{"sessions": []}`.
+  /// Lists every live seat of the authenticated user, from the session bridges.
+  ///
+  /// A seat appears here even if it has never sent the user a notification,
+  /// unlike [sendersVisible]. The server wraps the list as `{"sessions": []}`.
   Future<List<ActiveSession>> activeSessions() async {
     try {
       final res  = await _dio.get<Map<String, dynamic>>( "/api/commons/active-sessions" );
@@ -373,6 +346,7 @@ class NotificationRepository {
     }
   }
 
+  // Maps a failed request to an exception, preferring the server's `detail`.
   NotificationApiException _err( DioException e, String fallback ) {
     final sc  = e.response?.statusCode;
     final msg = e.response?.data is Map<String, dynamic>

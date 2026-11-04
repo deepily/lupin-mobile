@@ -3,6 +3,7 @@ import 'error_handling/error_handler.dart';
 import 'logging/logger.dart';
 import 'storage/storage_manager.dart';
 import 'di/service_locator.dart';
+import 'constants/app_constants.dart';
 
 /// Application initialization manager
 class AppInitialization {
@@ -75,6 +76,7 @@ class AppInitialization {
       minLevel: logLevel,
       enableConsole: enableDebugLogging,
       enableFile: enableFileLogging,
+      fileStore: enableFileLogging ? await StorageManager.getInstance() : null,
       enableRemote: enableRemoteLogging,
       remoteEndpoint: remoteEndpoint,
       remoteApiKey: remoteApiKey,
@@ -91,7 +93,7 @@ class AppInitialization {
 
   /// Initialize storage system
   static Future<void> _initializeStorage() async {
-    final storage = await StorageManager.getInstance();
+    await StorageManager.getInstance();
     Logger.info('Storage system initialized');
   }
 
@@ -106,21 +108,21 @@ class AppInitialization {
     Logger.setGlobalContext(LogContext(
       feature: 'lupin_mobile',
       metadata: {
-        'app_version': '1.0.0', // This would come from package info
+        'app_version': AppConstants.appVersion,
         'platform': defaultTargetPlatform.name,
         'debug_mode': kDebugMode,
       },
     ));
   }
 
-  /// Update global context with user information
+  /// Sets the global logging context to the signed-in user and session.
   static void setUserContext(String userId, String? sessionId) {
     Logger.setGlobalContext(LogContext(
       userId: userId,
       sessionId: sessionId,
       feature: 'lupin_mobile',
       metadata: {
-        'app_version': '1.0.0',
+        'app_version': AppConstants.appVersion,
         'platform': defaultTargetPlatform.name,
         'debug_mode': kDebugMode,
       },

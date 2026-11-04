@@ -1,0 +1,49 @@
+{
+  "_captured_at_sha": "bb0acb3",
+  "tool": "doc_lint (lupin f4637ecee)",
+  "total": 11712,
+  "files_with_findings": 391,
+  "by_top": {
+    "(lib root)": 33,
+    "(other)": 1,
+    "core": 350,
+    "features": 6338,
+    "services": 1224,
+    "shared": 110,
+    "test": 3656
+  },
+  "by_feature": {
+    "features/agentic": 19,
+    "features/artifacts": 1,
+    "features/auth": 16,
+    "features/broadcast": 581,
+    "features/claude_code": 14,
+    "features/decision_proxy": 2,
+    "features/docs": 159,
+    "features/finished_tasks": 289,
+    "features/fleet": 1148,
+    "features/fleet_status": 732,
+    "features/focus_mode": 524,
+    "features/holding_area": 834,
+    "features/home": 20,
+    "features/notifications": 161,
+    "features/queue": 117,
+    "features/quick_ask": 274,
+    "features/settings": 80,
+    "features/task_list": 699,
+    "features/transcript": 668
+  },
+  "by_rule": {
+    "caps": 7059,
+    "sentence-length": 1199,
+    "bare-ref": 1115,
+    "summary-length": 939,
+    "glyph": 779,
+    "tic": 235,
+    "iso-date": 214,
+    "dartdoc-length": 85,
+    "preface-length": 43,
+    "dated-banner": 42,
+    "agent-imperative": 2
+  }
+}

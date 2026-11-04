@@ -8,25 +8,27 @@ import '../domain/focus_chat_bloc.dart';
 import '../domain/focus_chat_event.dart';
 import '../domain/focus_chat_state.dart';
 
-/// Always-visible vertical badge rail (Q11 Pattern A): PersonaBadges in
-/// `visibleOrder` — persona group (oldest session first) above a thin
-/// divider, system group (establishment order, Q7) below; filtered by the
-/// Live/History lens + the Personas/All scope (plan 2026.06.25 §4.5 +
-/// 2026.08.21 §5f) — unread dot/count overlays
-/// on non-focused senders, selection highlight ring, recency status dot
-/// (🟢 live / 🟡 history — mirrors the web glyphs). Tap →
-/// `FocusSenderSelected` — the ONLY thing in the surface that moves
-/// `focusedSender` (Q4 manual-focus invariant).
+/// Always-visible vertical rail of persona badges, one per visible sender.
+///
+/// Persona senders come first, oldest session first, then a thin divider, then system
+/// senders in arrival order. The Live or History lens and the Personas or All scope decide
+/// who is listed. Non-focused senders show an unread dot or count. The focused sender has a
+/// selection ring, and a status dot shows recency: green for live, yellow for history.
+/// A tap sends `FocusSenderSelected`, the only thing on this surface that moves
+/// `focusedSender`, so focus changes only by the user's hand.
+/// Design: src/docs/decisions/README.md (R-FM-rail-order)
 class SessionRail extends StatelessWidget {
+  /// Rail width in logical pixels.
   static const double width = 56;
 
+  /// Creates the rail.
   const SessionRail( { super.key } );
 
-  /// Avatar initial when no persona glyph is available (Rick 2026-08-21:
-  /// the persona NAME, never the repo id — the old `sid[0]` fallback
-  /// produced a rail of identical letters). Order: persona display name →
-  /// persona name → the sender-id local part before `@` / `#`
-  /// (`deep.research@lupin…` → "D").
+  /// Avatar initial for a sender with no persona glyph.
+  ///
+  /// It uses the persona name, never the repo id, which would give a rail of identical
+  /// letters. The order is persona display name, persona name, then the sender id's local
+  /// part before `@` or `#`; `deep.research@lupin` gives "D".
   static String railInitial( String sid, VoicePersona? persona ) {
     final name = persona?.displayName ?? persona?.name;
     if ( name != null && name.trim().isNotEmpty ) return name.trim().substring( 0, 1 ).toUpperCase();
@@ -82,9 +84,10 @@ class SessionRail extends StatelessWidget {
     );
   }
 
-  /// PersonaBadge when the registry has one; name-initial fallback
-  /// otherwise (PersonaBadge renders nothing for a null persona, but the
-  /// rail must always show a tappable entry per sender).
+  /// A `PersonaBadge` when the registry has a glyph, else a name-initial avatar.
+  ///
+  /// `PersonaBadge` renders nothing for a null persona, but every sender needs a tappable
+  /// entry.
   Widget _badgeFor( BuildContext context, String sid, VoicePersona? persona ) {
     if ( persona != null && ( persona.icon ?? '' ).isNotEmpty ) {
       return PersonaBadge( persona: persona, senderId: sid, diameter: 28 );
@@ -101,8 +104,9 @@ class SessionRail extends StatelessWidget {
   }
 }
 
-/// Live filter, nothing live, but senders exist in History — say so
-/// instead of rendering a blank rail (plan §4.1 "empty state").
+/// Empty state for the Live lens when senders exist only in History.
+///
+/// It says so instead of rendering a blank rail.
 class _EmptyLiveHint extends StatelessWidget {
   final int historyCount;
   const _EmptyLiveHint( { required this.historyCount } );

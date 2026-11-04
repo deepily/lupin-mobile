@@ -61,6 +61,8 @@
 
 set -euo pipefail
 
+source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/lib/worktree-link-lib.sh"
+
 TARGET="${1:-$PWD}"
 CHECK_ONLY=0
 if [[ "${1:-}" == "--check" ]]; then
@@ -86,21 +88,12 @@ fi
 #
 # Bonus: ${line#worktree } keeps worktree paths containing spaces, which awk '{print $2}'
 # silently truncated at the first space.
-if ! WORKTREE_LIST="$( git -C "$TARGET" worktree list --porcelain 2>/dev/null )"; then
-    WORKTREE_LIST=""
-fi
-
-MAIN_REPO=""
-while IFS= read -r line; do
-    if [[ "$line" == "worktree "* ]]; then
-        MAIN_REPO="${line#worktree }"
-        break
-    fi
-done <<< "$WORKTREE_LIST"
-if [[ -z "$MAIN_REPO" ]]; then
+# The one copy of this lives in lib/worktree-link-lib.sh (byte-identical with lupin's).
+if ! wt_resolve_main "$TARGET"; then
     echo "ERROR: $TARGET is not inside a git repository" >&2
     exit 2
 fi
+MAIN_REPO="$WT_MAIN"
 
 SOURCE_SDK="$MAIN_REPO/flutter"
 LINK="$TARGET/flutter"
@@ -116,7 +109,7 @@ if [[ $CHECK_ONLY -eq 1 ]]; then
     exit 1
 fi
 
-if [[ "$( cd "$TARGET" && pwd -P )" == "$( cd "$MAIN_REPO" && pwd -P )" ]]; then
+if wt_same_dir "$TARGET" "$MAIN_REPO"; then
     echo "REFUSING: $TARGET is the MAIN repo, which owns the real SDK."
     echo "  Linking it to itself would replace a real directory with a loop."
     exit 3

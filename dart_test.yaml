@@ -1,20 +1,10 @@
-# The two tags this repo's suite uses, declared so `--tags` / `--exclude-tags` name something
+# The tag this repo's suite uses, declared so `--tags` / `--exclude-tags` name something
 # the runner knows about rather than something it infers from a call site.
 #
-# ⚠️ DECLARING A TAG CHANGES NOTHING FUNCTIONALLY, AND THAT IS WORTH SAYING OUT LOUD.
-# Verified 2026-09-27: both `--tags pending-capture` and `--exclude-tags pending-capture`
-# already selected correctly with no file here and printed no unknown-tag warning. This file
-# is a written-down contract — the gate command in a slice report names `pending-capture`, and
-# a reader should be able to find out what that means without grepping for `@Tags`.
+# The `pending-capture` tag (rows red on a missing fixture) was retired 2026-10-10, when the
+# last fixture was captured: no test carries it any more, and a new fixture-dependent row
+# should land together with its fixture instead.
 tags:
-  # Rows whose fixture does not exist yet. They run RED, never `skip`ped (§5, ruled by María):
-  # a skipped row can pass without its fixture and nothing notices. A row may carry this tag
-  # ONLY if its sole failure is `fixture_loader`'s missing-file `FileSystemException`.
-  #
-  # Gate:   ./flutter.sh test --exclude-tags pending-capture
-  # Roster: ./flutter.sh test --tags pending-capture
-  pending-capture:
-
   # Rows that need a real server on the wire. Venue-scheduled and submit-only — never part of
   # the local gate, and never run against :8000 ad hoc.
   live:

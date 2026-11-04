@@ -15,7 +15,8 @@ import '../../_helpers/transcript_fakes.dart';
 ///
 /// ⚠️ THESE USE TYPED MODEL OBJECTS BUILT FROM §3, NOT CAPTURED FRAMES, and that is a stated
 /// limit rather than a shortcut. Phase 1 has not emitted, so there is nothing to capture; the
-/// rows §5 requires to parse CAPTURED output are tagged `pending-capture` and red. What these
+/// rows §5 requires to parse CAPTURED output were tagged `pending-capture` and red until the
+/// fixtures were captured (tag retired 2026-10-10); they now run in the gate. What these
 /// prove is that the client obeys the contract as written. What they cannot prove is that the
 /// server writes it.
 void main() {
@@ -1105,15 +1106,13 @@ class _TestBloc extends TranscriptStreamBloc {
   _TestBloc( {
     required this.lifecycle,
     required TranscriptRepository repo,
-    required TranscriptFrameRouter router,
+    required super.router,
     required RecordingSender send,
-    int ringBytes = AppConstants.transcriptRingBytes,
+    super.ringBytes,
   } ) : super(
           ccSessionId : "seat-1",
           repository  : repo,
-          router      : router,
           send        : send.call,
-          ringBytes   : ringBytes,
         );
 
   @override

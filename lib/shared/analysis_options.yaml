@@ -1,0 +1,8 @@
+# Per-directory options for the documentation sweep.
+# Inherits the root options and adds the public-docs rule; the gate is
+# `./flutter.sh analyze lib/shared`.
+include: ../../analysis_options.yaml
+
+linter:
+  rules:
+    public_member_api_docs: true

@@ -64,7 +64,7 @@ void main() {
   test( "switching dev -> lan-dev clears the OLD (dev) session and leaves lan-dev's untouched", () async {
     String? activeAtLogout;
     setAccessToken( "dev-access" );
-    when( () => repo.logout( any() ) ).thenAnswer( ( _ ) async { activeAtLogout = svc.active; } );
+    when( () => repo.logout( any(), refreshToken: any( named: "refreshToken" ) ) ).thenAnswer( ( _ ) async { activeAtLogout = svc.active; } );
 
     bloc.add( const AuthServerContextSwitchRequested( "lan-dev" ) );
     final state = await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
@@ -84,7 +84,7 @@ void main() {
 
   test( "a failing server logout still clears the old session and switches", () async {
     setAccessToken( "dev-access" );
-    when( () => repo.logout( any() ) ).thenThrow( const AuthException( "offline" ) );
+    when( () => repo.logout( any(), refreshToken: any( named: "refreshToken" ) ) ).thenThrow( const AuthException( "offline" ) );
 
     bloc.add( const AuthServerContextSwitchRequested( "lan-dev" ) );
     await bloc.stream.firstWhere( ( s ) => s is AuthUnauthenticated );
@@ -100,6 +100,6 @@ void main() {
 
     expect( svc.active, "dev" );
     expect( await store.readRefreshToken( "dev" ), "dev-refresh" );
-    verifyNever( () => repo.logout( any() ) );
+    verifyNever( () => repo.logout( any(), refreshToken: any( named: "refreshToken" ) ) );
   } );
 }

@@ -2,29 +2,27 @@ import 'package:flutter/material.dart';
 
 import '../../../core/testing/test_keys.dart';
 
-/// One owner group's header — the pane's SECOND disclosure surface.
+/// One owner group's header, the pane's second disclosure surface.
 ///
-/// 🔴 THE ROW'S ELLIPSIS HIDES VERBS; THIS HIDES ROWS. They are different surfaces with
-/// different stakes, which is why this is not the row's disclosure reused. The web header
-/// is `role="button" tabindex="0" aria-expanded aria-controls`
-/// (`notifications.js:12010`).
-///
-/// 🔴 THE COUNT IS IN THE LABEL, AND THAT IS THE PART THAT MATTERS. "Collapsed" alone
-/// does not tell a screen-reader user whether work is hidden or simply absent — a
-/// collapsed group and an empty one announce identically, and the operator is then
-/// looking at a task list with work silently missing while nothing says so.
-///
-/// ⚠️ THE ACCEPTANCE LINE FOR THIS WIDGET WAS REWRITTEN, AND THE REASON IS WORTH KEEPING.
-/// It used to read *"group header keyboard-operable"* — which a PHONE CAN NEITHER
-/// SATISFY NOR FAIL, having no keyboard. A builder could not make it true; a reviewer
-/// could not make it false. Rachel caught it before it was minted. `Semantics( button:,
-/// expanded:, label: )` is the phone-meaningful equivalent, and it is testable.
+/// The row's ellipsis hides verbs and this hides rows, so it is not the row's disclosure
+/// reused. The count is in the label. "Collapsed" alone does not tell a screen-reader user
+/// whether work is hidden or absent, since a collapsed group and an empty one would
+/// announce identically. `Semantics( button:, expanded:, label: )` is the phone-meaningful
+/// form of a keyboard-operable header, and it is testable.
 class TaskGroupHeader extends StatelessWidget {
+  /// The owner label, or "Unassigned".
   final String ownerLabel;
+
+  /// How many rows the group holds.
   final int count;
+
+  /// True when the group's rows are shown.
   final bool expanded;
+
+  /// Called when the header is tapped.
   final VoidCallback onToggle;
 
+  /// Creates the header.
   const TaskGroupHeader( {
     super.key,
     required this.ownerLabel,
@@ -33,16 +31,17 @@ class TaskGroupHeader extends StatelessWidget {
     required this.onToggle,
   } );
 
-  /// Where the owner label's text starts: 16 dp gutter + 20 dp chevron + 8 dp gap. The
-  /// pane indents its rows by exactly this, so rows sit under the persona that owns them.
-  /// Derived from the three numbers below rather than typed as 44, so it moves with them.
   static const double _gutter      = 16;
   static const double _chevronSize = 20;
   static const double _chevronGap  = 8;
+
+  /// Where the owner label's text starts: gutter, chevron and gap together.
+  ///
+  /// The pane indents its rows by exactly this, so rows sit under the persona that owns
+  /// them. It is derived from the three sizes above, so it moves with them.
   static const double textInset    = _gutter + _chevronSize + _chevronGap;
 
-  /// What TalkBack reads. Kept as a static so the test asserts the SAME string the
-  /// widget renders rather than a copy that can drift from it.
+  /// What TalkBack reads, as a static so the test asserts the string the widget renders.
   static String semanticLabel( String ownerLabel, int count ) =>
       '$ownerLabel, $count ${count == 1 ? 'task' : 'tasks'}';
 
@@ -52,19 +51,15 @@ class TaskGroupHeader extends StatelessWidget {
       button   : true,
       expanded : expanded,
       label    : semanticLabel( ownerLabel, count ),
-      // The child's own text would otherwise be announced again after the label above.
+      // The child's own text would otherwise be announced again after the label.
       child    : ExcludeSemantics(
         child : InkWell(
           key     : Key( '${TestKeys.taskListGroupHeaderPrefix}$ownerLabel' ),
           onTap   : onToggle,
-          // 🔴 48 dp MINIMUM, AS A CONSTRAINT RATHER THAN TUNED PADDING. A group header
-          // is a touch target like any other, and below the floor a collapse aimed at one
-          // group lands on its neighbour — which HIDES ROWS, not just verbs.
-          //
-          // ⚠️ Measured: padding alone gave 44 dp. Padding is a number someone picks and
-          // then a font or icon change moves it, silently, back under the line;
-          // `kMinInteractiveDimension` is the floor itself and cannot drift away from it.
-          // My own widget test caught this before it shipped.
+          // A 48 dp minimum, as a constraint and not tuned padding. Below the floor a
+          // collapse aimed at one group lands on its neighbour, which hides rows. Padding
+          // alone gave 44 dp, and a font or icon change would silently move it back under
+          // the line; `kMinInteractiveDimension` is the floor itself.
           child   : ConstrainedBox(
             constraints : const BoxConstraints( minHeight: kMinInteractiveDimension ),
             child : Padding(

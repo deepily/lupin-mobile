@@ -5,24 +5,23 @@ import '../data/doc_link.dart';
 import '../data/doc_models.dart';
 import '../data/doc_repository.dart';
 
-/// A folder listing in the doc viewer (row 61ecfb22, parity with the web's
-/// ticket 416d4b00).
+/// A folder listing in the doc viewer.
 ///
-/// Until 2026-09-24 the phone printed a listing's JSON as source text, so the
-/// 📁 Folder button and the Roots panel had nothing to land on. Folders first,
-/// then files, as the server sorts them; a tap opens the entry in place.
+/// Folders come first, then files, in the server's order, and a tap opens the entry in place.
 class DocDirectoryView extends StatelessWidget {
+  /// The listing to show.
   final DocDirectoryListing listing;
 
   /// Fetches the roots for the Roots panel. Null hides the panel.
   final DocRepository? repository;
 
-  /// Show another place in the same viewer.
+  /// Shows another place in the same viewer.
   final void Function( DocLink link ) onOpen;
 
-  /// Unfold the Roots panel on arrival (row 0534b50d's landing).
+  /// True to unfold the Roots panel on arrival.
   final bool rootsOpen;
 
+  /// Creates a listing view.
   const DocDirectoryView( {
     super.key,
     required this.listing,
@@ -40,9 +39,8 @@ class DocDirectoryView extends StatelessWidget {
       key      : const Key( TestKeys.docListing ),
       children : [
         if ( repo != null ) DocRootsPanel( repository: repo, onOpen: onOpen, initiallyOpen: rootsOpen ),
-        // ⚠️ THE SERVER DECIDES WHETHER "UP" EXISTS: `parent` is null at a
-        // scope's top and wherever the parent falls outside the whitelist. The
-        // Roots panel above is the way out from there.
+        // The server decides whether "up" exists. `parent` is null at a scope's top and
+        // where the parent falls outside the whitelist, so the Roots panel is the way out.
         if ( parent != null )
           ListTile(
             key     : const Key( TestKeys.docListingUp ),
@@ -63,7 +61,7 @@ class DocDirectoryView extends StatelessWidget {
             subtitle : entry.isDirectory || entry.sizeBytes == null
                 ? null
                 : Text( formatByteSize( entry.sizeBytes! ) ),
-            // 🔴 BUILT FROM `rel_path`, NEVER FROM `view_url` — see [docLinkFor].
+            // Built from `rel_path` and never from `view_url`; see [docLinkFor].
             onTap    : () => onOpen( docLinkFor( listing.scope, entry.path, label: entry.name ) ),
           ),
       ],
@@ -71,19 +69,24 @@ class DocDirectoryView extends StatelessWidget {
   }
 }
 
-/// Every browsable root: each registered repo's allowed folders, plus io
-/// (Rick, 2026-09-24, item 2b).
+/// Every browsable root: each registered repo's allowed folders, plus io.
 ///
-/// Folded by default and fetched on first unfold — the listing is what the
-/// reader came for, and the roots cost a request they may never want.
+/// It is folded by default and fetched on first unfold.
+/// The listing is what the reader came for, and the roots cost a request they may not want.
 class DocRootsPanel extends StatefulWidget {
+  /// Fetches the scopes the panel lists.
   final DocRepository repository;
+
+  /// Shows the tapped root in the viewer.
   final void Function( DocLink link ) onOpen;
 
-  /// Unfolded and fetching from the first frame — the global file-viewer
-  /// button's landing (row 0534b50d), where the roots ARE what the reader came for.
+  /// True to start unfolded and fetching from the first frame.
+  ///
+  /// The global file-viewer button lands this way, where the roots are what the reader
+  /// came for.
   final bool initiallyOpen;
 
+  /// Creates a roots panel.
   const DocRootsPanel( { super.key, required this.repository, required this.onOpen, this.initiallyOpen = false } );
 
   @override
@@ -108,8 +111,8 @@ class _DocRootsPanelState extends State<DocRootsPanel> {
       title             : const Text( "Roots" ),
       onExpansionChanged: ( open ) {
         if ( open && _scopes == null ) {
-          // A block body, not an arrow: an arrow would RETURN the Future from
-          // the setState callback, which Flutter rejects.
+          // A block body, because an arrow would return the Future from the setState
+          // callback, which Flutter rejects.
           final scopes = widget.repository.fetchScopes();
           setState( () { _scopes = scopes; } );
         }
@@ -151,9 +154,13 @@ class _DocRootsPanelState extends State<DocRootsPanel> {
 
 /// One entry in the Roots panel.
 class DocRoot {
+  /// The text shown for the root.
   final String  label;
+
+  /// The link that opens the root.
   final DocLink link;
 
+  /// Creates a root entry.
   const DocRoot( this.label, this.link );
 }
 

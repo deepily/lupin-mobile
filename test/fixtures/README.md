@@ -2,9 +2,9 @@
 
 These JSON files are captured from a running Lupin backend, redacted to stable
 placeholder values, and loaded by repository-layer unit tests. The pattern
-exists to prevent stub drift: when the backend response shape changes, a
-re-capture regenerates these fixtures and any test still assuming the old shape
-fails immediately.
+exists to prevent stub drift. When the backend response shape changes, a
+re-capture regenerates these fixtures. Any test still assuming the old shape
+then fails immediately.
 
 ## Why
 
@@ -41,14 +41,14 @@ python src/scripts/capture-auth-fixtures.py
 
 The script:
 1. POSTs to `/auth/login` twice — once with good creds (captures 200), once
-   with deliberately-wrong password (captures 401 shape).
+   with a wrong password (captures 401 shape).
 2. Uses the captured access token to GET `/auth/me`.
 3. Uses the captured refresh token to POST `/auth/refresh`.
 4. Redacts the captured JSON (see below) and writes the four fixtures.
 
 ## Redaction rules
 
-The capture script MUST replace real sensitive values with stable placeholders
+The capture script must replace real sensitive values with stable placeholders
 before writing. This lets fixtures be committed to git safely and makes test
 assertions stable across captures.
 
@@ -84,9 +84,9 @@ final Map<String, dynamic> body = loadFixture( "auth/login_response.json" );
 
 - After any change to backend Pydantic response models under
   `src/cosa/rest/auth_models.py` (or any endpoint touched by the change).
-- When a test failure mentions a missing key or wrong type — run the capture
-  once and compare the diff against the old fixture to confirm the backend
-  shape changed.
+- When a test failure mentions a missing key or wrong type. Run the capture
+  once and compare the diff against the old fixture. That confirms whether the
+  backend shape changed.
 - Never re-capture to "fix" a failing test without checking the diff first.
 
 ## Negative test (drift detection demo)

@@ -4,38 +4,33 @@ import 'package:dio/dio.dart';
 
 import 'queue_models.dart';
 
-/// Typed wrapper over the 14-endpoint Lupin CJ Flow queue API.
-/// Uses the shared Dio (auth interceptor injects Bearer automatically).
+/// Typed wrapper over the Lupin CJ Flow queue API.
+///
+/// It uses the shared Dio, whose auth interceptor adds the bearer token.
 class QueueRepository {
   final Dio _dio;
+
+  /// Creates a repository over the shared Dio.
   const QueueRepository( this._dio );
 
-  // ─────────────────────────────────────────────
-  // POST /api/v2/ask  (was POST /api/push — 410 tombstone, REMOVE BY 2026-12-31)
-  // ─────────────────────────────────────────────
-
-  /// Ask one question through CJ Flow v2. SYNCHRONOUS: the answer (or the
-  /// first clarifying question) is in the returned [AskResponse]; nothing is
-  /// queued for polling. Never 500s for an agent failure — the server degrades
-  /// to the receptionist and reports it in `status`/`error`.
-  /// Per-request receive budget for the ask call ONLY (AC-S4.7, landed here
-  /// because S1 owns the ask-call edits per the plan's sequencing table).
+  /// Receive timeout for the ask, spoken-ask and resume calls only.
   ///
-  /// The shared Dio's global 30s (`http_service.dart:45`) is right for every
-  /// other call and is NOT loosened. It is wrong for exactly this one: the
-  /// near-match confirmation (`rest/v2/flow.py`, `_near_match_replay` /
-  /// `_user_confirms`) BLOCKS the request thread while it asks the user
-  /// "is that the same as …?" — `timeout_seconds = 30`, `retry_on_timeout`,
-  /// `max_attempts = 3`, `backoff_multiplier = 2.0`, so ~210s worst case.
-  /// At the global 30s the phone times out at the instant the FIRST confirm
-  /// attempt expires, the confirm then defaults to "no", and the user never
-  /// sees the question. 240s covers the whole ladder.
-  ///
-  /// 🔴 Live on the dev server: `similarity confirmation enabled = true` sits
-  /// in `[Lupin: Development]` (`lupin-app.ini:497`); it is `false` only under
-  /// `[Lupin: Testing]`.
+  /// The shared Dio's 30 second limit is right for every other call and is not loosened.
+  /// Those calls can block while the server asks the user to confirm a near-match replay.
+  /// The server retries that confirmation for roughly 210 seconds in the worst case.
+  /// At 30 seconds the phone would time out on the first attempt and the user never sees the question.
+  /// 240 seconds covers the whole retry ladder.
+  /// The confirmation is enabled on the development server and disabled in the testing profile.
   static const Duration askReceiveTimeout = Duration( seconds: 240 );
 
+  /// Asks one question through CJ Flow v2 and returns the synchronous [AskResponse].
+  ///
+  /// The answer, or the first clarifying question, is in the response and nothing is queued.
+  /// An agent failure never surfaces as a 500: the server degrades to the receptionist
+  /// and reports it in `status` and `error`.
+  ///
+  /// Raises:
+  ///   - [QueueApiException] when the request fails
   Future<AskResponse> ask( AskRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -49,32 +44,21 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/v2/ask-audio  (one request, two NDJSON lines — plan rev 14 §2.1)
-  // ─────────────────────────────────────────────
-
+  /// Path of the one-request spoken-ask endpoint.
   static const String askAudioPath = '/api/v2/ask-audio';
 
-  /// Upload a recording and ask it in ONE request. The reply is read as it
-  /// arrives: [SpokenAskTranscript] as soon as the server has transcribed
-  /// (~280 ms), then one terminal event — see [SpokenAskEvent] for the
-  /// end-of-stream rules.
+  /// Uploads a recording and asks it in one request, reading the reply as it arrives.
   ///
-  /// 🔴 `websocketId` goes on the QUERY STRING, never in the form. The server
-  /// reads `websocket_id` as a query parameter; sent as a form field it is
-  /// silently ignored, both lines still arrive, and the answer goes to a
-  /// session nobody is listening on (§2.1 CB1).
+  /// [SpokenAskTranscript] arrives once the server has transcribed, then one terminal event.
+  /// [SpokenAskEvent] lists the end-of-stream rules.
+  /// The stream is lazy, so nothing runs until someone listens.
   ///
-  /// The multipart field is `file` (the server binds `file: UploadFile`) and
-  /// the filename is the recording's own name, so the server's temp-file
-  /// suffix matches the real format (§3.2 CB2).
-  ///
-  /// Never throws: every failure is emitted as an event. It does NOT delete
-  /// `audioPath` — `AsrService` owns the recording (§3.2 SB2/CB3), and this
-  /// stream is lazy, so nothing here runs until someone listens.
-  ///
-  /// Uses [askReceiveTimeout]: line 2 waits on the same blocking confirm
-  /// ladder inside `flow.ask` that [ask] does.
+  /// Ensures:
+  ///   - the websocket id goes on the query string, never in the form, because the server ignores it as a form field
+  ///   - the multipart field is `file` and the filename is the recording's own, so the server suffix matches the format
+  ///   - it uses [askReceiveTimeout], because the second line waits on the same blocking confirmation as [ask]
+  ///   - it never throws; every failure is emitted as an event
+  ///   - it does not delete `audioPath`, which the speech-recognition service owns
   Stream<SpokenAskEvent> askSpoken( String audioPath, String websocketId ) async* {
     final ResponseBody body;
     try {
@@ -100,10 +84,10 @@ class QueueRepository {
       }
       body = data;
     } on DioException catch ( e ) {
-      // SB5 — BUILD-THEN-EMIT. `_err` is the house mapping; every other caller
-      // throws its result, and a throw here would reach §C as an unhandled
-      // stream error instead of a SpokenAskFailed. A streamed error body is
-      // still unread bytes, so decode it first for `_err` to find `detail`.
+      // Build the error, then emit it. Every other caller throws the result of `_err`,
+      // but a throw here would reach the bloc as an unhandled stream error instead of
+      // a SpokenAskFailed. A streamed error body is still unread bytes, so decode it
+      // first so `_err` can find `detail`.
       await _decodeStreamedErrorBody( e );
       final err = _err( e, 'ask-audio failed' );
       yield SpokenAskFailed( err.message, statusCode: err.statusCode );
@@ -178,10 +162,11 @@ class QueueRepository {
     }
   }
 
-  /// A non-200 on a `ResponseType.stream` request carries its body as an
-  /// unread [ResponseBody]. Replace it with the decoded JSON (or text) so
-  /// [_err] can read `detail`. Best-effort: a body that cannot be read leaves
-  /// `_err` its `message` fallback.
+  /// Replaces the unread body of a streamed non-200 with its decoded JSON or text.
+  ///
+  /// A non-200 on a streamed request carries its body as an unread [ResponseBody].
+  /// Decoding it lets [_err] read `detail`.
+  /// A body that cannot be read leaves `_err` its `message` fallback.
   static Future<void> _decodeStreamedErrorBody( DioException e ) async {
     final response = e.response;
     if ( response == null || response.data is! ResponseBody ) return;
@@ -198,14 +183,12 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/v2/submit  (wave 2 of the v2 cutover — the eleven submit-shaped
-  // doors route through this one body once the server's agentic-job path lands)
-  // ─────────────────────────────────────────────
-
-  /// Submit work whose command is already decided. Same synchronous
-  /// [AskResponse] as [ask]; a command missing arguments comes back
-  /// `needs_input` + `argsMissing` and is never parked.
+  /// Submits work whose command is already decided and returns the synchronous [AskResponse].
+  ///
+  /// A command missing arguments comes back as `needs_input` with `argsMissing`, never parked.
+  ///
+  /// Raises:
+  ///   - [QueueApiException] when the request fails
   Future<AskResponse> submit( SubmitRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>( '/api/v2/submit', data: req.toJson() );
@@ -215,14 +198,14 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // PushAgenticRequest → POST /api/v2/submit   (was /api/push-agentic — wave 2)
-  // ─────────────────────────────────────────────
-
-  /// Door 10 is 1:1 with `submit`: `routing_command` → `command`, `args` /
-  /// `question` verbatim, queue directives top-level. A v2 body that did not
-  /// create a job (needs_input / receptionist / failed) is a [QueueApiException],
-  /// never a "Job queued" with no id.
+  /// Submits an agentic job through `/api/v2/submit` and returns the queue-and-poll shape.
+  ///
+  /// The mapping to [submit] is one to one: `routing_command` becomes `command`,
+  /// `args` and `question` carry over unchanged, and the queue directives stay top-level.
+  ///
+  /// Raises:
+  ///   - [QueueApiException] when the body created no job (needs input, receptionist or failed),
+  ///     so the caller never sees "Job queued" without an id
   Future<PushJobResponse> pushAgentic( PushAgenticRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>( '/api/v2/submit', data: req.toSubmitRequest().toJson() );
@@ -240,10 +223,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // GET /api/get-queue/{queue_name}
-  // ─────────────────────────────────────────────
-
+  /// Fetches one queue (todo, run, done or dead) for the signed-in user.
   Future<QueueResponse> getQueue( String queueName ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>( '/api/get-queue/$queueName' );
@@ -253,10 +233,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/jobs/{job_id}/cancel
-  // ─────────────────────────────────────────────
-
+  /// Cancels a job.
   Future<void> cancelJob( String jobId ) async {
     try {
       await _dio.post<dynamic>( '/api/jobs/$jobId/cancel' );
@@ -265,10 +242,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/jobs/{job_id}/message
-  // ─────────────────────────────────────────────
-
+  /// Sends a message into a running job as a notification.
   Future<MessageDeliveredResponse> injectMessage(
     String jobId,
     String message, {
@@ -285,13 +259,9 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // Retry = re-ask via POST /api/v2/ask
-  // (was POST /api/job-history/{job_id}/retry — 410 tombstone, REMOVE BY 2026-12-31.
-  //  The old handler pulled question_text off the stored row server-side; the
-  //  client now supplies it, so a retry is just the same question asked again.)
-  // ─────────────────────────────────────────────
-
+  /// Retries a job by asking its question again through `POST /api/v2/ask`.
+  ///
+  /// The server no longer reads the question off the stored row, so the caller supplies it.
   Future<AskResponse> retryJob( {
     required String  jobId,
     required String  questionText,
@@ -306,28 +276,21 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/v2/resume  (Door A — answer a PARKED ask)  AC-S4.8
-  // ─────────────────────────────────────────────
-
-  /// Answer one turn of a parked interview and get the NEXT turn back.
+  /// Answers one turn of a parked interview and returns the next turn.
   ///
-  /// Returns an [AskResponse] because the outcome is the same six-way
-  /// branch as [ask]: another `parked` (the interview continues on the
-  /// SAME `pending_id` — AC-S4.12), a `done` answer, or one of the resume
-  /// door's own two endings, `pending_expired` / `already_resumed`
-  /// (AC-S4.13).
-  ///
-  /// 🔴 All FOUR fields go on the wire — see [ResumeRequest]. Dropping
-  /// `websocket_id` silences the answer's TTS on every turn after the
-  /// first, and nothing reports a fault when it happens.
+  /// The outcome is the same branch as [ask].
+  /// It is another `parked` on the same `pending_id`, a `done` answer, or one of the resume
+  /// door's two endings, `pending_expired` and `already_resumed`.
+  /// All four fields go on the wire, as [ResumeRequest] explains.
+  /// Dropping `websocket_id` silences the answer's speech on every turn after the first,
+  /// and nothing reports a fault.
   Future<AskResponse> resume( ResumeRequest req ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
         '/api/v2/resume',
         data    : req.toJson(),
         // Same budget as the ask turn: a resume re-enters the same flow and
-        // can hit the same blocking near-match confirm.
+        // can hit the same blocking near-match confirmation.
         options : Options( receiveTimeout: askReceiveTimeout ),
       );
       return AskResponse.fromJson( res.data! );
@@ -336,10 +299,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/jobs/{id_hash}/resume-from-checkpoint
-  // ─────────────────────────────────────────────
-
+  /// Resumes a failed or interrupted job from its last checkpoint as a new job.
   Future<ResumeCheckpointResponse> resumeFromCheckpoint( String idHash ) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>( '/api/jobs/$idHash/resume-from-checkpoint' );
@@ -349,10 +309,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // PATCH /api/queue/todo/{job_id}/pause
-  // ─────────────────────────────────────────────
-
+  /// Pauses a job that is still in the todo queue.
   Future<void> pauseJob( String jobId ) async {
     try {
       await _dio.patch<dynamic>( '/api/queue/todo/$jobId/pause' );
@@ -361,10 +318,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // PATCH /api/queue/todo/{job_id}/resume
-  // ─────────────────────────────────────────────
-
+  /// Resumes a paused job in the todo queue.
   Future<void> resumeJob( String jobId ) async {
     try {
       await _dio.patch<dynamic>( '/api/queue/todo/$jobId/resume' );
@@ -373,10 +327,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // DELETE /api/queue/{queue_name}/{job_id}
-  // ─────────────────────────────────────────────
-
+  /// Deletes a job from the named queue.
   Future<void> deleteJob( String queueName, String jobId ) async {
     try {
       await _dio.delete<dynamic>( '/api/queue/$queueName/$jobId' );
@@ -385,10 +336,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // GET /api/job-history
-  // ─────────────────────────────────────────────
-
+  /// Fetches one page of job history, optionally filtered by status, type or age in days.
   Future<JobHistoryPage> getJobHistory( {
     String? status,
     String? jobType,
@@ -413,10 +361,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // GET /api/job-history/{job_id}
-  // ─────────────────────────────────────────────
-
+  /// Fetches one job history record.
   Future<JobHistoryEntry> getJobHistoryEntry( String jobId ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>( '/api/job-history/$jobId' );
@@ -426,10 +371,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // POST /api/reset-queues  (admin only)
-  // ─────────────────────────────────────────────
-
+  /// Resets all queues and returns the server's reply; admin only.
   Future<Map<String, dynamic>> resetQueues() async {
     try {
       final res = await _dio.post<Map<String, dynamic>>( '/api/reset-queues' );
@@ -439,10 +381,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // GET /api/get-job-interactions/{job_id}
-  // ─────────────────────────────────────────────
-
+  /// Fetches the notification interactions recorded for a job.
   Future<JobInteractionsResponse> getJobInteractions( String jobId ) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>( '/api/get-job-interactions/$jobId' );
@@ -452,10 +391,7 @@ class QueueRepository {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // Error helper
-  // ─────────────────────────────────────────────
-
+  /// Builds a [QueueApiException] from a failed request, preferring the server's `detail`.
   QueueApiException _err( DioException e, String fallback ) {
     final code   = e.response?.statusCode;
     final detail = e.response?.data is Map

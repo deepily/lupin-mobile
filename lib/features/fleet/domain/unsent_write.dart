@@ -5,43 +5,31 @@ import '../data/task_write_repository.dart';
 
 /// One write the operator made that never reached the server.
 ///
-/// 🔴 THE POINT IS THAT THE OPERATOR'S ACTION SURVIVES THE FAILURE. Gap G6: a failed
-/// write was rolled back and shown as an error, so the row snapped back and the act was
-/// gone — on a phone, where a write dying because the signal dropped in a lift is the
-/// ORDINARY case and not the exotic one. Rolling back is right; FORGETTING is not. The
-/// row returns to its old state AND wears a mark saying what has not been sent, so the
-/// operator can tell "I never pressed that" from "I pressed it and it has not landed".
+/// The row rolls back and wears a mark saying what has not been sent, so the operator
+/// can tell "never pressed" from "pressed, not landed". Only a transport failure (no
+/// response, or a timeout) becomes one of these. A 4xx is a refusal: it rolls back and
+/// shows the server's words, because retrying only fails again.
 ///
-/// 🔴 ONLY A TRANSPORT FAILURE BECOMES ONE OF THESE. Tiffany's ruling, 2026-09-23: *"Only
-/// transport failures (no response or timeout) are marked unsent and retried. A 4xx is a
-/// refusal: roll it back and show the server's words, because retrying it just fails
-/// again."* So a server that ANSWERED and said no is not an unsent write at all — it is
-/// an error, handled exactly as it was before this row, with the server's own sentence in
-/// front of the operator. Recording it would put a mark on the row that no amount of
-/// signal could ever clear, and would re-send the same refused request on every
-/// connectivity edge for the life of the process, invisibly.
-///
-/// ⚠️ THIS IS NOT AN OFFLINE QUEUE, AND THE DISTINCTION IS WORTH HOLDING. No durable
-/// store, no replay across a restart, no ordering guarantee between two writes on one
-/// row. It is a per-session record of what the network ate, retried on the one signal
-/// that can plausibly fix it. Anything more is its own row with its own ruling; anything
-/// less loses the act.
+/// This is not an offline queue: nothing is stored durably, nothing replays after a
+/// restart, and two writes on one row have no ordering guarantee. It is a per-session
+/// record, retried on each restored connection.
 class UnsentWrite extends Equatable {
   /// The row this write was made against.
   final String taskId;
 
-  /// What the operator did, in their words — the mark the row wears.
+  /// What the operator did, in their words; the mark the row wears.
   final String label;
 
-  /// The status verb, when this went through the TRANSITION door. Null for a field edit.
+  /// The status verb when this was a transition; null for a field edit.
   final TaskVerb? verb;
 
-  /// The priority, when this went through the FIELD door.
+  /// The new priority when this was a field edit.
   final String? priority;
 
-  /// The owner, when this went through the FIELD door.
+  /// The new owner when this was a field edit.
   final String? ownerPersona;
 
+  /// Creates the record of one unsent write.
   const UnsentWrite( {
     required this.taskId,
     required this.label,
@@ -54,29 +42,22 @@ class UnsentWrite extends Equatable {
   List<Object?> get props => [ taskId, label, verb?.name, priority, ownerPersona ];
 }
 
-/// True when [error] means the request never got an answer, so a restored connection
-/// could plausibly fix it.
+/// True when [error] means the request got no answer, so a restored link could fix it.
+///
+/// A 202 is not a failed write: it filed a ticket, and a retry would file a second.
+/// The exception for it is its own type, [TaskAwaitingApprovalException], so it is never
+/// caught as a failure.
 ///
 /// Requires:
-///   - error is what [TaskWriteRepository] threw. A [TaskAwaitingApprovalException] must
-///     never reach here — see the note below
+///   - error is what [TaskWriteRepository] threw
+///   - error is not a [TaskAwaitingApprovalException]
 ///
 /// Ensures:
-///   - a [TaskWriteException] caused by a Dio failure WITH a response → false (the server
-///     answered and refused; show its words)
-///   - a connection error or any timeout → true (nobody answered)
-///   - a CANCELLED request → false. Nothing cancels a write today — the write doors take
-///     no token — but if one ever does, a cancellation is somebody DELIBERATELY
-///     abandoning the request, and silently re-sending an abandoned write behind the
-///     operator's back is the opposite of what cancelling means
-///   - anything unrecognised → false. Guessing "transport" on an error nobody has
-///     classified would retry a request whose failure we do not understand; guessing
-///     "refusal" merely shows the operator a message, which is what the pane did before
-///     this row existed
-///
-/// ⚠️ A 202 IS NOT A FAILED WRITE. The request SUCCEEDED and the change did not happen;
-/// retrying it files a SECOND TICKET. `TaskAwaitingApprovalException` is a distinct type
-/// precisely so it cannot be caught as an ordinary failure, and nothing here widens that.
+///   - a [TaskWriteException] caused by a Dio failure with a response returns false
+///   - a connection error or any timeout returns true
+///   - a cancelled request returns false, so an abandoned write is never re-sent
+///   - anything unrecognised returns false, so the operator sees a message instead of a
+///     retry of an unclassified failure
 bool isTransportFailure( Object error ) {
   if ( error is! TaskWriteException ) return false;
   final cause = error.cause;
@@ -88,35 +69,21 @@ bool isTransportFailure( Object error ) {
     case DioExceptionType.sendTimeout:
     case DioExceptionType.receiveTimeout:
       return true;
-    // `badResponse` IS the 4xx case — the server answered and refused, which is Tiffany's
-    // ruling in one line. `cancel` is somebody DELIBERATELY abandoning the request. Both
-    // are named here rather than left to the default because both carry a decision
-    // somebody made on purpose, and a reader should find it in the code.
+    // badResponse is the 4xx case: the server answered and refused. cancel means the
+    // request was abandoned on purpose. Both are named so the decision is visible.
     case DioExceptionType.badResponse:
     case DioExceptionType.cancel:
       return false;
 
-    // 🔴 EVERYTHING ELSE FALLS HERE, AND THAT IS WHY A DIO UPGRADE IS NO LONGER A COMPILE
-    // BREAK. This switch used to enumerate all eight members and stop, which made it
-    // exhaustive — so dio adding ONE enum value stopped this file compiling, and
-    // `unsent_write.dart` sits on the app's startup path, so that is not a local failure.
-    // Measured 2026-09-28 in a fresh worktree that resolved dio 5.11.1 (it appends
-    // `transformTimeout`): 46 test files failed to load on this one switch and not one of
-    // the messages named it.
+    // Everything else returns false, including badCertificate, unknown and any member a
+    // future dio adds, so a dio upgrade cannot break compilation on this startup-path
+    // file. A new type read as transport would retry a failure nobody understands;
+    // read as a refusal it only shows a message.
     //
-    // `badCertificate` and `unknown` land here, which is where they always belonged: they
-    // are not ours to guess about. So does any member a future dio adds. The answer is
-    // false either way, matching the contract documented above — "anything unrecognised →
-    // false" — and it is the conservative direction, because a new type read as transport
-    // would silently retry a request whose failure nobody has understood, while reading it
-    // as a refusal only puts a message in front of the operator.
-    //
-    // What this COSTS is the exhaustiveness check that forced a human to classify each new
-    // member. `unsent_write_test.dart` buys it back with two tests: a guard on
-    // `DioExceptionType.values.length`, and a table naming every member and its answer.
-    // When dio grows a member those go red with instructions instead of the build falling
-    // over. Do not bump the number to make an upgrade pass — classify the member here
-    // first, and name it explicitly above if the decision is an interesting one.
+    // The compiler no longer forces each new member to be classified. Two tests in
+    // `test/unit/fleet/unsent_write_test.dart` cover that: one guards
+    // `DioExceptionType.values.length` and one lists every member with its answer.
+    // When dio grows a member, classify it here before bumping the number.
     default:
       return false;
   }
@@ -129,36 +96,33 @@ class RetryOutcome {
 
   /// Server refusals met during the pass, in the server's own words.
   ///
-  /// 🔴 A RETRY THAT MEETS A 4xx STOPS BEING AN UNSENT WRITE AND BECOMES AN ERROR. It
-  /// leaves [remaining] — the connection is fine, so the mark would never clear — and its
-  /// message comes back here so the pane can put the server's sentence in front of the
-  /// operator. Dropping the record silently would tell them their action landed.
+  /// A retry that meets a 4xx leaves [remaining], because the connection is fine and the
+  /// mark would never clear. Its message comes back here so the pane can show the
+  /// server's sentence instead of implying the action landed.
   final List<String> refusals;
 
+  /// Creates the outcome of one retry pass.
   const RetryOutcome( { required this.remaining, required this.refusals } );
 }
 
-/// Retry every unsent write, once.
+/// Retries every unsent write once.
 ///
-/// 🔴 ONE ATTEMPT PER WRITE PER RESTORED EDGE — never a loop inside one edge, and never
-/// one attempt ever. A later restored edge tries again, because the edge is a genuine new
-/// signal and "once ever" would lose an operator's action permanently over a single bad
-/// moment, which is the failure G6 exists to prevent. Tiffany approved both halves of
-/// that on 2026-09-23 and asked for the pair of tests that pin them: two restores produce
-/// two attempts, and one restore produces exactly one.
+/// Each write gets one attempt per restored connection: never a loop within one
+/// connection, and never one attempt ever. A later restored connection tries again,
+/// because "once ever" would lose the operator's action over one bad moment.
 ///
 /// Requires:
-///   - writes are the currently-unsent records, keyed by task id
-///   - send performs one write and throws exactly as the repository does
+///   - writes are the currently unsent records, keyed by task id
+///   - send performs one write and throws as the repository does
 ///
 /// Ensures:
-///   - every write is attempted AT MOST ONCE per call
+///   - every write is attempted at most once per call
 ///   - a write that succeeds is dropped
-///   - a write that fails on TRANSPORT again is kept, and not retried again this call
-///   - a write REFUSED by the server is dropped and its message returned in
+///   - a write that fails on transport again is kept
+///   - a write refused by the server is dropped and its message returned in
 ///     [RetryOutcome.refusals]
-///   - a [TaskAwaitingApprovalException] drops the record: the server has the request and
-///     has filed a ticket, so it is no longer unsent, and retrying it would file a second
+///   - a [TaskAwaitingApprovalException] drops the record, because the server holds the
+///     request and a retry would file a second ticket
 ///   - never throws
 Future<RetryOutcome> retryUnsentWrites(
   Map<String, UnsentWrite> writes,
@@ -170,9 +134,9 @@ Future<RetryOutcome> retryUnsentWrites(
   for ( final entry in writes.entries ) {
     try {
       await send( entry.value );
-      // Landed. The mark clears.
+      // Landed; the mark clears.
     } on TaskAwaitingApprovalException {
-      // The server HAS it and has filed a ticket. Not unsent, and retrying files a second.
+      // The server has it and filed a ticket; retrying would file a second.
     } on Object catch ( e ) {
       if ( isTransportFailure( e ) ) {
         remaining[ entry.key ] = entry.value;

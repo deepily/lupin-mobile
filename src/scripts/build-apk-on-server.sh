@@ -12,7 +12,7 @@
 # ─────────────────────────────────────────────────────────────────────────────────────
 # WHY THE SETTINGS LIVE HERE AND NOT IN SOMEONE'S HEAD (row f681440d)
 #
-# The build is one long command (CLAUDE.md § DEVELOPMENT COMMANDS). Without the GRADLE_OPTS
+# The build is one long command (CLAUDE.md § Development commands). Without the GRADLE_OPTS
 # override, android/gradle.properties asks Gradle for -Xmx8G plus 4G metaspace, the seat's
 # cap kills it, and all Gradle says is "Gradle build daemon disappeared unexpectedly". That
 # is not a message anyone connects to memory, so the override belongs in a script.
@@ -50,7 +50,7 @@ REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 source "$SCRIPT_DIR/lib/apk-build-stamp.sh"
 APK="$REPO_ROOT/build/app/outputs/flutter-apk/app-debug.apk"
 
-# Same values as CLAUDE.md § DEVELOPMENT COMMANDS. Overridable, but the defaults are the
+# Same values as CLAUDE.md § Development commands. Overridable, but the defaults are the
 # ones that are known to fit under 8 GiB.
 JAVA_HOME="${JAVA_HOME_OVERRIDE:-$HOME/opt/jdk-21}"
 GRADLE_OPTS="${GRADLE_OPTS:--Dorg.gradle.jvmargs=-Xmx4g\ -XX:MaxMetaspaceSize=1g\ -XX:ReservedCodeCacheSize=256m -Dkotlin.daemon.jvmargs=-Xmx1500m -Dorg.gradle.workers.max=6}"
@@ -61,9 +61,15 @@ usage() {
 build-apk-on-server.sh — build the debug APK on the dev server, main checkout only
 
   (no arguments)   Build. Prints the commit it built and where the APK is.
-  --fcm            Compile in FCM push wake-ups (--dart-define=ENABLE_FCM=true). Opt-in
-                   until the wake path is proven on a device (row 8ff78c69, slice 1).
+  --no-fcm         Compile FCM push wake-ups OUT (no --dart-define=ENABLE_FCM=true).
+                   The default is to compile them IN: a build without them has no token
+                   and no background wake-up, and nothing on the phone says so.
+  --fcm            Accepted and ignored (FCM is already the default); old commands work.
   --help, -h       This text.
+
+The drawer shows the branch built from, then "<yyyy.mm.dd> build N": N counts builds made
+that day, kept in io/build-counter (gitignored; survives `flutter clean`; restarts at 1
+each day; advanced only when a build succeeds).
 
 Environment:
   JAVA_HOME_OVERRIDE   JDK to use (default ~/opt/jdk-21)
@@ -73,15 +79,90 @@ From the laptop, `deploy-apk-to-device.sh --build` runs this over ssh, then inst
 EOF
 }
 
-FCM=false
+FCM=true
+SAW_FCM=false
+SAW_NO_FCM=false
 while [ $# -gt 0 ]; do
     case "$1" in
-        --fcm)     FCM=true ;;
+        --fcm)     SAW_FCM=true ;;
+        --no-fcm)  SAW_NO_FCM=true; FCM=false ;;
         --help|-h) usage; exit 0 ;;
         *) print_error "Unknown argument: $1"; echo ""; usage; exit 2 ;;
     esac
     shift
 done
+
+if [ "$SAW_FCM" = true ] && [ "$SAW_NO_FCM" = true ]; then
+    print_error "--fcm and --no-fcm contradict each other; pass one."
+    exit 2
+fi
+
+fcm_note=""
+build_args=( build apk --debug )
+if [ "$FCM" = true ]; then
+    build_args+=( --dart-define=ENABLE_FCM=true )
+    fcm_note=" (with FCM push wake-ups)"
+fi
+
+cd "$REPO_ROOT"
+sha="$( git rev-parse --short HEAD )"
+branch="$( git branch --show-current )"
+dirty=""
+[ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
+
+# What the app shows on its drawer's build line (lib/core/build_info.dart reads these):
+# branch, date, that day's build number, time, commit, push. Push comes from ENABLE_FCM.
+# Date and number come from the SAME clock reading as the time, so they cannot disagree.
+# The counter file is io/build-counter (gitignored, outside build/ so `flutter clean`
+# cannot reset it); it is only advanced after the APK is verified, further down.
+build_now="${APK_BUILD_NOW:-$( date -Is )}"
+build_date="$( echo "${build_now%%T*}" | tr '-' '.' )"
+counter_file="${APK_BUILD_COUNTER_FILE:-$REPO_ROOT/io/build-counter}"
+build_dirty="$( [ -n "$dirty" ] && echo true || echo false )"
+build_args+=(
+    "--dart-define=BUILD_TIME=$build_now"
+    "--dart-define=BUILD_TZ=$( date +%Z )"
+    "--dart-define=BUILD_SHA=$sha"
+    "--dart-define=BUILD_DIRTY=$build_dirty"
+    "--dart-define=BUILD_BRANCH=$branch"
+)
+
+# Takes this build's number and adds it to the build arguments. Called AFTER the build lock
+# is held (or in the dry run, which holds none), so two overlapping builds cannot read the
+# same count: the second one never gets this far (exit 4).
+build_number=""
+take_build_number() {
+    build_number="$( build_counter_next "$counter_file" "$build_date" )"
+    build_args+=( "--dart-define=BUILD_NUMBER=$build_number" )
+}
+
+# Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
+# and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
+# compile-time flag needs writing down at all (row 8ff78c69, F3).
+stamp_built_apk() {
+    write_apk_stamp "$APK" "$sha" "$branch" "$FCM" "$build_dirty" "$build_date" "$build_number"
+}
+
+# Test hook: print what would be built and stop, before any checkout, JDK or Gradle check.
+# src/scripts/test-apk-fcm-default.sh uses it to prove the default and the opt-out.
+if [ "${APK_BUILD_DRY_RUN:-}" = "1" ]; then
+    take_build_number
+    echo "BUILD_ARGS: ${build_args[*]}"
+    echo "FCM: $FCM"
+    echo "BUILD_DATE: $build_date"
+    echo "BUILD_NUMBER: $build_number"
+    # Test hook: act as if the build succeeded, so a test can see the count advance.
+    if [ "${APK_BUILD_DRY_RUN_COMMIT:-}" = "1" ]; then
+        build_counter_commit "$counter_file" "$build_date" "$build_number"
+    fi
+    # With a throwaway APK path, also write the stamp through the SAME function the real
+    # build uses, so a test can read back what the stamp says about this build.
+    if [ -n "${APK_STAMP_TEST_APK:-}" ]; then
+        APK="$APK_STAMP_TEST_APK"
+        stamp_built_apk
+    fi
+    exit 0
+fi
 
 # ════════════════════════════════════════════════════════════════════════════════════
 # Right place?
@@ -106,7 +187,7 @@ fi
 
 if [ ! -x "$JAVA_HOME/bin/java" ]; then
     print_error "No JDK at $JAVA_HOME"
-    print_info "Set JAVA_HOME_OVERRIDE=/path/to/jdk-21, or see CLAUDE.md § DEVELOPMENT COMMANDS."
+    print_info "Set JAVA_HOME_OVERRIDE=/path/to/jdk-21, or see CLAUDE.md § Development commands."
     exit 3
 fi
 
@@ -123,22 +204,13 @@ if ! flock -n 9; then
     exit 4
 fi
 
+# The number is read only now that no other build can be between this read and the write
+# at the end. Reading it before the lock let two overlapping builds take the same number.
+take_build_number
+
 # ════════════════════════════════════════════════════════════════════════════════════
 # Build
 # ════════════════════════════════════════════════════════════════════════════════════
-cd "$REPO_ROOT"
-sha="$( git rev-parse --short HEAD )"
-branch="$( git branch --show-current )"
-dirty=""
-[ -n "$( git status --porcelain -- lib pubspec.yaml android )" ] && dirty=" (plus uncommitted changes under lib/, pubspec.yaml or android/)"
-
-fcm_note=""
-build_args=( build apk --debug )
-if [ "$FCM" = true ]; then
-    build_args+=( --dart-define=ENABLE_FCM=true )
-    fcm_note=" (with FCM push wake-ups)"
-fi
-
 print_step "Building debug APK on $( hostname ): $branch @ $sha$dirty$fcm_note"
 print_info "About 1 minute warm, about 7 minutes cold."
 
@@ -160,12 +232,13 @@ if [ ! -f "$APK" ] || [ ! "$APK" -nt "$marker" ]; then
     exit 1
 fi
 
-# Stamp WHAT was built, beside the thing that was built — deploy-apk-to-device.sh reads it
-# and says what it is installing. See src/scripts/lib/apk-build-stamp.sh for why a
-# compile-time flag needs writing down at all (row 8ff78c69, F3).
-write_apk_stamp "$APK" "$sha" "$branch" "$FCM" \
-    "$( [ -n "$dirty" ] && echo true || echo false )"
+# Only now does the build count: it produced a new APK. A failed build exits above.
+if ! build_counter_commit "$counter_file" "$build_date" "$build_number"; then
+    print_info "Could not write $counter_file; the next build may repeat build $build_number."
+fi
+stamp_built_apk
 
 print_success "Built in $(( SECONDS - started ))s: $APK"
-print_success "Commit: $branch @ $sha$dirty$fcm_note"
+print_success "Commit: ${branch:-detached} @ $sha$dirty$fcm_note"
+print_success "Drawer reads: ${branch:-detached $sha} / $build_date build $build_number"
 print_info    "Stamped: $( basename "$( apk_stamp_path "$APK" )" ) (fcm=$FCM)"

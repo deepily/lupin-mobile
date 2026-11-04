@@ -1,9 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/logging/log_redaction.dart';
+import '../../core/logging/logger.dart';
+
+/// Returns log metadata naming the request [path] without its query string.
+///
+/// The query string is left out because it can carry a credential.
+LogContext requestLogContext( String path ) => LogContext( metadata: { 'path': path.split( '?' ).first } );
 
 /// HTTP service for making requests to the Lupin FastAPI backend.
 /// 
@@ -26,11 +31,11 @@ class HttpService {
     _configureDio();
   }
   
-  /// Marker stored on the Dio's `options.extra` so a single shared Dio (e.g.
-  /// the DI singleton consumed by both `HttpService` and `CachedHttpService`)
-  /// is configured exactly once. Without this guard each subclass ctor would
-  /// re-add the logging interceptors, producing 2× log output per request
-  /// (and confusing any reader into thinking the request was dispatched twice).
+  /// Marker in the Dio's `options.extra` that makes a shared Dio configure only once.
+  ///
+  /// The DI singleton is shared by `HttpService` and `CachedHttpService`. Without the marker each
+  /// constructor re-adds the logging interceptors. That doubles the log output per request and
+  /// makes a reader think the request was sent twice.
   static const String _configuredMarker = '_lupin_http_configured';
 
   void _configureDio() {
@@ -71,22 +76,29 @@ class HttpService {
       ));
     }
 
+    // Method and path only: the query string can carry a token, and this wrapper runs in release builds too.
+    // The lines are debug entries, so a release console (warning and above) does not show them.
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
-        print('[HTTP] Request: ${options.method} ${options.uri}');
+        Logger.debug( 'Request: ${options.method} ${_uriWithoutQuery( options.uri )}', tag: 'HTTP' );
         handler.next(options);
       },
       onResponse: (response, handler) {
-        print('[HTTP] Response: ${response.statusCode} ${response.requestOptions.uri}');
+        Logger.debug( 'Response: ${response.statusCode} ${_uriWithoutQuery( response.requestOptions.uri )}', tag: 'HTTP' );
         handler.next(response);
       },
       onError: (error, handler) {
-        print('[HTTP] Error: ${error.message}');
+        Logger.debug( 'Error: ${error.type.name} ${_uriWithoutQuery( error.requestOptions.uri )}', tag: 'HTTP' );
         handler.next(error);
       },
     ));
   }
-  
+
+  /// Returns [uri] as scheme, host, port and path.
+  ///
+  /// The userinfo, query string and fragment are dropped.
+  static String _uriWithoutQuery( Uri uri ) => '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}${uri.path}';
+
   /// Retrieves a new session ID from the FastAPI backend.
   /// 
   /// Requires:
@@ -104,8 +116,8 @@ class HttpService {
     try {
       final response = await _dio.get('/api/get-session-id');
       return response.data;
-    } catch (e) {
-      print('[HTTP] Session ID request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Session ID request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-session-id' ) );
       rethrow;
     }
   }
@@ -146,8 +158,8 @@ class HttpService {
         },
       );
       return response;
-    } catch (e) {
-      print('[HTTP] ElevenLabs TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'ElevenLabs TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech-elevenlabs' ) );
       rethrow;
     }
   }
@@ -179,39 +191,25 @@ class HttpService {
         },
       );
       return response;
-    } catch (e) {
-      print('[HTTP] OpenAI TTS request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'OpenAI TTS request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/get-speech' ) );
       rethrow;
     }
   }
   
-  /// Uploads an audio file and requests transcription.
-  /// 
-  /// Requires:
-  ///   - filePath must point to a valid, readable audio file
-  ///   - sessionId must be a valid session identifier
-  ///   - File must be in a supported audio format (MP3, WAV, M4A)
-  ///   - File size must be within backend limits
-  /// 
-  /// Ensures:
-  ///   - Audio file is uploaded to the backend
-  ///   - Transcription is processed and returned
-  ///   - Returns transcription text with confidence scores
-  /// 
-  /// Raises:
-  ///   - DioException if upload or transcription fails
-  ///   - FileSystemException if file cannot be read
-  ///   - ArgumentError if file format is unsupported
+  /// Uploads an audio file to `/api/upload-and-transcribe-mp3`; deprecated for chat replies.
   ///
-  /// ⚠️ MP3-ENDPOINT TRAP (F-S4-2, focus-mode-voice-chat 2026-06-12): this
-  /// method POSTs to `/api/upload-and-transcribe-mp3`, which QUEUES A
-  /// MULTIMODAL JOB on the parent — it does NOT return a chat-reply
-  /// transcript, despite the WAV mention in the docstring above. For
-  /// voice-reply transcription use `AsrService`
-  /// (`lib/services/asr/asr_service.dart`), which POSTs to the synchronous
-  /// `/api/upload-and-transcribe-wav` endpoint. Deprecated for new callers;
-  /// kept for the legacy voice stack (zero active callers at annotation
-  /// time).
+  /// That endpoint queues a multimodal job on the parent and does not return a chat-reply transcript.
+  /// For voice-reply transcription use [AsrService] (`lib/services/asr/asr_service.dart`), which posts to the
+  /// synchronous `/api/upload-and-transcribe-wav` endpoint. This method is kept for the legacy voice stack.
+  ///
+  /// Requires:
+  ///   - filePath names a readable audio file in a supported format, within the backend's size limit
+  ///   - sessionId is a valid session identifier
+  ///
+  /// Raises:
+  ///   - DioException if the upload fails
+  ///   - FileSystemException if the file cannot be read
   @Deprecated( 'Wrong tool for chat replies — queues a multimodal job. '
       'Use AsrService (/api/upload-and-transcribe-wav) instead. F-S4-2.' )
   Future<Map<String, dynamic>> uploadAndTranscribe({
@@ -230,30 +228,27 @@ class HttpService {
       );
       
       return response.data;
-    } catch (e) {
-      print('[HTTP] Audio upload failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Audio upload failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/api/upload-and-transcribe-mp3' ) );
       rethrow;
     }
   }
   
   /// Performs a health check on the backend server.
-  /// 
+  ///
   /// Requires:
-  ///   - Network connectivity must be available
-  /// 
+  ///   - network connectivity is available
+  ///
   /// Ensures:
-  ///   - Returns true if server is healthy and responsive
-  ///   - Returns false if server is unreachable or unhealthy
-  ///   - Does not throw exceptions for network failures
-  /// 
-  /// Raises:
-  ///   - No exceptions are raised (all errors are caught and return false)
+  ///   - returns true if the server is healthy and responsive
+  ///   - returns false if the server is unreachable or unhealthy
+  ///   - nothing is raised for network failures; every error is caught and returns false
   Future<bool> checkHealth() async {
     try {
       final response = await _dio.get('/health');
       return response.statusCode == 200;
-    } catch (e) {
-      print('[HTTP] Health check failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Health check failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( '/health' ) );
       return false;
     }
   }
@@ -283,8 +278,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] GET request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'GET request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -316,8 +311,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] POST request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'POST request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -349,8 +344,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] PUT request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'PUT request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }
@@ -380,8 +375,8 @@ class HttpService {
         queryParameters: queryParameters,
         options: options,
       );
-    } catch (e) {
-      print('[HTTP] DELETE request failed: $e');
+    } catch (e, st) {
+      Logger.error( 'DELETE request failed', tag: 'HTTP', error: e, stackTrace: st, context: requestLogContext( path ) );
       rethrow;
     }
   }

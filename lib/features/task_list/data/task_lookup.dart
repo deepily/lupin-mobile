@@ -1,31 +1,41 @@
-/// Look up ONE ticket by the hash people actually paste (walk-through item M3).
+/// Looks up one ticket by the hash people paste.
 ///
-/// A port of the web's `shared/task-lookup.js`, which both web clients read. Rick,
-/// 2026-09-09: *"Every time someone refers to a row for a ticket by # I have no idea what
-/// they're talking about."*
+/// This ports the web's `shared/task-lookup.js`, which both web clients read. It must hit
+/// `GET /api/tasks/<ref>`, never `GET /api/tasks?id_prefix=<ref>`. The query form is the
+/// board query and chains the owed filter after the prefix match. It therefore hides
+/// holding-area rows, and on the web 1 of 23 held rows was findable that way. The
+/// single-row endpoint applies no visibility filter. The hashes people paste are usually
+/// for rows that are not on the board.
 ///
-/// 🔴 IT MUST HIT `GET /api/tasks/<ref>`, NEVER `GET /api/tasks?id_prefix=<ref>`. The
-/// query form is the BOARD query and chains the owed filter after the prefix match, so it
-/// hides holding-area rows — measured on the web, 1 of 23 held rows was findable that
-/// way. The single-row endpoint applies no visibility filter, and the hashes Rick is
-/// handed are usually for rows that are NOT on his board.
-///
-/// ⚠️ THE CLASSIFIER MIRRORS `task_store_rules.classify_task_ref` ON THE SERVER, which
-/// is what actually governs. This copy exists so the box refuses junk without a round
-/// trip and says why. The web pins its copy to the Python constant with a test; this one
-/// is pinned to the same numbers by `task_lookup_test.dart`.
+/// The classifier mirrors `task_store_rules.classify_task_ref` on the server, which
+/// governs. This copy lets the box refuse junk without a round trip. A test,
+/// `task_lookup_test.dart`, pins it to the same numbers.
 library;
 
 /// The shortest prefix the server will resolve.
 const minTaskRefPrefixLen = 4;
 
-enum TaskRefKind { full, prefix, invalid }
+/// How a typed reference classifies.
+enum TaskRefKind {
+  /// A complete task id.
+  full,
 
-/// A classified reference. [value] is null exactly when [kind] is invalid.
+  /// A hex prefix of at least [minTaskRefPrefixLen] characters.
+  prefix,
+
+  /// Text that is not a task reference.
+  invalid
+}
+
+/// A classified reference; [value] is null exactly when [kind] is invalid.
 class TaskRef {
+  /// The classification.
   final TaskRefKind kind;
+
+  /// The normalised id or prefix, or null when invalid.
   final String? value;
 
+  /// Creates a classified reference.
   const TaskRef( this.kind, this.value );
 }
 
@@ -35,17 +45,18 @@ final _canonicalUuid = RegExp(
 final _hexOnly = RegExp( r'^[0-9a-f]+$' );
 const _compactUuidLen = 32;
 
-/// Classify what the user typed. Pure; never throws.
+/// Classifies what the user typed; pure and never throws.
 ///
 /// Requires:
 ///   - [ref] is the raw text from the box; null is allowed
 ///
 /// Ensures:
-///   - a canonical UUID, or 32 bare hex chars -> full, lowercased
-///   - >= [minTaskRefPrefixLen] hex chars, hyphens tolerated -> prefix, hyphens stripped
-///   - anything else -> invalid, with a null value
-///   - junk never classifies as a prefix: a lookup built from arbitrary text is a search
-///     box, which is a different feature
+///   - a canonical UUID, or 32 bare hex chars, is full and lowercased
+///   - at least [minTaskRefPrefixLen] hex chars, hyphens tolerated, is a prefix with the
+///     hyphens stripped
+///   - anything else is invalid, with a null value
+///   - junk never classifies as a prefix, because a lookup built from arbitrary text is a
+///     search box, which is a different feature
 TaskRef classifyTaskRef( String? ref ) {
   if ( ref == null ) return const TaskRef( TaskRefKind.invalid, null );
 
@@ -65,16 +76,16 @@ TaskRef classifyTaskRef( String? ref ) {
 /// The lookup path for a reference, or null when it is not one.
 ///
 /// Ensures:
-///   - a classifiable ref -> `/api/tasks/<normalized>`, so two spellings of one id
+///   - a classifiable ref gives `/api/tasks/<normalized>`, so two spellings of one id
 ///     produce one URL
-///   - junk -> null, so the box can refuse it without spending a round trip on a 422
+///   - junk gives null, so the box can refuse it without spending a round trip on a 422
 String? taskLookupPath( String? ref ) {
   final classified = classifyTaskRef( ref );
   if ( classified.kind == TaskRefKind.invalid ) return null;
   return '/api/tasks/${Uri.encodeComponent( classified.value! )}';
 }
 
-/// Shown when the typed text will not classify. Worded as the web words it.
+/// Shown when the typed text will not classify; worded as the web words it.
 const taskRefRefusalMessage =
     'Enter at least $minTaskRefPrefixLen hex characters of a ticket id (0-9, a-f). '
     'Hyphens are fine — paste as much of the id as you have.';
@@ -84,8 +95,8 @@ const taskLookupAuthRequiredMessage = 'Signed out — sign back in to look up ti
 
 /// Shown when the store did not answer.
 ///
-/// ⚠️ THE SERVER'S OWN TEXT IS DELIBERATELY NOT PASSED THROUGH on this arm, as on the
-/// web: a 5xx's message is "HTTP 500" or a stack fragment, which the reader cannot act on.
+/// The server's own text is not passed through on this arm, as on the web. A 5xx's
+/// message is "HTTP 500" or a stack fragment, which the reader cannot act on.
 const taskLookupUnreachableMessage = 'The store did not answer. Try again in a moment.';
 
 /// A lookup the server answered with something other than a row.
@@ -96,6 +107,7 @@ class TaskLookupException implements Exception {
   /// FastAPI's `detail`, when the server sent one.
   final String? detail;
 
+  /// Creates the exception.
   const TaskLookupException( this.status, { this.detail } );
 
   @override
@@ -105,11 +117,11 @@ class TaskLookupException implements Exception {
 /// What the box says when a lookup failed.
 ///
 /// Ensures:
-///   - 404 -> names what was typed, so a typo is visible
-///   - 422 -> the server's `detail` passes through, because for an ambiguous prefix it
-///     NAMES the candidate ids and is the most useful text on the screen
-///   - 401 -> the sign-in sentence
-///   - anything else -> the unreachable sentence
+///   - 404 names what was typed, so a typo is visible
+///   - 422 passes the server's `detail` through, because for an ambiguous prefix it names
+///     the candidate ids and is the most useful text on the screen
+///   - 401 gives the sign-in sentence
+///   - anything else gives the unreachable sentence
 String describeLookupFailure( String typed, TaskLookupException error ) {
   switch ( error.status ) {
     case 404 : return 'No ticket matches "$typed".';

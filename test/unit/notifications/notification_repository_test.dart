@@ -5,6 +5,7 @@ import 'package:lupin_mobile/features/notifications/data/notification_repository
 
 import '../../_helpers/fixture_loader.dart';
 import '../_helpers/stub_dio.dart';
+import '../../_helpers/source_text.dart';
 
 void main() {
   group("NotificationRepository", () {
@@ -163,7 +164,7 @@ void main() {
     });
 
     test("the retired /api/dm/send door is gone from the repository", () async {
-      final src = File("lib/features/notifications/data/notification_repository.dart").readAsStringSync();
+      final src = stripComments( File("lib/features/notifications/data/notification_repository.dart").readAsStringSync() );
       expect(src.contains("/api/dm/send"), isFalse);
     });
 

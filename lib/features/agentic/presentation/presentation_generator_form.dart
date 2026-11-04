@@ -10,7 +10,11 @@ import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 
+/// Form that submits a presentation generation job.
+///
+/// On success it replaces itself with the job detail screen.
 class PresentationGeneratorForm extends StatefulWidget {
+  /// Creates the form.
   const PresentationGeneratorForm( { super.key } );
 
   @override

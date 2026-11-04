@@ -11,7 +11,11 @@ import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Form that submits deep research chained into a podcast.
+///
+/// On success it replaces itself with the job detail screen.
 class ResearchToPodcastForm extends StatefulWidget {
+  /// Creates the form.
   const ResearchToPodcastForm( { super.key } );
 
   @override
@@ -87,7 +91,7 @@ class _ResearchToPodcastFormState extends State<ResearchToPodcastForm> {
             const SizedBox( height: 16 ),
             TextField(
               controller  : _budgetCtrl,
-              keyboardType: TextInputType.numberWithOptions( decimal: true ),
+              keyboardType: const TextInputType.numberWithOptions( decimal: true ),
               decoration  : const InputDecoration(
                 labelText : 'Budget (USD, optional)',
                 border    : OutlineInputBorder(),

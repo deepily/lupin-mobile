@@ -8,15 +8,19 @@ import '../domain/notification_event.dart';
 import '../domain/notification_state.dart';
 import 'conversation_by_date_screen.dart';
 
-/// Per-sender date browse screen.
+/// Lists the dates on which a sender has messages, with counts.
 ///
 /// Backed by `GET /api/notifications/sender-dates/{sender}/{user}`, which
-/// returns `List<DateSummary>` (date YYYY-MM-DD, count, newCount). Tapping
-/// a date pushes [ConversationByDateScreen] anchored to that date.
+/// returns one [DateSummary] per day. Tapping a date pushes
+/// [ConversationByDateScreen] anchored to that date.
 class SenderDatesScreen extends StatefulWidget {
+  /// Sender whose dates are listed.
   final String senderId;
+
+  /// Email of the user the messages were addressed to.
   final String userEmail;
 
+  /// Creates the screen for [senderId] and [userEmail].
   const SenderDatesScreen( {
     super.key,
     required this.senderId,

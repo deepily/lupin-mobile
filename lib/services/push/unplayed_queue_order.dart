@@ -1,39 +1,33 @@
-/// Ordering for the unplayed-notification list the wake chain fetches
-/// (Tiffany's ruling, 2026-09-28: sort ascending by timestamp, client-side).
+/// Ordering for the unplayed list the wake chain fetches: oldest first, sorted client-side.
 ///
-/// 🔴 WHY THE CLIENT SORTS AT ALL, WHEN THE SERVER APPEARS TO. The list
-/// endpoint's docstring says it returns notifications "sorted by timestamp
-/// (newest first)" — `notifications.py:2520`. The handler does no sorting
-/// whatsoever (`notifications.py:2536`): it walks the queue in insertion order
-/// and slices. So the documented order and the real order disagree, and BOTH
-/// are things this client would be wrong to depend on. Sorting here costs
-/// microseconds on a list of tens and makes the chain correct under either
-/// server behaviour — including a future server-side fix that finally honours
-/// its own docstring and reverses us.
+/// Design: src/docs/decisions/README.md (R-PUSH-oldest-first)
 ///
-/// 🔴 WHY NOT COMPARE THE STRINGS. `NotificationItem.timestamp` is an
-/// ISO-8601 string carrying a LOCAL UTC OFFSET — the server formats it in the
-/// configured timezone (`notification_fifo_queue.py:149`) and only falls back
-/// to UTC when that lookup fails. So one process restart across a config
-/// change, or a DST boundary, is enough to put `...T01:00-04:00` and
-/// `...T02:00+00:00` in the same list, where a lexicographic compare orders
-/// them backwards. These are parsed to instants and compared as instants.
+/// The list endpoint's docstring says "sorted by timestamp (newest first)" (`notifications.py`).
+/// The handler does no sorting: it walks the queue in insertion order and slices.
+/// The documented order and the real order disagree, and this client would be wrong to depend on either.
+/// Sorting here costs microseconds on a list of tens and is correct under either behavior.
+/// It stays correct if the server later honors its docstring and would otherwise reverse the order.
+///
+/// The strings are not compared. `NotificationItem.timestamp` is ISO-8601 with a local UTC offset,
+/// because the server formats it in the configured timezone (`notification_fifo_queue.py`).
+/// It falls back to UTC only when that lookup fails.
+/// A restart across a config change or a DST boundary can put a minus-four-hour offset and a UTC
+/// timestamp in one list. A lexicographic compare orders them backwards.
+/// The timestamps are parsed to instants and compared as instants.
 library;
 
 /// Oldest first, by parsed instant, stable.
 ///
 /// Requires:
-///     - items are the raw wire maps from the unplayed-list response
+///   - items are the raw wire maps from the unplayed-list response
 ///
 /// Ensures:
-///     - returns a NEW list; the caller's list is not mutated
-///     - items are ordered by their `timestamp` field, earliest first,
-///       compared as instants so UTC offsets are honoured
-///     - an item whose timestamp is missing or unparseable is treated as
-///       OLDEST, so a malformed row is never starved behind well-formed ones
-///     - ties (equal instants, or several undateable items) keep their
-///       original relative order
-///     - never throws
+///   - returns a new list; the caller's list is not mutated
+///   - items are ordered by their `timestamp` field, earliest first, compared as instants so UTC offsets are honored
+///   - an item whose timestamp is missing or unparseable is treated as oldest, so a malformed row is never
+///     starved behind well-formed ones
+///   - ties (equal instants, or several undateable items) keep their original relative order
+///   - never throws
 List<Map<String, dynamic>> oldestFirst( List<Map<String, dynamic>> items ) {
   final decorated = <_Dated>[];
   for ( var i = 0; i < items.length; i++ ) {
@@ -41,25 +35,24 @@ List<Map<String, dynamic>> oldestFirst( List<Map<String, dynamic>> items ) {
   }
   decorated.sort( ( a, b ) {
     final byTime = a.at.compareTo( b.at );
-    // The index tiebreak is what makes this stable. Dart's List.sort is NOT
-    // guaranteed stable, so without it two items posted in the same second
-    // could swap between runs and a test pinning the order would flake.
+    // The index tiebreak makes the sort stable. Dart's List.sort is not guaranteed stable, so without it
+    // two items posted in the same second could swap between runs and a test pinning the order would flake.
     return byTime != 0 ? byTime : a.index.compareTo( b.index );
   } );
   return [ for ( final d in decorated ) d.item ];
 }
 
-/// Epoch stands for "no usable timestamp" — see the oldest-first contract.
+/// The epoch stands for "no usable timestamp"; see the oldest-first contract.
 final DateTime _undateable = DateTime.fromMillisecondsSinceEpoch( 0, isUtc: true );
 
 DateTime _instantOf( Map<String, dynamic> item ) {
   final raw = item[ 'timestamp' ];
   if ( raw is! String || raw.isEmpty ) return _undateable;
-  // tryParse, not parse: a malformed timestamp must not take down a background
-  // handler whose whole job is to be the thing that still works.
+  // Use tryParse, not parse: a malformed timestamp must not take down a background handler whose whole job is to still work.
   return DateTime.tryParse( raw )?.toUtc() ?? _undateable;
 }
 
+/// A timestamped item with its original index, for the stable sort.
 class _Dated {
   final Map<String, dynamic> item;
   final DateTime             at;

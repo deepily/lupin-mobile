@@ -9,16 +9,15 @@ import '../domain/queue_state.dart';
 import 'job_detail_screen.dart';
 import 'submit_job_sheet.dart';
 
-/// AC-S1.10 — the tab names come from [JobLane], not a parallel string list.
-///
-/// The literal this replaced (`const _queueNames = ['todo','run','done','dead']`)
-/// happened to agree with the server; nothing made it keep agreeing. `JobLane`
-/// is the mirrored vocabulary (`job_state.py` `STATE_TO_UI_CONTAINER`), so a
-/// server-side lane change now has one place to land instead of two.
+// Tab names come from [JobLane], not a parallel string list.
+// A literal list could silently drift from the server's lane names, and the mirrored
+// vocabulary in `job_lifecycle.dart` gives a server-side lane change one place to land.
 final _queueNames = JobLane.values.map( ( l ) => l.name ).toList( growable: false );
 const _tabLabels  = [ 'Todo', 'Running', 'Done', 'Dead' ];
 
+/// Tabbed dashboard of the todo, running, done and dead queues, with a submit button.
 class QueueDashboardScreen extends StatefulWidget {
+  /// Creates the screen.
   const QueueDashboardScreen( { super.key } );
 
   @override
@@ -198,7 +197,7 @@ class _JobTile extends StatelessWidget {
       subtitle : Text( job.agentType ?? job.status ),
       trailing : Chip(
         label          : Text( job.status, style: const TextStyle( fontSize: 11 ) ),
-        backgroundColor: _statusColor( job.status ).withOpacity( 0.2 ),
+        backgroundColor: _statusColor( job.status ).withValues( alpha: 0.2 ),
       ),
       onTap    : () => Navigator.of( context ).push( MaterialPageRoute(
         builder: ( _ ) => BlocProvider.value(

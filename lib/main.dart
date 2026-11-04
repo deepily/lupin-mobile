@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:audio_service/audio_service.dart';
 import 'core/app_initialization.dart';
 import 'core/logging/logger.dart';
-import 'core/error_handling/error_handler.dart';
 import 'core/di/service_locator.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_binding.dart';
 import 'services/push/notification_tap_router.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'services/websocket/ws_reconnect_coordinator.dart';
 import 'app.dart';
+import 'services/audio/lupin_media_handler.dart';
+import 'services/audio/podcast_audio_session.dart';
+import 'services/audio/podcast_cache.dart';
+import 'services/audio/podcast_player_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +29,31 @@ void main() async {
     );
 
     Logger.info('Lupin Mobile app starting...');
+
+    // The app's one media session: podcast playback with the screen locked (row 3469e9db, P3), and where
+    // earbud presses go. Quick Ask takes the presses while it's on screen (row c643b1b0). Must run before
+    // any AudioPlayer is created; the player itself is built lazily on first play.
+    ServiceLocator.instance.registerSingleton<LupinMediaHandler>( await AudioService.init(
+      builder : () => LupinMediaHandler(
+        // The media-button rewind key (earbuds, car, watch) backs up as far as the mini-player's back button (row 807a4ed0).
+        rewindInterval : PodcastPlayerService.skipBackInterval,
+      ),
+      config  : const AudioServiceConfig(
+        androidNotificationChannelId   : 'ai.deepily.lupin_mobile.podcast',
+        androidNotificationChannelName : 'Podcast playback',
+        androidNotificationOngoing     : true,
+      ),
+    ) );
+
+    // A duck from a short spoken alert must arrive as a pause (audio-focus ruling, row 049d914a).
+    await configurePodcastAudioSession( await AudioSession.instance );
+
+    // Downloads older than 30 days go, then the rest is learned; the app does not wait for it (row 24a39e97).
+    unawaited( preparePodcastCache( ServiceLocator.get<PodcastCache>() ) );
+
+    // Row b69dbf0b: the socket's reconnect triggers. The lifecycle and connectivity services must be running for
+    // them to see anything; the connectivity check does DNS lookups, so it is not awaited.
+    startReconnectServices( ServiceLocator.get<WsReconnectCoordinator>() );
 
     // S5 FCM silent-relay wake-up. No-op unless built with
     // --dart-define=ENABLE_FCM=true (default OFF — Stage-1 builds carry
@@ -54,7 +87,7 @@ void main() async {
     );
     
     // Show minimal error app
-    runApp(MaterialApp(
+    runApp(const MaterialApp(
       home: Scaffold(
         body: Center(
           child: Column(

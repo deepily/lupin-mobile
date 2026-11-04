@@ -1,0 +1,5 @@
+#!/bin/bash
+# Blocking pre-commit hook: doc linter, ignore checker, analyze --fatal-infos per swept directory.
+# Installed by tool/install-git-hooks.sh. Logic lives in tool/pre_commit_gate.py.
+ROOT="$(git rev-parse --show-toplevel)"
+exec python3 "$ROOT/tool/pre_commit_gate.py"

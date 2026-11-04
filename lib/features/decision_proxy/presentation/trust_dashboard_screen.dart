@@ -8,8 +8,14 @@ import '../domain/decision_proxy_event.dart';
 import '../domain/decision_proxy_state.dart';
 import 'trust_state_screen.dart';
 
+/// The trust dashboard: mode picker, pending decisions to ratify, and the batch footer.
+///
+/// Needs a [DecisionProxyBloc] above it. Leaving the active mode asks for confirmation first.
 class TrustDashboardScreen extends StatefulWidget {
+  /// The user whose pending decisions are shown.
   final String userEmail;
+
+  /// Creates the dashboard for [userEmail].
   const TrustDashboardScreen( { super.key, required this.userEmail } );
 
   @override
@@ -173,10 +179,9 @@ class _ModeHeader extends StatelessWidget {
             ),
             const SizedBox( height: 4 ),
             Text(
-              "ini=${trustModeToString( mode.iniMode )}"
-              + ( mode.runningMode != null
+              "ini=${trustModeToString( mode.iniMode )}${mode.runningMode != null
                   ? " · running=${trustModeToString( mode.runningMode! )}"
-                  : "" ),
+                  : ""}",
               style: Theme.of( context ).textTheme.bodySmall,
             ),
             const SizedBox( height: 12 ),

@@ -97,6 +97,8 @@
 
 set -euo pipefail
 
+source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/lib/worktree-link-lib.sh"
+
 # ── THE BORROW LIST ───────────────────────────────────────────────────────────────
 #
 # Relative paths, borrowed from the main checkout by SYMLINK. Read the DENY notes above
@@ -135,23 +137,14 @@ fi
 # `link-worktree-venv.sh`: a short-circuiting reader closes the pipe while git is still
 # writing a long worktree list, git takes SIGPIPE, and `pipefail` + `set -e` turn that
 # into a silent exit 141 that reads like success.
-if ! WORKTREE_LIST="$( git -C "$TARGET" worktree list --porcelain 2>/dev/null )"; then
-    WORKTREE_LIST=""
-fi
-
-MAIN_REPO=""
-while IFS= read -r line; do
-    if [[ "$line" == "worktree "* ]]; then
-        MAIN_REPO="${line#worktree }"
-        break
-    fi
-done <<< "$WORKTREE_LIST"
-if [[ -z "$MAIN_REPO" ]]; then
+# The one copy of this lives in lib/worktree-link-lib.sh (byte-identical with lupin's).
+if ! wt_resolve_main "$TARGET"; then
     echo "ERROR: $TARGET is not inside a git repository" >&2
     exit 2
 fi
+MAIN_REPO="$WT_MAIN"
 
-if [[ "$( cd "$TARGET" && pwd -P )" == "$( cd "$MAIN_REPO" && pwd -P )" ]]; then
+if wt_same_dir "$TARGET" "$MAIN_REPO"; then
     if [[ $CHECK_ONLY -eq 1 ]]; then
         echo "MAIN: $TARGET is the main checkout - it owns the real artifacts"
         exit 0

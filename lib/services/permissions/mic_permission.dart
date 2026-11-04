@@ -1,36 +1,20 @@
-/// AC-S2.7 — the ONE place the microphone permission is REQUESTED.
+/// The single place the microphone permission is requested.
 ///
-/// 🔴 The plan's context table said "mic permission handled, with a
-/// `requestMicPermission` test seam on `voice_reply_field.dart`". Both halves
-/// were true separately and NEITHER was reusable. Verified at HEAD:
-///
-///   * `AsrService.startRecording()` only **checks** — `hasPermission()` then
-///     throw. It never **requests**.
-///   * The actual `Permission.microphone.request()` lived at TWO private sites
-///     on TWO different recorder stacks: `_defaultMicPermission`, private to
-///     `_VoiceReplyFieldState`, and `_requestPermissions` in
-///     `voice_input_output_service.dart` (on `FlutterSoundRecorder`, not even
-///     registered in the service locator).
-///
-/// Quick Ask would have been the THIRD copy. Consequence if left alone: a
-/// first-run user holds the button and gets the inline error "Microphone
-/// permission denied" **having never been asked** — the screen simply does not
-/// work on a fresh install. That is not tidiness, it is whether the feature
-/// functions.
+/// `AsrService.startRecording` only checks the permission and throws when it is missing.
+/// Without a request, a first-run user holds the button and gets "Microphone permission denied"
+/// without being asked. The screen then does not work on a fresh install.
 library;
 
 import 'package:permission_handler/permission_handler.dart';
 
-/// The seam. Tests substitute this; production leaves it alone.
+/// Test seam for [requestMicPermission]; production code uses the default.
 typedef MicPermissionRequester = Future<bool> Function();
 
-/// Request the microphone permission, raising the system prompt when the
-/// permission has not yet been decided.
+/// Requests the microphone permission and returns true when recording is permitted.
 ///
-/// Returns true iff recording is permitted afterwards. `request()` is a no-op
-/// that returns the existing status when already granted or permanently
-/// denied, so calling it on every capture is safe and is what makes the
-/// first-run prompt appear at the moment the user reaches for the mic.
+/// Raises the system prompt only while the permission is undecided. When it is already granted
+/// or permanently denied, `request()` returns the existing status. Calling this on every capture
+/// is therefore safe, and it shows the first-run prompt when the user reaches for the microphone.
 Future<bool> requestMicPermission() async {
   final status = await Permission.microphone.request();
   return status.isGranted;

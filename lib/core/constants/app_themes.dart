@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+/// Material 3 light and dark themes, both seeded from blue.
 class AppThemes {
   AppThemes._();
   
+  /// The light theme.
   static ThemeData lightTheme = ThemeData(
     primarySwatch: Colors.blue,
     brightness: Brightness.light,
@@ -25,6 +27,7 @@ class AppThemes {
     ),
   );
   
+  /// The dark theme.
   static ThemeData darkTheme = ThemeData(
     primarySwatch: Colors.blue,
     brightness: Brightness.dark,

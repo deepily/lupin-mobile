@@ -1,7 +1,7 @@
-/// Shared types for all agentic job submission endpoints.
+/// Shared response and error types for the agentic job submission endpoints.
 ///
-/// All 9 submit endpoints return the same {job_id, queue_position, status}
-/// shape; only TFE resume-from has extra fields and warrants its own class.
+/// Every submit endpoint returns the same job id, queue position and status.
+/// Only the test-fix-expediter resume call has extra fields, so it has its own class.
 library;
 
 import '../../queue/data/queue_models.dart';
@@ -12,15 +12,25 @@ T? _as<T>( dynamic v ) => v is T ? v : null;
 // Job type enum
 // ─────────────────────────────────────────────
 
+/// The kinds of agentic job the hub can submit.
 enum AgenticJobType {
+  /// A deep research report job.
   deepResearch,
+  /// A podcast generation job.
   podcast,
+  /// A presentation generation job.
   presentation,
+  /// A software-engineering team job.
   sweTeam,
+  /// A job that fixes a dead job's bug.
   bugFixExpediter,
+  /// A test suite run.
   testSuite,
+  /// A job that fixes failing tests.
   testFixExpediter,
+  /// Deep research chained into a podcast.
   researchToPodcast,
+  /// Deep research chained into a presentation.
   researchToPresentation,
 }
 
@@ -28,14 +38,20 @@ enum AgenticJobType {
 // Common submit response
 // ─────────────────────────────────────────────
 
-/// Response from all 8 standard agentic submit endpoints.
-/// job_id prefix identifies type: dr- pg- px- swe- bfe- ts- rp- rx-
+/// Response from the standard agentic submit endpoints.
+///
+/// The job id prefix names the job type: dr-, pg-, px-, swe-, bfe-, ts-, rp- or rx-.
 class AgenticSubmitResponse {
+  /// Queue state the server reported, such as `queued`, `waiting` or `done`.
   final String  status;
+  /// Id of the created job.
   final String  jobId;
+  /// Place in the queue; 0 when the server reports none.
   final int     queuePosition;
+  /// Optional text from the server, such as the answer to a finished request.
   final String? message;
 
+  /// Creates a response from its parts.
   const AgenticSubmitResponse( {
     required this.status,
     required this.jobId,
@@ -43,11 +59,10 @@ class AgenticSubmitResponse {
     this.message,
   } );
 
-  /// v2 wave 2: build from the synchronous `/api/v2/submit` body. A long job comes
-  /// back `status == 'waiting'` with a `job_id` — that is a SUCCESS (the work was
-  /// accepted and is running behind the queue), not a degrade. Anything that did
-  /// not produce a job is surfaced as an [AgenticApiException] so the form shows a
-  /// Failure with the server's own words instead of a blank success.
+  /// Builds a response from the synchronous `/api/v2/submit` body.
+  ///
+  /// A long job returns status `waiting` with a job id, which counts as success.
+  /// Any body that produced no job throws an [AgenticApiException] carrying the server's words.
   factory AgenticSubmitResponse.fromAsk( AskResponse ask ) {
     final jobId = ask.jobId;
     if ( jobId != null && jobId.isNotEmpty && ( ask.status == 'waiting' || ask.status == 'done' ) ) {
@@ -66,6 +81,7 @@ class AgenticSubmitResponse {
     );
   }
 
+  /// Builds a response from the JSON body of a standard submit endpoint.
   factory AgenticSubmitResponse.fromJson( Map<String, dynamic> j ) =>
       AgenticSubmitResponse(
         status        : ( j[ 'status' ] as String? ) ?? 'queued',
@@ -81,13 +97,20 @@ class AgenticSubmitResponse {
 
 /// Response from POST /api/test-fix-expediter/resume-from.
 class TfeResumeResponse {
+  /// Outcome the server reported, `resumed` by default.
   final String  status;
+  /// Id of the new job that continues the work.
   final String  resumedJobId;
+  /// Id of the job that was resumed.
   final String  originalJobId;
+  /// Phase the new job restarts from; null when the server gave none.
   final int?    resumeFromPhase;
+  /// Name of the restart phase; null when the server gave none.
   final String? phaseName;
+  /// How many times the original job has been resumed.
   final int     resumeCount;
 
+  /// Creates a response from its parts.
   const TfeResumeResponse( {
     required this.status,
     required this.resumedJobId,
@@ -97,6 +120,7 @@ class TfeResumeResponse {
     this.resumeCount = 1,
   } );
 
+  /// Builds a response from the resume endpoint's JSON body.
   factory TfeResumeResponse.fromJson( Map<String, dynamic> j ) =>
       TfeResumeResponse(
         status          : ( j[ 'status' ] as String? ) ?? 'resumed',
@@ -112,10 +136,14 @@ class TfeResumeResponse {
 // Error
 // ─────────────────────────────────────────────
 
+/// Failure from an agentic endpoint, carrying the server's own explanation.
 class AgenticApiException implements Exception {
+  /// What went wrong, in the server's words when it gave any.
   final String message;
+  /// HTTP status code; null when no response arrived.
   final int?   statusCode;
 
+  /// Creates an exception with a message and an optional status code.
   const AgenticApiException( this.message, { this.statusCode } );
 
   @override

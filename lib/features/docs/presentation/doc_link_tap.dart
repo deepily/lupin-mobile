@@ -6,9 +6,7 @@ import '../data/doc_repository.dart';
 import 'doc_panel.dart';
 import 'doc_split_host.dart';
 
-/// What a tap on a link inside rendered markdown does — one rule for every
-/// place that renders markdown (the document viewer, and before 2026-09-18
-/// the inline abstract card).
+/// Handles a tap on a link inside rendered markdown, one rule for all of them.
 ///
 /// Requires:
 ///   - [context] is mounted
@@ -33,8 +31,7 @@ Future<void> openMarkdownHref( {
       host.open( link );
       return;
     }
-    // No split to open into and nothing to fetch with: a viewer showing
-    // in-hand text with no repository has nowhere to send the link.
+    // A viewer showing in-hand text with no repository has nowhere to send the link.
     if ( repository == null ) return;
     await showDocPanel( context: context, link: link, repository: repository );
     return;

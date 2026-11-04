@@ -13,103 +13,146 @@ import '../data/broadcast_repository.dart';
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
+/// An input to [BroadcastBloc].
 sealed class BroadcastEvent {
+  /// Creates an event.
   const BroadcastEvent();
 }
 
-/// Read who is listening. Pane-visible, pull-to-refresh, or the ↻ beside "Sending to:".
+/// Read who is listening: on pane-visible, pull-to-refresh or the refresh button.
 class BroadcastRosterRequested extends BroadcastEvent {
+  /// The cancel token for the read, or null.
   final CancelToken? cancelToken;
+
+  /// Creates the event.
   const BroadcastRosterRequested( { this.cancelToken } );
 }
 
 /// The operator typed, or the mic filled the box.
 class BroadcastBodyChanged extends BroadcastEvent {
+  /// The new body text.
   final String body;
+
+  /// Creates the event.
   const BroadcastBodyChanged( this.body );
 }
 
-/// Mic pressed. Press again to stop and transcribe.
+/// Mic pressed; pressing again stops and transcribes.
 class BroadcastMicToggled extends BroadcastEvent {
+  /// Creates the event.
   const BroadcastMicToggled();
 }
 
-/// Send, AFTER the confirm modal has been answered.
+/// Send, after the confirm modal has been answered.
 ///
-/// The confirm is the pane's, not the bloc's — same reasoning as the Holding Area's
-/// batch gate. A bloc that popped its own dialog could not be tested without a widget
-/// tree, and a pane that dispatched before confirming would put the gate somewhere a
-/// later hand can skip.
+/// The confirm belongs to the pane, not the bloc, as with the Holding Area's batch gate.
+/// A bloc that popped its own dialog could not be tested without a widget tree. A pane that
+/// dispatched before confirming would put the gate where a later hand can skip it.
 class BroadcastSendConfirmed extends BroadcastEvent {
+  /// Creates the event.
   const BroadcastSendConfirmed();
 }
 
 /// A `commons_broadcast_ack` frame arrived on the notification socket.
 class BroadcastAckReceived extends BroadcastEvent {
+  /// The ack.
   final BroadcastAck ack;
+
+  /// Creates the event.
   const BroadcastAckReceived( this.ack );
 }
 
-/// 🔴 THE LISTENING WINDOW BROKE — backgrounded, or the socket dropped.
+/// The listening window broke: the app backgrounded or the socket dropped.
 ///
-/// This is the event the whole acceptance clause hangs on. It does not fetch anything and
-/// it cannot be undone for the broadcast it lands on.
+/// The whole acceptance clause hangs on this event. It fetches nothing, and it cannot be
+/// undone for the broadcast it lands on, except by [BroadcastAcksReconcileRequested].
 class BroadcastListeningInterrupted extends BroadcastEvent {
+  /// Creates the event.
   const BroadcastListeningInterrupted();
 }
 
-/// 🔴 THE LISTENING WINDOW CLOSED AGAIN — resumed, or the socket came back.
+/// The listening window closed again: the app resumed or the socket came back.
 ///
-/// The counterpart to [BroadcastListeningInterrupted], and the reason that one is no
-/// longer permanent. This DOES fetch: it reads the saved acks for the broadcast on
-/// screen (`GET /api/notifications/broadcast-acks/{id}`) and folds them in.
+/// It is the counterpart to [BroadcastListeningInterrupted], and the reason that one is not
+/// permanent. It fetches: it reads the saved acks for the broadcast on screen from
+/// `GET /api/notifications/broadcast-acks/{id}` and folds them in.
 class BroadcastAcksReconcileRequested extends BroadcastEvent {
+  /// Creates the event.
   const BroadcastAcksReconcileRequested();
 }
 
 /// Recent commons traffic for the activity strip.
 class BroadcastHistoryRequested extends BroadcastEvent {
+  /// Creates the event.
   const BroadcastHistoryRequested();
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-enum MicState { idle, listening, transcribing }
+/// What the mic is doing.
+enum MicState {
+  /// Not recording.
+  idle,
 
+  /// Recording.
+  listening,
+
+  /// Recording stopped and the transcription is pending.
+  transcribing
+}
+
+/// The Broadcast pane's state.
 class BroadcastState extends Equatable {
+  /// The message being composed.
   final String body;
+
+  /// Who is listening.
   final ActiveSessionRoster roster;
+
+  /// True while the roster read is in flight.
   final bool rosterLoading;
 
-  /// 🔴 WHY THE ROSTER'S FAILURE IS ITS OWN FIELD. Send is disabled on
-  /// `hasBody && hasRecipients`, so a failed roster fetch leaves Send dead. On the web
-  /// the reason lives in `btn.title` — a tooltip, which a phone has no way to show. A
-  /// stale fetch on flaky LTE would leave the operator holding a typed message and a
-  /// dead button with no reachable explanation.
+  /// Why the roster read failed, or null.
+  ///
+  /// The failure is its own field because Send is disabled on `hasBody && hasRecipients`, so
+  /// a failed read leaves Send dead. On the web the reason lives in a tooltip, which a phone
+  /// cannot show. A stale fetch on flaky LTE would leave the operator holding a typed
+  /// message and a dead button with no reachable explanation.
   final String? rosterError;
 
+  /// What the mic is doing.
   final MicState mic;
+
+  /// Why the mic failed, or null.
   final String? micError;
 
+  /// True while a send is in flight.
   final bool sending;
+
+  /// Why the send failed, or null.
   final String? sendError;
 
-  /// Set when the server rate-limited us. Distinct from [sendError] because "wait 31
-  /// seconds" and "that did not send" are different instructions.
+  /// Seconds the server asked us to wait, set when it rate-limited the send.
+  ///
+  /// It is distinct from [sendError] because "wait 31 seconds" and "that did not send" are
+  /// different instructions.
   final int? rateLimitedForSeconds;
 
   /// The tally for the most recent broadcast, or null before anything was sent.
   final AckAggregate? aggregate;
 
+  /// Recent commons traffic for the activity strip.
   final List<Map<String, dynamic>> history;
 
-  /// The server's kill switch is on — distinct from an empty [history].
+  /// True when the server's kill switch is on; distinct from an empty [history].
   final bool historyDisabled;
 
-  /// A history read has answered at least once, so an empty [history] means "quiet"
-  /// rather than "not asked yet".
+  /// True once a history read has answered.
+  ///
+  /// An empty [history] then means "quiet" and not "not asked yet".
   final bool historyLoaded;
 
+  /// Creates the state; everything defaults to empty.
   const BroadcastState( {
     this.body                  = '',
     this.roster                = const ActiveSessionRoster.empty(),
@@ -126,25 +169,29 @@ class BroadcastState extends Equatable {
     this.historyLoaded         = false,
   } );
 
+  /// True when the body has non-blank text.
   bool get hasBody       => body.trim().isNotEmpty;
+
+  /// True when at least one session is live.
   bool get hasRecipients => roster.count > 0;
 
-  /// 🔴 TWO CONDITIONS, NOT ONE (`broadcast-panel.js:228-238`). A Send built on the body
-  /// alone is tappable with zero live sessions and the confirm silently no-ops.
+  /// True when Send is enabled.
+  ///
+  /// It needs two conditions, a body and a recipient, and no send in flight. A Send built
+  /// on the body alone is tappable with zero live sessions and the confirm silently no-ops.
   bool get canSend => hasBody && hasRecipients && !sending;
 
   /// Why Send is dead, in words, or null when it is alive.
   ///
   /// Ensures:
   ///   - returns null exactly when [canSend] is true
-  ///   - never returns a tooltip-shaped fragment; this is rendered VISIBLY beside the
-  ///     button, because a phone cannot hover
+  ///   - never returns a tooltip-shaped fragment; it is rendered visibly beside the button,
+  ///     because a phone cannot hover
   String? get disabledReason {
-    // 🔴 THE NULL ARM COMES FIRST, AND IT WAS MISSING. Without it this getter falls all
-    // the way through to "Nobody is listening" on the HAPPY path — a live Send button
-    // sitting beside a sentence saying it cannot send. Caught by the test that pins
-    // "enabled produces no reason", which is the half of the contract easy to leave
-    // untested because nothing looks wrong until both conditions are finally satisfied.
+    // The null arm comes before the explanations. Without it the getter falls through to
+    // "Nobody is listening" on the happy path, a live Send button beside a sentence saying
+    // it cannot send. A test pins "enabled produces no reason", the half of the contract
+    // that is easy to leave untested because nothing looks wrong until both conditions hold.
     if ( sending )  return 'Sending…';
     if ( canSend )  return null;
 
@@ -158,6 +205,7 @@ class BroadcastState extends Equatable {
     return 'Nobody is listening right now. Tap ↻ to refresh.';
   }
 
+  /// Copies the state with changes; the `clear...` flags drop a field to null.
   BroadcastState copyWith( {
     String? body,
     ActiveSessionRoster? roster,
@@ -197,22 +245,14 @@ class BroadcastState extends Equatable {
   }
 
   @override
-  /// 🔴 THE WHOLE OBJECTS, NOT SUMMARIES OF THEM — AND THE SUMMARIES WERE A BUG.
-  ///
-  /// This list first read `roster.count`, `aggregate?.ackedCount` and `history.length`.
-  /// Each is a NUMBER STANDING IN FOR A VALUE, and bloc skips an emit when the new state
-  /// compares equal — so any change that kept the number identical was silently dropped
-  /// and the pane never rebuilt. Three real cases, none of them exotic:
-  ///
-  ///   · a seat RE-acks with a `body_summary` it did not send the first time. Same
-  ///     session, so the count stays 1, so no rebuild, so the summary never appears.
-  ///   · one seat leaves and another joins between refreshes. Still 3, so no rebuild —
-  ///     and the confirm modal then names the WRONG PEOPLE, which is the one screen whose
-  ///     entire job is telling the operator who is about to be interrupted.
-  ///   · five history entries replaced by five different ones. Still 5, so no rebuild.
-  ///
-  /// ⇒ The models carry value equality now, so the objects can be compared directly and
-  /// a summary can no longer hide a change behind a matching integer.
+  // Equality compares the whole objects, not summaries of them. The list once held
+  // `roster.count`, `aggregate?.ackedCount` and `history.length`, each a number standing in
+  // for a value, and bloc skips an emit when the new state compares equal. A change that
+  // kept the number identical was silently dropped and the pane never rebuilt. Three cases:
+  // a seat re-acks with a `body_summary` it did not send the first time (same session, same
+  // count); one seat leaves and another joins between refreshes, so the confirm modal names
+  // the wrong people; five history entries are replaced by five different ones. The models
+  // carry value equality, so the objects compare directly.
   @override
   List<Object?> get props => [
     body, roster, rosterLoading, rosterError, mic, micError,
@@ -225,12 +265,10 @@ class BroadcastState extends Equatable {
 
 /// Compose, mic, send, and a tally that refuses to lie about itself.
 ///
-/// 🔴 THERE IS NO POLL TIMER IN THIS BLOC, AND ITS ABSENCE IS THE DESIGN. Acks ride the
-/// `notification_queue_update` socket stream this client already holds open; for this one
-/// pane socket-first is how the feature works rather than an optimisation. The pane still
-/// needs the LIFECYCLE half of the usual story — not to stop a timer, but because a
-/// socket that silently stops is indistinguishable from a quiet fleet, and on a phone it
-/// stops routinely, by OS design, every time the app backgrounds.
+/// There is no poll timer in this bloc, and that is the design. Acks ride the
+/// `notification_queue_update` socket stream this client already holds open. The pane still
+/// needs the lifecycle half of the usual story, not to stop a timer. A socket that silently
+/// stops looks like a quiet fleet, and on a phone it stops every time the app backgrounds.
 class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
   final BroadcastRepository _repo;
   final VoiceCaptureSession? _voice;
@@ -238,9 +276,10 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
   StreamSubscription<AppLifecycleState>? _lifecycleSub;
   StreamSubscription<bool>?              _socketSub;
 
-  /// Test seams. Default to the app-wide singletons, which is what production uses.
+  /// The app lifecycle stream; a test seam that defaults to the app-wide singleton.
   Stream<AppLifecycleState> get lifecycleStream => AppLifecycleService().lifecycleStream;
 
+  /// Creates the bloc; [voice] is the mic, or null when voice input is not available.
   BroadcastBloc( this._repo, { VoiceCaptureSession? voice } )
       : _voice = voice,
         super( const BroadcastState() ) {
@@ -254,35 +293,27 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     on<BroadcastHistoryRequested>( _onHistory );
   }
 
-  /// 🔴 THE ACCEPTANCE CLAUSE IS DEAD CODE UNTIL SOMETHING FIRES IT.
+  /// Starts watching for the listening window breaking and closing; idempotent.
   ///
-  /// `AckConfidence.interrupted` is the whole point of this pane, and nothing in the
-  /// pane itself can know the listening window broke. Two signals can:
+  /// `AckConfidence.interrupted` is dead code until something fires it, and the pane itself
+  /// cannot know the window broke. Two signals can. One is the app leaving the foreground,
+  /// where the OS suspends the socket. The other is the socket dropping while foregrounded.
+  /// Calling it twice replaces the subscriptions instead of doubling them.
   ///
-  ///   · the app leaving the foreground — the OS suspends the socket, by design, and on
-  ///     a phone this is the ordinary case rather than an edge one;
-  ///   · the socket dropping while still foregrounded — a network blip.
-  ///
-  /// ⚠️ `inactive` IS DELIBERATELY NOT TREATED AS AN INTERRUPTION, and this is the one
-  /// judgement call in here. Flutter delivers `inactive` for transient interruptions — a
-  /// notification-shade pull, an incoming-call banner — which do NOT suspend the socket.
-  /// Treating it as a break would make the pane cry wolf on every shade pull, and a guard
-  /// that fires constantly is one people learn to ignore, which converts it into no guard
-  /// at all. `paused`, `hidden` and `detached` are the states where delivery actually
-  /// stops.
-  ///
-  /// ⇒ If that judgement is ever shown wrong, the failure is a FALSE NEGATIVE — a tally
-  /// presented as exact when it is not — so it is worth re-checking against a real device
-  /// rather than trusting this comment. Nobody has measured it on hardware.
-  ///
-  /// Idempotent: calling it twice replaces the subscriptions rather than doubling them.
+  /// `inactive` is not treated as an interruption, which is the one judgement call here.
+  /// Flutter sends `inactive` for transient interruptions such as a notification-shade pull
+  /// or an incoming-call banner, and these do not suspend the socket. Treating it as a
+  /// break would make the pane cry wolf on every shade pull, and a guard that fires
+  /// constantly gets ignored. `paused`, `hidden` and `detached` are where delivery stops.
+  /// If the judgement is wrong, the failure is a false negative, a tally presented as exact
+  /// when it is not. Nobody has measured it on hardware, so check a real device.
   void startListeningWatch( { Stream<bool>? socketStream } ) {
     _lifecycleSub?.cancel();
     _lifecycleSub = lifecycleStream.listen( ( state ) {
       if ( state == AppLifecycleState.resumed ) {
-        // Coming BACK is the other half, and for a phone it is the common half: the OS
-        // suspended the socket, acks were pushed at nobody, and this is the first moment
-        // anything can ask what was missed.
+        // Coming back is the other half, and on a phone the common half: the OS suspended
+        // the socket, acks were pushed at nobody, and this is the first moment anything can
+        // ask what was missed.
         add( const BroadcastAcksReconcileRequested() );
         return;
       }
@@ -308,24 +339,16 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     return super.close();
   }
 
-  /// 🔴 THE ROSTER COMES FIRST AND THE HISTORY FOLLOWS IT — SEQUENCED, NOT CONCURRENT.
-  ///
-  /// On its merits: the roster gates the Send button and is the thing the operator is
-  /// waiting for; the Recent Activity strip is decoration below the fold. Issuing both on
-  /// first paint makes them compete for one scarce phone connection to render something
-  /// nobody is looking at yet.
-  ///
-  /// ⚠️ BUT BE HONEST ABOUT WHAT SURFACED IT: a widget test, not a phone. Two bloc
-  /// handlers each awaiting a Dio call, started in the same fake-async turn, NEVER
-  /// COMPLETE — the pane sits on "Sending to: …" forever and the test dies with pending
-  /// timers and a runner hang that reports *"the Dart compiler exited unexpectedly"*.
-  /// Bounded by controls on both sides: ONE such handler completes fine, and TWO raw
-  /// concurrent `dio.get` calls outside a bloc complete fine. I did not root-cause the
-  /// bloc/Dio/fake-async interaction below that statement, and I am not claiming to have.
-  ///
-  /// ⇒ So this ordering is justified by the product argument above and merely REVEALED by
-  /// the harness. If someone later removes the sequencing for a good reason, the widget
-  /// tests will hang again and this paragraph is the map.
+  // The roster comes first and the history follows it, sequenced and not concurrent. The
+  // roster gates the Send button and is what the operator waits for, while the Recent
+  // Activity strip is decoration below the fold, and issuing both on first paint makes them
+  // compete for one scarce phone connection. A widget test surfaced the ordering: two bloc
+  // handlers each awaiting a Dio call, started in the same fake-async turn, never complete.
+  // The pane sits on "Sending to: ..." forever and the test dies with pending timers and a
+  // runner hang. One such handler completes fine, and two raw concurrent `dio.get` calls
+  // outside a bloc complete fine. The bloc/Dio/fake-async interaction below that is not
+  // root-caused. If the sequencing is removed for a good reason, the widget tests will hang
+  // again, and this comment is the map.
   Future<void> _onRoster( BroadcastRosterRequested e, Emitter<BroadcastState> emit ) async {
     emit( state.copyWith( rosterLoading: true, clearRosterError: true ) );
     try {
@@ -333,8 +356,8 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
       emit( state.copyWith( roster: roster, rosterLoading: false ) );
       add( const BroadcastHistoryRequested() );
     } on DioException catch ( err ) {
-      // A cancellation is the lifecycle rule working. Silently drop it rather than
-      // painting a banner every time the operator backgrounds the app.
+      // A cancellation is the lifecycle rule working: drop it silently, instead of painting
+      // a banner every time the operator backgrounds the app.
       if ( CancelToken.isCancel( err ) ) {
         emit( state.copyWith( rosterLoading: false ) );
         return;
@@ -361,9 +384,8 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
       final capture = await voice.stopAndTranscribe();
 
       if ( capture.wasHeard ) {
-        // 🔴 APPEND, NEVER REPLACE. The operator may have typed a first line and then
-        // reached for the mic; replacing would silently destroy it, and the destroyed
-        // text is the half they bothered to type.
+        // Append, never replace. The operator may have typed a first line and then reached
+        // for the mic, and replacing would silently destroy the half they typed.
         final heard = capture.transcript!.trim();
         final next  = state.body.trim().isEmpty ? heard : '${state.body.trimRight()} $heard';
         emit( state.copyWith( body: next, mic: MicState.idle, clearMicError: true ) );
@@ -390,8 +412,8 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
   Future<void> _onSend( BroadcastSendConfirmed e, Emitter<BroadcastState> emit ) async {
     if ( !state.canSend ) return;
 
-    // Captured BEFORE the await: the roster can refresh mid-flight, and the tally must
-    // be denominated in what we actually sent to.
+    // Captured before the await: the roster can refresh mid-flight, and the tally must be
+    // denominated in what was actually sent to.
     final recipientsAtSend = state.roster.count;
 
     emit( state.copyWith( sending: true, clearSendError: true, clearRateLimit: true ) );
@@ -403,16 +425,16 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
         body      : '',
         aggregate : AckAggregate(
           broadcastId      : result.broadcastId,
-          // The clock the expired-vs-partial decision runs on. Recorded at the moment
-          // the server accepted the send, not at first paint.
+          // The clock the expired-versus-partial decision runs on, recorded when the server
+          // accepted the send and not at first paint.
           sentAt           : DateTime.now(),
-          // 🔴 THE SERVER'S COUNT, NOT THE ROSTER'S. The roster is what we could see;
-          // `recipients` is what the server actually enumerated, and they differ whenever
-          // a seat went quiet between the refresh and the send.
+          // The server's count, not the roster's. The roster is what we could see and
+          // `recipients` is what the server enumerated, and they differ whenever a seat went
+          // quiet between the refresh and the send.
           recipientsAtSend : result.recipients > 0 ? result.recipients : recipientsAtSend,
         ),
-        // `queued` is not a delivery receipt. A partial fanout is reported here rather
-        // than swallowed, because the status field alone would read as success.
+        // `queued` is not a delivery receipt. A partial fanout is reported here, not
+        // swallowed, because the status field alone would read as success.
         sendError : result.hasFailures
             ? '${result.failedRecipients.length} session(s) could not be reached.'
             : null,
@@ -423,7 +445,7 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
         rateLimitedForSeconds : err.retryAfterSeconds ?? 0,
       ) );
     } on BroadcastException {
-      // The body is deliberately NOT cleared — the operator's words survive a failure.
+      // The body is not cleared: the operator's words survive a failure.
       emit( state.copyWith( sending: false, sendError: 'the broadcast was not sent' ) );
     }
   }
@@ -440,37 +462,31 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
     emit( state.copyWith( aggregate: agg.interrupted() ) );
   }
 
-  /// 🔴 THE FAILURE ARM IS THE ONE THAT MATTERS, AND IT IS WHY THIS DOES NOT SWALLOW.
-  ///
-  /// A read that fails must leave the tally EXACTLY as interrupted as it found it. The
-  /// tempting shape — catch, log nothing, carry on — produces a pane that says "2 of 5
-  /// acked" in the confident voice after a read that never answered, which is the same
-  /// false precision [AckConfidence.interrupted] exists to prevent, arrived at by a new
-  /// route. So the catch arms deliberately emit nothing: no state change IS the correct
-  /// outcome of a failed recovery.
-  ///
-  /// Ensures:
-  ///   - no aggregate on screen → does nothing (there is no broadcast to reconcile)
-  ///   - a successful read folds the saved acks in and lifts confidence
-  ///   - a server error, a transport failure or a cancellation leaves confidence alone
+  // Reads the saved acks and folds them in. The failure arm is the one that matters, so it
+  // does not swallow quietly. A failed read must leave the tally exactly as interrupted as
+  // it found it. The tempting shape, catch and carry on, produces a pane saying "2 of 5
+  // acked" in a confident voice after a read that never answered, the false precision
+  // [AckConfidence.interrupted] exists to prevent. So the catch arms emit nothing: no state
+  // change is the correct outcome of a failed recovery. With no aggregate on screen there is
+  // no broadcast to reconcile and it does nothing. A server error, a transport failure or a
+  // cancellation leaves confidence alone.
   Future<void> _onReconcile( BroadcastAcksReconcileRequested e, Emitter<BroadcastState> emit ) async {
     final agg = state.aggregate;
     if ( agg == null || agg.broadcastId.isEmpty ) return;
 
     try {
       final saved = await _repo.drainMissedAcks( agg.broadcastId );
-      // Re-read from state: the fetch was awaited, and a live ack may have folded while
-      // it was in flight.
+      // Re-read from state: the fetch was awaited, and a live ack may have folded while it
+      // was in flight.
       final current = state.aggregate;
       if ( current == null || current.broadcastId != agg.broadcastId ) return;
 
-      // 🔴 THE SEATS THAT MOVED DURING THE READ KEEP WHAT ARRIVED, AND THIS IS THE ONE
-      // PLACE THAT CAN KNOW WHICH THOSE ARE. `agg` is the tally as it stood when the
-      // request went out; `current` is the tally now. Anything that differs between them
-      // arrived while the server was answering, so it is NEWER than the response — and
-      // the ordinary saved-wins rule would roll it backwards, turning a `completed` back
-      // into the `pending` the server was holding when it was asked. The count is the
-      // same either way, so nothing that counts acks would ever catch it.
+      // The seats that moved during the read keep what arrived, and this is the one place
+      // that can know which those are. `agg` is the tally when the request went out and
+      // `current` is the tally now, so anything that differs arrived while the server was
+      // answering and is newer than the response. The ordinary saved-wins rule would roll it
+      // back, turning a `completed` into the `pending` the server held when asked. The count
+      // is the same either way, so nothing that counts acks would catch it.
       final arrivedDuringRead = <String>{
         for ( final seat in current.acksBySession.entries )
           if ( agg.acksBySession[ seat.key ] != seat.value ) seat.key,
@@ -480,7 +496,7 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
         aggregate: current.reconciled( saved, keepLive: arrivedDuringRead ),
       ) );
     } on BroadcastException {
-      // Stays interrupted. See the note above.
+      // Stays interrupted; see the comment above.
     } on DioException {
       // Same, including cancellation.
     }
@@ -495,7 +511,7 @@ class BroadcastBloc extends Bloc<BroadcastEvent, BroadcastState> {
         historyLoaded   : true,
       ) );
     } on BroadcastException {
-      // The activity strip is decoration. A failure here must not disturb compose.
+      // The activity strip is decoration, and a failure here must not disturb compose.
     } on DioException {
       // Same, including cancellation.
     }

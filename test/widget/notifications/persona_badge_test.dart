@@ -47,7 +47,7 @@ void main() {
         senderId : "s-1",
       ) ) );
 
-      final badge = find.byKey( Key( "${TestKeys.personaBadgePrefix}s-1" ) );
+      final badge = find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-1" ) );
       expect( badge, findsOneWidget );
 
       final avatar = tester.widget<CircleAvatar>( find.byType( CircleAvatar ) );
@@ -63,8 +63,8 @@ void main() {
         senderId : "s-1",
       ) ) );
 
-      expect( find.byKey( Key( "${TestKeys.personaBadgePrefix}s-1" ) ),     findsNothing );
-      expect( find.byKey( Key( "${TestKeys.personaBadgeDashedPrefix}s-1" ) ), findsNothing );
+      expect( find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-1" ) ),     findsNothing );
+      expect( find.byKey( const Key( "${TestKeys.personaBadgeDashedPrefix}s-1" ) ), findsNothing );
       expect( find.byType( CircleAvatar ), findsNothing );
     } );
 
@@ -75,8 +75,8 @@ void main() {
       ) ) );
 
       // Dashed-variant key is used (not the plain prefix).
-      expect( find.byKey( Key( "${TestKeys.personaBadgeDashedPrefix}s-2" ) ), findsOneWidget );
-      expect( find.byKey( Key( "${TestKeys.personaBadgePrefix}s-2" ) ),       findsNothing );
+      expect( find.byKey( const Key( "${TestKeys.personaBadgeDashedPrefix}s-2" ) ), findsOneWidget );
+      expect( find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-2" ) ),       findsNothing );
 
       // CustomPaint with DashedBorderPainter is in the tree.
       final dashedPaint = find.byWidgetPredicate(
@@ -121,7 +121,7 @@ void main() {
 
       // Badge present with persona color background — primary disambiguator
       // survives even if the glyph fails to render.
-      final badge = find.byKey( Key( "${TestKeys.personaBadgePrefix}s-glitch" ) );
+      final badge = find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-glitch" ) );
       expect( badge, findsOneWidget );
 
       final avatar = tester.widget<CircleAvatar>( find.byType( CircleAvatar ) );
@@ -143,7 +143,7 @@ void main() {
       ) ) );
 
       expect( tester.takeException(), isNull );
-      final badge = find.byKey( Key( "${TestKeys.personaBadgePrefix}s-odd" ) );
+      final badge = find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-odd" ) );
       expect( badge, findsOneWidget );
     } );
 
@@ -198,9 +198,9 @@ void main() {
           ) ) );
           expect( tester.takeException(), isNull );
 
-          expect( find.byKey( Key( "${TestKeys.personaBadgeDottedPrefix}s-of" ) ), findsOneWidget );
-          expect( find.byKey( Key( "${TestKeys.personaBadgePrefix}s-of"       ) ), findsNothing );
-          expect( find.byKey( Key( "${TestKeys.personaBadgeDashedPrefix}s-of" ) ), findsNothing );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgeDottedPrefix}s-of" ) ), findsOneWidget );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-of"       ) ), findsNothing );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgeDashedPrefix}s-of" ) ), findsNothing );
 
           expect(
             findPainter( tester ).cap,
@@ -220,8 +220,8 @@ void main() {
           expect( tester.takeException(), isNull );
 
           // Dotted-variant key wins precedence over dashed (web composition rule).
-          expect( find.byKey( Key( "${TestKeys.personaBadgeDottedPrefix}s-both" ) ), findsOneWidget );
-          expect( find.byKey( Key( "${TestKeys.personaBadgeDashedPrefix}s-both" ) ), findsNothing );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgeDottedPrefix}s-both" ) ), findsOneWidget );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgeDashedPrefix}s-both" ) ), findsNothing );
 
           expect(
             findPainter( tester ).cap,
@@ -262,9 +262,9 @@ void main() {
           ) ) );
           expect( tester.takeException(), isNull );
 
-          expect( find.byKey( Key( "${TestKeys.personaBadgePrefix}s-pl"       ) ), findsOneWidget );
-          expect( find.byKey( Key( "${TestKeys.personaBadgeDottedPrefix}s-pl" ) ), findsNothing );
-          expect( find.byKey( Key( "${TestKeys.personaBadgeDashedPrefix}s-pl" ) ), findsNothing );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgePrefix}s-pl"       ) ), findsOneWidget );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgeDottedPrefix}s-pl" ) ), findsNothing );
+          expect( find.byKey( const Key( "${TestKeys.personaBadgeDashedPrefix}s-pl" ) ), findsNothing );
 
           expect(
             find.byWidgetPredicate(
@@ -319,7 +319,7 @@ void main() {
             senderId : "s-of",
           ) ) );
           expect(
-            find.byKey( Key( "${TestKeys.personaBadgeDottedPrefix}s-of" ) ),
+            find.byKey( const Key( "${TestKeys.personaBadgeDottedPrefix}s-of" ) ),
             findsOneWidget,
             reason:
                 "AC-C3 — overflow variant must be discoverable via "

@@ -9,6 +9,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:lupin_mobile/core/build_info.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
 import 'package:lupin_mobile/features/agentic/domain/agentic_submission_bloc.dart';
 import 'package:lupin_mobile/features/agentic/presentation/agentic_hub_screen.dart';
@@ -39,9 +40,13 @@ import 'package:lupin_mobile/features/notifications/data/notification_models.dar
 import 'package:lupin_mobile/features/notifications/domain/notification_bloc.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_event.dart';
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
+import 'package:lupin_mobile/features/podcasts/podcast_list_screen.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
+import 'package:lupin_mobile/services/audio/podcast_catalog.dart';
 import 'package:lupin_mobile/services/auth/server_context_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+
+import '../../helpers/fake_podcast_cache.dart';
 
 class _MockFocusBloc extends MockBloc<FocusChatEvent, FocusChatState>
     implements FocusChatBloc {}
@@ -295,6 +300,8 @@ void main() {
       final queueCtrl = StreamController<List<TtsQueueItem>>.broadcast();
       addTearDown( queueCtrl.close );
       when( () => tts.queueStream   ).thenAnswer( ( _ ) => queueCtrl.stream );
+      when( () => tts.lastOutcome   ).thenReturn( null );
+      when( () => tts.outcomeStream ).thenAnswer( ( _ ) => const Stream<TtsOutcome>.empty() );
       when( () => tts.queueSnapshot ).thenReturn( const [
         TtsQueueItem( id: 1, priority: 'high', text: 'playing now', sender: TtsSender( name: 'Tiffany', icon: '💍' ), isCurrent: true ),
         TtsQueueItem( id: 2, priority: 'low',  text: 'pytest chatter', sender: TtsSender( senderId: 'pytest@lupin#1' ), isCurrent: false ),
@@ -413,7 +420,7 @@ void main() {
       await tester.pump();
 
       final affordance =
-          find.byKey( Key( '${TestKeys.focusBatchFallbackPrefix}b1' ) );
+          find.byKey( const Key( '${TestKeys.focusBatchFallbackPrefix}b1' ) );
       expect( affordance, findsOneWidget );
       expect( find.byKey( const Key( TestKeys.promptYesButton ) ), findsNothing );
 
@@ -696,7 +703,7 @@ void main() {
     /// The row's stated sequence, item 2, verbatim.
     const surfaceOrder = <String>[
       'Agentic Jobs', 'Claude Code', 'Broadcast', 'Fleet Status',
-      'Finished Tasks', 'Task List', 'Holding Area',
+      'Finished Tasks', 'Task List', 'Holding Area', 'Podcasts',
     ];
 
     testWidgets( 'the header is the one string, and Quick Ask + Lupin AF Focus head the drawer', ( tester ) async {
@@ -711,6 +718,25 @@ void main() {
       expect( entry( 'Lupin AF Focus' ), findsOneWidget );
       expect( tester.getTopLeft( entry( 'Quick Ask' ) ).dy,
               lessThan( tester.getTopLeft( entry( 'Lupin AF Focus' ) ).dy ) );
+    } );
+
+    testWidgets( 'the build line is pinned under the entries and always on screen', ( tester ) async {
+      // A short phone: the entry list scrolls, the footer must not.
+      await openDrawer( tester );
+      tester.view.physicalSize = const Size( 800, 700 );
+      await tester.pumpAndSettle();
+      final line = find.byKey( const Key( TestKeys.focusDrawerBuildLine ) );
+      expect( line, findsOneWidget );
+      expect( tester.widget<Text>( line ).data, BuildInfo.current.describe() );
+      expect( tester.widget<Text>( line ).data, startsWith( 'Build' ) );
+      // Unstamped test run: one line, and no second line to be cut or blank.
+      expect( find.byKey( const Key( TestKeys.focusDrawerBuildDetail ) ), findsNothing );
+      expect( tester.getBottomLeft( line ).dy, lessThanOrEqualTo( 700 ) );
+      // Scrolling the entries does not move it.
+      final before = tester.getTopLeft( line );
+      await tester.drag( entry( 'Quick Ask' ), const Offset( 0, -300 ) );
+      await tester.pumpAndSettle();
+      expect( tester.getTopLeft( line ), before );
     } );
 
     testWidgets( 'Home grid is hidden from the surfaces drawer (row 74a799c9)', ( tester ) async {
@@ -802,12 +828,17 @@ void main() {
       // Registered because two builders read the locator; nothing here is mounted,
       // so a stub instance is all the builders need.
       GetIt.instance.registerSingleton<BroadcastBloc>( _MockBroadcastBloc() );
+      GetIt.instance.registerSingleton<PodcastCatalog>( PodcastCatalog( FakePodcastCache() ) );
       // ⚠️ Registering prefs also hands them to `FocusChatPane`'s fraction bar and
       // to `DocSplitHost`, which read them on build — an unstubbed mock returns
       // null into a `double` there. Found by running this, not by reading it.
       final prefs = _MockPrefs();
       when( () => prefs.ttsFraction        ).thenReturn( 0.5 );
       when( () => prefs.docsBelowWhenWide  ).thenReturn( false );
+      // The pane's silenced-speech marker reads these three on build.
+      when( () => prefs.enabled            ).thenReturn( true );
+      when( () => prefs.masterMute         ).thenReturn( false );
+      when( () => prefs.inQuietHours( any() ) ).thenReturn( false );
       GetIt.instance.registerSingleton<NotificationPreferences>( prefs );
       GetIt.instance.registerSingleton<NotificationStopList>( _MockStopList() );
       addTearDown( GetIt.instance.reset );
@@ -834,6 +865,7 @@ void main() {
       expect( ( built[ 'Finished Tasks' ]! as BlocProvider ).child, isA<FinishedTasksScreen>() );
       expect( built[ 'Task List' ], isA<PaneHostScreen<TaskListBloc>>() );
       expect( built[ 'Holding Area' ], isA<PaneHostScreen<HoldingAreaBloc>>() );
+      expect( built[ 'Podcasts' ], isA<PodcastListScreen>() );
       expect( built[ 'Settings' ], isA<NotificationAudioSettingsScreen>() );
       expect( built[ 'Notification stop-list' ], isA<NotificationFilterSettingsScreen>() );
 

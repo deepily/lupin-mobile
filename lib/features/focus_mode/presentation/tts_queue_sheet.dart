@@ -3,18 +3,20 @@ import 'package:flutter/material.dart';
 import '../../../core/testing/test_keys.dart';
 import '../../../services/tts/tts_orchestrator.dart';
 
-/// TTS queue viewer (Rick 2026-08-21: "a pop-up queued TTS message viewer
-/// that lets me delete / skip messages that are noisy" — web
-/// `#tts-queue-section` parity). Bottom sheet over the focus screen:
-/// the in-flight utterance first with **Skip**, then the pending ones in
-/// play order with a per-row delete, plus **Clear queue** (pending only)
-/// and **Stop all** (cuts the current one too). Live off
-/// [TtsOrchestrator.queueStream]; nothing here is a mute — what you delete
-/// is gone, what you leave still plays.
+/// Bottom sheet over the focus screen that lists the queued speech.
+///
+/// The in-flight utterance comes first with a Skip button. The pending ones follow in play
+/// order, each with a delete button. Clear queue drops the pending items only, and Stop all
+/// cuts the current one too. The list follows [TtsOrchestrator.queueStream] live.
+/// Nothing here is a mute: what the user deletes is gone, and what is left still plays.
 class TtsQueueSheet extends StatelessWidget {
+  /// The orchestrator whose queue is shown and edited.
   final TtsOrchestrator tts;
+
+  /// Creates the sheet over [tts].
   const TtsQueueSheet( { super.key, required this.tts } );
 
+  /// Opens the sheet as a modal bottom sheet over [context].
   static Future<void> show( BuildContext context, TtsOrchestrator tts ) =>
       showModalBottomSheet<void>(
         context     : context,
@@ -64,6 +66,7 @@ class TtsQueueSheet extends StatelessWidget {
                     ],
                   ),
                 ),
+                _LastOutcomeLine( tts: tts ),
                 if ( items.isEmpty )
                   Padding(
                     key     : const Key( TestKeys.ttsQueueEmpty ),
@@ -132,6 +135,33 @@ class _QueueRow extends StatelessWidget {
         icon      : Icon( actionIcon ),
         onPressed : onAction,
       ),
+    );
+  }
+}
+
+/// One plain line saying what became of the last message, or nothing before the first one.
+///
+/// A problem reads in the error colour so it is seen first; a normal send reads quietly.
+class _LastOutcomeLine extends StatelessWidget {
+  final TtsOrchestrator tts;
+  const _LastOutcomeLine( { required this.tts } );
+
+  @override
+  Widget build( BuildContext context ) {
+    final theme = Theme.of( context );
+    return StreamBuilder<TtsOutcome>(
+      stream      : tts.outcomeStream,
+      initialData : tts.lastOutcome,
+      builder: ( context, snap ) {
+        final o = snap.data;
+        if ( o == null ) return const SizedBox.shrink();
+        final color = o.problem ? theme.colorScheme.error : theme.colorScheme.outline;
+        return Padding(
+          key     : const Key( TestKeys.ttsQueueLastOutcome ),
+          padding : const EdgeInsets.fromLTRB( 16, 0, 16, 8 ),
+          child   : Text( o.line, style: theme.textTheme.bodyMedium?.copyWith( color: color ) ),
+        );
+      },
     );
   }
 }

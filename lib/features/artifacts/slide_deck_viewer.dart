@@ -5,9 +5,12 @@ import '../../services/artifacts/io_file_service.dart';
 
 /// Metadata card + open-in-external-app for PPTX/PDF slide decks.
 class SlideDeckViewer extends StatefulWidget {
+  /// The id of the job that produced the deck.
   final String jobId;
+  /// The server-side path of the deck file.
   final String deckPath; // server-side path for /api/io/file?path=...
 
+  /// Creates the viewer; the job id and deck path are required.
   const SlideDeckViewer( {
     super.key,
     required this.jobId,

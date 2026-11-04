@@ -1,40 +1,31 @@
-/// How an ask ENDED when it did not end with this device's answer —
-/// AC-S4.9 (the notification door) and AC-S4.13 (the resume door).
-///
-/// 🔴 **One vocabulary, two doors, because they are the same two events.**
-/// The notification door reports them as 400s carrying "already responded"
-/// / "grace period exceeded"; the resume door reports them as
-/// `already_resumed` (`flow.py:727`) and `pending_expired` (`:698`). The
-/// plan handled the pair on one door and not the other, so they are named
-/// once here and both doors classify through it.
-///
-/// They mean **different things to the user** and must never collapse into
-/// one "something went wrong" card:
-///   - expired            → the question timed out; ask again.
-///   - answeredElsewhere  → you, or another device, already answered it.
-///
-/// A generic error card satisfies "routes correctly" while telling the user
-/// nothing they can act on — which is what AC-S4.13 exists to prevent.
+/// Classification of asks that ended without this device's answer.
 library;
 
+/// How an ask ended without this device's answer.
+///
+/// The notification door and the resume door report the same two events differently.
+/// The notification door sends 400s saying "already responded" or "grace period exceeded".
+/// The resume door sends `already_resumed` and `pending_expired`.
+/// Both doors classify through this enum.
+/// The two outcomes mean different things to the user, so they never collapse into one error card.
 enum AskResolution {
-  /// The ask timed out. The server has already substituted its
-  /// `response_default`, so there is nothing left to answer.
+  /// The ask timed out and the server already used its `response_default`.
   expired,
 
-  /// Someone answered it — this user on another device, a proxy, or an
-  /// earlier turn of this same conversation. Not an error: the ask is
-  /// simply finished.
+  /// Someone already answered, such as this user on another device.
+  ///
+  /// Not an error, because the ask is finished.
   answeredElsewhere,
 
-  /// Anything else. The caller keeps its existing failure handling.
+  /// Any other failure; the caller keeps its own failure handling.
   failed;
 
-  /// True when the ask reached a legitimate END rather than an error. Both
-  /// resolve the card instead of raising.
+  /// True when the ask reached a legitimate end rather than an error.
+  ///
+  /// Both resolved values close the card instead of raising.
   bool get isResolved => this != AskResolution.failed;
 
-  /// What to tell the user. Short, because it renders inside a card.
+  /// Short text to show the user inside the ask card.
   String get userMessage {
     switch ( this ) {
       case AskResolution.expired           : return 'Expired — the question timed out. Ask again.';
@@ -44,13 +35,10 @@ enum AskResolution {
   }
 }
 
-/// Classify a FAILURE from `POST /api/notify/response` — AC-S4.9.
+/// Classifies a failure message from `POST /api/notify/response`.
 ///
-/// Keyed on the message body rather than the status code: both arrive as
-/// 400s, so the code alone cannot separate "you already answered this" from
-/// "the question is gone" from a genuine client error. Matching is
-/// case-insensitive and substring-based because the server composes these
-/// into longer sentences.
+/// Both outcomes arrive as 400s, so the message body decides, not the status code.
+/// Matching ignores case and looks for a substring, because the server embeds the phrases in longer sentences.
 AskResolution classifyRespondFailure( String message ) {
   final m = message.toLowerCase();
   if ( m.contains( 'already responded' ) )      return AskResolution.answeredElsewhere;
@@ -58,10 +46,9 @@ AskResolution classifyRespondFailure( String message ) {
   return AskResolution.failed;
 }
 
-/// Classify a `status` from `POST /api/v2/resume` — AC-S4.13.
+/// Classifies the `status` string from `POST /api/v2/resume`.
 ///
-/// The twins of the two 400s above, arriving as a status string on a 200
-/// rather than as an error. Same two meanings, so the same two values.
+/// It maps to the same two outcomes as the 400 messages, delivered on a 200 instead.
 AskResolution classifyResumeStatus( String? status ) {
   switch ( status ) {
     case 'pending_expired'  : return AskResolution.expired;

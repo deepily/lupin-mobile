@@ -11,7 +11,11 @@ import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Form that submits a deep research job.
+///
+/// On success it replaces itself with the job detail screen.
 class DeepResearchForm extends StatefulWidget {
+  /// Creates the form.
   const DeepResearchForm( { super.key } );
 
   @override
@@ -104,7 +108,7 @@ class _DeepResearchFormState extends State<DeepResearchForm> {
             const SizedBox( height: 16 ),
             TextField(
               controller : _budgetCtrl,
-              keyboardType: TextInputType.numberWithOptions( decimal: true ),
+              keyboardType: const TextInputType.numberWithOptions( decimal: true ),
               decoration : const InputDecoration(
                 labelText : 'Budget (USD, optional)',
                 border    : OutlineInputBorder(),

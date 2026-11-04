@@ -40,7 +40,7 @@ void main() {
     testWidgets( "fires AgenticFormReset on mount and renders form fields", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
@@ -56,7 +56,7 @@ void main() {
     testWidgets( "empty source submit is a no-op", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 
@@ -71,7 +71,7 @@ void main() {
     testWidgets( "valid dry-run submit dispatches AgenticSubmitRequested with podcast type", ( tester ) async {
       whenListen(
         bloc,
-        Stream<AgenticSubmissionState>.empty(),
+        const Stream<AgenticSubmissionState>.empty(),
         initialState: const AgenticSubmissionInitial(),
       );
 

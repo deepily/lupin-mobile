@@ -261,4 +261,27 @@ void main() {
       }
     } );
   } );
+
+  group( "isUnrecordedThinking", () {
+    TranscriptBlock b( TranscriptBlockKind k, String t, { bool truncated = false } ) =>
+        TranscriptBlock( kind: k, text: t, truncated: truncated );
+
+    test( "an empty or whitespace-only thinking block is unrecorded", () {
+      expect( b( TranscriptBlockKind.thinking, "" ).isUnrecordedThinking, isTrue );
+      expect( b( TranscriptBlockKind.thinking, " \n\t" ).isUnrecordedThinking, isTrue );
+    } );
+
+    test( "a thinking block with text is recorded", () {
+      expect( b( TranscriptBlockKind.thinking, "scratch" ).isUnrecordedThinking, isFalse );
+    } );
+
+    test( "an empty block of another kind is not 'unrecorded thinking'", () {
+      expect( b( TranscriptBlockKind.text, "" ).isUnrecordedThinking, isFalse );
+      expect( b( TranscriptBlockKind.toolResult, "" ).isUnrecordedThinking, isFalse );
+    } );
+
+    test( "a truncated empty thinking block is never called unrecorded", () {
+      expect( b( TranscriptBlockKind.thinking, "", truncated: true ).isUnrecordedThinking, isFalse );
+    } );
+  } );
 }

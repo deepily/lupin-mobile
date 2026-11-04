@@ -1,18 +1,37 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/logging/logger.dart';
 
-/// Network connectivity monitoring service for mobile apps.
-/// 
-/// Provides real-time network state monitoring, adaptive behavior based on
-/// connection type, and intelligent reconnection strategies for WebSocket services.
-/// Integrates with app lifecycle to optimize connectivity management.
+/// Watches network connectivity and quality to drive WebSocket reconnection decisions.
+///
+/// App-wide singleton. It tracks the connection type and tests whether the Lupin server answers.
+/// It keeps a history of latency and reachability, and maps the resulting quality to a [WebSocketConnectionStrategy].
 class NetworkConnectivityService {
   static final NetworkConnectivityService _instance = NetworkConnectivityService._internal();
+  /// Returns the shared instance.
   factory NetworkConnectivityService() => _instance;
   NetworkConnectivityService._internal();
 
   final Connectivity _connectivity = Connectivity();
+
+  /// Path of the unauthenticated health endpoint that tells us the Lupin server answered.
+  static const String healthPath = '/health';
+
+  /// Plain client for the health request, with no auth header and no token refresh.
+  ///
+  /// A sign-in problem therefore cannot read as no network.
+  final Dio _healthDio = Dio();
+
+  /// Replaces the reachability check and the latency probe.
+  ///
+  /// Null means a real request to the Lupin server.
+  ///
+  /// Tests set it so they need no network. It is never set in the app.
+  @visibleForTesting
+  Future<bool> Function()? internetProbe;
   
   // Stream controllers for network state broadcasts
   final StreamController<NetworkState> _networkStateController = 
@@ -29,59 +48,104 @@ class NetworkConnectivityService {
   Timer? _qualityTestTimer;
   Timer? _periodicCheckTimer;
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
-  
+
+  /// True from [pauseMonitoring] until [resumeMonitoring].
+  ///
+  /// While true, [initialize] does not arm the timers.
+  bool _monitoringPaused = false;
+
   // Network quality metrics
   final List<int> _latencyHistory = [];
   final List<bool> _reachabilityHistory = [];
   DateTime? _lastQualityTest;
   
   // Configuration
+  /// Time between connection quality tests.
   static const Duration qualityTestInterval = Duration(minutes: 2);
+  /// Time between periodic connectivity checks.
   static const Duration periodicCheckInterval = Duration(seconds: 30);
+  /// Number of latency samples kept.
   static const int latencyHistorySize = 10;
+  /// Number of reachability results kept.
   static const int reachabilityHistorySize = 20;
-  static const int goodLatencyThreshold = 100; // ms
-  static const int poorLatencyThreshold = 500; // ms
+  /// Latency at or below this counts as good, in milliseconds.
+  static const int goodLatencyThreshold = 100;
+  /// Latency at or above this counts as poor, in milliseconds.
+  static const int poorLatencyThreshold = 500;
   
   // Public getters
+  /// Latest network state.
   NetworkState get currentState => _currentState;
+  /// Latest connection quality.
   ConnectionQuality get currentQuality => _currentQuality;
+  /// Emits each change of [currentState].
   Stream<NetworkState> get networkStateStream => _networkStateController.stream;
+  /// Emits each change of [currentQuality].
   Stream<ConnectionQuality> get connectionQualityStream => _connectionQualityController.stream;
+  /// True when [currentState] is connected.
   bool get isConnected => _currentState == NetworkState.connected;
+  /// True when the last connectivity result was Wi-Fi.
   bool get isWifi => _lastConnectivityResult == ConnectivityResult.wifi;
+  /// True when the last connectivity result was mobile data.
   bool get isMobile => _lastConnectivityResult == ConnectivityResult.mobile;
   
   /// Initialize network monitoring service
   Future<void> initialize() async {
-    print('[NetworkService] Initializing network connectivity monitoring');
+    if ( _connectivitySubscription != null ) return;
+    debugPrint('[NetworkService] Initializing network connectivity monitoring');
     
     // Get initial connectivity state
     try {
       final result = await _connectivity.checkConnectivity();
       await _handleConnectivityChange(result);
-    } catch (e) {
-      print('[NetworkService] Error getting initial connectivity: $e');
+    } catch (e, st) {
+      Logger.error( 'Error getting initial connectivity', tag: 'NetworkService', error: e, stackTrace: st );
       _currentState = NetworkState.unknown;
     }
     
     // Subscribe to connectivity changes
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _handleConnectivityChange,
-      onError: (error) {
-        print('[NetworkService] Connectivity subscription error: $error');
+      onError: (Object error, StackTrace st) {
+        Logger.error( 'Connectivity subscription error', tag: 'NetworkService', error: error, stackTrace: st );
       },
     );
     
-    // Start periodic quality monitoring
-    _startQualityMonitoring();
-    
-    print('[NetworkService] Network monitoring initialized');
+    // Start periodic quality monitoring, unless the app was paused while the checks above were running
+    if ( !_monitoringPaused ) _startQualityMonitoring();
+
+    debugPrint('[NetworkService] Network monitoring initialized');
   }
   
+  /// True while the quality and periodic-check timers are armed.
+  @visibleForTesting
+  bool get isMonitoring => _qualityTestTimer != null;
+
+  /// Cancels the quality and periodic-check timers.
+  ///
+  /// A backgrounded app then sends no health requests.
+  ///
+  /// The connectivity subscription stays on; it costs nothing.
+  void pauseMonitoring() {
+    _monitoringPaused = true;
+    _qualityTestTimer?.cancel();
+    _periodicCheckTimer?.cancel();
+    _qualityTestTimer   = null;
+    _periodicCheckTimer = null;
+  }
+
+  /// Re-arms the timers after [pauseMonitoring].
+  ///
+  /// It does nothing before [initialize] or while the timers are armed.
+  void resumeMonitoring() {
+    _monitoringPaused = false;
+    if ( _connectivitySubscription == null || isMonitoring ) return;
+    _startQualityMonitoring();
+  }
+
   /// Handle connectivity state changes
   Future<void> _handleConnectivityChange(ConnectivityResult result) async {
-    print('[NetworkService] Connectivity changed: $result');
+    debugPrint('[NetworkService] Connectivity changed: $result');
     
     _lastConnectivityResult = result;
     final previousState = _currentState;
@@ -91,7 +155,7 @@ class NetworkConnectivityService {
       case ConnectivityResult.wifi:
       case ConnectivityResult.mobile:
       case ConnectivityResult.ethernet:
-        // Test actual internet connectivity
+        // Ask the Lupin server whether it answers
         final hasInternet = await _testInternetConnectivity();
         _currentState = hasInternet ? NetworkState.connected : NetworkState.limited;
         break;
@@ -113,7 +177,7 @@ class NetworkConnectivityService {
     
     // Broadcast state change if different
     if (_currentState != previousState) {
-      print('[NetworkService] Network state changed: $previousState -> $_currentState');
+      debugPrint('[NetworkService] Network state changed: $previousState -> $_currentState');
       _networkStateController.add(_currentState);
       
       // Trigger immediate quality test for connected state
@@ -126,30 +190,26 @@ class NetworkConnectivityService {
     }
   }
   
-  /// Test actual internet connectivity beyond device network interface
+  /// Returns true when the Lupin server answers `GET /health` with 200 within 5 seconds.
+  ///
+  /// The base URL is read on every call, so a switch of server context takes effect on the next check.
   Future<bool> _testInternetConnectivity() async {
+    final probe = internetProbe;
+    if ( probe != null ) return probe();
+    final answered = await _requestHealth( const Duration( seconds: 5 ) );
+    if ( !answered ) debugPrint( '[NetworkService] Lupin server did not answer ${AppConstants.apiBaseUrl}$healthPath' );
+    return answered;
+  }
+
+  /// Sends `GET /health` to the configured Lupin server; true only for a 200 inside [timeout].
+  Future<bool> _requestHealth( Duration timeout ) async {
     try {
-      // Try multiple reliable endpoints
-      final testUrls = [
-        'google.com',
-        'cloudflare.com',
-        '8.8.8.8',
-      ];
-      
-      for (final url in testUrls) {
-        try {
-          final result = await InternetAddress.lookup(url)
-              .timeout(const Duration(seconds: 5));
-          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-            return true;
-          }
-        } catch (e) {
-          continue; // Try next URL
-        }
-      }
-      return false;
-    } catch (e) {
-      print('[NetworkService] Internet connectivity test failed: $e');
+      final response = await _healthDio.get<dynamic>(
+        '${AppConstants.apiBaseUrl}$healthPath',
+        options: Options( validateStatus: ( _ ) => true ),
+      ).timeout( timeout );
+      return response.statusCode == 200;
+    } catch ( e ) {
       return false;
     }
   }
@@ -171,16 +231,24 @@ class NetworkConnectivityService {
       }
     });
     
-    // Schedule periodic connectivity verification
+    // Schedule periodic connectivity verification. It runs while limited too, on an interface that can carry
+    // the server, so a server that comes back is seen without an OS network event.
     _periodicCheckTimer = Timer.periodic(periodicCheckInterval, (timer) async {
-      if (_currentState == NetworkState.connected) {
-        final hasInternet = await _testInternetConnectivity();
-        if (!hasInternet && _currentState == NetworkState.connected) {
-          await _handleConnectivityChange(_lastConnectivityResult);
-        }
+      final wasConnected = _currentState == NetworkState.connected;
+      if ( !wasConnected && !( _currentState == NetworkState.limited && _carriesTraffic( _lastConnectivityResult ) ) ) return;
+      final hasInternet = await _testInternetConnectivity();
+      if ( hasInternet != wasConnected && _currentState == ( wasConnected ? NetworkState.connected : NetworkState.limited ) ) {
+        await _handleConnectivityChange(_lastConnectivityResult);
       }
     });
   }
+
+  /// True for an interface type that can reach the server.
+  ///
+  /// Bluetooth is limited and is never re-checked.
+  bool _carriesTraffic( ConnectivityResult result ) =>
+      result == ConnectivityResult.wifi || result == ConnectivityResult.mobile ||
+      result == ConnectivityResult.ethernet || result == ConnectivityResult.vpn;
   
   /// Perform network quality assessment
   Future<void> _performQualityTest() async {
@@ -210,33 +278,28 @@ class NetworkConnectivityService {
       _currentQuality = _calculateConnectionQuality();
       
       if (_currentQuality != previousQuality) {
-        print('[NetworkService] Connection quality changed: $previousQuality -> $_currentQuality');
+        debugPrint('[NetworkService] Connection quality changed: $previousQuality -> $_currentQuality');
         _connectionQualityController.add(_currentQuality);
       }
       
-      print('[NetworkService] Quality test: latency=${latency}ms, quality=$_currentQuality');
+      debugPrint('[NetworkService] Quality test: latency=${latency}ms, quality=$_currentQuality');
       
     } catch (e) {
-      print('[NetworkService] Quality test failed: $e');
+      debugPrint('[NetworkService] Quality test failed: $e');
       _currentQuality = ConnectionQuality.poor;
       _connectionQualityController.add(_currentQuality);
     }
   }
   
-  /// Measure network latency to reliable endpoint
+  /// Measures the round trip of `GET /health` to the Lupin server, in milliseconds.
+  ///
+  /// It returns 9999 when the server does not answer in 3 seconds.
   Future<int> _measureLatency() async {
+    if ( internetProbe != null ) return 0;
     final stopwatch = Stopwatch()..start();
-    
-    try {
-      // Use DNS lookup as latency test (lightweight)
-      await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 3));
-      stopwatch.stop();
-      return stopwatch.elapsedMilliseconds;
-    } catch (e) {
-      stopwatch.stop();
-      return 9999; // Very high latency indicates poor connection
-    }
+    final answered  = await _requestHealth( const Duration( seconds: 3 ) );
+    stopwatch.stop();
+    return answered ? stopwatch.elapsedMilliseconds : 9999; // Very high latency indicates poor connection
   }
   
   /// Calculate connection quality based on metrics
@@ -294,47 +357,47 @@ class NetworkConnectivityService {
   WebSocketConnectionStrategy getConnectionStrategy() {
     switch (_currentQuality) {
       case ConnectionQuality.excellent:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 1),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 1),
           maxReconnectAttempts: 10,
-          pingInterval: const Duration(seconds: 30),
+          pingInterval: Duration(seconds: 30),
           enableKeepalive: true,
           bufferSize: 16384,
           enableCompression: true,
         );
       case ConnectionQuality.good:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 2),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 2),
           maxReconnectAttempts: 8,
-          pingInterval: const Duration(seconds: 45),
+          pingInterval: Duration(seconds: 45),
           enableKeepalive: true,
           bufferSize: 8192,
           enableCompression: true,
         );
       case ConnectionQuality.fair:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 5),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 5),
           maxReconnectAttempts: 5,
-          pingInterval: const Duration(seconds: 60),
+          pingInterval: Duration(seconds: 60),
           enableKeepalive: true,
           bufferSize: 4096,
           enableCompression: false,
         );
       case ConnectionQuality.poor:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 10),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 10),
           maxReconnectAttempts: 3,
-          pingInterval: const Duration(seconds: 90),
+          pingInterval: Duration(seconds: 90),
           enableKeepalive: false,
           bufferSize: 2048,
           enableCompression: false,
         );
       case ConnectionQuality.offline:
       case ConnectionQuality.unknown:
-        return WebSocketConnectionStrategy(
-          reconnectDelay: const Duration(seconds: 30),
+        return const WebSocketConnectionStrategy(
+          reconnectDelay: Duration(seconds: 30),
           maxReconnectAttempts: 2,
-          pingInterval: const Duration(seconds: 120),
+          pingInterval: Duration(seconds: 120),
           enableKeepalive: false,
           bufferSize: 1024,
           enableCompression: false,
@@ -362,7 +425,7 @@ class NetworkConnectivityService {
   
   /// Dispose of resources
   void dispose() {
-    print('[NetworkService] Disposing network connectivity service');
+    debugPrint('[NetworkService] Disposing network connectivity service');
     _connectivitySubscription?.cancel();
     _qualityTestTimer?.cancel();
     _periodicCheckTimer?.cancel();
@@ -371,33 +434,72 @@ class NetworkConnectivityService {
   }
 }
 
-/// Network connectivity states
+/// Whether the device can reach the internet.
 enum NetworkState {
-  unknown,     // Initial or error state
-  disconnected, // No network connectivity
-  limited,     // Network interface available but no internet
-  connected,   // Full internet connectivity
+  /// Initial state, or the state after an error.
+  unknown,
+
+  /// No network connectivity.
+  disconnected,
+
+  /// A network interface is up but the Lupin server did not answer.
+  limited,
+
+  /// A network interface is up and the Lupin server answered.
+  connected,
 }
 
-/// Connection quality levels
+/// True when a network edge from [previous] to [next] should retry unsent writes and refetch.
+///
+/// Ensures:
+///   - an edge into `connected` or `limited` from a state that was not usable acts
+///   - `limited` to `connected` acts, because the server is now confirmed answering
+///   - `connected` to `limited` does not act, because the server just stopped answering
+///   - a repeat of the same state does not act
+bool shouldRetryOnNetworkEdge( NetworkState previous, NetworkState next ) {
+  if ( next != NetworkState.connected && next != NetworkState.limited ) return false;
+  if ( next == previous ) return false;
+  if ( previous == NetworkState.connected && next == NetworkState.limited ) return false;
+  return true;
+}
+
+/// How good the connection is, judged from latency and reachability.
 enum ConnectionQuality {
-  unknown,   // Quality not yet determined
-  offline,   // No connection
-  poor,      // High latency, unreliable
-  fair,      // Moderate latency, mostly reliable
-  good,      // Low latency, reliable
-  excellent, // Very low latency, highly reliable
+  /// Quality not determined yet.
+  unknown,
+
+  /// No connection.
+  offline,
+
+  /// High latency and unreliable.
+  poor,
+
+  /// Moderate latency, mostly reliable.
+  fair,
+
+  /// Low latency and reliable.
+  good,
+
+  /// Very low latency and highly reliable.
+  excellent,
 }
 
-/// WebSocket connection strategy based on network quality
+/// WebSocket connection settings chosen for one [ConnectionQuality].
 class WebSocketConnectionStrategy {
+  /// Wait before the first reconnect attempt.
   final Duration reconnectDelay;
+  /// Reconnect attempts before giving up.
   final int maxReconnectAttempts;
+  /// Interval between keepalive pings.
   final Duration pingInterval;
+  /// Whether keepalive pings are sent.
   final bool enableKeepalive;
+  /// Buffer size in bytes.
   final int bufferSize;
+  /// Whether messages are compressed.
   final bool enableCompression;
   
+  /// Creates a strategy; every field is required.
   const WebSocketConnectionStrategy({
     required this.reconnectDelay,
     required this.maxReconnectAttempts,

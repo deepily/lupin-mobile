@@ -5,11 +5,15 @@ import '../data/decision_proxy_repository.dart';
 import 'decision_proxy_event.dart';
 import 'decision_proxy_state.dart';
 
+/// Drives the decision-proxy dashboard and trust screens.
+///
+/// Every successful change reloads the dashboard so the screen shows the new server state.
 class DecisionProxyBloc extends Bloc<DecisionProxyEvent, DecisionProxyState> {
   final DecisionProxyRepository _repo;
 
   String? _activeUserEmail;
 
+  /// Creates a bloc that talks to the server through [_repo].
   DecisionProxyBloc( this._repo ) : super( const DecisionProxyInitial() ) {
     on<DecisionProxyLoadDashboard>( _onLoadDashboard );
     on<DecisionProxySetMode>( _onSetMode );

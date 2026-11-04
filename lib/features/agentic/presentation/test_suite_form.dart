@@ -10,7 +10,11 @@ import '../domain/agentic_submission_bloc.dart';
 import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 
+/// Form that submits a test suite run.
+///
+/// On success it replaces itself with the job detail screen.
 class TestSuiteForm extends StatefulWidget {
+  /// Creates the form.
   const TestSuiteForm( { super.key } );
 
   @override

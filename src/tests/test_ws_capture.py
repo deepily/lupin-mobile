@@ -114,10 +114,11 @@ class TestThinking:
     def test_a_substantial_thinking_block_qualifies( self ):
         assert wsc.thinking_reasons( append_frame( [ THINKING ] ) ) == []
 
-    def test_a_two_character_scratch_block_is_not_enough_to_assert_hidden_or_shown( self ):
-        frame   = append_frame( [ { "kind": "thinking", "text": "ok" } ] )
-        reasons = wsc.thinking_reasons( frame )
-        assert any( "8+ characters" in r for r in reasons )
+    def test_an_EMPTY_thinking_block_qualifies_because_empty_is_the_real_contract( self ):
+        assert wsc.thinking_reasons( append_frame( [ { "kind": "thinking", "text": "" } ] ) ) == []
+
+    def test_a_short_thinking_block_qualifies_too( self ):
+        assert wsc.thinking_reasons( append_frame( [ { "kind": "thinking", "text": "ok" } ] ) ) == []
 
     def test_a_frame_with_no_thinking_block_says_so( self ):
         assert wsc.thinking_reasons( append_frame( [ PROSE ] ) ) == [ "no `thinking` block" ]

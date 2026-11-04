@@ -2,7 +2,7 @@ name: lupin_mobile
 description: A mobile client for the Lupin AI assistant system with voice interface and real-time communication.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0+1
+version: 0.2.2+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -26,6 +26,12 @@ dependencies:
   # Audio and Media
   flutter_sound: ^9.2.13
   audioplayers: ^5.2.1
+  # Podcast playback with a media session + foreground service (P2/P3, row 3469e9db)
+  just_audio: ^0.9.40
+  # Session config so a duck from a short spoken alert arrives as a pause (row 049d914a)
+  audio_session: ^0.1.25
+  # The app's own media session: the podcast's lock-screen card, and earbud presses for Quick Ask (row c643b1b0)
+  audio_service: ^0.18.19
   permission_handler: ^11.0.1
   # One-shot push-to-talk WAV capture for the focus-mode voice reply (S4).
   # Chosen over the in-tree flutter_sound per OSQ-2 as amended 2026-06-12
@@ -99,6 +105,7 @@ dependencies:
   logger: ^2.0.2+1
   crypto: ^3.0.3
   file_picker: ^11.0.3
+  meta: ^1.16.0
 
 dev_dependencies:
   flutter_test:
@@ -122,6 +129,11 @@ dev_dependencies:
 
   # Code Quality
   flutter_lints: ^3.0.1
+
+  # Imported directly by tests; versions match pubspec.lock
+  shared_preferences_platform_interface: ^2.4.1
+  stream_channel: ^2.1.4
+  connectivity_plus_platform_interface: ^1.2.4
 
 flutter:
   uses-material-design: true

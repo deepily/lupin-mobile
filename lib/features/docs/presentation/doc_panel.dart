@@ -5,21 +5,26 @@ import '../data/doc_link.dart';
 import '../data/doc_repository.dart';
 import 'doc_viewer_screen.dart';
 
-/// Where a tapped doc link opens (row d7f56574).
+/// Where a tapped doc link opens.
 ///
-/// Rick, on a Pixel Fold: the document takes the RIGHT half of the screen when
-/// the phone is open, and the BOTTOM half when it is folded shut or in an
-/// ordinary tall phone layout, so the conversation that linked it stays
-/// readable beside it.
-enum DocPanelPlacement { rightHalf, bottomHalf }
+/// The document takes the right half of the screen when the phone is open. It takes the
+/// bottom half when the phone is folded shut or in an ordinary tall layout.
+/// Either way the conversation that linked it stays readable beside it.
+/// Design: src/docs/decisions/README.md (R-DOC-panel-placement)
+enum DocPanelPlacement {
+  /// The document fills the right half of the screen.
+  rightHalf,
 
-/// Width, in logical pixels, at which the screen counts as "open".
+  /// The document fills the bottom half of the screen.
+  bottomHalf
+}
+
+/// Width, in logical pixels, at which the screen counts as open.
 ///
-/// 600 is Material's boundary between a compact (phone) window and a medium
-/// one. An unfolded Fold's inner screen is well past it and its outer screen
-/// is well under it, so width alone tells the two apart, including an unfolded
-/// screen that is slightly taller than it is wide, which an aspect-ratio test
-/// would call a phone.
+/// 600 is Material's boundary between a compact window and a medium one.
+/// An unfolded Fold's inner screen is well past it and its outer screen well under it.
+/// Width alone therefore tells them apart, where an aspect-ratio test would call a
+/// slightly tall unfolded screen a phone.
 const double docPanelSplitWidth = 600;
 
 /// Which half a document opens in on a screen of [size].
@@ -27,8 +32,8 @@ const double docPanelSplitWidth = 600;
 /// Ensures:
 ///   - returns [DocPanelPlacement.bottomHalf] on a narrow screen, always
 ///   - on a wide screen (width >= [docPanelSplitWidth]) returns
-///     [DocPanelPlacement.bottomHalf] when [belowWhenWide] (Rick 2026-09-18:
-///     tables get the full width), else [DocPanelPlacement.rightHalf]
+///     [DocPanelPlacement.bottomHalf] when [belowWhenWide] (tables get the
+///     full width), else [DocPanelPlacement.rightHalf]
 DocPanelPlacement docPanelPlacementFor( Size size, { bool belowWhenWide = false } ) =>
     size.width >= docPanelSplitWidth && !belowWhenWide
         ? DocPanelPlacement.rightHalf
@@ -37,12 +42,11 @@ DocPanelPlacement docPanelPlacementFor( Size size, { bool belowWhenWide = false 
 /// True when [size] is wide enough that beside-or-below is a real choice.
 bool docPlacementIsChoosable( Size size ) => size.width >= docPanelSplitWidth;
 
-/// Open [link] in a panel over half of the screen.
+/// Opens [link] in a panel over half of the screen.
 ///
-/// The half not covered stays visible behind a light scrim; tapping it, the
-/// viewer's back arrow or the system back gesture closes the panel. The panel
-/// is a [DocViewerScreen], so loading, errors and sharing behave exactly as
-/// they do full screen.
+/// The half not covered stays visible behind a light scrim.
+/// Tapping it, the viewer's back arrow or the system back gesture closes the panel.
+/// The panel is a [DocViewerScreen], so loading, errors and sharing behave as full screen.
 ///
 /// Requires:
 ///   - link.isFetchable is true

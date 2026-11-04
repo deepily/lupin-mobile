@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/testing/test_keys.dart';
@@ -14,8 +13,9 @@ import '../../_helpers/transcript_fakes.dart';
 /// The Live Console screen — C5.4, C5.5, C5.14, C5.15, C5.17, C5.18, C5.19 and C5.22.
 ///
 /// ⚠️ TYPED MODEL OBJECTS, NOT CAPTURED FRAMES, and §5 requires captured ones for C5.18,
-/// C5.21 and C5.22. Those captured twins live in `live_console_captured_test.dart`, tagged
-/// `pending-capture` and RED until phase 1 emits. **What is here proves the BEHAVIOUR; it
+/// C5.21 and C5.22. Those captured twins live in `live_console_captured_test.dart`, which
+/// was tagged `pending-capture` until the fixtures were captured (2026-10-10) and now runs
+/// in the gate. **What is here proves the BEHAVIOUR; it
 /// does not discharge the rows that demand captured input**, and the slice report says so
 /// rather than rounding it off.
 void main() {
@@ -277,6 +277,59 @@ void main() {
       expect( find.byKey( const Key( "transcript.chip.thinking" ) ), findsOneWidget );
       expect( find.byKey( const Key( "transcript.chip.unknown" ) ), findsNothing );
       expect( find.text( "Thinking…" ), findsOneWidget );
+    } );
+  } );
+
+  // ---------------------------------------------------------------------------
+  group( "C5.22 — a `thinking` block with NO text is a dim label, not a chip", () {
+    testWidgets( "empty text shows 'Thinking (not recorded)' and offers no chip",
+        ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.thinking, text: "" ),
+      ] );
+
+      expect( find.text( "Thinking (not recorded)" ), findsOneWidget );
+      expect( find.byKey( const Key( TestKeys.transcriptUnrecordedThinking ) ), findsOneWidget );
+      expect( find.byKey( const Key( "transcript.chip.thinking" ) ), findsNothing,
+          reason: "negative control: a build that kept the chip for an empty block opens "
+                  "onto a blank body, and fails exactly here" );
+      expect( find.text( "Thinking…" ), findsNothing );
+    } );
+
+    testWidgets( "it cannot be expanded: a tap opens nothing", ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.thinking, text: "   " ),
+      ] );
+
+      await tester.tap( find.byKey( const Key( TestKeys.transcriptUnrecordedThinking ) ) );
+      await tester.pump();
+
+      expect( find.byKey( const Key( "transcript.plain.thinking" ) ), findsNothing );
+      expect( find.byType( SelectableText ), findsNothing );
+    } );
+
+    testWidgets( "a block WITH text keeps its fold and has no 'not recorded' label",
+        ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.thinking, text: "scratch text here" ),
+      ] );
+
+      expect( find.text( "Thinking (not recorded)" ), findsNothing );
+      expect( find.byKey( const Key( "transcript.chip.thinking" ) ), findsOneWidget );
+
+      await tester.tap( find.byKey( const Key( "transcript.chip.thinking" ) ) );
+      await tester.pump();
+      expect( find.byKey( const Key( "transcript.plain.thinking" ) ), findsOneWidget );
+    } );
+
+    testWidgets( "an empty tool result is not mistaken for unrecorded thinking",
+        ( tester ) async {
+      await pump( tester, blocks: [
+        block( kind: TranscriptBlockKind.toolResult, text: "", name: "Bash" ),
+      ] );
+
+      expect( find.text( "Thinking (not recorded)" ), findsNothing );
+      expect( find.byKey( const Key( "transcript.chip.tool_result" ) ), findsOneWidget );
     } );
   } );
 
@@ -560,12 +613,11 @@ class _TestBloc extends TranscriptStreamBloc {
   _TestBloc( {
     required this.lifecycle,
     required FakeTranscriptRepository repo,
-    required TranscriptFrameRouter router,
+    required super.router,
     required RecordingSender send,
   } ) : super(
           ccSessionId : "seat-1",
           repository  : repo,
-          router      : router,
           send        : send.call,
         );
 

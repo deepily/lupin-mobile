@@ -8,13 +8,12 @@ import 'dispatch_sheet.dart';
 const _kRetiredBannerYellow  = Color( 0xFFFFF3CD );
 const _kRetiredBannerAccent  = Color( 0xFFFF9800 );
 
-/// Retired 2026-05-05 — INTERACTIVE Claude Code session list was eliminated
-/// alongside the dispatch endpoint cluster. BOUNDED submissions land as `cc-*`
-/// jobs in the Queue Dashboard (Tier 3 surface).
+/// A banner and button standing in for the retired interactive session list.
 ///
-/// Preserved as a banner + CTA so the home-tab entry surfaces the retirement
-/// notice and the live successor surface.
+/// Bounded submissions appear as `cc-*` jobs in the Queue Dashboard, so the
+/// screen points there and offers the submit sheet.
 class SessionListScreen extends StatelessWidget {
+  /// Creates the screen.
   const SessionListScreen( { super.key } );
 
   void _openDispatch( BuildContext context ) {
@@ -54,11 +53,11 @@ class SessionListScreen extends StatelessWidget {
                 border : Border( left: BorderSide( color: _kRetiredBannerAccent, width: 4 ) ),
               ),
               padding: const EdgeInsets.all( 16 ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon( Icons.warning_amber_rounded, color: _kRetiredBannerAccent, size: 32 ),
-                  const SizedBox( width: 16 ),
-                  const Expanded(
+                  Icon( Icons.warning_amber_rounded, color: _kRetiredBannerAccent, size: 32 ),
+                  SizedBox( width: 16 ),
+                  Expanded(
                     child: Text(
                       "INTERACTIVE Claude Code session list retired 2026-05-05.\n\n"
                       "BOUNDED submissions still work via the + button and land as `cc-*` jobs "

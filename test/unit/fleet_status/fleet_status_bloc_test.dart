@@ -57,6 +57,10 @@ class _FakeRepo implements FleetRepository {
   }
 
   @override
+  Future<Map<String, Object?>> setSkeletonCrew( bool on ) async =>
+      throw UnimplementedError( "not exercised by this test" );
+
+  @override
   Future<Map<String, Object?>> setSizeCap( int cap ) async {
     putCalls++;
     if ( putThrows != null ) throw putThrows!;

@@ -1,19 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:dio/dio.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/logging/logger.dart';
 import '../auth/auth_token_provider.dart';
+import 'ws_reconnect_coordinator.dart';
 import 'ws_resume_store.dart';
 
-/// WebSocket service for real-time communication with Lupin backend.
-/// 
-/// Manages WebSocket connections, reconnection logic, and message streaming.
-/// Follows the singleton pattern for consistent connection management.
-class WebSocketService {
+/// Singleton WebSocket service for real-time communication with the Lupin backend.
+///
+/// Manages the connection, reconnection logic and message streaming.
+class WebSocketService implements WsReconnectTarget {
   final Dio _dio;
   WebSocketChannel? _channel;
+  /// The listener on [_channel].
+  ///
+  /// It is cancelled whenever that channel is retired, so a replaced channel cannot speak.
+  StreamSubscription<dynamic>? _channelSub;
   StreamController<dynamic>? _messageController;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
@@ -21,30 +27,46 @@ class WebSocketService {
   bool _isConnected = false;
   bool _shouldReconnect = true;
 
-  /// AC-S1.8 — the observable behind [connectionStream].
+  /// True from the start of a connect attempt until it succeeds or fails.
   ///
-  /// `isConnected` alone is a sync getter over a private bool, so any
-  /// predicate built on it goes STALE SILENTLY: the socket drops, a screen's
-  /// record button stays enabled, and nothing repaints to tell it otherwise.
+  /// A second attempt in that window would open a second channel for one device slot, and the server answers
+  /// that with close code 4004.
+  bool _connecting = false;
+
+  /// Set when [connect] arrives during an attempt.
+  ///
+  /// The attempt then runs once more if it ends without a socket.
+  bool _connectAgain = false;
+
+  /// The observable behind [connectionStream].
+  ///
+  /// `isConnected` alone is a sync getter over a private bool, so any predicate built on it goes stale silently.
+  /// The socket drops, a screen's record button stays enabled, and nothing repaints to say otherwise.
   final StreamController<bool> _connectionCtrl = StreamController<bool>.broadcast();
   int _reconnectAttempts = 0;
+  /// Reconnect attempts before giving up.
   static const int maxReconnectAttempts = 5;
+  /// Default wait before a reconnect attempt.
   static const Duration reconnectDelay = Duration(seconds: 5);
+  /// Longest a session-id request or a handshake may take before the attempt fails.
+  static const Duration connectTimeout = Duration(seconds: 15);
+  /// Interval between keepalive pings.
   static const Duration pingInterval = Duration(seconds: 30);
 
-  /// Close code the server sends when a NEWER socket claimed this device's
-  /// slot (row dc446601). Permanent: reconnecting would bump the newer socket
-  /// and start a loop between two sockets of one install.
+  /// Close code the server sends when a newer socket claimed this device's slot.
+  ///
+  /// It is permanent. Reconnecting would bump the newer socket and start a loop between two sockets of one install.
   static const int closeCodeSuperseded = 4004;
 
   final WsResumeStore?                _injectedStore;
   final WebSocketChannel Function( Uri ) _channelFactory;
   final Duration                      _reconnectBaseDelay;
+  final Duration                      _connectTimeout;
   WsResumeStore?                      _lazyStore;
 
-  /// The highest frame `seq` processed on this install (row 281a10d6). Loaded
-  /// from the store on every auth, set from `resume_complete.seq` and from
-  /// each live frame.
+  /// The highest frame `seq` processed on this install.
+  ///
+  /// Loaded from the store on every auth, then set from `resume_complete.seq` and from each live frame.
   int _lastSeq = 0;
 
   /// Lazily built so a service that never authenticates never touches prefs.
@@ -54,21 +76,36 @@ class WebSocketService {
   String? _userId;
 
   // Public getters
+  /// True while the socket is connected.
+  @override
   bool get isConnected => _isConnected;
 
-  /// Connection state as a stream, with THREE properties AC-S1.8 requires and
-  /// which `pausedStream` (the nearest in-tree pattern) has only one of:
+  /// True while a connect attempt is running.
+  @override
+  bool get isConnecting => _connecting;
+
+  /// Failures counted toward [maxReconnectAttempts] since the last success or manual trigger.
   ///
-  ///   1. emits at ALL FIVE sites that mutate `_isConnected` — a stream wired
-  ///      at two of five is worse than no stream, because it LOOKS observable;
-  ///   2. distinct-until-changed, applied at the MUTATION site (the
-  ///      `pausedStream` pattern, `tts_orchestrator.dart:166,174`) — three of
-  ///      the five sites set `false`, so without it one disconnect emits
-  ///      `false` repeatedly;
-  ///   3. replays the CURRENT value on subscribe — a listener attached while
-  ///      already disconnected must learn immediately, not at the next
-  ///      transition. `pausedStream` does NOT do this; mirroring it literally
-  ///      would have shipped the bug this stream exists to remove.
+  /// One failure counts once, however many of its callbacks fire.
+  @visibleForTesting
+  int get reconnectAttempts => _reconnectAttempts;
+
+  /// True while a retry timer is waiting to fire.
+  @override
+  bool get isRetryPending => _reconnectTimer?.isActive ?? false;
+
+  /// True when this service is allowed to open a socket on its own.
+  ///
+  /// False before the first [connect], after [disconnect] (sign-out) and after a 4004 close.
+  @override
+  bool get wantsConnection => _shouldReconnect && _userId != null;
+
+  /// Connection state as a stream that emits on change and replays on subscribe.
+  ///
+  /// It has three properties, of which `pausedStream` (the nearest in-tree pattern) has only the second:
+  ///   1. It emits at all five sites that mutate `_isConnected`. A stream wired at two of five is worse than none, because it looks observable.
+  ///   2. It is distinct-until-changed, applied at the mutation site (`tts_orchestrator.dart`). Three of the five sites set false, so otherwise one disconnect emits false repeatedly.
+  ///   3. It replays the current value on subscribe. A listener attached while already disconnected must learn at once, not at the next transition.
   Stream<bool> get connectionStream {
     late StreamController<bool> out;
     StreamSubscription<bool>?   sub;
@@ -87,28 +124,35 @@ class WebSocketService {
     return out.stream;
   }
 
-  /// The ONLY writer of `_isConnected`. Distinct-until-changed lives here, at
-  /// the mutation site, so every one of the five call sites gets it for free
-  /// and a sixth added later cannot forget it.
+  /// The only writer of `_isConnected`.
+  ///
+  /// Distinct-until-changed lives here, at the mutation site, so every call site gets it and a later one cannot forget it.
   void _setConnected( bool value ) {
     if ( _isConnected == value ) return;
     _isConnected = value;
     if ( !_connectionCtrl.isClosed ) _connectionCtrl.add( value );
   }
+  /// Session id obtained from the backend, or null before connecting.
   String? get sessionId => _sessionId;
+  /// Decoded incoming messages; empty before the service is built.
   Stream<dynamic> get stream => _messageController?.stream ?? const Stream.empty();
 
-  /// Requires: [dio] is the shared client. The named parameters exist for tests.
+  /// Creates the service on [dio], the shared client; the named parameters exist for tests.
   WebSocketService(
     this._dio, {
     WsResumeStore?                store,
     WebSocketChannel Function( Uri )? channelFactory,
     Duration?                     reconnectBaseDelay,
+    Duration?                     connectTimeout,
   })  : _injectedStore      = store,
+        _connectTimeout     = connectTimeout ?? WebSocketService.connectTimeout,
         _channelFactory     = channelFactory ?? WebSocketChannel.connect,
         _reconnectBaseDelay = reconnectBaseDelay ?? reconnectDelay {
     _messageController = StreamController<dynamic>.broadcast();
   }
+
+  /// Log context naming the current session, so a line can be matched to server logs.
+  LogContext get _logContext => LogContext( sessionId: _sessionId );
 
   /// Validates session ID format as "adjective noun" with space.
   /// 
@@ -153,9 +197,36 @@ class WebSocketService {
       return;
     }
 
+    // Recorded even when an attempt is already running: a sign-out then sign-in during an attempt must not
+    // leave the service refusing to connect. The running attempt is re-run if it was cancelled.
     _userId = userId;
     _shouldReconnect = true;
+    if ( _connecting ) {
+      _connectAgain = true;
+      return;
+    }
     await _establishConnection();
+  }
+
+  /// Tries once to bring a dropped socket back, as a trigger would.
+  ///
+  /// The triggers are resume, network restored, push wake-up and the retry loop.
+  ///
+  /// Requires:
+  ///   - none; it checks its own preconditions and returns false when they fail
+  ///
+  /// Ensures:
+  ///   - returns false and does nothing when connected, when a connect is running, or when [wantsConnection] is false
+  ///   - otherwise cancels a pending retry timer, resets the retry counter and makes one attempt
+  ///   - at most one channel is ever opened, however many triggers arrive together
+  ///   - returns true when this call started an attempt, whether or not it succeeded
+  @override
+  Future<bool> reconnectNow() async {
+    if ( _isConnected || _connecting || !wantsConnection ) return false;
+    _reconnectTimer?.cancel();
+    _reconnectAttempts = 0;
+    await _establishConnection();
+    return true;
   }
 
   /// Internal method to establish WebSocket connection.
@@ -170,37 +241,72 @@ class WebSocketService {
   ///   - Message listeners are set up
   ///   - Reconnection counter is reset on success
   Future<void> _establishConnection() async {
+    if ( _connecting ) return;
+    _connecting = true;
+    try {
+      do {
+        _connectAgain = false;
+        await _attemptOnce();
+      } while ( _connectAgain && !_isConnected && _shouldReconnect );
+    } finally {
+      _connecting = false;
+    }
+  }
+
+  /// One connect attempt: session id, channel, handshake. Its failure schedules a retry.
+  ///
+  /// Each network wait is bounded by [connectTimeout], so a stalled handshake cannot hold the single-flight flag.
+  /// The fetched session id is held in a local.
+  /// It becomes [sessionId] only once the socket is up, so a failed or superseded attempt never leaves an id with no connection.
+  Future<void> _attemptOnce() async {
+    WebSocketChannel? channel;
     try {
       // Step 1: Get session ID from FastAPI (like the web client does)
-      final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id');
+      final sessionResponse = await _dio.get('${AppConstants.apiBaseUrl}/api/get-session-id').timeout( _connectTimeout );
       final sessionData = sessionResponse.data;
-      _sessionId = sessionData['session_id'];
+      final fetchedId   = sessionData['session_id'];
       
       // Validate session ID format
-      if (_sessionId == null || !_isValidSessionFormat(_sessionId!)) {
-        throw Exception('Invalid session ID format received: $_sessionId. Expected "adjective noun" format.');
+      if ( fetchedId is! String || !_isValidSessionFormat( fetchedId ) ) {
+        throw Exception('Invalid session ID format received: $fetchedId. Expected "adjective noun" format.');
       }
       
-      print('[WebSocket] Got valid session ID: $_sessionId');
+      debugPrint('[WebSocket] Got valid session ID: $fetchedId');
       
       // Step 2: Connect to WebSocket with session ID in URL  
-      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$_sessionId');
+      final uri = Uri.parse('${AppConstants.wsBaseUrl}${AppConstants.wsQueueEndpoint}/$fetchedId');
       
-      _channel = _channelFactory( uri );
+      // Whatever channel is still held is dead or half dead; it must not stay open behind the new one.
+      _retireChannel();
+      final opened = _channelFactory( uri );
+      channel = opened;
+      _channel = opened;
       
       // Wait for connection to be established
-      await _channel!.ready;
+      await opened.ready.timeout( _connectTimeout );
+
+      // A disconnect() (sign-out) or a 4004 that landed while this attempt was in flight must not be undone by it.
+      // A disconnect() also drops this channel from _channel, so a later connect() runs a fresh attempt.
+      if ( !_shouldReconnect || !identical( _channel, opened ) ) {
+        await opened.sink.close( status.goingAway );
+        if ( identical( _channel, opened ) ) _channel = null;
+        return;
+      }
       
+      _sessionId = fetchedId;
       _setConnected( true );
       _reconnectAttempts = 0;
       
-      print('[WebSocket] Connected to ${uri.toString()}');
+      debugPrint('[WebSocket] Connected to ${uri.toString()}');
       
-      // Start listening to messages
-      _channel!.stream.listen(
-        _handleMessage,
-        onError: _handleError,
-        onDone: _handleDisconnection,
+      // Start listening to messages. Each callback is bound to ITS channel, so a late done or error from a
+      // channel that has since been replaced cannot be read as the live channel's.
+      _channelSub = opened.stream.listen(
+        ( Object? message ) {
+          if ( identical( _channel, opened ) ) _handleMessage( message );
+        },
+        onError: ( Object error, [ StackTrace? st ] ) => _handleError( opened, error, st ),
+        onDone: () => _handleDisconnection( opened ),
       );
       
       // Step 3: Send authentication message (like the web client does)
@@ -211,21 +317,26 @@ class WebSocketService {
       // Start ping timer
       _startPingTimer();
       
-    } catch (e) {
-      print('[WebSocket] Connection failed: $e');
+    } catch (e, st) {
+      Logger.error( 'Connection failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
       _setConnected( false );
+      // A timed-out handshake leaves a half-open channel; close it so it cannot connect later.
+      final stale = channel;
+      if ( stale != null ) {
+        if ( identical( _channel, stale ) ) _channel = null;
+        unawaited( stale.sink.close( status.goingAway ).catchError( ( Object _ ) {} ) );
+      }
       _scheduleReconnect();
     }
   }
 
-  /// Builds the `auth_request` payload (extracted so AC-S5.5 can
-  /// fixture-pin the shape without a live socket).
+  /// Builds the `auth_request` payload; static so a test can pin its shape.
   ///
-  /// `client_type: "mobile"` is the F-S6-1 S5-side OBLIGATION: it lets the
-  /// parent distinguish this mobile WS from web sessions — the FCM wake
-  /// trigger fires on "no live MOBILE WS", so a desktop browser must not
-  /// suppress the phone's wake. Absent marker ⇒ parent treats the client
-  /// as web (backward-compatible); harmless in Stage-1 builds.
+  /// No live socket is needed.
+  ///
+  /// `client_type: "mobile"` lets the parent tell this mobile socket from web sessions. The FCM wake trigger fires
+  /// on "no live mobile WS", so a desktop browser must not suppress the phone's wake. An absent marker makes the
+  /// parent treat the client as web, which is backward-compatible.
   static Map<String, dynamic> buildAuthRequestMessage({
     required String bearerToken,
     required String? sessionId,
@@ -257,13 +368,13 @@ class WebSocketService {
   ///   - Bearer token is generated for the user
   ///   - Session ID is included in auth message
   ///   - Subscribed events array is included (empty = receive all events)
-  ///   - client_type "mobile" marker is included (F-S6-1, S5 §3.1)
+  ///   - client_type "mobile" marker is included
   Future<void> _authenticate(String userId) async {
     try {
       // Bearer auth token sourced from AuthBloc (set on login / refresh).
       final accessToken = readAccessToken();
       if (accessToken == null) {
-        print('[WebSocket] No access token available — auth skipped');
+        Logger.warning( 'No access token available — auth skipped', tag: 'WebSocket', context: _logContext );
         return;
       }
       final authToken = 'Bearer $accessToken';
@@ -279,9 +390,9 @@ class WebSocketService {
       );
 
       await sendMessage(authMessage);
-      print('[WebSocket] Authentication sent for user: $userId with session: $_sessionId');
-    } catch (e) {
-      print('[WebSocket] Authentication failed: $e');
+      debugPrint('[WebSocket] Authentication sent for user: $userId with session: $_sessionId');
+    } catch (e, st) {
+      Logger.error( 'Authentication failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
     }
   }
 
@@ -318,11 +429,11 @@ class WebSocketService {
       // Handle authentication response
       if (decoded['type'] == AppConstants.eventAuthSuccess) {
         _sessionId = decoded['session_id'];
-        print('[WebSocket] Authentication successful, session: $_sessionId');
+        debugPrint('[WebSocket] Authentication successful, session: $_sessionId');
       }
       
       if (decoded['type'] == AppConstants.eventAuthError) {
-        print('[WebSocket] Authentication failed: ${decoded['message'] ?? 'Unknown error'}');
+        Logger.warning( 'Authentication rejected by server: ${decoded['message'] ?? 'Unknown error'}', tag: 'WebSocket', context: _logContext );
       }
       
       // Row 281a10d6: backlog is over. seq here is the SERVER's current seq —
@@ -350,7 +461,7 @@ class WebSocketService {
       
       // Handle TTS status updates
       if (decoded['type'] == 'status' || decoded['type'] == 'audio_complete' || decoded['type'] == 'error') {
-        print('[WebSocket] TTS ${decoded['type']}: ${decoded['text']}');
+        debugPrint('[WebSocket] TTS ${decoded['type']}: ${decoded['text']}');
       }
       
       // Forward message to listeners
@@ -364,38 +475,68 @@ class WebSocketService {
         _persistAndAck( seq );
       }
       
-    } catch (e) {
-      print('[WebSocket] Message parsing error: $e');
+    } catch (e, st) {
+      Logger.warning( 'Message parsing error', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
       // Forward raw message if JSON parsing fails
       _messageController?.add(message);
     }
   }
 
-  /// Handles WebSocket errors.
-  /// 
+  /// Cancels the listener on, and closes, the channel this service holds, then forgets it.
+  ///
   /// Requires:
-  ///   - Error object from WebSocket stream
-  /// 
+  ///   - none; a null channel is a no-op
+  ///
   /// Ensures:
-  ///   - Connection status is set to disconnected
-  ///   - Reconnection is scheduled if enabled
-  ///   - Error is logged for debugging
-  void _handleError(error) {
-    print('[WebSocket] Error: $error');
+  ///   - [_channel] is null and its listener is cancelled, so no later callback from it is delivered
+  ///   - a close with `goingAway` is requested, and its failure is ignored
+  void _retireChannel() {
+    final old = _channel;
+    unawaited( _channelSub?.cancel() );
+    _channelSub = null;
+    _channel    = null;
+    if ( old != null ) unawaited( old.sink.close( status.goingAway ).catchError( ( Object _ ) {} ) );
+  }
+
+  /// Handles a WebSocket error on [source].
+  ///
+  /// Requires:
+  ///   - [source] is the channel whose stream raised [error]
+  ///
+  /// Ensures:
+  ///   - an error from a channel that is no longer current is ignored
+  ///   - otherwise the channel is retired, the state is disconnected, and exactly one reconnect is scheduled
+  ///     (the done that usually follows an error finds the channel retired and does nothing)
+  void _handleError( WebSocketChannel source, Object error, [StackTrace? st] ) {
+    if ( !identical( _channel, source ) ) {
+      debugPrint('[WebSocket] Ignoring an error from a replaced channel');
+      return;
+    }
+    Logger.error( 'Stream error', tag: 'WebSocket', error: error, stackTrace: st, context: _logContext );
+    _retireChannel();
     _setConnected( false );
+    _pingTimer?.cancel();
     _scheduleReconnect();
   }
 
-  /// Handles WebSocket disconnection.
-  /// 
+  /// Handles the end of [source]'s stream.
+  ///
+  /// Requires:
+  ///   - [source] is the channel whose stream ended; its own close code is the one read
+  ///
   /// Ensures:
-  ///   - Connection status is updated
-  ///   - Ping timer is cancelled
-  ///   - Reconnection is scheduled if shouldReconnect is true
-  ///   - Resources are cleaned up properly
-  void _handleDisconnection() {
-    final code = _channel?.closeCode;
-    print('[WebSocket] Connection closed (code: $code)');
+  ///   - a done from a channel that is no longer current is ignored, so it cannot clear the live connection or
+  ///     schedule a reconnect (this service closed that channel itself, so a 4004 on it is its own doing)
+  ///   - otherwise the channel is retired, the state is disconnected and the ping timer is cancelled
+  ///   - 4004 on the current channel stops reconnection; any other code schedules one reconnect if allowed
+  void _handleDisconnection( WebSocketChannel source ) {
+    final code    = source.closeCode;
+    final current = identical( _channel, source );
+    debugPrint('[WebSocket] Connection closed (code: $code${current ? "" : ", replaced channel"})');
+
+    if ( !current ) return;
+
+    _retireChannel();
     _setConnected( false );
     _pingTimer?.cancel();
 
@@ -403,7 +544,7 @@ class WebSocketService {
     // this one. Every other code (incl. 4001, whose refresh/sign-out is
     // handled by the auth layer, and 4003) reconnects as before.
     if ( code == closeCodeSuperseded ) {
-      print('[WebSocket] Superseded by a newer socket (4004) — not reconnecting');
+      debugPrint('[WebSocket] Superseded by a newer socket (4004) — not reconnecting');
       _shouldReconnect = false;
       _reconnectTimer?.cancel();
       return;
@@ -416,14 +557,14 @@ class WebSocketService {
 
   void _scheduleReconnect() {
     if (!_shouldReconnect || _reconnectAttempts >= maxReconnectAttempts) {
-      print('[WebSocket] Max reconnect attempts reached or reconnection disabled');
+      Logger.warning( 'Max reconnect attempts reached or reconnection disabled', tag: 'WebSocket', context: _logContext );
       return;
     }
     
     _reconnectAttempts++;
     final delay = _reconnectBaseDelay * _reconnectAttempts;
     
-    print('[WebSocket] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inMilliseconds}ms');
+    debugPrint('[WebSocket] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inMilliseconds}ms');
     
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () {
@@ -442,6 +583,9 @@ class WebSocketService {
     });
   }
 
+  /// Sends [message] as JSON.
+  ///
+  /// Throws when the socket is not connected or the send fails.
   Future<void> sendMessage(Map<String, dynamic> message) async {
     if (!_isConnected || _channel == null) {
       throw Exception('WebSocket not connected');
@@ -450,21 +594,23 @@ class WebSocketService {
     try {
       final encoded = jsonEncode(message);
       _channel!.sink.add(encoded);
-    } catch (e) {
-      print('[WebSocket] Failed to send message: $e');
-      throw e;
+    } catch (e, st) {
+      Logger.error( 'Failed to send message', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
+      rethrow;
     }
   }
 
   /// Persists the cursor and tells the server it may drop frames through [seq].
   ///
-  /// Ensures: a failed write or a dead socket is logged, never thrown into the
-  /// message handler.
+  /// A failed write or a dead socket is logged, never thrown into the message handler.
   void _persistAndAck( int seq ) {
-    _store.setLastSeq( seq ).catchError( ( Object e ) => print('[WebSocket] last_seq persist failed: $e') );
-    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e ) => print('[WebSocket] ack failed: $e') );
+    _store.setLastSeq( seq ).catchError( ( Object e, StackTrace st ) => Logger.warning( 'last_seq persist failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext ) );
+    sendMessage( { 'type': 'ack', 'seq': seq } ).catchError( ( Object e, StackTrace st ) => Logger.warning( 'ack failed', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext ) );
   }
 
+  /// Sends [data] as a binary frame.
+  ///
+  /// Throws when the socket is not connected or the send fails.
   Future<void> sendBinary(List<int> data) async {
     if (!_isConnected || _channel == null) {
       throw Exception('WebSocket not connected');
@@ -472,17 +618,20 @@ class WebSocketService {
 
     try {
       _channel!.sink.add(data);
-    } catch (e) {
-      print('[WebSocket] Failed to send binary data: $e');
-      throw e;
+    } catch (e, st) {
+      Logger.error( 'Failed to send binary data', tag: 'WebSocket', error: e, stackTrace: st, context: _logContext );
+      rethrow;
     }
   }
 
+  /// Closes the socket, stops reconnection and clears the session id.
   Future<void> disconnect() async {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
     
+    unawaited( _channelSub?.cancel() );
+    _channelSub = null;
     if (_channel != null) {
       await _channel!.sink.close(status.goingAway);
       _channel = null;
@@ -491,9 +640,10 @@ class WebSocketService {
     _setConnected( false );
     _sessionId = null;
     
-    print('[WebSocket] Disconnected');
+    debugPrint('[WebSocket] Disconnected');
   }
 
+  /// Disconnects and closes the message and connection streams.
   void dispose() {
     disconnect();
     _messageController?.close();

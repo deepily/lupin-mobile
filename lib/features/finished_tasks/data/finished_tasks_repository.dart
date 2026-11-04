@@ -4,23 +4,21 @@ import 'finished_tasks_models.dart';
 
 /// Fetches the finished-work event stream over the shared Dio.
 ///
-/// The auth interceptor registered in `service_locator.dart` injects the Bearer token
-/// and refreshes on 401, so nothing here touches credentials — the house rule, and the
-/// reason the cascade struck 401 handling from this phase.
+/// The auth interceptor in `service_locator.dart` supplies the Bearer token and
+/// refreshes on 401, so nothing here touches credentials.
 class FinishedTasksRepository {
   final Dio _dio;
 
+  /// Creates a repository over the shared [Dio].
   const FinishedTasksRepository( this._dio );
 
+  /// The server path the events are read from.
   static const String endpoint = "/api/tasks/events";
 
-  /// Fetch one status's events inside the window.
+  /// Fetches one status's events inside the window.
   ///
-  /// 🔴 ONE CALL PER STATUS, DELIBERATELY. `to_status` is an exact-match filter, so
-  /// the three lit-able statuses are three requests. The alternative — fetching
-  /// unfiltered and partitioning on the client — would pull every transition in the
-  /// window (queued, in_progress, blocked, …) to render three of them, which on a
-  /// phone is the difference between a page and a payload.
+  /// One call per status, because `to_status` is an exact-match filter; fetching
+  /// unfiltered would pull every transition in the window to render three.
   ///
   /// Requires:
   ///     - status is one of kFinishedStatuses
@@ -32,12 +30,9 @@ class FinishedTasksRepository {
   /// Raises:
   ///     - FinishedTasksApiException on any transport or HTTP failure, carrying the
   ///       server's own `detail` message unedited when one was supplied
-  ///     - 🔴 a CANCELLED request rethrows the DioException UNFLATTENED, so the caller
-  ///       can tell "the pane went away" from "the fetch failed". Now that this pane
-  ///       polls, that distinction is load-bearing: without it, leaving the pane
-  ///       mid-poll paints an error view on the way out, and the next visit opens on a
-  ///       failure that never happened. The same rule `FleetRepository.fetchState`
-  ///       already follows.
+  ///     - a cancelled request rethrows the DioException unflattened, so the caller can
+  ///       tell "the pane went away" from "the fetch failed"; without that, leaving the
+  ///       pane mid-poll would paint an error view on the way out
   Future<List<FinishedTaskEvent>> fetchStatus( {
     required String status,
     required String since,
@@ -66,21 +61,17 @@ class FinishedTasksRepository {
           .map( FinishedTaskEvent.fromJson )
           .toList();
     } on DioException catch ( e ) {
-      // A CANCELLATION IS NOT A FAILURE — see the docstring. Flattening it here would
-      // make every pane exit look like a dead endpoint.
+      // A cancellation is not a failure; flattening it would make every pane exit look
+      // like a dead endpoint.
       if ( e.type == DioExceptionType.cancel ) rethrow;
       throw FinishedTasksApiException( _detail( e, "fetching '$status' events" ) );
     }
   }
 
-  /// Fetch every status in the window, independently.
+  /// Fetches every status in the window, independently.
   ///
-  /// 🔴 A STATUS WHOSE FETCH FAILED IS ABSENT FROM THE MAP, NOT EMPTY — and the
-  /// distinction is the point. An empty list means "the window holds none of these";
-  /// an absent key means "we do not know". Collapsing the two renders a failed fetch
-  /// as a confident "nothing was closed today", which is the most misleading thing
-  /// this pane could say. [FinishedFetchResult.succeeded] carries which is which so
-  /// the pane can show a partial result honestly rather than silently.
+  /// A failed status is absent from the map, not empty: empty means none, absent means
+  /// unknown, and [FinishedFetchResult.succeeded] says which.
   ///
   /// Ensures:
   ///     - one entry per status whose fetch succeeded, in kFinishedStatuses order
@@ -122,14 +113,16 @@ class FinishedTasksRepository {
 
 /// The outcome of one window fetch, keeping "none" and "unknown" apart.
 class FinishedFetchResult {
-  /// Events for each status whose fetch SUCCEEDED. An absent key is unknown.
+  /// Events for each status whose fetch succeeded; an absent key means unknown.
   final Map<String, List<FinishedTaskEvent>> eventsByStatus;
 
-  /// Why each failed status failed. Empty when the whole window came back.
+  /// Why each failed status failed; empty when the whole window came back.
   final Map<String, String> failures;
 
+  /// The window the fetch covered, in days, after clamping.
   final int windowDays;
 
+  /// Creates a result from the per-status events, failures and window.
   const FinishedFetchResult( {
     required this.eventsByStatus,
     required this.failures,
@@ -154,8 +147,12 @@ class FinishedFetchResult {
   int? countFor( String status ) => eventsByStatus[ status ]?.length;
 }
 
+/// A failed fetch, carrying the message to show.
 class FinishedTasksApiException implements Exception {
+  /// The server's own message when it supplied one, else a description of the failure.
   final String message;
+
+  /// Creates an exception with its message.
   const FinishedTasksApiException( this.message );
   @override
   String toString() => "FinishedTasksApiException: $message";

@@ -3,467 +3,170 @@
 ## 📚 Archived Sessions
 
 Older session entries have been archived for token-limit hygiene. See:
+- **[2026-09-19-to-10-05-history.md](history/2026-09-19-to-10-05-history.md)** — Surfaces drawer, FCM wake-ups, fleet pane parity, merge gate in the repo, logger (archived 2026-11-01)
+- **[2026-09-01-to-18-history.md](history/2026-09-01-to-18-history.md)** — spoken-ask door, Quick Ask fixes, split screen, 0% means silence, the backup SDK finding (archived 2026-10-02)
 - **[2026-05-21-to-08-31-history.md](history/2026-05-21-to-08-31-history.md)** — notif-client sync, focus-mode milestone, v2 cutover waves, Quick Ask push-to-talk, the backup incident (archived 2026-09-16)
 - **[2026-05-06-to-11-history.md](history/2026-05-06-to-11-history.md)** — voice-persona milestone Phases 0–5 + CC-dispatch retirement sync + yes/no/neither tri-state (9 entries, May 6–11, 2026; archived 2026-08-21)
 - **[2026-04-17-to-24-history.md](history/2026-04-17-to-24-history.md)** — WS hookup → TTS overlap fix (5 sessions, Apr 17-24, 2026; archived 2026-05-11)
 - **[2026-04-15-to-16-history.md](history/2026-04-15-to-16-history.md)** — Tier 1-4 buildout (5 sessions, Apr 15-16, 2026)
 - **[2025-07-06-to-08-17-history.md](history/2025-07-06-to-08-17-history.md)** — Initial era (7 sessions, Jul 2025 – Aug 2025; project then dormant for 8 months)
 
-Most recent entries (2026-09-01 onward) are retained below.
+Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
-## 2026.09.30 | Session `43b31a9d` (Tiffany 💍) — PR prep for the v0.2.2 branch
+## 2026.11.02 | Session `cfdbef0b` (Tiffany) — "Other" on choice asks, hands-free Quick Ask, no banner while the app is open
+
+The work came from Rick by voice and from rows on my board. APK builds 1 to 4 were made; the last is `bd27502`, and the drawer reads "2026.11.02 build 4". Each change had an independent review, and every defect it found was fixed with a test that fails without the fix.
+
+- **"Other" on every multiple-choice ask** (row `50ce6d46`): single- and multi-select, in the notification sheet and the focus pane. A typed answer is sent as the web client sends it. The review found that a cursor move re-ticked "Other" over a later pick; fixed. Merged `8048669`.
+- **📋 view links** (row `3310b925`): the parser already keyed on the address, so tests now cover both 📋 and 📄. Merged `8048669`.
+- **Quick Ask multiple choice** (row `6fd3ec4e`): Quick Ask shows the options and "Other", and answers `{"answers": ...}`. The review found that a replacing prompt reused the old one's state; the fix keys the prompt by id. Merged `63eadc5`.
+- **Hands-free Quick Ask, screen on** (row `c643b1b0`, plan `src/rnd/2026.11.02-quick-ask-hands-free-earbud-taps-plan.md`): an earbud tap starts and stops recording, and a double tap sends, each with a tone.
+  - The app now owns its media session: `LupinMediaHandler` on `audio_service`, replacing `just_audio_background`, which kept the press handler private.
+  - The review found four defects, all fixed in `138f095`. The claim outlived the screen, and a podcast started under it couldn't be paused. The first tap could go to another app, and player errors were dropped.
+  - Merged `174d54b`; the row waits on Rick's earbud check. The locked-screen step is row `3a8005c1`.
+- **No system banner while the app is open** (row `66f6cf2f`, Rick's ruling): with the app in front, a notification dings and vibrates in-app. Nothing is posted to Android. The review found that two quick dings leaked audio focus and kept a podcast paused. It also found that vibrate mode got no signal. Both are fixed. Merged `bd27502`.
+- **Filed for tonight**: the intermittent tap to start and stop (row `0f29b56e`), and ASR returning no transcript (row `bcc9cba3`).
+- **Lessons**:
+  - A TextEditingController notifies on cursor and composing changes too, so a listener must compare the text.
+  - audioplayers takes audio focus on every `play()` and releases only the latest request, so stop before each play.
+  - Renaming a test is a missing id to AC-G2; rename it in `test/fixtures/ac_g2_passing_baseline.json` in the same branch.
+- **Memento sweep**: Sam's two 11-01 mementos (tester, row `a25f51b3`) were summarized and trashed.
+  - `ws_stale_channel_test.dart` failed once in a full run and passed alone, so it may be flaky.
+  - `Markdown( selectable: true )` draws no RichText; read the EditableText instead.
+
+## 2026.11.01 | Session `6b2f0ab0` (Tiffany) — Drive podcasts on the phone, one-click approve links, download for offline
+
+The work came from Mr. Radio's handoff and from Rick by voice. APK builds 1 to 3 were made; the last is `fefb4f4`, and the drawer reads "2026.11.01 build 3".
+
+- **Drive podcasts list** (row `dc0dafdc`): the Podcasts screen lists every podcast in Google Drive under the phone's own. It reads them through the server endpoints `/api/podcast-drive/list` and `/stream` (lupin `269d72151`), so the phone needs no Google sign-in. A 401 goes through the token refresh. Mr. Radio confirmed that the desktop and phone podcast paths upload to the same Drive folder. Merged `478ac9b`; real-reply test `dddc6ad`.
+- **Approve and view links in cards** (row `a25f51b3`): `approve ☐` approves in place and `📄` shows the row, matching both web clients. Built by a crew (Rio implemented, Krishna reviewed with two re-loops, Sam wrote 20 tests); all three were reaped with mementos. Merged `ea76434` and `b45b3aa`. Rick confirmed on the phone that the link renders.
+- **Download for offline** (row `6430afac`, Rick's ask): a download button on each Drive row; on mobile data it asks first. An independent review found a double-sheet race and an unhandled connection-check error; both were fixed. Merged `fefb4f4`.
+- **History archived**: 2026-09-19 to 10-05 moved to `history/2026-09-19-to-10-05-history.md`.
+- **Lessons**:
+  - A spinner behind an open sheet keeps `pumpAndSettle` from ever settling, so the tap guard and the spinner are now separate.
+  - `spawn_sessions` already makes each seat's worktree, so a brief must not tell the implementer to add one.
+
+## 2026.10.31 | Session `e3be888f` (Tiffany) — Explainer to podcast to playback on the phone
+
+Rick's broadcast `ed04ca86`: row `3469e9db` (P0), coordinated with Mr. Radio. The crew was Krishna, Chloé and Tiberius, all Sonnet 5.5, all reaped with mementos. APK builds 1 to 7 were made; the last is `243aea6`.
+
+- **Plan** `src/rnd/2026.10.31-explainer-to-podcast-phone-loop-plan.md` (`c9906e4`). Tiberius reviewed it. The afternoon explainer was added in `a12ec46`, and the earbud research in `39907c0`.
+- **Player** (row `049d914a`): an app-wide player, lock-screen and earbud play/pause, and a pause while the app speaks. Merged `152146a` and `f8f5e27`.
+- **Button and Play** (row `0c23edab`): a Podcast button in the doc viewer, using the server's from-viewer route, and Play on the done card. Merged `65ef6d8`.
+- **Offline** (row `24a39e97`): a persistent cache, Wi-Fi prefetch, and an ask before mobile data. Merged `7aaeeaa`.
+- **Rick passed the loop on the phone**, and row `3469e9db` closed.
+- **Rewind** (row `807a4ed0`): back 15 seconds, with a long press to go to the start. Merged `dffeb1d`.
+- **Podcasts list** (row `f13143d5`, `fe84492`), and its Surfaces entry (row `e12f5649`, `5fe702c`).
+- **Bar on first Play** (row `a5c251e5`): just_audio's `play()` returns only when playback ends, so the player is no longer awaited. Merged `0cd7649` and `243aea6`.
+- **Earbud research** (row `3d1bb844`): a double tap sends "next track", which does nothing on a one-item queue. A single tap works; the earlier failure was the laptop-paired buds.
+- **Lessons**:
+  - I merged one branch before its gate finished, and it failed; every merge after that was gated first.
+  - Chloé's home card landed on the hidden Home grid. Surfaces is a separate list.
+
+## 2026.10.20 | Session `31cd100e` (Tiffany) — Plans 1 and 2 on mobile, from zero to done
+
+Rick's broadcast `be6e2010`: finish both plans and work with María on code reuse. Crew: Tiberius, Pocholo, Maya, Rachel and Rio, all Sonnet 5.5, all reaped with mementos.
+
+- **Plan** `src/rnd/2026.10.20-plans-1-2-mobile-parity-plan.md` (`2cb4e0b`, status `caa2291`). Rick ruled exact lookups now, vectors later.
+- **Dart index** (row `dad36ae1`): lupin's indexer, 2609 entries, two hand checks of 30 modules each.
+- **Lookups** (row `55013536`): María's lupin `fc0517fc6` lets the reuse tools answer for mobile. I reviewed it, and a live `check_exists` returned Dart classes.
+- **Wiki** (row `f45cf2cb`): 39 pages plus 28 sub-pages, merged `d2d5f03`, `a2ce0a5`, `5464459`, `dee7e11`. The gate passed. 16 of 2609 names have no page.
+- **Recall baseline**: 37 of 40 known twins found, 0 of 200 random negatives. The set is in `projects-data/lupin-mobile/reuse-review/negatives-2026.10.20/`. The misses are lupin row `74d0db47`.
+- **Reviewer skill** `.claude/skills/reuse-reviewer/SKILL.md`, merged `d925b94`.
+- **Queue bug** `45140e2e`: deleting a job now re-fetches the queue, with a test that fails first. Merged `d19bfd8`; APK 2026.10.20 build 1.
+- **Handed off**: the librarian tick to Cheech (row `874dff1a`). The cache duplicate `f3d4fc00` is parked until 2026-10-28.
+- **Lesson**: check a claimed ruling against the card. Maya's row said P2, but the card said "a finding for later".
+
+## 2026.10.14 | Session `8e50c76c` (Tiffany) — Plan 1 mobile done, then lupin rows from Cheech's list
+
+Crew: Chloé, Pocholo, Tiberius, Rio, John and Extra 1, all Sonnet 5.5, all reaped with mementos. The last two seats went to Mr. Radio, by Rick's ruling.
+
+- **Plan 1 mobile, 100%**: decisions record ruled A, scope class first (`2f422bb`), then the page (`1fd23e8`). María's wrappers merged `90fa022`.
+- **Phone fixes**: speech requests carry an utterance id, merged `32f75fd` (row `b6f7f302`). The flaky gate test waits on its condition, merged `9e78016`.
+- **Skeleton crew switch** (row `5da989df`): it sits beside the cap dial, and the poke switch is hidden. Merged `40c9d72` and `937d880`; APK 2026.10.14 build 2.
+- **Lupin rows from Cheech's list**: Rick split the list among the managers. Landed on the lupin working branch:
+  - `4007b4466`: tic rule skips code spans (`07d6d4c7`), dead vote buttons removed (`2650df28`), Retry-now test (`5a8bd0c6`).
+  - `ef7256e58`: verifier fixes (`df767922`), real card votes (`ed6db05a`), markdownlint test fix.
+- **markdownlint 0.18.1**: installed in lupin's main node_modules (row `47f8c955`). The test container sees it through a bind mount (row `2ac183c2`).
+- **Gates**: mobile full gate PASS-WITH-WARNING at `937d880`. Lupin landings ran the unit tier and the bundle test.
+- **Not pushed**: every mobile commit since `0ff5b47`.
+
+## 2026.10.13 | Session `5f30c269` (Tiffany) — markdown blocks at commit, wrappers clean, R&D ledger
+
+Crew: Chloé (author), Maya (author) and Tiberius (reviewer), all Sonnet 5.5, all reaped with mementos. Two Claude Code helper jobs ran first; Rick had them stopped and replaced by Lupin workers.
+
+- **Plan 1, mobile steps** (lupin row `ec1854b7`, closed at `8dd037b`). `CLAUDE.md` and `README.md` are at 0 lint findings. An R&D ledger of 115 rows and the R&D read rule, with its test, are in.
+- **Markdown gate blocks** (row `696b6744`, open): Rick ruled R1 to R5 on the plan. Each page has a class in `tool/data/markdown_scope.txt`, and the hook and the merge gate refuse by class. Merged `982172b`.
+- **Reviews** (rows `ecd452ac`, `9d66ab24`, `105a343f`): Tiberius found nine holes in the gate by running them. All were fixed and re-run before the merge.
+- **Command wrappers** (rows `afad632f`, `37fec485`, closed): reinstalled twice from María's cleaned sources, 992 findings to 0, then held at zero. Merged `2f60db8`, `7885efd`, `51333e5`.
+- **Open, with Rick**: the decisions record holds 81 findings, and its header forbids editing old lines. Plan section 8 gives the two choices.
+- **Plan**: `src/rnd/2026.10.13-plan-1-mobile-markdown-cleanup-and-blocking-plan.md`.
+- **Tool tests**: 249 passed at `51333e5`. There is no full merge gate verdict yet; it cannot pass until the decisions record is ruled.
+- **Mementos**: Chloé, Maya and Tiberius each left one in `io/mementos/`; the sweep was not run tonight.
+
+## 2026.10.10 | Sessions `de4ce9d3` then `271cba01` (Tiffany 💍) — silent phone found, build line, doc rewrite closed
+
+Crew: Tiberius (author), Chloé (reviewer), Maya (author) and Rio (reviewer), both released in the afternoon. Session `de4ce9d3` died at about 19:20 EDT; `271cba01` picked up from row `79d49618` and Rick's pasted notes. Everything before 19:21 EDT below is from commits, gate logs and `TODO.md`, not from memory.
+
+- **Silent phone** (bug `e0f0faf0`, closed): Master mute was on. The outcome line added in `3bc7670` named it when Rick read the phone at 18:00 EDT; he heard speech at about 18:47 EDT. Also merged: a speech watchdog and four review rounds (`259531c`, `6a9ca61`, `4c26045`), and a banner naming each active silencer with its repaint and rebuild tests (`0dd0655`, `17750b7`, `a672945`, `37a6b20`).
+- **Phone socket and logout**: an old listener can no longer tear down the live socket, the session id is taken once the socket is up, logout sends the refresh token and unregisters the push token first. Merged `98a497e`. The late-completion gap is a server change, lupin row `87d19d27`.
+- **Build line**: the drawer shows branch, date and a per-day build number (`c07c65d`, `16fc44d`). Latest APK is 2026.10.10 build 8 at `44f723c`, push wake-ups on.
+- **Command wrappers** refreshed and backup paths corrected (row `08c4e586`, merge `cbe1854`).
+- **Doc-comment rewrite closed** (row `79d49618`): Rick turned all checking off and asked for the job finished. Six commits from Tiberius, each passed by Chloé, merged `d1c1e6e`: six dropped reasons restored, the last 3 public members documented, 92 linter findings in 22 `lib/` files cleared, rule 6 cites a commit (`R-DOC-reason-by-commit`). `lib/` reads 0 linter findings and 0 undocumented public members. The blind taste test before that: new comments preferred 39 to 6.
+- **Merge gate runs the doc linter** (row `27548910`, admitted by Rick): no gate step ran it before, which is how the 92 findings went unseen. Merged `45819e4` (`836af40`, `d31726f`).
+- **Dropped rows checked** (row `e0d17ef4`, closed): nothing new owed from `a246634e` or `9d7b62e9`; why they were dropped is unverified.
+- **Merge gates**: PASS `5663197..44f723c`; PASS-WITH-WARNING `b941543..45819e4` (the range changes the gate's own files; the question whether Chloé's review counts as the human read is with Rick). Earlier in the day: ten PASS and one FAIL (`259531c..6a9ca61`, passed 15 minutes later on a wider range), logs in `io/2026.10.10/tiffany/`.
+- **Post-game**: `src/docs/post-games/v0.2.2/2026.10.10-silent-phone-and-doc-closeout-crew-post-game.md`, rulings R19 to R25 (manager, reversible).
+- **Held, waiting for Rick**: flaky foreground-gate test (`ff9cc9d3`), R&D ledger for mobile (`e40642c3`).
 
-- Rick's broadcast `0375db54`: wip is being PR'd to `main`; next branch is `wip-v0.2.2-2026.09.30-tracking-lupin`.
-- TODO.md gained a START HERE handoff table (open threads, stale remote branches, post-merge steps).
-- Committed the deep-research response to the wake-socket problem statement, with frontmatter; removed an empty stray file `workers.`.
+## 2026.10.09 | Session `de4ce9d3` (Tiffany 💍) — five held rows cleared, two connectivity rulings, blind Dart count
 
----
+Crew (all Sonnet 5.5): Maya (reviewer), Clayton (author), Pocholo (author, then reviewer), one author seat that got no persona; all released with mementos by 12:05 EDT. Afternoon: Pocholo (tester, released 14:00), Clayton (author, running at this checkpoint). Tip `95c1c02`, not pushed (28 commits ahead of origin). I cleared my own context at 12:31 EDT (session `f6acc646`, same seat).
 
-## 2026.09.29 | Session `3ecf2f22` (Tiffany 💍) — Wake backlog, dictation field, push pause, "off means off", transcript fixtures
+- **APK scripts build with FCM by default** (row `58ec8260`, closed): `--no-fcm` opts out, `--fcm` still accepted; a stamp test covers both. Merged `60d7be1`, stamp test in `869481b`.
+- **Log masking** (bug `8398bfe8`, closed): quoted keys, whole arrays and objects, `secret_key` / `private_key` / `access_key` and plural names, a linear scanner. Maya refused my ruling that any plural name holding a bare number stays readable (`passwords=12345678` printed); only token-count names keep a number now. Merged `869481b`.
+- **Analyzer notes** (decision `6f0e209d`, closed; Rick: "Fix both, with tests"): mounted guard in the inbox screen, four `withValues`, notifications and queue on the strict check. Merged `12acb7d`.
+- **Connectivity timers never arm while the app is paused** (bug `1b192f22`): three rounds, each from a reviewer finding (pause during start-up, pause before the services start, usage state on a paused start). Merged `f244d73`, `d35feaf`, `4e15c9c`. Rick ruled both open questions at about 14:41 EDT: the phone checks the Lupin server instead of `google.com` and `cloudflare.com`, and `limited` counts as usable in the task list and holding area. Clayton wrote both (12 commits, red test before each fix); Maya reviewed in four rounds (one not yet with three findings, then three passes). Merged `13882d9`; merge gate PASS on `d572558..13882d9` (no new failure, 3 known); APK built, stamp `sha=13882d9 fcm=true dirty=false`. Not checked by anyone: a real phone, the real server, TLS. Both seats released with mementos.
+- **Seat-worktree scripts share one library with lupin** (lupin row `c41c090a`, closed): byte-identical copy, the three scripts source it, a usage test that survives the reviewer's mutants. Merged `d5da690`, `95c1c02`. My merge turned lupin's `test_new_worktrees_come_up_tier_capable.py` red because I ran only one of the two lupin files that read mobile's scripts; Chloé's fixture fix landed at lupin `2c24f7fee`, and both files are green from the real checkouts (32 passed, 2 skipped). Closed after a spawn into a new worktree linked Flutter and the Gradle wrapper.
+- **Merge gates**: PASS `29a612c..60d7be1`, PASS `60d7be1..f244d73`, PASS-WITH-WARNING `f244d73..d35feaf` (ignores and the exemption list read), PASS `d35feaf..95c1c02`. Suite: no new failure, 3 known. APK built at `95c1c02`, FCM on.
+- **Blind Dart symbol count for Cheech** (lupin row `7a963ebf`, Dart leg): 227 of 227 changed files match the index at lupin `ab3fc4557`, 2,577 symbols each side; counter frozen by sha256 before the index ran. The row was missing from my handover; Cheech reminded me.
+- **Fresh slice of Dart pairs for Cheech** (row `df97c02b`, closed): from my 819 pairs (45 pilot, 774 sweep), 639 share no symbol with dev 80 or gate 175, and 344 share no file either. Unlabelled, so they test false alarms only. Folder `projects-data/lupin-mobile/dart-fresh-slice-2026.10.09/`.
+- **Claim judge** (rows `2847a900`, `9e0dd2dd`): Cheech's extractor revision 2 was not adopted; the gate run is no earlier than 2026-10-10 afternoon.
+- **Post-game** for the crew: `src/docs/post-games/v0.2.2/2026.10.09-board-whittling-crew-post-game.md`, rulings R12 to R18 drafted.
+- Logs and verdicts under `io/2026.10.09/{tiffany,maya,pocholo}/`.
 
-**RESUME HERE:**
+- **Evening**: Rick's phone check passed all three steps (card, about 18:20 EDT); rows `1b192f22` and `b69dbf0b` closed. He dropped rulings R6 to R11 (row `ea96c8d7` closed) and admitted lupin row `879fe139`.
 
-1. **Only live row: `768e852f`** (transcript console). C5.18 needs a recapture of `append_mixed_kinds` now that the server puts `name` on tool_result (Mr. Radio `687310b7`, live). The capture needs the admin test account: the script now reads `LUPIN_TEST_ADMIN_EMAIL` / `_PASSWORD` (Rick's `.bashrc`), and seats get them at the 09-30 fleet restart. C5.22 (thinking) stays pending-capture: no seat records thinking text.
-2. **The ask-audio contract fixture drifts** whenever lupin touches the ask response, and the guard blocks worker syncs, so Rick ran it twice today. A permission rule for `test/fixtures/asr/ask_audio_ndjson_contract.json` would stop the recurrence.
-3. Branches: only `main` + wip remain (Rick deleted 8 merged/stale ones). No worktrees.
+- **Documentation plan closed (P0 row `b707f92f`)**: both of Cheech's extractor variants failed at 19:02 EDT, so Rick ruled a hand read of a sample in place of the claim judge. Pocholo and Chloé read 242 of 819 pairs (214 kept, 18 moved, 3 to restore, 7 rightly gone; the random 60 found none; a blind cross-check of 25 agreed). A fresh author seat wrote seven comment-only commits, Chloé reviewed (one not yet, then pass), merged `4e317c8`, merge gate PASS. Along the way: mobile comments said the task write doors ignore an undeclared field; the server refuses it with a 422. The full judge run stays owed on held row `79d49618`. Files: `io/2026.10.09/hand-read/`.
 
-**Shipped** (crew: Pocholo, Tiberius, Chloé, Cheech, Maya, Clayton; every commit reviewed and cherry-picked; suite 2728/2/0 at `bded008`, `--fcm` APK built there):
-- **Wake fetch** asks the server for only the allowed priorities, oldest first: `95b7095` (`1a7678ff`). Also closes `33ee7329`.
-- **Wake backlog, show each**: up to 5 items per wake, each with its own notification id (review caught a same-second id collision): `8aebb59` (`8e91d937`). One whole-handler 27 s deadline: `416450b` (`5365750f`).
-- **DictationTextField**: all 15 mic-yes sites, census-guarded, plus a fix for a start completing on a dead widget: `c4e60ea` (`c67f9781`).
-- **Pause push from server** (P0 `67ee93b0`): admin toggle on the Notifications screen, 30 min to 24 h or until resumed: `29579af`.
-- **Off means off** (Rick's ruling): Focus speech honors Notifications off, Master mute, muted senders, and quiet hours: `bb12bd1` (`ea716d77`).
-- **A push-registration throw at login no longer skips the permission prompt**: `ab4f895` (`dfea49e7`, from Maya's review `20df4428`).
-- **Transcript fixtures**: `state_refused` captured (C5.21 green), `append_mixed_kinds` recaptured, the JWT-shape guard: `fed43e7`, `aab5824`; the capture script reads `LUPIN_TEST_ADMIN_*`: `e789f07`.
-- Fixture syncs to lupin: `d596526`, `bded008`.
+- **Transcript console finished overnight (row `768e852f`)**: Rick said the test admin account already exists; María gave the method (`bash -ic`). Tiberius ran the capture and found the only frame with thinking text held live tokens that the capture's check missed; he wrote nothing. Fixes, each reviewed by Chloé (one not yet, then pass): the token check now lives inside `_fixture_lib.write_fixture`; `append_mixed_kinds.json` recaptured (C5.18 green); an empty thinking block shows "Thinking (not recorded)"; `append_thinking.json` captured; the `pending-capture` tag retired; the gate's known-failure list rebuilt to zero. Merges `efd683e`, `8e7132e`, `bade1da`, each merge gate passed; suite 2915 passed, 0 failed; APK built at `8e7132e`. Stop poke steps for Rick: `src/docs/phone-checks/2026.10.09-stop-poke-switch-phone-check.md`. Receipts: `io/2026.10.09/{chloe,tiberius,tiffany}/`.
 
----
+- **2026-10-10 midday**: Rick ran the Stop poke phone check (off 11:45, on 11:46 EDT, both confirmed at my seat) and un-parked rows `ee68d5e7` and `768e852f`; both closed. He then reported no speech on the phone and asked for a build line in the main menu.
+  - **Build line** (Maya, `84ba4b0`, Chloé PASS, merge `c07c65d`): `lib/core/build_info.dart`, a pinned drawer footer, stamped by `src/scripts/build-apk-on-server.sh`.
+  - **Speech** (Tiberius; Chloé reviewed five hand-overs, two NOT YET): watchdog and bounded on-device speaks, an outcome line in the Speech queue sheet, serialized on-device speech, her 13 driven scenarios kept as `test/unit/services/tts/on_device_speech_serialization_test.dart`. Merges `259531c`, `6a9ca61`, `4c26045`. The gate failed once on `6a9ca61` (a renamed test id, AC-G2) and passed on `4c26045`; suite 2959 passed, 0 failed. Cause on Rick's phone still unproven.
+  - APK built at `4c26045`, 13:12 EDT. Receipts: `io/2026.10.10/{tiffany,chloe,tiberius}/`.
 
-## 2026.09.28 | Session `1b9a6410` (Tiffany 💍) — FCM wake-ups live on the phone, tap-to-sender, notification controls, the append mic
+  - **Version line** (afternoon; Maya `d689996`, `96fd562`; Rio NOT YET then PASS; merge `16fc44d`, gate PASS): the drawer shows the branch over `yyyy.mm.dd build N`, counter in `io/build-counter`. APK build 4 at `16fc44d`, 15:39 EDT. Receipts: `io/2026.10.10/rio/`.
 
-**RESUME HERE:**
+  - **Evening**: phone socket and logout fixes (Tiberius `0d6f56b`, Chloé PASS, merge `98a497e`, gate PASS over `5eaaa2a..98a497e`): listeners bound to their own channel, the previous channel closed, one failure one reconnect, logout sends the refresh token and unregisters push first. Rick installed build 4 and at 18:00 EDT read the cause off the Speech queue sheet: Master mute was on. A census of every control that silences speech: `io/2026.10.10/tiberius/census-speech-silencing-controls.md`. Extractor A2 failed the Dart dev 80 check, so the judge run (row `79d49618`) stays held. I cleared my own context at 18:13 EDT (session `068dfb3b`, same seat).
 
-1. **Rick owes:** the dev test admin account (`f2f30810`, which unblocks `768e852f` slice 4) and the NDK 27 install (`sdkmanager "ndk;27.0.12077973" "platforms;android-36"`, for P3 `5cbd2e42`).
-2. **Merged late:** Cheech's notification management view `370e491` (P0 `7cac3a17`, awaiting Rick's device check) and Maya's prompt-bubble mic `286e02c` (Focus half of `928c5808`). Next for Maya: the mic in the notification sheet (Rick: "both"). Tip `286e02c`, suite 2558/1/8, `--fcm` APK built from it.
-3. **Unmerged:** `feat/transcript-dispatcher` (the 0fa608b rebase), `feat/transcript-mobile-s4` (`c310763`), and 281a10d6 (device_id / close 4004), which isn't staffed yet.
+  - **Late evening** (all Tiberius or Maya, each reviewed by Chloé, each merge gated, suite 0 failing):
+    - Speech-silenced banner and logout keystore read guard, merge `0dd0655`; logout delete guard and quiet-hours wording, `17750b7`; banner repaints on a bypass toggle, `a672945` (APK build 7, 18:39 EDT); tests pinning banner rebuilds, `37a6b20`.
+    - Command wrappers refreshed to planning-is-prompting `05ec88d` and backup paths corrected in the wrappers and `CLAUDE.md`, merge `cbe1854` (Maya; row `08c4e586` closed; sha sent to María).
+    - Rick heard the phone speak after turning Master mute off; speech bug `e0f0faf0` closed.
+    - Rick rejected the claim-judge premise and chose an automated blind taste test; brief `io/2026.10.10/tiffany/brief-blind-taste-test.md`, pilot running at this checkpoint (row `79d49618`).
+    - Flaky test found and reproduced under load (held row `ff9cc9d3`).
 
-**Shipped** (crew: Maya, Pocholo, Chloé, Cheech; every merge independently reviewed; suite 2484/1/8 at `ea0d2f3`, the 8 being the known pending-capture reds):
-- **FCM background wake proven on the emulator and the phone** (row `8ff78c69`, closed): live bugs fixed along the way: `ba07dc8` notification permission never requested, `f827e7a` fingerprint unlock never worked (FlutterFragmentActivity).
-- **Tap a notification → that sender's conversation**, sender emoji and name in the title: `265947d` (Maya; `d9bc6f6c`, `1ae4c68c`; Rick confirmed on the phone).
-- **Review F1–F9 + C1–C4** (Pocholo, reviewed by Chloé): `62a319d`, `e004517`: speech/network budgets, the token-rotation race, the wake switch, the v2 channel at default importance, APK build stamp.
-- **Append mic in the Focus reply draft**: `ea0d2f3` (Maya; `570c2fce`; Rick confirmed).
-- **pubspec.lock tracked**, dio switch made total, seat provisioning fixed: Chloé (`0705bcce`); stale AC-G2 fixture `f113473` (`6f9c0fe4`).
-- CLAUDE.md: always build with `--fcm` (`5c62999`).
+**RESUME HERE (checkpoint, 2026-10-10 19:00 EDT; replaces the lines below):** (1) Tiberius's taste test pilot report in `io/2026.10.10/taste-test/`, Chloé's check, then the numbers and the code-check plan to Rick. (2) Flaky test row `ff9cc9d3` waits on Rick's admission. (3) Post-game for today's crew at session end. Seats up: Tiberius, Chloé; nothing pushed; APK build 7 ready.
 
----
+**RESUME HERE (superseded, 2026-10-10 18:17 EDT):** (1) Chloé's verdict on the mute banner `0d6f56b..d5ccb9a` (Tiberius), then merge, gate, build 5. (2) Chloé's verdict on the wrappers `5eaaa2a..4db931e` (Maya), then merge, gate, the sha to María (row `08c4e586`, held). (3) Rick says Master mute is off; send a test; close `e0f0faf0` only when he says he heard speech. (4) Judge run: Rick's hold, run or drop. (5) Post-game for today's crew at session end. Seats up: Tiberius, Maya, Chloé; nothing pushed.
 
-## 2026.09.27 | Session `0fb2674f` (Tiffany 💍) — Transcript phase 3 slices 1–3, the Surfaces drawer, and a one-command phone deploy
+**RESUME HERE (superseded, 2026-10-10 16:02 EDT):** (1) Rick installs build 4 and says "installed"; respawn Tiberius from `io/mementos/tiberius.md`, send a test; if silent, Rick reads the top line of the Speech queue sheet (row `e0f0faf0`). (2) When Rick approves the admit request on `79d49618`, staff the judge run. (3) Phone socket defects are owed on `e0f0faf0`, not started. (4) Rick: rulings R12 to R18. No seats running; nothing pushed.
 
-**RESUME HERE:**
+**RESUME HERE (superseded, 2026-10-10 13:14 EDT):** (1) Rick installs the 13:12 build and says "installed"; send a test; if silent, he reads the top line of the Speech queue sheet and that goes to Tiberius (seat `cc-author-tiffany-1`, up). (2) When the ticket gate opens, file rows for the speech bug, the build line and the socket teardown loop; they are recorded on row `79d49618` meanwhile. (3) Rick: admit `79d49618` (judge run ready), rulings R12 to R18, the `pubspec.yaml` version. Nothing pushed.
 
-1. **Rick's two P0s:** run `src/scripts/deploy-apk-to-device.sh` once from the laptop, which closes `651e3956`, and file a ticket from the phone with New Task, which closes `5e315760`. The check list is `tmp/2026.09.28-phone-check-list.md`.
-2. **Stop-list `f27a61f4`** is re-looped for its undo defects; the fix plan is in `io/mementos/cheech.md`.
-3. **Phase 3** waits on Mr. Radio's server: slice 4, and merging `0fa608b`.
+**RESUME HERE (superseded, 2026-10-10 00:26 EDT):** (1) Rick: approver sign-in to move `768e852f` and `ee68d5e7` out of parked; the Stop poke phone check; admit `79d49618`; rulings R12 to R18; deploy the APK. (2) When Cheech says the `final_absent` change landed, staff the judge run over all 819 pairs. (3) No seats running; seeds are `io/mementos/tiberius.md` and `io/mementos/chloe.md`; nothing pushed.
 
-**Shipped** (5-seat crew: Maya, Pocholo, Chloé, Cheech, Clayton; each merge reviewed and tested):
-- **Transcript phase 3** (row `768e852f`): slice 1 `a086a0c` (PaneVisibilityMixin extraction), slice 2 `fad452e` (fleet-row watch button), slice 3 `9962f59` (router, route-scoped bloc, Live Console). The dispatcher `0fa608b` is held back until the server emits.
-- **Surfaces drawer** `bb8c72e` (row `c59457f0`).
-- **Phone deploy script** `d15210f` + `c6db075` (row `651e3956`): installs the server-built APK over the SMB mount to whatever adb sees, phone first, and refuses a stale APK.
-- `686576b` CLAUDE.md dev commands; `610f8c9` `/coverage/` gitignored.
-- **Rick confirmed on the device:** record button `3f2a7dab`, mic hold `a1c12c6e`, Files `0534b50d`.
-
-**Suite: 2055 → 2299 passed / 1 skipped / 0 failed** at `bb8c72e` (8 pending-capture reds by design).
-
-**Lesson:** twice, a fix commit was stacked on something that must not merge (the C9 hold-back, then row A). A one-line `git merge-base --is-ancestor` check before every merge caught both.
-
----
-
-## 2026.09.26 | Session `90e34e30` (Tiffany 💍) — Skeleton Shift: five-accordion status report, the TaskRow call-site guard, and file_picker passing on the phone
-
-**RESUME HERE:**
-
-1. **Row `61ecfb22` (doc viewer) is ready to close, and only Rick can close it** because it is parked. He confirmed on the phone that `file_picker` 11.0.3 builds, installs, logs no errors, and uploads.
-2. **Device walk-through**: item 10 is done. Rick's test broadcast `f670a706` reached this seat, the first real send from the app. Items 11-13 (the reply tally through the notification shade, backgrounding and navigation) and item 14 (landscape) are still owed.
-3. **Rebuild the APK** to get New Task on the phone. It's merged and pushed, and never yet tapped on a device. The Project field defaults to `lupin`, as on the web.
-
-**Shipped:**
-- `1d61d2d` + `db9162c`, merged as `92a3fc0`, row `d5bbd786`: a source-scan test that fails when any `TaskRow(` call in `lib/` drops a constructor argument, unless a `// taskrow-omit: <param> <why>` comment explains it. It was mutation-tested on four breakages. María reviewed it; her two points (a `//` inside a string hid a call, and `super.x` parameters were not counted) are fixed.
-- A done-versus-remaining report on the five accordions, sent to Rick as a notification card (broadcast `7938c019`).
-- `a36ef40`, merged as `30efd26`, plus fix `e7f2bcc` merged as `ce3fe8a`, row `b31a9ed9`: **New Task**, the web's new-ticket card on the phone (M4, on Rick's keypress yes). It's ported from lupin `shared/task-create.js`: nine fields, the same defaults, validation and outcome text, and a POST to `/api/tasks`. A petition or no answer keeps the card open; a created ticket closes it and refreshes the board. Title and Details have mics. It was mutation-tested on 7 breakages. A test caught the Approval dropdown overflowing by 156 px at 360 dp. María reviewed the rules layer and the card; she found that a cancelled capture left the mics dead, which is now fixed with two tests that fail on `30efd26`.
-
-**Rulings:** row `e1e2c545` (the two re-spin doors read different memento files) stays with Mr. Radio, because it is lupin tooling. Rick's test upload was deleted from `lupin/io` on his yes.
-
-**Housekeeping:** the memento sweep trashed 6 stale records and kept 3.
-
-**Suite: 1999 → 2035 passed / 1 skipped / 0 failed.**
-
-**Lesson:** a review DM that is condensed in transit can drop a finding. María's first accept on `a36ef40` lost the stale-mic point, and it only surfaced when she resent it after the merge. When a reviewer says there are nits, ask for the list in full before merging.
-
----
-
-## 2026.09.24 | Session `ecb8e6e3` (Tiffany 💍) — Task List M1/M3/M4, and doc-viewer parity with the web: Download, Folder, listing, Roots, Upload
-
-**RESUME HERE:**
-
-1. 🔴 **Rick's laptop APK build is the first real test of `file_picker` 11.0.3**, because this machine has no Android SDK. If it breaks: take it out of `pubspec.yaml` and set `platformDocFilePicker = null` in `lib/features/docs/presentation/doc_upload_sheet.dart`. Row `61ecfb22` is blocked on that build (chase 09-25 09:00 EDT).
-2. **Row `651e3956` (P1)**: investigate reviving the Android SDK here. Rick is picking it up 09-25.
-3. The device walkthrough from 09-23 is still owed (items 7-14 plus one real broadcast).
-
-**Shipped** (21 files, +2100/−28):
-- `84ebb4d` / merge `6ce802e`: Task List headline ("Live: N", split only while a park is active), paste-a-ticket-number lookup via `GET /api/tasks/<ref>` (finds held rows), and a disabled New task button. Row `323d0f9c`.
-- `8bc9b9e` / merge `312aa40`: doc viewer ⬇ Download (original bytes through the share sheet), 📁 Folder, a real folder listing, and a folded 🗂 Roots panel. Row `61ecfb22`, agreed with Mr. Radio before building.
-- `0528f11` / merge `104401b`: ⬆ Upload for admins. It sends refuse first; on a name clash, a sheet offers Replace, Rename or Cancel. It adds `file_picker`.
-
-**Bugs found on the way**:
-- The listing parser read `type`/`path` while the server sends `kind`/`rel_path`, so every entry was a pathless file. This was invisible because nothing rendered listings.
-- PDF, audio and video were decoded as text.
-
-**Coordination**: Mr. Radio's upload endpoint shipped as lupin `627ef22c8`. Only io and lupin accept uploads; the other mounts answer 403 until Rick makes them writable.
-
-**suite 1936 → 1999 passed / 1 skipped / 0 failed** on the merged tree.
-
-## 2026.09.23 | Session `693d5366` (Tiffany 💍) — Fleet pane parity closed, broadcast ack recovery built on the new server read, two rulings in hand
-
-**RESUME HERE:**
-
-1. 🔴 **REBUILD THE APK AND CHECK ON DEVICE**: the P0 DM editor, the B1 spinner (walk-through item 8), items 7-14 of `src/rnd/2026.09.22-emulator-walkthrough-five-accordions.md`, and now **one real broadcast** that exercises the ack read-back after backgrounding the app. ⚠️ A broadcast reaches every live seat, so warn the fleet first.
-2. **d5bbd786 TaskRow call-site guard**: Rick **approved** it (22:15), but it's still `not_approved` because only he can admit it. Once admitted, staff a worker.
-3. **c51e92da** phone probe stays parked until about 10-19. Don't raise it.
-
-**Shipped**: 73ce4cb inbox hidden + Task List indent · d80419b logout pops routes, Lupin Focus first on the grid · 7e005e8+125f37f Broadcast @mention chips · da54a06 B1 Fleet Status spinner · 67500ca P0 DM editor (composer capped at 60% above the keyboard) · aac32aa Broadcast history disabled state · crew merges a9d0d0d, e397c9c, 0952925, dd8de55, 3c1ebe7, ae75043, 39c8a14 · 5ad3fc8 post-game · **19b8c6e broadcast ack recovery** (Sam, row 973e4b6b): `drainMissedAcks()` now reads `GET /api/notifications/broadcast-acks/{id}` (lupin 1c7da903) on resume/reconnect. It merges saved acks per seat, ignores other broadcasts, lets a seat that moved during the read keep its live ack (a race caught in review, fixed in 0cdfe1a), and leaves a failed read "interrupted". Expired vs partial runs on a 5-minute window from the **send**, which differs from the web on purpose.
-
-**Rulings**: 19190a5b Task List **hides** illegal verbs (Rick, closed). Server `limit` is `Query(500)` with no maximum, so going over 500 is not an error (Sam, verified at `notifications.py:2444`).
-
-**suite 1904 → 1936 passed / 1 skipped / 0 failed** on the merge result. One self-respin (wake proof written). The Last Call bell (row 3d741e8b) never fired because `last_call.py` isn't executable (María's bug 8a838de5), so the close was run by hand.
-
-## 2026.09.23 | Memento sweep (María 🌸, row `5b29a807`) — 50 mementos moved to the trash (3 kept for Tiffany); per Rick's ruling, only the last two days summarized
-
-- **09-22**: `await bloc.close()` inside `testWidgets` never returns for a bloc with an `on<Event>` handler. Four of five fleet panes were unreachable, referenced only by their own files and tests. Untrack `local.properties` and gitignore `google-services.json` (Rick).
-
-## 2026.09.22 | Session `f19a8996` (Tiffany 💍) — Phase 5 shipped, five accordions wired, then Rick walked them on the emulator and found ten things
-
-**RESUME HERE — FIRST THING IN THE MORNING, IN THIS ORDER:**
-
-1. 🔴 **REBUILD AND FINISH THE WALK-THROUGH.** Nothing else is blocked. `src/scripts/build-and-deploy-lupin-mobile.sh` (or `--push-only` if the APK is current), then **items 8-14** of `src/rnd/2026.09.22-emulator-walkthrough-five-accordions.md`. Item 7 is fixed and pushed but **not in Rick's APK**, so it has to be re-checked too. Items 10-13 are the four no test can reach: the first real broadcast ever fired from this app, the `inactive` guard measured in **both** directions, and the ack tally surviving navigation.
-   ⚠️ **A broadcast send hits every live seat.** Tell the fleet first or send something that reads as a test.
-2. **B1 Fleet Status spinner — highest-priority code work.** Order is **B1b first** (the debug line), on María's call: it is the only item that can say whether Rick's spinner is the defect we found or another one still unidentified. Then both cancel fixes — data-in-hand emits the composite, no-data keeps returning — and **two** tests so the second cannot regress into the first. ⚠️ **My causal claim is withdrawn**: a lifecycle cancel self-heals on resume, so the path I found probably does **not** explain what he saw.
-3. **R1+N2 Holding Area, one piece of work.** Ruled **B**: group by persona, **sessions unlabelled** (no hash, no count, no subtitle), **collapsed by default**. Inside B: approve-all now spans all of a persona's sessions, so **the button and confirm must report that wider count**.
-4. **Cheap and independent, no rulings needed**: **M1** the conditional headline (`Live: L` alone when parked is 0; the three-part form only when parked > 0) · **M4** the new-task stub · **B3** left padding — **measure at 360 dp, do not eyeball at 800**; the title only has ~90 dp there.
-5. **M2** the `⋯` disclosure (state in `aria-expanded` **and** `hidden`, both required) and **M3** the paste-a-hash lookup box — which is **not** a filter: it must hit `/api/tasks/<ref>`, never `/api/tasks?id_prefix=`, because the query form hid 22 of 23 held rows.
-6. **N1 Broadcast recipient picker** — the biggest item, and **still gated on one question for Rick**: does the endpoint accept a recipient list at all? Ask before building, or the picker's selection gets discarded.
-
-**Two implementers were offered and not yet staffed.** The split: seat 1 takes B1 then N1; seat 2 takes M1/M4/B3 then R1+N2.
-
-**Still Rick's, not started**: the 244 pre-existing analyzer errors in `lib/core/**` scaffolding (none new, none mine — and they mean the analyzer cannot serve as a gate). `c51e92da` phone probe stays held to 2026-10-19; **do not re-raise it.**
-
-**Where the evening ended**: commit `75f1291`, **16 commits pushed**, backup verified off the mirror, board at **0 live rows**, tree clean.
-
----
-
-**suite 1586 → 1673 passed / 1 skipped / 0 failed.** All five fleet accordions are built, merged and **reachable**. Rick walked them on the emulator and filed ten findings; one is fixed, one he ruled on, and the rest are scoped in a peer-reviewed work plan with **nothing blocked on him but a rebuild**. Two self-respins this session (`fc9e316a`, then `a9df00ea`).
-
-**Shipped**
-- **Phase 5 Broadcast** — data layer, bloc, pane, 59 tests, mutation-proved 14/14; bloc at **app root** on Rick's ruling so the ack tally survives navigation.
-- **The orphan-pane fix** (`43342f0`) — four of five accordions had no door: no card, no route, no provider. Four phases of green work nobody could open.
-- **Finished Tasks first load** — the pane was a spinner forever because *nothing ever dispatched the load*. His log carried `/api/tasks` and **no `/api/tasks/events` at all**; the absence was the evidence.
-- **Trust Dashboard hidden** on his order — both doors, the card and the app-bar shield, behind one flag rather than a deletion.
-- **`--push-only`** on the build-and-deploy script; **`io/`** into `.gitignore`; a false docstring in `pane_polling_mixin` corrected.
-- **Three new test files, 10 cases, every one mutation-proved.**
-
-**The three defects that were all the same defect**
-`PaneHostScreen` had zero tests; the ack **dispatch** seam had none; Finished Tasks' first load had none. In each case the tests either side proved their own half — and for Finished Tasks the harness literally sent the event production never sent. **Unit tests either side of a seam cannot fail on the seam.**
-
-**Rick's rulings**
-- Skeleton crew is the **standing** weekday mode before 17:00, and in it a manager implements its own rows — I had recorded it as a one-off waiver and was corrected.
-- Broadcast bloc at **app root**; **wire the orphan panes**; Trust Dashboard **back-burnered then hidden**; `io/` ignored; **Holding Area grouping by persona with sessions unlabelled and collapsed** — overruling my recommendation, and he was right that mirroring the clients he uses is the requirement.
-- **"Leave it refreshing"** on the polling question.
-
-**What I got wrong, because it is the useful part**
-Twice I attached a true observation to the wrong mechanism — the parity-guard hang (blamed the poll timer; it was `bloc.close()`), and the Fleet Status spinner (claimed "nothing retries"; María proved a lifecycle cancel self-heals, and I withdrew the diagnosis). My first Trust Dashboard guard **could not fail** — it scrolled past the card, which disposes it. I read two killed background runs' `exit 0` as a pass. And I spent four of Rick's interruptions asking questions whose answers were written in the clients he had already told me to read: *"a question that source can answer is not a question."*
-
-**María reviewed the plan and changed it three times** — smaller fix, withdrawn causal claim, and a finding of her own (`de509b51`) that made my own document weaker. Mr. Radio's `1c7da903` shape accepted; I withdrew a reconcile proposal of mine as unsound after he showed two counts from the same source prove nothing.
-
-**Docs**: check-in briefing · emulator walk-through checklist · walk-through findings work plan, all in `src/rnd/`, all linked in the README.
-
----
-
-## 2026.09.20 | Session `cc9c1f1a` (Tiffany 💍) — Manager on duty: a three-seat cascade review, then five fleet-pane phases built, reviewed and merged in one evening
-
-**RESUME HERE**: **nine merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work`, union verified green, PUSHED AND BACKED UP at Rick's 22:55 ritual order.** Rick ruled everything outstanding tonight: admit both held rows (done), batch won't-fix keeps NO confirm matching web (closed), and the phone round-trip probe `c51e92da` is **PARKED to 2026-10-19** — he has no cell service and no public-IP server for at least a month, and told the fleet to stop asking. **Do not re-raise it.** Still owed by him: untracking `android/local.properties`. P0 `4b16174d` remains `blocked` on `user:rick` with a chase at 09:00Z; Rick's own P0 `72e01fb3` (four legacy accordions) was CLOSED on receipts this session.
-
-**CLOSED AFTER THE POST-GAME WAS WRITTEN** (this session continued past `e7afbbb`):
-
-| row | outcome |
-|---|---|
-| `67c7a2e1` roster addressability guard | **merged `488f189`**, 71/71 focus_mode tests green on the merge result |
-| `72e01fb3` Rick's four legacy accordions | **closed on receipts** — verified `lib/features/` carries `fleet_status`, `finished_tasks`, `task_list`, `holding_area`, not taken from a report |
-| `c597c4fc` cross-pane cell-key parity | minted, admitted, **scope and mutation proof both corrected by Rachel before she started** |
-| `384591dd` Phase 5 Broadcast | **blocked on a server defect**, not on Rick — see below |
-| `c51e92da` phone round-trip probe | **parked to 2026-10-19 on Rick's direct order** |
-| `e1e2c545` two re-spin doors read different memento slots | filed to Mr. Radio (Chloé's find) |
-
-**THREE MANAGER ERRORS CAUGHT BY WORKERS BEFORE ANY CODE WAS WRITTEN**, all mine, all recorded on their rows rather than quietly fixed:
-1. I specified a guard that had already shipped with Phase 2 (Rachel).
-2. I prescribed a mutation proof that **could not fail** — both panes render the same shared widget, so mutating a cell key changes both identically and the comparison stays green (Rachel). Her fix: a wrapper at one pane's call site so exactly one side diverges.
-3. I asked Rick to schedule a device sitting whose every option assumed the work was possible. It never was — he has told this fleet repeatedly that he has no cell service and no public IP. **A well-formed answer to a badly-framed question reads exactly like a ruling.** The wrong amendment is left on the row with the correction underneath.
-
-**THE FINDING THAT STOPPED PHASE 5**, and it surfaced only because Chloé was held: `commons_broadcast_ack` appears never to write a notification row. Persistence lives in the `notify_user` route behind a `persist` flag; the ack watcher never goes through that route. If it holds, the DB-backed undelivered drain can never contain acks, so the pane renders **zero** acks after every resume — not a truncated count. Phase 5's entire acceptance clause would have been built, tested, mutation-proven and merged **green** while protecting something unreachable. Filed to Mr. Radio **labelled traced, not measured** — and Chloé caught a defect in her own probe first (reading an error body as an empty population), which is why the trace is trustworthy.
-
-**Durable fact saved to project memory**: no cell service, no public IP, not before ~2026-10-20. The row was never the problem; the repeated asking was.
-
-**THE MERGE CHAIN**, every one reviewed against the tree rather than the worker's report:
-
-| sha | what |
-|---|---|
-| `6781674` | seat-worktree provisioning scripts (Sam, reviewed by Rachel) |
-| `a9a7f49` | Phase 2 Finished Tasks (Rachel) |
-| `3265c6b` | Phase 0 shared plumbing + Phase 3 Task List (Sam) |
-| `d9b15a3` | Phase 1 Fleet Status (Chloé) |
-| `06884c9` | Phase 4 Holding Area + guard fix (Rachel) |
-| `20c0c17` | replay-ask verification (Sam) |
-| `2c8e131` | measurement integrity (Sam) |
-| `05fbfd8` | analyzer exclusions narrowed to what was authorised (Sam) |
-
-**Verified**: 1578 passed / 1 skipped in the main checkout, that skip genuinely environmental. Analyze **978 issues — identical to the pre-phase baseline `3f807f0`**, so five phase merges introduced zero new issues and zero errors in any new pane. `test_keys.dart` clean by resolve check: 219 keys, 216 refs, no dangling, no duplicates.
-
-1. **The crew corrected me five times and was right every time.** Rachel: my item text said the default filter pills were done+dropped; the source says `FINISHED_DEFAULT_SHOWN = ["done"]`. Sam: my sort wording predated Rick's own 2026-09-09 ruling, which names **both clients** — priority before status, and terminal rows **filtered**, not sorted to the bottom. Sam again: I told him to move verb logic into a directory where his own implementation already lived. Chloé: I routed a fleet-cap write through a task repository that cannot even produce the 202 condition I was guarding — `awaiting_human_approval` has **zero hits** in the arbiter app. Sam a third time: a count overturned my exclusion ruling. **Each was caught before a line was written**, because each seat read the source before building to the spec.
-2. **Every ruling landed as an amendment on the row**, so the correct build cannot later be "fixed" back to match my wrong sentence — the same failure shape Rachel's negative assertion defends against.
-3. **Five defects Chloé found in her own code, all by test, none findable by reading**: `isOffline` inverted in both directions (the liveness verdict is a **free-form string**, not an enum — live seats reported "LIVE", "quiet 3m", "stale 21m"); a 360 dp overflow; cancellation read as "arbiter down"; a failed cap read blanking the table; and **a leaked poll timer**, which ships as a battery bug nobody can attribute.
-4. **Her arm C is the night's best single measurement.** Breaking the dial's wiring **killed 4 tests while 22 stayed green** — every pane and bloc test among them. Three files *looked* like they covered the dial; each proved one half while handing in the other. She watched the ceiling too: a near-total kill would have been a syntax error wearing a finding's clothes.
-5. **My own miss, recorded**: the Phase 2 merge landed a **red** test I did not catch — a guard scanning source for the substring `"TaskRow("`, which also matches `"FinishedTaskRow("`, the pane's own row. It accused the pane of exactly what it was built not to do and sat red for half an hour until Rachel picked up her branch. **I reviewed the guard I was shown and never looked for one I had not been told about.** Rachel's reframe is better than my self-reproach and names an installable control: *the thing that would have caught it is running the suite on the merge result, not on the branch.*
-6. **Sam hit both signs of one defect family in one night.** A substring guard and an authored fixture manufactured **false alarm** — the fixture produced a false defect report that reached me and got a row amended twice. A worktree measuring the wrong specimen manufactured **false comfort**: a bare `flutter analyze` walked the symlinked 2.3 GB SDK for 7801 phantom errors, and two wire-contract tests **silently skipped** in every worktree because the cosa probe was CWD-relative, so a seat saw green with less coverage than the main tree. His line: **a worktree that reports different results from the main tree is a measuring instrument that changes the thing it measures.**
-7. **Asking for a measurement beat both positions.** I ruled Sam's unauthorised generated-file exclusions should go; he defended them. The count said **they match zero files** — this repo has no `.g.dart` or `.freezed.dart`. His reason is better than mine was: **an exclusion that hides nothing is not free.** What remains is labelled with its measured cost, including `build/**` kept and honestly marked as *a claim about the future rather than a measured saving*.
-8. **Gates I refused to game**: the fleet ticket gate offers a P0 exemption and the create gate refuses live status below P0. I declined both rather than relabel honest P1/P2 rows, routing content to `task_amend` and the committed doc instead. Minting reached 5 of 10; items 6–7 are specified in full on P0 `4b16174d`, items 8–11 routed to Mr. Radio as a **filing** decision after I corrected my own implication that rows were being transferred.
-
-**Crew standards earned tonight**, now carried in every memento: tests at **360×800**, never the 800×600 default · fixtures **captured from the real producer**, never authored · **mutation-prove** any test written against a known defect · drive a real tap through the real widget tree and assert the request that went out · when you cut a delta, **look for a second count someone else produced independently**.
-
----
-
-## 2026.09.19 | Session `cc9c1f1a` (Tiffany 💍) — Board cleared: three rows closed on receipts, the P0 split before it could bury its server half, and a live token found in a paste
-
-**RESUME HERE**: **no code was written this session** — it was a board-driving session, and the working tree carries only one new doc. Three rows closed with receipts, four filed. Two rows wait on Rick's admit (`a7de7d69` the token leak, `67c7a2e1` the sentinel guard); an `ask_multiple_choice` for both was live at the time of writing, defaulting to "not tonight" so a timeout cannot authorize work.
-
-1. **`c3fc62bf` closed on Rick's own device evidence** (P1, commit `a2f1d75`). He ran the emulator build and pasted the tail: `POST http://10.0.2.2:7999/api/v2/transcribe` → **200**, `{"transcription":"What's the sum of 2 plus 2?","trace":{"stt_ms":313.1,"upload_bytes":19220}}`. Three facts beyond the path: 19,220 bytes of OGG/Opus confirms the `5524acd` encode is live **on device**; STT took 313 ms; the pre-v2 wav door appears nowhere in the tail. Downstream `/api/v2/ask` → 200 and `/api/notify/response` recorded his "yes", so the whole spoken-ask chain works on a device, not just the transcribe leg. Script written for him first: `src/rnd/2026.09.19-emulator-transcribe-check-script.md`.
-2. **`b00e076c` closed** (P1, `a8c30b3`) — Rick admitted and ruled close. **Verified at HEAD rather than trusted from the commit**: 9/9 green across the two dedicated files.
-3. **P0 `cea58ee0` closed — but split first, which is the point.** The server half had been **amended onto that same row as part (2)**, so closing it as ruled would have silently buried the server fix. Split out verbatim as lupin row `2184bebb` (P1, Mr. Radio accountable) carrying the docker-exec root cause, then closed the phone half on `11f9f5e` + 10/10 green — including the test that reproduces Rick's literal three-seat report.
-4. **The receipt discipline refused me twice, correctly.** `operator_attestation` for Rick's paste → **403**: his click is his to mint, not mine to assert for him. A full sha I wrote from memory → **422**, object not found on any branch; I had extended a short sha instead of running `git rev-parse`. Both fixed by citing the commit and quoting his tail in the reason.
-5. **A live bearer token arrived in a paste** — Rick's logcat tail carried his full JWT twice, with `sub` and email inside, a 30-minute token. That is `a7de7d69` (filed earlier the same hour) demonstrating itself, so I recommended re-rating it P1. Root cause read in code, not guessed: Dio's `LogInterceptor` at `http_service.dart:55` defaults `requestHeader: true` and the file has **no `kDebugMode` guard**, so a release APK logs it too; `AuthInterceptor` is registered at `service_locator.dart:247` *before* `HttpService` at `:261`, so the header is populated by the time the logger reads it.
-6. **Mr. Radio ruled the server half and was right twice about my own work.** He chose option B (the hook writes its sender id into the bridge) and **banned option A even as a silent fallback** — "a wrong identity that looks like a right one" — which is stricter than how I filed it. He then caught me claiming 10/10 green *after* restoring a mutant **without re-running it** (re-ran: green, measured), and predicted a gap I had not tested: `""` is skipped but **`"none"` is not**, because the guard tests absence rather than addressability. Measured 11 passed / 1 failed, filed as `67c7a2e1` with his endorsed one-line fix.
-7. **Two condensed DMs were not acted on.** Both arrived garbled and I asked one disambiguating question instead of inferring a wire contract — the same shape that cost a wrongly-dropped row on 09-04. Answer came back "null, no sentinel", now durable on `2184bebb`.
-8. **Filed**: `a7de7d69` (P2→recommended P1, token leak) · `2184bebb` (P1, lupin, server half) · `9511aa08` (P3, verify a replayed answer reaches the phone) · `67c7a2e1` (P3, sentinel guard). **`9511aa08` is filed as a *verify*, not a defect** — I had flagged `spoke:false` as a possible `0e7c9214` recurrence, then read it properly: `status` is `waiting`, so it is the enqueue response and those nulls are correct. Corrected to Rick in the same breath.
-
-**Files**: `src/rnd/2026.09.19-emulator-transcribe-check-script.md` (new) · `history.md` · `TODO.md` · `.claude-session.md` · **no `lib/` or `test/` changes** — the mutant at `focus_chat_bloc.dart:444` and both sentinel probes were reverted and the tree verified clean with `git diff --quiet`.
-
----
-
-## 2026.09.18 | Session `fe56dccd` (Tiffany 💍) — Nine commits: a P0 closed, 0% means silence, abstracts disclose on request, and the Fold picks its own split
-
-**RESUME HERE**: everything below is committed, **backed up and pushed**. Rick drove the emulator live and confirmed the split toggle and the 0% slider by voice from the backyard. Still owed by him: check-list item 9 (`/api/v2/transcribe` in the log, closes `c3fc62bf`), and review/close of `cea58ee0` (P0, phone half done) and `b00e076c` (in the holding area — admitting it costs one of my tickets, so I left it).
-
-1. **Loose ends from 09-15/17** (`ea0660f`, `8312e45`): the rsync exclusions described in history on 09-15 were never committed; committed, plus `.claude/worktrees/` (María's template change — the backup was mirroring 112 MB of agent worktrees) and both scripts repointed at the standalone repo path. New doc: `src/rnd/2026.09.18-emulator-ui-check-list.md`, 13 items, one commit named per line.
-2. **The screen-level tests Rick asked for** (`67a2c74`): items 3, 4 and 6 were pinned only in the bloc or in the split component alone. Five tests now drive the REAL bloc through the REAL `FocusModeScreen`. **The first version was weak** — the rail always shows the FOCUSED seat, so a badge check passed whether or not the send counted; they assert the filter bar's Live count instead. Disconnecting the refresh button fails its test.
-3. **0% means silence** (`73b76f0`, Rick: *"I literally want 0% playback. That is nothing."*). Two causes: the foreground cut still spoke the first sentence, anything under 80 chars, every title and every `verbatim` answer; and the **background FCM wake spoke the whole `message` and never read the slider at all** — which is what he heard from Mr. Radio's high-priority notes. `TtsPreviewTruncator.silences()` now gates `enqueueAlways` (before the stop-list and before `verbatim`), `enqueueIfSpeakable` and `speakAnyway`; the wake chain takes the fraction through a new seam.
-4. **Abstracts are progressive disclosure** (`8be8bb9`, his ruling): the bubble renders NONE of the abstract, just a row — "Abstract", or "Abstract · has a document". A tap opens the whole thing in the viewer (the 50/50 split in focus mode, a page elsewhere) through `DocSplitHost.openText`; `DocViewerScreen` takes in-hand content with no fetch and its links are live through one shared helper. The inline render, the 8-line collapse and the doc badge are gone with their tests.
-5. **P0 `cea58ee0` — duplicate Krishna, Rio and Rachel** (`11f9f5e`). Root cause is SERVER-side and verified with `docker exec`: `commons.py _sender_id_for_bridge` resolves the project inside `lupin-rest-dev`, where host paths do not exist, so the walk falls back to the cwd basename and every WORKTREE seat is served as `claude.code@seat-cc-author-….deepily.ai#hash`. The phone now treats the 8-hex session hash as the seat's identity and replaces a roster-only alias in place. Server half amended onto the row; María staffs it (option B: the hook writes its sender id into the bridge).
-6. **Beside ⇄ below on the Fold** (`850f0dc`, `034c3dc`): his idea, ruled as a toggle in the viewer's title bar rather than a Settings switch, remembered in `docs.below_when_wide`. He then caught it **re-fetching the document on every flip** — Row and Column are different parents, so Flutter discarded the viewer and its `initState` fetched again. GlobalKeys move the viewer AND the conversation between layouts: no refetch, and opening a document no longer resets the conversation's scroll or a half-typed reply.
-7. **An answer tapped offline is no longer dropped** (`a8c30b3`, row `b00e076c`, phone half of lupin `e4dc53a9`). Chloé proved card `2411f68e` never reached `:7999`; the phone POSTed once, failed, logged, and showed only the generic banner whose retry reloads the rail. The answer now stays on its card as "Not sent — tap to resend", is resent automatically on WS re-auth while the ask is open, and an ask that closed first says "Expired — your answer … was not sent" (Mr. Radio's addition).
-8. **Filed for others**: lupin `e4dc53a9` — Rick answered two of my cards and both calls came back as timeouts (Rio's stray-stdout fix covers one; my row covers the other).
-
-**Files**: `lib/features/{docs,focus_mode}/…` · `lib/services/{tts,push,notification_audio}/…` · `lib/features/docs/presentation/doc_link_tap.dart` (new) · 3 new test files · `src/rnd/2026.09.18-emulator-ui-check-list.md` + `-markdown-render-sample.md` (new) · `README.md` · `TODO.md` · commits `ea0660f` `8312e45` `67a2c74` `73b76f0` `8be8bb9` `11f9f5e` `850f0dc` `034c3dc` `a8c30b3` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`. Suite: **1234 passed / 0 failed / 1 skipped** (from 1211).
-
-**Rick's rulings today**: 0% = silence, literally · abstracts are disclosed on request, never inline · beside/below is a viewer toggle, not a Settings switch · the rail keeps opening on the Live hour · `tiffany/release-picker-2` deleted · my expired heartbeat file deleted · session end = backup and push, and never ask about pushing.
-
----
-
-## 2026.09.17 | Session `7e82da5f` (Tiffany 💍) — Seven commits: the split screen made real, one capture core, and every live seat on the rail
-
-**RESUME HERE**: everything below is committed locally and **not pushed**, and all of it waits on ONE device rebuild (`build-and-deploy-lupin-mobile.sh`). Also confirm `a2f1d75` on that same run — type a message to a seat and Mr. Radio closes lupin `80f10bdd` when the `:7999` log shows `POST /api/notify` with `direction=human_to_ai`. Open question for Rick: should the rail keep opening on the Live hour, or default to 24h?
-
-1. **UI tweaks `4672ac2c`** (`bc98024`): password survives a failed sign-in (AuthGate no longer swaps the form for the spinner mid-attempt), 👁️ show/hide on the field, voice-reply row and buttons 60 dp.
-2. **Phone→session messages `cfb8285`**: the composer now uses the browsers' `POST /api/notify` (`user_initiated_message`, `direction=human_to_ai`) instead of `/api/dm/send`, which framed the phone as a peer nobody could reply to (lupin `80f10bdd`). `/api/dm/send` removed from the phone; the frozen `focus_chat_bloc_test.dart` re-pinned by blob in `frozen_surface_test.dart`, reason recorded.
-3. **Live hour is two-way `6dba6fc`**: a message YOU send bumps that sender's activity, so writing to a quiet seat pulls it back onto the rail. A failed send does not.
-4. **Live-seat roster + refresh `cf5280a`**: cold start and a new toolbar refresh read `GET /api/commons/active-sessions` and merge every live seat in, even one that has never notified him — the reason he had to start conversations in the browser. Pairs with lupin `82b163b9` (Mr. Radio added `sender_id`).
-5. **The 50/50 split, for real `91b2139`** (`2416d2c5`, `e0843a8a`): the first fix was a half-screen dialog, which cannot resize what is under it, so the bubbles stayed full width behind the document. `DocSplitHost` lays conversation and viewer out as equal halves — side by side ≥600 dp, stacked below.
-6. **Who sent it, and their colour `d7aaacd`** (`de12b7bc`): the accent bar was keyed to PRIORITY (`high` = orange), so every sender looked like Mr. Radio; it now carries the sender's own colour. The pane header gains the persona name in bold, sender id italic.
-7. **One capture core `fc8d9dc`** (`0b40272e`): there was no second recording engine — both composers already drove the same `AsrService`. The duplicated WRAPPER is now `VoiceCaptureSession` (permission, cancel epoch, error strings, blank-transcript guard), called by both. The focus review box moved from a shared 4-line row to full width with the buttons below; that cramped row was the "truncation".
-8. **Audit `168922f9`**: revision 2 of the mux parity plan — six Stage-1 findings dropped, four softened, five rulings faithful, and the reuse citations nobody had checked verified at the plan's own commit. One count changed work (`wireSectionCollapse` is in eight renderers, not five). Closed by María's manager attestation; revisions 3–5 had already fixed two of the three recommendations.
-
-**Files**: `lib/features/{auth,focus_mode,docs,notifications,quick_ask}/…` · `lib/services/asr/voice_capture_session.dart` (new) · `lib/features/docs/presentation/doc_split_host.dart` (new) · 5 new test files · `history.md` · `.claude-session.md` · commits `bc98024` `cfb8285` `6dba6fc` `cf5280a` `91b2139` `d7aaacd` `fc8d9dc` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`. Suite after each: **1211 passed / 0 failed / 1 skipped**.
-
----
-
-## 2026.09.16 | Session `b0157e13` (Tiffany 💍) — Recording bug closed, seven phone commits, the fleet demo clip filmed
-
-**RESUME HERE**: Rick said **yes** (~21:44, for real, during the take) to building today's fixes onto his phone after the video. Next: he runs `build-and-deploy-lupin-mobile.sh` on the laptop, asks by voice in Quick Ask with *Send immediately* OFF, and pastes the `[HTTP] Request: POST` line — expect `/api/v2/transcribe`. That closes `c3fc62bf` with commit `a2f1d75`. Then María's audit `168922f9` waits on his admit.
-
-1. **Recording bug `4be8fe63` closed** (`225bc8c`): capture diagnostics in the log (held vs recorded seconds, SHORT CAPTURE, INPUT DROPOUT on exact-zero runs) and kept recordings moved to app-internal storage where `adb run-as` can fetch them. Root causes were the emulator mic (no permission → silence → "Thank you."; then DC offset) and Whisper stopping at the first pause (fixed lupin-side, `05ddc8f0`). A 400 ms tail-drain wait was built and withdrawn — the evidence did not support it.
-2. **UUID sent as email `588c8dc9`** (`a2cde69`): the cold start and FCM registration now get the user's email.
-3. **Opus accuracy `9b1f7701`** (`5524acd`): 0.57% WER on 9 real phone clips, so questions record as Ogg/Opus 48 kHz / 32 kbps, WAV below API 29.
-4. **46 red tests `5ac999f5`** (`fe731d1`): deleted `test/legacy_quarantine`, cosa contract tests find `../lupin/src/cosa`. Suite fully green; failing baseline is now empty.
-5. **Bubbles 90% wide** (`c9a3375`) and **doc links in focus bubbles** (`ceebacc`, opens over half the screen).
-6. **v2 transcribe** (`a2f1d75`, `c3fc62bf`): contract proven live (401 unauthenticated; 200 "What's 2 plus 2?" on a 9 KB .ogg); device check still owed.
-7. **Fleet demo clip** (lupin `src/rnd/2026.09.16-fleet-demo-clip-workflow.md`): spun up 8 silent stand-by seats, played the closing yes/no beat across ~10 takes; Rick ruled narration after a line ruins a take (§3b). Final take a keeper; seats dismissed without mementos; my 2 evening worker seats donated to Mr. Radio.
-
-**Files**: `history.md` · `history/2026-05-21-to-08-31-history.md` (new archive) · `TODO.md` · commits `225bc8c` `a2cde69` `5524acd` `fe731d1` `c9a3375` `ceebacc` `a2f1d75` on `wip-v0.1.6-2026.04.16-tracking-lupin-work`
-
----
-
-## 2026.09.15 | Session `71d94067` (Tiffany 💍) — Device-session build shipped, six fold-laters merged, release-picker reversal ruled
-
-**RESUME HERE**: the release-picker flip is on branch `tiffany/release-picker` off `a349f0a`, and its row `2070a906` is still in the holding area waiting on Rick's admit. Both device rows (`c51e92da`, `9b1f7701`) remain parked on his laptop and handset.
-
-1. **Device-session build merged** on `77b86b7`: the Settings→Debug network round-trip probe, the "Keep voice recordings" switch, and the LAN DEV / LAN TEST server switch on the sign-in screen. Script written at `src/rnd/2026.09.15-phone-device-session-script.md`. The switch was reviewed twice; the first review returned a BLOCK, which was fixed before merge.
-2. **Six fold-laters merged** as `a349f0a` (row `8d9b2a0c`): the shared Dio baseUrl now set at registration, a dead event removed, the toggle re-subscribes on `didUpdateWidget`, recording names moved to UTC so a restart cannot collide, the probe's `unknown_length` branch covered through a real request, and the server switch gated to non-release builds. Suite 1100 pass / 1 fail / 46 known — the old "1071 pass" baseline was stale, the untouched tip is 1083.
-3. **That release gate was then reversed by Rick** at ~20:39: the sign-in screen is the only pre-auth surface, since Settings sits behind `AuthGate`, so hiding the switch in release strands any phone installing a CI artifact at the emulator-only `10.0.2.2`. Filed as bug `2070a906`; builder staffed to flip it back and invert the `ca07b57` tests.
-4. **Laptop build diagnosed**: JDK 25.0.3 against Gradle 8.12. Flutter 3.32 caps Gradle at 8.12 / AGP 8.7.3 — exactly our pins — and AGP 9.4.0 still lists JDK 17, so no upgrade path reaches 25. Written up in `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md`, linked from the README; the recommendation is JDK 21 plus `flutter config --jdk-dir`, no repo change.
-5. **rsync fixed**: `src/scripts/rsync-lupin-mobile.sh` now excludes `.claude/` and `io/`. The sync was carrying 878 MB of agent worktrees; it is 29 MB now. The laptop needs a one-time `rm -rf` of those two paths, because rsync never deletes what it excludes.
-
-**Files**: `README.md` · `src/scripts/rsync-lupin-mobile.sh` · `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md` · `src/rnd/2026.09.15-phone-device-session-script.md` · merges `77b86b7`, `a349f0a` on `wip-v0.1.6-2026.04.16-tracking-lupin-work` · nothing pushed
-
----
-
-## 2026.09.15 evening | Session `71d94067` (Tiffany 💍) — Two merges, four reviews, and one defect shape that kept reappearing
-
-**RESUME HERE**: both device rows are queued and wait only on Rick recording about ten voice memos — no device session, no emulator and no working laptop build are needed. Krishna's row `0b3f063a` is queued and approved with two open nits.
-
-1. **Release picker merged** `dcc7263`. A context clear left a builder alive that I did not know about, so two independent implementations arrived for one bug; a reviewer ruled between them and found a third way to hide the picker — `bool.fromEnvironment("dart.vm.product")` — that escaped every assertion on both branches. The tests now strip comments before grepping, so the docstring can finally name the constant it warns against.
-2. **Quick Ask overflow merged** `82c97cc`, nine commits, after **three review rounds that each found a real defect**: a question arriving post-scroll was never rendered; the re-anchor fixing that landed short on short cards; and the tests could not see either because all four used one content shape. Filed figures were wrong — prompt-plus-error is 114px, not 82, and an ordinary 360×640 phone clipped by 2px, voiding the P3 reasoning.
-3. **JDK 21 proven, not just recommended**: a worker built a real debug APK end to end. Rick's own `flutter doctor -v` then killed his own JBR proposal and my stale research row — **Android Studio 2026.1 bundles JBR 25.0.3**, the very Java breaking his build. Corrected in `ac880d2`. Flutter 3.35.1 was investigated and changes nothing: its Gradle cap is identical.
-4. **Peer reviews delivered**: Mr. Radio's janitor fix approved with nits (the summary card still made the false claim his commit was named after); Krishna's visual-normalizer fix blocked, reworked, then approved across 31 mutants.
-5. **The through-line, worth more than any single fix**: five separate findings tonight were all **a check whose success condition is weaker than the claim it supports** — a dead selector, a stub that never ran its JS, a shared id resolving on the wrong page, a control that re-implemented its checker, and a measurement that was incomplete rather than mistaken.
-
-**Files**: `src/rnd/2026.09.15-android-toolchain-briefing-for-outside-review.md` (new) · `src/rnd/2026.09.15-jdk-gradle-flutter-compatibility.md` · `README.md` · merges `dcc7263`, `82c97cc` · commits `6a07f64`, `ac880d2` · nothing pushed
-
----
-
-## 2026.09.14 | Session `b3e285b8` (Tiffany 💍) — Spoken-ask door built and merged: §B `83f19a7`, §C `16d73f8`
-
-**RESUME HERE**: the phone half of the spoken-ask door is merged on wip. At 09:00 on 09-15 Rick gives a device session for `c51e92da` (round-trip probe) and `9b1f7701` (Opus/AAC check). See TODO.md § Owed.
-
-1. **Build go** 15:48 (`ccd7d20e`), conditional on rev 13. Sam folded rev 13 and Chloé verified it 13/13 (`7a6ca84`); revs 14–19 were folded while the build ran.
-2. **Staffed two builders** from Rick's seat grant: Rachel on §B (5 commits) and Maya on §C (5 commits), each in its own worktree after the spawn dropped both into the main tree. Every handoff was pinned to a sha and checked on disk; the contract fixture blob `5b2ae802` was byte-identical across lupin → phone.
-3. **Merged**: `83f19a7` and `16d73f8` (`--no-ff`, commit `-F`). `git diff d867576 HEAD -- lib test` is empty, and Mr. Radio verified it independently. Tests: the same 46 already failing before and after, 1030 passing, 72 of them new. §A merged in lupin (`993be2b6`).
-4. **Filed**: `5ac999f5` (46 pre-existing failures) and `9cddb791` (320×568 overflow, 10/82px). Rick kept both.
-5. **Post-game** (María): 6 own misses posted, including a duplicate María spawn, a hold file written where the hook never reads, and a reap run in the same batch as the memento edit it cited. Q4 was measured: the hold was ignored because of its location, not its fields. R2's wording was extended to cover claims carried in another call's arguments.
-
-**Files**: `TODO.md` · `history.md` · merges on `wip-v0.1.6-2026.04.16-tracking-lupin-work` · memory `never-ask-rick-about-push.md`
-
----
-
-## 2026.09.11 | Session `afe9bfdc` (Tiffany 💍) — Cascaded review closed; plan rev 8 → rev 12, nothing built
-
-**RESUME HERE**: plan rev 12 committed `2def6e4` (sha256 `ccc0430b`, 646 lines); six pins in git. Nine-stage cascade closed plus two verification passes folded. **Nothing built** — Rick's plan-only ruling held all session, and he declined a build at 22:39.
-
-1. **Cascade closed, 9/9 stages, 0 escalations, 0 votes.** Every finding folded across five committed revisions. The resumption point is task row `9df9f1c2` plus memento `38e7a298`.
-2. **Verification found what the cascade could not.** Rev 9 scored 19 PASS / 1 FAIL; rev 10 scored 3 PASS / 4 FAIL. Both passes surfaced defects introduced *by the folds themselves* — a population no findings-checklist covers by construction.
-3. **Five over-claims retracted**, mine and the manager's, each caught by re-measuring rather than trusting a summary. Rules earned: *a self-inconsistent file hashes perfectly* · *renumbering a list edits every reference to it* · *"same" is positional* · *a durable record needs revising when the world moves, not only when the work does*.
-4. **Rev 13 is owed and held** — 11 items, framed as a **list-to-verify, not a list-to-apply**: measured at rev 11 against a rev-12 head, so coordinates have drifted ~49 lines.
-5. **Five items parked on Rick**, chase 09:00 — build go/no-go `ccd7d20e` (answered *no* tonight), CB4's ruling `7b5458f5`, seat restart `79c4ad06`, and approval of `c51e92da` + `9b1f7701`, the last two being `9df9f1c2`'s own closing condition.
-
-**Checkpoint**: rev 12 committed + manager-verified; row `9df9f1c2` reassigned to Mr. Radio with receipt (event `13786`); memento final `38e7a298`, record ≡ mirror; seat handed off at ~89% context.
-
-**Files**: `src/rnd/2026.09.11-spoken-ask-streamed-door-implementation-plan.md` · `src/rnd/2026.09.11-voice-one-leg-ask-decision-brief.md` · `.claude-memento-tiffany-afe9bfdc.md` · `TODO.md` · `history.md`
-
-**Detail**: task row `9df9f1c2` (all findings, rulings, parked items) · `projects-data/lupin/cascade-pins/` (reviewer findings files, fold queue, per-rev pins)
-
----
-
-## 2026.09.08 | Session `a08d762c` (Tiffany 💍) — Abstracts render as markdown; doc links open in-app
-
-**One commit `756ae43`, 69 new tests, suite 882 → 951 passing.** Analyze clean on every touched file.
-
-A notification's `abstract` was rendered with a plain `Text` widget, so the markdown the fleet
-already writes into it showed as literal brackets and parens and the doc links were dead. Now a
-null/empty abstract renders nothing (unchanged), a present one renders formatted inline, and a doc
-link inside it is tappable and opens the target in-app.
-
-**The finding that shrank the job**: `GET /api/docs/file` returns RAW source text over the shared
-Dio that already injects the Bearer token. No WebView, no second auth path, no backend change — the
-expensive design (embed the Lupin SPA in a browser view) was never the design we needed.
-
-| Phase | What landed |
-|---|---|
-| P1 | `flutter_markdown` → `flutter_markdown_plus`. Google discontinued the former 2025-05-30; we shipped it until today. Pinned 1.0.7 (not 1.0.12 — ≥1.0.8 needs Dart 3.9, toolchain is 3.8.0). New pure parser `doc_link.dart` + `doc_models.dart`. |
-| P2 | `DocRepository` dispatching on content-type rather than file extension (a directory has no extension) + `DocViewerScreen` for markdown / source / image. Server refusals surface verbatim. |
-| P3 | `AbstractBody` wired into both conversation card screens, with a document icon badge shown only when a *fetchable* link is present. |
-
-**Rick's amendment**: modern link format only. A legacy `?scope=` link classifies `unknown` and
-renders inert rather than being rewritten — the backend 400s on that parameter, so a tap would offer
-a guaranteed failure. Detected explicitly so it stays a decision someone can find and reverse.
-
-**Two defects the tests caught**: `DocViewerScreen`'s `FutureBuilder` did not subscribe until the
-next frame, so a fast rejection escaped as an unhandled async error instead of reaching the error
-view (replaced with explicit load state); and `setState()` was handed a closure returning a Future.
-
-The 46 pre-existing suite failures are unchanged and identical test-for-test — 44 in
-`legacy_quarantine/`, 2 requiring a sibling `../cosa` checkout this standalone clone lacks.
-
-**Session end**: Rick scoped P4 down to the two loose ends and `2e8d02c` closed them — the
-external-link confirm, which had shipped with zero tests, now has 7 (with `url_launcher` mocked at
-its MethodChannel, so they assert what the platform was actually *asked* to do); and `flutter_html`
-was removed, having been added and imported nowhere. The `.html` and directory renderers stay
-descoped until a real abstract links one; both degrade to a readable source view.
-
-**Final**: 76 new tests, suite 882 → **958 passing**, 46 pre-existing failures unchanged
-test-for-test. Ticket `2df54cf6` closed with receipts. **Pushed** — `a55ed01..2e8d02c`, verified
-0 ahead of origin.
-
-One finding worth carrying: tapping a markdown link *embedded in prose* needs
-`tester.tapOnText( find.textRange.ofSubstring(...) )`. `find.textContaining` returns the whole
-paragraph, whose centre is the surrounding words rather than the link span, so a test written the
-obvious way passes for the wrong reason.
-
-Docs: `src/rnd/2026.09.08-abstract-doc-link-viewer-feasibility.md`,
-`src/rnd/2026.09.08-abstract-doc-link-viewer-implementation-plan.md`.
-
----
-
-## 2026.09.04 | Session `3d7921bc` (Tiffany 💍) — Quick Ask shipped three fixes; the cache bug I found was filed, not taken
-
-**Five commits, 220/220 green** (was 130 at session start), analyze clean on every touched file.
-
-| commit | what |
-|---|---|
-| `1ee125b` | Quick Ask tap-to-toggle recording with a deliberate send (15 files) |
-| `32c7980` | card dismiss X, cancelling the job if it is still running (8 files) |
-| `153ac19` | inject `isQuickAskJob` so answers speak in full — DI registration extracted to `ServiceLocator.buildFocusChatBloc()` so the seam is testable without `path_provider` |
-| `649f458` | a progress notification is not the answer — belt channel guards on `n.type`, `QuickAskEntry.progressText`, spinner + muted status line rendered LAST so an answer outranks a stale milestone |
-| `ff2e90c` | the long-running-jobs plan doc (507 lines) + README entry, on Rick's ruling |
-
-Both behaviour commits were mutation-checked, not just run.
-
-**The plan doc's bottom line corrects its own premise.** It is not "build a notification pane" — it is a **cap change**. All eleven agentic builders were checked: **10 of 11 already emit a per-job sender id**, so focus mode's sender-keyed windows already group by job; `claude_code` is the sole exception. What actually needs doing is revealing the `ask.flow` bucket the persona-less default rail scope hides, raising the per-sender cap of 7 (right for a chatty human, wrong for a job emitting ~10 milestones), and queuing the second interrupt. Two of my own mid-plan mechanisms are logged as wrong in its §11: `progress_group_id` is not the job key, and job grouping did not need building.
-
-**A cache defect found, filed, and handed off — what I got wrong was the timing.** While chasing Rick's paraphrase-replay report I measured 5,028 trace records and found **103 PERFECT (100.0) cache matches refused and re-run as fresh jobs**. `_may_serve` (`flow.py:1099`) serves only on `answer_is_correct is True` and fails closed at None; **every refusal reads `:None`, not one `:False`** — nobody is ever asked, because the only confirmation sought lands on a daemon thread that times out. V1 (`todo_fifo_queue.py:534-640`, still present, not deleted) auto-accepted >=100 with no gate and asked the 90-band with 3 retries and backoff. Both V2 behaviours are regressions, and Rick diagnosed both from observable behaviour before either file was opened.
-
-Filed as `fe1c0d3f`, reassigned to **Pocholo** with **Mr Radio** accountable, on Rick's instruction: *"file that as a bug and have someone else look into it, it's not your job to edit the Lupin repo."* I stayed read-only throughout, which was right — **but I should have found an owner at filing time instead of working the row for another ten minutes.**
-
-**Rick corrected his own ruling and the row carries both readings.** First *"restore what version 1 did"*, then immediately: *"I don't need to restore V1 verbatim — I mean use the logic, or copy the logic, that V1 uses. Do NOT resuscitate V1. Do not!"* Amended under `user_direct` and relayed to Pocholo and Mr Radio, who had been about to route it back to Rick as an open proposal.
-
-**Six of my hypotheses died today, every one refuted by someone checking recorded state.** tier-1 floor as mechanism · `_may_serve` as Rick's cause · silent exits as the diagnostic gap · "no score on this path" · `snapshotable` explaining `usage_count` · `confirmation_threshold is None`. The largest withdrawal: I argued "286 asks cleared the 90.0 bar and only 1 ever replayed, so the funnel is blocked downstream." Pocholo established that **`_near_match_replay` postdates the trace corpus** — those asks had no branch to traverse. **You cannot measure a gate on traffic that predates it.** Whether 90.0 is the right bar is open again. Every one of the six was reasoning forward from source; every refutation was measurement.
-
-**🔴 An error at the wrap, recorded because a dropped row is easy to lose.** I dropped `3658ec66` — Pocholo's row, Mr Radio accountable — on standing authority. Mr Radio had already ruled it queued at 00:14Z; his DM reply reached me **condensed** as "not within my team's responsibility," which I read as a drop instruction when he almost certainly meant his crew were not working it during the wrap. `dropped` is terminal, so the correction is a post-terminal amendment on the row and reinstatement is his call. **The failure was not the misreading — `task_get` returned his full ruling to me seconds before I called the transition and I acted on the DM summary instead of the row I was acting on.** Same shape as the six above: a condensed secondhand account beat the recorded state that was already in my hands.
-
-**Session ran through two self-respins** at the 50% context line, both clean — memento written, nonce verified, wake proof confirmed against `claude_code.session_id` rather than introspection.
-
-**Files**: `lib/features/quick_ask/**`, `lib/features/focus_mode/domain/focus_chat_bloc.dart`, `lib/core/di/service_locator.dart`, `lib/core/testing/test_keys.dart`, `test/unit/quick_ask/**`, `test/widget/quick_ask/**`, `test/service_integration/quick_ask_probe_wiring_test.dart`, `src/rnd/2026.09.04-long-running-quick-ask-notification-pane.md`, `README.md`
-
----
-
-## 2026.09.01 | Session `5b101cc5` (Tiffany 💍) — the backup was 99% Flutter SDK, and the bounce we were waiting on had already happened
-
-**Backup fixed twice, then verified.** The 2026-08-30 fix corrected `SOURCE_DIR` but left `DEST_DIR` naming the retired subtree `lupin/src/lupin-mobile/`; repointed to the standalone mirror `projects/lupin-mobile/` (`1da5b72`). The first green dry run then turned out to be backing up the wrong thing: `flutter/` is a vendored 1.9 GB SDK clone, gitignored and re-obtainable, and the exclusion file was the generic Python list shipped with the canonical script — it knows `.venv/` and `build/` and nothing about Dart. Added `flutter/`, `.flutter/`, `.dart_tool/`, `.flutter-plugins*`, `.gradle/` (`717e94c`). **1.79 GB / 20,433 files → 6.22 MB / 794.**
-
-**Verified rather than assumed.** Diffed `git ls-files` (532) against rsync's own `--out-format='%n'` list: 530 of 532 tracked files reach the mirror, the two absent being `.gitignore` and `android/.gitignore`, caught by the canonical list's own pattern. Rick ran the cleanup `rm` (858 MB → 47 MB) and then the `--write` run; walked all 532 against the destination filesystem afterwards — **missing: 0**. One residue noted: the destination's root `.gitignore` is a stale April copy, since rsync neither updates nor deletes excluded files on the receiving side.
-
-**Two stale facts corrected** (`9f175bd`, `ce6e218`). `TODO.md` carried "bounce `:7999` first" as the next action; measured, the container had started 2026-09-01 23:13 UTC with both fixes (`c91bd1bb`, `7aac0061`, merged 2026-08-30) already ancestors of the served HEAD, over a live `/src` bind-mount — **a bounce would have changed nothing.** And I had twice told Rick row `734bd1bf` was "blocked on you at the mic"; it had not been since its 2026-08-31 amendment.
-
-**`734bd1bf` (AC-G3) CLOSED — worked server-side, handed off, settled.** Ran `test_9b_the_read_guard.py` (14 passed, incl. "a confirmed exact hit is still served"), eliminating `_may_serve` as the explanation for Rick's probe. `path`/`route_reason` turned out to already ship in the response body (`_finish` → `_emit`); the web Q&A UI just does not surface them. Found `test_v2_ask_roundtrip.py`'s strict-xfail exit condition unreachable — it never confirms its answer, so a free consumer is necessary but not sufficient. **Two self-corrections**: my two-ask remedy hit the same drain wall on `:8000`, and my "seed a snapshot row" spec was half-written — tier 1 queries the *canonical-synonym* table, so a bare snapshot is unfindable. Rick ruled implementation is not a mobile seat's job; Mr Radio 🦉 ruled the relay was lossy and sent me to **Rio ⚡ direct** (spec carried search-strings, no line numbers — the lupin tree moved three times in the hour).
-
-**Rio's version beat the spec twice.** He used `V2Cache.write_back()` (both writes, normalizer-computed fields — my drift warning made structurally moot), added a **negative arm** I failed to specify, and checked `replayed_snapshot_id` against the seed. `ts-fee0022f`: confirmed row → `path=replay`/`exact_hit`/`cache_hit=True`; unconfirmed → `path=agent`. **That negative arm killed the two-day ambiguity without the trace field I insisted was needed** — a refusal is visible from outside on a question the cache demonstrably holds. Row closed with receipts. He then fixed the roundtrip docstring, again better than instructed: rather than naming both blockers on both tests, he checked which test needs which (`ts-cdba4e5e`, 4 passed, 2 xfails holding). Nine amendments on the row carry the full trail.
-
-**Files**: `src/scripts/backup.sh`, `src/scripts/conf/rsync-exclude.txt`, `TODO.md`, `history.md`
-
----
+**RESUME HERE (superseded, 19:51 EDT):** (1) Rick: rulings R12 to R18 (link sent); admit row `79d49618`; the Stop poke flip (`ee68d5e7`: phone, Settings, Notifications, switch "Stop poke", admin sign-in) and transcript capture (`768e852f`). (2) When Cheech reports a passing Dart extractor, run the judge over all 819 pairs (row `79d49618`). (3) No seats running; nothing pushed. Earlier line: (2) Rick: rulings R6 to R11 (`ea96c8d7`) and R12 to R18; push. (3) Cheech's gate run, chase 2026-10-10 14:00 EDT, then the judge over the pilot and the sweep.

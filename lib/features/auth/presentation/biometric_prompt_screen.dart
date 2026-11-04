@@ -4,8 +4,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../domain/auth_bloc.dart';
 import '../domain/auth_event.dart';
 
+/// Asks the user to unlock the stored account with biometrics.
 class BiometricPromptScreen extends StatefulWidget {
+  /// The email of the stored account.
   final String email;
+  /// Creates the screen for [email].
   const BiometricPromptScreen( { super.key, required this.email } );
 
   @override

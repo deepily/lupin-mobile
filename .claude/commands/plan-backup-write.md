@@ -1,12 +1,12 @@
-# Backup Command - Write Mode (EXECUTE)
+# Backup Command - Write Mode (Execute)
 
-**Project**: Planning is Prompting
-**Prefix**: [PLAN]
+**Project**: Lupin Mobile
+**Prefix**: `[LUPIN-MOBILE]`
 **Version**: 1.0
 
 ---
 
-## ⚠️ CAUTION
+## Caution
 
 This command **executes the actual backup** and will modify files on the destination.
 
@@ -43,10 +43,10 @@ Execute the project's backup script located at `src/scripts/backup.sh` in **writ
    - Notifies if updates are available
    - Can be skipped with `SKIP_VERSION_CHECK=1 ./src/scripts/backup.sh --write`
 
-2. **Rsync Backup (WRITE MODE)**:
+2. **Rsync Backup (Write Mode)**:
    - Syncs source directory to destination (typically DATA01 → DATA02)
    - Uses exclusion patterns from `src/scripts/conf/rsync-exclude.txt`
-   - **ACTUALLY MODIFIES FILES** on the destination
+   - **Actually modifies files** on the destination
    - Shows detailed progress and statistics
 
 3. **Safety Features**:
@@ -59,11 +59,11 @@ Execute the project's backup script located at `src/scripts/backup.sh` in **writ
 
 ```
 ========================================
-  Planning is Prompting Backup Sync
+  Lupin Mobile Backup Sync
 ========================================
 Mode: WRITE MODE
-Source: /mnt/DATA01/include/www.deepily.ai/projects/planning-is-prompting/
-Destination: /mnt/DATA02/include/www.deepily.ai/projects/planning-is-prompting/
+Source: /mnt/DATA01/include/www.deepily.ai/projects/lupin-mobile/
+Destination: /mnt/DATA02/include/www.deepily.ai/projects/lupin-mobile/
 Exclusions: src/scripts/conf/rsync-exclude.txt
 ========================================
 

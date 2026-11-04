@@ -11,7 +11,11 @@ import '../domain/agentic_submission_event.dart';
 import '../domain/agentic_submission_state.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 
+/// Form that submits a software-engineering team job.
+///
+/// On success it replaces itself with the job detail screen.
 class SweTeamForm extends StatefulWidget {
+  /// Creates the form.
   const SweTeamForm( { super.key } );
 
   @override
@@ -98,7 +102,7 @@ class _SweTeamFormState extends State<SweTeamForm> {
             const SizedBox( height: 16 ),
             TextField(
               controller  : _budgetCtrl,
-              keyboardType: TextInputType.numberWithOptions( decimal: true ),
+              keyboardType: const TextInputType.numberWithOptions( decimal: true ),
               decoration  : const InputDecoration(
                 labelText : 'Budget (USD, optional)',
                 border    : OutlineInputBorder(),

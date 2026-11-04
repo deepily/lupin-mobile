@@ -113,7 +113,7 @@ void main() {
   testWidgets( 'submit_job_sheet: Question / Command', ( t ) async {
     bigScreen( t );
     final queue = _MockQueueBloc();
-    whenListen( queue, const Stream<QueueState>.empty(), initialState: QueueInitial() );
+    whenListen( queue, const Stream<QueueState>.empty(), initialState: const QueueInitial() );
     await t.pumpWidget( app( BlocProvider<QueueBloc>.value( value: queue, child: const SubmitJobSheet() ) ) );
     await dictate( t );
 
@@ -123,7 +123,7 @@ void main() {
   testWidgets( 'dispatch_sheet: Prompt gets a mic, Project does not', ( t ) async {
     bigScreen( t );
     final cc = _MockClaudeCodeBloc();
-    whenListen( cc, const Stream<ClaudeCodeState>.empty(), initialState: ClaudeCodeInitial() );
+    whenListen( cc, const Stream<ClaudeCodeState>.empty(), initialState: const ClaudeCodeInitial() );
     await t.pumpWidget( app( BlocProvider<ClaudeCodeBloc>.value( value: cc, child: const DispatchSheet() ) ) );
 
     expect( find.byIcon( Icons.mic ), findsOneWidget );
@@ -135,7 +135,7 @@ void main() {
   testWidgets( 'job_detail_screen: the Message dialog', ( t ) async {
     bigScreen( t );
     final bloc = _MockQueueBloc();
-    whenListen( bloc, const Stream<QueueState>.empty(), initialState: QueueInitial() );
+    whenListen( bloc, const Stream<QueueState>.empty(), initialState: const QueueInitial() );
     await t.pumpWidget( MaterialApp(
       builder : ( c, child ) => DictationScope(
         asr: asr, requestMicPermission: () async => true, child: child! ),

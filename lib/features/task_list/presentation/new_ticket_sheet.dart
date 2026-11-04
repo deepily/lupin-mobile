@@ -4,12 +4,12 @@ import '../../../core/testing/test_keys.dart';
 import '../../../shared/widgets/dictation_text_field.dart';
 import '../data/new_ticket.dart';
 
-/// Open the New Ticket card over the Task List (row b31a9ed9, walk-through item M4).
+/// Opens the New Ticket card over the Task List.
 ///
 /// Ensures:
-///   - completes with the `created` outcome when a ticket was created and the card
-///     closed itself; with null when the operator dismissed it
-///   - every other outcome — petition, refusal, no answer — keeps the card OPEN with the
+///   - completes with the `created` outcome when a ticket was created and the card closed
+///     itself, and with null when the operator dismissed it
+///   - every other outcome, petition, refusal or no answer, keeps the card open with the
 ///     sentence showing, as on the web, so nothing typed is lost
 Future<NewTicketOutcome?> showNewTicketSheet(
   BuildContext context, {
@@ -27,13 +27,20 @@ Future<NewTicketOutcome?> showNewTicketSheet(
   );
 }
 
-/// The card. Its fields are the web's `NEW_TICKET_FIELDS`, in the web's order:
-/// title, details, assigned to, accountable manager, priority, approval, type, epic key,
-/// project. A field on one client and not the other is the defect the web's shared
-/// module exists to prevent, so this list is pinned by a test.
+/// The New Ticket card.
+///
+/// Its fields are the web's `NEW_TICKET_FIELDS`, in the web's order: title, details,
+/// assigned to, accountable manager, priority, approval, type, epic key, project. A test
+/// pins the list, because a field on one client and not the other is the defect the web's
+/// shared module exists to prevent.
 class NewTicketSheet extends StatefulWidget {
+  /// Files the ticket and returns the worded outcome.
   final Future<NewTicketOutcome> Function( Map<String, String> payload ) createTicket;
+
+  /// The names offered as suggestions under the two people fields.
   final List<String> assignees;
+
+  /// Creates the card.
   const NewTicketSheet( {
     super.key,
     required this.createTicket,
@@ -107,15 +114,15 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
       Navigator.of( context ).pop( outcome );
       return;
     }
-    // 🔴 A PETITION KEEPS THE CARD OPEN, AND SO DOES "NO ANSWER". Both may mean the row
+    // A petition keeps the card open, and so does "no answer". Both may mean the row
     // already exists, and the sentence says so; closing would hide the one warning that
     // stops an honest retry from filing it twice.
     setState( () { _inFlight = false; _result = outcome.text; } );
   }
 
-  /// A free-text box with the roster as suggestions — the web's `<input list=…>`. The
-  /// operator can type a name the roster does not know yet; the suggestions are a
-  /// courtesy, not a constraint.
+  // A free-text box with the roster as suggestions, like the web's `<input list=...>`.
+  // The operator can type a name the roster does not know yet; the suggestions are a
+  // courtesy, not a constraint.
   Widget _person( String label, String hint, TextEditingController c, FocusNode f, String key ) {
     return RawAutocomplete<String>(
       textEditingController : c,
@@ -157,8 +164,7 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
       key          : Key( key ),
       value        : value,
       decoration   : InputDecoration( labelText: label, border: const OutlineInputBorder() ),
-      // ⚠️ EXPANDED, OR "Not approved — holding area" OVERFLOWS AT 360 dp. Measured: 156
-      // px over on the first widget run. A phone's portrait width is the width.
+      // Expanded, or "Not approved — holding area" overflows by 156 px at 360 dp.
       isExpanded   : true,
       items        : [
         for ( final v in values )
@@ -174,9 +180,8 @@ class _NewTicketSheetState extends State<NewTicketSheet> {
   @override
   Widget build( BuildContext context ) {
     const gap = SizedBox( height: 12 );
-    // 🔴 THE KEYBOARD'S HEIGHT IS PADDING, AND THE FORM SCROLLS. A voice-strip keyboard
-    // is 420 dp and more; the Focus DM editor's Send and X went dead behind one (P0,
-    // 09-23), because the fix was tested against a 320 dp keyboard.
+    // The keyboard's height is padding, and the form scrolls. A voice-strip keyboard is
+    // 420 dp and more, so a control can go dead behind it if the fix assumes a smaller one.
     final keyboard = MediaQuery.of( context ).viewInsets.bottom;
 
     return Padding(

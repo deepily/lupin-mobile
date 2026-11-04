@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../logging/error_summary.dart';
+import '../logging/logger.dart';
 import '../storage/storage_manager.dart';
 import 'cache_manager.dart';
 import 'cache_policy.dart';
@@ -164,8 +165,9 @@ class OfflineManager {
         // Process request (this would be implemented by the caller)
         _eventController.add(OfflineRequestProcessedEvent(request.key, true));
         await removeFromQueue(request.key);
-      } catch (e) {
-        print('[OfflineManager] Error processing queued request ${request.key}: $e');
+      } catch (e, st) {
+        // The request key holds the path, query and body of the request, so it stays out of the log.
+        Logger.error( 'Error processing queued request', tag: 'OfflineManager', error: describeFailure( e ), stackTrace: st );
         _eventController.add(OfflineRequestProcessedEvent(request.key, false));
       }
     }
@@ -275,10 +277,14 @@ class OfflineManager {
 
 /// Queued request data
 class QueuedRequest {
+  /// Key identifying the entry.
   final String key;
+  /// The data.
   final Map<String, dynamic> data;
+  /// When the object was created.
   final DateTime timestamp;
 
+  /// Creates a [QueuedRequest].
   const QueuedRequest({
     required this.key,
     required this.data,
@@ -288,12 +294,18 @@ class QueuedRequest {
 
 /// Offline statistics
 class OfflineStats {
+  /// Whether the device is online.
   final bool isOnline;
+  /// Requests waiting to be sent.
   final int queuedRequestCount;
+  /// Items cached across all managers.
   final int totalCachedItems;
+  /// Total size of all caches.
   final int totalCacheSize;
+  /// Statistics per cache manager.
   final Map<String, CacheStats> cacheManagerStats;
 
+  /// Creates a [OfflineStats].
   const OfflineStats({
     required this.isOnline,
     required this.queuedRequestCount,
@@ -302,6 +314,7 @@ class OfflineStats {
     required this.cacheManagerStats,
   });
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'is_online': isOnline,
@@ -317,33 +330,45 @@ class OfflineStats {
 
 /// Base offline event
 abstract class OfflineEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Offline status change event
 class OfflineStatusEvent extends OfflineEvent {
+  /// Whether the device is online.
   final bool isOnline;
+  /// Creates the event.
   OfflineStatusEvent(this.isOnline);
 }
 
 /// Offline cache event
 class OfflineCacheEvent extends OfflineEvent {
+  /// Key of the cache this manager serves.
   final String cacheKey;
+  /// Key of the item.
   final String itemKey;
+  /// Creates the event.
   OfflineCacheEvent(this.cacheKey, this.itemKey);
 }
 
 /// Offline queue event
 class OfflineQueueEvent extends OfflineEvent {
+  /// Key of the queued request.
   final String requestKey;
+  /// True when the request was added, false when removed.
   final bool added;
+  /// Creates the event.
   OfflineQueueEvent(this.requestKey, this.added);
 }
 
 /// Offline request processed event
 class OfflineRequestProcessedEvent extends OfflineEvent {
+  /// Key of the queued request.
   final String requestKey;
+  /// Whether the eviction succeeded.
   final bool success;
+  /// Creates the event.
   OfflineRequestProcessedEvent(this.requestKey, this.success);
 }
 

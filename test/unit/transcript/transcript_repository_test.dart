@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lupin_mobile/features/transcript/data/transcript_models.dart';
 import 'package:lupin_mobile/features/transcript/data/transcript_repository.dart';
 
 import '../_helpers/stub_dio.dart';
@@ -22,7 +21,7 @@ import '../_helpers/stub_dio.dart';
 /// ones; only the socket is replaced.
 void main() {
   const id   = "stable-session-id-1234";
-  final path = "${ TranscriptRepository.pathPrefix }/$id";
+  const path = "${ TranscriptRepository.pathPrefix }/$id";
 
   late StubAdapter          adapter;
   late TranscriptRepository repo;

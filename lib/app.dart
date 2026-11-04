@@ -12,7 +12,6 @@ import 'features/auth/presentation/auth_gate.dart';
 import 'features/auth/presentation/ws_lifecycle_listener.dart';
 import 'features/agentic/domain/agentic_submission_bloc.dart';
 import 'features/claude_code/domain/claude_code_bloc.dart';
-import 'features/claude_code/domain/claude_code_event.dart';
 import 'features/decision_proxy/domain/decision_proxy_bloc.dart';
 import 'features/focus_mode/domain/focus_chat_bloc.dart';
 import 'features/focus_mode/domain/focus_chat_event.dart';
@@ -35,13 +34,18 @@ import 'services/permissions/notification_permission.dart';
 import 'services/push/fcm_bootstrap.dart';
 import 'services/push/notification_tap_payload.dart';
 import 'services/push/notification_tap_router.dart';
+import 'features/artifacts/podcast_prefetch.dart';
+import 'features/podcasts/podcast_list_screen.dart';
+import 'services/audio/podcast_catalog.dart';
+import 'services/audio/podcast_player_service.dart';
+import 'features/audio/mini_player_bar.dart';
 import 'services/tts/streaming_tts_player.dart';
 import 'services/websocket/websocket_service.dart';
 
-/// Login hook behind `WsLifecycleListener.onAuthenticated`, extracted so
-/// the identity routing is testable: the UUID goes to the WebSocket (which
-/// authenticates by bearer token and uses the id only as a connect gate),
-/// the EMAIL goes to every email-keyed consumer.
+/// The login hook behind `WsLifecycleListener.onAuthenticated`, split out for testing.
+///
+/// The UUID goes to the WebSocket, which authenticates by bearer token and uses the id only as a connect gate.
+/// The email goes to every email-keyed consumer.
 ///
 /// Requires:
 ///   - userId is the account UUID and email the account email, both non-empty
@@ -51,12 +55,12 @@ import 'services/websocket/websocket_service.dart';
 ///   - ws.connect( userId: userId ) is called iff ws is not connected
 ///   - registerPush receives email, never userId
 ///   - a throwing registerPush is logged and does not stop the rest of the hook
-///   - requestNotifications is called once, AFTER registerPush, so a
+///   - requestNotifications is called once, after registerPush, so a
 ///     system prompt the user has not answered yet never delays registration
-///   - a notification tap held by [tapRouter] is routed to FocusChatBloc, ONCE,
-///     with the email this login just supplied (row d9bc6f6c)
-///   - a DENIED notification permission is logged via [logSink], because
-///     nothing else on the device reports it (review F8)
+///   - a notification tap held by [tapRouter] is routed to FocusChatBloc once,
+///     with the email this login just supplied
+///   - a denied notification permission is logged via [logSink], because
+///     nothing else on the device reports it
 Future<void> onWsAuthenticated( {
   required WsBlocDispatcher dispatcher,
   required WebSocketService ws,
@@ -116,7 +120,7 @@ Future<void> onWsAuthenticated( {
 ///
 /// Ensures:
 ///   - nothing happens when router is null or holds no tap
-///   - a routable tap is dispatched as ONE [FocusMessageRevealRequested] and
+///   - a routable tap is dispatched as one [FocusMessageRevealRequested] and
 ///     marked handled, so a later drain cannot repeat it
 void _routePendingTap( NotificationTapRouter? router, String email ) {
   final tap = router?.takePending();
@@ -130,20 +134,22 @@ void _routePendingTap( NotificationTapRouter? router, String email ) {
   ) );
 }
 
-/// WS frame → bloc dispatch bridge. Extracted from the private app State so
-/// the cross-bloc dispatch contracts (AC-S2.8 single-TTS-dispatch pin,
-/// AC-S2.10 reconnect re-hydration) are testable against the REAL wiring
-/// rather than a copy. Resolves blocs lazily via ServiceLocator at dispatch
-/// time, matching the prior inline behavior.
+/// Bridges WebSocket frames to bloc events.
+///
+/// It is split out of the private app State so the cross-bloc dispatch contracts are testable against the
+/// real wiring, not a copy. The contracts are a single TTS dispatch per frame and re-hydration on reconnect.
+/// It resolves blocs from the ServiceLocator at dispatch time.
 class WsBlocDispatcher {
-  /// Set by `onWsAuthenticated`; stamps `FocusColdStartRequested` on
-  /// `auth_success` frames. Every successful (re)connection completes WS
-  /// auth, so the auth_success frame doubles as the reconnect re-hydration
-  /// trigger (S2 §3.3; the seam Stage 2's FCM wake path terminates into,
-  /// F-S5-1c). It holds the EMAIL — it was once fed the account UUID, and
-  /// senders-visible 404'd on every reconnect (row 588c8dc9).
+  /// The signed-in account email, set by `onWsAuthenticated`.
+  ///
+  /// It stamps `FocusColdStartRequested` on `auth_success` frames.
+  /// Every successful connection completes WebSocket auth, so that frame also triggers re-hydration on reconnect.
+  /// It holds the email, not the account UUID, because the senders-visible request returns 404 for a UUID.
   String? lastAuthenticatedEmail;
 
+  /// Routes one WebSocket frame of [type] to the blocs that handle it.
+  ///
+  /// Blocs are resolved from the service locator at call time, not held, and a [type] that no case names is ignored.
   void dispatch( String type, Map<String, dynamic> data ) {
     switch ( type ) {
       case AppConstants.eventQueueTodoUpdate:
@@ -183,6 +189,13 @@ class WsBlocDispatcher {
         // same frames; speech ownership lives with FocusChatBloc alone (the
         // legacy bloc's `tts` is not injected — F-S2-1 DI withdrawal).
         if ( notif != null ) _dispatchToFocus( notif );
+        // A finished podcast is downloaded in the background when the phone is on Wi-Fi (row 24a39e97).
+        if ( notif != null && ServiceLocator.isRegistered<PodcastCatalog>() ) {
+          ServiceLocator.get<PodcastCatalog>().record( notif.abstractText, title: notif.title, at: notif.timestamp );
+        }
+        if ( notif != null && ServiceLocator.isRegistered<PodcastPrefetcher>() ) {
+          unawaited( ServiceLocator.get<PodcastPrefetcher>().prefetch( notif.abstractText ) );
+        }
         // Belt channel (S1 §3): a notification whose `jobId` matches the live
         // Quick Ask job is independent completion evidence, and a
         // `response_requested` one is proof of life in the pre-job-id window
@@ -291,10 +304,11 @@ class WsBlocDispatcher {
     }
   }
 
-  /// Inner-type discrimination for the focus surface — same `valid_types`
-  /// whitelist the legacy dispatch pivots on (S2 §3.3): user-facing types
-  /// become inbound chat items; persona events update badge data; admin
-  /// types (speakerphone, commons-*) are not focus events.
+  /// Sorts a notification by its inner type for the focus surface.
+  ///
+  /// It uses the same `valid_types` whitelist as the legacy dispatch.
+  /// User-facing types become inbound chat items and persona events update badge data.
+  /// Admin types (speakerphone, commons-*) are not focus events.
   void _dispatchToFocus( NotificationItem notif ) {
     final focus = ServiceLocator.get<FocusChatBloc>();
     switch ( notif.type ) {
@@ -329,7 +343,11 @@ class WsBlocDispatcher {
   }
 }
 
+/// The root widget: connects the WebSocket to the blocs and routes notification taps.
+///
+/// It owns the [WsBlocDispatcher] and the tap subscription while it is mounted.
 class LupinMobileApp extends StatefulWidget {
+  /// Creates the root widget; `main` is the only caller.
   const LupinMobileApp( { super.key } );
 
   @override
@@ -337,6 +355,9 @@ class LupinMobileApp extends StatefulWidget {
 }
 
 class _LupinMobileAppState extends State<LupinMobileApp> {
+  /// The app's one Navigator, so the mini-player bar (above it) can open the Podcasts screen.
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   StreamSubscription<dynamic>? _wsSubscription;
   StreamSubscription<NotificationTapPayload>? _tapSubscription;
   final WsBlocDispatcher _dispatcher = WsBlocDispatcher();
@@ -348,14 +369,12 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
     _listenForTaps();
   }
 
-  /// The WARM half of row d9bc6f6c: a tap while this process is ALREADY running
-  /// and already signed in.
+  /// Routes a notification tap that arrives while the process is running and signed in.
   ///
-  /// `onWsAuthenticated` drains the router once, at login, which covers the cold
-  /// start and the tap that arrives while the user is still at the lock screen.
-  /// It does NOT fire again — so a tap on a notification received an hour into a
-  /// session would sit in the router's slot forever without this. The two paths
-  /// share the router's handle-once dedupe, so a tap cannot be routed twice.
+  /// `onWsAuthenticated` drains the router once, at login.
+  /// That covers the cold start and a tap that arrives while the user is still at the lock screen.
+  /// It does not fire again, so a tap an hour into a session would sit in the router's slot without this.
+  /// The two paths share the router's handle-once dedupe, so a tap cannot be routed twice.
   void _listenForTaps() {
     if ( !ServiceLocator.isRegistered<NotificationTapRouter>() ) return;
     final router = ServiceLocator.get<NotificationTapRouter>();
@@ -394,6 +413,15 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
     _wsSubscription?.cancel();
     _tapSubscription?.cancel();
     super.dispose();
+  }
+
+  /// Opens the Podcasts screen on the app Navigator.
+  ///
+  /// The mini-player bar sits above the Navigator, so it has no context of its own.
+  void _openPodcasts() {
+    _navigatorKey.currentState?.push( MaterialPageRoute<void>(
+      builder: ( _ ) => PodcastListScreen( catalog: ServiceLocator.get<PodcastCatalog>() ),
+    ) );
   }
 
   @override
@@ -458,11 +486,13 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
         ),
         onSignedOut: () async {
           final ws = ServiceLocator.get<WebSocketService>();
-          if ( ws.isConnected ) await ws.disconnect();
+          // Always: a socket that is down but still allowed to retry would otherwise be revived after sign-out.
+          await ws.disconnect();
           // S5 best-effort unregister (POST /api/fcm/unregister-token).
           await fcmOnLoggedOut();
         },
         child: MaterialApp(
+          navigatorKey: _navigatorKey,
           title    : AppConstants.appName,
           theme    : AppThemes.lightTheme,
           darkTheme: AppThemes.darkTheme,
@@ -472,7 +502,15 @@ class _LupinMobileAppState extends State<LupinMobileApp> {
             asr   : ServiceLocator.isRegistered<AsrService>()
                 ? ServiceLocator.get<AsrService>()
                 : null,
-            child : child!,
+            // The podcast mini-player rides under every screen (row 3469e9db, P2).
+            child : Column( children: [
+              Expanded( child: child! ),
+              if ( ServiceLocator.isRegistered<PodcastPlayerService>() )
+                MiniPlayerBar(
+                  service   : ServiceLocator.get<PodcastPlayerService>(),
+                  onOpenList: ServiceLocator.isRegistered<PodcastCatalog>() ? _openPodcasts : null,
+                ),
+            ] ),
           ),
           home     : AuthGate(
             serverContext     : ServiceLocator.get<ServerContextService>(),

@@ -20,10 +20,11 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../../../_helpers/source_text.dart';
 
 void main() {
   group( 'AC-S1.8 property 1 — every mutation site publishes', () {
-    final source = File( 'lib/services/websocket/websocket_service.dart' ).readAsStringSync();
+    final source = stripComments( File( 'lib/services/websocket/websocket_service.dart' ).readAsStringSync() );
 
     test( '`_isConnected` is assigned in exactly ONE place: the single writer', () {
       // The field declaration plus the one write inside `_setConnected`.

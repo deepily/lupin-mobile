@@ -1,50 +1,32 @@
-/// Which inbound items the user is EXPECTED TO ACT ON — AC-S3.6, AC-S3.6b,
-/// AC-S3.8 (plan 2026.08.29 §6).
+/// Which inbound items the user is expected to act on, and so must be heard.
 ///
-/// The rule generalises rather than growing a special case per surface.
-/// Audibility keys on *"something is waiting on the user"*, which covers
-/// exactly two things: an **answer they deliberately asked for** (Rick's
-/// ruling 4), and a **question the system is blocked on** — the latter more
-/// strongly, since a Door C confirm holds the server for up to ~210s and
-/// then defaults to "no" if nobody replies.
+/// Audibility keys on "something is waiting on the user": an answer they asked for, or a question
+/// the system is blocked on. A question matters more, because a confirm holds the server for up to
+/// about 210 seconds and then defaults to "no" if nobody replies.
+/// Design: src/docs/decisions/README.md (R-TTS-actionable)
 ///
-/// 🔴 **One predicate, TWO enforcement points, and that is the whole
-/// design.** The same "expected to act on" test decides (a) whether speech
-/// is `verbatim` in `TtsOrchestrator`, and (b) whether the item survives
-/// `FocusChatBloc`'s bloc-level stop-list drop (AC-S3.8 item 2). Rick ruled
-/// the same principle at both — *"show the answer… mute it and mark it"* —
-/// and the second point was invisible until someone read the ingest path.
-/// Two copies of this test would drift; there is one.
+/// One predicate has two enforcement points. The same test decides whether speech is `verbatim` in
+/// `TtsOrchestrator` and whether the item survives `FocusChatBloc`'s stop-list drop. Two copies would drift.
 library;
 
-/// The persona-less sender every `/api/v2/flow` question is sent from.
-/// `TtsSender.isPersona` is false for it, so `_systemSenderMuted` drops it
-/// whenever `speakSystemSenders` is off — the configuration that loses the
-/// question silently today.
+/// Persona-less sender that every `/api/v2/flow` question is sent from.
+///
+/// `TtsSender.isPersona` is false for it, so `_systemSenderMuted` drops it whenever `speakSystemSenders`
+/// is off. That setting would lose the question silently.
 const String askFlowSenderId = 'ask.flow@lupin.deepily.ai';
 
-/// True when the item is a QUESTION the system is waiting on.
+/// True when the item is a question the system is waiting on.
 ///
 /// Two arms, and the second is not redundant:
+///   1. `response_requested == true`: a question that blocks the ask, such as a near-match confirm.
+///   2. the `ask.flow` sender with no `job_id`: the in-place argument interview ("which city?").
+///      `_speak()` dispatches a fire-and-forget `AsyncNotificationRequest` that does not carry
+///      `response_requested`, so arm 1 alone cannot see it.
 ///
-/// 1. **`response_requested == true`** — Door B, and Door C's near-match
-///    confirm, which blocks the ask.
-/// 2. **`ask.flow` sender AND no `job_id`** — Door A, the in-place argument
-///    interview ("which city?"). `_speak()` dispatches an
-///    `AsyncNotificationRequest`, documented fire-and-forget, which does
-///    **not** carry `response_requested` — so arm 1 alone cannot see it,
-///    and an implementation keyed only on `response_requested` passes the
-///    Door C case while losing every turn of Rick's ruling-5 interview.
-///
-/// The `job_id` half of arm 2 is what keeps it tight: every flow QUESTION
-/// calls `_speak( job_id: None )` while the ANSWER path passes a real
-/// `job_id`, so this selects questions without sweeping in answers or the
-/// "New … job" acknowledgement.
-///
-/// ⚠️ Deliberate widening, named so it is not discovered later: arm 2 also
-/// catches the receptionist degrade line, which is likewise sent with no
-/// `job_id`. That is user-facing speech the user is meant to hear, so it is
-/// acceptable — but it is a decision, not an accident.
+/// The `job_id` test keeps arm 2 tight. Every flow question speaks with no `job_id`.
+/// The answer path passes a real one, so arm 2 skips answers and the "New ... job" acknowledgement.
+/// Arm 2 also catches the receptionist degrade line, which is likewise sent with no `job_id`.
+/// That line is speech the user should hear, so the widening is accepted.
 bool isActionableQuestion( {
   required bool responseRequested,
   String?       senderId,
@@ -56,16 +38,14 @@ bool isActionableQuestion( {
   return fromFlow && noJob;
 }
 
-/// True when the item should be spoken with `verbatim: true` — skipping
-/// the system-sender mute and the preview-fraction cut (Rick's ruling 4).
+/// True when the item should be spoken with `verbatim: true`.
 ///
-/// [isLiveAskAnswer] is the answer arm: the host passes a predicate over
-/// the item's `job_id` (Quick Ask exposes one), keeping the enqueue in one
-/// place rather than teaching this file about blocs.
+/// Verbatim skips the system-sender mute and the preview-fraction cut.
+/// [isLiveAskAnswer] is the answer arm. The host passes a predicate over the `job_id`
+/// (Quick Ask exposes one). The enqueue stays in one place, and this file knows nothing about blocs.
 ///
-/// 🔴 This does **not** decide whether the item is spoken at all — the
-/// stop-list (gate 1) still holds, and `verbatim` never bypasses it
-/// (OSQ3, closed by Rick's direct keypress).
+/// This does not decide whether the item is spoken at all. The stop-list still holds, and `verbatim`
+/// never bypasses it.
 bool shouldSpeakVerbatim( {
   required bool responseRequested,
   String?       senderId,

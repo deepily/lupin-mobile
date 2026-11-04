@@ -1,14 +1,11 @@
-/// The append-mic text box (row c67f9781; plan `2026.09.29-dictation-text-field-plan.md`).
+/// The append-mic text box: one shared dictation state machine for every text field.
 ///
-/// Rick, 2026-09-28: the append mic "should be default behavior everywhere within
-/// the mobile app." Before this file the state machine (idle / listening /
-/// transcribing, the splice, the dispose-cancel) existed four times, each copy
-/// slightly different. It lives here once.
-///
-/// The shape is deliberate: the widget takes the SERVICE and builds its own
-/// session. It never accepts one, so no ancestor can hand in a session with a
-/// foreign lifetime. The two bloc-owned surfaces (Quick Ask, Broadcast) stay
-/// outside this widget on purpose (Rick, 2026-09-29, plan §3).
+/// The state machine lives here once: idle, listening, transcribing, the splice and cancel
+/// on dispose. The append mic is the default behaviour for text boxes in the app.
+/// The widget takes the service and builds its own session. It never accepts one, so no
+/// ancestor can hand in a session with a foreign lifetime.
+/// The two bloc-owned surfaces, Quick Ask and Broadcast, stay outside this widget.
+/// Design: src/rnd/2026.09.29-dictation-text-field-plan.md
 library;
 
 import 'dart:async';
@@ -21,14 +18,23 @@ import '../../services/asr/voice_capture_session.dart';
 import '../../services/permissions/mic_permission.dart';
 
 /// Where a [DictationTextField]'s recording stands.
-enum DictationPhase { idle, listening, transcribing }
+enum DictationPhase {
+  /// No recording is running.
+  idle,
 
-/// One recorder at a time: [AsrService] is a shared singleton.
+  /// The microphone is capturing.
+  listening,
+
+  /// The recording is being turned into text.
+  transcribing
+}
+
+/// Allows one recorder at a time, because [AsrService] is a shared singleton.
 ///
-/// A second mic press while another box records is DISABLED, never an
-/// auto-stop of the first, because stopping it would silently truncate a
-/// sentence. Keyed by service, so it works with or without a [DictationScope].
-/// A bloc-owned recorder (Quick Ask) can register here too.
+/// A second mic press while another box records is disabled and never stops the first,
+/// because stopping it would silently truncate a sentence.
+/// Guards are keyed by service, so they work with or without a [DictationScope].
+/// A bloc-owned recorder such as Quick Ask can register here too.
 class DictationRecorderGuard extends ChangeNotifier {
   static final Expando<DictationRecorderGuard> _byService = Expando<DictationRecorderGuard>();
 
@@ -57,9 +63,11 @@ class DictationRecorderGuard extends ChangeNotifier {
     _notifyLater();
   }
 
-  /// Release can happen inside a widget's dispose, while the tree is being torn
-  /// down; a listener's setState then is illegal. The owner value is already
-  /// set, so only the repaint waits a microtask.
+  /// Notifies listeners one microtask later.
+  ///
+  /// A release can happen inside a widget's dispose, while the tree is torn down, and a
+  /// listener's setState is illegal then. The owner value is already set, so only the
+  /// repaint waits.
   void _notifyLater() => scheduleMicrotask( () { if ( !_disposed ) notifyListeners(); } );
 
   bool _disposed = false;
@@ -68,17 +76,18 @@ class DictationRecorderGuard extends ChangeNotifier {
   void dispose() { _disposed = true; super.dispose(); }
 }
 
-/// Hands the [AsrService] to every [DictationTextField] below it, so 15 sites do
-/// not each reach for `ServiceLocator`. Mounted once at the app root.
+/// Hands the [AsrService] to every [DictationTextField] below it.
 ///
-/// With no scope AND no `asr:` argument a field renders as a plain TextField,
-/// which keeps every migration additive.
+/// It is mounted once at the app root, so no field reaches for `ServiceLocator`.
+/// With no scope and no `asr` argument a field renders as a plain TextField.
 class DictationScope extends InheritedWidget {
+  /// The service handed to fields below, or null for plain text boxes.
   final AsrService? asr;
 
-  /// Test seam for the permission prompt, for every field below.
+  /// Replaces the permission prompt for every field below, so tests can stub it.
   final MicPermissionRequester? requestMicPermission;
 
+  /// Creates a scope that provides [asr] to its subtree.
   const DictationScope( {
     super.key,
     required this.asr,
@@ -86,9 +95,11 @@ class DictationScope extends InheritedWidget {
     required super.child,
   } );
 
+  /// The service of the nearest scope, or null when there is none.
   static AsrService? maybeOf( BuildContext context ) =>
       context.dependOnInheritedWidgetOfExactType<DictationScope>()?.asr;
 
+  /// The permission override of the nearest scope, or null.
   static MicPermissionRequester? permissionOf( BuildContext context ) =>
       context.dependOnInheritedWidgetOfExactType<DictationScope>()?.requestMicPermission;
 
@@ -96,49 +107,78 @@ class DictationScope extends InheritedWidget {
   bool updateShouldNotify( DictationScope old ) => asr != old.asr;
 }
 
+/// A text box with an append mic that adds spoken words to what is typed.
 class DictationTextField extends StatefulWidget {
+  /// The text being edited; dictated words are spliced into it.
   final TextEditingController controller;
 
-  /// The recorder service. Null falls back to [DictationScope]; with neither,
-  /// this is a plain TextField.
+  /// The recorder service.
+  ///
+  /// Null falls back to [DictationScope]. With neither, this is a plain TextField.
   final AsrService? asr;
 
-  /// Test seam for the permission prompt.
+  /// Replaces the permission prompt, so tests can stub it.
   final MicPermissionRequester? requestMicPermission;
 
-  /// False forces a plain box even inside a [DictationScope]. For a surface
-  /// that shares a screen with a bloc-owned recorder (Quick Ask), until that
-  /// recorder registers with [DictationRecorderGuard].
+  /// False forces a plain box even inside a [DictationScope].
+  ///
+  /// It serves a surface that shares a screen with a bloc-owned recorder, such as Quick
+  /// Ask, until that recorder registers with [DictationRecorderGuard].
   final bool dictate;
 
-  /// The caller's decoration. The mic is added as `suffixIcon`; if the caller
-  /// already set one, the mic goes before it.
+  /// The caller's decoration.
+  ///
+  /// The mic is added as `suffixIcon`. If the caller already set one, the mic goes before it.
   final InputDecoration decoration;
 
+  /// Passed to the TextField as `maxLines`.
   final int?             maxLines;
+
+  /// Passed to the TextField as `minLines`.
   final int?             minLines;
+
+  /// Whether the box and its mic accept input.
   final bool             enabled;
+
+  /// Passed to the TextField as `keyboardType`.
   final TextInputType?   keyboardType;
+
+  /// Called on every edit, including a dictated splice.
   final ValueChanged<String>? onChanged;
+
+  /// Passed to the TextField as `onSubmitted`.
   final ValueChanged<String>? onSubmitted;
+
+  /// Passed to the TextField as `focusNode`.
   final FocusNode?       focusNode;
+
+  /// Passed to the TextField as `autofocus`.
   final bool             autofocus;
 
-  /// Keys, so existing sites keep the TestKeys their tests already find.
+  /// Key for the text field, so a host screen can find it.
   final Key? fieldKey;
+
+  /// Key for the mic button.
   final Key? micKey;
+
+  /// Key for the cancel button.
   final Key? cancelKey;
+
+  /// Key for the error message, which is then shown as a keyed widget.
   final Key? errorKey;
 
-  /// Tells the host where the recording stands (a card hides Submit while a
-  /// chunk records).
+  /// Tells the host where the recording stands.
+  ///
+  /// A card uses it to hide Submit while a chunk records.
   final ValueChanged<DictationPhase>? onPhaseChanged;
 
-  /// Sizing for the mic buttons, for a surface with a bigger touch target than
-  /// the stock 48 dp (the voice reply's 60 dp thumb rule).
+  /// Icon size for the mic buttons, for a surface with a bigger touch target than 48 dp.
   final double?          micIconSize;
+
+  /// Constraints for the mic buttons, for the same bigger touch target.
   final BoxConstraints?  micConstraints;
 
+  /// Creates a text box, with a mic when a recorder service is available.
   const DictationTextField( {
     super.key,
     required this.controller,
@@ -177,9 +217,10 @@ class _DictationTextFieldState extends State<DictationTextField> {
   Timer? _timer;
   int    _seconds = 0;
 
-  /// True from the mic press until the recorder is running, refused or stale:
-  /// the permission prompt is open. Leaving then must still cancel, or the start
-  /// completes on a dead widget and strands the recorder.
+  /// True from the mic press until the recorder is running, refused or stale.
+  ///
+  /// The permission prompt is open meanwhile. Leaving then must still cancel, or the
+  /// start completes on a dead widget and strands the recorder.
   bool _starting = false;
 
   AsrService?            _asr;
@@ -201,8 +242,7 @@ class _DictationTextFieldState extends State<DictationTextField> {
     if ( widget.asr != old.asr || widget.dictate != old.dictate ) _bind( _service() );
   }
 
-  /// Build the session ONCE per service; a parent rebuild keeps it, so a
-  /// recording survives one.
+  /// Builds the session once per service, so a recording survives a parent rebuild.
   void _bind( AsrService? asr ) {
     if ( asr == _asr ) return;
     _release();
@@ -224,10 +264,9 @@ class _DictationTextFieldState extends State<DictationTextField> {
     _timer?.cancel();
     final s = _session;
     if ( s == null ) return;
-    // The recorder is a shared singleton: abandoning a capture strands the TTS
-    // hold for the rest of the app session (row a1c12c6e). Running OR
-    // transcribing, and an in-flight transcription is invalidated so its
-    // result cannot land on a dead widget.
+    // The recorder is a shared singleton, and abandoning a capture strands the speech hold
+    // for the rest of the app session. A running capture is cancelled, and an in-flight
+    // transcription is invalidated so its result cannot land on a dead widget.
     if ( _phase == DictationPhase.listening || _starting ) {
       s.cancel();
     } else if ( _phase == DictationPhase.transcribing ) {
@@ -288,15 +327,15 @@ class _DictationTextFieldState extends State<DictationTextField> {
     final capture = await session.stopAndTranscribe();
     if ( !mounted ) return;
     _guard!.release( this );
-    // A stale result appends nothing, but must still free the mic.
+    // A stale result appends nothing but must still free the mic.
     if ( capture.isStale ) {
       setState( () => _setPhase( DictationPhase.idle ) );
       return;
     }
     setState( () {
       if ( capture.wasHeard ) {
-        // An edit during the recording voids the remembered caret: the words
-        // then go to the END rather than into the middle of new text.
+        // An edit during the recording voids the remembered caret, so the words go
+        // to the end and not into the middle of new text.
         widget.controller.value = spliceDictation(
           value : widget.controller.value,
           heard : capture.transcript!,
@@ -381,7 +420,7 @@ class _DictationTextFieldState extends State<DictationTextField> {
       if ( deco.suffixIcon != null ) {
         suffix = Row( mainAxisSize: MainAxisSize.min, children: [ suffix, deco.suffixIcon! ] );
       }
-      // A tall box pins the mic to the top right, not the middle of the box.
+      // A tall box pins the mic to the top right and not the middle of the box.
       if ( widget.maxLines != 1 ) {
         suffix = Align(
           alignment    : Alignment.topCenter,
@@ -405,8 +444,8 @@ class _DictationTextFieldState extends State<DictationTextField> {
       deco = deco.copyWith(
         suffixIcon : suffix,
         helper     : helper,
-        // errorText when the caller keyed nothing (a site's own errorText then
-        // yields to the newer dictation message); a keyed widget otherwise.
+        // Uses errorText when the caller keyed nothing, so the newer dictation message
+        // replaces the site's own errorText; otherwise a keyed widget carries it.
         errorText  : _error != null && widget.errorKey == null ? _error : deco.errorText,
         error      : _error != null && widget.errorKey != null
             ? KeyedSubtree( key: widget.errorKey, child: Text( _error! ) )

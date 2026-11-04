@@ -1,67 +1,141 @@
 import 'dart:async';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import '../../core/logging/logger.dart';
 import '../push/notification_tap_payload.dart';
 import 'notification_preferences.dart';
 
-/// Channel IDs must match the `RawResourceAndroidNotificationSound` filenames
-/// (sans extension) in `android/app/src/main/res/raw/`. These are the three
-/// MP3 assets copied from the Lupin web client to maintain audio parity.
+/// Android notification channel ids.
+///
+/// Each must match the `RawResourceAndroidNotificationSound` filename, without its extension, in
+/// `android/app/src/main/res/raw/`. The three MP3 assets are copied from the Lupin web client for audio parity.
 class _Channels {
+  /// Channel id for medium priority.
   static const medium = 'lupin_medium';
+  /// Channel id for high priority.
   static const high   = 'lupin_high';
+  /// Channel id for urgent priority.
   static const urgent = 'lupin_urgent';
 }
 
-/// Plays audio on incoming notifications: single ding per priority tier, plus
-/// spoken title+message for high/urgent. Mirrors Lupin web client semantics
-/// (see `src/fastapi_app/static/js/notifications.js`).
+/// Whether the app is on screen: resumed, or inactive under the shade or a system dialog.
 ///
-/// Triggered from `NotificationBloc._onExternalUpdate` when a WS
-/// `notification_queue_update` event carries a parsed `NotificationItem`.
+/// It is the production [NotificationAudioService.isForeground]. It needs the app's binding, so tests inject their own.
+bool appIsInForeground() {
+  final state = WidgetsBinding.instance.lifecycleState;
+  return state == AppLifecycleState.resumed || state == AppLifecycleState.inactive;
+}
+
+/// Plays a priority's ding inside the app, with no system notification.
+///
+/// The sounds are the channel sounds, bundled again as assets, because Android raw resources can't be played from Dart.
+/// They play on the notification stream, so the ringer's silent mode still silences them.
+class InAppDingPlayer {
+  final AudioPlayer _player;
+
+  /// Creates the player; [player] is a test seam, production passes nothing.
+  InAppDingPlayer( { AudioPlayer? player } ) : _player = player ?? AudioPlayer() {
+    _player.setAudioContext( const AudioContext(
+      android: AudioContextAndroid(
+        contentType : AndroidContentType.sonification,
+        usageType   : AndroidUsageType.notification,
+        audioFocus  : AndroidAudioFocus.gainTransientMayDuck,
+      ),
+    ) );
+  }
+
+  /// The asset path of [channelId]'s sound, under `assets/`.
+  static String assetFor( String channelId ) => 'audio/$channelId.mp3';
+
+  /// Plays [channelId]'s sound, cutting off one still playing.
+  ///
+  /// The stop matters: each `play` takes audio focus again, and audioplayers releases only the latest request.
+  /// Without it two overlapping dings left focus held, and a podcast paused by the first never resumed.
+  Future<void> play( String channelId ) async {
+    await _player.stop();
+    await _player.play( AssetSource( assetFor( channelId ) ) );
+  }
+}
+
+/// Plays a ding for each incoming notification, one sound per priority tier.
+///
+/// While the app is on screen the ding plays inside the app and nothing is posted to Android.
+/// So no banner drops over the screen the user is already looking at. In the background it posts as before.
+///
+/// High and urgent notifications are also spoken, by `TtsOrchestrator`.
+/// Mirrors the Lupin web client (`src/fastapi_app/static/js/notifications.js`). `NotificationBloc._onExternalUpdate`
+/// calls it when a WS `notification_queue_update` event carries a parsed `NotificationItem`.
 class NotificationAudioService {
   final FlutterLocalNotificationsPlugin _fln;
   final FlutterTts                      _tts;
   final NotificationPreferences         _prefs;
+  final bool Function()?                _isForeground;
+  final Future<void> Function( String channelId )? _playInApp;
+  final Future<void> Function()                    _vibrate;
   bool _initialized = false;
+  bool _handlersSet = false;
+  Completer<void>? _utteranceDone;
 
-  /// The notification-TAP callback this service must PRESERVE when it
-  /// initializes the plugin (row d9bc6f6c).
+  /// How long the engine may take to accept a text; see [flutterTtsSpeak].
+  final Duration speakAcceptBudget;
+  final Duration? _completionBound;
+
+  /// The notification-tap callback this service must preserve when it initializes the plugin.
   ///
-  /// 🔴 NOT AN OPTIONAL EXTRA — WITHOUT IT THIS SERVICE SILENTLY UNBINDS TAPS.
-  /// `FlutterLocalNotificationsPlugin()` is a singleton
-  /// (`factory FlutterLocalNotificationsPlugin() => _instance`) and
-  /// `initialize()` installs the tap handler by plain ASSIGNMENT, so calling it
-  /// without one sets the handler to null. This service initializes LAZILY, on
-  /// the first ding — so the old bare call would have let taps work from launch
-  /// until the first notification arrived and then stop, which is about the
-  /// worst shape a bug can have: intermittent, ordering-dependent, and invisible
-  /// to any test that only exercises a cold start.
+  /// It is not optional. `FlutterLocalNotificationsPlugin()` is a singleton and `initialize()` installs the tap handler
+  /// by plain assignment, so calling it without a callback sets the handler to null. This service initializes lazily,
+  /// on the first ding, so taps would work from launch until the first notification arrives and then stop.
+  /// That failure is intermittent, ordering-dependent and invisible to any test that only exercises a cold start.
   final DidReceiveNotificationResponseCallback? _onNotificationTap;
 
-  /// Wiring probe, same purpose as `FocusChatBloc.hasQuickAskProbe`: let a
-  /// DI-level test assert that PRODUCTION actually injected the callback.
+  /// Wiring probe, like `FocusChatBloc.hasQuickAskProbe`.
   ///
-  /// Without it, a test can only check that this class forwards whatever it was
-  /// given — and a service constructed with nothing forwards nothing perfectly
-  /// happily, which is the uninjected-seam failure this repo has already been
-  /// bitten by once (bug 9adff476).
+  /// It lets a DI-level test assert that production injected the callback.
+  ///
+  /// Without it a test can only check that this class forwards whatever it was given, and a service constructed
+  /// with nothing forwards nothing without complaint. That uninjected-seam failure has happened before: see the
+  /// Quick Ask fix in commit 153ac19.
   @visibleForTesting
   bool get hasTapCallback => _onNotificationTap != null;
 
+  /// Wiring probe for the foreground check, for the same reason as [hasTapCallback].
+  ///
+  /// A service built without one posts every ding to Android, banners included, and nothing else would notice.
+  @visibleForTesting
+  bool get hasForegroundProbe => _isForeground != null;
+
+  /// Creates the service; [plugin] and [tts] default to the platform singletons.
+  ///
+  /// [isForeground] says whether the app is on screen; production passes [appIsInForeground].
+  /// With none, every ding posts to Android.
+  /// [playInApp] plays a channel's sound inside the app. It defaults to an [InAppDingPlayer], built on first use.
+  /// [vibrate] buzzes with the in-app ding, as the system notification did. So vibrate mode still gets a signal.
   NotificationAudioService( {
     required NotificationPreferences prefs,
     FlutterLocalNotificationsPlugin? plugin,
     FlutterTts?                      tts,
     DidReceiveNotificationResponseCallback? onNotificationTap,
-  } ) : _prefs = prefs,
+    bool Function()?                 isForeground,
+    Future<void> Function( String channelId )? playInApp,
+    Future<void> Function()?         vibrate,
+    this.speakAcceptBudget = const Duration( seconds: 10 ),
+    Duration? completionBound,
+  } ) : _completionBound = completionBound,
+       _prefs = prefs,
+       _isForeground = isForeground,
+       _playInApp = playInApp,
+       _vibrate   = vibrate ?? HapticFeedback.vibrate,
        _onNotificationTap = onNotificationTap,
        _fln   = plugin ?? FlutterLocalNotificationsPlugin(),
        _tts   = tts    ?? FlutterTts();
 
+  /// Initializes the notification plugin and creates the Android channels, once.
   Future<void> initialize() async {
     if ( _initialized ) return;
     const androidInit = AndroidInitializationSettings( '@mipmap/ic_launcher' );
@@ -106,11 +180,12 @@ class NotificationAudioService {
     ) );
   }
 
-  /// Called by `NotificationBloc` whenever a WS notification_queue_update
-  /// event carries a fresh `NotificationItem`. [priority] is one of the
-  /// four canonical tiers `low | medium | high | urgent`. [suppressDing]
-  /// is the backend `suppress_ding` flag (silences ding only, not speech —
-  /// matches web client semantics).
+  /// Plays the ding for an incoming notification, subject to the preferences.
+  ///
+  /// [priority] is one of `low`, `medium`, `high` or `urgent`. A `low` priority and a master mute do nothing.
+  /// [suppressDing] is the backend `suppress_ding` flag. It silences the ding only, not speech, as in the web client.
+  /// Speech is not dispatched from here: `TtsOrchestrator` owns it, with `flutter_tts` as the fallback through
+  /// [flutterTtsSpeak].
   Future<void> handleIncoming( {
     required String  priority,
     required String  message,
@@ -127,36 +202,96 @@ class NotificationAudioService {
     final shouldDing = !suppressDing && _dingEnabledFor( priority );
 
     if ( shouldDing ) {
-      await _showDing(
-        priority       : priority,
-        title          : title,
-        body           : message,
-        notificationId : notificationId,
-        senderId       : senderId,
-      );
+      if ( _isForeground?.call() ?? false ) {
+        await _vibrate();
+        await ( _playInApp ?? _defaultPlayInApp )( _channelFor( priority ) );
+      } else {
+        await _showDing(
+          priority       : priority,
+          title          : title,
+          body           : message,
+          notificationId : notificationId,
+          senderId       : senderId,
+        );
+      }
     }
 
-    // Speech is NOT dispatched from here anymore. `TtsOrchestrator` owns
-    // all speech — ElevenLabs primary, `flutter_tts` fallback via
-    // [flutterTtsSpeak] below. The orchestrator is wired in
-    // `NotificationBloc._onExternalUpdate` alongside this ding call.
+    // Speech is not dispatched from here. `TtsOrchestrator` owns all speech, ElevenLabs first and `flutter_tts`
+    // as the fallback through [flutterTtsSpeak]. `NotificationBloc._onExternalUpdate` wires it beside this ding call.
   }
 
-  /// Fallback helper — called ONLY by `TtsOrchestrator` when ElevenLabs
-  /// is unavailable (quota exceeded, network error, WS disconnected).
-  /// Kept inside this service because it owns the `FlutterTts` singleton.
+  /// Speaks [text] with `flutter_tts` and returns when the engine has finished it.
+  ///
+  /// `TtsOrchestrator` calls it when ElevenLabs is unavailable: quota exceeded, a network error or a disconnected
+  /// WebSocket. It lives here because this service owns the `FlutterTts` singleton. A missing TTS engine is non-fatal.
+  ///
+  /// Two bounds, so a wedged engine can never hold the caller for good:
+  ///   - acceptance: [speakAcceptBudget] for the engine to take the text
+  ///   - completion: [completionBoundFor] the text, for the engine's completion, cancel or error callback
+  ///
+  /// The orchestrator keeps its in-flight utterance until this returns.
+  /// That is what lets skip, stop-all, pause, the microphone hold and an urgent arrival reach the speech.
+  /// Returning on acceptance let a burst pile up inside the engine where none of them could.
   Future<void> flutterTtsSpeak( String text ) async {
+    final done = Completer<void>();
+    _utteranceDone = done;
     try {
+      _ensureHandlers();
       await _tts.stop();
-      await _tts.speak( text );
-    } catch ( _ ) {
+      await _tts.speak( text ).timeout( speakAcceptBudget );
+    } on TimeoutException {
+      Logger.warning( "on-device speak was not accepted within ${speakAcceptBudget.inMilliseconds} ms", tag: "TtsFallback" );
+      _release( done );
+      await stopFallbackSpeech();
+      return;
+    } catch ( e ) {
       // TTS engine may be unavailable on some devices; non-fatal.
+      Logger.warning( "on-device speak failed", tag: "TtsFallback", error: e );
+      _release( done );
+      return;
+    }
+    try {
+      await done.future.timeout( completionBoundFor( text ) );
+    } on TimeoutException {
+      Logger.warning( "on-device speech did not report finishing within ${completionBoundFor( text ).inSeconds} s", tag: "TtsFallback" );
+      _release( done );
+      await stopFallbackSpeech();
     }
   }
 
-  /// Stop any in-flight `flutter_tts` utterance. Called by
-  /// `TtsOrchestrator` on urgent-preempt and user-cancel paths.
+  /// How long the engine may take to finish [text] before it is presumed wedged.
+  ///
+  /// It is 30 s plus the text at a slow 8 characters a second, unless a bound was injected.
+  Duration completionBoundFor( String text ) =>
+      _completionBound ?? Duration( seconds: 30 + text.length ~/ 8 );
+
+  void _ensureHandlers() {
+    if ( _handlersSet ) return;
+    _handlersSet = true;
+    try {
+      // No cancel handler: the engine's cancel callback carries no utterance id, so a late one for a stopped
+      // utterance would release the next, already accepted, one. Every stop this service's callers issue goes
+      // through [stopFallbackSpeech], which releases the waiting speak itself.
+      _tts.setCompletionHandler( _releaseCurrent );
+      _tts.setErrorHandler( ( dynamic _ ) => _releaseCurrent() );
+    } catch ( e ) {
+      // Without callbacks the completion bound still releases the caller.
+      Logger.warning( "could not register the speech completion handlers", tag: "TtsFallback", error: e );
+    }
+  }
+
+  void _releaseCurrent() => _release( _utteranceDone );
+
+  void _release( Completer<void>? c ) {
+    if ( c != null && !c.isCompleted ) c.complete();
+  }
+
+  /// Stops any in-flight `flutter_tts` utterance.
+  ///
+  /// `TtsOrchestrator` calls it on urgent-preempt and user-cancel.
   Future<void> stopFallbackSpeech() async {
+    // Release a waiting speak first: some engines fire no cancel callback on stop.
+    _releaseCurrent();
     try {
       await _tts.stop();
     } catch ( _ ) {
@@ -192,22 +327,24 @@ class NotificationAudioService {
         sound     : RawResourceAndroidNotificationSound( channelId ),
       ),
     );
-    // Unique id per notification — backend NotificationItem.id is a string,
-    // so we hash to a stable 32-bit int. Prefer the item's OWN id when we have
-    // it: hashing the title collapses every notification that shares one into a
-    // single Android id, so each new arrival replaced the last.
+    // The Android id is a stable 32-bit hash, because the backend `NotificationItem.id` is a string.
+    // Prefer the item's own id: hashing the title collapses every notification that shares one into a single
+    // Android id, so each new arrival replaced the last.
     final id = ( notificationId ?? title ?? body ).hashCode & 0x7fffffff;
     await _fln.show(
       id, title ?? 'Lupin', body, details,
-      // Row d9bc6f6c: the foreground ding is a SECOND post site, and a tap on it
-      // has to route exactly like a tap on a background wake notification. Null
-      // when the caller had no id to give, which reads as "not routable".
+      // The foreground ding is a second post site, and a tap on it must route exactly like a tap on a
+      // background wake notification. The payload is null when the caller had no id, which reads as "not routable".
       payload: notificationId == null ? null : NotificationTapPayload(
         notificationId : notificationId,
         senderId       : senderId,
       ).encode(),
     );
   }
+
+  InAppDingPlayer? _inAppPlayer;
+
+  Future<void> _defaultPlayInApp( String channelId ) => ( _inAppPlayer ??= InAppDingPlayer() ).play( channelId );
 
   String _channelFor( String priority ) {
     switch ( priority ) {

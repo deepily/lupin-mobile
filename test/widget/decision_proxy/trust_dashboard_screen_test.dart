@@ -144,8 +144,8 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
-      expect( find.byKey( Key( '${TestKeys.trustDecisionCardPrefix}d-42' ) ), findsOneWidget );
-      await tester.tap( find.byKey( Key( '${TestKeys.trustDecisionApprovePrefix}d-42' ) ) );
+      expect( find.byKey( const Key( '${TestKeys.trustDecisionCardPrefix}d-42' ) ), findsOneWidget );
+      await tester.tap( find.byKey( const Key( '${TestKeys.trustDecisionApprovePrefix}d-42' ) ) );
       await tester.pump();
 
       final captured = verify( () => bloc.add( captureAny(
@@ -175,7 +175,7 @@ void main() {
       await tester.pumpWidget( underTest() );
       await tester.pump();
 
-      await tester.tap( find.byKey( Key( '${TestKeys.trustDecisionRejectPrefix}d-43' ) ) );
+      await tester.tap( find.byKey( const Key( '${TestKeys.trustDecisionRejectPrefix}d-43' ) ) );
       await tester.pump();
 
       final captured = verify( () => bloc.add( captureAny(

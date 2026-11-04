@@ -1,0 +1,8 @@
+# Provisional per-directory options for the documentation pilot.
+# Inherits the root options and adds the public-docs rule; the gate is
+# `dart analyze --fatal-infos lib/features/fleet_status`.
+include: ../../../analysis_options.yaml
+
+linter:
+  rules:
+    public_member_api_docs: true

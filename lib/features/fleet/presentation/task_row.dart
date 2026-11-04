@@ -8,74 +8,52 @@ import '../data/task_write_repository.dart';
 import 'task_field_controls.dart';
 import 'verb_reason_sheet.dart';
 
-/// The ONE row widget. Task List and Holding Area both render this and produce
-/// cell-for-cell identical output.
+/// The one row widget; Task List and Holding Area render it with identical cells.
 ///
-/// 🔴 THERE IS NO PANE PARAMETER, AND ITS ABSENCE IS THE WHOLE MECHANISM.
-/// "Build one widget" is an instruction, not a mechanism — this satisfies every word of
-/// it and is what a developer under deadline actually writes:
+/// It has no pane parameter, and that absence is what keeps the panes identical. A
+/// `pane: Pane.holdingArea` argument with `if ( pane == ... )` branches in `build` would
+/// share a type and none of the cell-for-cell identity. The constructor takes a row model
+/// and nothing that says which pane it is in. What one pane needs and its sibling does
+/// not, such as the Holding Area's batch selection, lives in the group header or a wrapper.
+/// Drift then needs a constructor change, which shows up in review.
 ///
-/// ```dart
-/// TaskRow( model: row, pane: Pane.holdingArea )   // one widget, three behaviours
-/// ```
-///
-/// One type, one constant, divergent layouts via `if (pane == …)` inside `build`. The
-/// web comment protects CELL-FOR-CELL IDENTITY (`holdingAreaTable.ts:20-22`), and a
-/// shared type delivers no part of that.
-///
-/// ⇒ The constructor takes a row model and nothing that can tell it which pane it is
-/// in. Anything one pane needs that its sibling does not — the Holding Area's batch
-/// selection — lives in the GROUP HEADER or a WRAPPER, never in a branch inside the row.
-/// Drift then requires changing this constructor, which is visible in review; today it
-/// would take adding an enum case, which is not.
-///
-/// ⚠️ FINISHED TASKS MUST NOT RENDER THIS. Its rows come from `task_events` and carry no
-/// `priority`, `blocked`, `accountable` or `actions`. A guard test asserts its absence,
-/// because §7's title — "The shared row" — reads to a later hand as a mandate to unify.
+/// Finished Tasks must not render this widget: its rows come from `task_events` and carry
+/// no `priority`, `blocked`, `accountable` or `actions`. A guard test asserts it does not.
 class TaskRow extends StatefulWidget {
+  /// The row to render.
   final TaskRowModel model;
 
-  /// The verbs this row offers. Supplied by the pane, but as DATA — a list of verbs is
-  /// not a pane discriminator: both panes may pass the same list, and neither can make
-  /// the row lay itself out differently by choosing one.
+  /// The verbs this row offers, as obligations rather than built payloads.
   ///
-  /// 🔴 THESE ARE OBLIGATIONS, NOT PAYLOADS, AND THE CHANGE IS NOT COSMETIC. This was
-  /// `List<TaskVerb>` — a list of BUILT payloads — which works only for the two verbs
-  /// that need nothing. Four of the seven require a reason the operator has not typed
-  /// yet, so a pane building them eagerly would have to pass `TaskVerb.wontFix( reason:
-  /// '' )`: a button whose every press is a guaranteed 422. The Holding Area named that
-  /// exact trap and declined to ship the verb rather than fall into it.
-  ///
-  /// ⇒ The pane says WHICH verbs; the row collects what each one needs through the
-  /// shared sheet and hands the pane a payload that is already complete.
+  /// The pane says which verbs, as data; both panes may pass the same list. The row
+  /// collects what each verb needs through the shared sheet. It hands the pane a complete
+  /// payload. Built payloads would not work. Four of the seven verbs need a reason the
+  /// operator has not yet typed. Building them eagerly would send an empty reason and get
+  /// a 422 on every press.
   final List<VerbNeeds> verbs;
 
-  /// Fired when the operator confirms a verb AND has supplied everything it requires.
-  /// The row owns arming and the sheet; the pane owns the write and the optimistic
-  /// rollback.
+  /// Called when the operator confirms a verb and has supplied everything it requires.
+  ///
+  /// The row owns arming and the sheet; the pane owns the write and the optimistic rollback.
   final void Function( TaskVerb verb )? onVerb;
 
-  /// Fired when the operator commits a FIELD change — priority or owner, never status.
+  /// Called when the operator commits a field change, priority or owner, never status.
   ///
-  /// ⚠️ NULL MEANS "THIS PANE DOES NOT OFFER FIELD EDITS", AND IT IS NOT A PANE
-  /// DISCRIMINATOR. It is the same shape [onVerb] already had: a callback the pane
-  /// supplies or does not, exactly as it supplies a verb list or an empty one. Both
-  /// panes may pass one, and neither can make the row lay itself out differently by
-  /// choosing — the controls appear because there is somewhere for their output to go,
-  /// which is a property of the DATA and not of which pane is asking.
+  /// Null means the pane offers no field edits. That is data, not a pane discriminator,
+  /// like [onVerb]: the controls appear because their output has somewhere to go.
   final void Function( { String? priority, String? ownerPersona } )? onFieldChanged;
 
-  /// The personas this row may be reassigned to. Data, from the live fleet.
+  /// The personas this row may be reassigned to, from the live fleet.
   final List<String> ownerOptions;
 
-  /// What the operator did to this row that has NOT reached the server, if anything.
+  /// What the operator did to this row that has not reached the server, or null.
   ///
-  /// 🔴 VISIBLE STATE, NOT ONLY A NOTICE. Gap G6's acceptance says so in as many words,
-  /// and the reason is that a notice bar says "something failed" while the operator is
-  /// looking at fifty rows. The mark has to be ON the row, because the question they are
-  /// actually asking is "did MY park land", and only the row can answer it.
+  /// It is visible state on the row, not only a notice. A notice bar says something failed
+  /// while the operator looks at fifty rows. The question they ask is whether their own
+  /// park landed, and only the row can answer it.
   final String? unsentLabel;
 
+  /// Creates a row; [verbs], [onVerb] and [onFieldChanged] are supplied by the pane.
   const TaskRow( {
     super.key,
     required this.model,
@@ -93,7 +71,7 @@ class TaskRow extends StatefulWidget {
 class _TaskRowState extends State<TaskRow> {
   bool _expanded = false;
 
-  /// The verb currently armed, if any. Terminal verbs arm before they fire (§7.4).
+  // The verb currently armed, if any. Terminal verbs arm before they fire.
   String? _armedVerb;
 
   @override
@@ -103,18 +81,13 @@ class _TaskRowState extends State<TaskRow> {
       children : [
         _line1( context ),
         _line2( context ),
-        // 🔴 COLLAPSED CONTROLS MUST BE ABSENT FROM THE SEMANTICS TREE, NOT MERELY
-        // INVISIBLE. Under ruling 2 the disclosed row is this pane's PRIMARY VERB
-        // SURFACE. Hidden with `Opacity(0)`, a zero-height `SizedBox`, or
-        // `Visibility(…, maintainSemantics: true)`, TalkBack reads and can ACTIVATE
-        // every row's write verbs while the row looks collapsed.
-        //
-        // `Visibility` drops the child from the tree by default, which is what we want —
-        // and note that the two idioms a Flutter developer reaches for first
-        // (`Visibility(visible:false)`, `Offstage`) are both accidentally correct here.
-        // That is precisely the condition under which something drifts unnoticed later,
-        // so the widget test asserts no action node is reachable while collapsed rather
-        // than trusting the default.
+        // Collapsed controls must be absent from the semantics tree, not merely invisible.
+        // The disclosed row is the pane's primary verb surface. Hidden with `Opacity(0)`,
+        // a zero-height `SizedBox` or `Visibility(..., maintainSemantics: true)`, TalkBack
+        // can read and activate every row's write verbs while the row looks collapsed.
+        // `Visibility` drops the child from the tree by default, as does `Offstage`, so the
+        // default is correct here. The widget test asserts that no action node is reachable
+        // while collapsed, instead of trusting the default.
         Visibility(
           visible : _expanded,
           child   : _line3( context ),
@@ -123,13 +96,10 @@ class _TaskRowState extends State<TaskRow> {
     );
   }
 
-  /// Line 1 is the title and the disclosure control. Nothing else fits.
-  ///
-  /// At 360 dp — ordinary Android portrait — 16 dp gutters and a 48 dp minimum
-  /// interactive target leave roughly 86 dp for the title, about twelve characters.
-  /// Every title in this fleet shares a `[LUPIN-MOBILE] Phase N:` prefix, so packing
-  /// `id · class · status · priority` here truncates every row to the SAME string and
-  /// the pane cannot be read at all.
+  // Line 1 is the title and the disclosure control; nothing else fits. At 360 dp, 16 dp
+  // gutters and a 48 dp target leave roughly 86 dp for the title, about twelve characters.
+  // Fleet titles share a `[LUPIN-MOBILE] Phase N:` prefix, so more fields here would
+  // truncate every row to the same string.
   Widget _line1( BuildContext context ) {
     return Row(
       children : [
@@ -142,18 +112,13 @@ class _TaskRowState extends State<TaskRow> {
     );
   }
 
-  /// The mark a row wears while one of the operator's writes has not landed.
-  ///
-  /// 🔴 ON LINE 1, WHERE THE ROW IS IDENTIFIED, AND NOT BEHIND THE DISCLOSURE. A mark
-  /// hidden inside the controls answers the question only for someone who already
-  /// suspects the answer. §7.2 is emphatic that line 1 does not survive extra FIELDS at
-  /// 360 dp — this is an icon, not a field, and it is the one thing on the row that is
-  /// about the operator rather than about the task.
-  ///
-  /// ⚠️ THE LABEL NAMES THE VERB, NOT THE FAILURE. "Park not sent" tells the operator
-  /// what to press again; "write failed" tells them something is broken and leaves them
-  /// to work out what. Colour carries none of it — `Semantics` does, because a coloured
-  /// glyph is invisible to TalkBack and to anyone who does not know this app's palette.
+  // The mark a row wears while one of the operator's writes has not landed. It sits on
+  // line 1, where the row is identified, not behind the disclosure, because a mark hidden
+  // in the controls helps only someone who already suspects the answer. It is an icon, not
+  // a field, so it does not crowd line 1. The label names the verb ("Park not sent"), which
+  // tells the operator what to press again, where "write failed" would not. `Semantics`
+  // carries the label and colour carries nothing, because TalkBack cannot see a coloured
+  // glyph.
   Widget _unsentMark( BuildContext context ) {
     return Padding(
       padding : const EdgeInsets.only( right: 6 ),
@@ -174,8 +139,8 @@ class _TaskRowState extends State<TaskRow> {
         .map( ( c ) => _cell( c.key, widget.model.cell( c.key ) ) )
         .toList( growable: false );
 
-    // Wrap rather than Row: nine fields do not fit one phone line either, and a
-    // hard-coded break point would be another number that goes stale silently.
+    // A Wrap, not a Row: nine fields do not fit one phone line, and a hard-coded break
+    // point would go stale silently.
     return Wrap( spacing: 8, runSpacing: 4, children: cells );
   }
 
@@ -185,9 +150,9 @@ class _TaskRowState extends State<TaskRow> {
       crossAxisAlignment : CrossAxisAlignment.start,
       children : [
         _cell( 'detail', widget.model.cell( 'detail' ) ),
-        // The FIELD door sits above the verbs, and the order is not arbitrary: priority
-        // and owner are reversible edits, the verbs below include two that are not, and
-        // the reversible controls should not be the ones a thumb reaches last.
+        // The field controls sit above the verbs. Priority and owner are reversible, the
+        // verbs below include two that are not, and reversible controls should not be the
+        // ones a thumb reaches last.
         if ( widget.onFieldChanged != null ) _fieldControls( context ),
         _verbBar( context ),
       ],
@@ -203,9 +168,9 @@ class _TaskRowState extends State<TaskRow> {
     );
   }
 
-  /// Every cell carries its schema key, so the identity guard can read the ORDERED key
-  /// list out of a rendered pane. A cell with no value still renders — an absent cell
-  /// and an empty one are different, and the guard compares presence and order.
+  // Every cell carries its schema key, so the identity guard can read the ordered key
+  // list out of a rendered pane. A cell with no value still renders as a dash, because the
+  // guard compares presence and order, and an absent cell differs from an empty one.
   Widget _cell( String key, String? value, { TextStyle? style } ) {
     return Text(
       value ?? '—',
@@ -216,17 +181,10 @@ class _TaskRowState extends State<TaskRow> {
     );
   }
 
-  /// The disclosure control.
-  ///
-  /// ⚠️ `expanded:` CARRIES STATE, NOT PURPOSE. Without a label the toggle is a glyph
-  /// and TalkBack says "button, collapsed" — the user never learns there are verbs
-  /// behind it. `Semantics(expanded:)` raises `hasExpandedState`/`isExpanded`, which
-  /// Android turns into "expanded"/"collapsed"; a visual rotation delivers none of it
-  /// (`basic.dart:7344`, `semantics.dart:1392`, `:5401-5405`).
-  ///
-  /// ⚠️ This is the app's FIRST `Semantics` widget — `grep -rn 'Semantics(' lib`
-  /// returned zero before this file. There is no existing practice to carry substance
-  /// into; it is being set here, on the app's densest UI.
+  // The disclosure control. `expanded:` carries state, not purpose: without a label the
+  // toggle is a bare glyph and TalkBack says only "button, collapsed", so the user never
+  // learns that verbs sit behind it. `Semantics(expanded:)` sets the expanded state that
+  // Android announces as "expanded" or "collapsed"; a visual rotation announces nothing.
   Widget _disclosureToggle( BuildContext context ) {
     return Semantics(
       expanded : _expanded,
@@ -234,8 +192,8 @@ class _TaskRowState extends State<TaskRow> {
       child    : IconButton(
         key       : const Key( TestKeys.taskRowDisclosure ),
         icon      : const Icon( Icons.more_horiz ),
-        // The web spec is an ellipsis right-justified ON THE TITLE LINE
-        // (`rowSchema.ts:12-15`); the second row is not displayed by default.
+        // The web spec puts an ellipsis, right-justified, on the title line; the second
+        // row is hidden by default.
         onPressed : () => setState( () {
           _expanded = !_expanded;
           if ( !_expanded ) _armedVerb = null;   // collapsing disarms
@@ -251,35 +209,24 @@ class _TaskRowState extends State<TaskRow> {
     );
   }
 
-  /// A terminal verb ARMS, then fires on the second press (`taskVerbs.ts:116-117` —
-  /// `terminal: true` is the shared module's `armsTwice`). On a phone, where a mis-tap is
-  /// likelier than a mis-click, this is the single most worth carrying.
-  ///
-  /// 🔴 AND CARRYING IT AS WRITTEN PROTECTS A SIGHTED USER AND NOBODY ELSE. In Flutter,
-  /// CHANGING A BUTTON'S LABEL IN PLACE IS NOT ANNOUNCED — TalkBack focus stays on the
-  /// node, the text under it changes, and nothing is spoken (`semantics.dart:5351-5362`:
-  /// an update is announced only with `liveRegion`, *"even if the widget does not have
-  /// accessibility focus"*). A TalkBack user believes the first tap missed and taps
-  /// again — AND THAT IS THE TAP THAT FIRES THE TERMINAL ACTION. A safety mechanism that
-  /// makes a mis-tap harder for one class of user and no harder for another, recorded as
-  /// handled, is strictly worse than omitting it.
-  ///
-  /// ⇒ The armed state is a LIVE REGION, and the test asserts the ANNOUNCEMENT rather
-  /// than the label change.
-  ///
-  /// ⚠️ Do not reach for `SemanticsService.announce` — it is deprecated on Android
-  /// (`semantics_service.dart:40-46`), with the SDK itself pointing at `liveRegion`.
+  // A terminal verb arms on the first press and fires on the second, which is the shared
+  // module's `armsTwice`. On a phone a mis-tap is likelier than a mis-click.
+  //
+  // Changing a button's label in place is not announced in Flutter. TalkBack focus stays
+  // on the node, the text changes and nothing is spoken, because an update is announced
+  // only with `liveRegion`. A TalkBack user then believes the first tap missed and taps
+  // again, and that tap fires the terminal action. So the armed state is a live region,
+  // and the test asserts the announcement, not the label change. Do not use
+  // `SemanticsService.announce`: it is deprecated on Android in favour of `liveRegion`.
   Widget _verbButton( VerbNeeds verb ) {
     final armed = _armedVerb == verb.name;
     final label = armed ? 'Confirm ${verb.name}' : verb.name;
 
-    // ⚠️ THE FLAG MUST SIT ON THE NODE THAT CARRIES THE LABEL, OR IT ANNOUNCES NOTHING.
-    // A bare `Semantics( liveRegion: … )` around a button produces a SEPARATE node with
-    // no label of its own, and the button's changing text stays on the child node —
-    // so the live region fires on a node that says nothing while the words the user
-    // needs change silently one level down. `MergeSemantics` folds them into one node
-    // that has both the label and the flag. Caught by the test below, which asserts the
-    // flag on the node the button key resolves to.
+    // The live-region flag must sit on the node that carries the label, or it announces
+    // nothing. A bare `Semantics( liveRegion: ... )` around a button makes a separate node
+    // with no label, while the changing text stays on the child node. `MergeSemantics`
+    // folds them into one node holding both. The widget test asserts the flag on the node
+    // the button key resolves to.
     return MergeSemantics(
       child : Semantics(
         liveRegion : armed,
@@ -292,18 +239,11 @@ class _TaskRowState extends State<TaskRow> {
     );
   }
 
-  /// One press of a verb button: arm, or collect, or fire.
+  /// Handles one press of a verb button: arm, collect, or fire.
   ///
-  /// 🔴 ARMING COMES FIRST AND THE SHEET COMES SECOND, NOT THE OTHER WAY ROUND. §7.4's
-  /// mechanism is that a terminal verb's FIRST tap changes nothing and says so out loud
-  /// (the live region). Opening the sheet on that first tap would put a modal in front of
-  /// the announcement, and a TalkBack user would meet the sheet instead of the warning —
-  /// which is the failure §7.4 exists to prevent, wearing a different costume.
-  ///
-  /// ⚠️ THE ROW STAYS DISARMED AFTER THE SHEET, EVEN WHEN THE OPERATOR CANCELS. Leaving
-  /// a terminal verb armed behind a dismissed sheet means the NEXT tap fires it with no
-  /// warning at all — the operator backed out, and a back-out that leaves the safety off
-  /// is worse than no safety.
+  /// Arming comes before the sheet: the first tap on a terminal verb only announces,
+  /// and a sheet opened then would cover the announcement. The row stays disarmed after
+  /// the sheet, even on cancel, or the next tap would fire with no warning.
   ///
   /// Ensures:
   ///   - a terminal verb that is not yet armed only arms, and sends nothing
@@ -327,7 +267,7 @@ class _TaskRowState extends State<TaskRow> {
       needs    : verb,
       rowTitle : widget.model.title,
     );
-    if ( built == null ) return;   // cancelled — no write, and the verb is disarmed
+    if ( built == null ) return;   // cancelled: no write, and the verb stays disarmed
     widget.onVerb?.call( built );
   }
 }

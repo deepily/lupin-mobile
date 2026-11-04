@@ -3,19 +3,23 @@ import 'package:dio/dio.dart';
 import 'auth_repository.dart';
 import 'auth_token_provider.dart';
 
-/// Dio interceptor that injects the current access token and transparently
-/// refreshes on 401. Requires callbacks for reading the stored refresh
-/// token and persisting the rotated pair (so the interceptor does not
-/// import AuthBloc or SecureCredentialStore directly).
+/// Dio interceptor that adds the access token and refreshes it on a 401.
+///
+/// Reading the stored refresh token and persisting the rotated pair are callbacks, so the interceptor
+/// does not import AuthBloc or SecureCredentialStore.
 class AuthInterceptor extends Interceptor {
   final Dio             _dio;
   final AuthRepository  _repo;
+  /// Reads the stored refresh token for the active server context.
   final Future<String?> Function() readRefreshToken;
+  /// Persists the rotated token pair after a successful refresh.
   final Future<void>    Function( AuthTokens tokens ) onTokensRotated;
+  /// Called when the session cannot be refreshed, so the app can sign the user out.
   final Future<void>    Function() onRefreshFailed;
 
   bool _refreshing = false;
 
+  /// Creates an interceptor that sends requests through [dio] and refreshes through [repo].
   AuthInterceptor( {
     required Dio dio,
     required AuthRepository repo,
@@ -66,11 +70,10 @@ class AuthInterceptor extends Interceptor {
       final retryOpts        = err.requestOptions;
       retryOpts.extra[ "_auth_retried" ] = true;
       retryOpts.headers[ "Authorization" ] = "Bearer ${rotated.accessToken}";
-      // A multipart body is single-use: the first attempt finalized it, and
-      // replaying the same FormData throws inside fetch, so the retry would
-      // fail and read as a refresh failure. Clone it (files re-read from
-      // their source) so the refresh stays invisible to the user — Rick's
-      // CB4 ruling, plan rev 14 §3.2.
+      // A multipart body is single-use: the first attempt finalized it, and replaying the same FormData
+      // throws inside fetch, so the retry would fail and read as a refresh failure. Clone it, with files
+      // re-read from their source, so the refresh stays invisible to the user.
+      // Design: src/docs/decisions/README.md (R-AUTH-retry-clone)
       if ( retryOpts.data is FormData ) {
         retryOpts.data = ( retryOpts.data as FormData ).clone();
       }
@@ -85,26 +88,24 @@ class AuthInterceptor extends Interceptor {
     }
   }
 
-  /// Refresh, surviving a rotation the BACKGROUND wake isolate got to first.
+  /// Refreshes, surviving a rotation the background wake isolate got to first.
   ///
-  /// 🔴 THE STORED REFRESH TOKEN HAS TWO WRITERS. The FCM wake handler runs in
-  /// its own isolate (`fcm_bootstrap.dart`) and refreshes there, and the server
-  /// revokes on every exchange, so when a wake arrives while the app is
-  /// backgrounded-but-alive both sides can present the same token. The loser
-  /// gets a 401 on a token that was valid when it read it, and treating that as
-  /// a dead session logged the user out for nothing — the board polls every 60 s
-  /// and wakes are rate-limited to one per 60 s, so the two recur on similar
-  /// cadences rather than colliding exotically.
+  /// The stored refresh token has two writers: the FCM wake handler also refreshes it, in its own isolate (`fcm_bootstrap.dart`).
+  /// The server revokes on every exchange, so a wake while the app is backgrounded but alive can make both sides present one token.
+  /// The loser gets a 401 on a token that was valid when it read it. That is not a dead session, and treating it as one logs the user out.
   ///
   /// Requires:
   ///   - presented is the refresh token this attempt already tried
+  ///
   /// Ensures:
-  ///   - returns rotated tokens, retrying ONCE iff the 401 came with a
-  ///     different token now in the store (i.e. the other writer won)
+  ///   - returns rotated tokens, retrying once only if the 401 came with a different token now in the
+  ///     store, which means the other writer won
+  ///
   /// Raises:
-  ///   - AuthException when the session is genuinely dead: any non-401, or a
-  ///     401 on a token the store still agrees with
+  ///   - AuthException when the session is dead: any non-401, or a 401 on a token the store still agrees with
   Future<AuthTokens> _refreshRacingBackground( String presented ) async {
+    // The board polls every 60 s and wakes are rate-limited to one per 60 s, so the two
+    // writers recur on similar cadences rather than colliding rarely.
     try {
       return await _repo.refresh( presented );
     } on AuthException catch ( e ) {

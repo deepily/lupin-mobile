@@ -3,7 +3,7 @@
 Legacy service-level integration notes. **Not** the canonical Flutter
 `integration_test/` directory (that lives at project root and is driven
 by `IntegrationTestWidgetsFlutterBinding`). Renamed from `test/integration/`
-on 2026-04-17 to avoid confusion during the 2026 testing playbook adoption.
+to avoid confusion during the 2026 testing playbook adoption.
 
 This directory contains comprehensive integration test notes that verify the interaction between different services and components in the Lupin Mobile application.
 
@@ -71,16 +71,10 @@ flutter test test/integration/websocket_integration_test.dart
 flutter test test/integration/cache_integration_test.dart
 ```
 
-### Running Complete Integration Suite
+### Running the Whole Directory
 ```bash
-# Run all integration tests
-flutter test test/integration/integration_test_runner.dart
-
-# Run with verbose output
-flutter test test/integration/integration_test_runner.dart --verbose
-
-# Run with coverage
-flutter test test/integration/integration_test_runner.dart --coverage
+# There is no master runner; run the directory
+./flutter.sh test test/service_integration/
 ```
 
 ## Test Architecture

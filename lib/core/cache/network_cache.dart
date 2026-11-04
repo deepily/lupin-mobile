@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
-import '../storage/storage_manager.dart';
 import 'cache_manager.dart';
 import 'cache_policy.dart';
 import 'offline_manager.dart';
@@ -60,7 +59,7 @@ class NetworkCache {
       data: response.data,
       headers: response.headers.map,
       timestamp: DateTime.now(),
-      ttl: customTtl ?? Duration(minutes: 30),
+      ttl: customTtl ?? const Duration(minutes: 30),
     );
     
     await _responseCache.put(
@@ -245,16 +244,26 @@ class NetworkCache {
 
 /// Network response wrapper for caching
 class NetworkResponse {
+  /// HTTP method.
   final String method;
+  /// Request URL.
   final String url;
+  /// Query parameters, or null.
   final Map<String, dynamic>? queryParameters;
+  /// Request body, or null.
   final Map<String, dynamic>? requestData;
+  /// HTTP status code.
   final int statusCode;
+  /// The data.
   final dynamic data;
+  /// Response headers.
   final Map<String, List<String>> headers;
+  /// When the object was created.
   final DateTime timestamp;
+  /// How long the response stays valid.
   final Duration ttl;
 
+  /// Creates a [NetworkResponse].
   const NetworkResponse({
     required this.method,
     required this.url,
@@ -285,6 +294,7 @@ class NetworkResponse {
     );
   }
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'method': method,
@@ -299,6 +309,7 @@ class NetworkResponse {
     };
   }
 
+  /// Reads a [NetworkResponse] from the map [toJson] produces.
   factory NetworkResponse.fromJson(Map<String, dynamic> json) {
     return NetworkResponse(
       method: json['method'],
@@ -318,13 +329,20 @@ class NetworkResponse {
 
 /// Network cache statistics
 class NetworkCacheStats {
+  /// Number of cached responses.
   final int totalResponses;
+  /// Total size in bytes.
   final int totalSizeBytes;
+  /// Hit rate.
   final double hitRate;
+  /// Counts per HTTP method.
   final Map<String, int> methodStats;
+  /// Counts per HTTP status code.
   final Map<int, int> statusStats;
+  /// Number of expired entries.
   final int expiredCount;
 
+  /// Creates a [NetworkCacheStats].
   const NetworkCacheStats({
     required this.totalResponses,
     required this.totalSizeBytes,
@@ -334,6 +352,7 @@ class NetworkCacheStats {
     required this.expiredCount,
   });
 
+  /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
       'total_responses': totalResponses,
@@ -348,54 +367,73 @@ class NetworkCacheStats {
 
 /// Base network cache event
 abstract class NetworkCacheEvent {
+  /// When the event was created.
   final DateTime timestamp = DateTime.now();
 }
 
 /// Network cache store event
 class NetworkCacheStoreEvent extends NetworkCacheEvent {
+  /// HTTP method.
   final String method;
+  /// Request URL.
   final String url;
+  /// HTTP status code.
   final int statusCode;
   
+  /// Creates the event.
   NetworkCacheStoreEvent(this.method, this.url, this.statusCode);
 }
 
 /// Network cache hit event
 class NetworkCacheHitEvent extends NetworkCacheEvent {
+  /// HTTP method.
   final String method;
+  /// Request URL.
   final String url;
+  /// HTTP status code.
   final int statusCode;
   
+  /// Creates the event.
   NetworkCacheHitEvent(this.method, this.url, this.statusCode);
 }
 
 /// Network cache miss event
 class NetworkCacheMissEvent extends NetworkCacheEvent {
+  /// HTTP method.
   final String method;
+  /// Request URL.
   final String url;
   
+  /// Creates the event.
   NetworkCacheMissEvent(this.method, this.url);
 }
 
 /// Network cache expired event
 class NetworkCacheExpiredEvent extends NetworkCacheEvent {
+  /// HTTP method.
   final String method;
+  /// Request URL.
   final String url;
   
+  /// Creates the event.
   NetworkCacheExpiredEvent(this.method, this.url);
 }
 
 /// Network cache invalidate event
 class NetworkCacheInvalidateEvent extends NetworkCacheEvent {
+  /// Pattern that selects the entries.
   final String pattern;
   
+  /// Creates the event.
   NetworkCacheInvalidateEvent(this.pattern);
 }
 
 /// Network cache cleanup event
 class NetworkCacheCleanupEvent extends NetworkCacheEvent {
+  /// Number of entries removed.
   final int removedCount;
   
+  /// Creates the event.
   NetworkCacheCleanupEvent(this.removedCount);
 }
 
