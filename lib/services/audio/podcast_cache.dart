@@ -152,6 +152,19 @@ class PodcastCache extends ChangeNotifier {
     return _inFlight.putIfAbsent( name, () => _download( serverPath, name ).whenComplete( () { _inFlight.remove( name ); } ) );
   }
 
+  /// Deletes the downloaded file called [name] from the phone and forgets it.
+  ///
+  /// Ensures:
+  ///   - only the phone's copy goes; the file on the server or in Drive is untouched
+  ///   - a name that is not on disk is forgotten without an error
+  ///   - listeners hear about it, so a card or the list drops its downloaded marker
+  Future<void> delete( String name ) async {
+    final file = File( "${( await _dir() ).path}/$name.mp3" );
+    if ( await file.exists() ) await file.delete();
+    _names.remove( name );
+    notifyListeners();
+  }
+
   /// Deletes every download older than [age] and returns how many it removed.
   ///
   /// Age is the time since the file was written. A half-finished `.part` file that old goes too.

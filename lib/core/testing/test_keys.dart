@@ -592,6 +592,10 @@ class TestKeys {
   static const podcastDriveDownloadPrefix    = 'podcast.drive.download.';
   /// Prefix of a Drive row's download spinner; `<job folder>/<Drive file id>` follows.
   static const podcastDriveDownloadingPrefix = 'podcast.drive.downloading.';
+  /// Prefix of a Drive row's delete button; `<job folder>/<Drive file id>` follows.
+  static const podcastDriveDeletePrefix      = 'podcast.drive.delete.';
+  /// Key of the Undo action on the snackbar a delete shows.
+  static const podcastDriveDeleteUndo        = 'podcast.drive.delete.undo';
   /// Prefix of a Drive row's on-this-phone mark; `<job folder>/<Drive file id>` follows.
   static const podcastDriveDownloadedPrefix  = 'podcast.drive.downloaded.';
 
