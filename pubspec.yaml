@@ -2,7 +2,7 @@ name: lupin_mobile
 description: A mobile client for the Lupin AI assistant system with voice interface and real-time communication.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0+1
+version: 0.2.2+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
