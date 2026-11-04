@@ -12,8 +12,9 @@ A sophisticated Android mobile client for the Lupin AI assistant system, featuri
 - **Podcasts**: The app has a player, a Podcasts screen, a Podcast button in the document viewer, and Play on finished cards.
 - **Google Drive podcasts**: The Podcasts screen lists every podcast stored in Google Drive, below the ones saved on the phone.
 - **Offline listening**: A download button on each Drive row saves a podcast. On mobile data the app asks first.
+- **Delete the phone copy**: Once a podcast is saved, Delete replaces Download. Undo is offered for five seconds, and Drive is never touched.
 - **Earbud and lock-screen controls**: Play, pause and rewind work from the earbuds and the lock screen. A long press on rewind restarts.
-- **Hands-free Quick Ask**: An earbud tap starts and stops recording, and a double tap sends the question.
+- **Hands-free Quick Ask (in progress)**: Earbud taps for recording and sending are wired in. They do not yet work on the phone, and the fix comes in the next release.
 - **Choice questions**: Every multiple-choice ask now has an "Other" answer you can type, in the notification sheet and in Quick Ask.
 - **Approve and view links**: Cards show an approve link that approves in place and a link that shows the row.
 - **Push wake-ups**: Firebase messages wake the app in the background. You can pause push from the server for up to 24 hours.
