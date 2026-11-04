@@ -1,6 +1,23 @@
 # TODO
 
-## Resume here: 2026-11-02 close (Tiffany)
+## Resume here: 2026-11-04 close (Tiffany)
+
+v0.2.2 is merged (PR #4, `ccdc8fd`) and released with the APK. The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`. Four rows carry over, and all of them come back at 09:00 Eastern on 11-05.
+
+- [ ] Earbud capture is likely silent, so Whisper returns "thank you" (row `bcc9cba3`). First capture the WAV with earbuds in and check its peak level.
+- [ ] Earbud taps only click on the phone (row `c643b1b0`), then the phone-locked step (row `3a8005c1`).
+- [ ] Firebase key restriction (row `cbdec4ca`): Rick changes it in the Cloud console, then I check that a push wake-up still reaches build 2.
+- [x] Archive TODO.md horizon: done, 528 lines down to 101 (`09b1907`).
+- [ ] Possible flake: `ws_stale_channel_test.dart` (carried from 11-01).
+
+### Decisions Log — 2026-11-04 (session `5988cc00`, Tiffany)
+
+- Rick: fix the transcript bug in the next branch and carry the tap bug forward. The version is 0.2.2.
+- Rick: the whole-branch gate's exceptions are allowed: the analyzer config, three ignores, and the markdown check failing on older records. Each is documented in PR #4.
+- Rick: the podcast Delete has an Undo snackbar. If the podcast is playing, it keeps playing and is deleted when it stops; a progress ring shows only while it downloads.
+- Rick: the next branch is `wip-v0.2.3-2026.11.04-tracking-lupin`, and the release carries the debug APK.
+
+## Earlier: 2026-11-02 close (Tiffany)
 
 Five rows were done or merged today; APK build 4 is at `bd27502`. Two new bugs are filed for tonight, and both wait for Rick's approval.
 

@@ -15,6 +15,23 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.04 | Session `5988cc00` (Tiffany): v0.2.2 merged and released, next branch cut
+
+Rick's broadcast `5abd2128` asked for the PR prep (row `41fe1e70`, P0). The crew was John, Clayton, Tiberius, Arnold and extra 1, all reaped with mementos.
+
+- **Fixes** (each with a defect Arnold found and a failing test):
+  - Quick Ask stop tap during recorder start (row `0f29b56e`), merged `2c57159`.
+  - Podcast Delete with Undo (row `a51e7fd2`), merged `37c5b13`.
+- **Prep**: version `0.2.2+1` with `AppConstants.appVersion`, README "What's New in v0.2.2", and TODO archived to `todo-archive/2026-09-23-to-10-20-todo.md`. These merged as `6adda41`, `85398dc` and `a3ba552`.
+- **Gate**: the whole-branch run needed `--allow-analyzer-config --allow-ignores`, and older records fail the markdown check (Rick's ruling, documented in the PR). The suite came back NO_NEW_FAILURE.
+- **PR #4 merged** as `ccdc8fd`. Release `v0.2.2` has `lupin-mobile-v0.2.2-debug.apk` attached. New branch `wip-v0.2.3-2026.11.04-tracking-lupin`.
+- **Carried to v0.2.3**: earbud taps don't work on the phone (`c643b1b0`), and earbud capture is likely silent (`bcc9cba3`; Whisper hears "thank you"). Also step 2 `3a8005c1`, and the Firebase key restriction `cbdec4ca` (Rick's console change).
+- **Lessons**:
+  - On one seat, a cross-seat order to edit `lib/` was refused as untrusted, so reassign the edit instead of arguing.
+  - Run `pip_drift_check.py` against `.claude/commands`. Its "version lies" are mostly project-config differences.
+  - A worker on a detached HEAD must branch before the merge.
+- **Memento sweep**: 10 worker mementos from 11-04 were summarized above and trashed.
+
 ## 2026.11.02 | Session `cfdbef0b` (Tiffany) — "Other" on choice asks, hands-free Quick Ask, no banner while the app is open
 
 The work came from Rick by voice and from rows on my board. APK builds 1 to 4 were made; the last is `bd27502`, and the drawer reads "2026.11.02 build 4". Each change had an independent review, and every defect it found was fixed with a test that fails without the fix.
