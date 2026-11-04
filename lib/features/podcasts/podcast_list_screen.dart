@@ -70,6 +70,10 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   /// A name stays here through the Undo window and, when it is playing, until playback ends.
   final Set<String>         _pending     = {};
 
+  /// The newest delete's token per name; a snackbar that closes with an older token is stale.
+  final Map<String, int>    _deleteToken = {};
+  int                       _tokens      = 0;
+
   @override
   void initState() {
     super.initState();
@@ -167,6 +171,7 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
   ///   - the Drive file is never touched
   void _delete( PodcastCache cache, String name, String title ) {
     if ( !_pending.add( name ) ) return;
+    final token = _deleteToken[ name ] = ++_tokens;
     setState( () {} );
     final messenger = ScaffoldMessenger.of( context );
     messenger.hideCurrentSnackBar();
@@ -176,11 +181,20 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       action  : SnackBarAction(
         key    : const Key( TestKeys.podcastDriveDeleteUndo ),
         label  : "Undo",
-        onPressed: () { if ( _pending.remove( name ) && mounted ) setState( () {} ); },
+        onPressed: () { if ( _keep( name ) && mounted ) setState( () {} ); },
       ),
     ) ).closed.then( ( reason ) {
-      if ( reason != SnackBarClosedReason.action ) unawaited( _finishDelete( cache, name ) );
+      if ( reason != SnackBarClosedReason.action && _deleteToken[ name ] == token ) unawaited( _finishDelete( cache, name ) );
     } );
+  }
+
+  /// Cancels the pending delete of [name]; true if one was pending.
+  ///
+  /// Ensures:
+  ///   - the close of the snackbar that offered the delete no longer deletes the copy
+  bool _keep( String name ) {
+    _deleteToken.remove( name );
+    return _pending.remove( name );
   }
 
   /// Deletes the copy of [name] now, or after playback ends if it is playing.
@@ -202,6 +216,7 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       debugPrint( "[PodcastList] delete of $name failed: $e" );
     }
     _pending.remove( name );
+    _deleteToken.remove( name );
     if ( mounted ) setState( () {} );
   }
 
@@ -329,7 +344,7 @@ class _PodcastListScreenState extends State<PodcastListScreen> {
       tooltip  : "Download to this phone",
       onPressed: () {
         // The copy is still on disk during the Undo window or while it plays: keep it, download nothing.
-        if ( _pending.remove( name ) ) { setState( () {} ); return; }
+        if ( _keep( name ) ) { setState( () {} ); return; }
         _download( cache, url, title );
       },
     );

@@ -199,4 +199,22 @@ void main() {
     await t.pumpAndSettle();
     expect( _key( TestKeys.podcastDriveDeletePrefix ), findsOneWidget );
   } );
+
+  testWidgets( "delete, keep via Download, delete again: the first snackbar's close must not delete the copy", ( t ) async {
+    cache.files[ _name ] = PathFile( "/tmp/x.mp3" );
+    await open( t );
+
+    await t.tap( _key( TestKeys.podcastDriveDeletePrefix ) );
+    await t.pumpAndSettle( const Duration( milliseconds: 300 ) );
+    await t.tap( _key( TestKeys.podcastDriveDownloadPrefix ) );
+    await t.pumpAndSettle( const Duration( milliseconds: 300 ) );
+    await t.tap( _key( TestKeys.podcastDriveDeletePrefix ) );
+    await t.pumpAndSettle( const Duration( milliseconds: 300 ) );
+
+    expect( cache.deleted, isEmpty, reason: "file went before the second Undo window ended" );
+    await t.tap( find.byKey( const Key( TestKeys.podcastDriveDeleteUndo ) ) );
+    await pastUndo( t );
+    expect( cache.deleted, isEmpty );
+    expect( cache.isCached( _name ), isTrue );
+  } );
 }
