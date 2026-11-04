@@ -158,7 +158,7 @@ class _RecordHeader extends StatelessWidget {
                     // One tap starts and the next stops.
                     // It is `onTap` and not a long press, so no finger has to stay down.
                     onTap   : enabled
-                        ? () => bloc.add( recording
+                        ? () => bloc.add( recording || state.phase == QuickAskPhase.starting
                             ? const QuickAskRecordReleased()
                             : const QuickAskRecordPressed() )
                         : null,
@@ -229,6 +229,7 @@ class _RecordHeader extends StatelessWidget {
 
   String _headline( QuickAskState s ) {
     switch ( s.phase ) {
+      case QuickAskPhase.starting:      return 'Starting… tap to stop';
       case QuickAskPhase.recording:     return 'Listening… tap to stop';
       case QuickAskPhase.transcribing:  return 'Transcribing…';
       case QuickAskPhase.review:        return 'Ready to send';

@@ -11,6 +11,11 @@ enum QuickAskPhase {
   /// Nothing is happening.
   idle,
 
+  /// The first tap landed and the recorder is still starting.
+  ///
+  /// A second tap in this window means stop. It is held and applied the moment the recorder is up.
+  starting,
+
   /// The microphone is capturing.
   recording,
 
@@ -251,7 +256,7 @@ class QuickAskState extends Equatable {
   /// The microphone is inert while a draft is held. Clear and send are the only way out,
   /// so a stray tap cannot throw away a question the user already spoke.
   bool get canRecord =>
-      ( blockReason == null || phase == QuickAskPhase.recording ) && !hasDraft;
+      ( blockReason == null || phase == QuickAskPhase.recording || phase == QuickAskPhase.starting ) && !hasDraft;
 
   /// What the button shows when it is disabled. Null when it is enabled.
   String? get blockedMessage => canRecord ? null : blockReason?.message;

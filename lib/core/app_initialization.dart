@@ -3,6 +3,7 @@ import 'error_handling/error_handler.dart';
 import 'logging/logger.dart';
 import 'storage/storage_manager.dart';
 import 'di/service_locator.dart';
+import 'constants/app_constants.dart';
 
 /// Application initialization manager
 class AppInitialization {
@@ -107,7 +108,7 @@ class AppInitialization {
     Logger.setGlobalContext(LogContext(
       feature: 'lupin_mobile',
       metadata: {
-        'app_version': '1.0.0', // This would come from package info
+        'app_version': AppConstants.appVersion,
         'platform': defaultTargetPlatform.name,
         'debug_mode': kDebugMode,
       },
@@ -121,7 +122,7 @@ class AppInitialization {
       sessionId: sessionId,
       feature: 'lupin_mobile',
       metadata: {
-        'app_version': '1.0.0',
+        'app_version': AppConstants.appVersion,
         'platform': defaultTargetPlatform.name,
         'debug_mode': kDebugMode,
       },

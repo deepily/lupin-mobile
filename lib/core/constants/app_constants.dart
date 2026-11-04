@@ -9,7 +9,7 @@ class AppConstants {
   static const String appName = 'Lupin Mobile';
 
   /// App version string.
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '0.2.2';
   
   // API Configuration
   // These are runtime-mutable. ServerContextService rewrites them when the user toggles

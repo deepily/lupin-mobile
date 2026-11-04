@@ -184,15 +184,37 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     // Re-entrancy guard. `canRecord` stays true while a capture runs,
     // because it describes whether the control is live.
     // The guard against a second start therefore belongs here, not in the predicate.
-    if ( state.phase == QuickAskPhase.recording ) return;
+    if ( state.phase == QuickAskPhase.recording || state.phase == QuickAskPhase.starting ) return;
     if ( !state.canRecord ) return;
+
+    // Mark the start at once. Starting is async, and until now the phase stayed idle through it,
+    // so a stop tap in that window was dropped and a second press started the recorder again.
+    _stopAfterStart = false;
+    final generation = ++_startGeneration;
+    emit( state.copyWith( phase: QuickAskPhase.starting ) );
 
     // The session requests the microphone before capturing.
     // `AsrService.startRecording()` only checks permission and throws,
     // which on a fresh install would refuse a user who was never asked.
-    final start = await _session.start();
+    VoiceCaptureStart start;
+    try {
+      start = await _session.start();
+    } catch ( ex ) {
+      // A newer press owns the phase and the held stop now, so an old start's failure changes nothing.
+      if ( generation != _startGeneration ) return;
+      // The session only translates recorder errors. Anything else, such as the permission plugin
+      // or a missing temp dir, would leave the phase at `starting` and refuse every later press.
+      _stopAfterStart = false;
+      emit( state.copyWith(
+        phase        : QuickAskPhase.idle,
+        errorMessage : 'Could not start recording: $ex',
+        capturing    : _asr.isCapturing,
+      ) );
+      return;
+    }
     if ( start.isStale ) return;
     if ( !start.started ) {
+      _stopAfterStart = false;
       emit( state.copyWith(
         phase        : QuickAskPhase.idle,
         errorMessage : start.errorMessage,
@@ -205,13 +227,34 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
       clearError : true,
       capturing  : _asr.isCapturing,
     ) );
+
+    // The user already tapped stop while the recorder was starting: apply it now.
+    if ( _stopAfterStart ) {
+      _stopAfterStart = false;
+      await _stopRecording( emit );
+    }
   }
+
+  /// Set when a stop tap arrives while the recorder is still starting.
+  bool _stopAfterStart = false;
+
+  /// Counts presses, so a failed start can tell whether it is still the current one.
+  int _startGeneration = 0;
 
   /// Second tap: stop, transcribe and hold the draft.
   ///
   /// The submit lives behind the send button, not here.
   Future<void> _onRecordReleased( QuickAskRecordReleased e, Emitter<QuickAskState> emit ) async {
+    if ( state.phase == QuickAskPhase.starting ) {
+      _stopAfterStart = true;
+      return;
+    }
     if ( state.phase != QuickAskPhase.recording ) return;
+    await _stopRecording( emit );
+  }
+
+  /// Stops the running capture and moves to review, or sends at once in send-immediately mode.
+  Future<void> _stopRecording( Emitter<QuickAskState> emit ) async {
     final epoch = _opEpoch;
     emit( state.copyWith( phase: QuickAskPhase.transcribing ) );
 
@@ -439,6 +482,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
   }
 
   Future<void> _onRecordCancelled( QuickAskRecordCancelled e, Emitter<QuickAskState> emit ) async {
+    _stopAfterStart = false;
     await _session.cancelAwaiting();  // anything in flight is now stale
     emit( state.copyWith(
       phase             : QuickAskPhase.idle,

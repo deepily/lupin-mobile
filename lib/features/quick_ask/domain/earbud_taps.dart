@@ -96,7 +96,7 @@ typedef EarbudAction = ( { QuickAskEvent? event, HandsFreeCue cue } );
 ///   - `event` is null exactly when `cue` is [HandsFreeCue.refused]
 ///   - `cue` is never [HandsFreeCue.ready], which only the claim plays
 EarbudAction earbudAction( EarbudGesture gesture, QuickAskState state ) {
-  if ( state.phase == QuickAskPhase.recording ) {
+  if ( state.phase == QuickAskPhase.recording || state.phase == QuickAskPhase.starting ) {
     return ( event: const QuickAskRecordReleased(), cue: HandsFreeCue.stopped );
   }
   switch ( gesture ) {
