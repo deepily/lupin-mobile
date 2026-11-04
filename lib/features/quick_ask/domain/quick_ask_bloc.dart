@@ -190,6 +190,7 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     // Mark the start at once. Starting is async, and until now the phase stayed idle through it,
     // so a stop tap in that window was dropped and a second press started the recorder again.
     _stopAfterStart = false;
+    final generation = ++_startGeneration;
     emit( state.copyWith( phase: QuickAskPhase.starting ) );
 
     // The session requests the microphone before capturing.
@@ -199,6 +200,8 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     try {
       start = await _session.start();
     } catch ( ex ) {
+      // A newer press owns the phase and the held stop now, so an old start's failure changes nothing.
+      if ( generation != _startGeneration ) return;
       // The session only translates recorder errors. Anything else, such as the permission plugin
       // or a missing temp dir, would leave the phase at `starting` and refuse every later press.
       _stopAfterStart = false;
@@ -234,6 +237,9 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
 
   /// Set when a stop tap arrives while the recorder is still starting.
   bool _stopAfterStart = false;
+
+  /// Counts presses, so a failed start can tell whether it is still the current one.
+  int _startGeneration = 0;
 
   /// Second tap: stop, transcribe and hold the draft.
   ///
