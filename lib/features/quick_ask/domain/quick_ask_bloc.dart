@@ -195,9 +195,23 @@ class QuickAskBloc extends Bloc<QuickAskEvent, QuickAskState> {
     // The session requests the microphone before capturing.
     // `AsrService.startRecording()` only checks permission and throws,
     // which on a fresh install would refuse a user who was never asked.
-    final start = await _session.start();
+    VoiceCaptureStart start;
+    try {
+      start = await _session.start();
+    } catch ( ex ) {
+      // The session only translates recorder errors. Anything else, such as the permission plugin
+      // or a missing temp dir, would leave the phase at `starting` and refuse every later press.
+      _stopAfterStart = false;
+      emit( state.copyWith(
+        phase        : QuickAskPhase.idle,
+        errorMessage : 'Could not start recording: $ex',
+        capturing    : _asr.isCapturing,
+      ) );
+      return;
+    }
     if ( start.isStale ) return;
     if ( !start.started ) {
+      _stopAfterStart = false;
       emit( state.copyWith(
         phase        : QuickAskPhase.idle,
         errorMessage : start.errorMessage,
