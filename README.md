@@ -4,14 +4,43 @@ A sophisticated Android mobile client for the Lupin AI assistant system, featuri
 
 ## 🚀 Project Status
 
-**Lupin v0.1.6 Resync — All 4 Tiers Complete** ✅ — On-device validation pending
+**Lupin Mobile v0.2.2** — The phone now plays podcasts, answers questions by voice, and wakes for push notifications.
 
-### What's New (v0.1.6 Resync)
-- ✅ **Tier 1 — Auth**: Real JWT auth, biometric unlock, WS persistence, Dev/Test toggle
-- ✅ **Tier 2 — Notifications + Decision Proxy**: InboxScreen, ConversationScreen, InteractivePromptSheet, TrustDashboardScreen, NotificationBloc, DecisionProxyBloc
-- ✅ **Tier 3 — Queue/CJ Flow + Claude Code**: QueueDashboardScreen, JobDetailScreen, SubmitJobSheet, ChatScreen, SessionListScreen, DispatchSheet, QueueBloc, ClaudeCodeBloc
-- ✅ **Tier 4 — Agentic Jobs**: AgenticHubScreen + 9 submission forms, AgenticRepository (10 endpoints), AgenticSubmissionBloc, IoFileService, MarkdownReportViewer, AudioArtifactPlayer, SlideDeckViewer
-- ✅ **Tests**: 140/140 unit tests passing
+### What's New in v0.2.2
+
+#### Major Features
+- **Podcasts**: The app has a player, a Podcasts screen, a Podcast button in the document viewer, and Play on finished cards.
+- **Google Drive podcasts**: The Podcasts screen lists every podcast stored in Google Drive, below the ones saved on the phone.
+- **Offline listening**: A download button on each Drive row saves a podcast. On mobile data the app asks first.
+- **Earbud and lock-screen controls**: Play, pause and rewind work from the earbuds and the lock screen. A long press on rewind restarts.
+- **Hands-free Quick Ask**: An earbud tap starts and stops recording, and a double tap sends the question.
+- **Choice questions**: Every multiple-choice ask now has an "Other" answer you can type, in the notification sheet and in Quick Ask.
+- **Approve and view links**: Cards show an approve link that approves in place and a link that shows the row.
+- **Push wake-ups**: Firebase messages wake the app in the background. You can pause push from the server for up to 24 hours.
+- **Notification controls**: Tapping a notification opens that sender's conversation. Master mute, quiet hours and muted senders all apply to speech.
+- **Live Console and Fleet panes**: The transcript console, the Surfaces drawer and the fleet panes match what the web client shows.
+- **Document viewer parity**: You can download, upload, browse folders and list roots, as in the web viewer.
+
+#### Infrastructure
+- **Merge gate**: One script, `tool/merge_gate.py`, runs the analyzer, doc linter, markdown gate, coverage check and full suite.
+- **Documentation standard**: Doc comments follow `src/docs/docstring-standard.md`. A hook and the gate refuse public members without docs.
+- **Markdown gate**: Each page has a class, and the commit hook refuses pages that break the rules for that class.
+- **Reuse tools**: A Dart symbol index, a wiki of 39 pages and a reuse-reviewer skill answer "does this already exist?".
+- **Dead code removed**: 54 unreachable files, about 26,000 lines, were deleted, and analyzer warnings fell from 102 to 2.
+- **Build and deploy scripts**: One script builds the APK on the server, and another installs it on the phone. Push wake-ups are on by default.
+- **Build line**: The drawer shows the branch, the date and a build number for each day.
+- **Planning commands**: The `/plan-*` command wrappers were refreshed from the planning-is-prompting sources.
+
+#### Quality of Life
+- **No pop-up while the app is open**: A notification dings and vibrates inside the app instead of posting an Android banner.
+- **Silent phone found**: The speech outcome line now names Master mute when it is the reason nothing played.
+- **Reconnect fixes**: The WebSocket no longer gives up after five retries, and an old listener cannot tear down the live socket.
+- **Logout cleanup**: Logout sends the refresh token and unregisters the push token first.
+- **Log safety**: Logs mask secrets in quoted keys, arrays and plural names, and they flush when the app pauses.
+- **Queue fix**: Deleting a job now fetches the queue again, so the list stays correct.
+- **Voice input**: Dictation fields work on all fifteen microphone sites, and the append mic works in the Focus reply.
+- **Off means off**: Focus speech obeys Notifications off, Master mute, muted senders and quiet hours.
+- **Tests**: The suite runs more than 3,300 tests, and every fixed defect has a test that fails without the fix.
 
 ### Current Capabilities
 - **Authentication**: JWT login, biometric unlock, WS session persistence
