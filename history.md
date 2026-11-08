@@ -15,6 +15,15 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.07 | Session `9dc7dc88` (Rachel): one-off merge of the focus-composer fix, APK build 1
+
+Rick asked by voice for one job: `git merge --ff-only fix-focus-composer-mc-answer-d10ef810`. Krishna wrote the fix and Tiberius approved it, and Cheech handed the row over.
+
+- **Merged** `c128a02` by fast-forward from `8c9d860`. The focus composer now sends a typed reply to a multiple-choice ask as `{"answers": {header: text}}` (row `d10ef810`, closed).
+- **Suite**: 3359 pass and 1 fail. The `ask_spoken_stream` fixture-currency test also fails on `8c9d860` (row `1d674700`).
+- **APK**: `build-apk-on-server.sh` with FCM; the drawer reads "2026.11.07 build 1".
+- **Rows**: merge row `a3510961` is held, so a worker seat cannot close it; Cheech is sending Rick a drop. Held rows `1d674700` and `eb149168` were re-owned to Tiffany, and `c7f03ede` to Cheech.
+
 ## 2026.11.04 | Session `5988cc00` (Tiffany): v0.2.2 merged and released, next branch cut
 
 Rick's broadcast `5abd2128` asked for the PR prep (row `41fe1e70`, P0). The crew was John, Clayton, Tiberius, Arnold and extra 1, all reaped with mementos.
