@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -732,7 +733,7 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
     try {
       await _repo.respond( NotificationResponsePayload(
         notificationId : targetId,
-        responseValue  : event.text,
+        responseValue  : _wireAnswer( event.senderId, targetId, event.text ),
       ) );
 
       final windows = _copyWindows();
@@ -794,6 +795,33 @@ class FocusChatBloc extends Bloc<FocusChatEvent, FocusChatState> {
         hydration : FocusHydration.error,
       ) );
     }
+  }
+
+  /// The value to post for a reply to the ask [targetId].
+  ///
+  /// A multiple_choice ask with nested questions needs `{"answers": {<header>: <text>}}`.
+  /// The sheet, Quick Ask and the pane already send that form.
+  /// A typed or spoken reply is bare text, so it is wrapped under the first question's header.
+  /// The key is `q_0` when the question has no header, as the prompt body keys it.
+  /// Text the pane already wrapped passes through, and every other ask keeps the bare string.
+  String _wireAnswer( String senderId, String targetId, String text ) {
+    final ask = ( state.windows[ senderId ] ?? const <FocusMessage>[] )
+        .where( ( m ) => m.item.id == targetId ).firstOrNull;
+    if ( ask == null || ask.item.responseType != 'multiple_choice' ) return text;
+
+    final questions = ask.item.responseOptions?[ 'questions' ];
+    if ( questions is! List || questions.isEmpty ) return text;
+
+    try {
+      final decoded = jsonDecode( text );
+      if ( decoded is Map && decoded[ 'answers' ] is Map ) return text;
+    } on FormatException {
+      // Plain text: wrap it below.
+    }
+
+    final first  = questions.first;
+    final header = ( first is Map && first[ 'header' ] != null ) ? first[ 'header' ].toString() : 'q_0';
+    return jsonEncode( { 'answers': { header: text } } );
   }
 
   Map<String, List<FocusMessage>> _windowsWithUnsent( String senderId, String targetId, String text ) {
