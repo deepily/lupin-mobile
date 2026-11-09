@@ -13,6 +13,7 @@ import 'package:lupin_mobile/features/holding_area/domain/holding_area_bloc.dart
 import 'package:lupin_mobile/features/holding_area/presentation/filer_group_header.dart';
 import 'package:lupin_mobile/features/holding_area/presentation/holding_area_pane.dart';
 
+import '../../unit/_helpers/drain_event_loop.dart';
 import '../../unit/_helpers/stub_dio.dart';
 
 /// The whole pane, at 360×800.
@@ -52,7 +53,7 @@ List<String> _transitionIds( StubAdapter a ) => a.captured
 /// fetch is still in flight when the assertions run and every pane test sees an empty
 /// pane. `runAsync` lets real async actually happen before the frames are pumped.
 Future<void> settle( WidgetTester tester ) async {
-  await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 60 ) ) );
+  await tester.runAsync( drainEventLoop );
   await tester.pumpAndSettle();
 }
 
@@ -68,7 +69,7 @@ Future<void> settle( WidgetTester tester ) async {
 /// `settle` helper above was written for.
 Future<void> expandGroup( WidgetTester tester, String filer ) async {
   await tester.tap( find.byKey( Key( '${TestKeys.holdingGroupTogglePrefix}$filer' ) ) );
-  await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 20 ) ) );
+  await tester.runAsync( drainEventLoop );
   await tester.pumpAndSettle();
 }
 
@@ -561,8 +562,7 @@ void _unsentMarkReachesTheRow() {
     // ⚠️ REAL TIME, NOT THE FAKE CLOCK. The pane's first fetch runs on the real event
     // loop; `pumpAndSettle` alone drives only the test clock, so the groups have not
     // arrived when the next line looks for one.
-    await tester.runAsync(
-        () => Future<void>.delayed( const Duration( milliseconds: 40 ) ) );
+    await tester.runAsync( drainEventLoop );
     await tester.pumpAndSettle();
 
     // Unfold the group so the rows are on screen, then lose a write on row a.
@@ -571,8 +571,7 @@ void _unsentMarkReachesTheRow() {
     await expandGroup( tester, 'Sam' );
 
     bloc.add( HoldingAreaRowVerbPressed( id: 'a', verb: TaskVerb.approve() ) );
-    await tester.runAsync(
-        () => Future<void>.delayed( const Duration( milliseconds: 40 ) ) );
+    await tester.runAsync( drainEventLoop );
     await tester.pumpAndSettle();
 
     expect( find.byKey( const Key( TestKeys.taskRowUnsentMark ) ), findsOneWidget,

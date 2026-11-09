@@ -5,6 +5,7 @@ import 'package:lupin_mobile/features/task_list/data/task_list_repository.dart';
 import 'package:lupin_mobile/features/task_list/domain/task_list_bloc.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 void main() {
   late StubAdapter adapter;
@@ -36,7 +37,7 @@ void main() {
       };
 
       bloc.add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await drainEventLoop();
 
       expect(bloc.state.error, isNull,
           reason: "leaving a pane must not look like the server falling over");
@@ -48,7 +49,7 @@ void main() {
           (_) => jsonBody({"detail": "boom"}, status: 500);
 
       bloc.add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await drainEventLoop();
 
       expect(bloc.state.error, isNotNull,
           reason: "swallowing cancellations must not swallow genuine failures too");
@@ -85,7 +86,7 @@ void main() {
       bloc.add(const TaskListGroupToggled("sam"));
       await Future<void>.delayed(Duration.zero);
       bloc.add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await drainEventLoop();
 
       expect(bloc.state.collapsed, contains("sam"));
     });
@@ -97,7 +98,7 @@ void main() {
           (_) => jsonBodyFromFixtureLike(hasMore: true, total: 16);
 
       bloc.add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await drainEventLoop();
 
       expect(bloc.state.incomplete, isTrue);
       expect(bloc.state.total, 16);
@@ -108,7 +109,7 @@ void main() {
           (_) => jsonBodyFromFixtureLike(hasMore: false, total: 0);
 
       bloc.add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await drainEventLoop();
 
       expect(bloc.state.incomplete, isFalse);
     });
@@ -133,7 +134,7 @@ void _writeDoorTests(
           (_) => jsonBodyFromFixtureLike(hasMore: false, total: 0);
 
       blocOf().add(TaskListVerbPressed(taskId: "t1", verb: TaskVerb.approve()));
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await drainEventLoop();
 
       expect(seen, ["queued"], reason: "approve is a STATUS change, not a field edit");
     });
@@ -148,7 +149,7 @@ void _writeDoorTests(
           (_) => jsonBodyFromFixtureLike(hasMore: false, total: 0);
 
       blocOf().add(const TaskListFieldChanged(taskId: "t1", priority: "P0"));
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await drainEventLoop();
 
       expect(seen.single["priority"], "P0");
       expect(seen.single.containsKey("status"), isFalse);
@@ -170,11 +171,11 @@ void _writeDoorTests(
       );
 
       blocOf().add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await drainEventLoop();
       expect(blocOf().state.model!.groups.single.tasks.length, 1);
 
       blocOf().add(TaskListVerbPressed(taskId: "t1", verb: TaskVerb.approve()));
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await drainEventLoop();
 
       expect(blocOf().state.model!.groups.single.tasks.length, 1,
           reason: "the row must come BACK — a 202 did not approve it");
@@ -194,9 +195,9 @@ void _writeDoorTests(
           (_) => jsonBody({"detail": "nope"}, status: 500);
 
       blocOf().add(const TaskListRefreshRequested());
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await drainEventLoop();
       blocOf().add(TaskListVerbPressed(taskId: "t1", verb: TaskVerb.approve()));
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await drainEventLoop();
 
       expect(blocOf().state.model!.groups.single.tasks.length, 1);
       expect(blocOf().state.error, isNotNull);
