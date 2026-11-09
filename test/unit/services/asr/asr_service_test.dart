@@ -5,10 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:record/record.dart';
 
+import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
+import 'package:lupin_mobile/services/audio/lupin_media_handler.dart';
 
 class _MockDio      extends Mock implements Dio {}
 class _MockRecorder extends Mock implements AudioRecorder {}
+
+class _Trace implements LogDestination {
+  final lines = <String>[];
+  @override
+  void write( LogEntry entry ) {
+    if ( entry.tag == LupinMediaHandler.logTag ) lines.add( entry.message );
+  }
+  @override
+  Future<void> flush() async {}
+}
 
 void main() {
   group( 'AsrService (S4)', () {
@@ -55,6 +67,36 @@ void main() {
       when( () => recorder.stop() ).thenAnswer( ( _ ) async => path );
       return file;
     }
+
+    test( 'a stopped capture traces how long it was held, its size and its peak level', () async {
+      Logger.resetForTesting();
+      final trace = _Trace();
+      Logger.addDestination( trace );
+      addTearDown( Logger.resetForTesting );
+      when( () => recorder.getAmplitude() ).thenAnswer( ( _ ) async => Amplitude( current: -18.0, max: -18.0 ) );
+
+      final file = await startWithFile();
+      await Future<void>.delayed( const Duration( milliseconds: 350 ) );
+      await asr.stopToFile();
+
+      expect( trace.lines.single, matches( RegExp( r'^capture: held=0\.\d\ds bytes=4 peakDb=-18\.0 samples=[1-9]$' ) ) );
+      asr.discardPendingUpload( file.path );
+    } );
+
+    test( 'a recorder with no level still traces the capture, with peakDb=none', () async {
+      Logger.resetForTesting();
+      final trace = _Trace();
+      Logger.addDestination( trace );
+      addTearDown( Logger.resetForTesting );
+      when( () => recorder.getAmplitude() ).thenThrow( StateError( 'not recording' ) );
+
+      final file = await startWithFile();
+      await Future<void>.delayed( const Duration( milliseconds: 250 ) );
+      await asr.stopToFile();
+
+      expect( trace.lines.single, contains( 'peakDb=none samples=0' ) );
+      asr.discardPendingUpload( file.path );
+    } );
 
     /// A `/api/v2/transcribe` 200 body carrying [text].
     Map<String, dynamic> v2( String text ) => {

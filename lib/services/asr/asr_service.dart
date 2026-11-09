@@ -6,6 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../../core/logging/logger.dart';
+import '../audio/lupin_media_handler.dart';
+import 'peak_meter.dart';
+
 /// Typed failure for every ASR error path.
 ///
 /// The paths are a denied microphone permission, a recorder failure, an HTTP non-200, a network failure
@@ -99,6 +103,11 @@ class AsrService {
   /// The capture log compares the file size with how long the microphone was open. A capture held for
   /// 3.0 s that yields 2.6 s of audio has dropped 0.4 s, and no single number shows that; the pair does.
   DateTime? _captureStartedAt;
+
+  /// Reads the capture's level while the microphone is open.
+  ///
+  /// It feeds the earbud trace.
+  late final PeakMeter _meter = PeakMeter( read: () async => ( await _recorder.getAmplitude() ).current );
 
   /// True while a capture is in flight on this recorder.
   ///
@@ -495,6 +504,7 @@ class AsrService {
     }
     _setActivePath( path );
     _captureStartedAt = _clock();
+    _meter.start();
   }
 
   /// Recordings handed out by [stopToFile] and not yet discarded.
@@ -514,6 +524,7 @@ class AsrService {
   ///   - [AsrException] if the recorder fails to stop or produced no file
   Future<String> stopToFile() async {
     String? stopped;
+    _meter.stop();
     try {
       stopped = await _recorder.stop();
     } catch ( e ) {
@@ -532,10 +543,9 @@ class AsrService {
     _pendingUploadPaths.add( filePath );
     final startedAt = _captureStartedAt;
     _captureStartedAt = null;
-    _logCaptureSize(
-      filePath,
-      startedAt == null ? null : _clock().difference( startedAt ),
-    );
+    final heldFor = startedAt == null ? null : _clock().difference( startedAt );
+    _logCaptureSize( filePath, heldFor );
+    _traceCapture( filePath, heldFor );
     return filePath;
   }
 
@@ -659,11 +669,29 @@ class AsrService {
   ///
   /// The recorder's own cancel() deletes it too; this is a second guard.
   Future<void> cancelRecording() async {
+    _meter.stop();
     final path = _activePath;
     _setActivePath( null );
     _captureStartedAt = null;
     await _recorder.cancel();
     if ( path != null ) _deleteQuietly( File( path ) );
+  }
+
+  /// Puts one capture line in the earbud trace.
+  ///
+  /// The line gives how long the microphone was open, the file size and the peak level.
+  ///
+  /// Ensures:
+  ///   - never throws, whatever the file system does
+  void _traceCapture( String path, Duration? heldFor ) {
+    int? bytes;
+    try {
+      bytes = File( path ).lengthSync();
+    } catch ( _ ) {
+      bytes = null;
+    }
+    final held = heldFor == null ? 'unknown' : ( heldFor.inMilliseconds / 1000.0 ).toStringAsFixed( 2 );
+    Logger.info( 'capture: held=${ held }s bytes=${ bytes ?? "unreadable" } ${ _meter.describe() }', tag: LupinMediaHandler.logTag );
   }
 
   void _deleteQuietly( File f ) {
