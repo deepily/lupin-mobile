@@ -93,6 +93,8 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 
 // Notification audio (ding + TTS on high/urgent)
 import '../../services/notification_audio/notification_audio_service.dart';
+import '../logging/logger.dart';
+import '../../services/diagnostics/earbud_trace_uploader.dart';
 import '../../services/push/fcm_bootstrap.dart' show fcmOnLoggedOut;
 import '../../services/push/notification_tap_binding.dart';
 import '../../services/push/notification_tap_router.dart';
@@ -376,6 +378,8 @@ class ServiceLocator {
     dio.options.baseUrl = serverContext.baseUrl;
     serverContext.addListener((config) => dio.options.baseUrl = config.baseUrl);
     _getIt.registerSingleton<Dio>(dio);
+    // Earbud trace lines go to the server's access log; the phone has no adb to read them.
+    Logger.addDestination( EarbudTraceUploader( dio ) );
     return dio;
   }
 
