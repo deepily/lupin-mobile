@@ -469,16 +469,15 @@ void main() {
     // catch). The plan's row asserts `_capture.lupin_sha`, but the lupin fixture
     // carries `lupin_base_sha` and cannot hold its own commit sha. So the WHOLE
     // check is a byte comparison against lupin's fixture at a git ref:
-    //   - default ref: lupin's working branch (below) — `main` is 1,715 commits
-    //     behind and never sees the fixture;
-    //   - `$LUPIN_FIXTURE_REF` overrides it. Until §A merges, the fixture lives
-    //     only on `sam/ask-audio-door-a`, so this is RED on the default ref by
-    //     design: run with LUPIN_FIXTURE_REF=sam/ask-audio-door-a until then.
+    //   - default ref: `HEAD` of the lupin checkout, i.e. whatever working branch it is on now.
+    //     A branch name here went stale when lupin moved on (row 1d674700), and `main` is
+    //     1,715 commits behind and never sees the fixture;
+    //   - `$LUPIN_FIXTURE_REF` overrides it, for a check against a branch that is not checked out.
     // Provenance, comment only: copied from lupin 36314bf7 (sam/ask-audio-door-a).
     // A missing lupin repo FAILS, never skips: a skip reads as green.
     const lupinPath       = 'src/tests/fixtures/ask_audio_ndjson_contract.json';
     const phonePath       = 'test/fixtures/asr/ask_audio_ndjson_contract.json';
-    const defaultLupinRef = 'wip-v0.2.1-2026.08.29-cjflow-v2-followup';
+    const defaultLupinRef = 'HEAD';
 
     /// The lupin checkout: `$LUPIN_ROOT`, else the sibling of this repo's
     /// main checkout (works from a worktree too).
@@ -498,7 +497,7 @@ void main() {
             'Set LUPIN_ROOT to the lupin checkout. This test does not skip.' );
     }
 
-    test( 'the phone copy is byte-identical to lupin\'s fixture at \$LUPIN_FIXTURE_REF (default: lupin working branch)', () {
+    test( 'the phone copy is byte-identical to lupin\'s fixture at \$LUPIN_FIXTURE_REF (default: lupin HEAD)', () {
       final env  = Platform.environment[ 'LUPIN_FIXTURE_REF' ];
       final ref  = ( env == null || env.isEmpty ) ? defaultLupinRef : env;
       final root = lupinRoot();
@@ -510,7 +509,7 @@ void main() {
       final r    = Process.runSync( 'git', [ '-C', root, 'show', '$ref:$lupinPath' ], stdoutEncoding: null );
       if ( r.exitCode != 0 ) {
         fail( 'git show $ref:$lupinPath failed in $root (ref $ref @ $at): ${r.stderr}'
-              'Until §A merges, run with LUPIN_FIXTURE_REF=sam/ask-audio-door-a.' );
+              'Check out a lupin branch that has the fixture, or set LUPIN_FIXTURE_REF to one.' );
       }
       expect( Uint8List.fromList( r.stdout as List<int> ), File( phonePath ).readAsBytesSync(),
           reason: 'lupin $ref @ $at has a different $lupinPath — re-copy it byte for byte' );
