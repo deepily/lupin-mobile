@@ -63,4 +63,42 @@ void main() {
 
     expect( adapter.requests, hasLength( 1 ) );
   } );
+
+  group( 'install', () {
+    setUp( Logger.resetForTesting );
+    tearDown( Logger.resetForTesting );
+
+    test( 'installing twice leaves one uploader, so a line is sent once', () async {
+      final first  = _Adapter();
+      final second = _Adapter();
+      EarbudTraceUploader.install( baseUrl: 'http://one.test', dio: Dio()..httpClientAdapter = first );
+      EarbudTraceUploader.install( baseUrl: 'http://two.test', dio: Dio()..httpClientAdapter = second );
+
+      Logger.info( 'gesture: single', tag: LupinMediaHandler.logTag );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
+      expect( first.requests, isEmpty );
+      expect( second.requests.single.host, 'two.test' );
+    } );
+
+    test( 'the uploader has its own Dio with no interceptors, so no auth refresh can start', () {
+      final up = EarbudTraceUploader.install( baseUrl: 'http://one.test' );
+
+      expect( up.dio.interceptors.whereType<InterceptorsWrapper>(), isEmpty );
+      expect( up.dio.interceptors.length, 1, reason: 'Dio always holds its own import-conversion interceptor' );
+      expect( up.dio.options.baseUrl, 'http://one.test' );
+      expect( up.dio.options.connectTimeout, const Duration( seconds: 3 ) );
+    } );
+
+    test( 'switching server points later lines at the new host', () async {
+      final adapter = _Adapter();
+      final up      = EarbudTraceUploader.install( baseUrl: 'http://one.test', dio: Dio()..httpClientAdapter = adapter );
+      up.baseUrl = 'http://two.test';
+
+      Logger.info( 'click', tag: LupinMediaHandler.logTag );
+      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+
+      expect( adapter.requests.single.host, 'two.test' );
+    } );
+  } );
 }

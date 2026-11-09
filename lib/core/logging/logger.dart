@@ -471,6 +471,11 @@ class Logger {
     instance._destinations.add(destination);
   }
 
+  /// Removes [destination] from the shared logger; one that was never added is ignored.
+  static void removeDestination(LogDestination destination) {
+    instance._destinations.remove(destination);
+  }
+
   /// Removes every destination and restores the default level and context.
   @visibleForTesting
   static void resetForTesting() {
