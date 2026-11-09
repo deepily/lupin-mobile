@@ -19,6 +19,8 @@
    - **History file**: ./history.md
    - Never proceed without these parameters
 
+1b. **Must check GitHub CI**: run `src/scripts/ci-status-check.sh` once. Exit 1 means a workflow's newest run is red. Report it in the first status line. File a store bug row naming the run id unless an open row already covers it. Exit 2 means `gh` is unavailable. Say so; never skip silently.
+
 2. **Must handle the optional persona-request argument** (`$ARGS`):
    - **If `$ARGS` is empty or absent**: skip persona-request handling entirely — Preliminary 0's random allocation stands; proceed to Step 3.
    - **If `$ARGS` is non-empty**: the first whitespace-delimited token is the requested persona name (e.g., "María", "Mr. Radio", "rachel"). Execute **Preliminary 0.5: Persona-Request Swap** as documented in the canonical workflow. This fires the swap before the first user-facing acknowledgment, so the user hears the correct persona on turn 1 (no mid-turn identity flip).
