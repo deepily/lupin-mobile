@@ -13,8 +13,8 @@ class AudioCache {
   late final CacheManager<AudioMetadata> _metadataCache;
   late final OfflineManager _offlineManager;
   
-  final StreamController<AudioCacheEvent> _eventController = 
-      StreamController<AudioCacheEvent>.broadcast();
+  final StreamController<CacheEvent> _eventController = 
+      StreamController<CacheEvent>.broadcast();
 
   AudioCache._(OfflineManager offlineManager) : _offlineManager = offlineManager {
     _initialize();
@@ -78,7 +78,7 @@ class AudioCache {
       await _chunkCache.put(chunkKey, chunks[i]);
     }
     
-    _eventController.add(AudioCacheStoreEvent(text, provider, chunks.length));
+    _eventController.add(CachePutEvent( text, details: _eventDetails( provider, chunkCount: chunks.length ) ));
   }
 
   /// Get cached audio for text
@@ -92,7 +92,7 @@ class AudioCache {
     // Check if metadata exists
     final metadata = await _metadataCache.get(cacheKey);
     if (metadata == null) {
-      _eventController.add(AudioCacheMissEvent(text, provider));
+      _eventController.add(CacheMissEvent( text, details: _eventDetails( provider ) ));
       return null;
     }
     
@@ -102,7 +102,7 @@ class AudioCache {
       final chunkKey = '${cacheKey}_chunk_$i';
       final chunk = await _chunkCache.get(chunkKey);
       if (chunk == null) {
-        _eventController.add(AudioCacheMissEvent(text, provider));
+        _eventController.add(CacheMissEvent( text, details: _eventDetails( provider ) ));
         return null;
       }
       chunks.add(chunk);
@@ -115,7 +115,7 @@ class AudioCache {
     );
     await _metadataCache.put(cacheKey, updatedMetadata);
     
-    _eventController.add(AudioCacheHitEvent(text, provider, chunks.length));
+    _eventController.add(CacheHitEvent( text, details: _eventDetails( provider, chunkCount: chunks.length ) ));
     return chunks;
   }
 
@@ -129,13 +129,13 @@ class AudioCache {
       if (cached == null) {
         // Add to precache queue - in real implementation, this would
         // trigger TTS generation
-        _eventController.add(AudioPrecacheRequestEvent(phrase, provider));
+        _eventController.add(CachePrecacheRequestEvent( phrase, details: _eventDetails( provider ) ));
       }
     }
   }
 
   /// Get cache statistics
-  Future<AudioCacheStats> getStats() async {
+  Future<CacheStats> getStats() async {
     final chunkStats = _chunkCache.getStats();
     final metadataStats = _metadataCache.getStats();
     
@@ -151,14 +151,11 @@ class AudioCache {
       }
     }
     
-    return AudioCacheStats(
-      totalChunks: chunkStats.itemCount,
-      totalMetadata: metadataStats.itemCount,
-      totalSizeBytes: chunkStats.totalSizeBytes,
-      providerStats: providerStats,
-      chunkHitRate: chunkStats.hitRate,
-      metadataHitRate: metadataStats.hitRate,
-    );
+    return chunkStats.withExtras( {
+      "total_metadata"    : metadataStats.itemCount,
+      "provider_stats"    : providerStats,
+      "metadata_hit_rate" : metadataStats.hitRate,
+    } );
   }
 
   /// Clear cache for specific provider
@@ -185,14 +182,14 @@ class AudioCache {
       }
     }
     
-    _eventController.add(AudioCacheClearEvent(provider, removedCount));
+    _eventController.add(CacheClearEvent( details: { "provider": provider, "removed_count": removedCount } ));
   }
 
   /// Clear all cached audio
   Future<void> clearAll() async {
     await _chunkCache.clear();
     await _metadataCache.clear();
-    _eventController.add(AudioCacheClearEvent('all', 0));
+    _eventController.add(CacheClearEvent( details: { "provider": "all", "removed_count": 0 } ));
   }
 
   /// Get cached phrases for provider
@@ -218,11 +215,11 @@ class AudioCache {
     await _chunkCache.cleanup();
     await _metadataCache.cleanup();
     
-    _eventController.add(AudioCacheOptimizeEvent());
+    _eventController.add(CacheOptimizeEvent());
   }
 
   /// Stream of audio cache events
-  Stream<AudioCacheEvent> get events => _eventController.stream;
+  Stream<CacheEvent> get events => _eventController.stream;
 
   /// Dispose resources
   void dispose() {
@@ -230,6 +227,15 @@ class AudioCache {
   }
 
   // Private helper methods
+
+  /// Fields this cache adds to its events; chunk count only when known.
+  Map<String, Object?> _eventDetails( String provider, { int? chunkCount } ) {
+    return {
+      "provider" : provider,
+      if ( chunkCount != null ) "chunk_count" : chunkCount,
+    };
+  }
+
   String _hashText(String text) {
     final bytes = utf8.encode(text.toLowerCase().trim());
     final digest = sha256.convert(bytes);
@@ -319,109 +325,3 @@ class AudioMetadata {
     );
   }
 }
-
-/// Audio cache statistics
-class AudioCacheStats {
-  /// Number of cached chunks.
-  final int totalChunks;
-  /// Number of cached metadata entries.
-  final int totalMetadata;
-  /// Total size in bytes.
-  final int totalSizeBytes;
-  /// Entry counts per provider.
-  final Map<String, int> providerStats;
-  /// Hit rate for chunk lookups.
-  final double chunkHitRate;
-  /// Hit rate for metadata lookups.
-  final double metadataHitRate;
-
-  /// Creates a [AudioCacheStats].
-  const AudioCacheStats({
-    required this.totalChunks,
-    required this.totalMetadata,
-    required this.totalSizeBytes,
-    required this.providerStats,
-    required this.chunkHitRate,
-    required this.metadataHitRate,
-  });
-
-  /// Serializes to a JSON-compatible map.
-  Map<String, dynamic> toJson() {
-    return {
-      'total_chunks': totalChunks,
-      'total_metadata': totalMetadata,
-      'total_size_bytes': totalSizeBytes,
-      'provider_stats': providerStats,
-      'chunk_hit_rate': chunkHitRate,
-      'metadata_hit_rate': metadataHitRate,
-    };
-  }
-}
-
-/// Base audio cache event
-abstract class AudioCacheEvent {
-  /// When the event was created.
-  final DateTime timestamp = DateTime.now();
-}
-
-/// Audio cache store event
-class AudioCacheStoreEvent extends AudioCacheEvent {
-  /// Text involved in the operation.
-  final String text;
-  /// TTS provider that produced the audio.
-  final String provider;
-  /// Number of audio chunks.
-  final int chunkCount;
-  
-  /// Creates the event.
-  AudioCacheStoreEvent(this.text, this.provider, this.chunkCount);
-}
-
-/// Audio cache hit event
-class AudioCacheHitEvent extends AudioCacheEvent {
-  /// Text involved in the operation.
-  final String text;
-  /// TTS provider that produced the audio.
-  final String provider;
-  /// Number of audio chunks.
-  final int chunkCount;
-  
-  /// Creates the event.
-  AudioCacheHitEvent(this.text, this.provider, this.chunkCount);
-}
-
-/// Audio cache miss event
-class AudioCacheMissEvent extends AudioCacheEvent {
-  /// Text involved in the operation.
-  final String text;
-  /// TTS provider that produced the audio.
-  final String provider;
-  
-  /// Creates the event.
-  AudioCacheMissEvent(this.text, this.provider);
-}
-
-/// Audio precache request event
-class AudioPrecacheRequestEvent extends AudioCacheEvent {
-  /// Text involved in the operation.
-  final String text;
-  /// TTS provider that produced the audio.
-  final String provider;
-  
-  /// Creates the event.
-  AudioPrecacheRequestEvent(this.text, this.provider);
-}
-
-/// Audio cache clear event
-class AudioCacheClearEvent extends AudioCacheEvent {
-  /// TTS provider that produced the audio.
-  final String provider;
-  /// Number of entries removed.
-  final int removedCount;
-  
-  /// Creates the event.
-  AudioCacheClearEvent(this.provider, this.removedCount);
-}
-
-/// Audio cache optimize event
-class AudioCacheOptimizeEvent extends AudioCacheEvent {}

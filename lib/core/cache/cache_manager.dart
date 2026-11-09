@@ -144,7 +144,7 @@ class CacheManager<T> {
       await _persistEntry(entry);
     }
     
-    _eventController.add(CachePutEvent(key, sizeBytes));
+    _eventController.add(CachePutEvent( key, sizeBytes: sizeBytes ));
   }
 
   /// Removes item from both memory and persistent cache.
@@ -427,6 +427,10 @@ class CacheStats {
   final DateTime? newestEntry;
   /// Policy the cache follows.
   final CachePolicy policy;
+  /// Extra JSON-ready figures a wrapping cache adds to [toJson].
+  ///
+  /// Examples are counts per HTTP method. They follow the standard keys.
+  final Map<String, Object?> extras;
 
   /// Creates a [CacheStats].
   const CacheStats({
@@ -437,7 +441,22 @@ class CacheStats {
     this.oldestEntry,
     this.newestEntry,
     required this.policy,
+    this.extras = const {},
   });
+
+  /// Returns a copy of these stats that also carries [more] in [extras].
+  CacheStats withExtras( Map<String, Object?> more ) {
+    return CacheStats(
+      itemCount      : itemCount,
+      totalSizeBytes : totalSizeBytes,
+      expiredCount   : expiredCount,
+      hitRate        : hitRate,
+      oldestEntry    : oldestEntry,
+      newestEntry    : newestEntry,
+      policy         : policy,
+      extras         : { ...extras, ...more },
+    );
+  }
 
   /// Share of the entry limit in use, as a percentage.
   double get utilizationPercent => 
@@ -458,6 +477,7 @@ class CacheStats {
       'size_utilization_percent': sizeUtilizationPercent,
       'oldest_entry': oldestEntry?.toIso8601String(),
       'newest_entry': newestEntry?.toIso8601String(),
+      ...extras,
     };
   }
 }
@@ -466,6 +486,12 @@ class CacheStats {
 abstract class CacheEvent {
   /// When the event was created.
   final DateTime timestamp = DateTime.now();
+  /// Extra fields a wrapping cache adds, empty for [CacheManager] itself.
+  ///
+  /// Examples are the HTTP method and URL, or the TTS provider.
+  final Map<String, Object?> details;
+  /// Creates the event.
+  CacheEvent( { this.details = const {} } );
 }
 
 /// Cache hit event
@@ -473,7 +499,7 @@ class CacheHitEvent extends CacheEvent {
   /// Key identifying the entry.
   final String key;
   /// Creates the event.
-  CacheHitEvent(this.key);
+  CacheHitEvent( this.key, { super.details } );
 }
 
 /// Cache miss event
@@ -481,17 +507,17 @@ class CacheMissEvent extends CacheEvent {
   /// Key identifying the entry.
   final String key;
   /// Creates the event.
-  CacheMissEvent(this.key);
+  CacheMissEvent( this.key, { super.details } );
 }
 
 /// Cache put event
 class CachePutEvent extends CacheEvent {
   /// Key identifying the entry.
   final String key;
-  /// Size in bytes.
-  final int sizeBytes;
+  /// Size in bytes, or null when the emitter does not know it.
+  final int? sizeBytes;
   /// Creates the event.
-  CachePutEvent(this.key, this.sizeBytes);
+  CachePutEvent( this.key, { this.sizeBytes, super.details } );
 }
 
 /// Cache remove event
@@ -499,7 +525,7 @@ class CacheRemoveEvent extends CacheEvent {
   /// Key identifying the entry.
   final String key;
   /// Creates the event.
-  CacheRemoveEvent(this.key);
+  CacheRemoveEvent( this.key, { super.details } );
 }
 
 /// Cache expired event
@@ -507,16 +533,41 @@ class CacheExpiredEvent extends CacheEvent {
   /// Key identifying the entry.
   final String key;
   /// Creates the event.
-  CacheExpiredEvent(this.key);
+  CacheExpiredEvent( this.key, { super.details } );
 }
 
 /// Cache clear event
-class CacheClearEvent extends CacheEvent {}
+class CacheClearEvent extends CacheEvent {
+  /// Creates the event.
+  CacheClearEvent( { super.details } );
+}
 
 /// Cache cleanup event
 class CacheCleanupEvent extends CacheEvent {
   /// Number of items removed.
   final int itemsRemoved;
   /// Creates the event.
-  CacheCleanupEvent(this.itemsRemoved);
+  CacheCleanupEvent( this.itemsRemoved, { super.details } );
+}
+
+/// Cache invalidate event: entries matching [pattern] were removed.
+class CacheInvalidateEvent extends CacheEvent {
+  /// URL fragment or method name that selected the entries.
+  final String pattern;
+  /// Creates the event.
+  CacheInvalidateEvent( this.pattern, { super.details } );
+}
+
+/// Cache precache request event: [key] was missing and should be generated.
+class CachePrecacheRequestEvent extends CacheEvent {
+  /// Key identifying the wanted entry.
+  final String key;
+  /// Creates the event.
+  CachePrecacheRequestEvent( this.key, { super.details } );
+}
+
+/// Cache optimize event
+class CacheOptimizeEvent extends CacheEvent {
+  /// Creates the event.
+  CacheOptimizeEvent( { super.details } );
 }
