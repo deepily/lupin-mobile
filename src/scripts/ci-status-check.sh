@@ -6,19 +6,24 @@
 #   17 */4 * * * /path/to/src/scripts/ci-status-check.sh --quiet >> ~/.lupin/logs/ci-status.log 2>&1
 #
 # Requires: gh (logged in), python3. Read-only: it never reruns or edits a run.
-# Usage: ci-status-check.sh [--quiet] [--limit N]
+# Only runs on one branch (default main) and only finished runs count, so a run still
+# in progress never hides an older red one.
+# Usage: ci-status-check.sh [--quiet] [--limit N] [--branch NAME]
 #   --quiet   print only when something is red (cron-friendly)
-#   --limit N how many recent runs to look at (default 30)
+#   --limit N how many recent runs to look at (default 30; gh 2.4 cannot filter by branch, so raise it if main is busy)
+#   --branch  branch to read (default main)
 # Exit: 0 all newest runs green, 1 at least one red, 2 gh unavailable or failed.
 
 set -u
 
 QUIET=0
 LIMIT=30
+BRANCH=main
 while [ $# -gt 0 ]; do
     case "$1" in
         --quiet) QUIET=1 ;;
-        --limit) shift; LIMIT="$1" ;;
+        --limit)  [ $# -ge 2 ] || { echo "--limit needs a number" >&2; exit 2; }; shift; LIMIT="$1" ;;
+        --branch) [ $# -ge 2 ] || { echo "--branch needs a name" >&2; exit 2; }; shift; BRANCH="$1" ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
@@ -29,12 +34,18 @@ RAW=$( gh run list --limit "$LIMIT" --json name,conclusion,status,headBranch,dat
     exit 2
 }
 
-echo "$RAW" | QUIET=$QUIET python3 -I -c '
+echo "$RAW" | QUIET=$QUIET BRANCH=$BRANCH python3 -I -c '
 import json, os, sys
-runs   = json.load( sys.stdin )
+try:
+    runs = json.load( sys.stdin )
+except ValueError as e:
+    print( f"CI status: gh returned malformed JSON: {e}", file=sys.stderr )
+    sys.exit( 2 )
 quiet  = os.environ[ "QUIET" ] == "1"
 newest = {}
 for r in runs:                                   # gh lists newest first
+    if r[ "headBranch" ] != os.environ[ "BRANCH" ]: continue
+    if r[ "status" ] != "completed": continue    # in progress or queued: not a verdict yet
     newest.setdefault( r[ "name" ], r )
 red = [ r for r in newest.values() if r[ "conclusion" ] in ( "failure", "cancelled", "timed_out", "startup_failure" ) ]
 if red or not quiet:
