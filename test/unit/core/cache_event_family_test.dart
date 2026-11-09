@@ -114,6 +114,22 @@ void main() {
       expect( seen.single, isA<CacheInvalidateEvent>() );
       expect( ( seen.single as CacheInvalidateEvent ).pattern, "/family" );
     } );
+
+    test( "invalidateMethod removes only that method and emits CacheInvalidateEvent with the method as pattern", () async {
+      await network.clearAll();
+      await network.cacheGetResponse( "/family/m1", null, okResponse( "/family/m1" ) );
+      await network.cachePostResponse( "/family/m2", { "k": 1 }, okResponse( "/family/m2" ) );
+
+      final seen = <CacheEvent>[];
+      final sub  = network.events.listen( seen.add );
+      await network.invalidateMethod( "POST" );
+      await settle();
+      await sub.cancel();
+
+      expect( seen.single, isA<CacheInvalidateEvent>() );
+      expect( ( seen.single as CacheInvalidateEvent ).pattern, "POST" );
+      expect( ( await network.getStats() ).toJson()[ "method_stats" ], { "GET": 1 } );
+    } );
   } );
 
   group( "NetworkCache stats", () {
@@ -141,6 +157,14 @@ void main() {
       expect( extra.toJson()[ "a" ], 1 );
       expect( extra.toJson()[ "b" ], 2 );
       expect( base.toJson().containsKey( "a" ), isFalse );
+    } );
+
+    test( "an extras key that matches a standard key does not overwrite it", () {
+      const base  = CacheStats( itemCount: 3, totalSizeBytes: 9, expiredCount: 1, hitRate: 0.5, policy: CachePolicy.defaultPolicy );
+      final json  = base.withExtras( { "item_count": 99, "extra": 1 } ).toJson();
+
+      expect( json[ "item_count" ], 3 );
+      expect( json[ "extra" ], 1 );
     } );
   } );
 }

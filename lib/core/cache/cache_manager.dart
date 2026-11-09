@@ -429,7 +429,7 @@ class CacheStats {
   final CachePolicy policy;
   /// Extra JSON-ready figures a wrapping cache adds to [toJson].
   ///
-  /// Examples are counts per HTTP method. They follow the standard keys.
+  /// Examples are counts per HTTP method. A key that matches a standard key loses to it.
   final Map<String, Object?> extras;
 
   /// Creates a [CacheStats].
@@ -469,6 +469,7 @@ class CacheStats {
   /// Serializes to a JSON-compatible map.
   Map<String, dynamic> toJson() {
     return {
+      ...extras,
       'item_count': itemCount,
       'total_size_bytes': totalSizeBytes,
       'expired_count': expiredCount,
@@ -477,7 +478,6 @@ class CacheStats {
       'size_utilization_percent': sizeUtilizationPercent,
       'oldest_entry': oldestEntry?.toIso8601String(),
       'newest_entry': newestEntry?.toIso8601String(),
-      ...extras,
     };
   }
 }

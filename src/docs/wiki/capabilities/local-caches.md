@@ -3,7 +3,7 @@ capability: local-caches
 pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.cache.cache_manager.CacheManager@2aca9ec14d
-  - lupin-mobile:lib.core.cache.cache_manager.CacheStats@0f232b67f8
+  - lupin-mobile:lib.core.cache.cache_manager.CacheStats@0ee0b49e57
   - lupin-mobile:lib.core.cache.cache_manager.CacheEvent@7045b1d729
   - lupin-mobile:lib.core.cache.cache_policy.CachePolicy@58c855b02b
   - lupin-mobile:lib.core.cache.cache_policy.CacheEvictionStrategy@e52bbfdbc9
@@ -23,7 +23,7 @@ pins:
 - A periodic timer runs `cleanup()` every `autoCleanupInterval` when `enableAutoCleanup` is on. The presets are `defaultPolicy`, `shortLived`, `longLived`, `audio` and `offlineFirst`.
 - `OfflineManager.getCacheManager<T>` hands out one `CacheManager` per cache key and type. `NetworkCache` gets its own from it.
 - `NetworkCache` stores a `NetworkResponse` per method and URL, and `invalidateUrl` and `invalidateMethod` drop entries.
-- `NetworkCache.getStats` returns a `CacheStats` with `method_stats` and `status_stats` in its `extras`. `toJson` merges `extras` after the standard keys.
+- `NetworkCache.getStats` returns a `CacheStats` with `method_stats` and `status_stats` in its `extras`. `toJson` merges `extras` with the standard keys, which win on a clash.
 - `StorageManager` wraps shared preferences with typed getters and setters, JSON helpers, `removeKeysWithPrefix` and `getStats`. It also appends to files under the documents folder for the log store.
 
 ## Don't
