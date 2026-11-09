@@ -53,6 +53,10 @@ class EarbudTraceUploader implements LogDestination {
     return uploader;
   }
 
+  /// The uploader now on the logger, or null before the first [install].
+  @visibleForTesting
+  static EarbudTraceUploader? get installed => _installed;
+
   /// The Dio the lines go through.
   @visibleForTesting
   Dio get dio => _dio;
