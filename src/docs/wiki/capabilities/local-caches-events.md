@@ -1,31 +1,40 @@
 ---
 capability: local-caches-events
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
-  - lupin-mobile:lib.core.cache.cache_manager.CachePutEvent@1baf12f672
-  - lupin-mobile:lib.core.cache.cache_manager.CacheHitEvent@79db901403
-  - lupin-mobile:lib.core.cache.cache_manager.CacheMissEvent@8ab1be9e74
-  - lupin-mobile:lib.core.cache.cache_manager.CacheRemoveEvent@3bdf2a09a9
-  - lupin-mobile:lib.core.cache.cache_manager.CacheExpiredEvent@38a366c99b
-  - lupin-mobile:lib.core.cache.cache_manager.CacheClearEvent@5b5f9685c1
-  - lupin-mobile:lib.core.cache.cache_manager.CacheCleanupEvent@7bc925d52e
+  - lupin-mobile:lib.core.cache.cache_manager.CacheEvent@7045b1d729
+  - lupin-mobile:lib.core.cache.cache_manager.CachePutEvent@fc3330de03
+  - lupin-mobile:lib.core.cache.cache_manager.CacheHitEvent@fdda524845
+  - lupin-mobile:lib.core.cache.cache_manager.CacheMissEvent@3dae656c6e
+  - lupin-mobile:lib.core.cache.cache_manager.CacheRemoveEvent@924bf6e74d
+  - lupin-mobile:lib.core.cache.cache_manager.CacheExpiredEvent@0d31064ac3
+  - lupin-mobile:lib.core.cache.cache_manager.CacheClearEvent@75c55d73a5
+  - lupin-mobile:lib.core.cache.cache_manager.CacheCleanupEvent@c17b42c8c2
+  - lupin-mobile:lib.core.cache.cache_manager.CacheInvalidateEvent@c7e93fb6cc
+  - lupin-mobile:lib.core.cache.cache_manager.CachePrecacheRequestEvent@5efc383488
+  - lupin-mobile:lib.core.cache.cache_manager.CacheOptimizeEvent@e7d754cdce
 ---
-# Cache manager events
+# Cache events
 
-`CacheManager` publishes one event per operation on its broadcast `events` stream. Part of [[local-caches]]. The same idea is repeated in [[network-cache-events]] and [[audio-cache-events]].
+One family serves all three caches: every event extends `CacheEvent`, which carries a `timestamp` and a `details` map. `CacheManager`, `NetworkCache` and `AudioCache` each publish on their own broadcast `events` stream, typed `Stream<CacheEvent>`. Part of [[local-caches]].
 
 ## What it does
-- Every event extends `CacheEvent` and carries a `timestamp` set when it is created.
-- `get` emits `CacheMissEvent( key )` when neither memory nor storage holds the key. It emits `CacheExpiredEvent( key )` when the entry is older than `policy.maxAge`, and `CacheHitEvent( key )` otherwise.
-- `put` emits `CachePutEvent( key, sizeBytes )` once the entry is stored. `remove` emits `CacheRemoveEvent( key )` and `clear` emits `CacheClearEvent`.
-- `cleanup` removes each expired key through `remove`, then emits one `CacheCleanupEvent( itemsRemoved )`. It emits nothing when no key expired.
-- `dispose` closes the stream.
+- `CacheManager.get` emits `CacheMissEvent( key )` when no copy exists, `CacheExpiredEvent( key )` past `policy.maxAge`, and `CacheHitEvent( key )` otherwise.
+- `put` emits `CachePutEvent( key, sizeBytes: n )`, `remove` emits `CacheRemoveEvent( key )` and `clear` emits `CacheClearEvent`. `cleanup` emits one `CacheCleanupEvent( itemsRemoved )`, and nothing when no key expired.
+- `NetworkCache` emits the same classes, keyed `"<METHOD> <url>"`, with `details` of `method`, `url` and, when known, `status_code`.
+- Its store is a `CachePutEvent` with `sizeBytes` null. An entry past its own TTL gives `CacheExpiredEvent`, and `clearExpired` always emits `CacheCleanupEvent( removedCount )`. `invalidateUrl` and `invalidateMethod` each emit one `CacheInvalidateEvent( pattern )`.
+- `AudioCache` keys events by text, with `details` of `provider` and, on a store or hit, `chunk_count`. A lookup misses when the metadata or any chunk is missing.
+- `precacheCommonPhrases` emits `CachePrecacheRequestEvent( key )` for each absent phrase. `clearProviderCache` emits `CacheClearEvent` with `provider` and `removed_count`. `optimize` emits `CacheOptimizeEvent`.
 
 ## Don't
 - Don't count `CacheRemoveEvent` as a caller's delete. Eviction, expiry on read and `cleanup` all go through `remove`, so each emits one too.
-- Don't wait for a cleanup event after an empty sweep. None is sent.
+- Don't wait for a cleanup event after an empty `CacheManager` sweep. `NetworkCache.clearExpired` is the exception and always sends one.
+- Don't read an invalidate event as a count or a kind. It carries only `pattern`, and fires even when nothing matched.
+- Don't expect a precache request to generate audio, or a count from `AudioCache.clearAll`: it reports `removed_count` 0.
+- Don't add another event class for a wrapper's own fields. Put them in `details`.
 
 ## Invariants
-- An expired read emits `CacheRemoveEvent` first and `CacheExpiredEvent` second.
+- An expired read on `CacheManager` emits `CacheRemoveEvent` first and `CacheExpiredEvent` second.
 - An eviction caused by `put` emits its `CacheRemoveEvent` before that `put`'s `CachePutEvent`.
-- Nothing in `lib/` listens to `events`. The streams are for monitoring and tests.
+- A wrapper's stream carries its own level only. The inner `CacheManager` events never appear on it.
+- Nothing in `lib/` listens to any `events` stream. They are for monitoring and tests.

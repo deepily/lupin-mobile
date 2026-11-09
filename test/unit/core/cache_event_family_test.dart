@@ -65,7 +65,49 @@ void main() {
       expect( seen[ 0 ].details, { "method": "GET", "url": "/family/a" } );
       expect( seen[ 1 ].details, { "method": "GET", "url": "/family/a", "status_code": 200 } );
       expect( seen[ 2 ].details[ "status_code" ], 200 );
+      expect( ( seen[ 1 ] as CachePutEvent ).key, "GET /family/a" );
       expect( ( seen[ 1 ] as CachePutEvent ).sizeBytes, isNull );
+      expect( ( seen[ 2 ] as CacheHitEvent ).key, "GET /family/a" );
+      expect( seen[ 2 ].details, { "method": "GET", "url": "/family/a", "status_code": 200 } );
+      expect( seen[ 3 ].details, isEmpty );
+    } );
+
+    test( "an entry past its own TTL emits CacheExpiredEvent with method and url, and the lookup returns null", () async {
+      await network.clearAll();
+      await network.cacheGetResponse( "/family/ttl", null, okResponse( "/family/ttl" ), ttl: const Duration( milliseconds: 1 ) );
+      await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+
+      final seen = <CacheEvent>[];
+      final sub  = network.events.listen( seen.add );
+      final got  = await network.getCachedGetResponse( "/family/ttl", null );
+      await settle();
+      await sub.cancel();
+
+      expect( got, isNull );
+      expect( seen, hasLength( 1 ) );
+      expect( seen.single, isA<CacheExpiredEvent>() );
+      expect( ( seen.single as CacheExpiredEvent ).key, "GET /family/ttl" );
+      expect( seen.single.details, { "method": "GET", "url": "/family/ttl" } );
+    } );
+
+    test( "clearExpired emits one CacheCleanupEvent counting only the expired entries, and 0 on a second sweep", () async {
+      await network.clearAll();
+      await network.cacheGetResponse( "/family/x1", null, okResponse( "/family/x1" ), ttl: const Duration( milliseconds: 1 ) );
+      await network.cacheGetResponse( "/family/x2", null, okResponse( "/family/x2" ), ttl: const Duration( milliseconds: 1 ) );
+      await network.cacheGetResponse( "/family/live", null, okResponse( "/family/live" ), ttl: const Duration( hours: 1 ) );
+      await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+
+      final seen = <CacheEvent>[];
+      final sub  = network.events.listen( seen.add );
+      await network.clearExpired();
+      await network.clearExpired();
+      await settle();
+      await sub.cancel();
+
+      final cleanups = seen.whereType<CacheCleanupEvent>().toList();
+      expect( cleanups.map( ( e ) => e.itemsRemoved ), [ 2, 0 ] );
+      expect( ( await network.getStats() ).itemCount, 1 );
+      expect( await network.getCachedGetResponse( "/family/live", null ), isNotNull );
     } );
 
     test( "invalidateUrl emits CacheInvalidateEvent with the pattern", () async {
@@ -110,22 +152,38 @@ void main() {
       expect( seen.map( ( e ) => e.runtimeType ), [ CacheMissEvent, CachePutEvent, CacheHitEvent ] );
       expect( seen[ 0 ].details, { "provider": "elevenlabs" } );
       expect( seen[ 1 ].details, { "provider": "elevenlabs", "chunk_count": 2 } );
+      expect( ( seen[ 1 ] as CachePutEvent ).key, "hello family" );
+      expect( ( seen[ 1 ] as CachePutEvent ).sizeBytes, isNull );
       expect( ( seen[ 2 ] as CacheHitEvent ).key, "hello family" );
+      expect( seen[ 2 ].details, { "provider": "elevenlabs", "chunk_count": 2 } );
     } );
 
     test( "precache, provider clear and optimize map onto the family", () async {
+      await audio.clearAll();
+      await audio.cacheAudioForText( "stored phrase", "voicex", [ chunk( "p1" ) ] );
+
       final seen = <CacheEvent>[];
       final sub  = audio.events.listen( seen.add );
 
-      await audio.precacheCommonPhrases( [ "never cached phrase" ], "elevenlabs" );
-      await audio.clearProviderCache( "elevenlabs" );
+      await audio.precacheCommonPhrases( [ "never cached phrase" ], "voicex" );
+      await audio.clearProviderCache( "voicex" );
+      await audio.clearAll();
       await audio.optimize();
       await settle();
       await sub.cancel();
 
-      expect( seen.whereType<CachePrecacheRequestEvent>().single.key, "never cached phrase" );
-      expect( seen.whereType<CacheClearEvent>().single.details[ "provider" ], "elevenlabs" );
-      expect( seen.whereType<CacheOptimizeEvent>(), hasLength( 1 ) );
+      final precache = seen.whereType<CachePrecacheRequestEvent>().single;
+      expect( precache.key, "never cached phrase" );
+      expect( precache.details, { "provider": "voicex" } );
+
+      final clears = seen.whereType<CacheClearEvent>().toList();
+      expect( clears.map( ( e ) => e.details ), [
+        { "provider": "voicex", "removed_count": 1 },
+        { "provider": "all",    "removed_count": 0 },
+      ] );
+
+      final optimize = seen.whereType<CacheOptimizeEvent>().single;
+      expect( optimize.details, isEmpty );
     } );
 
     test( "getStats returns CacheStats with metadata count and provider counts as extras", () async {
