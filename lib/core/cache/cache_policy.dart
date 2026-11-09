@@ -51,14 +51,6 @@ class CachePolicy extends Equatable {
     persistAcrossRestarts: true,
   );
   
-  /// Audio-specific cache policy
-  static const CachePolicy audio = CachePolicy(
-    maxAge: Duration(days: 14),
-    maxItems: 500,
-    maxSizeBytes: 200 * 1024 * 1024, // 200MB
-    persistAcrossRestarts: true,
-  );
-  
   /// Offline-first cache policy (never expire)
   static const CachePolicy offlineFirst = CachePolicy(
     maxAge: Duration(days: 365),
