@@ -8,35 +8,8 @@ env:
   FLUTTER_VERSION: '3.32.0'
 
 jobs:
-  pr-title:
-    name: Check PR Title
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Check PR title format
-      uses: amannn/action-semantic-pull-request@v5
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        types: |
-          feat
-          fix
-          docs
-          style
-          refactor
-          perf
-          test
-          build
-          ci
-          chore
-          revert
-        requireScope: false
-        subjectPattern: ^(?![A-Z]).+$
-        subjectPatternError: |
-          The subject "{subject}" found in the pull request title "{title}"
-          didn't match the configured pattern. Please ensure that the subject
-          doesn't start with an uppercase character.
-          
+  # No PR title check: titles carry the [LUPIN-MOBILE] prefix, which the semantic-title action rejects (Rick 2026-11-09, row 23c5580e).
+
   size-check:
     name: Check PR Size
     runs-on: ubuntu-latest
@@ -63,7 +36,7 @@ jobs:
             level = 'warning';
           } else {
             message = '❌ Extra Large PR (> 1000 lines) - Please break this down into smaller PRs';
-            level = 'error';
+            level = 'warning';  // advisory only (Rick 2026-11-09, row 23c5580e)
           }
           
           core[level](message);
