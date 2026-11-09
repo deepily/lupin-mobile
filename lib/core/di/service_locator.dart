@@ -317,10 +317,6 @@ class ServiceLocator {
     final offlineManager = await OfflineManager.getInstance();
     _getIt.registerSingleton<OfflineManager>(offlineManager);
 
-    // Audio Cache
-    final audioCache = await AudioCache.getInstance();
-    _getIt.registerSingleton<AudioCache>(audioCache);
-
     // Network Cache
     final networkCache = await NetworkCache.getInstance();
     _getIt.registerSingleton<NetworkCache>(networkCache);
@@ -794,7 +790,6 @@ class ServiceLocator {
     services['SharedPreferences'] = _getIt.isRegistered<SharedPreferences>() ? 'Registered' : 'Not registered';
     services['StorageManager'] = _getIt.isRegistered<StorageManager>() ? 'Registered' : 'Not registered';
     services['OfflineManager'] = _getIt.isRegistered<OfflineManager>() ? 'Registered' : 'Not registered';
-    services['AudioCache'] = _getIt.isRegistered<AudioCache>() ? 'Registered' : 'Not registered';
     services['NetworkCache'] = _getIt.isRegistered<NetworkCache>() ? 'Registered' : 'Not registered';
     services['Dio'] = _getIt.isRegistered<Dio>() ? 'Registered' : 'Not registered';
     
@@ -814,9 +809,6 @@ extension ServiceLocatorExtensions on ServiceLocator {
   
   /// Get OfflineManager
   static OfflineManager get offlineManager => ServiceLocator.get<OfflineManager>();
-  
-  /// Get AudioCache
-  static AudioCache get audioCache => ServiceLocator.get<AudioCache>();
   
   /// Get NetworkCache
   static NetworkCache get networkCache => ServiceLocator.get<NetworkCache>();

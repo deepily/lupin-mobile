@@ -8,7 +8,7 @@ pins:
 ---
 # Audio chunk model
 
-`AudioChunk` is the record for one piece of streamed or cached audio, with the bytes and the playback state. Part of [[tts-streaming]]. The cache that stores it is in [[local-caches]].
+`AudioChunk` is the record for one piece of streamed or cached audio, with the bytes and the playback state. Part of [[tts-streaming]].
 
 ## What it does
 - It requires `id`, `type`, `data` and `timestamp`. `status` defaults to `pending`. The optional fields are `text`, `provider`, `voiceId`, `sequenceNumber`, `totalChunks`, `duration`, `sampleRate`, `bitRate`, `format` and `metadata`.
@@ -18,6 +18,5 @@ pins:
 - `canPlay` is true for `pending` and `cached`. Equality compares every field.
 
 ## Don't
-- Don't look for it in the playback path. `StreamingTtsPlayer` and `TtsOrchestrator` never use it, and the only code in `lib/` that touches it is `AudioCache`.
+- Don't look for it in the playback path. `StreamingTtsPlayer` and `TtsOrchestrator` never use it, and no code in `lib/` outside this file touches it.
 - Don't expect `status` to move. Nothing in `lib/` outside this file changes or reads it.
-- Don't rely on the cache size cap with these chunks. `AudioCache` sizes a chunk from `metadata["size_bytes"]` and counts 0 when it is absent.

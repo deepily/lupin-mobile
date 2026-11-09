@@ -12,8 +12,8 @@ class NetworkCache {
   late final CacheManager<NetworkResponse> _responseCache;
   late final OfflineManager _offlineManager;
   
-  final StreamController<NetworkCacheEvent> _eventController = 
-      StreamController<NetworkCacheEvent>.broadcast();
+  final StreamController<CacheEvent> _eventController = 
+      StreamController<CacheEvent>.broadcast();
 
   NetworkCache._(OfflineManager offlineManager) : _offlineManager = offlineManager {
     _initialize();
@@ -73,7 +73,7 @@ class NetworkCache {
       },
     );
     
-    _eventController.add(NetworkCacheStoreEvent(method, url, response.statusCode ?? 0));
+    _eventController.add( CachePutEvent( _eventKey( method, url ), details: _eventDetails( method, url, response.statusCode ?? 0 ) ) );
   }
 
   /// Get cached response
@@ -90,15 +90,15 @@ class NetworkCache {
       // Check if still valid (additional TTL check)
       if (cachedResponse.isExpired) {
         await _responseCache.remove(cacheKey);
-        _eventController.add(NetworkCacheExpiredEvent(method, url));
+        _eventController.add(CacheExpiredEvent( _eventKey( method, url ), details: _eventDetails( method, url ) ));
         return null;
       }
       
-      _eventController.add(NetworkCacheHitEvent(method, url, cachedResponse.statusCode));
+      _eventController.add(CacheHitEvent( _eventKey( method, url ), details: _eventDetails( method, url, cachedResponse.statusCode ) ));
       return cachedResponse;
     }
     
-    _eventController.add(NetworkCacheMissEvent(method, url));
+    _eventController.add(CacheMissEvent( _eventKey( method, url ), details: _eventDetails( method, url ) ));
     return null;
   }
 
@@ -149,7 +149,7 @@ class NetworkCache {
       }
     }
     
-    _eventController.add(NetworkCacheInvalidateEvent(urlPattern));
+    _eventController.add(CacheInvalidateEvent(urlPattern));
   }
 
   /// Invalidate cache for specific method
@@ -163,11 +163,11 @@ class NetworkCache {
       }
     }
     
-    _eventController.add(NetworkCacheInvalidateEvent(method));
+    _eventController.add(CacheInvalidateEvent(method));
   }
 
   /// Get cache statistics
-  Future<NetworkCacheStats> getStats() async {
+  Future<CacheStats> getStats() async {
     final cacheStats = _responseCache.getStats();
     
     // Count by method and status code
@@ -180,14 +180,10 @@ class NetworkCache {
       statusStats[response.statusCode] = (statusStats[response.statusCode] ?? 0) + 1;
     }
     
-    return NetworkCacheStats(
-      totalResponses: cacheStats.itemCount,
-      totalSizeBytes: cacheStats.totalSizeBytes,
-      hitRate: cacheStats.hitRate,
-      methodStats: methodStats,
-      statusStats: statusStats,
-      expiredCount: cacheStats.expiredCount,
-    );
+    return cacheStats.withExtras( {
+      "method_stats" : methodStats,
+      "status_stats" : statusStats.map( ( key, value ) => MapEntry( key.toString(), value ) ),
+    } );
   }
 
   /// Clear expired responses
@@ -203,17 +199,17 @@ class NetworkCache {
       }
     }
     
-    _eventController.add(NetworkCacheCleanupEvent(removedCount));
+    _eventController.add(CacheCleanupEvent( removedCount ));
   }
 
   /// Clear all network cache
   Future<void> clearAll() async {
     await _responseCache.clear();
-    _eventController.add(NetworkCacheClearEvent());
+    _eventController.add(CacheClearEvent());
   }
 
   /// Stream of network cache events
-  Stream<NetworkCacheEvent> get events => _eventController.stream;
+  Stream<CacheEvent> get events => _eventController.stream;
 
   /// Dispose resources
   void dispose() {
@@ -221,6 +217,19 @@ class NetworkCache {
   }
 
   // Private helper methods
+
+  /// Key shown on this cache's events: the HTTP method and URL.
+  String _eventKey( String method, String url ) => "$method $url";
+
+  /// Fields this cache adds to its events; status code only when known.
+  Map<String, Object?> _eventDetails( String method, String url, [ int? statusCode ] ) {
+    return {
+      "method" : method,
+      "url"    : url,
+      if ( statusCode != null ) "status_code" : statusCode,
+    };
+  }
+
   String _generateCacheKey(
     String method,
     String url,
@@ -326,116 +335,3 @@ class NetworkResponse {
     );
   }
 }
-
-/// Network cache statistics
-class NetworkCacheStats {
-  /// Number of cached responses.
-  final int totalResponses;
-  /// Total size in bytes.
-  final int totalSizeBytes;
-  /// Hit rate.
-  final double hitRate;
-  /// Counts per HTTP method.
-  final Map<String, int> methodStats;
-  /// Counts per HTTP status code.
-  final Map<int, int> statusStats;
-  /// Number of expired entries.
-  final int expiredCount;
-
-  /// Creates a [NetworkCacheStats].
-  const NetworkCacheStats({
-    required this.totalResponses,
-    required this.totalSizeBytes,
-    required this.hitRate,
-    required this.methodStats,
-    required this.statusStats,
-    required this.expiredCount,
-  });
-
-  /// Serializes to a JSON-compatible map.
-  Map<String, dynamic> toJson() {
-    return {
-      'total_responses': totalResponses,
-      'total_size_bytes': totalSizeBytes,
-      'hit_rate': hitRate,
-      'method_stats': methodStats,
-      'status_stats': statusStats.map((key, value) => MapEntry(key.toString(), value)),
-      'expired_count': expiredCount,
-    };
-  }
-}
-
-/// Base network cache event
-abstract class NetworkCacheEvent {
-  /// When the event was created.
-  final DateTime timestamp = DateTime.now();
-}
-
-/// Network cache store event
-class NetworkCacheStoreEvent extends NetworkCacheEvent {
-  /// HTTP method.
-  final String method;
-  /// Request URL.
-  final String url;
-  /// HTTP status code.
-  final int statusCode;
-  
-  /// Creates the event.
-  NetworkCacheStoreEvent(this.method, this.url, this.statusCode);
-}
-
-/// Network cache hit event
-class NetworkCacheHitEvent extends NetworkCacheEvent {
-  /// HTTP method.
-  final String method;
-  /// Request URL.
-  final String url;
-  /// HTTP status code.
-  final int statusCode;
-  
-  /// Creates the event.
-  NetworkCacheHitEvent(this.method, this.url, this.statusCode);
-}
-
-/// Network cache miss event
-class NetworkCacheMissEvent extends NetworkCacheEvent {
-  /// HTTP method.
-  final String method;
-  /// Request URL.
-  final String url;
-  
-  /// Creates the event.
-  NetworkCacheMissEvent(this.method, this.url);
-}
-
-/// Network cache expired event
-class NetworkCacheExpiredEvent extends NetworkCacheEvent {
-  /// HTTP method.
-  final String method;
-  /// Request URL.
-  final String url;
-  
-  /// Creates the event.
-  NetworkCacheExpiredEvent(this.method, this.url);
-}
-
-/// Network cache invalidate event
-class NetworkCacheInvalidateEvent extends NetworkCacheEvent {
-  /// Pattern that selects the entries.
-  final String pattern;
-  
-  /// Creates the event.
-  NetworkCacheInvalidateEvent(this.pattern);
-}
-
-/// Network cache cleanup event
-class NetworkCacheCleanupEvent extends NetworkCacheEvent {
-  /// Number of entries removed.
-  final int removedCount;
-  
-  /// Creates the event.
-  NetworkCacheCleanupEvent(this.removedCount);
-}
-
-/// Network cache clear event
-class NetworkCacheClearEvent extends NetworkCacheEvent {}
