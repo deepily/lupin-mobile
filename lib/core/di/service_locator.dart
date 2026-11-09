@@ -93,6 +93,7 @@ import '../../features/agentic/domain/agentic_submission_bloc.dart';
 
 // Notification audio (ding + TTS on high/urgent)
 import '../../services/notification_audio/notification_audio_service.dart';
+import '../../services/diagnostics/earbud_trace_uploader.dart';
 import '../../services/push/fcm_bootstrap.dart' show fcmOnLoggedOut;
 import '../../services/push/notification_tap_binding.dart';
 import '../../services/push/notification_tap_router.dart';
@@ -374,7 +375,13 @@ class ServiceLocator {
   static Dio registerSharedDio(ServerContextService serverContext) {
     final dio = Dio();
     dio.options.baseUrl = serverContext.baseUrl;
-    serverContext.addListener((config) => dio.options.baseUrl = config.baseUrl);
+    // Earbud trace lines go to the server's access log; the phone has no adb to read them.
+    // The uploader has its own Dio, so a 401 on /health cannot reach the auth interceptor.
+    final trace = EarbudTraceUploader.install( baseUrl: serverContext.baseUrl );
+    serverContext.addListener( (config) {
+      dio.options.baseUrl = config.baseUrl;
+      trace.baseUrl       = config.baseUrl;
+    } );
     _getIt.registerSingleton<Dio>(dio);
     return dio;
   }

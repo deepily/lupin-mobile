@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/features/quick_ask/data/hands_free_cues.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/earbud_taps.dart';
 import 'package:lupin_mobile/features/quick_ask/domain/quick_ask_bloc.dart';
@@ -29,6 +30,16 @@ class _Cues implements HandsFreeCuePlayer {
   final played = <HandsFreeCue>[];
   @override
   Future<void> play( HandsFreeCue cue ) async => played.add( cue );
+}
+
+class _Trace implements LogDestination {
+  final lines = <String>[];
+  @override
+  void write( LogEntry entry ) {
+    if ( entry.tag == LupinMediaHandler.logTag ) lines.add( entry.message );
+  }
+  @override
+  Future<void> flush() async {}
 }
 
 class _Transport implements MediaTransport {
@@ -197,5 +208,46 @@ void main() {
 
     verifyNever( () => bloc.add( any() ) );
     expect( cues.played, [ HandsFreeCue.ready ] );
+  } );
+
+  group( 'earbud trace', () {
+    late _Trace trace;
+    setUp( () {
+      Logger.resetForTesting();
+      trace = _Trace();
+      Logger.addDestination( trace );
+    } );
+    tearDown( Logger.resetForTesting );
+
+    testWidgets( 'a tap logs the claim, the press and where it went, then the gesture and its outcome', ( tester ) async {
+      await mount( tester, idle );
+      await handler.click();
+      await tester.pump( EarbudTapReader.defaultWindow );
+
+      expect( trace.lines, [
+        'hold=true onTop=true appShown=true',
+        'claim: podcastPlaying=false',
+        'click: button=media claimed=true podcastPlaying=false to=quick-ask',
+        'gesture: single phase=idle canRecord=true hasDraft=false blocked=null -> '
+            'event=QuickAskRecordPressed cue=started',
+      ] );
+    } );
+
+    testWidgets( 'a refused double tap logs why: nothing held to send', ( tester ) async {
+      await mount( tester, idle );
+      await handler.click( MediaButton.next );
+      await tester.pump();
+
+      expect( trace.lines.last,
+          'gesture: double phase=idle canRecord=true hasDraft=false blocked=null -> event=null cue=refused' );
+    } );
+
+    testWidgets( 'a press while a podcast plays logs that it went to the podcast', ( tester ) async {
+      await mount( tester, idle );
+      handler.reportPodcast( playing: true, processingState: AudioProcessingState.ready, position: Duration.zero );
+      await handler.click();
+
+      expect( trace.lines.last, 'click: button=media claimed=true podcastPlaying=true to=podcast' );
+    } );
   } );
 }

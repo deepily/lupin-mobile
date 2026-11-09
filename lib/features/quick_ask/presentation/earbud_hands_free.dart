@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/logging/logger.dart';
 import '../../../services/audio/lupin_media_handler.dart';
 import '../data/hands_free_cues.dart';
 import '../domain/earbud_taps.dart';
@@ -71,6 +72,7 @@ class _EarbudHandsFreeState extends State<EarbudHandsFree> implements MediaButto
     final want    = handler != null && _onTop && _appShown;
     if ( handler == null || want == _holding ) return;
     _holding = want;
+    Logger.info( 'hold=$want onTop=$_onTop appShown=$_appShown', tag: LupinMediaHandler.logTag );
     if ( want ) {
       unawaited( handler.claim( this, card: EarbudHandsFree.card ) );
       final cues = widget.cues;
@@ -97,6 +99,10 @@ class _EarbudHandsFreeState extends State<EarbudHandsFree> implements MediaButto
     final bloc   = context.read<QuickAskBloc>();
     final action = earbudAction( gesture, bloc.state );
     final event  = action.event;
+    final state  = bloc.state;
+    Logger.info( 'gesture: ${ gesture.name } phase=${ state.phase.name } canRecord=${ state.canRecord } '
+        'hasDraft=${ state.hasDraft } blocked=${ state.blockReason?.name } -> '
+        'event=${ event?.runtimeType } cue=${ action.cue.name }', tag: LupinMediaHandler.logTag );
     if ( event != null ) bloc.add( event );
     final cues = widget.cues;
     if ( cues != null ) unawaited( cues.play( action.cue ) );
