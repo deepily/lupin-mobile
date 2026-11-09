@@ -78,7 +78,28 @@ class _FakeChannel extends StreamChannelMixin<dynamic> implements WebSocketChann
   }
 }
 
+/// A pause before asserting that nothing further happens.
+///
+/// It proves absence only for as long as it lasts. Never use it to wait for something that
+/// should happen: use [_until].
 Future<void> _settle() => Future<void>.delayed( const Duration( milliseconds: 30 ) );
+
+/// Waits until [condition] holds, giving the event loop a turn between looks.
+///
+/// Requires:
+///   - condition has no side effects
+///
+/// Ensures:
+///   - returns as soon as condition is true, however slow the machine is
+///   - fails the test with [what] if it is still false after 10 seconds, a bound that only a
+///     real hang can reach (a fixed wait of a few tens of milliseconds is not enough under load)
+Future<void> _until( bool Function() condition, String what ) async {
+  final deadline = DateTime.now().add( const Duration( seconds: 10 ) );
+  while ( !condition() ) {
+    if ( DateTime.now().isAfter( deadline ) ) fail( "timed out waiting for: $what" );
+    await Future<void>.delayed( const Duration( milliseconds: 2 ) );
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -120,7 +141,7 @@ void main() {
   /// Connects and completes the handshake of the channel the attempt just opened.
   Future<_FakeChannel> connectFirst() async {
     final pending = ws.connect( userId: "u1" );
-    await _settle();
+    await _until( () => channels.isNotEmpty, "the first attempt to open a channel" );
     channels.last.handshake();
     await pending;
     return channels.last;
@@ -129,12 +150,10 @@ void main() {
   /// Waits for the channel the next retry opens, then completes its handshake.
   Future<_FakeChannel> admitNext() async {
     final before = channels.length;
-    for ( var i = 0; i < 100 && channels.length == before; i++ ) {
-      await Future<void>.delayed( const Duration( milliseconds: 5 ) );
-    }
+    await _until( () => channels.length > before, "a retry to open a channel" );
     expect( channels.length, before + 1, reason: "a retry should have opened a channel" );
     channels.last.handshake();
-    await _settle();
+    await _until( () => ws.isConnected, "the retried channel to report connected" );
     return channels.last;
   }
 
@@ -177,8 +196,8 @@ void main() {
       final first = await connectFirst();
 
       first.closeWith( kSuperseded );
+      await _until( () => !ws.wantsConnection, "the 4004 close to be recognised" );
       await _settle();
-      await Future<void>.delayed( const Duration( milliseconds: 40 ) );
 
       expect( ws.isConnected, isFalse );
       expect( ws.wantsConnection, isFalse, reason: "4004 is permanent: a newer socket holds the slot" );
@@ -202,7 +221,7 @@ void main() {
 
       serverUp = false;
       first.fail( Exception( "reset by peer" ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await _until( () => sessions.requests >= 2, "the retry to request a second id" );
 
       expect( sessions.requests, greaterThanOrEqualTo( 2 ), reason: "a second id was requested" );
       expect( ws.isConnected, isFalse );
@@ -212,7 +231,7 @@ void main() {
     test( "a first attempt that fails leaves no id at all", () async {
       serverUp = false;
       await ws.connect( userId: "u1" );
-      await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+      await _until( () => sessions.requests >= 1, "the failed attempt to request an id" );
 
       expect( sessions.requests, greaterThanOrEqualTo( 1 ) );
       expect( ws.sessionId, isNull );
@@ -226,12 +245,14 @@ void main() {
 
   group( "one failure, one reconnect", () {
     test( "an error followed by a done on the same channel counts once toward the cap", () async {
-      ws = build( delay: const Duration( milliseconds: 60 ) );
+      // A long delay keeps the retry pending for the whole check; a short one could fire first on a loaded machine.
+      ws = build( delay: const Duration( seconds: 30 ) );
       final first = await connectFirst();
       expect( ws.reconnectAttempts, 0 );
 
       first.fail( Exception( "reset by peer" ) );
       first.closeWith( 1006 );
+      await _until( () => ws.isRetryPending, "the failure to schedule a retry" );
       await _settle();
 
       expect( ws.reconnectAttempts, 1, reason: "the error and the done are one failure" );
@@ -243,7 +264,7 @@ void main() {
 
       first.fail( Exception( "reset by peer" ) );
       first.closeWith( 1006 );
-      await _settle();
+      await _until( () => channels.length >= 2, "the retry to open a channel" );
       await _settle();
 
       expect( channels.length, 2 );
