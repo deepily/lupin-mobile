@@ -12,7 +12,8 @@
 #   --quiet   print only when something is red (cron-friendly)
 #   --limit N how many recent runs to look at (default 30; gh 2.4 cannot filter by branch, so raise it if main is busy)
 #   --branch  branch to read (default main)
-# Exit: 0 all newest runs green, 1 at least one red, 2 gh unavailable or failed.
+# Exit: 0 all newest runs green, 1 at least one red, 2 bad input (flag, value),
+#       gh unavailable or failed, malformed gh JSON, or no finished run on the branch.
 
 set -u
 
@@ -22,7 +23,8 @@ BRANCH=main
 while [ $# -gt 0 ]; do
     case "$1" in
         --quiet) QUIET=1 ;;
-        --limit)  [ $# -ge 2 ] || { echo "--limit needs a number" >&2; exit 2; }; shift; LIMIT="$1" ;;
+        --limit)  [ $# -ge 2 ] || { echo "--limit needs a number" >&2; exit 2; }; shift; LIMIT="$1"
+                  case "$LIMIT" in ''|*[!0-9]*) echo "--limit needs a whole number, got: $LIMIT" >&2; exit 2 ;; esac ;;
         --branch) [ $# -ge 2 ] || { echo "--branch needs a name" >&2; exit 2; }; shift; BRANCH="$1" ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -47,6 +49,10 @@ for r in runs:                                   # gh lists newest first
     if r[ "headBranch" ] != os.environ[ "BRANCH" ]: continue
     if r[ "status" ] != "completed": continue    # in progress or queued: not a verdict yet
     newest.setdefault( r[ "name" ], r )
+if not newest:
+    branch = os.environ[ "BRANCH" ]
+    print( f"CI status: no finished run on {branch} in the runs fetched; raise --limit", file=sys.stderr )
+    sys.exit( 2 )
 red = [ r for r in newest.values() if r[ "conclusion" ] in ( "failure", "cancelled", "timed_out", "startup_failure" ) ]
 if red or not quiet:
     for name, r in sorted( newest.items() ):
