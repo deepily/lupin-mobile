@@ -8,8 +8,8 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 
 - [[app-bootstrap-and-di]] — start-up order, the service locator, the root widget and the build stamp. `main.dart`, `app.dart`, `core/app_initialization.dart`, `core/di`, `core/build_info.dart`
 - [[settings-store]] — typed settings definitions, validation, quick presets and change events. `core/settings`
-- [[local-caches]] — the generic, network and audio caches, their policy and eviction, and key-value storage. `core/cache`, `core/storage`
-- [[local-caches-events]] — the one `CacheEvent` family: what `CacheManager`, `NetworkCache` and `AudioCache` emit. `core/cache/cache_manager.dart`
+- [[local-caches]] — the generic and network caches, their policy and eviction, and key-value storage. `core/cache`, `core/storage`
+- [[local-caches-events]] — the one `CacheEvent` family: what `CacheManager` and `NetworkCache` emit. `core/cache/cache_manager.dart`
 - [[offline-queue]] — queueing requests while offline and replaying them when the network returns. `core/cache/offline_manager.dart`, `services/network/network_connectivity_service.dart`
 - [[error-handling-and-recovery]] — typed app errors, recovery strategies and the global error handler. `core/error_handling`
 - [[logging-and-redaction]] — the leveled logger, its console, file and remote sinks, and secret redaction. `core/logging`

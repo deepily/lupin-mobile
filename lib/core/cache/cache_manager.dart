@@ -557,17 +557,3 @@ class CacheInvalidateEvent extends CacheEvent {
   /// Creates the event.
   CacheInvalidateEvent( this.pattern, { super.details } );
 }
-
-/// Cache precache request event: [key] was missing and should be generated.
-class CachePrecacheRequestEvent extends CacheEvent {
-  /// Key identifying the wanted entry.
-  final String key;
-  /// Creates the event.
-  CachePrecacheRequestEvent( this.key, { super.details } );
-}
-
-/// Cache optimize event
-class CacheOptimizeEvent extends CacheEvent {
-  /// Creates the event.
-  CacheOptimizeEvent( { super.details } );
-}

@@ -1,17 +1,15 @@
-// NetworkCache and AudioCache emit the one CacheEvent family and return the one
-// CacheStats, carrying their own fields in `details` and `extras`.
+// NetworkCache emits the one CacheEvent family and returns the one CacheStats,
+// carrying its own fields in `details` and `extras`.
 
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lupin_mobile/core/cache/audio_cache.dart';
 import 'package:lupin_mobile/core/cache/cache_manager.dart';
 import 'package:lupin_mobile/core/cache/cache_policy.dart';
 import 'package:lupin_mobile/core/cache/network_cache.dart';
 import 'package:lupin_mobile/core/storage/storage_manager.dart';
-import 'package:lupin_mobile/shared/models/audio_chunk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 50 ) );
@@ -21,12 +19,9 @@ void main() {
 
   late Directory     tmp;
   late NetworkCache  network;
-  late AudioCache    audio;
 
   Response<dynamic> okResponse( String path ) =>
       Response<dynamic>( requestOptions: RequestOptions( path: path ), statusCode: 200, data: { "ok": true } );
-
-  AudioChunk chunk( String id ) => AudioChunk( id: id, type: AudioChunkType.tts, data: Uint8List( 4 ), timestamp: DateTime( 2026 ) );
 
   setUpAll( () async {
     tmp = await Directory.systemTemp.createTemp( "lupin_cache_family_" );
@@ -40,7 +35,6 @@ void main() {
     SharedPreferences.setMockInitialValues( { "offline_mode": false } );
     await StorageManager.getInstance();
     network = await NetworkCache.getInstance();
-    audio   = await AudioCache.getInstance();
     await settle();
   } );
 
@@ -135,68 +129,6 @@ void main() {
       expect( json[ "method_stats" ], { "GET": 1, "POST": 1 } );
       expect( json[ "status_stats" ], { "200": 2 } );
       expect( json[ "item_count" ], 2 );
-    } );
-  } );
-
-  group( "AudioCache events and stats", () {
-    test( "miss, store and hit carry provider and chunk count", () async {
-      final seen = <CacheEvent>[];
-      final sub  = audio.events.listen( seen.add );
-
-      await audio.getCachedAudioForText( "hello family", "elevenlabs" );
-      await audio.cacheAudioForText( "hello family", "elevenlabs", [ chunk( "c1" ), chunk( "c2" ) ] );
-      await audio.getCachedAudioForText( "hello family", "elevenlabs" );
-      await settle();
-      await sub.cancel();
-
-      expect( seen.map( ( e ) => e.runtimeType ), [ CacheMissEvent, CachePutEvent, CacheHitEvent ] );
-      expect( seen[ 0 ].details, { "provider": "elevenlabs" } );
-      expect( seen[ 1 ].details, { "provider": "elevenlabs", "chunk_count": 2 } );
-      expect( ( seen[ 1 ] as CachePutEvent ).key, "hello family" );
-      expect( ( seen[ 1 ] as CachePutEvent ).sizeBytes, isNull );
-      expect( ( seen[ 2 ] as CacheHitEvent ).key, "hello family" );
-      expect( seen[ 2 ].details, { "provider": "elevenlabs", "chunk_count": 2 } );
-    } );
-
-    test( "precache, provider clear and optimize map onto the family", () async {
-      await audio.clearAll();
-      await audio.cacheAudioForText( "stored phrase", "voicex", [ chunk( "p1" ) ] );
-
-      final seen = <CacheEvent>[];
-      final sub  = audio.events.listen( seen.add );
-
-      await audio.precacheCommonPhrases( [ "never cached phrase" ], "voicex" );
-      await audio.clearProviderCache( "voicex" );
-      await audio.clearAll();
-      await audio.optimize();
-      await settle();
-      await sub.cancel();
-
-      final precache = seen.whereType<CachePrecacheRequestEvent>().single;
-      expect( precache.key, "never cached phrase" );
-      expect( precache.details, { "provider": "voicex" } );
-
-      final clears = seen.whereType<CacheClearEvent>().toList();
-      expect( clears.map( ( e ) => e.details ), [
-        { "provider": "voicex", "removed_count": 1 },
-        { "provider": "all",    "removed_count": 0 },
-      ] );
-
-      final optimize = seen.whereType<CacheOptimizeEvent>().single;
-      expect( optimize.details, isEmpty );
-    } );
-
-    test( "getStats returns CacheStats with metadata count and provider counts as extras", () async {
-      await audio.clearAll();
-      await audio.cacheAudioForText( "stats phrase", "elevenlabs", [ chunk( "s1" ) ] );
-
-      final CacheStats stats = await audio.getStats();
-      final json            = stats.toJson();
-
-      expect( stats.itemCount, 1 );
-      expect( json[ "total_metadata" ], 1 );
-      expect( json[ "provider_stats" ], { "elevenlabs": 1 } );
-      expect( json.containsKey( "metadata_hit_rate" ), isTrue );
     } );
   } );
 
