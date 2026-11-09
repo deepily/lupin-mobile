@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 
+import '../../core/logging/logger.dart';
+
 /// What the media session's play, pause and seek controls act on: the podcast player.
 abstract interface class MediaTransport {
   /// Where the loaded track is now.
@@ -32,6 +34,9 @@ abstract interface class MediaButtonClaimant {
 /// A podcast can start under a claim, from the mini-player or after the app finishes speaking.
 /// It can still be paused from the earbuds and the lock screen.
 class LupinMediaHandler extends BaseAudioHandler {
+  /// The log tag of the earbud diagnostics: claim, release, each press and where it went.
+  static const String logTag = 'EarbudTrace';
+
   /// How far the media rewind key backs up.
   final Duration rewindInterval;
   /// How far the media fast-forward key jumps ahead.
@@ -114,6 +119,7 @@ class LupinMediaHandler extends BaseAudioHandler {
     _claimant = claimant;
     _card     = card;
     final playing = _podcastState.playing;
+    Logger.info( 'claim: podcastPlaying=$playing', tag: logTag );
     _show();
     if ( playing ) await _transport?.pause();
   }
@@ -124,6 +130,7 @@ class LupinMediaHandler extends BaseAudioHandler {
   /// So a screen closing late can't take the presses from the screen that replaced it.
   void release( MediaButtonClaimant claimant ) {
     if ( !identical( _claimant, claimant ) ) return;
+    Logger.info( 'release', tag: logTag );
     _claimant = null;
     _card     = null;
     _show();
@@ -132,7 +139,10 @@ class LupinMediaHandler extends BaseAudioHandler {
   @override
   Future<void> click( [ MediaButton button = MediaButton.media ] ) async {
     final claimant = _claimant;
-    if ( claimant != null && _claimantActs ) {
+    final toClaimant = claimant != null && _claimantActs;
+    Logger.info( 'click: button=${ button.name } claimed=${ claimant != null } podcastPlaying=${ _podcastState.playing } '
+        'to=${ toClaimant ? "quick-ask" : "podcast" }', tag: logTag );
+    if ( toClaimant ) {
       claimant.onMediaButton( button );
       return;
     }
