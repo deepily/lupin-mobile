@@ -1,6 +1,23 @@
 # TODO
 
-## Resume here: 2026-11-04 close (Tiffany)
+## Resume here: 2026-11-09 close (Tiffany)
+
+The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin` at `da3f69e`, and the APK is "2026.11.09 build 3". Owed work is in the store, and Rick's rows come back 10 Nov at 09:00 Eastern. The status report is `io/status/2026.11.09-tiffany-status-report.md`.
+
+- [ ] Earbud check on build 3 (rows `c643b1b0` and `bcc9cba3`); respawn Clayton from `io/mementos/clayton.md`.
+- [ ] Pull the public APK (row `cbdec4ca`): remove just the asset (recommended), delete the release, make the repo private, or restrict the key only.
+- [ ] notification_bloc_test re-pin (row `df84ddae`): Rick runs the script named on the row; then Tiberius checks, and I merge `718a205` plus the pin.
+- [ ] Fixed-wait sweep of about 80 tests (row `065ee0ee`, approved), plus three wiki-librarian rollups (P5).
+
+### Decisions Log — 2026-11-09 (session `21b94fbc`, Tiffany)
+
+- Rick: no CI for now ("I don't want CI I don't need it"). Row `23c5580e` is dropped, the session-start CI check is removed, and the workflows stay on until he says otherwise.
+- Rick: drop the dart format check (house style), drop the PR-title check, and make the size check a warning.
+- Rick: delete AudioCache.
+- Rick: a timing-only re-pin of frozen notification_bloc_test is allowed (yes, 2026-11-10 03:16:23 UTC).
+- Tiffany: the load-flake row closes on the tests found today; the full five-in-a-row goal moves to `065ee0ee`.
+
+## Earlier: 2026-11-04 close (Tiffany)
 
 v0.2.2 is merged (PR #4, `ccdc8fd`) and released with the APK. The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`. Four rows carry over, and all of them come back at 09:00 Eastern on 11-05.
 

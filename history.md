@@ -15,6 +15,18 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.09 | Session `21b94fbc` (Tiffany): took over Maria's 8 rows, 9 merges, CI dropped
+
+Maria handed over the lupin-mobile rows. The crew was Krishna, Clayton, Maya, Rio and Tiberius (reviewer), all reaped with verified mementos in `io/mementos/`.
+
+- **CI** (row `23c5580e`, dropped on Rick's ruling "I don't want CI"): commits `2be4030` and `a5c99c5`, then merges `31220ab` and `51798ad`. Rick ran both edit scripts himself, because the safety check refused them from a seat.
+- **Earbud trace** `09e6ab2` (rows `c643b1b0` and `bcc9cba3`): each press, gesture and capture peak level goes to the `:7999` access log, for Rick's phone check.
+- **Cache dedupe** `ad5558b` (row `f3d4fc00`, done): one CacheEvent and CacheStats family. AudioCache and `CachePolicy.audio` are deleted.
+- **Merge gate unblocked** `6c0e3d4` (rows `1d674700` and `eb149168`, done): the fixture-currency test reads lupin's checked-out HEAD, and the ac-g2 baseline is recaptured.
+- **Load flakes** `da3f69e` (row `df84ddae`): seven tests wait on states, event-loop turns or an injectable clock (`fcm_wake_chain.dart`). The notification_bloc_test re-pin is WIP `718a205`, with the pin step left for Rick.
+- **APK**: "2026.11.09 build 3" at `da3f69e`, with FCM.
+- **Found**: the public v0.2.2 APK holds only the Firebase key, with no other credentials.
+
 ## 2026.11.07 | Session `9dc7dc88` (Rachel): one-off merge of the focus-composer fix, APK build 1
 
 Rick asked by voice for one job: `git merge --ff-only fix-focus-composer-mc-answer-d10ef810`. Krishna wrote the fix and Tiberius approved it, and Cheech handed the row over.
