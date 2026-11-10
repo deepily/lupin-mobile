@@ -72,10 +72,14 @@ void main() {
 
   Future<void> pump() => Future<void>.delayed( Duration.zero );
 
+  // Only the orchestrator tests build these (newOrch); the AsrService group does not, and under a
+  // random test order it can run first.
   tearDown( () async {
-    await orch?.dispose();
+    if ( orch == null ) return;
+    await orch!.dispose();
     await completeCtrl.close();
     await errorCtrl   .close();
+    orch = null;
   } );
 
   test( "a notification arriving mid-recording plays NOTHING until the recording ends, then plays", () async {

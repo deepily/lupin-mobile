@@ -30,7 +30,9 @@ void main() {
     late int          port;
     late String       savedBaseUrl;
 
-    setUpAll( () async {
+    // A server per test: one test closes its server, so a shared one would make the result depend on test order.
+    setUp( () async {
+      requested.clear();
       // The test binding answers every HttpClient request with 400; this test needs the real client.
       HttpOverrides.global = null;
       savedBaseUrl         = AppConstants.apiBaseUrl;
@@ -47,13 +49,14 @@ void main() {
       ConnectivityPlatform.instance = fake;
     } );
 
-    tearDownAll( () async {
+    tearDown( () async {
       AppConstants.apiBaseUrl = savedBaseUrl;
       await server.close( force: true );
     } );
 
     test( "a Wi-Fi interface plus a Lupin server that answers reads connected, and the server saw GET /health", () async {
-      final network = NetworkConnectivityService();
+      final network = NetworkConnectivityService.forTesting();
+      addTearDown( network.dispose );
       await network.initialize();
       network.pauseMonitoring();
 
@@ -62,11 +65,17 @@ void main() {
     } );
 
     test( "a Wi-Fi interface plus a Lupin server that does not answer reads limited", () async {
-      final network = NetworkConnectivityService();
+      final network = NetworkConnectivityService.forTesting();
+      addTearDown( network.dispose );
+      await network.initialize();
       await server.close( force: true );
 
+      // Subscribe before the event, then wait for the state change itself: the probe is real socket I/O
+      // and the time it takes is not ours to guess. The timeout only bounds a hang.
+      final limited = network.networkStateStream.firstWhere( ( s ) => s == NetworkState.limited )
+          .timeout( const Duration( seconds: 30 ) );
       fake.events.add( ConnectivityResult.wifi );
-      await Future<void>.delayed( const Duration( milliseconds: 500 ) );
+      await limited;
 
       expect( network.currentState, NetworkState.limited );
     } );
