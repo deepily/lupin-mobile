@@ -115,6 +115,8 @@ void main() {
       Dio()..httpClientAdapter = sessions,
       store              : WsResumeStore(),
       reconnectBaseDelay : delay,
+      // The tests complete the handshake themselves; the 15 s production bound would fire during a long stall.
+      connectTimeout     : const Duration( minutes: 10 ),
       channelFactory     : ( Uri _ ) {
         if ( !serverUp ) throw Exception( "server down" );
         final c = _FakeChannel();

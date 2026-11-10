@@ -9,6 +9,7 @@ import 'package:lupin_mobile/features/holding_area/data/holding_area_repository.
 import 'package:lupin_mobile/features/holding_area/domain/holding_area_bloc.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 /// The Holding Area's bloc, with the BATCH path as the thing under test.
 ///
@@ -64,7 +65,7 @@ void main() {
     }
   }
 
-  Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 80 ) );
+  Future<void> settle() => drainEventLoop();
 
   setUp( () {
     adapter = StubAdapter();
