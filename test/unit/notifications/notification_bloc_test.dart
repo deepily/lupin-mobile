@@ -10,6 +10,7 @@ import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockAudioService extends Mock implements NotificationAudioService {}
 class _MockTtsOrchestrator extends Mock implements TtsOrchestrator {}
@@ -36,8 +37,10 @@ void main() {
           ]);
       },
       build  : () => NotificationBloc(repo),
-      act    : (b) => b.add(const NotificationsLoadInbox(userEmail: "u@x.y")),
-      wait   : const Duration(milliseconds: 50),
+      act    : (b) async {
+        b.add(const NotificationsLoadInbox(userEmail: "u@x.y"));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsInboxLoaded>()
@@ -59,10 +62,12 @@ void main() {
           ]);
       },
       build  : () => NotificationBloc(repo),
-      act    : (b) => b.add(const NotificationsLoadConversation(
+      act    : (b) async {
+        b.add(const NotificationsLoadConversation(
         senderId: "s-1", userEmail: "u@x.y",
-      )),
-      wait   : const Duration(milliseconds: 50),
+      ));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsConversationLoaded>()
@@ -95,12 +100,12 @@ void main() {
         b.add(const NotificationsLoadConversation(
           senderId: "s-1", userEmail: "u@x.y",
         ));
-        await Future.delayed(const Duration(milliseconds: 50));
+        await drainEventLoop();
         b.add(const NotificationsRespond(
           notificationId: "c-1", responseValue: "yes",
         ));
+        await drainEventLoop();
       },
-      wait: const Duration(milliseconds: 500),
       verify: (b) {
         // Confirms the responding lifecycle reached an acked state.
         // (The full state list is timing-sensitive; check final history.)
@@ -118,8 +123,10 @@ void main() {
           jsonBody({"detail": "boom"}, status: 500);
       },
       build  : () => NotificationBloc(repo),
-      act    : (b) => b.add(const NotificationsLoadInbox(userEmail: "u@x.y")),
-      wait   : const Duration(milliseconds: 50),
+      act    : (b) async {
+        b.add(const NotificationsLoadInbox(userEmail: "u@x.y"));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsError>().having((s) => s.message, "message", "boom"),
@@ -136,10 +143,12 @@ void main() {
           ]);
       },
       build  : () => NotificationBloc(repo),
-      act    : (b) => b.add(const NotificationsLoadSenderDates(
+      act    : (b) async {
+        b.add(const NotificationsLoadSenderDates(
         senderId: "s-1", userEmail: "u@x.y",
-      )),
-      wait   : const Duration(milliseconds: 50),
+      ));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsSenderDatesLoaded>()
@@ -176,10 +185,12 @@ void main() {
           });
       },
       build  : () => NotificationBloc(repo),
-      act    : (b) => b.add(const NotificationsLoadConversationByDate(
+      act    : (b) async {
+        b.add(const NotificationsLoadConversationByDate(
         senderId: "s-1", userEmail: "u@x.y",
-      )),
-      wait   : const Duration(milliseconds: 50),
+      ));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsConversationByDateLoaded>()
@@ -203,11 +214,15 @@ void main() {
       },
       build  : () => NotificationBloc(repo),
       act    : (b) async {
+        // Wait for each state itself: a fixed pause is overtaken by a stalled machine.
+        final first = b.stream.firstWhere((s) => s is NotificationsInboxLoaded);
         b.add(const NotificationsLoadInbox(userEmail: "u@x.y"));
-        await Future.delayed(const Duration(milliseconds: 50));
+        await first;
+        final refreshed = b.stream.firstWhere(
+            (s) => s is NotificationsInboxLoaded && s.senders.single.count == 2);
         b.add(const NotificationsExternalUpdate());
+        await refreshed;
       },
-      wait   : const Duration(milliseconds: 150),
       expect : () => [
         isA<NotificationsLoading>(),
         isA<NotificationsInboxLoaded>()
@@ -245,7 +260,7 @@ void main() {
       );
 
       bloc.add( NotificationsExternalUpdate( notification: urgent ) );
-      await Future.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       verify( () => audio.handleIncoming(
         priority     : "urgent",
@@ -268,7 +283,7 @@ void main() {
       final bloc  = NotificationBloc( repo, audio: audio );
 
       bloc.add( const NotificationsExternalUpdate() );
-      await Future.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       verifyNever( () => audio.handleIncoming(
         priority     : any( named: "priority" ),
@@ -317,7 +332,7 @@ void main() {
       );
 
       bloc.add( NotificationsExternalUpdate( notification: urgent ) );
-      await Future.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       verify( () => tts.enqueueIfSpeakable(
         priority : "urgent",
@@ -351,7 +366,7 @@ void main() {
         final bloc = NotificationBloc( repo );
 
         bloc.add( const NotificationsLoadInbox( userEmail: "u@x.y" ) );
-        await Future.delayed( const Duration( milliseconds: 50 ) );
+        await drainEventLoop();
 
         // Inject the WS event with assigned_at populated. The bloc routes
         // type=="voice_persona_assigned" into the `_onExternalUpdate` case

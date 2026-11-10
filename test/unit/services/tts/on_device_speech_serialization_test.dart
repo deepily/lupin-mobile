@@ -50,6 +50,7 @@ void main() {
   VoidCallback?     onCancel;
   late NotificationAudioService service;
   late TtsOrchestrator          orch;
+  var built = false;            // build() ran; C2 builds its own orchestrator, so the shared tearDown skips it
 
   Future<void> build( {
     Duration accept      = const Duration( milliseconds: 100 ),
@@ -100,11 +101,14 @@ void main() {
       player: player, fallback: service, prefs: prefs, ws: ws,
       fallbackSpeakBudget: outerAccept, maxPlayback: outerPlay,
     );
+    built = true;
   }
 
   Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 30 ) );
 
   tearDown( () async {
+    if ( !built ) return;
+    built = false;
     await orch.dispose();
     await completeCtrl.close();
     await errorCtrl.close();

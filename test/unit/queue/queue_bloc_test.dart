@@ -7,6 +7,7 @@ import 'package:lupin_mobile/features/queue/domain/queue_event.dart';
 import 'package:lupin_mobile/features/queue/domain/queue_state.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 void main() {
   group( 'QueueBloc', () {
@@ -28,8 +29,10 @@ void main() {
         } );
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add( const QueueLoadSnapshot( 'todo' ) ),
-      wait  : const Duration( milliseconds: 50 ),
+      act   : ( b ) async {
+        b.add( const QueueLoadSnapshot( 'todo' ) );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueLoading>(),
         isA<QueueSnapshotLoaded>()
@@ -63,10 +66,12 @@ void main() {
         } );
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add(
+      act   : ( b ) async {
+        b.add(
         const QueueSubmitJob( AskRequest( question: 'hello', websocketId: 'mobile' ) ),
-      ),
-      wait  : const Duration( milliseconds: 50 ),
+      );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueSubmitting>(),
         isA<QueueAnswered>()
@@ -90,8 +95,10 @@ void main() {
         } );
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add( const QueueSubmitJob( AskRequest( question: 'weather?' ) ) ),
-      wait  : const Duration( milliseconds: 50 ),
+      act   : ( b ) async {
+        b.add( const QueueSubmitJob( AskRequest( question: 'weather?' ) ) );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueSubmitting>(),
         isA<QueueAnswered>()
@@ -107,8 +114,10 @@ void main() {
           { 'detail': 'CJ Flow v2 is disabled (v2 flow enabled = False).' }, status: 503 );
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add( const QueueSubmitJob( AskRequest( question: 'x' ) ) ),
-      wait  : const Duration( milliseconds: 50 ),
+      act   : ( b ) async {
+        b.add( const QueueSubmitJob( AskRequest( question: 'x' ) ) );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueSubmitting>(),
         isA<QueueError>().having( ( s ) => s.message, 'message', contains( 'v2 flow enabled' ) ),
@@ -143,9 +152,11 @@ void main() {
         };
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add( const QueueRetryJob(
-        jobId: 'j-old', questionText: 'original question?', websocketId: 'mobile' ) ),
-      wait  : const Duration( milliseconds: 50 ),
+      act   : ( b ) async {
+        b.add( const QueueRetryJob(
+        jobId: 'j-old', questionText: 'original question?', websocketId: 'mobile' ) );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueActionComplete>()
           .having( ( s ) => s.message, 'message', allOf( contains( 'Retried' ), contains( 'Four.' ) ) ),
@@ -159,8 +170,10 @@ void main() {
             jsonBody( { 'status': 'cancelled' } );
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add( const QueueCancelJob( 'j-1' ) ),
-      wait  : const Duration( milliseconds: 50 ),
+      act   : ( b ) async {
+        b.add( const QueueCancelJob( 'j-1' ) );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueActionComplete>(),
       ],
@@ -173,8 +186,10 @@ void main() {
             jsonBody( { 'detail': 'internal error' }, status: 500 );
       },
       build : () => QueueBloc( repo ),
-      act   : ( b ) => b.add( const QueueLoadSnapshot( 'run' ) ),
-      wait  : const Duration( milliseconds: 50 ),
+      act   : ( b ) async {
+        b.add( const QueueLoadSnapshot( 'run' ) );
+        await drainEventLoop();
+      },
       expect: () => [
         isA<QueueLoading>(),
         isA<QueueError>(),
@@ -201,11 +216,14 @@ void main() {
       },
       build : () => QueueBloc( repo ),
       act   : ( b ) async {
+        // Wait for each state itself: a fixed pause is overtaken by a stalled machine.
+        final first = b.stream.firstWhere( ( s ) => s is QueueSnapshotLoaded );
         b.add( const QueueLoadSnapshot( 'todo' ) );
-        await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+        await first;
+        final refreshed = b.stream.firstWhere( ( s ) => s is QueueSnapshotLoaded && s.snapshot.jobs.length == 1 );
         b.add( const QueueExternalUpdate( 'todo' ) );
+        await refreshed;
       },
-      wait  : const Duration( milliseconds: 80 ),
       expect: () => [
         isA<QueueLoading>(),
         isA<QueueSnapshotLoaded>().having( ( s ) => s.snapshot.jobs.length, 'empty', 0 ),
@@ -235,10 +253,10 @@ void main() {
       build : () => QueueBloc( repo ),
       act   : ( b ) async {
         b.add( const QueueLoadSnapshot( 'todo' ) );
-        await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+        await drainEventLoop();
         b.add( const QueueDeleteJob( queueName: 'todo', jobId: 'j-1' ) );
+        await drainEventLoop();
       },
-      wait  : const Duration( milliseconds: 80 ),
       expect: () => [
         isA<QueueLoading>(),
         isA<QueueSnapshotLoaded>().having( ( s ) => s.snapshot.jobs.length, 'before', 1 ),
