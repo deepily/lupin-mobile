@@ -227,6 +227,12 @@ class FcmWakeChain {
   /// Speech and mark-played are cut to whatever it has left.
   final Duration handlerBudget;
 
+  /// The clock the deadlines are measured on; defaults to the device clock.
+  ///
+  /// A test passes a fake one so that budget arithmetic does not depend on how fast the machine runs.
+  /// The timers that enforce the deadlines are separate; a fake-async zone drives those.
+  final DateTime Function() clock;
+
   /// Creates a chain from its seams; the budgets default to the `kFcmWake*` constants.
   const FcmWakeChain( {
     required this.readCredentials,
@@ -245,6 +251,7 @@ class FcmWakeChain {
     this.speakBudget      = kFcmWakeSpeakBudget,
     this.markPlayedBudget = kFcmWakeMarkPlayedBudget,
     this.handlerBudget    = kFcmWakeHandlerBudget,
+    this.clock            = DateTime.now,
   } );
 
   /// Handles one wake payload and never throws.
@@ -273,16 +280,16 @@ class FcmWakeChain {
 
     // One deadline is shared by every step on the way to the notification, not a per-call timeout.
     // Four calls each allowed the full budget would let the handler run four times over its window and be reclaimed anyway.
-    final deadline = DateTime.now().add( showBudget );
+    final deadline = clock().add( showBudget );
     Duration remaining() {
-      final left = deadline.difference( DateTime.now() );
+      final left = deadline.difference( clock() );
       return left.isNegative ? Duration.zero : left;
     }
 
     // The overall deadline, across the pre-notification phase and the drain loop.
-    final overallDeadline = DateTime.now().add( handlerBudget );
+    final overallDeadline = clock().add( handlerBudget );
     Duration overallRemaining() {
-      final left = overallDeadline.difference( DateTime.now() );
+      final left = overallDeadline.difference( clock() );
       return left.isNegative ? Duration.zero : left;
     }
     Duration lesser( Duration a, Duration b ) => a < b ? a : b;

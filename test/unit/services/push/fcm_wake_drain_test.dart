@@ -8,6 +8,7 @@ library;
 
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lupin_mobile/services/push/fcm_wake_chain.dart';
@@ -39,6 +40,7 @@ void main() {
     Duration speakBudget      = kFcmWakeSpeakBudget,
     Duration markPlayedBudget = kFcmWakeMarkPlayedBudget,
     Duration handlerBudget    = kFcmWakeHandlerBudget,
+    DateTime Function()? now,
   } ) => FcmWakeChain(
     readCredentials             : () async => const FcmWakeCredentials( refreshToken: 'r', userEmail: 'e@x.com' ),
     exchangeForAccessToken      : ( _ ) async => 'a',
@@ -59,7 +61,25 @@ void main() {
     speakBudget                 : speakBudget,
     markPlayedBudget            : markPlayedBudget,
     handlerBudget               : handlerBudget,
+    clock                       : now ?? DateTime.now,
   );
+
+  /// Runs one wake on a fake clock.
+  ///
+  /// The budgets are counted in fake time, so a stalled machine cannot reorder them.
+  /// [make] gets the fake clock to pass to [chain].
+  _Run runWake( FcmWakeChain Function( DateTime Function() now ) make ) {
+    final run = _Run();
+    fakeAsync( ( fa ) {
+      final start = DateTime.utc( 2026, 1, 1 );
+      make( () => start.add( fa.elapsed ) ).handleWake( wake() ).then( ( o ) {
+        run.outcome = o;
+        run.took    = fa.elapsed;
+      } );
+      fa.elapse( const Duration( minutes: 1 ) );
+    } );
+    return run;
+  }
 
   setUp( () {
     shownBodies   = [];
@@ -109,7 +129,7 @@ void main() {
     expect( outcome.fetched, 7 );
   } );
 
-  test( 'the budget expiring mid-drain leaves the rest unplayed', () async {
+  test( 'the budget expiring mid-drain leaves the rest unplayed', () {
     unplayed = [ for ( var i = 1; i <= 4; i++ ) item( i ) ];
 
     // Each post eats 30ms of a 70ms budget: the third post is the last that can
@@ -117,28 +137,31 @@ void main() {
     // A post abandoned at the deadline may still complete later; it writes to
     // THIS test's list, not the shared one the next test's setUp replaces.
     final posted = <String>[];
-    final outcome = await chain(
+    final run = runWake( ( now ) => chain(
+      now    : now,
       budget : const Duration( milliseconds: 70 ),
       show   : ( title, body, payload ) async {
         await Future<void>.delayed( const Duration( milliseconds: 30 ) );
         posted.add( body );
       },
-    ).handleWake( wake() );
+    ) );
 
+    expect( run.outcome, isNotNull, reason: 'the wake finished' );
     expect( posted.length, lessThan( 4 ), reason: 'the drain stopped early' );
     expect( posted.length, greaterThanOrEqualTo( 1 ) );
     expect( markedPlayed, [ for ( var i = 1; i <= markedPlayed.length; i++ ) 'n-$i' ],
             reason: 'only what was shown was consumed' );
     expect( markedPlayed, isNotEmpty );
     expect( markedPlayed.length, lessThanOrEqualTo( posted.length ) );
-    expect( outcome.shown, isTrue );
+    expect( run.outcome!.shown, isTrue );
   } );
 
-  test( 'a post that hangs after the first item ends the drain; no fallback is added', () async {
+  test( 'a post that hangs after the first item ends the drain; no fallback is added', () {
     unplayed = [ item( 1 ), item( 2 ), item( 3 ) ];
     var calls = 0;
 
-    final outcome = await chain(
+    final run = runWake( ( now ) => chain(
+      now    : now,
       budget : const Duration( milliseconds: 50 ),
       show   : ( title, body, payload ) async {
         calls++;
@@ -146,11 +169,11 @@ void main() {
         shownTitles.add( title );
         shownBodies.add( body );
       },
-    ).handleWake( wake() );
+    ) );
 
     expect( shownBodies, [ 'body-1' ], reason: 'no fallback posted on top of a real item' );
     expect( markedPlayed, [ 'n-1' ], reason: 'the wedged item is not consumed' );
-    expect( outcome.shown, isTrue );
+    expect( run.outcome!.shown, isTrue );
   } );
 
   test( 'a muted item in the middle is skipped and not consumed', () async {
@@ -206,56 +229,63 @@ void main() {
   // Row 5365750f: speak and mark-played draw down from ONE handler deadline.
   group( 'whole-handler deadline', () {
     const window = Duration( milliseconds: 300 );
-    const slack  = Duration( milliseconds: 150 );
 
-    Future<Duration> timed( Future<FcmWakeOutcome> Function() run ) async {
-      final sw = Stopwatch()..start();
-      await run().timeout( const Duration( seconds: 5 ),
-          onTimeout: () => fail( 'handleWake hung' ) );
-      return sw.elapsed;
-    }
-
-    test( 'a slow (never-finishing) speak cannot push the handler past its window', () async {
+    test( 'a slow (never-finishing) speak cannot push the handler past its window', () {
       unplayed = [ item( 1 ) ];
-      final took = await timed( () => chain(
+      final run = runWake( ( now ) => chain(
+        now              : now,
         speakFn          : ( _ ) => Completer<void>().future,
         speakBudget      : const Duration( seconds: 10 ),
         markPlayedBudget : const Duration( milliseconds: 100 ),
         handlerBudget    : window,
-      ).handleWake( wake() ) );
+      ) );
 
-      expect( took, lessThan( window + slack ) );
+      expect( run.took, isNotNull, reason: 'handleWake finished' );
+      expect( run.took!, lessThanOrEqualTo( window ) );
       expect( markedPlayed, [ 'n-1' ], reason: 'speech is cut short of the ledger write' );
     } );
 
-    test( 'a never-finishing mark-played cannot push the handler past its window', () async {
+    test( 'a never-finishing mark-played cannot push the handler past its window', () {
       unplayed = [ item( 1 ), item( 2 ), item( 3 ), item( 4 ), item( 5 ) ];
-      final took = await timed( () => chain(
+      final run = runWake( ( now ) => chain(
+        now              : now,
         mark             : ( _, __ ) => Completer<void>().future,
         markPlayedBudget : const Duration( milliseconds: 100 ),
         handlerBudget    : window,
-      ).handleWake( wake() ) );
+      ) );
 
       // Per-call budgets alone would allow 5 x 100 ms = 500 ms here.
-      expect( took, lessThan( window + slack ) );
+      expect( run.took, isNotNull, reason: 'handleWake finished' );
+      expect( run.took!, lessThanOrEqualTo( window ) );
     } );
 
     test( 'slow-but-succeeding mark-played stops the drain, and never shows an item it cannot mark',
-        () async {
+        () {
       unplayed = [ item( 1 ), item( 2 ), item( 3 ), item( 4 ), item( 5 ) ];
-      final took = await timed( () => chain(
+      final run = runWake( ( now ) => chain(
+        now              : now,
         mark             : ( id, __ ) async {
           await Future<void>.delayed( const Duration( milliseconds: 80 ) );
           markedPlayed.add( id );
         },
         markPlayedBudget : const Duration( milliseconds: 100 ),
         handlerBudget    : window,
-      ).handleWake( wake() ) );
+      ) );
 
-      expect( took, lessThan( window + slack ) );
+      expect( run.took, isNotNull, reason: 'handleWake finished' );
+      expect( run.took!, lessThanOrEqualTo( window ) );
       expect( shownBodies.length, lessThan( 5 ), reason: 'the window ran out before the cap' );
       expect( markedPlayed.length, shownBodies.length,
           reason: 'every item shown was also marked — none left to be re-shown next wake' );
     } );
   } );
+}
+
+/// The result of one wake run on fake time.
+class _Run {
+  /// What the wake returned, or null if it never finished.
+  FcmWakeOutcome? outcome;
+
+  /// Fake time from the start to the finish of the wake.
+  Duration? took;
 }
