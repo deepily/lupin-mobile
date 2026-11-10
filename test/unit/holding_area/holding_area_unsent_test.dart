@@ -8,6 +8,7 @@ import 'package:lupin_mobile/features/holding_area/domain/holding_area_bloc.dart
 import 'package:lupin_mobile/services/network/network_connectivity_service.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 /// G6 on the Holding Area — and the half a group-level notice cannot do.
 ///
@@ -107,7 +108,7 @@ void main() {
     await network.controller.close();
   } );
 
-  Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 80 ) );
+  Future<void> settle() => drainEventLoop();
 
   Future<void> load() async {
     bloc.add( const HoldingAreaRefreshRequested() );
