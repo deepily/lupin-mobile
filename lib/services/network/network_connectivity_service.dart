@@ -15,6 +15,13 @@ class NetworkConnectivityService {
   factory NetworkConnectivityService() => _instance;
   NetworkConnectivityService._internal();
 
+  /// Returns a new instance that shares no state with the app-wide one.
+  ///
+  /// Tests use it so that one test's connection state cannot reach another's.
+  /// The app never calls it.
+  @visibleForTesting
+  factory NetworkConnectivityService.forTesting() => NetworkConnectivityService._internal();
+
   final Connectivity _connectivity = Connectivity();
 
   /// Path of the unauthenticated health endpoint that tells us the Lupin server answered.
@@ -178,14 +185,14 @@ class NetworkConnectivityService {
     // Broadcast state change if different
     if (_currentState != previousState) {
       debugPrint('[NetworkService] Network state changed: $previousState -> $_currentState');
-      _networkStateController.add(_currentState);
+      _emitState(_currentState);
       
       // Trigger immediate quality test for connected state
       if (_currentState == NetworkState.connected) {
         await _performQualityTest();
       } else {
         _currentQuality = ConnectionQuality.offline;
-        _connectionQualityController.add(_currentQuality);
+        _emitQuality(_currentQuality);
       }
     }
   }
@@ -279,7 +286,7 @@ class NetworkConnectivityService {
       
       if (_currentQuality != previousQuality) {
         debugPrint('[NetworkService] Connection quality changed: $previousQuality -> $_currentQuality');
-        _connectionQualityController.add(_currentQuality);
+        _emitQuality(_currentQuality);
       }
       
       debugPrint('[NetworkService] Quality test: latency=${latency}ms, quality=$_currentQuality');
@@ -287,7 +294,7 @@ class NetworkConnectivityService {
     } catch (e) {
       debugPrint('[NetworkService] Quality test failed: $e');
       _currentQuality = ConnectionQuality.poor;
-      _connectionQualityController.add(_currentQuality);
+      _emitQuality(_currentQuality);
     }
   }
   
@@ -423,6 +430,18 @@ class NetworkConnectivityService {
     };
   }
   
+  /// Broadcasts [state] unless [dispose] has already closed the stream.
+  ///
+  /// A health request still in flight when the service is disposed finishes afterwards, and must not throw.
+  void _emitState( NetworkState state ) {
+    if ( !_networkStateController.isClosed ) _networkStateController.add( state );
+  }
+
+  /// Broadcasts [quality] unless [dispose] has already closed the stream.
+  void _emitQuality( ConnectionQuality quality ) {
+    if ( !_connectionQualityController.isClosed ) _connectionQualityController.add( quality );
+  }
+
   /// Dispose of resources
   void dispose() {
     debugPrint('[NetworkService] Disposing network connectivity service');

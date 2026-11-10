@@ -7,6 +7,7 @@ import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_event
 import 'package:lupin_mobile/features/decision_proxy/domain/decision_proxy_state.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 void main() {
   group("DecisionProxyBloc", () {
@@ -43,8 +44,10 @@ void main() {
         });
       },
       build  : () => DecisionProxyBloc(repo),
-      act    : (b) => b.add(const DecisionProxyLoadDashboard("u@x.y")),
-      wait   : const Duration(milliseconds: 50),
+      act    : (b) async {
+        b.add(const DecisionProxyLoadDashboard("u@x.y"));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<DecisionProxyLoading>(),
         isA<DecisionProxyDashboardLoaded>()
@@ -83,10 +86,12 @@ void main() {
         });
       },
       build  : () => DecisionProxyBloc(repo),
-      act    : (b) => b.add(const DecisionProxyRatify(
+      act    : (b) async {
+        b.add(const DecisionProxyRatify(
         decisionId: "d-1", userEmail: "u@x.y", approved: true, feedback: "ok",
-      )),
-      wait   : const Duration(milliseconds: 200),
+      ));
+        await drainEventLoop();
+      },
       verify : (b) {
         expect(b.state, isA<DecisionProxyDashboardLoaded>());
       },
@@ -99,8 +104,10 @@ void main() {
           jsonBody({"detail": "down"}, status: 503);
       },
       build  : () => DecisionProxyBloc(repo),
-      act    : (b) => b.add(const DecisionProxyLoadDashboard("u@x.y")),
-      wait   : const Duration(milliseconds: 50),
+      act    : (b) async {
+        b.add(const DecisionProxyLoadDashboard("u@x.y"));
+        await drainEventLoop();
+      },
       expect : () => [
         isA<DecisionProxyLoading>(),
         isA<DecisionProxyError>().having((s) => s.message, "message", "down"),

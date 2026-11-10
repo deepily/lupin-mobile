@@ -9,6 +9,7 @@ import 'package:lupin_mobile/features/task_list/domain/task_list_bloc.dart';
 import 'package:lupin_mobile/services/network/network_connectivity_service.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 /// G6 end to end on the Task List, INCLUDING THE CONNECTIVITY TRIGGER ITSELF.
 ///
@@ -123,7 +124,7 @@ void main() {
     await network.controller.close();
   } );
 
-  Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 60 ) );
+  Future<void> settle() => drainEventLoop();
 
   int writesTo( String key ) => adapter.captured
       .where( ( c ) => '${c.method} ${c.path}' == key )

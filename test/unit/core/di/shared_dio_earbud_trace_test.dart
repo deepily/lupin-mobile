@@ -13,6 +13,7 @@ import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/audio/lupin_media_handler.dart';
 import 'package:lupin_mobile/services/auth/server_context_service.dart';
 import 'package:lupin_mobile/services/diagnostics/earbud_trace_uploader.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _Adapter implements HttpClientAdapter {
   final requests = <Uri>[];
@@ -63,7 +64,7 @@ void main() {
 
   Future<void> sendLine() async {
     Logger.info( 'click: button=media', tag: LupinMediaHandler.logTag );
-    await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+    await drainEventLoop();
   }
 
   test( 'registering the shared Dio installs a trace uploader that sends a line to /health', () async {
