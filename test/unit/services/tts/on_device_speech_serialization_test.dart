@@ -1,12 +1,14 @@
 /// On-device speech is serialized, bounded and always reachable (TTS rounds 3 and 4, 2026-10-10).
 ///
-/// Thirteen driven scenarios over the REAL `NotificationAudioService` (on a mocked `FlutterTts`) and a REAL
-/// `TtsOrchestrator`, so the contract between the two is exercised, not each half against a mock of the other:
+/// Fifteen driven scenarios on the real `NotificationAudioService`, with a mocked `FlutterTts`, and a real
+/// `TtsOrchestrator`. The contract between the two is exercised, not each half against a mock of the other:
 ///   - B1-B5  a backlog of on-device messages stays outside the engine; Skip, Stop-all, the microphone hold,
 ///            an urgent arrival and pause all reach the speech
 ///   - C1, C2 the service's completion bound releases the queue, and the orchestrator's outer bound is strictly longer
 ///   - D1     pressing the mic again while a drained utterance speaks must not wait for that utterance
 ///   - R1     an engine's late cancel callback cannot release the utterance that is speaking now
+///   - G1: an engine that never accepts the text is released by the service's accept budget
+///   - G2: a service that never returns is released by the orchestrator's outer bound
 ///   - E1     the outer bound firing first does not let the abandoned call's late timeout cut the next one
 ///   - Q1     a quota error keeps the utterance in flight while it is re-spoken on-device, and says so on screen
 ///   - X1     nothing is dispatched after dispose
@@ -18,6 +20,7 @@ library;
 import 'dart:async';
 import 'dart:ui' show VoidCallback;
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -33,10 +36,12 @@ import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 class _MockPlayer extends Mock implements StreamingTtsPlayer {}
 class _MockWs     extends Mock implements WebSocketService {}
 class _MockTts    extends Mock implements FlutterTts {}
+class _MockSvc    extends Mock implements NotificationAudioService {}
 class _MockFln    extends Mock implements FlutterLocalNotificationsPlugin {}
 
-int stopDelayMs  = 2;
-int speakDelayMs = 0;
+int  stopDelayMs   = 2;
+int  speakDelayMs  = 0;
+bool hangFirstSpeak = false;   // G1: the engine never accepts the first text
 
 void main() {
   late _MockPlayer player;
@@ -44,7 +49,8 @@ void main() {
   late _MockTts    tts;
   late StreamController<TtsCompleteEvent> completeCtrl;
   late StreamController<TtsErrorEvent>    errorCtrl;
-  late List<String> spoken;     // every text handed to the engine, in order
+  late List<String> spoken;     // every text the engine accepted, in order
+  late List<String> attempts;   // every text handed to the engine, accepted or not
   late int          stops;      // engine stop() calls
   VoidCallback?     onComplete;
   VoidCallback?     onCancel;
@@ -57,6 +63,7 @@ void main() {
     Duration completion  = const Duration( milliseconds: 200 ),
     Duration outerAccept = const Duration( milliseconds: 100 ),
     Duration outerPlay   = const Duration( milliseconds: 200 ),
+    Duration outerMargin = const Duration( milliseconds: 5 ),
   } ) async {
     SharedPreferences.setMockInitialValues( {} );
     final prefs = NotificationPreferences( await SharedPreferences.getInstance() );
@@ -67,6 +74,8 @@ void main() {
     errorCtrl    = StreamController<TtsErrorEvent>.broadcast();
     final mySpoken = <String>[];
     spoken     = mySpoken;
+    final myAttempts = <String>[];
+    attempts   = myAttempts;
     stops      = 0;
     onComplete = null;
     onCancel   = null;
@@ -88,6 +97,8 @@ void main() {
       return 1;
     } );
     when( () => tts.speak( any() ) ).thenAnswer( ( inv ) async {
+      myAttempts.add( inv.positionalArguments.first as String );
+      if ( hangFirstSpeak && myAttempts.length == 1 ) await Completer<void>().future;
       if ( speakDelayMs > 0 ) await Future<void>.delayed( Duration( milliseconds: speakDelayMs ) );
       mySpoken.add( inv.positionalArguments.first as String );
       return 1;
@@ -99,11 +110,12 @@ void main() {
     );
     orch = TtsOrchestrator(
       player: player, fallback: service, prefs: prefs, ws: ws,
-      fallbackSpeakBudget: outerAccept, maxPlayback: outerPlay,
+      fallbackSpeakBudget: outerAccept, maxPlayback: outerPlay, fallbackOuterMargin: outerMargin,
     );
     built = true;
   }
 
+  /// Waits 30 ms on the fake clock; the stub delays are on the same clock.
   Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 30 ) );
 
   tearDown( () async {
@@ -114,7 +126,44 @@ void main() {
     await errorCtrl.close();
   } );
 
-  test( "B1 burst of three: only the first is in the engine until it finishes; Skip reaches it", () async {
+  /// Runs [body] on a fake clock, like `onFakeTime` in fcm_wake_chain_test.dart.
+  ///
+  /// Every timer and stub delay is a zone timer, so `FakeAsync` owns them all.
+  /// Neither service reads `DateTime.now` on these paths, so no wall-clock time passes.
+  /// A cancelled subscription needs the real microtask queue, so the driver yields one real turn per 1 ms step.
+  ///
+  /// Requires:
+  ///   - [body] needs no real I/O
+  ///
+  /// Ensures:
+  ///   - fails if [body] has not finished within one fake minute
+  void fakeTest( String name, Future<void> Function() body ) {
+    test( name, () async {
+      final fa    = FakeAsync();
+      Object?     error;
+      StackTrace? trace;
+      var         done = false;
+      fa.run( ( _ ) {
+        () async {
+          try {
+            await body();
+          } catch ( e, st ) {
+            error = e;
+            trace = st;
+          }
+          done = true;
+        }();
+      } );
+      for ( var i = 0; i < 60000 && !done; i++ ) {
+        fa.elapse( const Duration( milliseconds: 1 ) );
+        await Future<void>.delayed( Duration.zero );
+      }
+      if ( !done ) fail( "did not finish within one fake minute: it hung" );
+      if ( error != null ) Error.throwWithStackTrace( error!, trace! );
+    } );
+  }
+
+  fakeTest( "B1 burst of three: only the first is in the engine until it finishes; Skip reaches it", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     orch.enqueueAlways( priority: "high", message: "two" );
@@ -130,7 +179,7 @@ void main() {
     expect( stops, greaterThanOrEqualTo( 1 ) );
   } );
 
-  test( "B2 Stop-all reaches an on-device utterance and clears the rest", () async {
+  fakeTest( "B2 Stop-all reaches an on-device utterance and clears the rest", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     orch.enqueueAlways( priority: "high", message: "two" );
@@ -144,7 +193,7 @@ void main() {
     expect( orch.queueDepth, 0 );
   } );
 
-  test( "B3 mic hold silences the engine whether or not something is in flight; nothing speaks while held", () async {
+  fakeTest( "B3 mic hold silences the engine whether or not something is in flight; nothing speaks while held", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     await pump();
@@ -161,7 +210,7 @@ void main() {
     expect( stops, greaterThanOrEqualTo( mid ) );
   } );
 
-  test( "B4 urgent arriving while an on-device utterance is in flight preempts it, and the interrupted one comes back", () async {
+  fakeTest( "B4 urgent arriving while an on-device utterance is in flight preempts it, and the interrupted one comes back", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "normal" );
     await pump();
@@ -170,7 +219,7 @@ void main() {
     expect( spoken.take( 2 ).toList(), [ "normal", "URGENT" ] );
   } );
 
-  test( "B5 pause: an in-flight on-device utterance finishes, then the queue parks", () async {
+  fakeTest( "B5 pause: an in-flight on-device utterance finishes, then the queue parks", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     await pump();
@@ -184,13 +233,16 @@ void main() {
     expect( spoken, [ "one", "two" ] );
   } );
 
-  test( "C1 a completion callback that never fires still releases the queue at the service bound", () async {
+  fakeTest( "C1 a completion callback that never fires still releases the queue at the service bound", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     orch.enqueueAlways( priority: "high", message: "two" );
     await pump();
     expect( spoken, [ "one" ] );
-    await Future<void>.delayed( const Duration( milliseconds: 260 ) );   // inner 200 ms + slack, outer is 300 ms
+    // The service's bound (200 ms) runs from when the engine accepted the text, about 2 ms in; the outer one is longer.
+    await Future<void>.delayed( const Duration( milliseconds: 160 ) );   // t = 190 ms: not released early
+    expect( spoken, [ "one" ], reason: "the bound has not run out yet, so nothing may release the queue" );
+    await Future<void>.delayed( const Duration( milliseconds: 40 ) );    // t = 230 ms: past 200, short of the outer bound
     expect( spoken, [ "one", "two" ], reason: "released without any callback" );
   } );
 
@@ -211,7 +263,7 @@ void main() {
     }
   } );
 
-  test( "R1 stale cancel callback from the stopped utterance arrives after the next speak was accepted", () async {
+  fakeTest( "R1 stale cancel callback from the stopped utterance arrives after the next speak was accepted", () async {
     await build( completion: const Duration( seconds: 5 ), outerPlay: const Duration( seconds: 5 ) );
     orch.enqueueAlways( priority: "high", message: "A" );
     orch.enqueueAlways( priority: "high", message: "B" );
@@ -229,7 +281,7 @@ void main() {
     expect( spoken, [ "A", "B" ], reason: "B is still speaking; C must not start on A's stale callback" );
   } );
 
-  test( "D1 mic pressed again while a drained on-device utterance speaks: the second hold's stop must not wait for that utterance", () async {
+  fakeTest( "D1 mic pressed again while a drained on-device utterance speaks: the second hold's stop must not wait for that utterance", () async {
     await build( completion: const Duration( seconds: 3 ), outerPlay: const Duration( seconds: 3 ) );
     orch.enqueueAlways( priority: "high", message: "X" );
     await pump();
@@ -247,21 +299,64 @@ void main() {
     expect( stops, greaterThan( before ), reason: "the engine must be stopped now, not when X finishes" );
   } );
 
-  test( "E1 outer bound fires first (slow stop plus slow accept): the abandoned call's late timeout must not cut the next utterance", () async {
-    stopDelayMs  = 20;
+  fakeTest( "E1 outer bound fires first (slow stop plus slow accept): the abandoned call's late timeout must not cut the next utterance", () async {
+    stopDelayMs  = 60;
     speakDelayMs = 90;
     addTearDown( () { stopDelayMs = 2; speakDelayMs = 0; } );
-    await build( accept: const Duration( milliseconds: 100 ), completion: const Duration( milliseconds: 200 ),
-                 outerAccept: const Duration( milliseconds: 100 ), outerPlay: const Duration( milliseconds: 200 ) );
+    // Outer bound = 100 + 200 + 5 = 305 ms. The service alone needs the 60 ms stop, 90 ms to accept
+    // and its 200 ms completion bound: 350 ms. So the outer bound abandons 'one' 45 ms earlier.
+    await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     orch.enqueueAlways( priority: "high", message: "two" );
     orch.enqueueAlways( priority: "high", message: "three" );
-    await Future<void>.delayed( const Duration( milliseconds: 700 ) );
+    await Future<void>.delayed( const Duration( milliseconds: 300 ) );
+    expect( attempts, [ "one" ], reason: "neither bound has run out at 300 ms" );
+    await Future<void>.delayed( const Duration( milliseconds: 80 ) );   // t = 380 ms
+    expect( attempts, [ "one", "two" ], reason: "the outer bound (305 ms) released 'one'; the service alone would not have until 350 + 60 ms" );
+    await Future<void>.delayed( const Duration( milliseconds: 320 ) );   // t = 700 ms
     // 'one' is abandoned by the outer bound; 'two' then starts. Nothing finished 'two' yet, so 'three' must wait.
-    expect( spoken, [ "one", "two" ], reason: "'two' is still speaking (its own bound runs from when it started)" );
+    expect( spoken, [ "one", "two" ], reason: "'two' is still speaking: the late 350 ms timeout of 'one' must not release it" );
   } );
 
-  test( "Q1 quota error: the utterance keeps _current while it speaks on-device, and the line says it was re-spoken", () async {
+  fakeTest( "G1 an engine that never accepts the text releases the queue at the service's accept budget", () async {
+    hangFirstSpeak = true;
+    addTearDown( () { hangFirstSpeak = false; } );
+    await build();   // accept 100 ms, completion 200 ms, outer 5.3 s
+    orch.enqueueAlways( priority: "high", message: "one" );
+    orch.enqueueAlways( priority: "high", message: "two" );
+    await Future<void>.delayed( const Duration( milliseconds: 90 ) );
+    expect( attempts, [ "one" ], reason: "the accept budget (100 ms from the engine call, about 2 ms in) has not run out" );
+    await Future<void>.delayed( const Duration( milliseconds: 40 ) );   // t = 130 ms: past 102, far short of every other bound
+    expect( attempts, [ "one", "two" ], reason: "released by the accept budget, not by the completion or outer bound" );
+  } );
+
+  fakeTest( "G2 a service that never returns releases the queue at the orchestrator's outer bound", () async {
+    SharedPreferences.setMockInitialValues( {} );
+    final prefs = NotificationPreferences( await SharedPreferences.getInstance() );
+    final svc   = _MockSvc();
+    final calls = <String>[];
+    when( () => svc.stopFallbackSpeech() ).thenAnswer( ( _ ) async {} );
+    when( () => svc.flutterTtsSpeak( any() ) ).thenAnswer( ( inv ) {
+      calls.add( inv.positionalArguments.first as String );
+      return calls.length == 1 ? Completer<void>().future : Future<void>.value();
+    } );
+    final pl = _MockPlayer();
+    when( () => pl.completeStream ).thenAnswer( ( _ ) => const Stream<TtsCompleteEvent>.empty() );
+    when( () => pl.errorStream    ).thenAnswer( ( _ ) => const Stream<TtsErrorEvent>.empty() );
+    final o = TtsOrchestrator(
+      player: pl, fallback: svc, prefs: prefs, ws: _MockWs(),
+      fallbackSpeakBudget: const Duration( milliseconds: 100 ), maxPlayback: const Duration( milliseconds: 200 ),
+      fallbackOuterMargin: const Duration( milliseconds: 50 ),
+    );   // outer bound = 100 + 200 + 50 = 350 ms
+    o.enqueueAlways( priority: "high", message: "one" );
+    o.enqueueAlways( priority: "high", message: "two" );
+    await Future<void>.delayed( const Duration( milliseconds: 340 ) );
+    expect( calls, [ "one" ], reason: "the outer bound has not run out yet" );
+    await Future<void>.delayed( const Duration( milliseconds: 20 ) );   // t = 360 ms
+    expect( calls, [ "one", "two" ], reason: "released by the outer bound" );
+  } );
+
+  fakeTest( "Q1 quota error: the utterance keeps _current while it speaks on-device, and the line says it was re-spoken", () async {
     await build();
     when( () => ws.sessionId ).thenReturn( "s" );
     when( () => player.speak(
@@ -283,7 +378,7 @@ void main() {
     expect( spoken, [ "first", "second" ], reason: "second goes on-device through the quota window" );
   } );
 
-  test( "Q2 any other server error still reads as a failure with its code", () async {
+  fakeTest( "Q2 any other server error still reads as a failure with its code", () async {
     await build();
     when( () => ws.sessionId ).thenReturn( "s" );
     when( () => player.speak(
@@ -297,19 +392,20 @@ void main() {
     expect( orch.lastOutcome!.problem, isTrue );
   } );
 
-  test( "X1 dispose with an on-device utterance in flight: nothing is dispatched afterwards", () async {
+  fakeTest( "X1 dispose with an on-device utterance in flight: nothing is dispatched afterwards", () async {
     await build();
     orch.enqueueAlways( priority: "high", message: "one" );
     orch.enqueueAlways( priority: "high", message: "two" );
     await pump();
     expect( spoken, [ "one" ] );
-    await orch.dispose();
+    unawaited( orch.dispose() );   // the flag flips synchronously; the stream closes finish on their own
     onComplete?.call();
     await pump();
     expect( spoken, [ "one" ], reason: "disposed: 'two' must not reach the engine" );
+    built = false;   // the controllers closed on the fake clock; a second close from the shared tearDown would never finish
   } );
 
-  test( "N1 empty-audio completion reads failed, not spoken", () async {
+  fakeTest( "N1 empty-audio completion reads failed, not spoken", () async {
     await build();
     when( () => ws.sessionId ).thenReturn( "s" );
     when( () => player.speak(
