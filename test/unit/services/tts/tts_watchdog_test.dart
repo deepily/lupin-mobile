@@ -114,7 +114,8 @@ void main() {
     expect( onDevice, isEmpty, reason: "audio is playing; completion is coming" );
 
     audioPlaying = false;
-    lastActivity = DateTime.now();   // a chunk just arrived
+    // A chunk arrived, stamped far ahead of the clock so that no stall can age it past the window.
+    lastActivity = DateTime.now().add( window * 100 );
     await Future<void>.delayed( window ~/ 2 );
     expect( onDevice, isEmpty, reason: "an event inside the window restarts the silence" );
 
@@ -196,8 +197,8 @@ void main() {
 
       o.enqueueAlways( priority: "high", message: "first, engine hangs" );
       o.enqueueAlways( priority: "high", message: "second" );
-      // Only the 50 ms fallback budget can abandon the hung first speak, so the second
-      // reaching the engine proves it fired. The drain lets the second finish.
+      // Only the 120 ms outer bound (50 budget + 50 playback + 20 margin, tts_orchestrator.dart:946)
+      // can abandon the hung first speak, so the second reaching the engine proves it fired.
       await waitUntil( () => onDevice.length >= 2, "the second utterance to reach the engine" );
       await drainEventLoop();
 
@@ -251,8 +252,11 @@ void main() {
       await drainEventLoop();
       expect( posted, [ "plays forever", "next" ], reason: "THE BUG: the watchdog re-armed forever" );
       expect( onDevice, isEmpty, reason: "it was heard already; it is not spoken a second time" );
-      expect( outcomes.where( ( l ) => l.contains( "never reported finishing" ) ), isNotEmpty,
-          reason: "the endless utterance's own outcome names the ceiling" );
+      expect( outcomes.take( 3 ).toList(), [
+        "Last message sent to the speaker",
+        "Last message failed: the audio never reported finishing",
+        "Last message sent to the speaker",
+      ], reason: "the endless utterance's own outcome, right after its send, names the ceiling; then 'next' is sent (a slow drain may add a fourth)" );
     } );
 
     test( "finding 4: a throw inside the watchdog releases the queue instead of leaving it held", () async {
