@@ -8,12 +8,35 @@ library;
 
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 
 import 'package:lupin_mobile/services/push/fcm_wake_chain.dart';
 import 'package:lupin_mobile/services/push/notification_tap_payload.dart';
 import 'package:lupin_mobile/services/tts/tts_preview_truncator.dart';
+
+/// Runs one wake on fake time and returns its outcome.
+///
+/// The budgets under test are 40 ms. On the real clock a 40 ms stall cuts a healthy step
+/// short. On fake time deadlines, timeouts and stub delays move together.
+///
+/// Requires:
+///   - [wake] builds its chain with the given clock, so deadlines read fake time
+///
+/// Ensures:
+///   - returns the outcome once one fake minute has passed
+///   - fails the test if the wake has not finished by then, which is a hang
+FcmWakeOutcome onFakeTime( Future<FcmWakeOutcome> Function( DateTime Function() now ) wake ) {
+  FcmWakeOutcome? outcome;
+  fakeAsync( ( fa ) {
+    final start = DateTime.utc( 2026, 1, 1 );
+    wake( () => start.add( fa.elapsed ) ).then( ( o ) => outcome = o );
+    fa.elapse( const Duration( minutes: 1 ) );
+  } );
+  if ( outcome == null ) fail( 'handleWake did not finish within one fake minute: it hung' );
+  return outcome!;
+}
 
 void main() {
   group( 'FcmWakeChain (S5 §3.2.4)', () {
@@ -526,6 +549,7 @@ void main() {
       Future<String> Function( String )?      exchange,
       Future<List<Map<String, dynamic>>> Function( String, String )? fetch,
       Future<void> Function( String, String, String? )? show,
+      DateTime Function()? now,
     } ) => FcmWakeChain(
       readCredentials: readCredentials ??
           () async => const FcmWakeCredentials(
@@ -542,10 +566,11 @@ void main() {
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),
+      clock                  : now ?? DateTime.now,
     );
 
-    test( 'a credential read that never returns: the fallback goes out anyway', () async {
-      final outcome = await chainWith( readCredentials: never ).handleWake( wakePayload() );
+    test( 'a credential read that never returns: the fallback goes out anyway', () {
+      final outcome = onFakeTime( ( now ) => chainWith( readCredentials: never, now: now ).handleWake( wakePayload() ) );
       expect( outcome.shown, isTrue, reason: 'a hang must still reach the shade' );
       expect( shownBodies, [ kFcmWakeFallbackBody ] );
       expect( outcome.detail, contains( 'timeout' ) );
@@ -553,43 +578,42 @@ void main() {
           reason: 'the hang is named in the log, not silent' );
     } );
 
-    test( 'a token exchange that never returns: the fallback goes out anyway', () async {
-      final outcome = await chainWith( exchange: ( _ ) => never() ).handleWake( wakePayload() );
+    test( 'a token exchange that never returns: the fallback goes out anyway', () {
+      final outcome = onFakeTime( ( now ) => chainWith( exchange: ( _ ) => never(), now: now ).handleWake( wakePayload() ) );
       expect( outcome.shown, isTrue );
       expect( shownBodies, [ kFcmWakeFallbackBody ] );
       expect( outcome.fetched, 0 );
     } );
 
-    test( 'a fetch that never returns: the fallback goes out anyway', () async {
-      final outcome = await chainWith( fetch: ( _, __ ) => never() ).handleWake( wakePayload() );
+    test( 'a fetch that never returns: the fallback goes out anyway', () {
+      final outcome = onFakeTime( ( now ) => chainWith( fetch: ( _, __ ) => never(), now: now ).handleWake( wakePayload() ) );
       expect( outcome.shown, isTrue );
       expect( shownBodies, [ kFcmWakeFallbackBody ] );
     } );
 
-    test( 'the budget is shared across steps, not granted per call', () async {
+    test( 'the budget is shared across steps, not granted per call', () {
       // Three slow-but-not-hung steps that together exceed the budget: a
       // per-call timeout would let this run 3x the window and still be
       // reclaimed by Android. One deadline stops it.
       Future<T> slow<T>( T v ) => Future.delayed( const Duration( milliseconds: 30 ), () => v );
-      final outcome = await chainWith(
+      final outcome = onFakeTime( ( now ) => chainWith(
         readCredentials: () => slow( const FcmWakeCredentials(
             refreshToken: 'r', userEmail: 'e@x.com' ) ),
         exchange : ( _ ) => slow( 'a' ),
         fetch    : ( _, __ ) => slow( [ wireItem() ] ),
-      ).handleWake( wakePayload() );
+        now      : now,
+      ).handleWake( wakePayload() ) );
       expect( outcome.detail, contains( 'timeout' ),
           reason: '3 x 30ms must not fit in a 40ms budget' );
       expect( outcome.shown, isTrue );
     } );
 
     test( 'a WEDGED notification plugin is reported shown=false, and does not hang the handler',
-        () async {
+        () {
       // The fallback goes out through the same seam, so without its own budget
       // the catch arm would hang on exactly what it is there to recover from.
-      final outcome = await chainWith( show: ( _, __, ___ ) => never() )
-          .handleWake( wakePayload() )
-          .timeout( const Duration( seconds: 2 ),
-              onTimeout: () => fail( 'handleWake hung on a wedged plugin' ) );
+      final outcome = onFakeTime( ( now ) => chainWith( show: ( _, __, ___ ) => never(), now: now )
+          .handleWake( wakePayload() ) );
       expect( outcome.shown, isFalse, reason: 'honest: nothing reached the shade' );
       expect( logs.any( ( l ) => l.contains( 'fallback notification failed' ) ), isTrue );
     } );
@@ -701,6 +725,7 @@ void main() {
       Future<void> Function( String )? speak,
       Future<bool> Function( String )? shouldSpeak,
       Future<void> Function( String, String )? markPlayed,
+      DateTime Function()? now,
     } ) => FcmWakeChain(
       readCredentials: () async => const FcmWakeCredentials(
           refreshToken: 'r', userEmail: 'e@x.com' ),
@@ -716,14 +741,13 @@ void main() {
       log                    : logs.add,
       speakBudget            : const Duration( milliseconds: 40 ),
       markPlayedBudget       : const Duration( milliseconds: 40 ),
+      clock                  : now ?? DateTime.now,
     );
 
     test( 'a WEDGED TTS engine is abandoned, and the item is STILL marked played',
-        () async {
-      final outcome = await chainWith( speak: ( _ ) => never() )
-          .handleWake( wakePayload() )
-          .timeout( const Duration( seconds: 2 ),
-              onTimeout: () => fail( 'handleWake hung on a wedged TTS engine' ) );
+        () {
+      final outcome = onFakeTime( ( now ) => chainWith( speak: ( _ ) => never(), now: now )
+          .handleWake( wakePayload() ) );
 
       expect( played, [ 'n-77' ],
           reason: 'the ledger write is what keeps the queue moving — a hang must not skip it' );
@@ -734,42 +758,39 @@ void main() {
     } );
 
     test( 'a WEDGED prefs read is abandoned too, and the item is still marked played',
-        () async {
+        () {
       // It would park the handler BEFORE anything was spoken, so the budget has
       // to cover the reads and not just the utterance.
-      final outcome = await chainWith( shouldSpeak: ( _ ) => never() )
-          .handleWake( wakePayload() )
-          .timeout( const Duration( seconds: 2 ),
-              onTimeout: () => fail( 'handleWake hung on a wedged prefs read' ) );
+      final outcome = onFakeTime( ( now ) => chainWith( shouldSpeak: ( _ ) => never(), now: now )
+          .handleWake( wakePayload() ) );
 
       expect( played, [ 'n-77' ] );
       expect( outcome.spoke, isFalse );
     } );
 
-    test( 'a WEDGED mark-played does not hang the handler either', () async {
+    test( 'a WEDGED mark-played does not hang the handler either', () {
       // Last step, and the one whose whole point is being best-effort: it may
       // fail, it may not hold the isolate open.
-      final outcome = await chainWith( markPlayed: ( _, __ ) => never() )
-          .handleWake( wakePayload() )
-          .timeout( const Duration( seconds: 2 ),
-              onTimeout: () => fail( 'handleWake hung on a wedged mark-played' ) );
+      final outcome = onFakeTime( ( now ) => chainWith( markPlayed: ( _, __ ) => never(), now: now )
+          .handleWake( wakePayload() ) );
 
       expect( outcome.shown, isTrue );
       expect( outcome.fetched, 1 );
       expect( logs.any( ( l ) => l.contains( 'mark-played failed (best-effort)' ) ), isTrue );
     } );
 
-    test( 'the speak budget does NOT cut a normal utterance short', () async {
+    test( 'the speak budget does NOT cut a normal utterance short', () {
       // A budget that fires on healthy speech would silently truncate every
       // notification, which is worse than the bug it prevents.
       final spoken = <String>[];
-      final chain = chainWith(
+      // The 5 ms of speech is fake time, so a stall cannot push it past the 40 ms budget.
+      final outcome = onFakeTime( ( now ) => chainWith(
         speak: ( t ) async {
           await Future<void>.delayed( const Duration( milliseconds: 5 ) );
           spoken.add( t );
         },
-      );
-      final outcome = await chain.handleWake( wakePayload() );
+        now: now,
+      ).handleWake( wakePayload() ) );
       expect( spoken, [ 'Build finished green.' ] );
       expect( outcome.spoke, isTrue );
       expect( played, [ 'n-77' ] );
@@ -787,7 +808,7 @@ void main() {
 
     setUp( () { logs = []; shownBodies = []; } );
 
-    FcmWakeChain chainWithGate( Future<bool> Function() gate ) => FcmWakeChain(
+    FcmWakeChain chainWithGate( Future<bool> Function() gate, { DateTime Function()? now } ) => FcmWakeChain(
       readCredentials: () async => const FcmWakeCredentials(
           refreshToken: 'r', userEmail: 'e@x.com' ),
       exchangeForAccessToken : ( _ ) async => 'a',
@@ -802,44 +823,43 @@ void main() {
       log                    : logs.add,
       showBudget             : const Duration( milliseconds: 40 ),
       fallbackBudget         : const Duration( milliseconds: 40 ),
+      clock                  : now ?? DateTime.now,
     );
 
-    test( 'a THROWING switch read does not escape handleWake', () async {
-      final chain = chainWithGate( () async => throw Exception( 'prefs unavailable' ) );
+    test( 'a THROWING switch read does not escape handleWake', () {
+      FcmWakeChain chain( DateTime Function() now ) => chainWithGate( () async => throw Exception( 'prefs unavailable' ), now: now );
 
       // The assertion is that this completes at all. Before the fix it threw, and
       // the throw went straight out through the background handler.
-      final outcome = await chain.handleWake( wakePayload() );
+      final outcome = onFakeTime( ( now ) => chain( now ).handleWake( wakePayload() ) );
 
       expect( outcome.handled, isTrue );
       expect( outcome.detail, contains( 'error:' ) );
       expect( logs.any( ( l ) => l.contains( 'chain failed' ) ), isTrue );
     } );
 
-    test( 'an unreadable switch still ends in a VISIBLE notification', () async {
+    test( 'an unreadable switch still ends in a VISIBLE notification', () {
       // "Cannot tell" must not silently mean "off" — that would be a wake
       // swallowed by a storage hiccup, which is the whole failure slice 2 exists
       // to prevent.
-      final chain = chainWithGate( () async => throw Exception( 'prefs unavailable' ) );
-      final outcome = await chain.handleWake( wakePayload() );
+      FcmWakeChain chain( DateTime Function() now ) => chainWithGate( () async => throw Exception( 'prefs unavailable' ), now: now );
+      final outcome = onFakeTime( ( now ) => chain( now ).handleWake( wakePayload() ) );
 
       expect( outcome.shown, isTrue );
       expect( shownBodies, [ kFcmWakeFallbackBody ] );
     } );
 
-    test( 'a HUNG switch read does not park the handler either', () async {
-      final chain = chainWithGate( () => Completer<bool>().future );
-      final outcome = await chain.handleWake( wakePayload() )
-          .timeout( const Duration( seconds: 2 ),
-              onTimeout: () => fail( 'handleWake hung on the switch read' ) );
+    test( 'a HUNG switch read does not park the handler either', () {
+      FcmWakeChain chain( DateTime Function() now ) => chainWithGate( () => Completer<bool>().future, now: now );
+      final outcome = onFakeTime( ( now ) => chain( now ).handleWake( wakePayload() ) );
 
       expect( outcome.shown, isTrue, reason: 'a hang still reaches the shade' );
       expect( outcome.detail, contains( 'timeout' ) );
     } );
 
-    test( 'and OFF still means off: the switch working is not regressed', () async {
-      final chain = chainWithGate( () async => false );
-      final outcome = await chain.handleWake( wakePayload() );
+    test( 'and OFF still means off: the switch working is not regressed', () {
+      FcmWakeChain chain( DateTime Function() now ) => chainWithGate( () async => false, now: now );
+      final outcome = onFakeTime( ( now ) => chain( now ).handleWake( wakePayload() ) );
 
       expect( outcome.detail, 'background notifications off' );
       expect( shownBodies, isEmpty, reason: 'off shows nothing at all' );
