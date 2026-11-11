@@ -75,9 +75,15 @@ const frozenFiles = <String>[
 ///   quietly re-pinned: a reviewer should confirm the edit is (a) and (b) and
 ///   nothing else. `git diff 026ffd3 -- test/unit/notifications/notification_bloc_test.dart`
 ///   is the whole story, and it is small.
+/// - notification_bloc_test.dart, again — Rick answered yes on a yes/no card to
+///   re-pinning for a timing-only change; the commit that moved this pin quotes
+///   the ruling. Fixed 50-500 ms waits became
+///   `drainEventLoop()`, because they raced the bloc under load. No expect, verify
+///   or emits line changed, and notification_bloc.dart runs no timers. The old pin
+///   was 215b782ac8d49767735ad8edcf6d9daa76162993; `git diff 215b782 095242c` shows it.
 const repinnedFrozenFiles = <String, String>{
   'test/unit/focus_mode/focus_chat_bloc_test.dart'       : 'f78738fe8e969779c578262ac5318ac40ba7657f',
-  'test/unit/notifications/notification_bloc_test.dart'  : '215b782ac8d49767735ad8edcf6d9daa76162993',
+  'test/unit/notifications/notification_bloc_test.dart'  : '095242cc5eeec5e9223d5ac38273ded17e7ffa39',
 };
 
 /// A file S4 unambiguously DID change. Diffing it is how this test proves the
