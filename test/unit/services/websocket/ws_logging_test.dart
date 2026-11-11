@@ -16,6 +16,8 @@ import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_resume_store.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 // Synthetic JWT, structurally valid and made up.
 const String _jwt =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
@@ -102,7 +104,8 @@ class _FailingStore extends WsResumeStore {
   }
 }
 
-Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 60 ) );
+/// Only pure async work is pending: all but one test use a 1 h backoff.
+Future<void> settle() => drainEventLoop();
 
 void main() {
   late _Capture        capture;
@@ -162,7 +165,9 @@ void main() {
     factoryError = Exception( "refused" );
 
     await ws.connect( userId: "u1" );
-    await Future<void>.delayed( const Duration( milliseconds: 400 ) );
+    // The 1 ms backoff timers run the attempts out; wait for the outcome, not for a time.
+    bool exhausted() => entries( LogLevel.warning ).any( ( e ) => e.message.startsWith( "Max reconnect attempts" ) );
+    await waitUntil( exhausted, "the max-reconnect-attempts warning" );
 
     final found = entries( LogLevel.warning ).where( ( e ) => e.message.startsWith( "Max reconnect attempts" ) );
     expect( found, hasLength( 1 ) );

@@ -16,6 +16,8 @@ import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_resume_store.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 /// Answers `/api/get-session-id` without a network.
 class _SessionAdapter implements HttpClientAdapter {
   @override
@@ -55,7 +57,8 @@ class _FakeSink implements WebSocketSink {
   @override Future<void> get done => Future.value();
 }
 
-Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 60 ) );
+/// Pure async work (stubbed Dio, in-memory prefs, fake channel): turns, not time.
+Future<void> settle() => drainEventLoop();
 
 void main() {
   late List<_FakeChannel> channels;
@@ -104,13 +107,17 @@ void main() {
       await settle();
       await channels[ 0 ].serverCloses( code );
       await settle();
-      await Future<void>.delayed( const Duration( milliseconds: 100 ) );
+      // The 5 ms backoff timer is the only thing that opens a second socket: wait for it
+      // when the code allows a reconnect. 4004 is asserted on the retry state instead.
+      if ( code != 4004 ) await waitUntil( () => channels.length >= 2, "second socket after close $code" );
       return channels.length;
     }
 
     test( '4004 superseded → NO reconnect', () async {
       expect( await connectionsAfterClose( 4004 ), 1 );
       expect( ws.isConnected, isFalse );
+      // No backoff timer is pending, so no second socket can ever follow (a drain would not fire it).
+      expect( ws.isRetryPending, isFalse );
     } );
 
     test( '4001 → reconnects and re-authenticates with the CURRENT token (auth path as today)', () async {
@@ -118,8 +125,8 @@ void main() {
       await settle();
       readAccessToken = () => 'refreshed';
       await channels[ 0 ].serverCloses( 4001 );
-      await Future<void>.delayed( const Duration( milliseconds: 150 ) );
-      expect( channels.length, 2 );
+      await waitUntil( () => channels.length == 2 && channels[ 1 ].sent.any( ( m ) => m[ 'type' ] == 'auth_request' ),
+          "re-authenticated second socket" );
       expect( authOf( channels[ 1 ] )[ 'token' ], 'Bearer refreshed' );
     } );
 
@@ -146,7 +153,8 @@ void main() {
       expect( await store.lastSeq(), 42 );
 
       await channels[ 0 ].serverCloses( 1006 );
-      await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+      await waitUntil( () => channels.length == 2 && channels[ 1 ].sent.any( ( m ) => m[ 'type' ] == 'auth_request' ),
+          "re-authenticated second socket" );
       expect( authOf( channels[ 1 ] )[ 'last_seq' ], 42 );
     } );
 
@@ -185,7 +193,8 @@ void main() {
       await settle();
       await store.setLastSeq( 77 );   // "the other isolate" wrote it
       await channels[ 0 ].serverCloses( 1006 );
-      await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+      await waitUntil( () => channels.length == 2 && channels[ 1 ].sent.any( ( m ) => m[ 'type' ] == 'auth_request' ),
+          "re-authenticated second socket" );
       expect( authOf( channels[ 1 ] )[ 'last_seq' ], 77 );
     } );
   } );

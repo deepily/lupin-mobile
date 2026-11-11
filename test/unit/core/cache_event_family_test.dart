@@ -12,7 +12,20 @@ import 'package:lupin_mobile/core/cache/network_cache.dart';
 import 'package:lupin_mobile/core/storage/storage_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 50 ) );
+import '../_helpers/drain_event_loop.dart';
+
+/// Awaited cache calls and stream events are pure async work: turns, not time.
+Future<void> settle() => drainEventLoop();
+
+/// Returns once a 1 ms TTL, stored before this call, has run out.
+///
+/// The cache stamps each entry with DateTime.now() when it is stored.
+/// An entry stored earlier is therefore older than 1 ms once the clock has moved 1 ms on.
+/// This waits for that outcome on the clock the cache reads, however slow the machine is.
+Future<void> waitPastOneMsTtl() async {
+  final since = DateTime.now();
+  await waitUntil( () => DateTime.now().difference( since ) > const Duration( milliseconds: 1 ), "the 1 ms TTL to run out" );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,7 +82,7 @@ void main() {
     test( "an entry past its own TTL emits CacheExpiredEvent with method and url, and the lookup returns null", () async {
       await network.clearAll();
       await network.cacheGetResponse( "/family/ttl", null, okResponse( "/family/ttl" ), ttl: const Duration( milliseconds: 1 ) );
-      await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+      await waitPastOneMsTtl();
 
       final seen = <CacheEvent>[];
       final sub  = network.events.listen( seen.add );
@@ -89,7 +102,7 @@ void main() {
       await network.cacheGetResponse( "/family/x1", null, okResponse( "/family/x1" ), ttl: const Duration( milliseconds: 1 ) );
       await network.cacheGetResponse( "/family/x2", null, okResponse( "/family/x2" ), ttl: const Duration( milliseconds: 1 ) );
       await network.cacheGetResponse( "/family/live", null, okResponse( "/family/live" ), ttl: const Duration( hours: 1 ) );
-      await Future<void>.delayed( const Duration( milliseconds: 30 ) );
+      await waitPastOneMsTtl();
 
       final seen = <CacheEvent>[];
       final sub  = network.events.listen( seen.add );
