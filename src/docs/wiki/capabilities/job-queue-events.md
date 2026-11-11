@@ -1,6 +1,6 @@
 ---
 capability: job-queue-events
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.queue.domain.queue_event.QueueEvent@0b967e92b2
   - lupin-mobile:lib.features.queue.domain.queue_event.QueueLoadSnapshot@33e8c9c034

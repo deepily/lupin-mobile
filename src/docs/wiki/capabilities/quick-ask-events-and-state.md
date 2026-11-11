@@ -1,6 +1,6 @@
 ---
 capability: quick-ask-events-and-state
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.quick_ask.data.quick_ask_models.stateForQueue@8f5dfccde0
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskRecordPressed@b4e1c5cde6
@@ -15,7 +15,7 @@ pins:
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskSpokenEventArrived@affe563314
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskSendModeChanged@9ba6aa5e65
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskPromptDismissed@1ea82c519d
-  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskPhase@65ab68df73
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskPhase@22976719e9
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskBlockReason@cffd3383a4
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskBlockReasonText@8da64bd400
 ---
@@ -30,7 +30,7 @@ The events `QuickAskBloc` accepts, the capture phases and the reasons the record
 - `QuickAskEntryDismissed` removes a card and cancels its job server-side when still running; a null `jobId` means a question not yet tied to a job.
 - `QuickAskPromptDismissed` posts the prompt's default answer, so the blocked ask stops waiting.
 - `QuickAskSpokenEventArrived` and `QuickAskWatchdogFired` are internal; only the bloc adds them. A spoken event whose epoch is stale is cancelled if it names a job, else dropped.
-- `QuickAskPhase` is idle, recording, transcribing, review, submitting or waiting.
+- `QuickAskPhase` is idle, starting, recording, transcribing, review, submitting or waiting.
 - `QuickAskBlockReason` is liveJobInFlight, unansweredPrompt, socketDisconnected or captureInFlight. `QuickAskBlockReasonText.message` gives the sentence the button shows.
 - `stateForQueue` maps `done` to completed, `dead` to failed, `run` to running and anything else to queued.
 

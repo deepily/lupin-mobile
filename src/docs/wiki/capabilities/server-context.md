@@ -1,6 +1,6 @@
 ---
 capability: server-context
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.settings.presentation.server_context_toggle.serverContextColor@3d858e0289
   - lupin-mobile:lib.features.settings.presentation.server_context_toggle.ServerContextToggle@d7376c9937

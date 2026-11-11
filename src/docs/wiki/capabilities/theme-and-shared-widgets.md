@@ -1,15 +1,15 @@
 ---
 capability: theme-and-shared-widgets
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.build_info_footer.BuildInfoFooter@33e3e79d85
-  - lupin-mobile:lib.core.constants.app_constants.AppConstants@ebe9cae664
+  - lupin-mobile:lib.core.constants.app_constants.AppConstants@1dabd8df50
   - lupin-mobile:lib.core.constants.app_themes.AppThemes@21c8ea0828
   - lupin-mobile:lib.shared.painters.dashed_border_painter.DashedBorderPainter@6099c7ce5c
 ---
 # Theme, constants and shared widgets
 
-`AppThemes` holds the two Material 3 themes. `AppConstants` holds server paths, WebSocket event names and tuning values. Two small widgets live here: `DashedBorderPainter` and `BuildInfoFooter`. See [[ws-connection]], [[server-context]] and [[app-bootstrap-and-di]].
+`AppThemes` holds the two Material 3 themes. `AppConstants` holds the app version, server paths, WebSocket event names and tuning values. Two small widgets live here: `DashedBorderPainter` and `BuildInfoFooter`. See [[ws-connection]], [[server-context]] and [[app-bootstrap-and-di]].
 
 ## What it does
 - `AppThemes.lightTheme` and `AppThemes.darkTheme` are seeded from blue. `app.dart` passes both to the app, so the device setting picks one.

@@ -1,6 +1,6 @@
 ---
 capability: agentic-requests-and-forms
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.agentic.data.agentic_common_models.TfeResumeResponse@cedafa7501
   - lupin-mobile:lib.features.agentic.data.podcast_models.PodcastGeneratorRequest@8a546dd526

@@ -1,10 +1,10 @@
 ---
 capability: interactive-prompts
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.shared.widgets.prompt_bodies.YesNoPromptBody@ae2eb73f1f
   - lupin-mobile:lib.shared.widgets.prompt_bodies.MultipleChoicePromptBody@e65b639d14
-  - lupin-mobile:lib.shared.widgets.prompt_bodies.MultiQuestionPromptBody@8bfb41bdbc
+  - lupin-mobile:lib.shared.widgets.prompt_bodies.MultiQuestionPromptBody@778f28fdfd
   - lupin-mobile:lib.shared.widgets.prompt_bodies.OpenEndedPromptBody@772f30d59d
   - lupin-mobile:lib.features.notifications.presentation.interactive_prompt_sheet.InteractivePromptSheet@c721ec8904
   - lupin-mobile:lib.features.notifications.data.ask_resolution.AskResolution@0c773b28d4
@@ -18,7 +18,7 @@ When a notification asks the user a question, four shared widgets draw the answe
 ## What it does
 - `InteractivePromptSheet.show` opens a modal sheet that shares the caller's `NotificationBloc`. It picks a body from `responseType`, sends `NotificationsRespond` and closes.
 - `yes_no` gets `YesNoPromptBody`, answering `yes`, `no` or `neither`, with ` [comment: ...]` appended when typed. Neither means the question needs re-framing.
-- `multiple_choice` gets `MultipleChoicePromptBody`. It gets `MultiQuestionPromptBody` when the options carry a nested `questions` list, wrapped as `{"answers": {header: value}}`.
+- `multiple_choice` gets `MultipleChoicePromptBody`. It gets `MultiQuestionPromptBody` when the options carry a nested `questions` list, wrapped as `{"answers": {header: value}}`. Each question also gets an Other box, and typing new text ticks Other.
 - `open_ended_batch` uses `MultiQuestionPromptBody` but submits the map unwrapped. `open_ended` and any unknown type get `OpenEndedPromptBody`.
 - `AskResolution` has `expired`, `answeredElsewhere` and `failed`. The first two close the card instead of raising an error.
 - `classifyRespondFailure` reads a 400 message by case-insensitive substring. `classifyResumeStatus` reads the resume route's `status`. Quick ask uses both; the focus chat bloc uses only `classifyRespondFailure`.

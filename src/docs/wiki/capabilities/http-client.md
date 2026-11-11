@@ -1,6 +1,6 @@
 ---
 capability: http-client
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.services.auth.auth_interceptor.AuthInterceptor@b447bb8eb5
   - lupin-mobile:lib.services.network.cached_http_service.CachedHttpService@4d3b4f837e

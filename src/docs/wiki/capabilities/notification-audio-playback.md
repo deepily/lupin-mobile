@@ -1,8 +1,8 @@
 ---
 capability: notification-audio-playback
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
-  - lupin-mobile:lib.services.notification_audio.notification_audio_service.NotificationAudioService@0d3fa81e0a
+  - lupin-mobile:lib.services.notification_audio.notification_audio_service.NotificationAudioService@b1ef46d504
   - lupin-mobile:lib.services.notification_audio.notification_delivery_policy.NotificationSurface@1cecbeea7b
   - lupin-mobile:lib.services.notification_audio.notification_delivery_policy.NotificationDeliveryPolicy@ba9c0b1ccf
   - lupin-mobile:lib.services.notification_audio.notification_preferences.NotificationPreferences@b7be8ae7be
@@ -22,11 +22,13 @@ pins:
 - `anyAllowedOn( surface )` is the cheap pre-flight the wake chain runs before it spends radio and battery.
 - The policy only silences. It never hides a list item and never marks anything played.
 - `NotificationAudioService.handleIncoming` plays one sound per tier on the Android channels `lupin_medium`, `lupin_high` and `lupin_urgent`. `low` and the master mute do nothing, and `suppress_ding` silences the ding only.
-- `flutterTtsSpeak` speaks with `flutter_tts` when ElevenLabs is unavailable. It waits for completion, bounded by 30 seconds plus 8 characters a second of text.
+- `flutterTtsSpeak` speaks with `flutter_tts` when ElevenLabs is unavailable. The engine has 10 seconds to accept the text, then completion is bounded by 30 seconds plus 8 characters a second of text.
+- While the app is on screen, `handleIncoming` posts nothing to Android. It vibrates and plays the ding inside the app, so no banner drops over the screen. In the background it posts as before ([[notification-sound-and-settings]]).
 - Preference defaults: `low` is silent, `medium` dings, and `high` and `urgent` ding and speak. The focus surface speaks every message anyway, through `TtsOrchestrator`.
 - `oldestFirst` sorts the fetched unplayed list by parsed instant, because the server's order and its docstring disagree. `notificationSenderLabel` builds the title, and `notificationSenderKey` the mute key.
 
 ## Don't
+- Don't build the service without the foreground probe. Every ding would then post to Android, banners included.
 - Don't build the service without the tap callback. `initialize()` assigns the plugin's handler, so a service built without the callback installs null. Taps then stop after the first ding.
 - Don't compare timestamps as strings. Offsets differ across restarts and DST, so `oldestFirst` compares instants.
 - Don't add a priority tier without a checkbox. Consent for it does not exist yet, so the policy denies it.

@@ -1,6 +1,6 @@
 ---
 capability: fleet-status-models-and-bloc
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.fleet_status.data.fleet_models.FleetLiveness@c24d6fbf2d
   - lupin-mobile:lib.features.fleet_status.data.fleet_models.FleetContextRecord@4b1677f2bd

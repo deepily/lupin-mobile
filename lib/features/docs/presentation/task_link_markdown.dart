@@ -93,8 +93,8 @@ class TaskLinkSession extends ChangeNotifier {
   ///
   /// Ensures:
   ///   - a second call for the same id does nothing, so a row named twice is read once
-  ///   - `not_approved`, an unknown status or a failed read leaves the live link
-  ///   - any other status shows approved, except dropped or wont_fix, shown as that status
+  ///   - `not_approved`, an empty status or a failed read leaves the live link
+  ///   - any other status, even an unknown one, shows approved, except dropped or wont_fix, shown as that status
   ///   - a link already tapped is not overwritten
   Future<void> ensureRead( String id ) async {
     if ( !_read.add( id ) ) return;

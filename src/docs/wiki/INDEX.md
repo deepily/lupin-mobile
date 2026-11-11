@@ -7,6 +7,7 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 ## Core and platform
 
 - [[app-bootstrap-and-di]] — start-up order, the service locator, the root widget and the build stamp. `main.dart`, `app.dart`, `core/app_initialization.dart`, `core/di`, `core/build_info.dart`
+  - [[home-screen]] — The home grid, its card order and the app-bar actions. `features/home`
 - [[settings-store]] — typed settings definitions, validation, quick presets and change events. `core/settings`
 - [[local-caches]] — the generic and network caches, their policy and eviction, and key-value storage. `core/cache`, `core/storage`
 - [[local-caches-events]] — the one `CacheEvent` family: what `CacheManager` and `NetworkCache` emit. `core/cache/cache_manager.dart`
@@ -31,9 +32,11 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 - [[fcm-push-wake]] — Firebase wake-ups, the token source, the wake chain and notification taps. `services/push`
 - [[fcm-wake-background-helpers]] — the helpers the background isolate runs during a wake: credentials, token exchange, fetch, notification id and details. `services/push/fcm_bootstrap.dart`
 - [[notification-audio-playback]] — deciding whether a notification is spoken, playing it, and the unplayed order. `services/notification_audio`, `services/push`
+  - [[notification-sound-and-settings]] — The management and sound screens, mute rows, quiet hours and the in-app ding. `features/settings`, `services/notification_audio`
 - [[tts-streaming]] — speech intent, the orchestrator, the streaming player and preview truncation. `services/tts`
 - [[tts-audio-chunk-model]] — the audio chunk record and its type and status enums. `shared/models/audio_chunk.dart`
 - [[asr-dictation]] — microphone capture, speech to text, dictation splicing and the microphone permission. `services/asr`, `services/permissions`, `shared/widgets`
+  - [[voice-capture-helpers]] — The capture level meter, the voice reply composer and the earbud trace uploader. `services/asr`, `services/diagnostics`, `features/focus_mode`
 - [[round-trip-probe]] — measuring the voice round trip with a probe WAV. `services/diagnostics`, `features/settings/presentation`
 - [[notification-filtering]] — the stop list, progress-group collapse, muting a sender and the filter settings. `services/notification_filter`, `features/notifications/presentation`
 - [[notification-permission]] — the operating system notification permission prompts. `services/permissions`
@@ -48,6 +51,7 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 - [[voice-personas]] — persona identity, the badge, labels and the speakerphone snapshot. `features/notifications/data`, `core/text`
 - [[quick-ask]] — a one-shot voice or text question to the server. `features/quick_ask`, `services/quick_ask`
   - [[quick-ask-events-and-state]] — The quick ask bloc's events, phases and block reasons. `features/quick_ask`, `services/quick_ask`
+  - [[quick-ask-earbuds]] — Earbud taps, the gesture-to-action table and the hands-free tones. `features/quick_ask`
 - [[decision-proxy-client]] — the trust dashboard and trust state screens. `features/decision_proxy`
   - [[decision-proxy-models]] — Trust modes, status, decision and trust-state models. `features/decision_proxy`
   - [[decision-proxy-events-and-states]] — The decision proxy bloc's events and states. `features/decision_proxy`
@@ -85,4 +89,9 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
 - [[doc-viewer-client]] — opening repo documents by path, the split panel, link taps and upload. `features/docs`
   - [[doc-links-models-and-upload]] — Link helpers, content models and upload helpers. `features/docs`
   - [[doc-directory-panel-and-sheets]] — The directory view, roots panel, panel placement and upload sheet. `features/docs`
+  - [[task-links-in-docs]] — The approve and view links for held task rows inside a card. `features/docs`
 - [[artifact-viewers]] — the markdown report, slide deck and audio artifact viewers and the io file fetch. `features/artifacts`, `services/artifacts`
+- [[podcast-playback]] — the app-wide podcast player, the media session, earbud presses and the mini-player bar. `services/audio`, `features/audio`
+  - [[podcast-downloads]] — the cache, the metered-link rule, the mobile-data sheet and prefetch. `services/audio`, `features/artifacts`
+  - [[podcast-library]] — the Podcasts screen, the Drive listing and the Play buttons on a done card. `features/podcasts`, `features/notifications`, `services/audio`
+  - [[podcast-from-viewer]] — the doc viewer's podcast button: check, confirm, start and refusal text. `features/docs`

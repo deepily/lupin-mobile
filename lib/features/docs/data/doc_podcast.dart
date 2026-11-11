@@ -18,7 +18,7 @@ class DocPodcastFacts {
   /// Parses the check's `{ ok, name, size }` body.
   ///
   /// Requires:
-  ///   - [json] carries a string `name`; a missing or non-numeric `size` reads as 0
+  ///   - [json] carries a string `name`; a missing `size` reads as 0, and a non-numeric one throws
   factory DocPodcastFacts.fromJson( Map<String, dynamic> json ) => DocPodcastFacts(
     name : json[ "name" ] as String,
     size : ( json[ "size" ] as num? )?.toInt() ?? 0,

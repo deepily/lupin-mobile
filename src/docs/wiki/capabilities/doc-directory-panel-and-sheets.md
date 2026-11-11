@@ -1,6 +1,6 @@
 ---
 capability: doc-directory-panel-and-sheets
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.docs.presentation.doc_directory_view.DocDirectoryView@8d29f24a2e
   - lupin-mobile:lib.features.docs.presentation.doc_directory_view.DocRootsPanel@804aa88f78

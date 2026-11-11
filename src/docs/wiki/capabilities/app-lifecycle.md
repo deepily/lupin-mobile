@@ -1,6 +1,6 @@
 ---
 capability: app-lifecycle
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.auth.presentation.ws_lifecycle_listener.WsLifecycleListener@456685887f
   - lupin-mobile:lib.services.lifecycle.app_lifecycle_service.AppLifecycleService@54e5a34fec

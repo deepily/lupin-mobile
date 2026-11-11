@@ -1,6 +1,6 @@
 ---
 capability: focus-chat-events
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.focus_mode.domain.focus_chat_event.FocusPromptContext@6be1bb6c35
   - lupin-mobile:lib.features.focus_mode.domain.focus_chat_event.FocusChatEvent@d602f5acf5

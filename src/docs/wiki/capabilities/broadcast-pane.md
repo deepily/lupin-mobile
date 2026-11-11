@@ -1,6 +1,6 @@
 ---
 capability: broadcast-pane
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.broadcast.data.broadcast_repository.BroadcastRepository@b9eae2854e
   - lupin-mobile:lib.features.broadcast.data.broadcast_repository.BroadcastException@8cf3a599b1

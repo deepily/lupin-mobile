@@ -1,6 +1,6 @@
 ---
 capability: offline-queue
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.cache.offline_manager.OfflineManager@1cfb96d19f
   - lupin-mobile:lib.core.cache.offline_manager.QueuedRequest@ba0c50b03f
@@ -11,7 +11,7 @@ pins:
   - lupin-mobile:lib.core.cache.offline_manager.OfflineQueueEvent@6ed4dc6375
   - lupin-mobile:lib.core.cache.offline_manager.OfflineRequestProcessedEvent@f9065a521c
   - lupin-mobile:lib.core.cache.offline_manager.OfflineClearEvent@46e772ef37
-  - lupin-mobile:lib.services.network.network_connectivity_service.NetworkConnectivityService@1fb67baa23
+  - lupin-mobile:lib.services.network.network_connectivity_service.NetworkConnectivityService@9945d00a15
   - lupin-mobile:lib.services.network.network_connectivity_service.NetworkState@d017df0aae
   - lupin-mobile:lib.services.network.network_connectivity_service.shouldRetryOnNetworkEdge@3be321f976
   - lupin-mobile:lib.services.network.network_connectivity_service.ConnectionQuality@45f3ada920
@@ -25,7 +25,7 @@ pins:
 - `OfflineManager` follows the platform connectivity stream. On a change to online it calls `processQueuedRequests`.
 - `queueRequest( key, data )` and `removeFromQueue` keep the queue in storage under `offline_queue` and emit an `OfflineQueueEvent`.
 - Its own `processQueuedRequests` sends nothing. It emits `OfflineRequestProcessedEvent` and removes each entry. `CachedHttpService.processQueuedRequests` is the one that replays GET and POST requests.
-- `NetworkConnectivityService` is a singleton. A network interface counts as `connected` only when `GET /health` answers 200 within 5 seconds, otherwise `limited`.
+- `NetworkConnectivityService` is a singleton. A network interface counts as `connected` only when `GET /health` answers 200 within 5 seconds, otherwise `limited`. After the service closes, a late result is dropped, not emitted.
 - It tests latency every 2 minutes and checks connectivity every 30 seconds. `pauseMonitoring` stops both timers while the app is in the background.
 - `getConnectionStrategy` maps a `ConnectionQuality` to a `WebSocketConnectionStrategy`: reconnect delay 1 second when excellent, up to 30 seconds when offline or unknown.
 - `shouldRetryOnNetworkEdge( previous, next )` is the one rule the task panes use to refetch and retry unsent writes.

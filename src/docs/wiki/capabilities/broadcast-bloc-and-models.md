@@ -1,6 +1,6 @@
 ---
 capability: broadcast-bloc-and-models
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.broadcast.data.broadcast_models.ActiveSession@b84e917aee
   - lupin-mobile:lib.features.broadcast.data.broadcast_models.ActiveSessionRoster@8e74c65157

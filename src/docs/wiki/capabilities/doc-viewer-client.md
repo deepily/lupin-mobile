@@ -1,11 +1,11 @@
 ---
 capability: doc-viewer-client
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.docs.data.doc_link.DocLinkKind@8f096e7578
   - lupin-mobile:lib.features.docs.data.doc_link.classifyDocHref@1f78b1f2fd
   - lupin-mobile:lib.features.docs.data.doc_link.parseDocLinks@7e1176ccd1
-  - lupin-mobile:lib.features.docs.data.doc_repository.DocRepository@5bcbc8f475
+  - lupin-mobile:lib.features.docs.data.doc_repository.DocRepository@e18928a8e4
   - lupin-mobile:lib.features.docs.data.doc_models.DocContentKind@357188f661
   - lupin-mobile:lib.features.docs.presentation.doc_viewer_screen.DocViewerScreen@2f0f965036
   - lupin-mobile:lib.features.docs.presentation.doc_split_host.DocSplitHost@8af502830a
@@ -28,8 +28,8 @@ Opens a repo document or an `io/` file from a notification's abstract link, and 
 - `DocRepository.upload` posts a multipart form to `/api/docs/upload`. A 409 raises `DocUploadConflict` with the server's suggested name, and the sheet offers Replace, Rename or Cancel.
 - `DocViewerScreen` shows one place at a time and keeps its own back history. Download shares the bytes already held. A binary file shows no preview.
 - Upload shows only when `tokenHasAdminRole` says the token is admin. That hides the button; the server's check decides.
-- `openMarkdownHref` handles every link tap in rendered markdown. A fetchable link opens in the surrounding `DocSplitHost`, else in a panel. An external URL asks first.
-- `AbstractBody` is a compact row that opens the whole abstract as markdown.
+- `openMarkdownHref` handles every link tap in rendered markdown. A fetchable link opens in the surrounding `DocSplitHost`, else in a panel. An external URL asks first. `AbstractBody` is a compact row that opens the whole abstract.
+- `DocRepository.checkPodcast` and `startPodcast` back the viewer's podcast button ([[podcast-from-viewer]]). A 409 with a job id returns that earlier job as already started.
 
 ## Don't
 - Don't pass `?scope=` and don't rewrite old links. The server answers 400.

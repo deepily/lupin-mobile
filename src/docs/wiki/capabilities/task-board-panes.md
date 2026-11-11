@@ -1,6 +1,6 @@
 ---
 capability: task-board-panes
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.task_list.domain.task_list_bloc.TaskListBloc@fcca9ec095
   - lupin-mobile:lib.features.task_list.data.task_list_repository.TaskListRepository@a33ff907f3

@@ -1,6 +1,6 @@
 ---
 capability: notification-filtering
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.notifications.presentation.mute_sender_action.senderItemFor@e0bd039c06
   - lupin-mobile:lib.features.notifications.presentation.mute_sender_action.showMuteSenderMenu@fe6184cae5

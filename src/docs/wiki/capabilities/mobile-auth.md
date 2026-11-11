@@ -1,6 +1,6 @@
 ---
 capability: mobile-auth
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.auth.domain.auth_bloc.AuthBloc@c314acc263
   - lupin-mobile:lib.features.auth.domain.auth_event.AuthEvent@eea7c6f5c7

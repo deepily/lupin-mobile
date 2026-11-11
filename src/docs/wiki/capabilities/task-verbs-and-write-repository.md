@@ -1,6 +1,6 @@
 ---
 capability: task-verbs-and-write-repository
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.fleet.data.task_row_model.TaskBlocker@742a411c40
   - lupin-mobile:lib.features.fleet.data.task_row_schema.RowCell@7cd69e4b62
@@ -9,7 +9,7 @@ pins:
   - lupin-mobile:lib.features.fleet.data.task_verbs.verbReasonComplaint@57d16e07f4
   - lupin-mobile:lib.features.fleet.data.task_verbs.verbDateComplaint@c96b086228
   - lupin-mobile:lib.features.fleet.data.task_verbs.VerbLegality@60af1cd419
-  - lupin-mobile:lib.features.fleet.data.task_write_repository.TaskWriteException@cd282700b1
+  - lupin-mobile:lib.features.fleet.data.task_write_repository.TaskWriteException@672af91948
   - lupin-mobile:lib.features.fleet.presentation.pane_host_screen.PaneHostScreen@1f6963acab
   - lupin-mobile:lib.features.fleet.presentation.verb_reason_sheet.VerbReasonSheet@3c88febfb5
   - lupin-mobile:lib.features.fleet.presentation.verb_reason_sheet.showVerbReasonSheet@eba61e6e99
@@ -24,7 +24,7 @@ The verb table, small row models, write error and shared sheet behind [[task-row
 - `verbReasonComplaint` has its own sentence for each reason verb and a generic one otherwise. `verbDateComplaint` has two: a park is bounded, and a held row is bounded.
 - `VerbLegality` is one verb's standing on one row: enabled or not, its `VerbNeeds`, and why not. Park is enabled only from queued or in_progress, approve only on not_approved, un-park only on parked, and demote on every other open row.
 - `TaskBlocker` is a typed `blocked_by` entry of kind `item`, `persona` or `user`; a missing field becomes empty. `RowCell` is a stable test key plus a label.
-- `TaskWriteException` carries a message naming the operation and row, and the underlying error. A 202 is the separate `TaskAwaitingApprovalException`.
+- `TaskWriteException` carries a message naming the operation and row, and the underlying error. `serverMessage` gives the server's `detail` text when the response has one. A 202 is the separate `TaskAwaitingApprovalException`.
 - `PaneHostScreen` wraps one pane in a Scaffold and builds its bloc from a factory, so the bloc lives and dies with the route.
 - `VerbReasonSheet` is a bottom sheet shared by both panes, with no pane parameter. `showVerbReasonSheet` returns the built verb, or null on cancel, and needs a verb whose `needsSheet` is true.
 

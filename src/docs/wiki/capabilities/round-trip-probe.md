@@ -1,6 +1,6 @@
 ---
 capability: round-trip-probe
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.settings.presentation.round_trip_probe_screen.RoundTripProbeScreen@76211ed06f
   - lupin-mobile:lib.services.diagnostics.probe_wav.ProbeWav@06eb376eee

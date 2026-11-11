@@ -1,6 +1,6 @@
 ---
 capability: live-transcript
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.transcript.data.transcript_repository.TranscriptRepository@09cbf3c45e
   - lupin-mobile:lib.features.transcript.domain.transcript_stream_bloc.TranscriptStreamBloc@d04cce530a
