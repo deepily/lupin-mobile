@@ -11,6 +11,7 @@ import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_preview_truncator.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _MockPlayer   extends Mock implements StreamingTtsPlayer {}
 class _MockFallback extends Mock implements NotificationAudioService {}
@@ -346,7 +347,7 @@ void main() {
 
       // Backend returns quota_exceeded.
       errorCtrl.add( const TtsErrorEvent( errorCode: "quota_exceeded", message: "out" ) );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       verify( () => fallback.flutterTtsSpeak( "failing text" ) ).called( 1 );
     } );
@@ -359,7 +360,7 @@ void main() {
       o.enqueueIfSpeakable( priority: "high", message: "first",  title: null );
       await Future<void>.delayed( Duration.zero );
       errorCtrl.add( const TtsErrorEvent( errorCode: "quota_exceeded" ) );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // Clear prior interactions on the mocks.
       clearInteractions( player );
@@ -373,7 +374,7 @@ void main() {
 
       // New utterance during fallback window.
       o.enqueueIfSpeakable( priority: "high", message: "next one", title: null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // Should go to fallback, NOT ElevenLabs.
       verify( () => fallback.flutterTtsSpeak( "next one" ) ).called( 1 );
@@ -425,7 +426,7 @@ void main() {
 
       final o = newOrch();
       o.enqueueIfSpeakable( priority: "high", message: "will fail", title: null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       verify( () => fallback.flutterTtsSpeak( "will fail" ) ).called( 1 );
     } );
@@ -444,7 +445,7 @@ void main() {
         title    : null,
         voiceId  : "pNInz6obpgDQGcFmaJgB",
       );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       verify( () => player.speak(
         text      : "hello from Adam",
@@ -460,7 +461,7 @@ void main() {
       final o = newOrch();
 
       o.enqueueIfSpeakable( priority: "high", message: "no persona", title: null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // Server falls back to Sam when voice_id key is absent (Q3 contract).
       // The orchestrator passes null through; StreamingTtsPlayer's body
@@ -503,7 +504,7 @@ void main() {
         errorCode : 'quota_exceeded',
         message   : 'first',
       ) );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // Fallback should have re-spoken "first" without voiceId.
       verify( () => fallback.flutterTtsSpeak( "first" ) ).called( 1 );
@@ -515,7 +516,7 @@ void main() {
         title    : null,
         voiceId  : "vx-second",
       );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // Per Q4: flutter_tts is called with bare text only. No voiceId,
       // no overload that takes voiceId. The fallback voice space is
@@ -697,7 +698,7 @@ void main() {
       o.enqueueAlways( priority: "high", message: "first" );
       await pump();
       errorCtrl.add( const TtsErrorEvent( errorCode: "quota_exceeded" ) );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       expect( fallbackSpoken, [ "first" ], reason: "quota error re-speaks current via fallback" );
 
       o.pause();
@@ -707,7 +708,7 @@ void main() {
       expect( fallbackSpoken, [ "first" ] );
 
       o.resume();
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( fallbackSpoken, [ "first", "held one", "held two" ] );
       expect( spoken, [ "first" ], reason: "ElevenLabs got only the pre-window dispatch" );
@@ -810,7 +811,7 @@ void main() {
 
       o.pause();
       errorCtrl.add( const TtsErrorEvent( errorCode: "server_error" ) );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( spoken, [ "erroring" ], reason: "error continuation parks at the _tryStartNext gate" );
       expect( o.queueDepth, 1 );

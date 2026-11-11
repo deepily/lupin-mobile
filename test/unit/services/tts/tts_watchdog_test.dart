@@ -18,6 +18,8 @@ import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 class _MockPlayer   extends Mock implements StreamingTtsPlayer {}
 class _MockFallback extends Mock implements NotificationAudioService {}
 class _MockWs       extends Mock implements WebSocketService {}
@@ -194,7 +196,10 @@ void main() {
 
       o.enqueueAlways( priority: "high", message: "first, engine hangs" );
       o.enqueueAlways( priority: "high", message: "second" );
-      await Future<void>.delayed( const Duration( milliseconds: 300 ) );
+      // Only the 50 ms fallback budget can abandon the hung first speak, so the second
+      // reaching the engine proves it fired. The drain lets the second finish.
+      await waitUntil( () => onDevice.length >= 2, "the second utterance to reach the engine" );
+      await drainEventLoop();
 
       expect( onDevice, [ "first, engine hangs", "second" ], reason: "THE BUG: _current stayed set, zero POSTs, silence" );
       expect( o.lastOutcome!.line, isNot( contains( "did not respond" ) ), reason: "the second spoke fine afterwards" );
@@ -230,16 +235,24 @@ void main() {
     test( "finding 3: audio that reports playing forever is stopped at the ceiling and the queue advances", () async {
       final o = await newOrch( maxPlayback: const Duration( milliseconds: 120 ) );
       audioPlaying = true;   // onComplete never fires
+      // Every outcome, in order. lastOutcome alone moves on to "next" once it is posted.
+      final outcomes = <String>[];
+      final sub      = o.outcomeStream.listen( ( out ) => outcomes.add( out.line ) );
+      addTearDown( sub.cancel );
 
       o.enqueueAlways( priority: "high", message: "plays forever" );
       o.enqueueAlways( priority: "high", message: "next" );
       await pump();
       expect( posted, [ "plays forever" ] );
 
-      await Future<void>.delayed( const Duration( milliseconds: 260 ) );
+      // Only the 120 ms playback bound can release the endless utterance, so "next"
+      // being posted proves it fired. The drain lets the release finish.
+      await waitUntil( () => posted.length >= 2, "the next utterance to be posted" );
+      await drainEventLoop();
       expect( posted, [ "plays forever", "next" ], reason: "THE BUG: the watchdog re-armed forever" );
       expect( onDevice, isEmpty, reason: "it was heard already; it is not spoken a second time" );
-      expect( o.lastOutcome!.line, contains( "never reported finishing" ) );
+      expect( outcomes.where( ( l ) => l.contains( "never reported finishing" ) ), isNotEmpty,
+          reason: "the endless utterance's own outcome names the ceiling" );
     } );
 
     test( "finding 4: a throw inside the watchdog releases the queue instead of leaving it held", () async {

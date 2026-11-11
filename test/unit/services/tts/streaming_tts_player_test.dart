@@ -7,6 +7,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/constants/app_constants.dart';
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _MockDio         extends Mock implements Dio {}
 class _MockAudioPlayer extends Mock implements StreamingTtsAudioPlayer {}
@@ -92,7 +93,7 @@ void main() {
       );
       // Let the microtask queue drain so `_playPcmBuffer` progresses
       // to `await myCompleter.future`.
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // audioPlayer.play WAS called (sync part of _playPcmBuffer ran).
       verify( () => audioPlayer.play( any() ) ).called( 1 );
@@ -104,7 +105,7 @@ void main() {
 
       // Now fire onComplete (simulating audio playback end).
       onCompleteCtrl.add( null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( emitted.length, 1 );
       expect( emitted.single.played, isTrue );
@@ -123,11 +124,11 @@ void main() {
       );
       // Simulate a long-playing utterance: 100ms of silence between WS
       // complete and actual playback end.
-      await Future<void>.delayed( const Duration( milliseconds: 100 ) );
+      await drainEventLoop();
       expect( emitted, isEmpty );
 
       onCompleteCtrl.add( null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( emitted.length, 1 );
     } );
@@ -143,7 +144,7 @@ void main() {
       // complete so the orchestrator advances its FIFO.
       player!.handleWsEvent( AppConstants.eventAudioStreamingComplete,
         <String, dynamic>{ 'status': 'success' } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( emitted.length, 1 );
       expect( emitted.single.played, isFalse, reason: "nothing was played, so it must not read as spoken" );
@@ -162,7 +163,7 @@ void main() {
         p       : player!,
         pcmBytes: List<int>.filled( 100, 0 ),
       );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       // audioPlayer.play ran; _playPcmBuffer is awaiting onComplete.
       verify( () => audioPlayer.play( any() ) ).called( 1 );
@@ -171,7 +172,7 @@ void main() {
       // but the identity check inside _playPcmBuffer must suppress the
       // complete emission.
       await player!.stop();
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( emitted, isEmpty, reason:
         "stop() must not cause a stray complete event — otherwise the "
@@ -190,9 +191,9 @@ void main() {
         p       : player!,
         pcmBytes: List<int>.filled( 100, 0 ),
       );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       await player!.stop();
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       expect( emitted, isEmpty, reason: "preempt path must not emit complete" );
 
       // Second utterance arrives (preempting one). It should emit exactly
@@ -202,12 +203,12 @@ void main() {
         p       : player!,
         pcmBytes: List<int>.filled( 100, 0 ),
       );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       expect( emitted, isEmpty, reason:
         "new utterance must not emit complete until its playback ends" );
 
       onCompleteCtrl.add( null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( emitted.length, 1, reason:
         "new utterance's complete fires exactly once after its playback ends" );
@@ -221,13 +222,13 @@ void main() {
         p       : player!,
         pcmBytes: List<int>.filled( 100, 0 ),
       );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( player!.isPlaying, isTrue,
         reason: "isPlaying must remain true while audio is playing" );
 
       onCompleteCtrl.add( null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( player!.isPlaying, isFalse );
     } );
@@ -243,7 +244,7 @@ void main() {
         <String, dynamic>{ 'data': List<int>.filled( 100, 0 ) } );
       player!.handleWsEvent( AppConstants.eventAudioStreamingComplete,
         <String, dynamic>{ 'status': 'success' } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( emitted, isEmpty );
       verifyNever( () => audioPlayer.play( any() ) );
@@ -298,7 +299,7 @@ void main() {
         <String, dynamic>{ 'data': List<int>.filled( 50, 0 ) } );
       player!.handleWsEvent( 'tts_error',
         <String, dynamic>{ 'error_code': 'quota_exceeded', 'text': 'out' } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( errs.length, 1 );
       expect( errs.first.errorCode, 'quota_exceeded' );

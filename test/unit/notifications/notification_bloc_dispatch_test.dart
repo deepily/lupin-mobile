@@ -39,6 +39,7 @@ import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockAudioService extends Mock implements NotificationAudioService {}
 class _MockTtsOrchestrator extends Mock implements TtsOrchestrator {}
@@ -155,7 +156,7 @@ void main() {
         bloc.add( NotificationsExternalUpdate(
           notification: _makeItem( type: "voice_persona_assigned" ),
         ) );
-        await Future.delayed( const Duration( milliseconds: 50 ) );
+        await drainEventLoop();
 
         verifyNever( () => audio.handleIncoming(
           priority     : any( named: "priority" ),
@@ -183,7 +184,7 @@ void main() {
         bloc.add( NotificationsExternalUpdate(
           notification: _makeItem( type: "some_unknown_type" ),
         ) );
-        await Future.delayed( const Duration( milliseconds: 50 ) );
+        await drainEventLoop();
 
         verifyNever( () => audio.handleIncoming(
           priority     : any( named: "priority" ),
@@ -221,7 +222,7 @@ void main() {
             },
           ),
         ) );
-        await Future.delayed( const Duration( milliseconds: 50 ) );
+        await drainEventLoop();
 
         verify( () => audio.handleIncoming(
           priority     : "urgent",
@@ -306,7 +307,7 @@ void main() {
         bloc.add( NotificationsExternalUpdate(
           notification: _makeItem( type: typeString ),
         ) );
-        await Future.delayed( const Duration( milliseconds: 50 ) );
+        await drainEventLoop();
 
         // AC-A2 — persona map unchanged after dispatch.
         expect(
@@ -537,7 +538,7 @@ void main() {
             senderId : "s1",
             on       : true,
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
 
           expect(
             bloc.speakerphoneBySessionForTesting[ "s1" ],
@@ -562,14 +563,14 @@ void main() {
             senderId : "s1",
             on       : true,
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
           final first = bloc.speakerphoneBySessionForTesting[ "s1" ];
 
           bloc.add( const NotificationsSpeakerphoneChanged(
             senderId : "s1",
             on       : true,
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
           final second = bloc.speakerphoneBySessionForTesting[ "s1" ];
 
           expect(
@@ -593,13 +594,13 @@ void main() {
             senderId : "s1",
             on       : true,
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
 
           bloc.add( const NotificationsSpeakerphoneChanged(
             senderId : "s1",
             on       : false,
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
 
           expect(
             bloc.speakerphoneBySessionForTesting[ "s1" ],
@@ -659,7 +660,7 @@ void main() {
               raw      : const { "on": true, "displaced": "x", "displaced_by": "y" },
             ),
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
 
           expect(
             bloc.speakerphoneBySessionForTesting,
@@ -693,7 +694,7 @@ void main() {
               },
             ),
           ) );
-          await Future.delayed( const Duration( milliseconds: 50 ) );
+          await drainEventLoop();
 
           expect(
             bloc.speakerphoneBySessionForTesting[ "s-sphkr" ],

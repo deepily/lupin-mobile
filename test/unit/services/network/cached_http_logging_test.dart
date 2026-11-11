@@ -14,6 +14,7 @@ import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/core/storage/storage_manager.dart';
 import 'package:lupin_mobile/services/network/cached_http_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _Capture implements LogDestination {
   final List<LogEntry> entries = [];
@@ -44,7 +45,7 @@ class _ScriptedAdapter implements HttpClientAdapter {
   void close( { bool force = false } ) {}
 }
 
-Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 60 ) );
+Future<void> settle() => drainEventLoop();
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

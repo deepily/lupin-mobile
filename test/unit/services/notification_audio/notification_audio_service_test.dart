@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _MockFln extends Mock implements FlutterLocalNotificationsPlugin {}
 class _MockTts extends Mock implements FlutterTts {}
@@ -264,7 +265,7 @@ void main() {
       when( () => tts.speak( any() ) ).thenAnswer( ( inv ) async { order.add( "speak:${inv.positionalArguments.first}" ); return 1; } );
 
       final future = boundedService( done: const Duration( seconds: 5 ) ).flutterTtsSpeak( "hello world" );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
       completion!();
       await future;
 
@@ -275,7 +276,7 @@ void main() {
       final service = boundedService( done: const Duration( seconds: 5 ) );
       var finished  = false;
       final future  = service.flutterTtsSpeak( "hello world" ).then( ( _ ) => finished = true );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       verify( () => tts.speak( "hello world" ) ).called( 1 );
       expect( finished, isFalse, reason: "accepted is not finished: the orchestrator must keep its utterance" );
@@ -289,7 +290,7 @@ void main() {
     test( "stopFallbackSpeech releases a speak that is waiting, even when the engine fires no cancel callback", () async {
       final service = boundedService( done: const Duration( seconds: 5 ) );
       final future  = service.flutterTtsSpeak( "long" );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       await service.stopFallbackSpeech();
       await future.timeout( const Duration( seconds: 1 ) );   // would hang for 5 s without the release
@@ -303,16 +304,16 @@ void main() {
       final service = boundedService( done: const Duration( seconds: 5 ) );
 
       final first = service.flutterTtsSpeak( "skipped" );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
       await service.stopFallbackSpeech();            // the user skipped it
       await first;
 
       var secondFinished = false;
       final second = service.flutterTtsSpeak( "next one" ).then( ( _ ) => secondFinished = true );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       cancel?.call();                                // the first one's cancel callback finally arrives
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
       expect( secondFinished, isFalse, reason: "THE BUG: the stale cancel released the utterance that was speaking" );
 
       completion!();

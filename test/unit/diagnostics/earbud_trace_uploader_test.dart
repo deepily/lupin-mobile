@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/audio/lupin_media_handler.dart';
 import 'package:lupin_mobile/services/diagnostics/earbud_trace_uploader.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _Adapter implements HttpClientAdapter {
   final requests = <Uri>[];
@@ -36,7 +37,7 @@ void main() {
     final up      = EarbudTraceUploader( Dio( BaseOptions( baseUrl: 'http://lupin.test' ) )..httpClientAdapter = adapter );
 
     up.write( _entry( 'click: button=media claimed=true', LupinMediaHandler.logTag ) );
-    await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+    await drainEventLoop();
 
     expect( adapter.requests.single.path, '/health' );
     expect( adapter.requests.single.queryParameters, { 'earbud_trace': 'click: button=media claimed=true' } );
@@ -47,7 +48,7 @@ void main() {
     final up      = EarbudTraceUploader( Dio( BaseOptions( baseUrl: 'http://lupin.test' ) )..httpClientAdapter = adapter );
 
     up.write( _entry( 'something else', 'StorageManager' ) );
-    await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+    await drainEventLoop();
 
     expect( adapter.requests, isEmpty );
   } );
@@ -58,7 +59,7 @@ void main() {
 
     await runZonedGuarded( () async {
       up.write( _entry( 'gesture: single', LupinMediaHandler.logTag ) );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
     }, ( e, s ) => fail( 'escaped: $e' ) );
 
     expect( adapter.requests, hasLength( 1 ) );
@@ -75,7 +76,7 @@ void main() {
       EarbudTraceUploader.install( baseUrl: 'http://two.test', dio: Dio()..httpClientAdapter = second );
 
       Logger.info( 'gesture: single', tag: LupinMediaHandler.logTag );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       expect( first.requests, isEmpty );
       expect( second.requests.single.host, 'two.test' );
@@ -96,7 +97,7 @@ void main() {
       up.baseUrl = 'http://two.test';
 
       Logger.info( 'click', tag: LupinMediaHandler.logTag );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       expect( adapter.requests.single.host, 'two.test' );
     } );

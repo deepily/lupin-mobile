@@ -14,6 +14,7 @@ import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 import 'package:lupin_mobile/services/auth/biometric_gate.dart';
 import 'package:lupin_mobile/services/auth/secure_credential_store.dart';
 import 'package:lupin_mobile/services/auth/server_context_service.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockRepo      extends Mock implements AuthRepository {}
 class _MockBiometric extends Mock implements BiometricGate {}
@@ -96,7 +97,7 @@ void main() {
 
   test( "picking the server that is already active does nothing", () async {
     bloc.add( const AuthServerContextSwitchRequested( "dev" ) );
-    await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+    await drainEventLoop();
 
     expect( svc.active, "dev" );
     expect( await store.readRefreshToken( "dev" ), "dev-refresh" );

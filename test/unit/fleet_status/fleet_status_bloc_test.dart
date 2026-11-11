@@ -7,6 +7,7 @@ import 'package:lupin_mobile/features/fleet_status/data/fleet_models.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_repository.dart';
 import 'package:lupin_mobile/features/fleet_status/data/fleet_watchable_models.dart';
 import 'package:lupin_mobile/features/fleet_status/domain/fleet_status_bloc.dart';
+import '../_helpers/drain_event_loop.dart';
 
 /// A repository that counts calls and can be told to fail.
 ///
@@ -92,7 +93,7 @@ void main() {
 
       bloc.startPolling();
       // Never told it is visible.
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( repo.stateCalls, 0, reason: "a pane off screen must not poll" );
       expect( bloc.isPolling, isFalse );
@@ -105,7 +106,7 @@ void main() {
 
       bloc.startPolling();
       bloc.onPaneVisible();
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( repo.stateCalls, 1 );
       expect( bloc.isPolling, isTrue );
@@ -118,11 +119,11 @@ void main() {
 
       bloc.startPolling();
       bloc.onPaneVisible();
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
       final afterVisible = repo.stateCalls;
 
       bloc.onPaneHidden();
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( bloc.isPolling, isFalse );
       expect( repo.stateCalls, afterVisible, reason: "no request after hiding" );

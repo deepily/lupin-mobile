@@ -36,6 +36,7 @@ import 'package:lupin_mobile/services/notification_filter/notification_stop_list
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../unit/_helpers/drain_event_loop.dart';
 
 class _MockPlayer   extends Mock implements StreamingTtsPlayer {}
 class _MockFallback extends Mock implements NotificationAudioService {}
@@ -143,7 +144,7 @@ class _Seam {
 
     bloc = FocusChatBloc( _MockRepo(), tts: orchestrator, stopList: stopList );
     bloc.add( const FocusSenderSelected( _senderId ) );
-    await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+    await drainEventLoop();
   }
 
   Future<void> dispose() async {
@@ -179,7 +180,7 @@ void main() {
   Future<void> deliver( WidgetTester tester, NotificationItem item ) async {
     await tester.runAsync( () async {
       seam.bloc.add( FocusInboundNotification( item ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
     } );
     await tester.pumpWidget( seam.host() );
     await tester.pump();
@@ -234,7 +235,7 @@ void main() {
       expect( seam.spokenToPlayer, isEmpty );
 
       await tester.tap( find.byKey( const Key( TestKeys.promptSpeakAnyway ) ) );
-      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 50 ) ) );
+      await tester.runAsync( () => drainEventLoop() );
       await tester.pump();
 
       expect( seam.spokenToPlayer, hasLength( 1 ),

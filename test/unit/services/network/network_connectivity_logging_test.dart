@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/network/network_connectivity_service.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _Capture implements LogDestination {
   final List<LogEntry> entries = [];
@@ -35,7 +36,7 @@ void main() {
     final service = NetworkConnectivityService();
 
     await service.initialize();
-    await Future<void>.delayed( const Duration( milliseconds: 100 ) );
+    await drainEventLoop();
 
     final errors = capture.entries.where( ( e ) => e.tag == "NetworkService" && e.level == LogLevel.error ).toList();
     expect( errors.map( ( e ) => e.message ), containsAll( [ "Error getting initial connectivity", "Connectivity subscription error" ] ) );

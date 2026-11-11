@@ -17,6 +17,7 @@ import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_state.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockRepo extends Mock implements NotificationRepository {}
 class _MockTts  extends Mock implements TtsOrchestrator {}
@@ -76,7 +77,7 @@ void main() {
 
     tearDown( () async => bloc?.close() );
 
-    Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 10 ) );
+    Future<void> pump() => drainEventLoop();
 
     /// An inbound message 90 minutes old: past the 1-hour Live window, so the
     /// sender starts in History and is hidden by the default Live lens.

@@ -9,6 +9,7 @@ import 'package:lupin_mobile/features/broadcast/data/broadcast_repository.dart';
 import 'package:lupin_mobile/features/broadcast/domain/broadcast_bloc.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 /// 🔴 THE HALF THAT MAKES THE ACCEPTANCE CLAUSE REAL.
 ///
@@ -50,7 +51,7 @@ void main() {
   /// The send fixture's broadcast id — the one the aggregate ends up holding.
   final ackPath = 'GET ${BroadcastRepository.ackDrainPath( 'b-fixture-0001' )}';
 
-  Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
+  Future<void> settle() => drainEventLoop();
 
   Future<_WatchableBloc> sentBloc() async {
     final bloc = _WatchableBloc( BroadcastRepository( makeDio( adapter ) ), lifecycle.stream );
@@ -62,12 +63,12 @@ void main() {
     final deadline = DateTime.now().add( const Duration( seconds: 5 ) );
     while ( !bloc.state.canSend ) {
       if ( DateTime.now().isAfter( deadline ) ) fail( 'roster never loaded' );
-      await Future<void>.delayed( const Duration( milliseconds: 5 ) );
+      await drainEventLoop();
     }
     bloc.add( const BroadcastSendConfirmed() );
     while ( bloc.state.aggregate == null ) {
       if ( DateTime.now().isAfter( deadline ) ) fail( 'send never landed' );
-      await Future<void>.delayed( const Duration( milliseconds: 5 ) );
+      await drainEventLoop();
     }
     return bloc;
   }

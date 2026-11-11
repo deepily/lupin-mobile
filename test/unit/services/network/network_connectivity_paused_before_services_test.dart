@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lupin_mobile/services/lifecycle/app_lifecycle_service.dart';
 import 'package:lupin_mobile/services/network/network_connectivity_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_reconnect_coordinator.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _FakeConnectivity extends ConnectivityPlatform {
   @override
@@ -38,7 +39,7 @@ void main() {
     final coordinator = WsReconnectCoordinator.forApp( _NeverConnectedTarget() );
     addTearDown( coordinator.stop );
     startReconnectServices( coordinator );
-    await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+    await drainEventLoop();
 
     expect( AppLifecycleService().currentLifecycleState, AppLifecycleState.paused, reason: "first state comes from the binding" );
     expect( NetworkConnectivityService().isMonitoring, isFalse, reason: "no DNS timers in the background" );

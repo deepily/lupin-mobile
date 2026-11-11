@@ -36,6 +36,7 @@ import 'package:lupin_mobile/services/notification_audio/notification_audio_serv
 import 'package:lupin_mobile/services/quick_ask/quick_ask_preferences.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../unit/_helpers/drain_event_loop.dart';
 
 class _MockNotifRepo     extends Mock implements NotificationRepository {}
 class _MockQueueRepo     extends Mock implements QueueRepository {}
@@ -144,10 +145,10 @@ void main() {
       );
 
       broadcast.add( const BroadcastRosterRequested() );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
       broadcast.add( const BroadcastBodyChanged( 'all hands' ) );
       broadcast.add( const BroadcastSendConfirmed() );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
     }
 
     setUp( () {
@@ -196,7 +197,7 @@ void main() {
 
       dispatcher.dispatch( 'notification_queue_update',
           _ackFrame( broadcastId: 'b-1', sessionId: 's-radio' ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( broadcast.state.aggregate!.ackedCount, 1,
           reason: 'the dispatcher arm in app.dart is the ONLY path from a socket frame to '
@@ -211,7 +212,7 @@ void main() {
       final frame = _ackFrame( broadcastId: 'b-1', sessionId: 's-radio' );
       dispatcher.dispatch( 'notification_queue_update', frame );
       dispatcher.dispatch( 'notification_queue_update', frame );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( broadcast.state.aggregate!.ackedCount, 1,
           reason: 'a socket redelivery must not inflate the tally' );
@@ -222,7 +223,7 @@ void main() {
 
       dispatcher.dispatch( 'notification_queue_update',
           _ackFrame( broadcastId: 'b-OTHER', sessionId: 's-radio' ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( broadcast.state.aggregate!.ackedCount, 0 );
     } );
@@ -231,7 +232,7 @@ void main() {
       await sendSoAggregateExists( broadcastId: 'b-1', recipients: 3 );
 
       dispatcher.dispatch( 'notification_queue_update', _plainFrame() );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( broadcast.state.aggregate!.ackedCount, 0,
           reason: 'the broadcast arm costs one type comparison on every other frame and '
@@ -262,7 +263,7 @@ void main() {
       };
 
       expect( () => dispatcher.dispatch( 'notification_queue_update', broken ), returnsNormally );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
       expect( broadcast.state.aggregate!.ackedCount, 0 );
     } );
   } );

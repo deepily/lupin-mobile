@@ -12,6 +12,7 @@ import 'package:lupin_mobile/features/task_list/domain/task_list_bloc.dart';
 import 'package:lupin_mobile/features/task_list/presentation/task_list_pane.dart';
 
 import '../../unit/_helpers/stub_dio.dart';
+import '../../unit/_helpers/drain_event_loop.dart';
 
 /// 🔴 THE CROSS-PANE GUARD. Appendix A item 7.
 ///
@@ -189,7 +190,7 @@ Map<String, dynamic> _page() => {
 /// FAKE clock while the stubbed HTTP resolves on the REAL one, so without it both panes
 /// render empty and the comparison passes vacuously, `[] == []`.
 Future<void> settle( WidgetTester tester ) async {
-  await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 60 ) ) );
+  await tester.runAsync( () => drainEventLoop() );
   await tester.pump();
   await tester.pump( const Duration( milliseconds: 50 ) );
 }

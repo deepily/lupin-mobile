@@ -9,6 +9,7 @@ import 'package:lupin_mobile/services/audio/podcast_player_service.dart';
 import '../../../helpers/fake_podcast_cache.dart';
 import '../../../helpers/fake_podcast_engine.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _MockTts extends Mock implements TtsOrchestrator {}
 class _FakeFile extends Fake implements File {
@@ -303,7 +304,7 @@ void main() {
   test( "survives the screen that started it: no widget involved, still playing", () async {
     // The service is app-scoped; nothing a screen does can dispose it.
     await svc.playFile( _FakeFile(), "E", id: "pg-1" );
-    await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+    await drainEventLoop();
     expect( svc.isPlaying, isTrue );
     expect( engine.calls, isNot( contains( "stop" ) ) );
   } );
