@@ -13,10 +13,10 @@ pins:
 ---
 # Quick ask earbuds
 
-Hands-free Quick Ask: while the screen is mounted, a tap on the earbud records and a double tap sends, with a tone for each outcome. The screen, bloc and state are in [[quick-ask]]. The media session that hands over the presses is in [[podcast-playback]].
+Hands-free Quick Ask: with the screen in front, an earbud tap records and a double tap sends, with a tone for each outcome. The screen, bloc and state are in [[quick-ask]]. The media session that hands over the presses is in [[podcast-playback]].
 
 ## What it does
-- `EarbudHandsFree` wraps the screen. While mounted it claims the earbud presses from the media session and plays the `ready` tone once it has them.
+- `EarbudHandsFree` wraps the screen. It claims the earbud presses from the media session only while Quick Ask is the top route. The app must also be on screen. The `ready` tone plays right after the claim starts, not after it ends.
 - `EarbudTapReader` turns presses into an `EarbudGesture`. A next-track press is a double at once. Two play or pause presses inside 400 ms are a double. A lone press is a single after that window. Previous-track is ignored.
 - `earbudAction` does only what the on-screen buttons do. A single tap is the record button. A double tap is send, or stop while recording, so the question is not lost.
 - A gesture that cannot act plays the `refused` tone and sends no event.

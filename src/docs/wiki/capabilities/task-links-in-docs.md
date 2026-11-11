@@ -20,7 +20,7 @@ A card abstract can carry approve and view links for held task rows, and the app
 - `TaskLinkMarkdown` draws markdown so that approve links act in place. With no repository the task links stay ordinary links.
 - `TaskLinkSession` lives as long as the drawn card. It reads each row once, however many links name it, and sends at most one approve per row at a time.
 - A `TaskLinkState` has one of five `TaskLinkPhase` looks: live, sending, approved, closed or refused. Every link that names the row shares it.
-- A held row (`not_approved`), an unknown status or a failed read leaves the link live. Any other status shows approved, except dropped or wont_fix, which show that status as plain text.
+- A held row (`not_approved`), an empty status or a failed read leaves the link live. Any other status, even an unknown one, shows approved, except dropped or wont_fix, which show that status as plain text.
 - A refusal or a closed status is drawn as selectable plain text under the card, so the server's words stay exact.
 - A view link opens `taskOverlayText` in a dialog: title, priority, owner, status and body. A missing field reads as a dash, `unowned` or `(no body)`.
 
