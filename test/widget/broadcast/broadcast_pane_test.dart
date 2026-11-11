@@ -12,6 +12,7 @@ import 'package:lupin_mobile/features/broadcast/domain/broadcast_bloc.dart';
 import 'package:lupin_mobile/features/broadcast/presentation/broadcast_pane.dart';
 
 import '../../unit/_helpers/stub_dio.dart';
+import '../../unit/_helpers/drain_event_loop.dart';
 
 /// The Broadcast pane, driven through the real widget tree.
 ///
@@ -69,7 +70,7 @@ void main() {
   /// hang documented in `pane_cell_parity_test.dart`. The loading state here is the text
   /// "Sending to: …", deliberately.
   Future<void> settle( WidgetTester tester ) async {
-    await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 60 ) ) );
+    await tester.runAsync( () => drainEventLoop() );
     await tester.pumpAndSettle();
   }
 

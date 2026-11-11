@@ -21,6 +21,7 @@ import 'package:lupin_mobile/features/notifications/domain/notification_event.da
 import 'package:lupin_mobile/features/notifications/domain/notification_state.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 const _adam = VoicePersona(
   name        : "Adam",
@@ -83,7 +84,7 @@ void main() {
           senderId : "s-1",
           persona  : _adam,
         ) );
-        await Future.delayed( const Duration( milliseconds: 30 ) );
+        await drainEventLoop();
         b.add( const NotificationsVoicePersonaReleased(
           senderId    : "s-1",
           personaName : "Adam",
@@ -125,7 +126,7 @@ void main() {
           senderId : "s-1",
           persona  : _bellaBorrowed,
         ) );
-        await Future.delayed( const Duration( milliseconds: 30 ) );
+        await drainEventLoop();
         // Unrelated state-change: re-load the inbox. Persona snapshot must
         // survive on the freshly-emitted InboxLoaded.
         b.add( const NotificationsLoadInbox( userEmail: "u@x.y" ) );
