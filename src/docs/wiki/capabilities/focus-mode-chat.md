@@ -25,7 +25,7 @@ The phone's main screen: a rail of sessions beside the focused session's convers
 - It is the only speech dispatcher here. Every inbound notification goes to `TtsOrchestrator.enqueueAlways`, and the stop-list decides what is dropped.
 - A stop-list match is not stored, counted unread or spoken. A muted question is stored with its rule named, and `FocusSpeakAnywayRequested` speaks it.
 - The rail is built once from `senders-visible`, sorted by last activity. Live arrivals then keep establishment order and the rail never re-sorts. A reconnect merges and keeps positions. Only a user tap or a notification tap moves focus.
-- `FocusRespondRequested` answers an open ask. With none open it sends a direct message through `POST /api/notify`, not `/api/dm/send`. An unsent answer is resent on reconnect. A typed reply to a multiple-choice ask is sent as `{"answers": {header: text}}`.
+- `FocusRespondRequested` answers an open ask. With none open it sends a direct message through `POST /api/notify`, not `/api/dm/send`. An unsent answer is resent on reconnect. A typed reply to a multiple-choice ask with nested questions is sent as `{"answers": {header: text}}`, keyed `q_0` with no header. A plain ask sends the bare text.
 - `FocusFilter` is Live or 24h and `FocusSenderScope` is Personas or All. They change what the rail shows, never what is stored.
 - `FocusChatPane` shows the focused window newest first. A progress group collapses to one row, but an open ask never does.
 - `SpeechSilencedBanner` names whole-phone silencers and opens the screen that holds each switch. `TtsFractionBar` sets how much of each message is spoken. `TtsQueueSheet` shows the queue.

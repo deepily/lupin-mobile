@@ -27,7 +27,7 @@ Quick ask is the one-shot question screen: tap, speak, tap again, send, read the
 - The bloc branches on response `status`. `done` has no job to follow and `parked` opens an interview. `expired`, `rejected` and `needs_input` each become a failed card.
 - A job is followed through `job_state_transition` frames. A frame applies only if its lifecycle rank is higher or it is terminal, so duplicates do nothing.
 - A watchdog probes the queue at 45, 90 and 180 seconds. Three misses spanning over 120 seconds set `lost`.
-- `QuickAskInterview` keeps one `pending_id` across turns and answers through the resume route. `QuickAskPrompt` is a `response_requested` notification and answers through the notify response route; see [[interactive-prompts]]. A multiple-choice prompt shows its options and an Other box, and a replacing prompt starts fresh.
+- `QuickAskInterview` keeps one `pending_id` across turns and answers through the resume route. `QuickAskPrompt` is a `response_requested` notification and answers through the notify response route; see [[interactive-prompts]]. A prompt with nested questions shows its options and an Other box. A replacing prompt starts fresh.
 
 ## Don't
 - Don't rename `QuickAskPreferences.keySendImmediately`. The stored choice would silently reset.
