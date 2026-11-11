@@ -12,6 +12,8 @@ import 'package:lupin_mobile/core/logging/log_file_store.dart';
 import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/lifecycle/app_lifecycle_service.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 class _FakeStore implements LogFileStore {
   final List<String> appended = [];
 
@@ -142,7 +144,7 @@ void main() {
     Logger.addDestination( hung );
 
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
-    await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+    await waitUntil( () => hung.flushCalls >= 1, "the first flush to start" );
     expect( hung.flushCalls, 1 );
 
     final store = _FakeStore();
@@ -150,10 +152,19 @@ void main() {
     Logger.warning( "after the hung flush", tag: "T" );
     binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
-    await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+    // Only the 50 ms timeout can release the hung flush, so a second flush proves it fired.
+    await waitUntil(
+      () => hung.flushCalls >= 2 && store.appended.join().contains( "after the hung flush" ),
+      "a second flush after the timeout released the first",
+    );
 
     expect( hung.flushCalls, 2, reason: "the latch was released by the timeout" );
     expect( store.appended.join(), contains( "after the hung flush" ) );
+
+    // The service is a singleton and the second flush is still hung on the gate. Release
+    // it so the next test starts with no flush in flight.
+    hung.gate!.complete();
+    await drainEventLoop();
   } );
 
   group( "a failing flush never throws", () {

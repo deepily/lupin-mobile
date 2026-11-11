@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
 import 'package:lupin_mobile/services/audio/lupin_media_handler.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _MockDio      extends Mock implements Dio {}
 class _MockRecorder extends Mock implements AudioRecorder {}
@@ -73,10 +74,14 @@ void main() {
       final trace = _Trace();
       Logger.addDestination( trace );
       addTearDown( Logger.resetForTesting );
-      when( () => recorder.getAmplitude() ).thenAnswer( ( _ ) async => Amplitude( current: -18.0, max: -18.0 ) );
+      var samples = 0;
+      when( () => recorder.getAmplitude() ).thenAnswer( ( _ ) async {
+        samples++;
+        return Amplitude( current: -18.0, max: -18.0 );
+      } );
 
       final file = await startWithFile();
-      await Future<void>.delayed( const Duration( milliseconds: 350 ) );
+      await waitUntil( () => samples >= 1, "the 250 ms level sampler to read once" );
       await asr.stopToFile();
 
       expect( trace.lines.single, matches( RegExp( r'^capture: held=0\.\d\ds bytes=4 peakDb=-18\.0 samples=[1-9]$' ) ) );
@@ -88,10 +93,14 @@ void main() {
       final trace = _Trace();
       Logger.addDestination( trace );
       addTearDown( Logger.resetForTesting );
-      when( () => recorder.getAmplitude() ).thenThrow( StateError( 'not recording' ) );
+      var tries = 0;
+      when( () => recorder.getAmplitude() ).thenAnswer( ( _ ) async {
+        tries++;
+        throw StateError( 'not recording' );
+      } );
 
       final file = await startWithFile();
-      await Future<void>.delayed( const Duration( milliseconds: 250 ) );
+      await waitUntil( () => tries >= 1, "the 250 ms level sampler to try once" );
       await asr.stopToFile();
 
       expect( trace.lines.single, contains( 'peakDb=none samples=0' ) );

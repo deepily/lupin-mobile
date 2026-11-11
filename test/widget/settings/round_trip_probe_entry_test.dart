@@ -68,8 +68,11 @@ void main() {
     await tester.tap( find.byKey( const Key( TestKeys.probeRunButton ) ) );
     // The probe mixes real async (clip generation, stream drains) with the
     // test zone, so alternate real waits with pumps until the run finishes.
-    for ( var i = 0; i < 400 && find.text( 'health' ).evaluate().isEmpty; i++ ) {
-      await tester.runAsync( () => drainEventLoop() );
+    // Clip generation runs in another isolate, which event-loop turns cannot
+    // bound, so the loop is bounded by real time, not by a count.
+    final stopAt = DateTime.now().add( kWaitUntilDeadline );
+    while ( find.text( 'health' ).evaluate().isEmpty && DateTime.now().isBefore( stopAt ) ) {
+      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 10 ) ) );
       await tester.pump();
     }
     await tester.pumpAndSettle();
