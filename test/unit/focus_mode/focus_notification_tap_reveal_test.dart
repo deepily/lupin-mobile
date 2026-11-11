@@ -9,6 +9,8 @@ import 'package:lupin_mobile/features/notifications/data/notification_models.dar
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 
+import '../_helpers/drain_event_loop.dart';
+
 class _MockRepo extends Mock implements NotificationRepository {}
 class _MockTts  extends Mock implements TtsOrchestrator {}
 
@@ -69,7 +71,7 @@ void main() {
         notificationId : 'n-77',
         userEmail      : email,
       ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( bloc.state.focusedSender, who,
           reason: "the must-have: Rick's complaint is having to tab through "
@@ -91,7 +93,7 @@ void main() {
 
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( seen, isNotEmpty );
       for ( final s in seen ) {
@@ -112,12 +114,12 @@ void main() {
         senderId: who, timestamp: DateTime( 2026, 9, 28 ), played: false,
         playCount: 0, responseRequested: false, suppressDing: false,
         displayQualifierWidget: false ) ) );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
       expect( bloc.state.unreadBySender[ who ], 1, reason: 'setup' );
 
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-1', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       expect( bloc.state.unreadBySender[ who ], 0 );
 
@@ -141,7 +143,7 @@ void main() {
 
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 80 ) );
+      await drainEventLoop();
 
       verify( () => repo.conversation( who, email, hours: any( named: 'hours' ) ) )
           .called( 1 );
@@ -158,7 +160,7 @@ void main() {
       final bloc = newBloc();
 
       bloc.add( const FocusSenderSelected( who ) );
-      await Future<void>.delayed( const Duration( milliseconds: 80 ) );
+      await drainEventLoop();
 
       verifyNever( () => repo.conversation( any(), any(), hours: any( named: 'hours' ) ) );
       expect( bloc.state.windows[ who ], isNull );
@@ -174,11 +176,11 @@ void main() {
 
       final bloc = newBloc();
       bloc.add( const FocusColdStartRequested( userEmail: 'cold@test.com' ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: 'stale@test.com' ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       verify( () => repo.conversation( who, 'cold@test.com',
           hours: any( named: 'hours' ) ) ).called( 1 );
@@ -193,10 +195,10 @@ void main() {
 
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-1', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-2', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       verify( () => repo.conversation( who, email, hours: any( named: 'hours' ) ) )
           .called( 1 );
@@ -214,7 +216,7 @@ void main() {
       final bloc = newBloc();
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       expect( bloc.state.hydration, FocusHydration.error );
       expect( bloc.state.focusedSender, who,
@@ -230,10 +232,10 @@ void main() {
       final bloc = newBloc();
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       bloc.add( const FocusRevealConsumed() );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       expect( bloc.state.revealMessageId, isNull );
       expect( bloc.state.focusedSender, who,
@@ -248,7 +250,7 @@ void main() {
       final sub  = bloc.stream.listen( seen.add );
 
       bloc.add( const FocusRevealConsumed() );
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
 
       expect( seen, isEmpty, reason: 'no needless rebuild of the whole surface' );
 
@@ -263,11 +265,11 @@ void main() {
       final bloc = newBloc();
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
       expect( bloc.state.revealMessageId, 'n-77', reason: 'setup' );
 
       bloc.add( const FocusSenderSelected( other ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       expect( bloc.state.focusedSender, other );
       expect( bloc.state.revealMessageId, isNull );
@@ -282,10 +284,10 @@ void main() {
       final bloc = newBloc();
       bloc.add( const FocusMessageRevealRequested(
         senderId: who, notificationId: 'n-77', userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       bloc.add( const FocusColdStartRequested( userEmail: email ) );
-      await Future<void>.delayed( const Duration( milliseconds: 80 ) );
+      await drainEventLoop();
 
       expect( bloc.state.focusedSender, who );
       expect( bloc.state.revealMessageId, 'n-77' );
