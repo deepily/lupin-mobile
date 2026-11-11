@@ -91,3 +91,7 @@ Rick approved the names. Drafted from the symbol index of `lupin-mobile` at gene
   - [[doc-directory-panel-and-sheets]] — The directory view, roots panel, panel placement and upload sheet. `features/docs`
   - [[task-links-in-docs]] — The approve and view links for held task rows inside a card. `features/docs`
 - [[artifact-viewers]] — the markdown report, slide deck and audio artifact viewers and the io file fetch. `features/artifacts`, `services/artifacts`
+- [[podcast-playback]] — the app-wide podcast player, the media session, earbud presses and the mini-player bar. `services/audio`, `features/audio`
+  - [[podcast-downloads]] — the cache, the metered-link rule, the mobile-data sheet and prefetch. `services/audio`, `features/artifacts`
+  - [[podcast-library]] — the Podcasts screen, the Drive listing and the Play buttons on a done card. `features/podcasts`, `features/notifications`, `services/audio`
+  - [[podcast-from-viewer]] — the doc viewer's podcast button: check, confirm, start and refusal text. `features/docs`
