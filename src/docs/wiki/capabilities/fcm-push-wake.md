@@ -9,10 +9,10 @@ pins:
   - lupin-mobile:lib.services.push.fcm_bootstrap.fcmOnLoggedOut@bfcd093214
   - lupin-mobile:lib.services.push.fcm_bootstrap.fcmBackgroundHandler@41efe59048
   - lupin-mobile:lib.services.push.fcm_bootstrap.showWakeNotification@83bcfe40e6
-  - lupin-mobile:lib.services.push.fcm_bootstrap.buildBackgroundWakeChain@219ae2eae1
+  - lupin-mobile:lib.services.push.fcm_bootstrap.buildBackgroundWakeChain@71c5c45494
   - lupin-mobile:lib.services.push.fcm_wake_chain.FcmWakeOutcome@afc7e164e9
   - lupin-mobile:lib.services.push.fcm_wake_chain.FcmWakeCredentials@c7f184e4d3
-  - lupin-mobile:lib.services.push.fcm_wake_chain.FcmWakeChain@e273b48b0f
+  - lupin-mobile:lib.services.push.fcm_wake_chain.FcmWakeChain@a7632b3621
   - lupin-mobile:lib.services.push.fcm_wakeup_service.FcmTokenSource@7aa038a480
   - lupin-mobile:lib.services.push.fcm_wakeup_service.FcmWakeupService@604f551343
   - lupin-mobile:lib.services.push.notification_tap_binding.notificationTapSink@f9ae974d73
@@ -27,8 +27,8 @@ A Firebase message wakes the app so it can show unplayed notifications while no 
 ## What it does
 - The code flag `kEnableFcm` defaults to off. The build scripts pass `ENABLE_FCM=true` unless given `--no-fcm`. `initFcmIfEnabled` does nothing when it is off.
 - `FcmWakeupService` posts the token to `/api/fcm/register-token` on sign-in, on token rotation and on every WebSocket reconnect. `/api/fcm/unregister-token` runs on sign-out. Both are idempotent.
-- The push payload carries no content. The wake chain exchanges the stored refresh token, fetches the unplayed list, shows a notification, speaks one item and marks it played.
-- It shows at most 5 items per wake (`kFcmWakeDrainMax`). The whole handler has 27 seconds, and the show step has 20.
+- The push payload carries no content. The wake chain exchanges the stored refresh token, fetches the unplayed list, shows a notification, speaks one item and marks it played. The speech asks for transient audio focus, so a podcast in the app pauses.
+- It shows at most 5 items per wake (`kFcmWakeDrainMax`). The whole handler has 27 seconds, and the show step has 20, both read from an injectable `clock`.
 - Every path that would end without a visible notification posts a fallback ("New activity. Open Lupin to see it."), so FCM keeps the high priority.
 - `NotificationTapPayload` rides in the notification and decodes totally. A bad payload returns null and the tap becomes a plain launch.
 - `NotificationTapRouter` keeps one pending tap and dedupes by notification id and drops a tap with no `senderId`. `takePending` hands it over after `AuthAuthenticated`.

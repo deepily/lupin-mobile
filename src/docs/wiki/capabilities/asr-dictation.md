@@ -3,7 +3,7 @@ capability: asr-dictation
 pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.services.asr.asr_service.AsrException@c9ccd96e88
-  - lupin-mobile:lib.services.asr.asr_service.AsrService@7fdacc2ee9
+  - lupin-mobile:lib.services.asr.asr_service.AsrService@32ec4349ac
   - lupin-mobile:lib.services.asr.dictation_splice.spliceDictation@f35ab13be4
   - lupin-mobile:lib.services.asr.voice_capture_session.VoiceCaptureSession@e4bb43605d
   - lupin-mobile:lib.services.asr.voice_capture_session.VoiceCapture@ec23df4279
@@ -25,6 +25,7 @@ pins:
 - `AsrService` posts to `POST /api/v2/transcribe` through the shared `Dio`, so the bearer rides along. It answers a transcription and a trace with timings. Capture start and end call `TtsOrchestrator.setCaptureHold`, so no notification speaks over a recording.
 - It records Ogg/Opus, mono, 32 kbps at 48 kHz. A device with no Opus encoder falls back to 16-bit PCM WAV at 44100 Hz.
 - Every failure is an `AsrException`: a denied permission, a recorder failure, a non-200 reply, a network failure or an empty transcript. An empty reply is an error, never a blank field.
+- Each capture also logs `capture: held=<s> bytes=<n> peakDb=<db> samples=<n>` to the earbud trace, with the level from `PeakMeter` ([[voice-capture-helpers]]).
 - `VoiceCaptureSession.start()` asks for the microphone, then records. `stopAndTranscribe()` returns a `VoiceCapture`. A cancel bumps a counter, so a late result from an earlier attempt is dropped.
 - Focus mode and Quick Ask both use the session. Only Quick Ask's own job tracking stays in its bloc.
 - `spliceDictation` places a dictated chunk in a box. It appends at the caret and never replaces text, and a blank chunk changes nothing.

@@ -14,7 +14,7 @@ The doc viewer's podcast button asks the server whether a file can be made into 
 ## What it does
 - `DocPodcastFacts` is the server's answer to the check, `GET /api/podcast-proxy/from-viewer/check`: the file's name and size in bytes. A missing or non-numeric size reads as 0.
 - `showPodcastConfirmSheet` asks "Podcast <name>?" in an in-app bottom sheet, never a system dialog.
-- `DocPodcastStarted` is the answer to `POST /api/podcast-proxy/from-viewer`: the queue job id. It is `spent` when the server answered 409, because this file's bytes already have a job.
+- `DocPodcastStarted` is the answer to `POST /api/podcast-proxy/from-viewer`: the queue job id. `alreadyStarted` is true when the server answered 409 with a job id, because this file's bytes already have a job.
 - `podcastRefusalText` gives the server's own message when it sent one, from `{ detail: { code, message } }`. Otherwise it reads "Podcast failed (HTTP <status>)".
 
 ## Don't

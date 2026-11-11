@@ -6,7 +6,7 @@ pins:
   - lupin-mobile:lib.features.queue.data.queue_models.QueueApiException@e4ad48ef87
   - lupin-mobile:lib.features.queue.data.queue_models.AskResponse@1cf3669566
   - lupin-mobile:lib.features.queue.data.queue_models.SpokenAskEvent@06445f7c78
-  - lupin-mobile:lib.features.queue.domain.queue_bloc.QueueBloc@ed187d06e7
+  - lupin-mobile:lib.features.queue.domain.queue_bloc.QueueBloc@7d42e09a9e
   - lupin-mobile:lib.features.queue.domain.job_lifecycle.JobLifecycleState@8fb2eee51e
   - lupin-mobile:lib.features.queue.domain.job_lifecycle.JobLane@409134c5fd
   - lupin-mobile:lib.features.queue.presentation.queue_dashboard_screen.QueueDashboardScreen@7b7f742140
@@ -26,7 +26,7 @@ The phone's view of lupin's job queue: a four-tab dashboard, a job detail screen
 - `ask`, `askSpoken` and `resume` wait 240 seconds because the server may hold for a near-match confirm. Other calls keep the shared client's 30 seconds.
 - `askSpoken` returns a stream of `SpokenAskEvent`s and never throws. A transcript comes first, then one result, failure or cut-off. A cut-off means the ask still runs on the server.
 - `AskResponse.isParked` means answer through `resume`; `isNeedsInput` means the server is telling, not asking. Dropping `websocket_id` on a resume silences later spoken answers.
-- `QueueBloc` holds one state slot. `QueueExternalUpdate` refreshes silently, only while a snapshot shows, and a failed refresh keeps the last good state.
+- `QueueBloc` holds one state slot. `QueueExternalUpdate` refreshes silently, only while a snapshot shows, and a failed refresh keeps the last good state. After a job action the bloc refreshes the queue inline.
 - `JobLifecycleState` has ten values mirroring the server. Its lane maps each to a `JobLane`: `stalled` is in `todo`, `interrupted` in `dead`. `parse` returns null for an unknown name.
 - `Job` in `shared/models/job.dart` is a separate local vocabulary; only a test imports it.
 

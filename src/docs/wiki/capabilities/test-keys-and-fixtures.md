@@ -2,7 +2,7 @@
 capability: test-keys-and-fixtures
 pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
-  - lupin-mobile:lib.core.testing.test_keys.TestKeys@21ede3e1fe
+  - lupin-mobile:lib.core.testing.test_keys.TestKeys@f02c173671
 ---
 # Test keys
 
@@ -23,4 +23,4 @@ pins:
 ## Invariants
 - A key string is unique across the file.
 - A prefix constant is never used as a complete key. It always takes a suffix.
-- Tests under `test/` are the main readers. 91 files under `test/` refer to `TestKeys`.
+- Tests under `test/` are the main readers. 104 files under `test/` refer to `TestKeys`.

@@ -12,7 +12,7 @@ pins:
   - lupin-mobile:lib.core.logging.logger.ConsoleLogDestination@a3d6987277
   - lupin-mobile:lib.core.logging.logger.FileLogDestination@a150fff58d
   - lupin-mobile:lib.core.logging.logger.RemoteLogDestination@1136787a56
-  - lupin-mobile:lib.core.logging.logger.Logger@ad8ac5179d
+  - lupin-mobile:lib.core.logging.logger.Logger@b17362e7b8
   - lupin-mobile:lib.core.logging.logger.TaggedLogger@cca31c8816
 ---
 # Logging and redaction
@@ -24,6 +24,7 @@ pins:
 - Levels are `verbose`, `debug`, `info`, `warning`, `error` and `critical`. The console shows everything in debug builds and warnings and above in release.
 - `Logger.setGlobalContext( LogContext )` stamps user id, session id and feature on later entries.
 - `FileLogDestination` buffers 100 entries and flushes at once on `error` and above. At 10 MB it rotates and keeps 5 files. The buffer holds at most 1000 entries and the oldest drop first.
+- `Logger.removeDestination` drops one destination, so a replaced uploader leaves the logger before its successor joins.
 - The file destination writes through `LogFileStore`, which `StorageManager` implements. The interface keeps `logger.dart` free of storage imports.
 - `redactSecrets( line )` masks JWTs, `Authorization` values and values of fields named like `token`, `password`, `secret` or `api_key`. Count fields such as `max_tokens` keep their numbers.
 - `describeFailure( error )` returns the type, plus the offset for a `FormatException`, and never the message.

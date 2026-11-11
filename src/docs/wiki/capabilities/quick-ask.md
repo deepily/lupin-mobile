@@ -2,14 +2,14 @@
 capability: quick-ask
 pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
-  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_bloc.QuickAskBloc@ab0d9a861b
-  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskState@7aef85f553
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_bloc.QuickAskBloc@ffac06cf87
+  - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskState@df9def6473
   - lupin-mobile:lib.features.quick_ask.data.quick_ask_models.QuickAskEntry@ca1cc55b97
   - lupin-mobile:lib.features.quick_ask.data.quick_ask_models.QuickAskSource@e340c6e1b2
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskInterview@1dabcf4bba
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskPrompt@8e6e208321
   - lupin-mobile:lib.services.quick_ask.quick_ask_preferences.QuickAskPreferences@521d092cc4
-  - lupin-mobile:lib.features.quick_ask.presentation.quick_ask_screen.QuickAskScreen@32c1de85b1
+  - lupin-mobile:lib.features.quick_ask.presentation.quick_ask_screen.QuickAskScreen@af8f1c87a8
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskConnectionChanged@b2e64c032f
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskEntryDismissed@8e8a0d98bc
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskEvent@fd3d3913c7
@@ -22,12 +22,12 @@ pins:
 Quick ask is the one-shot question screen: tap, speak, tap again, send, read the answer. `QuickAskBloc` runs the capture and follows the job. It is separate from the queue bloc, whose single slot a refresh would wipe. See [[job-queue-client]] and [[asr-dictation]]. Detail pages: [[quick-ask-events-and-state]].
 
 ## What it does
-- Record is a tap toggle. Release transcribes into `draftTranscript` for review, and nothing leaves the phone until `QuickAskDraftSent`. `QuickAskPreferences` can switch to send immediately.
+- Record is a tap toggle. Release transcribes into `draftTranscript` for review, and nothing leaves the phone until `QuickAskDraftSent`. `QuickAskPreferences` can switch to send immediately. While the recorder is still starting, a stop tap is held until it has started, and a failed start returns to idle with an error.
 - One question is live at a time. `blockReason` checks a live job, an open prompt or interview, a closed WebSocket and a capture in flight, in that order.
 - The bloc branches on response `status`. `done` has no job to follow and `parked` opens an interview. `expired`, `rejected` and `needs_input` each become a failed card.
 - A job is followed through `job_state_transition` frames. A frame applies only if its lifecycle rank is higher or it is terminal, so duplicates do nothing.
 - A watchdog probes the queue at 45, 90 and 180 seconds. Three misses spanning over 120 seconds set `lost`.
-- `QuickAskInterview` keeps one `pending_id` across turns and answers through the resume route. `QuickAskPrompt` is a `response_requested` notification and answers through the notify response route; see [[interactive-prompts]].
+- `QuickAskInterview` keeps one `pending_id` across turns and answers through the resume route. `QuickAskPrompt` is a `response_requested` notification and answers through the notify response route; see [[interactive-prompts]]. A multiple-choice prompt shows its options and an Other box, and a replacing prompt starts fresh.
 
 ## Don't
 - Don't rename `QuickAskPreferences.keySendImmediately`. The stored choice would silently reset.

@@ -10,7 +10,7 @@ pins:
   - lupin-mobile:lib.services.tts.streaming_tts_player.TtsCompleteEvent@151378f6af
   - lupin-mobile:lib.services.tts.streaming_tts_player.TtsErrorEvent@0059294468
   - lupin-mobile:lib.services.tts.tts_orchestrator.TtsOutcome@00a65fe3ab
-  - lupin-mobile:lib.services.tts.tts_orchestrator.TtsOrchestrator@6d442ea253
+  - lupin-mobile:lib.services.tts.tts_orchestrator.TtsOrchestrator@265aa87260
   - lupin-mobile:lib.services.tts.tts_orchestrator.TtsSender@6a01129142
   - lupin-mobile:lib.services.tts.tts_orchestrator.TtsSuppression@179de0276e
   - lupin-mobile:lib.services.tts.tts_orchestrator.TtsQueueItem@dc045be064
@@ -28,7 +28,8 @@ pins:
 - `pause()` holds the queue without dropping anything. `setCaptureHold( true )` also holds it while the microphone records.
 - An urgent message preempts a non-urgent one that is playing, and the interrupted one requeues behind it. While paused it only queues.
 - `StreamingTtsPlayer.speak( text )` posts to `/api/get-speech-elevenlabs`. The audio arrives as WebSocket chunks and plays once as one PCM blob. `TtsCompleteEvent` fires after playback ends.
-- A `quota_exceeded` error switches to `flutter_tts` for 5 minutes. `queueStream` feeds the queue viewer with skip, remove and clear.
+- A `quota_exceeded` error switches to `flutter_tts` for 5 minutes. `queueStream` feeds the queue viewer with skip, remove and clear. `speakingStream` is true while an utterance is in flight, and the podcast player pauses on it ([[podcast-playback]]).
+- An on-device utterance keeps its place until `flutterTtsSpeak` returns, so skip, stop-all and the mic hold reach it. An outer bound, the service's two bounds plus 5 seconds, frees a service that never returns.
 
 ## Don't
 - Don't fire completion before playback ends. The next `play()` would cut the current utterance.
