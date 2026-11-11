@@ -1,6 +1,20 @@
 # TODO
 
-## Resume here: 2026-11-09 close (Tiffany)
+## Resume here: 2026-11-11 close (Tiffany)
+
+The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`, and nothing is pushed. The APK is still "2026.11.09 build 3", because today changed only tests and docs. Owed work is in the store.
+
+- [ ] Earbud check on build 3 (rows `c643b1b0` and `bcc9cba3`). Rick asked for a callback at 7 pm Eastern. After his check, read `docker logs --timestamps lupin-rest-dev | grep earbud_trace`, and respawn Clayton from `io/mementos/clayton-85dfc14c.md`.
+- [ ] Code-health Phase 2 (rows `adc98845`, `4adc2850`, `032ee125`, `4ebc3c6e`) starts when Cheech's Phase 1 (`dbbe93a0`) is done. The umbrella row `e1778814` is still held for Rick.
+- [x] Public APK pulled (`cbdec4ca`), re-pin (`df84ddae`), fixed-wait sweep (`065ee0ee`), wiki rollups, baseline cost (`2ee18321`). Session `14de3771`
+
+### Decisions Log — 2026-11-11 (session `14de3771`, Tiffany)
+
+- Rick: delete just the APK asset from the public v0.2.2 release (card answer); he ran the API delete himself.
+- Rick: call him back for the earbud check at 7 pm Eastern (comment on the card).
+- Tiffany: the baseline cost cites 0.9 judge calls per definition, the plan's only per-definition rate. The per-run figure (747 to 782 calls) is used only to price a call.
+
+## Earlier: 2026-11-09 close (Tiffany)
 
 The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin` at `da3f69e`, and the APK is "2026.11.09 build 3". Owed work is in the store, and Rick's rows come back 10 Nov at 09:00 Eastern. The status report is `io/status/2026.11.09-tiffany-status-report.md`.
 

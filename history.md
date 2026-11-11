@@ -15,6 +15,22 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.11 | Session `14de3771` (Tiffany): fixed-wait sweep done, wiki lint clean, public APK pulled
+
+The work came from Rick's morning broadcast and from my board. Arnold, then Tiberius, worked as crew, and both are reaped. Nothing is pushed.
+
+- **Fixed-wait sweep** (row `065ee0ee`, done): about 50 test files now wait on states, outcomes or fake time, not fixed delays. The new helper `waitUntil` lives in `test/unit/_helpers/drain_event_loop.dart`. Merges `af2ebfb`, `f4c7d11`, `b6a4c6e` and `76360e1`. The full suite passed 5 runs in a row in random order at `76360e1`: 3389 pass, at load 13 to 36.
+- **Frozen pin** (row `df84ddae`, done): notification_bloc_test is re-pinned to `095242cc` on Rick's yes, merged `578db55`.
+- **Wiki lint clean** (rows `c6722c1d`, `a549bfc5`, `dae9175b`, done): 0 stale, 0 orphan, 0 dangling. 9 pages are new and 18 were corrected against the code, merged `86eb067`.
+- **Public APK pulled** (row `cbdec4ca`, done): Rick deleted the v0.2.2 release asset through the GitHub API, because gh 2.4.0 has no delete-asset. The release now has no files.
+- **Code-health baseline** (row `2ee18321`, done): lupin-mobile has 3,905 definitions, about 3,515 judge calls or $837 to $1,020 for one full pass. María landed the line in the lupin plan as `6d461d66e`. The four Phase 2 rows wait for Cheech's Phase 1.
+- **Lessons**:
+  - A drain never fires a positive-duration timer. So swapping a fixed wait for a drain can weaken a negative check. Use `waitUntil` or fake time there, and mutation-check every bound.
+  - The TTS watchdog reads `DateTime.now`, so its tests cannot run on a fake clock (Arnold).
+  - A process-wide singleton leaked a hung flush into the next test under random order; release the gate in `addTearDown`.
+- **Memento sweep**: 7 mementos from the last two days were summarized above, and 14 were moved to the trash. Rio's `broadcast_repository_test` flake never reproduced; today's 5 green runs agree.
+- **Still blocked**: the earbud check on build 3 (rows `c643b1b0` and `bcc9cba3`) waits on Rick, and `3a8005c1` waits on it.
+
 ## 2026.11.09 | Session `21b94fbc` (Tiffany): took over Maria's 8 rows, 9 merges, CI dropped
 
 Maria handed over the lupin-mobile rows. The crew was Krishna, Clayton, Maya, Rio and Tiberius (reviewer), all reaped with verified mementos in `io/mementos/`.
