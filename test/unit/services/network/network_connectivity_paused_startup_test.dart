@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lupin_mobile/services/network/network_connectivity_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_reconnect_coordinator.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _SlowConnectivity extends ConnectivityPlatform {
   final Completer<ConnectivityResult> first = Completer<ConnectivityResult>();
@@ -45,7 +46,7 @@ void main() {
     await Future<void>.delayed( Duration.zero );
 
     platform.first.complete( ConnectivityResult.wifi );
-    await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+    await drainEventLoop();
     expect( NetworkConnectivityService().isMonitoring, isFalse, reason: "initialize() finished while paused" );
 
     binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );

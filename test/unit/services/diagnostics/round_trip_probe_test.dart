@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lupin_mobile/services/asr/asr_service.dart';
 import 'package:lupin_mobile/services/diagnostics/round_trip_probe.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 /// Adapter that drains the request body (so Dio's onSendProgress fires, as it
 /// does on a real socket), records every request, and can fail chosen calls.
@@ -360,7 +361,7 @@ void main() {
       expect( last[ 'reason' ], 'probe screen closed' );
 
       // Nothing trickles in afterwards.
-      await Future<void>.delayed( const Duration( milliseconds: 20 ) );
+      await drainEventLoop();
       expect( adapter.requests.length, 5 );
       expect( sink.lines.length, 6 );
     } );

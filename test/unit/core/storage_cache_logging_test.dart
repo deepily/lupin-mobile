@@ -13,6 +13,7 @@ import 'package:lupin_mobile/core/cache/offline_manager.dart';
 import 'package:lupin_mobile/core/logging/logger.dart';
 import 'package:lupin_mobile/core/storage/storage_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _Capture implements LogDestination {
   final List<LogEntry> entries = [];
@@ -24,7 +25,7 @@ class _Capture implements LogDestination {
   Future<void> flush() async {}
 }
 
-Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 50 ) );
+Future<void> settle() => drainEventLoop();
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

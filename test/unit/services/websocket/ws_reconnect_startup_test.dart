@@ -11,6 +11,7 @@ import 'package:lupin_mobile/services/network/network_connectivity_service.dart'
 import 'package:lupin_mobile/services/websocket/ws_reconnect_coordinator.dart';
 
 import '../../../_helpers/source_text.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _FakeConnectivity extends ConnectivityPlatform {
   @override
@@ -48,7 +49,7 @@ void main() {
     addTearDown( coordinator.stop );
 
     startReconnectServices( coordinator );
-    await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+    await drainEventLoop();
 
     expect( coordinator.isLoopRunning, isTrue, reason: "the coordinator started, on screen" );
     expect( NetworkConnectivityService().isMonitoring, isTrue, reason: "the connectivity service was initialized" );

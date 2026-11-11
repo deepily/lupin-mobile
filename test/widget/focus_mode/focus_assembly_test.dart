@@ -24,6 +24,7 @@ import 'package:lupin_mobile/features/notifications/data/notification_models.dar
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/services/asr/asr_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import '../../unit/_helpers/drain_event_loop.dart';
 
 class _MockAuthBloc extends MockBloc<AuthEvent, AuthState> implements AuthBloc {}
 class _MockTts  extends Mock implements TtsOrchestrator {}
@@ -83,7 +84,7 @@ void main() {
       bloc.add( const FocusSenderScopeChanged( FocusSenderScope.all ) );   // persona-less fixtures (§5f)
       bloc.add( FocusInboundNotification( _item( 'a1', 'A' ) ) );
       bloc.add( FocusInboundNotification( _item( 'b1', 'B' ) ) );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
     } );
     expect( bloc.state.senderOrder, [ 'A', 'B' ],
         reason: 'seeding completed BEFORE the surface pumps (hard gate)' );

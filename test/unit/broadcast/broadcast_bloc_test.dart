@@ -10,6 +10,7 @@ import 'package:lupin_mobile/services/asr/voice_capture_session.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockAsr extends Mock implements AsrService {}
 
@@ -37,7 +38,7 @@ void main() {
   /// through Dio's interceptor chain and the stub adapter, several futures deep, so a
   /// single microtask turn returns mid-flight and the assertion then fails as though the
   /// FEATURE were broken rather than the wait.
-  Future<void> settle() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
+  Future<void> settle() => drainEventLoop();
 
   /// 🔴 WAIT FOR THE POST-CONDITION, NOT FOR A DURATION.
   ///
@@ -59,7 +60,7 @@ void main() {
       if ( DateTime.now().isAfter( deadline ) ) {
         fail( 'timed out waiting for $because — state was ${bloc.state}' );
       }
-      await Future<void>.delayed( const Duration( milliseconds: 5 ) );
+      await drainEventLoop();
     }
   }
 

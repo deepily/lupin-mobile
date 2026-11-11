@@ -27,6 +27,7 @@ import 'package:lupin_mobile/features/transcript/domain/transcript_frame_router.
 import 'package:lupin_mobile/services/notification_audio/notification_audio_service.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../unit/_helpers/drain_event_loop.dart';
 
 class _MockRepo  extends Mock implements NotificationRepository {}
 class _MockAudio extends Mock implements NotificationAudioService {}
@@ -223,7 +224,7 @@ void main() {
       expect( focusBloc.state.pendingPromptFor( 'sender-1' )?.item.id, 'n-live' );
     } );
 
-    Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
+    Future<void> pump() => drainEventLoop();
 
     test( 'AC-S2.8 — one notification_queue_update frame → EXACTLY ONE orchestrator enqueue across BOTH blocs', () async {
       dispatcher.dispatch( 'notification_queue_update', _queueUpdateFrame( priority: 'high' ) );

@@ -24,6 +24,7 @@ import 'package:lupin_mobile/services/notification_audio/notification_preference
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 
 import '../_helpers/stub_dio.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockAudioService extends Mock implements NotificationAudioService {}
 class _MockTtsOrchestrator extends Mock implements TtsOrchestrator {}
@@ -87,7 +88,7 @@ void main() {
     final deadline = DateTime.now().add( const Duration( seconds: 2 ) );
     while ( !done() ) {
       if ( DateTime.now().isAfter( deadline ) ) fail( 'timed out after 2 s waiting for $what' );
-      await Future.delayed( const Duration( milliseconds: 5 ) );
+      await drainEventLoop();
     }
   }
 

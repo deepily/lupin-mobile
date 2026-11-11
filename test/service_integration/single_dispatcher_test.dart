@@ -33,6 +33,7 @@ import 'package:lupin_mobile/services/notification_audio/notification_audio_serv
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/quick_ask/quick_ask_preferences.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../unit/_helpers/drain_event_loop.dart';
 
 class _MockNotifRepo extends Mock implements NotificationRepository {}
 class _MockQueueRepo extends Mock implements QueueRepository {}
@@ -112,7 +113,7 @@ void main() {
 
     test( 'ONE notification frame fans out to three blocs and yields ONE enqueue', () async {
       dispatcher.dispatch( 'notification_queue_update', _queueUpdateFrame() );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       verify( () => tts.enqueueAlways(
         priority : any( named: 'priority' ),
@@ -138,7 +139,7 @@ void main() {
         'timestamp'  : '2026-08-29T20:00:00',
         'metadata'   : { 'question_text': 'q', 'response_text': 'It is sunny.' },
       } );
-      await Future<void>.delayed( const Duration( milliseconds: 50 ) );
+      await drainEventLoop();
 
       verifyNever( () => tts.enqueueAlways(
         priority : any( named: 'priority' ),

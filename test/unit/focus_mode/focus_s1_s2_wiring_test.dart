@@ -19,6 +19,7 @@ import 'package:lupin_mobile/services/notification_audio/notification_preference
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockPlayer   extends Mock implements StreamingTtsPlayer {}
 class _MockFallback extends Mock implements NotificationAudioService {}
@@ -75,7 +76,7 @@ void main() {
     );
     final bloc = FocusChatBloc( _MockRepo(), tts: orch );
 
-    Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 10 ) );
+    Future<void> pump() => drainEventLoop();
 
     // HOLD, then two inbounds (different senders, no focus).
     orch.pause();

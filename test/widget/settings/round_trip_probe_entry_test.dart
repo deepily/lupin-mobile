@@ -12,6 +12,7 @@ import 'package:lupin_mobile/features/settings/presentation/notification_audio_s
 import 'package:lupin_mobile/features/settings/presentation/round_trip_probe_screen.dart';
 import 'package:lupin_mobile/services/diagnostics/round_trip_probe.dart';
 import 'package:lupin_mobile/services/notification_audio/notification_preferences.dart';
+import '../../unit/_helpers/drain_event_loop.dart';
 
 void main() {
   group( 'Debug section: network round-trip probe entry', () {
@@ -68,7 +69,7 @@ void main() {
     // The probe mixes real async (clip generation, stream drains) with the
     // test zone, so alternate real waits with pumps until the run finishes.
     for ( var i = 0; i < 400 && find.text( 'health' ).evaluate().isEmpty; i++ ) {
-      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 10 ) ) );
+      await tester.runAsync( () => drainEventLoop() );
       await tester.pump();
     }
     await tester.pumpAndSettle();
@@ -98,21 +99,21 @@ void main() {
     await tester.tap( find.byKey( const Key( TestKeys.probeRunButton ) ) );
     // Fake time must advance too (the probe's network-type lookup has a timeout).
     for ( var i = 0; i < 400 && adapter.requests < 4; i++ ) {
-      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 10 ) ) );
+      await tester.runAsync( () => drainEventLoop() );
       await tester.pump( const Duration( milliseconds: 100 ) );
     }
     expect( adapter.requests, 4 );   // request index 3 is in flight
 
     await tester.pumpWidget( const MaterialApp( home: SizedBox() ) );   // dispose the screen
     for ( var i = 0; i < 100 && !sink.closed; i++ ) {
-      await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 10 ) ) );
+      await tester.runAsync( () => drainEventLoop() );
       await tester.pump( const Duration( milliseconds: 100 ) );
     }
 
     expect( sink.lines.length, 4 );   // 3 samples + the cancelled line
     expect( sink.lines.last, contains( '"kind":"cancelled"' ) );
     expect( sink.closed, isTrue );
-    await tester.runAsync( () => Future<void>.delayed( const Duration( milliseconds: 50 ) ) );
+    await tester.runAsync( () => drainEventLoop() );
     expect( adapter.requests, 4 );
   } );
 }

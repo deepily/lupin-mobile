@@ -12,6 +12,7 @@ import 'package:lupin_mobile/features/focus_mode/domain/focus_chat_event.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_models.dart';
 import 'package:lupin_mobile/features/notifications/data/notification_repository.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
+import '../_helpers/drain_event_loop.dart';
 
 class _MockRepo extends Mock implements NotificationRepository {}
 class _MockTts  extends Mock implements TtsOrchestrator {}
@@ -49,7 +50,7 @@ void main() {
   late _Capture  capture;
   late FocusChatBloc bloc;
 
-  Future<void> pump() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
+  Future<void> pump() => drainEventLoop();
 
   void stubSendersOk() {
     when( () => repo.sendersVisible( any(), hours: any( named: 'hours' ) ) )

@@ -21,6 +21,7 @@ import 'package:lupin_mobile/services/push/notification_tap_payload.dart';
 import 'package:lupin_mobile/services/push/notification_tap_router.dart';
 import 'package:lupin_mobile/services/tts/tts_orchestrator.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
+import '../unit/_helpers/drain_event_loop.dart';
 
 class _MockRepo extends Mock implements NotificationRepository {}
 class _MockTts  extends Mock implements TtsOrchestrator {}
@@ -71,7 +72,7 @@ void main() {
       requestNotifications : () async => true,
       tapRouter            : tapRouter,
     );
-    await Future<void>.delayed( const Duration( milliseconds: 80 ) );
+    await drainEventLoop();
   }
 
   group( 'the login drain (cold start, and a tap taken at the lock screen)', () {
@@ -132,7 +133,7 @@ void main() {
 
       // Navigate away by hand, then reconnect.
       focusBloc.add( const FocusSenderSelected( 'someone-else' ) );
-      await Future<void>.delayed( const Duration( milliseconds: 40 ) );
+      await drainEventLoop();
 
       await login( tapRouter: router );
 
@@ -159,7 +160,7 @@ void main() {
         requestNotifications : () async => true,
         tapRouter            : router,
       );
-      await Future<void>.delayed( const Duration( milliseconds: 60 ) );
+      await drainEventLoop();
 
       expect( dispatcher.lastAuthenticatedEmail, email );
       expect( pushed, [ email ] );
@@ -175,7 +176,7 @@ void main() {
       router.offer( const NotificationTapPayload(
         notificationId: 'n-77', senderId: sender ) );
 
-      await Future<void>.delayed( const Duration( milliseconds: 150 ) );
+      await drainEventLoop();
       expect( router.hasPending, isTrue );
 
       await login( tapRouter: router );
