@@ -19,6 +19,8 @@ import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_resume_store.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 /// Hands out one session id per request, in order; the last one repeats.
 class _SessionAdapter implements HttpClientAdapter {
   final List<String> ids;
@@ -78,11 +80,14 @@ class _FakeChannel extends StreamChannelMixin<dynamic> implements WebSocketChann
   }
 }
 
-/// A pause before asserting that nothing further happens.
+/// Lets already-queued events (a late done, an error followed by its done) reach the service.
 ///
-/// It proves absence only for as long as it lasts. Never use it to wait for something that
-/// should happen: use [_until].
-Future<void> _settle() => Future<void>.delayed( const Duration( milliseconds: 30 ) );
+/// Turns, not time: it gives pending stream events their turn however slow the machine is.
+/// Every check that follows reads state those events would change (connected flag, pending
+/// retry, attempt count, channel count), so it fails if they misbehave.
+/// Nothing here relies on a timer having had time to fire.
+/// Never use it to wait for something a timer produces: use [_until].
+Future<void> _settle() => drainEventLoop();
 
 /// Waits until [condition] holds, giving the event loop a turn between looks.
 ///
@@ -270,6 +275,8 @@ void main() {
       await _settle();
 
       expect( channels.length, 2 );
+      // The second channel never completes its handshake, so a duplicate retry would show up as a second count.
+      expect( ws.reconnectAttempts, 1, reason: "the error and the done are one failure" );
     } );
   } );
 }

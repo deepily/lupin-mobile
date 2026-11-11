@@ -17,6 +17,8 @@ import 'package:lupin_mobile/services/auth/auth_token_provider.dart';
 import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_resume_store.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 class _SessionAdapter implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch( RequestOptions o, Stream<List<int>>? s, Future<void>? c ) async =>
@@ -69,7 +71,8 @@ class _FakeSink implements WebSocketSink {
   @override Future<void> get done => Future.value();
 }
 
-Future<void> _settle() => Future<void>.delayed( const Duration( milliseconds: 20 ) );
+/// Pure async work only (stubbed Dio, fake channel); turns, not time.
+Future<void> _settle() => drainEventLoop();
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -109,7 +112,8 @@ void main() {
   Future<void> giveUp() async {
     serverUp = false;
     await ws.connect( userId: "u1" );
-    await Future<void>.delayed( const Duration( milliseconds: 200 ) );
+    // The 1 ms backoff timers spend the budget; each pending timer or running attempt is visible on the service.
+    await waitUntil( () => !ws.isRetryPending && !ws.isConnecting, "the service gives up" );
     expect( ws.isConnected, isFalse );
     expect( ws.isRetryPending, isFalse, reason: "the service has given up" );
   }
@@ -165,8 +169,11 @@ void main() {
 
     serverUp = true;
     expect( await slow.reconnectNow(), isTrue );
+    // A cancelled timer cannot fire, so "no pending retry" is the claim itself; a wait of
+    // the 300 ms backoff would only re-state it.
     expect( slow.isRetryPending, isFalse );
-    await Future<void>.delayed( const Duration( milliseconds: 400 ) );
+    await _settle();
+    expect( slow.isRetryPending, isFalse );
     expect( channels.length, 1, reason: "the cancelled timer must not open a second channel" );
   } );
 

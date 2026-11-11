@@ -26,6 +26,8 @@ import 'package:lupin_mobile/services/websocket/websocket_service.dart';
 import 'package:lupin_mobile/services/websocket/ws_reconnect_coordinator.dart';
 import 'package:lupin_mobile/services/websocket/ws_resume_store.dart';
 
+import '../../_helpers/drain_event_loop.dart';
+
 class _SessionAdapter implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch( RequestOptions o, Stream<List<int>>? s, Future<void>? c ) async =>
@@ -65,8 +67,6 @@ class _FakeConnectivity extends ConnectivityPlatform {
   @override
   Stream<ConnectivityResult> get onConnectivityChanged => changes.stream;
 }
-
-Future<void> _wait( int ms ) => Future<void>.delayed( Duration( milliseconds: ms ) );
 
 void main() {
   final binding  = TestWidgetsFlutterBinding.ensureInitialized();
@@ -119,11 +119,14 @@ void main() {
   /// Fails the first connect and all five retries, then confirms the service has stopped trying.
   Future<void> failSixConnectsAndGiveUp() async {
     await ws.connect( userId: "u1" );
-    await _wait( 400 );
+    // The 1 ms backoff timers run the retries; a pending timer or a running attempt is visible on the service.
+    await waitUntil( () => !ws.isRetryPending && !ws.isConnecting, "the service gives up" );
     expect( connectAttempts, 6, reason: "one connect and five retries" );
     expect( ws.isConnected, isFalse );
 
-    await _wait( 200 );
+    // No timer is pending, so nothing can start a seventh try; the drain lets any stray work show itself.
+    await drainEventLoop();
+    expect( ws.isRetryPending, isFalse );
     expect( connectAttempts, 6, reason: "the service has given up: no seventh try on its own" );
   }
 
@@ -133,7 +136,7 @@ void main() {
     serverUp = true;
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
     binding.handleAppLifecycleStateChanged( AppLifecycleState.resumed );
-    await _wait( 400 );
+    await waitUntil( () => ws.isConnected, "the socket reconnects after the resume" );
 
     expect( ws.isConnected, isTrue, reason: "a resume after the outage should bring the socket back" );
   } );
@@ -144,7 +147,8 @@ void main() {
     serverUp = true;
     platform.changes.add( ConnectivityResult.none );
     platform.changes.add( ConnectivityResult.wifi );
-    await _wait( 600 );
+    // The coordinator debounces the network change with a real 100 ms timer; wait for its outcome.
+    await waitUntil( () => ws.isConnected, "the socket reconnects after the network returns" );
 
     expect( ws.isConnected, isTrue, reason: "connectivity restored should bring the socket back" );
   } );
