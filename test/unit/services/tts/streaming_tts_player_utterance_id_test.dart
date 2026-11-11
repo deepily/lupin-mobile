@@ -7,6 +7,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:lupin_mobile/core/constants/app_constants.dart';
 import 'package:lupin_mobile/services/tts/streaming_tts_player.dart';
+import '../../_helpers/drain_event_loop.dart';
 
 class _MockDio         extends Mock implements Dio {}
 class _MockAudioPlayer extends Mock implements StreamingTtsAudioPlayer {}
@@ -92,7 +93,7 @@ void main() {
       feedChunk();
       player.handleWsEvent( AppConstants.eventAudioStreamingComplete,
         <String, dynamic>{ 'status': 'success', 'utterance_id': abandoned } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( player.isPlaying, isTrue, reason: "current utterance must still be pending" );
       verifyNever( () => audioPlayer.play( any() ) );
@@ -101,10 +102,10 @@ void main() {
       // The current utterance's own completion still plays and finishes.
       player.handleWsEvent( AppConstants.eventAudioStreamingComplete,
         <String, dynamic>{ 'status': 'success', 'utterance_id': current } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       verify( () => audioPlayer.play( any() ) ).called( 1 );
       onCompleteCtrl.add( null );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       expect( emitted.length, 1 );
     } );
 
@@ -119,7 +120,7 @@ void main() {
       player.handleWsEvent( 'tts_error', <String, dynamic>{
         'error_code': 'quota_exceeded', 'utterance_id': abandoned,
       } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( errors, isEmpty );
       expect( player.isPlaying, isTrue );
@@ -134,7 +135,7 @@ void main() {
       player.handleWsEvent( 'tts_error', <String, dynamic>{
         'error_code': 'quota_exceeded', 'utterance_id': current,
       } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
 
       expect( errors.length, 1 );
       expect( errors.single.errorCode, 'quota_exceeded' );
@@ -151,13 +152,13 @@ void main() {
 
       player.handleWsEvent( AppConstants.eventAudioStreamingComplete,
         <String, dynamic>{ 'status': 'success' } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       expect( complete.length, 1, reason: "no id on the frame: complete is honoured" );
       expect( complete.single.played, isFalse );
 
       await speakAndGetId();
       player.handleWsEvent( 'tts_error', <String, dynamic>{ 'error_code': 'rate_limit' } );
-      await Future<void>.delayed( const Duration( milliseconds: 10 ) );
+      await drainEventLoop();
       expect( errors.length, 1 );
       expect( errors.single.errorCode, 'rate_limit' );
     } );
