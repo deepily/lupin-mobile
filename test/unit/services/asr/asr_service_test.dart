@@ -81,7 +81,7 @@ void main() {
       } );
 
       final file = await startWithFile();
-      await waitUntil( () => samples >= 1, "the 250 ms level sampler to read once" );
+      await waitUntil( () => samples >= 1, "the 100 ms level sampler to read once" );
       await asr.stopToFile();
 
       expect( trace.lines.single, matches( RegExp( r'^capture: held=0\.\d\ds bytes=4 peakDb=-18\.0 samples=[1-9]$' ) ) );
@@ -100,7 +100,7 @@ void main() {
       } );
 
       final file = await startWithFile();
-      await waitUntil( () => tries >= 1, "the 250 ms level sampler to try once" );
+      await waitUntil( () => tries >= 1, "the 100 ms level sampler to try once" );
       await asr.stopToFile();
 
       expect( trace.lines.single, contains( 'peakDb=none samples=0' ) );

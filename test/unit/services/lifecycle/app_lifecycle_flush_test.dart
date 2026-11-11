@@ -114,6 +114,7 @@ void main() {
 
   test( "one flush stays in flight; a pause during it is remembered and runs once more", () async {
     final counting = _CountingDestination()..gate = Completer<void>();
+    addTearDown( () { if ( !counting.gate!.isCompleted ) counting.gate!.complete(); } );
     Logger.addDestination( counting );
 
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
@@ -141,6 +142,7 @@ void main() {
     addTearDown( () => AppLifecycleService.logFlushTimeout = original );
 
     final hung = _CountingDestination()..gate = Completer<void>();
+    addTearDown( () { if ( !hung.gate!.isCompleted ) hung.gate!.complete(); } );
     Logger.addDestination( hung );
 
     binding.handleAppLifecycleStateChanged( AppLifecycleState.paused );
@@ -162,7 +164,7 @@ void main() {
     expect( store.appended.join(), contains( "after the hung flush" ) );
 
     // The service is a singleton and the second flush is still hung on the gate. Release
-    // it so the next test starts with no flush in flight.
+    // it so the next test starts with no flush in flight; the teardown also releases it on failure.
     hung.gate!.complete();
     await drainEventLoop();
   } );
