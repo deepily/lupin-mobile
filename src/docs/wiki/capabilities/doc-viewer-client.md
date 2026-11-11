@@ -1,6 +1,6 @@
 ---
 capability: doc-viewer-client
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.docs.data.doc_link.DocLinkKind@8f096e7578
   - lupin-mobile:lib.features.docs.data.doc_link.classifyDocHref@1f78b1f2fd

@@ -1,6 +1,6 @@
 ---
 capability: decision-proxy-events-and-states
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.decision_proxy.domain.decision_proxy_event.DecisionProxyEvent@bf99efc68f
   - lupin-mobile:lib.features.decision_proxy.domain.decision_proxy_event.DecisionProxyLoadDashboard@c2efbd68a9

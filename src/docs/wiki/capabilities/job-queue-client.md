@@ -1,6 +1,6 @@
 ---
 capability: job-queue-client
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.queue.data.queue_repository.QueueRepository@3dce1bc787
   - lupin-mobile:lib.features.queue.data.queue_models.QueueApiException@e4ad48ef87

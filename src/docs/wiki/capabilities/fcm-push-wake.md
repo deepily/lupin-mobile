@@ -1,6 +1,6 @@
 ---
 capability: fcm-push-wake
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.services.push.fcm_bootstrap.FirebaseTokenSource@8e6e22ba3e
   - lupin-mobile:lib.services.push.fcm_bootstrap.initFcmIfEnabled@4fb470a99e

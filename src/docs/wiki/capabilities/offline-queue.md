@@ -1,6 +1,6 @@
 ---
 capability: offline-queue
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.cache.offline_manager.OfflineManager@1cfb96d19f
   - lupin-mobile:lib.core.cache.offline_manager.QueuedRequest@ba0c50b03f

@@ -1,6 +1,6 @@
 ---
 capability: notification-bloc-events
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.notifications.domain.notification_event.NotificationEvent@c4073da3af
   - lupin-mobile:lib.features.notifications.domain.notification_event.NotificationsLoadInbox@8db668e077

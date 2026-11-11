@@ -1,6 +1,6 @@
 ---
 capability: heartbeat-and-push-switches
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.settings.data.heartbeat_poke_repository.HeartbeatPokeState@c308651e1b
   - lupin-mobile:lib.features.settings.data.heartbeat_poke_repository.HeartbeatPokeRepository@375e92a2ba

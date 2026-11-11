@@ -1,6 +1,6 @@
 ---
 capability: focus-mode-chat
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.focus_mode.domain.focus_chat_bloc.FocusChatBloc@17bc0e83aa
   - lupin-mobile:lib.features.focus_mode.presentation.focus_chat_pane.FocusChatPane@b33abec535

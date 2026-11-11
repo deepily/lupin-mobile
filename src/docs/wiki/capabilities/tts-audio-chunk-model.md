@@ -1,6 +1,6 @@
 ---
 capability: tts-audio-chunk-model
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.shared.models.audio_chunk.AudioChunk@1fcaca318c
   - lupin-mobile:lib.shared.models.audio_chunk.AudioChunkType@2fc5eb43c3

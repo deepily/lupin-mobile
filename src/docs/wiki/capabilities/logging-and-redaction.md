@@ -1,6 +1,6 @@
 ---
 capability: logging-and-redaction
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.logging.error_summary.describeFailure@b31c9f692d
   - lupin-mobile:lib.core.logging.log_file_store.LogFileStore@f19760f1d0

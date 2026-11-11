@@ -1,6 +1,6 @@
 ---
 capability: error-handling-and-recovery
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.error_handling.error_handler.AppError@06e3af8651
   - lupin-mobile:lib.core.error_handling.error_handler.NetworkError@856efd01a6

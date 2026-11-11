@@ -1,6 +1,6 @@
 ---
 capability: quick-ask-events-and-state
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.quick_ask.data.quick_ask_models.stateForQueue@8f5dfccde0
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_event.QuickAskRecordPressed@b4e1c5cde6

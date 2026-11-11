@@ -1,6 +1,6 @@
 ---
 capability: task-row-and-verbs
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.fleet.data.task_row_model.TaskRowModel@aaa437a2dc
   - lupin-mobile:lib.features.fleet.data.task_row_schema.RowSchema@66acde2589

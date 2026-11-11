@@ -1,6 +1,6 @@
 ---
 capability: voice-personas
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.notifications.data.voice_persona.VoicePersona@9c2345238e
   - lupin-mobile:lib.features.notifications.presentation.persona_badge.PersonaBadge@410907e6e4

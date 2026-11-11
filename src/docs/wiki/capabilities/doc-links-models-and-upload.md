@@ -1,6 +1,6 @@
 ---
 capability: doc-links-models-and-upload
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.docs.data.doc_link.hasFetchableDocLink@c842a3f2eb
   - lupin-mobile:lib.features.docs.data.doc_link.docLinkFor@c87f0bef05

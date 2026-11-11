@@ -1,6 +1,6 @@
 ---
 capability: quick-ask
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_bloc.QuickAskBloc@ab0d9a861b
   - lupin-mobile:lib.features.quick_ask.domain.quick_ask_state.QuickAskState@7aef85f553

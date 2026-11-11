@@ -1,6 +1,6 @@
 ---
 capability: theme-and-shared-widgets
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.core.build_info_footer.BuildInfoFooter@33e3e79d85
   - lupin-mobile:lib.core.constants.app_constants.AppConstants@ebe9cae664

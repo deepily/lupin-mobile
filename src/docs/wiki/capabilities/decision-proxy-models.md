@@ -1,6 +1,6 @@
 ---
 capability: decision-proxy-models
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.decision_proxy.data.decision_proxy_models.trustModeToString@8e0b328e7a
   - lupin-mobile:lib.features.decision_proxy.data.decision_proxy_models.PendingSummary@b6f04867fe

@@ -1,6 +1,6 @@
 ---
 capability: interactive-prompts
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.shared.widgets.prompt_bodies.YesNoPromptBody@ae2eb73f1f
   - lupin-mobile:lib.shared.widgets.prompt_bodies.MultipleChoicePromptBody@e65b639d14

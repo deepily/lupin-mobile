@@ -1,6 +1,6 @@
 ---
 capability: mobile-auth-events-and-states
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.auth.domain.auth_event.AuthStarted@f21dd42527
   - lupin-mobile:lib.features.auth.domain.auth_event.AuthLoginRequested@6da033305b

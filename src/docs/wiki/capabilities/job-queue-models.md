@@ -1,6 +1,6 @@
 ---
 capability: job-queue-models
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.queue.data.queue_models.AskRequest@e2ba002564
   - lupin-mobile:lib.features.queue.data.queue_models.SubmitRequest@4d05f9e90a

@@ -1,6 +1,6 @@
 ---
 capability: pane-polling-and-visibility
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.fleet.domain.pane_visibility_mixin.PaneVisibilityMixin@20f02d89c9
   - lupin-mobile:lib.features.fleet.domain.pane_polling_mixin.PanePollingMixin@96f1fe861f

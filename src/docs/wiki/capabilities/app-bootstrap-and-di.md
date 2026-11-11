@@ -1,6 +1,6 @@
 ---
 capability: app-bootstrap-and-di
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.app.onWsAuthenticated@edf8811245
   - lupin-mobile:lib.app.WsBlocDispatcher@a31c4dcae1

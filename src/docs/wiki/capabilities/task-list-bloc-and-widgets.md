@@ -1,6 +1,6 @@
 ---
 capability: task-list-bloc-and-widgets
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.task_list.domain.task_list_bloc.TaskListEvent@eb84b1c276
   - lupin-mobile:lib.features.task_list.domain.task_list_bloc.TaskListRefreshRequested@7ce0b077c4

@@ -1,6 +1,6 @@
 ---
 capability: transcript-stream-events-and-frames
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.transcript.data.transcript_models.TranscriptStateFrame@1baad2af96
   - lupin-mobile:lib.features.transcript.data.transcript_models.TranscriptBacklog@4f834e2feb

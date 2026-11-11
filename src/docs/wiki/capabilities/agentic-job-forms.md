@@ -1,6 +1,6 @@
 ---
 capability: agentic-job-forms
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.agentic.presentation.agentic_hub_screen.AgenticHubScreen@ada74757b6
   - lupin-mobile:lib.features.agentic.data.agentic_common_models.AgenticJobType@0d3eb4e6a1

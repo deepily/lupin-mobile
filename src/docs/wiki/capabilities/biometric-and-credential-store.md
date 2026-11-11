@@ -1,6 +1,6 @@
 ---
 capability: biometric-and-credential-store
-pin_algorithm: py3.13.xebd695/dart-analyzer-parseString/7.7.1
+pin_algorithm: py3.13.x6a05a1/dart-analyzer-parseString/7.7.1
 pins:
   - lupin-mobile:lib.features.auth.presentation.biometric_prompt_screen.BiometricPromptScreen@2b55479722
   - lupin-mobile:lib.services.auth.biometric_gate.BiometricOutcome@85a275b55e
