@@ -1,11 +1,21 @@
 # TODO
 
-## Resume here: 2026-11-11 close (Tiffany)
+## Resume here: 2026-11-14 close (Tiffany)
 
-The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`, and nothing is pushed. The APK is still "2026.11.09 build 3", because today changed only tests and docs. Owed work is in the store.
+The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`, pushed at this session end. The APK is "2026.11.14 build 3" (`7f05939`, FCM). Owed work is in the store.
 
-- [ ] Earbud check on build 3 (rows `c643b1b0` and `bcc9cba3`). Rick asked for a callback at 7 pm Eastern. After his check, read `docker logs --timestamps lupin-rest-dev | grep earbud_trace`, and respawn Clayton from `io/mementos/clayton-85dfc14c.md`.
-- [ ] Code-health Phase 2 (rows `adc98845`, `4adc2850`, `032ee125`, `4ebc3c6e`) starts when Cheech's Phase 1 (`dbbe93a0`) is done. The umbrella row `e1778814` is still held for Rick.
+- [ ] Code-health Phase 2 (rows `adc98845`, `4adc2850`, `032ee125`, `4ebc3c6e`; chase 16 Nov) starts when Cheech's Phase 1 (`dbbe93a0`, last step `d2a18b64`) is done. The umbrella row `e1778814` is still held for Rick.
+- [x] Earbud taps on the Pixel (rows `c643b1b0` and `bcc9cba3`, merge `7f05939`); pocket mode `3a8005c1` dropped. Session `925e1e93`
+
+### Decisions Log — 2026-11-14 (session `925e1e93`, Tiffany)
+
+- Rick: real beeps over a silent stream for winning the earbud taps (card). Of the silent stream he said: "sounds a lot like a kludgey ugly workaround".
+- Rick: "I don't want to be the tester". He took the problem statement to an outside expert, then chose "Ship it, I verify". When the server adb setup was refused, he chose a one-tap check.
+- Rick: 2 of 3 is a pass; "mark it as finished for the moment". Pocket mode `3a8005c1` dropped (card yes).
+- Tiffany: the earbud dump script stays in `src/scripts/`, for the next routing question.
+
+## Earlier: 2026-11-11 close (Tiffany)
+
 - [x] Public APK pulled (`cbdec4ca`), re-pin (`df84ddae`), fixed-wait sweep (`065ee0ee`), wiki rollups, baseline cost (`2ee18321`). Session `14de3771`
 
 ### Decisions Log — 2026-11-11 (session `14de3771`, Tiffany)

@@ -15,6 +15,27 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.14 | Session `925e1e93` (Tiffany): earbud taps work on the Pixel, status report podcast
+
+The work came from Rick's broadcast `f31b417e` and then by voice. Skeleton crew was on until he lifted it in the afternoon; no seats were spawned, and two read-only review subagents were used. Nothing is pushed before this session end.
+
+- **Status report**: `io/tmp/2026.11.14-tiffany-lupin-mobile-status-report.md`, made into a status-report podcast.
+- **Earbud taps fixed** (rows `c643b1b0` and `bcc9cba3`, done; Rick passed 2 of 3 on build 3):
+  - **Cause**: Rick ran `src/scripts/earbud-media-session-dump.sh` (`3ae7d2e`, `8f76740`) twice. Both dumps showed Android 17 sending every tap to ChatGPT's stopped voice-mode session, not to Lupin's active one.
+  - Android picks the app whose player last entered "started". audioplayers never reports started, because it starts playback through `setPlaybackParams`. An outside expert's response confirmed this: `io/tmp/2026.11.14-earbud-tap-problem-statement-response.md`.
+  - **Build 2** (`1fa6292`), an audioplayers silent loop, failed on the phone for that reason, and was reverted.
+  - **Fix** (merge `7f05939`): the tones play through just_audio, so each beep wins the next tap. A stray play press within 300 ms of a next-track press is ignored. The tone files live in support storage, are rewritten if missing, and are written atomically.
+  - **Reviews**: two independent reviews found six defects, and all were fixed with tests. They were a start-or-stop race, a leaked player, an unhandled load error, cache-dir files, a self-awaiting `whenComplete` and an AC-G2 rename.
+  - The merge gate passed; its one warning was the one-line baseline rename, which I read. APKs "2026.11.14 build 1" to "build 3" were built with FCM.
+  - The miss in Rick's check was a double tap that the earbuds read as a volume swipe, which never reaches apps.
+- **Pocket mode** (row `3a8005c1`): dropped on Rick's yes. It needs a microphone foreground service and carries a Play policy risk.
+- **Chases**: the four code-health Phase 2 rows were re-chased to 16 Nov, because Cheech's Phase 1 (`d2a18b64`) is still running its final pyramid.
+- **Lessons**:
+  - A media session that says "playing" does not win earbud routing. Only a player that Android logs as started does, and `dumpsys audio` shows which.
+  - `whenComplete( () => map.remove( k ) )` returns the removed future, and the chain waits on itself forever. Use a block body.
+  - When Rick says he doesn't want to be the tester, write the problem statement for an expert instead of building another trial.
+- **Memento sweep**: Clayton's 11-09 memento was trashed unread (older than two days). Tiffany's records were kept.
+
 ## 2026.11.11 | Session `14de3771` (Tiffany): fixed-wait sweep done, wiki lint clean, public APK pulled
 
 The work came from Rick's morning broadcast and from my board. Arnold, then Tiberius, worked as crew, and both are reaped. Nothing is pushed.
