@@ -226,6 +226,20 @@ void main() {
       expect( stream.isOn, isTrue );
     } );
 
+    test( 'a player whose setup fails is disposed, and the retry builds a fresh one', () async {
+      when( () => player.dispose() ).thenAnswer( ( _ ) async {} );
+      var fail = true;
+      when( () => player.setReleaseMode( any() ) ).thenAnswer( ( _ ) async { if ( fail ) throw StateError( 'no player' ); } );
+      await expectLater( stream.start(), throwsStateError );
+      verify( () => player.dispose() ).called( 1 );
+      verifyNever( () => player.play( any() ) );
+      fail = false;
+      await stream.stop();
+      await stream.start();
+      expect( built, 2 );
+      verify( () => player.play( any() ) ).called( 1 );
+    } );
+
     test( 'stop before any start touches no player', () async {
       await stream.stop();
       expect( built, 0 );

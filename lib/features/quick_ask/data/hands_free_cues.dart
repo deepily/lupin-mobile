@@ -98,17 +98,26 @@ class SilentKeepAlive implements ClaimKeepAlive {
     }
   }
 
+  /// Makes the looping, focus-free media player.
+  ///
+  /// Ensures:
+  ///   - a player whose setup fails is disposed before the error goes on, so a retry leaks nothing
   Future<AudioPlayer> _build() async {
     final player = _create();
-    await player.setAudioContext( const AudioContext(
-      android: AudioContextAndroid(
-        contentType : AndroidContentType.music,
-        usageType   : AndroidUsageType.media,
-        audioFocus  : AndroidAudioFocus.none,
-      ),
-    ) );
-    await player.setReleaseMode( ReleaseMode.loop );
-    return player;
+    try {
+      await player.setAudioContext( const AudioContext(
+        android: AudioContextAndroid(
+          contentType : AndroidContentType.music,
+          usageType   : AndroidUsageType.media,
+          audioFocus  : AndroidAudioFocus.none,
+        ),
+      ) );
+      await player.setReleaseMode( ReleaseMode.loop );
+      return player;
+    } catch ( _ ) {
+      await player.dispose();
+      rethrow;
+    }
   }
 }
 
