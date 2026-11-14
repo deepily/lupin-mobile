@@ -2,10 +2,11 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +55,28 @@ void main() {
     test( 'a "next track" press is a double tap at once', () => fakeAsync( ( clock ) {
       reader.press( MediaButton.next );
       expect( seen, [ EarbudGesture.double ] );
+    } ) );
+
+    test( 'a play press just after "next track" is its echo and reports nothing', () => fakeAsync( ( clock ) {
+      reader.press( MediaButton.next );
+      clock.elapse( const Duration( milliseconds: 299 ) );
+      reader.press( MediaButton.media );
+      clock.elapse( const Duration( seconds: 1 ) );
+      expect( seen, [ EarbudGesture.double ] );
+    } ) );
+
+    test( 'dispose cancels the echo window, so no timer outlives the reader', () => fakeAsync( ( clock ) {
+      reader.press( MediaButton.next );
+      reader.dispose();
+      expect( clock.pendingTimers, isEmpty );
+    } ) );
+
+    test( 'a play press once the echo window has passed is a single tap again', () => fakeAsync( ( clock ) {
+      reader.press( MediaButton.next );
+      clock.elapse( EarbudTapReader.defaultEchoWindow );
+      reader.press( MediaButton.media );
+      clock.elapse( EarbudTapReader.defaultWindow );
+      expect( seen, [ EarbudGesture.double, EarbudGesture.single ] );
     } ) );
 
     test( 'a "next track" press drops a press still waiting', () => fakeAsync( ( clock ) {
@@ -119,131 +142,113 @@ void main() {
   } );
 
   group( 'ToneCuePlayer', () {
-    test( 'a cue stops the one still playing first, so audio focus is not left held', () async {
-      registerFallbackValue( BytesSource( Uint8List( 0 ) ) );
-      registerFallbackValue( const AudioContext() );
-      final player = _MockAudioPlayer();
-      when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) async {} );
-      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
-      when( () => player.play( any() ) ).thenAnswer( ( _ ) async {} );
-      final cues = ToneCuePlayer( player: player );
+    late _MockAudioPlayer   player;
+    late int                built;
+    late List<HandsFreeCue> asked;
+    late ToneCuePlayer      cues;
+    late Completer<void>    playing;
 
+    setUp( () {
+      player  = _MockAudioPlayer();
+      built   = 0;
+      asked   = [];
+      playing = Completer<void>();
+      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
+      when( () => player.setFilePath( any() ) ).thenAnswer( ( _ ) async => const Duration( milliseconds: 60 ) );
+      // A real just_audio play() completes only when playback stops.
+      when( () => player.play() ).thenAnswer( ( _ ) => playing.future );
+      cues = ToneCuePlayer(
+        create   : () { built++; return player; },
+        toneFile : ( cue ) async { asked.add( cue ); return '/tmp/${ cue.name }.wav'; },
+      );
+    } );
+
+    test( 'no player is built until the first cue', () {
+      expect( built, 0 );
+    } );
+
+    test( 'a cue stops the one still playing, loads its own file and plays it', () async {
       await cues.play( HandsFreeCue.started );
       await cues.play( HandsFreeCue.stopped );
-
       verifyInOrder( [
-        () => player.stop(), () => player.play( any() ),
-        () => player.stop(), () => player.play( any() ),
+        () => player.stop(), () => player.setFilePath( '/tmp/started.wav' ), () => player.play(),
+        () => player.stop(), () => player.setFilePath( '/tmp/stopped.wav' ), () => player.play(),
       ] );
+      expect( asked, [ HandsFreeCue.started, HandsFreeCue.stopped ] );
+      expect( built, 1 );
+    } );
+
+    test( 'play returns without waiting for the tone to end', () async {
+      await cues.play( HandsFreeCue.ready ).timeout( const Duration( seconds: 1 ) );
+      expect( playing.isCompleted, isFalse );
+    } );
+
+    test( 'a tone whose load fails is logged, not thrown, and the next cue still plays', () async {
+      var fail = true;
+      when( () => player.setFilePath( any() ) ).thenAnswer( ( _ ) async {
+        if ( fail ) throw StateError( 'interrupted' );
+        return const Duration( milliseconds: 60 );
+      } );
+      await cues.play( HandsFreeCue.ready );
+      verifyNever( () => player.play() );
+      fail = false;
+      await cues.play( HandsFreeCue.started );
+      verify( () => player.play() ).called( 1 );
+    } );
+
+    test( 'a tone file that cannot be found is logged, not thrown', () async {
+      final missing = ToneCuePlayer( create: () => player, toneFile: ( _ ) async => throw const FileSystemException( 'gone' ) );
+      await missing.play( HandsFreeCue.ready );
+      verifyNever( () => player.play() );
+    } );
+
+    test( 'a tone that fails while playing is not thrown into the next cue', () async {
+      await cues.play( HandsFreeCue.ready );
+      playing.completeError( StateError( 'no audio' ) );
+      await pumpEventQueue();
+      playing = Completer<void>();
+      await cues.play( HandsFreeCue.started );
+      verify( () => player.play() ).called( 2 );
     } );
   } );
 
-  group( 'SilentKeepAlive', () {
-    late _MockAudioPlayer player;
-    late int              built;
-    late SilentKeepAlive  stream;
+  group( 'CueToneFiles', () {
+    late Directory dir;
+    late Future<Directory> Function() original;
 
     setUp( () {
-      registerFallbackValue( BytesSource( Uint8List( 0 ) ) );
-      registerFallbackValue( const AudioContext() );
-      registerFallbackValue( ReleaseMode.loop );
-      player = _MockAudioPlayer();
-      built  = 0;
-      when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) async {} );
-      when( () => player.setReleaseMode( any() ) ).thenAnswer( ( _ ) async {} );
-      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
-      when( () => player.play( any() ) ).thenAnswer( ( _ ) async {} );
-      stream = SilentKeepAlive( create: () { built++; return player; } );
+      dir      = Directory.systemTemp.createTempSync( 'cue-tone-files' );
+      original = CueToneFiles.directory;
+      CueToneFiles.directory = () async => dir;
     } );
 
-    test( 'no player is built until the first start', () {
-      expect( built, 0 );
-      expect( stream.isOn, isFalse );
+    tearDown( () {
+      CueToneFiles.directory = original;
+      dir.deleteSync( recursive: true );
     } );
 
-    test( 'start loops silence on the media stream with no audio focus', () async {
-      await stream.start();
-      final context = verify( () => player.setAudioContext( captureAny() ) ).captured.single as AudioContext;
-      expect( context.android.usageType, AndroidUsageType.media );
-      expect( context.android.audioFocus, AndroidAudioFocus.none );
-      verify( () => player.setReleaseMode( ReleaseMode.loop ) ).called( 1 );
-      final source = verify( () => player.play( captureAny() ) ).captured.single as BytesSource;
-      final view   = ByteData.view( source.bytes.buffer );
-      expect( String.fromCharCodes( source.bytes.sublist( 0, 4 ) ), 'RIFF' );
-      final samples = List.generate( ( source.bytes.length - 44 ) ~/ 2, ( i ) => view.getInt16( 44 + i * 2, Endian.little ) );
-      expect( samples, hasLength( CueTones.sampleRate ) );
-      expect( samples.every( ( v ) => v == 0 ), isTrue );
-      expect( stream.isOn, isTrue );
+    test( 'the first call writes the tone, and the file holds exactly its bytes', () async {
+      final path = await CueToneFiles.path( HandsFreeCue.started );
+      expect( File( path ).readAsBytesSync(), CueTones.wav( HandsFreeCue.started ) );
+      expect( File( '$path.part' ).existsSync(), isFalse );
     } );
 
-    test( 'a second start plays nothing more, and stop then start reuses the one player', () async {
-      await stream.start();
-      await stream.start();
-      verify( () => player.play( any() ) ).called( 1 );
-      await stream.stop();
-      await stream.start();
-      verify( () => player.stop() ).called( 1 );
-      verify( () => player.play( any() ) ).called( 1 );
-      expect( built, 1 );
+    test( 'a file deleted since the last call is written again', () async {
+      final path = await CueToneFiles.path( HandsFreeCue.sent );
+      File( path ).deleteSync();
+      expect( await CueToneFiles.path( HandsFreeCue.sent ), path );
+      expect( File( path ).readAsBytesSync(), CueTones.wav( HandsFreeCue.sent ) );
     } );
 
-    test( 'a stop while the player is still being built leaves the silence stopped', () async {
-      final building = Completer<void>();
-      when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) => building.future );
-      final starting = stream.start();
-      await pumpEventQueue();
-      verify( () => player.setAudioContext( any() ) ).called( 1 );
-      final stopping = stream.stop();
-      expect( stream.isOn, isFalse );
-      building.complete();
-      await starting;
-      await stopping;
-      verifyInOrder( [ () => player.play( any() ), () => player.stop() ] );
+    test( 'overlapping first calls share one path and leave a whole file', () async {
+      final paths = await Future.wait( [ for ( var i = 0; i < 5; i++ ) CueToneFiles.path( HandsFreeCue.ready ) ] );
+      expect( paths.toSet(), hasLength( 1 ) );
+      expect( File( paths.first ).readAsBytesSync(), CueTones.wav( HandsFreeCue.ready ) );
     } );
 
-    test( 'start, stop and start in one turn collapse to one play, with no stop', () async {
-      await Future.wait( [ stream.start(), stream.stop(), stream.start() ] );
-      expect( stream.isOn, isTrue );
-      expect( built, 1 );
-      verify( () => player.play( any() ) ).called( 1 );
-      verifyNever( () => player.stop() );
-    } );
-
-    test( 'start and stop in one turn never build or play', () async {
-      await Future.wait( [ stream.start(), stream.stop() ] );
-      expect( built, 0 );
-      expect( stream.isOn, isFalse );
-    } );
-
-    test( 'a failed start does not block the next call', () async {
-      var fail = true;
-      when( () => player.play( any() ) ).thenAnswer( ( _ ) async { if ( fail ) throw StateError( 'no audio' ); } );
-      await expectLater( stream.start(), throwsStateError );
-      fail = false;
-      await stream.stop();
-      await stream.start();
-      verify( () => player.play( any() ) ).called( 2 );
-      expect( stream.isOn, isTrue );
-    } );
-
-    test( 'a player whose setup fails is disposed, and the retry builds a fresh one', () async {
-      when( () => player.dispose() ).thenAnswer( ( _ ) async {} );
-      var fail = true;
-      when( () => player.setReleaseMode( any() ) ).thenAnswer( ( _ ) async { if ( fail ) throw StateError( 'no player' ); } );
-      await expectLater( stream.start(), throwsStateError );
-      verify( () => player.dispose() ).called( 1 );
-      verifyNever( () => player.play( any() ) );
-      fail = false;
-      await stream.stop();
-      await stream.start();
-      expect( built, 2 );
-      verify( () => player.play( any() ) ).called( 1 );
-    } );
-
-    test( 'stop before any start touches no player', () async {
-      await stream.stop();
-      expect( built, 0 );
-      verifyNever( () => player.stop() );
+    test( 'each cue has its own file', () async {
+      final paths = { for ( final cue in HandsFreeCue.values ) await CueToneFiles.path( cue ) };
+      expect( paths, hasLength( HandsFreeCue.values.length ) );
     } );
   } );
 

@@ -12,7 +12,6 @@ import 'services/push/notification_tap_router.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/websocket/ws_reconnect_coordinator.dart';
 import 'app.dart';
-import 'features/quick_ask/data/hands_free_cues.dart';
 import 'services/audio/lupin_media_handler.dart';
 import 'services/audio/podcast_audio_session.dart';
 import 'services/audio/podcast_cache.dart';
@@ -38,8 +37,6 @@ void main() async {
       builder : () => LupinMediaHandler(
         // The media-button rewind key (earbuds, car, watch) backs up as far as the mini-player's back button (row 807a4ed0).
         rewindInterval : PodcastPlayerService.skipBackInterval,
-        // Silence plays while Quick Ask holds the presses, so Android sends them here (row c643b1b0).
-        keepAlive      : SilentKeepAlive(),
       ),
       config  : const AudioServiceConfig(
         androidNotificationChannelId   : 'ai.deepily.lupin_mobile.podcast',

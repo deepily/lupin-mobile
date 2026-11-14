@@ -24,25 +24,6 @@ abstract interface class MediaButtonClaimant {
   void onMediaButton( MediaButton button );
 }
 
-/// Real media audio that plays while a claimant holds the earbud presses.
-///
-/// Android gives an earbud press to the app that played audio last, not to the session that reports "playing".
-/// On a Pixel with Android 17, this session was active and playing, yet a tap went to another app.
-/// That app's session was stopped, but it had played audio more recently.
-abstract interface class ClaimKeepAlive {
-  /// Starts the stream.
-  ///
-  /// Ensures:
-  ///   - a call while it is already running does nothing
-  Future<void> start();
-
-  /// Stops the stream.
-  ///
-  /// Ensures:
-  ///   - a call while it is stopped does nothing
-  Future<void> stop();
-}
-
 /// The app's one media session: the lock-screen card, and where earbud presses go.
 ///
 /// By default a press drives the podcast, as a media player's should.
@@ -60,23 +41,17 @@ class LupinMediaHandler extends BaseAudioHandler {
   final Duration rewindInterval;
   /// How far the media fast-forward key jumps ahead.
   final Duration fastForwardInterval;
-  /// Plays while the claimant's card shows, so presses come to this app.
-  ///
-  /// Null in tests that don't need it.
-  final ClaimKeepAlive? keepAlive;
 
   MediaTransport?      _transport;
   MediaButtonClaimant? _claimant;
   MediaItem?           _card;
   MediaItem?           _podcastItem;
   PlaybackState        _podcastState = PlaybackState();
-  bool                 _keepAliveOn  = false;
 
   /// Creates the handler; the app makes exactly one, through `AudioService.init`.
   LupinMediaHandler( {
     required this.rewindInterval,
     this.fastForwardInterval = const Duration( seconds: 10 ),
-    this.keepAlive,
   } );
 
   /// Whether a claimant holds the earbud presses.
@@ -90,36 +65,15 @@ class LupinMediaHandler extends BaseAudioHandler {
 
   /// Shows the claimant's card, or the podcast's.
   ///
-  /// The claimant's card is shown as playing, and [keepAlive] plays under it.
-  /// Together they keep this the session Android sends presses to.
+  /// The claimant's card is shown as playing. That keeps this the session Android sends presses to.
   void _show() {
-    final claimantActs = _claimantActs;
-    if ( claimantActs ) {
+    if ( _claimantActs ) {
       mediaItem.add( _card );
       playbackState.add( PlaybackState( processingState: AudioProcessingState.ready, playing: true ) );
     } else {
       mediaItem.add( _podcastItem );
       playbackState.add( _podcastState );
     }
-    _syncKeepAlive( claimantActs );
-  }
-
-  /// Runs [keepAlive] exactly while the claimant's card shows.
-  ///
-  /// A playing podcast is real media already, so the stream stops under it and resumes when it pauses.
-  ///
-  /// Ensures:
-  ///   - start and stop are called only on a change, and each change is logged
-  ///   - a failure to start or stop is logged, never thrown into the caller
-  void _syncKeepAlive( bool on ) {
-    if ( on == _keepAliveOn ) return;
-    _keepAliveOn = on;
-    Logger.info( 'keepAlive: ${ on ? "on" : "off" }', tag: logTag );
-    final stream = keepAlive;
-    if ( stream == null ) return;
-    unawaited( ( on ? stream.start() : stream.stop() ).catchError( ( Object e, StackTrace s ) {
-      Logger.warning( 'keepAlive: ${ on ? "start" : "stop" } failed: $e', tag: logTag, error: e, stackTrace: s );
-    } ) );
   }
 
   /// Records [item] as the podcast's card, and shows it unless the claimant's card is showing.

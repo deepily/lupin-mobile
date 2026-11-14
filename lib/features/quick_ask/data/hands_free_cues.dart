@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
-import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../../../core/logging/logger.dart';
 import '../../../services/audio/lupin_media_handler.dart';
 import '../domain/earbud_taps.dart';
 
@@ -12,112 +16,86 @@ abstract interface class HandsFreeCuePlayer {
   Future<void> play( HandsFreeCue cue );
 }
 
-/// The real player: short tones built in memory, played through the media stream.
+/// The real player: short tones built in memory, played through just_audio.
 ///
 /// The media stream reaches the earbuds.
-/// A cue alone does not make this the app Android sends presses to; [SilentKeepAlive] does that.
+/// Android sends an earbud press to the app whose player started last, so each tone also wins the next press.
+/// It must be just_audio, as the podcast uses: Android never logged the audioplayers tone players as started.
+/// The player takes no audio focus, so a tone pauses nothing.
 class ToneCuePlayer implements HandsFreeCuePlayer {
-  final AudioPlayer _player;
-  final Map<HandsFreeCue, Uint8List> _tones = {
-    for ( final cue in HandsFreeCue.values ) cue: CueTones.wav( cue ),
-  };
+  final AudioPlayer Function()                  _create;
+  final Future<String> Function( HandsFreeCue ) _toneFile;
+  AudioPlayer? _player;
 
-  /// Creates the player; [player] is a test seam, production passes nothing.
-  ToneCuePlayer( { AudioPlayer? player } ) : _player = player ?? AudioPlayer() {
-    _player.setAudioContext( const AudioContext(
-      android: AudioContextAndroid(
-        contentType : AndroidContentType.sonification,
-        usageType   : AndroidUsageType.media,
-        audioFocus  : AndroidAudioFocus.gainTransientMayDuck,
-      ),
-    ) );
-  }
+  /// Creates the player; [create] and [toneFile] are test seams, production passes nothing.
+  ///
+  /// The player is built on the first [play], after `AudioService.init` has run.
+  ToneCuePlayer( { AudioPlayer Function()? create, Future<String> Function( HandsFreeCue )? toneFile } )
+      : _create   = create ?? _newPlayer,
+        _toneFile = toneFile ?? CueToneFiles.path;
+
+  static AudioPlayer _newPlayer() => AudioPlayer( handleInterruptions: false, handleAudioSessionActivation: false );
 
   /// Plays [cue], cutting off one still playing.
   ///
-  /// Each `play` takes audio focus again and audioplayers releases only the latest request, so the stop keeps focus from leaking.
+  /// Ensures:
+  ///   - returns once the tone is loaded, without waiting for it to end
+  ///   - a tone that fails to play is logged, never thrown later
   @override
   Future<void> play( HandsFreeCue cue ) async {
-    await _player.stop();
-    await _player.play( BytesSource( _tones[ cue ]! ) );
+    try {
+      final player = _player ??= _create();
+      await player.stop();
+      await player.setFilePath( await _toneFile( cue ) );
+      // just_audio's play() completes only when playback stops, so it is not awaited.
+      unawaited( player.play().catchError( ( Object e, StackTrace s ) => _logFailure( cue, e, s ) ) );
+    } catch ( e, s ) {
+      // A later cue's stop() interrupts this one's load; that, or a missing file, must not escape.
+      _logFailure( cue, e, s );
+    }
   }
+
+  void _logFailure( HandsFreeCue cue, Object e, StackTrace s ) =>
+      Logger.warning( 'cue: ${ cue.name } failed: $e', tag: LupinMediaHandler.logTag, error: e, stackTrace: s );
 }
 
-/// Loops a second of silence on the media stream while Quick Ask holds the earbud presses.
+/// Each tone as a WAV file in the app's support folder, since just_audio plays files.
 ///
-/// With only the 60 ms ready cue played, Android sent earbud taps to another app's stopped session.
-/// A media stream that keeps playing makes this the app that played media last, as a playing podcast does.
-/// It takes no audio focus, so it pauses nothing and nothing pauses it.
-///
-/// Start and stop run one at a time, in call order.
-/// So a stop that arrives while the player is still being built still leaves the silence stopped.
-class SilentKeepAlive implements ClaimKeepAlive {
-  final AudioPlayer Function() _create;
-  AudioPlayer?  _player;
-  bool          _want    = false;
-  bool          _playing = false;
-  Future<void>  _queue   = Future<void>.value();
+/// The support folder, not the cache: Android may clear the cache while the app runs.
+class CueToneFiles {
+  CueToneFiles._();
 
-  static final Uint8List _silence = CueTones.silence();
+  /// Where the files go; a test seam, production uses the app's support folder.
+  @visibleForTesting
+  static Future<Directory> Function() directory = getApplicationSupportDirectory;
 
-  /// Creates the stream; [create] is a test seam, production passes nothing.
-  ///
-  /// The player is built on the first [start], after `AudioService.init` has run.
-  SilentKeepAlive( { AudioPlayer Function()? create } ) : _create = create ?? AudioPlayer.new;
+  static final Map<HandsFreeCue, Future<String>> _writing = {};
 
-  /// Whether the silence is meant to be playing: the last call was [start].
-  bool get isOn => _want;
-
-  @override
-  Future<void> start() {
-    _want = true;
-    return _enqueue();
-  }
-
-  @override
-  Future<void> stop() {
-    _want = false;
-    return _enqueue();
-  }
-
-  /// Runs [_apply] after every earlier call has finished, even one that failed.
-  Future<void> _enqueue() => _queue = _queue.catchError( ( Object _ ) {} ).then( ( _ ) => _apply() );
-
-  /// Brings the player to the state the latest call asked for.
-  ///
-  /// Does nothing when the player is in that state already.
-  Future<void> _apply() async {
-    if ( _want == _playing ) return;
-    if ( _want ) {
-      final player = _player ??= await _build();
-      await player.play( BytesSource( _silence ) );
-      _playing = true;
-    } else {
-      await _player?.stop();
-      _playing = false;
-    }
-  }
-
-  /// Makes the looping, focus-free media player.
+  /// The path of [cue]'s tone file, writing the file when it is missing.
   ///
   /// Ensures:
-  ///   - a player whose setup fails is disposed before the error goes on, so a retry leaks nothing
-  Future<AudioPlayer> _build() async {
-    final player = _create();
-    try {
-      await player.setAudioContext( const AudioContext(
-        android: AudioContextAndroid(
-          contentType : AndroidContentType.music,
-          usageType   : AndroidUsageType.media,
-          audioFocus  : AndroidAudioFocus.none,
-        ),
-      ) );
-      await player.setReleaseMode( ReleaseMode.loop );
-      return player;
-    } catch ( _ ) {
-      await player.dispose();
-      rethrow;
+  ///   - the file at the returned path holds exactly [CueTones.wav] for [cue]
+  ///   - a file deleted since the last call is written again
+  ///   - calls that overlap share one write
+  static Future<String> path( HandsFreeCue cue ) async {
+    final file = File( '${ ( await directory() ).path }/hands-free-cue-${ cue.name }.wav' );
+    final writing = _writing[ cue ];
+    if ( writing != null ) return writing;
+    if ( await file.exists() ) {
+      final started = _writing[ cue ];
+      return started ?? Future<String>.value( file.path );
     }
+    // A block body: an arrow would return the removed Future itself, and whenComplete would wait on it forever.
+    return _writing[ cue ] ??= _write( file, cue ).whenComplete( () { _writing.remove( cue ); } );
+  }
+
+  /// Writes beside the file, then renames it into place.
+  ///
+  /// So a crash mid-write never leaves a short file at [file].
+  static Future<String> _write( File file, HandsFreeCue cue ) async {
+    final part = File( '${ file.path }.part' );
+    await part.writeAsBytes( CueTones.wav( cue ), flush: true );
+    return ( await part.rename( file.path ) ).path;
   }
 }
 
@@ -160,21 +138,6 @@ class CueTones {
         samples.add( ( wave * edge * 0.4 * 32767 ).round() );
       }
     }
-    return _pcmWav( samples );
-  }
-
-  /// Builds [seconds] of digital silence, for [SilentKeepAlive] to loop.
-  ///
-  /// Requires:
-  ///   - seconds > 0
-  ///
-  /// Ensures:
-  ///   - returns a 44-byte PCM WAV header followed by sampleRate * seconds zero samples
-  static Uint8List silence( { double seconds = 1.0 } ) =>
-      _pcmWav( List<int>.filled( ( sampleRate * seconds ).round(), 0 ) );
-
-  /// Wraps mono 16-bit [samples] at [sampleRate] in a PCM WAV header.
-  static Uint8List _pcmWav( List<int> samples ) {
     final dataBytes = samples.length * 2;
     final bytes     = Uint8List( 44 + dataBytes );
     final view      = ByteData.view( bytes.buffer );
