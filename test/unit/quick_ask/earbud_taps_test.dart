@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
@@ -62,6 +63,12 @@ void main() {
       reader.press( MediaButton.media );
       clock.elapse( const Duration( seconds: 1 ) );
       expect( seen, [ EarbudGesture.double ] );
+    } ) );
+
+    test( 'dispose cancels the echo window, so no timer outlives the reader', () => fakeAsync( ( clock ) {
+      reader.press( MediaButton.next );
+      reader.dispose();
+      expect( clock.pendingTimers, isEmpty );
     } ) );
 
     test( 'a play press once the echo window has passed is a single tap again', () => fakeAsync( ( clock ) {
@@ -176,6 +183,25 @@ void main() {
       expect( playing.isCompleted, isFalse );
     } );
 
+    test( 'a tone whose load fails is logged, not thrown, and the next cue still plays', () async {
+      var fail = true;
+      when( () => player.setFilePath( any() ) ).thenAnswer( ( _ ) async {
+        if ( fail ) throw StateError( 'interrupted' );
+        return const Duration( milliseconds: 60 );
+      } );
+      await cues.play( HandsFreeCue.ready );
+      verifyNever( () => player.play() );
+      fail = false;
+      await cues.play( HandsFreeCue.started );
+      verify( () => player.play() ).called( 1 );
+    } );
+
+    test( 'a tone file that cannot be found is logged, not thrown', () async {
+      final missing = ToneCuePlayer( create: () => player, toneFile: ( _ ) async => throw const FileSystemException( 'gone' ) );
+      await missing.play( HandsFreeCue.ready );
+      verifyNever( () => player.play() );
+    } );
+
     test( 'a tone that fails while playing is not thrown into the next cue', () async {
       await cues.play( HandsFreeCue.ready );
       playing.completeError( StateError( 'no audio' ) );
@@ -183,6 +209,46 @@ void main() {
       playing = Completer<void>();
       await cues.play( HandsFreeCue.started );
       verify( () => player.play() ).called( 2 );
+    } );
+  } );
+
+  group( 'CueToneFiles', () {
+    late Directory dir;
+    late Future<Directory> Function() original;
+
+    setUp( () {
+      dir      = Directory.systemTemp.createTempSync( 'cue-tone-files' );
+      original = CueToneFiles.directory;
+      CueToneFiles.directory = () async => dir;
+    } );
+
+    tearDown( () {
+      CueToneFiles.directory = original;
+      dir.deleteSync( recursive: true );
+    } );
+
+    test( 'the first call writes the tone, and the file holds exactly its bytes', () async {
+      final path = await CueToneFiles.path( HandsFreeCue.started );
+      expect( File( path ).readAsBytesSync(), CueTones.wav( HandsFreeCue.started ) );
+      expect( File( '$path.part' ).existsSync(), isFalse );
+    } );
+
+    test( 'a file deleted since the last call is written again', () async {
+      final path = await CueToneFiles.path( HandsFreeCue.sent );
+      File( path ).deleteSync();
+      expect( await CueToneFiles.path( HandsFreeCue.sent ), path );
+      expect( File( path ).readAsBytesSync(), CueTones.wav( HandsFreeCue.sent ) );
+    } );
+
+    test( 'overlapping first calls share one path and leave a whole file', () async {
+      final paths = await Future.wait( [ for ( var i = 0; i < 5; i++ ) CueToneFiles.path( HandsFreeCue.ready ) ] );
+      expect( paths.toSet(), hasLength( 1 ) );
+      expect( File( paths.first ).readAsBytesSync(), CueTones.wav( HandsFreeCue.ready ) );
+    } );
+
+    test( 'each cue has its own file', () async {
+      final paths = { for ( final cue in HandsFreeCue.values ) await CueToneFiles.path( cue ) };
+      expect( paths, hasLength( HandsFreeCue.values.length ) );
     } );
   } );
 

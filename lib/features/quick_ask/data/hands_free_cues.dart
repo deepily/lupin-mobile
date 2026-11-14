@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -43,38 +43,59 @@ class ToneCuePlayer implements HandsFreeCuePlayer {
   ///   - a tone that fails to play is logged, never thrown later
   @override
   Future<void> play( HandsFreeCue cue ) async {
-    final player = _player ??= _create();
-    await player.stop();
-    await player.setFilePath( await _toneFile( cue ) );
-    // just_audio's play() completes only when playback stops, so it is not awaited.
-    unawaited( player.play().catchError( ( Object e, StackTrace s ) {
-      Logger.warning( 'cue: ${ cue.name } failed: $e', tag: LupinMediaHandler.logTag, error: e, stackTrace: s );
-    } ) );
+    try {
+      final player = _player ??= _create();
+      await player.stop();
+      await player.setFilePath( await _toneFile( cue ) );
+      // just_audio's play() completes only when playback stops, so it is not awaited.
+      unawaited( player.play().catchError( ( Object e, StackTrace s ) => _logFailure( cue, e, s ) ) );
+    } catch ( e, s ) {
+      // A later cue's stop() interrupts this one's load; that, or a missing file, must not escape.
+      _logFailure( cue, e, s );
+    }
   }
+
+  void _logFailure( HandsFreeCue cue, Object e, StackTrace s ) =>
+      Logger.warning( 'cue: ${ cue.name } failed: $e', tag: LupinMediaHandler.logTag, error: e, stackTrace: s );
 }
 
-/// Each tone as a WAV file in the temporary folder, since just_audio plays files.
+/// Each tone as a WAV file in the app's support folder, since just_audio plays files.
+///
+/// The support folder, not the cache: Android may clear the cache while the app runs.
 class CueToneFiles {
   CueToneFiles._();
 
-  static final Map<HandsFreeCue, Future<String>> _written = {};
+  /// Where the files go; a test seam, production uses the app's support folder.
+  @visibleForTesting
+  static Future<Directory> Function() directory = getApplicationSupportDirectory;
 
-  /// The path of [cue]'s tone file, writing it the first time it is asked for.
+  static final Map<HandsFreeCue, Future<String>> _writing = {};
+
+  /// The path of [cue]'s tone file, writing the file when it is missing.
   ///
   /// Ensures:
-  ///   - the file holds exactly [CueTones.wav] for [cue]
-  ///   - a failed write is not cached, so the next call tries again
-  static Future<String> path( HandsFreeCue cue ) =>
-      _written[ cue ] ??= _write( cue ).catchError( ( Object e ) {
-        _written.remove( cue );
-        throw e;
-      } );
+  ///   - the file at the returned path holds exactly [CueTones.wav] for [cue]
+  ///   - a file deleted since the last call is written again
+  ///   - calls that overlap share one write
+  static Future<String> path( HandsFreeCue cue ) async {
+    final file = File( '${ ( await directory() ).path }/hands-free-cue-${ cue.name }.wav' );
+    final writing = _writing[ cue ];
+    if ( writing != null ) return writing;
+    if ( await file.exists() ) {
+      final started = _writing[ cue ];
+      return started ?? Future<String>.value( file.path );
+    }
+    // A block body: an arrow would return the removed Future itself, and whenComplete would wait on it forever.
+    return _writing[ cue ] ??= _write( file, cue ).whenComplete( () { _writing.remove( cue ); } );
+  }
 
-  static Future<String> _write( HandsFreeCue cue ) async {
-    final dir  = await getTemporaryDirectory();
-    final file = File( '${ dir.path }/hands-free-cue-${ cue.name }.wav' );
-    await file.writeAsBytes( CueTones.wav( cue ), flush: true );
-    return file.path;
+  /// Writes beside the file, then renames it into place.
+  ///
+  /// So a crash mid-write never leaves a short file at [file].
+  static Future<String> _write( File file, HandsFreeCue cue ) async {
+    final part = File( '${ file.path }.part' );
+    await part.writeAsBytes( CueTones.wav( cue ), flush: true );
+    return ( await part.rename( file.path ) ).path;
   }
 }
 

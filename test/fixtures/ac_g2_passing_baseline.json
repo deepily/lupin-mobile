@@ -1285,7 +1285,7 @@
     "test/unit/quick_ask/earbud_taps_test.dart::EarbudTapReader dispose drops a press still waiting",
     "test/unit/quick_ask/earbud_taps_test.dart::EarbudTapReader two presses further apart are two single taps",
     "test/unit/quick_ask/earbud_taps_test.dart::EarbudTapReader two presses inside the window are one double tap and no single",
-    "test/unit/quick_ask/earbud_taps_test.dart::ToneCuePlayer a cue stops the one still playing first, so audio focus is not left held",
+    "test/unit/quick_ask/earbud_taps_test.dart::ToneCuePlayer a cue stops the one still playing, loads its own file and plays it",
     "test/unit/quick_ask/earbud_taps_test.dart::earbudAction a double tap while recording also stops it, so the question is not lost",
     "test/unit/quick_ask/earbud_taps_test.dart::earbudAction a double tap with a held transcript sends it",
     "test/unit/quick_ask/earbud_taps_test.dart::earbudAction a double tap with nothing held sends nothing",
