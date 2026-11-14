@@ -51,11 +51,20 @@ read -r -p "Tap ONE earbud once now, wait two seconds, then press Enter here... 
     echo "=== dumpsys media_session ==="
     "$ADB" shell dumpsys media_session
     echo
-    echo "=== dumpsys audio (playback) ==="
-    "$ADB" shell dumpsys audio | grep -iE -A40 "playback activity|AudioPlaybackConfiguration|players:" | head -200
+    LUPIN_UID="$( "$ADB" shell dumpsys package ai.deepily.lupin_mobile | grep -m1 -oE 'userId=[0-9]+' | cut -d= -f2 | tr -d '\r' )"
+    echo "=== lupin uid: ${LUPIN_UID:-unknown} ==="
+    echo
+    echo "=== dumpsys audio: current players ==="
+    "$ADB" shell dumpsys audio | grep -E "AudioPlaybackConfiguration piid" | head -80
+    echo
+    echo "=== dumpsys audio: latest playback activity ==="
+    "$ADB" shell dumpsys audio | sed -n '/Playback activity/,/^$/p' | tail -120
+    echo
+    echo "=== dumpsys audio: focus stack ==="
+    "$ADB" shell dumpsys audio | sed -n '/Audio Focus stack entries/,/^$/p' | head -30
     echo
     echo "=== logcat around the tap ==="
-    "$ADB" logcat -d -v time | grep -iE "media_?session|MediaButton|MediaKey|KeyEvent|avrcp|audioservice|EarbudTrace|lupin" | tail -400
+    "$ADB" logcat -d -v time | grep -iE "media_?session|MediaButton|MediaKey|KeyEvent|avrcp|audioservice|EarbudTrace|lupin|AudioPlayerStateMonitor|MediaPlayer" | tail -400
 } > "$OUT" 2>&1
 
 echo "Saved: $OUT"
