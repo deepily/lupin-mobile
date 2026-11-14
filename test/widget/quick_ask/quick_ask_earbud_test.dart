@@ -227,6 +227,7 @@ void main() {
       expect( trace.lines, [
         'hold=true onTop=true appShown=true',
         'claim: podcastPlaying=false',
+        'keepAlive: on',
         'click: button=media claimed=true podcastPlaying=false to=quick-ask',
         'gesture: single phase=idle canRecord=true hasDraft=false blocked=null -> '
             'event=QuickAskRecordPressed cue=started',

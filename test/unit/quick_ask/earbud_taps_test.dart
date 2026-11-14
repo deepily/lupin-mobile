@@ -137,6 +137,62 @@ void main() {
     } );
   } );
 
+  group( 'SilentKeepAlive', () {
+    late _MockAudioPlayer player;
+    late int              built;
+    late SilentKeepAlive  stream;
+
+    setUp( () {
+      registerFallbackValue( BytesSource( Uint8List( 0 ) ) );
+      registerFallbackValue( const AudioContext() );
+      registerFallbackValue( ReleaseMode.loop );
+      player = _MockAudioPlayer();
+      built  = 0;
+      when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) async {} );
+      when( () => player.setReleaseMode( any() ) ).thenAnswer( ( _ ) async {} );
+      when( () => player.stop() ).thenAnswer( ( _ ) async {} );
+      when( () => player.play( any() ) ).thenAnswer( ( _ ) async {} );
+      stream = SilentKeepAlive( create: () { built++; return player; } );
+    } );
+
+    test( 'no player is built until the first start', () {
+      expect( built, 0 );
+      expect( stream.isOn, isFalse );
+    } );
+
+    test( 'start loops silence on the media stream with no audio focus', () async {
+      await stream.start();
+      final context = verify( () => player.setAudioContext( captureAny() ) ).captured.single as AudioContext;
+      expect( context.android.usageType, AndroidUsageType.media );
+      expect( context.android.audioFocus, AndroidAudioFocus.none );
+      verify( () => player.setReleaseMode( ReleaseMode.loop ) ).called( 1 );
+      final source = verify( () => player.play( captureAny() ) ).captured.single as BytesSource;
+      final view   = ByteData.view( source.bytes.buffer );
+      expect( String.fromCharCodes( source.bytes.sublist( 0, 4 ) ), 'RIFF' );
+      final samples = List.generate( ( source.bytes.length - 44 ) ~/ 2, ( i ) => view.getInt16( 44 + i * 2, Endian.little ) );
+      expect( samples, hasLength( CueTones.sampleRate ) );
+      expect( samples.every( ( v ) => v == 0 ), isTrue );
+      expect( stream.isOn, isTrue );
+    } );
+
+    test( 'a second start plays nothing more, and stop then start reuses the one player', () async {
+      await stream.start();
+      await stream.start();
+      verify( () => player.play( any() ) ).called( 1 );
+      await stream.stop();
+      await stream.start();
+      verify( () => player.stop() ).called( 1 );
+      verify( () => player.play( any() ) ).called( 1 );
+      expect( built, 1 );
+    } );
+
+    test( 'stop before any start touches no player', () async {
+      await stream.stop();
+      expect( built, 0 );
+      verifyNever( () => player.stop() );
+    } );
+  } );
+
   group( 'CueTones', () {
     test( 'each cue is a mono 16-bit PCM WAV of the expected length', () {
       for ( final cue in HandsFreeCue.values ) {

@@ -26,6 +26,15 @@ class _Claimant implements MediaButtonClaimant {
   void onMediaButton( MediaButton button ) => presses.add( button );
 }
 
+class _KeepAlive implements ClaimKeepAlive {
+  final calls = <String>[];
+  Object? failWith;
+  @override
+  Future<void> start() async { calls.add( 'start' ); if ( failWith != null ) throw failWith!; }
+  @override
+  Future<void> stop()  async { calls.add( 'stop' ); if ( failWith != null ) throw failWith!; }
+}
+
 const _card    = MediaItem( id: 'qa', title: 'Quick Ask' );
 const _episode = MediaItem( id: 'pg-1', title: 'Episode' );
 
@@ -185,6 +194,72 @@ void main() {
       expect( handler.mediaItem.value, isNull );
       expect( handler.playbackState.value.playing, isFalse );
       expect( handler.playbackState.value.processingState, AudioProcessingState.idle );
+    } );
+  } );
+
+  group( 'the keep-alive stream plays exactly while the claimant\'s card shows', () {
+    late _KeepAlive        stream;
+    late LupinMediaHandler held;
+    late _Transport        podcast;
+
+    setUp( () {
+      stream  = _KeepAlive();
+      podcast = _Transport();
+      held    = LupinMediaHandler( rewindInterval: const Duration( seconds: 15 ), keepAlive: stream );
+      held.attach( podcast );
+    } );
+
+    void podcastPlaying( bool on ) => held.reportPodcast(
+      playing: on, processingState: AudioProcessingState.ready, position: const Duration( seconds: 30 ) );
+
+    test( 'a claim starts it once, and more state reports do not start it again', () async {
+      await held.claim( _Claimant(), card: _card );
+      podcastPlaying( false );
+      podcastPlaying( false );
+      expect( stream.calls, [ 'start' ] );
+    } );
+
+    test( 'a release stops it', () async {
+      final quickAsk = _Claimant();
+      await held.claim( quickAsk, card: _card );
+      held.release( quickAsk );
+      expect( stream.calls, [ 'start', 'stop' ] );
+    } );
+
+    test( 'a podcast playing under the claim stops it, and pausing the podcast starts it again', () async {
+      await held.claim( _Claimant(), card: _card );
+      podcastPlaying( true );
+      podcastPlaying( false );
+      expect( stream.calls, [ 'start', 'stop', 'start' ] );
+    } );
+
+    test( 'a claim over a playing podcast starts it once the pause is reported', () async {
+      podcastPlaying( true );
+      await held.claim( _Claimant(), card: _card );
+      expect( stream.calls, isEmpty );
+      expect( podcast.calls, [ 'pause' ] );
+      podcastPlaying( false );
+      expect( stream.calls, [ 'start' ] );
+    } );
+
+    test( 'with no claim, podcast state changes never touch it', () {
+      podcastPlaying( true );
+      podcastPlaying( false );
+      expect( stream.calls, isEmpty );
+    } );
+
+    test( 'a stream that fails to start or stop does not break the claim or the release', () async {
+      stream.failWith = StateError( 'no audio' );
+      final quickAsk = _Claimant();
+      await held.claim( quickAsk, card: _card );
+      await pumpEventQueue();
+      expect( held.isClaimed, isTrue );
+      await held.click();
+      expect( quickAsk.presses, [ MediaButton.media ] );
+      held.release( quickAsk );
+      await pumpEventQueue();
+      expect( held.isClaimed, isFalse );
+      expect( stream.calls, [ 'start', 'stop' ] );
     } );
   } );
 }

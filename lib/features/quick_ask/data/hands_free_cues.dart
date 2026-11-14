@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 
+import '../../../services/audio/lupin_media_handler.dart';
 import '../domain/earbud_taps.dart';
 
 /// Plays the tone for each [HandsFreeCue].
@@ -13,8 +14,8 @@ abstract interface class HandsFreeCuePlayer {
 
 /// The real player: short tones built in memory, played through the media stream.
 ///
-/// The media stream reaches the earbuds. Playing it also keeps this app the one
-/// Android sends the next earbud press to.
+/// The media stream reaches the earbuds.
+/// A cue alone does not make this the app Android sends presses to; [SilentKeepAlive] does that.
 class ToneCuePlayer implements HandsFreeCuePlayer {
   final AudioPlayer _player;
   final Map<HandsFreeCue, Uint8List> _tones = {
@@ -39,6 +40,55 @@ class ToneCuePlayer implements HandsFreeCuePlayer {
   Future<void> play( HandsFreeCue cue ) async {
     await _player.stop();
     await _player.play( BytesSource( _tones[ cue ]! ) );
+  }
+}
+
+/// Loops a second of silence on the media stream while Quick Ask holds the earbud presses.
+///
+/// With only the 60 ms ready cue played, Android sent earbud taps to another app's stopped session.
+/// A media stream that keeps playing makes this the app that played media last, as a playing podcast does.
+/// It takes no audio focus, so it pauses nothing and nothing pauses it.
+class SilentKeepAlive implements ClaimKeepAlive {
+  final AudioPlayer Function() _create;
+  AudioPlayer? _player;
+  bool         _on = false;
+
+  static final Uint8List _silence = CueTones.silence();
+
+  /// Creates the stream; [create] is a test seam, production passes nothing.
+  ///
+  /// The player is built on the first [start], after `AudioService.init` has run.
+  SilentKeepAlive( { AudioPlayer Function()? create } ) : _create = create ?? AudioPlayer.new;
+
+  /// Whether the silence is meant to be playing.
+  bool get isOn => _on;
+
+  @override
+  Future<void> start() async {
+    if ( _on ) return;
+    _on = true;
+    final player = _player ??= await _build();
+    await player.play( BytesSource( _silence ) );
+  }
+
+  @override
+  Future<void> stop() async {
+    if ( !_on ) return;
+    _on = false;
+    await _player?.stop();
+  }
+
+  Future<AudioPlayer> _build() async {
+    final player = _create();
+    await player.setAudioContext( const AudioContext(
+      android: AudioContextAndroid(
+        contentType : AndroidContentType.music,
+        usageType   : AndroidUsageType.media,
+        audioFocus  : AndroidAudioFocus.none,
+      ),
+    ) );
+    await player.setReleaseMode( ReleaseMode.loop );
+    return player;
   }
 }
 
@@ -81,6 +131,21 @@ class CueTones {
         samples.add( ( wave * edge * 0.4 * 32767 ).round() );
       }
     }
+    return _pcmWav( samples );
+  }
+
+  /// Builds [seconds] of digital silence, for [SilentKeepAlive] to loop.
+  ///
+  /// Requires:
+  ///   - seconds > 0
+  ///
+  /// Ensures:
+  ///   - returns a 44-byte PCM WAV header followed by sampleRate * seconds zero samples
+  static Uint8List silence( { double seconds = 1.0 } ) =>
+      _pcmWav( List<int>.filled( ( sampleRate * seconds ).round(), 0 ) );
+
+  /// Wraps mono 16-bit [samples] at [sampleRate] in a PCM WAV header.
+  static Uint8List _pcmWav( List<int> samples ) {
     final dataBytes = samples.length * 2;
     final bytes     = Uint8List( 44 + dataBytes );
     final view      = ByteData.view( bytes.buffer );
