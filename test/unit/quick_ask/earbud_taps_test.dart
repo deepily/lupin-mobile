@@ -56,6 +56,22 @@ void main() {
       expect( seen, [ EarbudGesture.double ] );
     } ) );
 
+    test( 'a play press just after "next track" is its echo and reports nothing', () => fakeAsync( ( clock ) {
+      reader.press( MediaButton.next );
+      clock.elapse( const Duration( milliseconds: 299 ) );
+      reader.press( MediaButton.media );
+      clock.elapse( const Duration( seconds: 1 ) );
+      expect( seen, [ EarbudGesture.double ] );
+    } ) );
+
+    test( 'a play press once the echo window has passed is a single tap again', () => fakeAsync( ( clock ) {
+      reader.press( MediaButton.next );
+      clock.elapse( EarbudTapReader.defaultEchoWindow );
+      reader.press( MediaButton.media );
+      clock.elapse( EarbudTapReader.defaultWindow );
+      expect( seen, [ EarbudGesture.double, EarbudGesture.single ] );
+    } ) );
+
     test( 'a "next track" press drops a press still waiting', () => fakeAsync( ( clock ) {
       reader.press( MediaButton.media );
       reader.press( MediaButton.next );

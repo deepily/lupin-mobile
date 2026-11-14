@@ -34,18 +34,24 @@ enum HandsFreeCue {
 /// Most earbuds send a double tap as a "next track" press, and that is a double at once.
 /// Others send two play/pause presses, so a press waits [window] for a second one before it counts as a single.
 /// A "previous track" press is ignored.
+/// Pixel Buds can send a stray play press right after "next track", so a play press that soon after is ignored.
 class EarbudTapReader {
   /// How long a press waits for a second press.
   static const Duration defaultWindow = Duration( milliseconds: 400 );
+  /// How long after a "next track" press a play press is taken as its echo and ignored.
+  static const Duration defaultEchoWindow = Duration( milliseconds: 300 );
 
   /// Receives each gesture.
   final void Function( EarbudGesture ) onGesture;
   /// How long a press waits for a second press.
   final Duration window;
+  /// How long after a "next track" press a play press is ignored.
+  final Duration echoWindow;
   Timer? _pending;
+  Timer? _echo;
 
   /// Creates a reader that reports to [onGesture].
-  EarbudTapReader( { required this.onGesture, this.window = defaultWindow } );
+  EarbudTapReader( { required this.onGesture, this.window = defaultWindow, this.echoWindow = defaultEchoWindow } );
 
   /// Feeds one press.
   ///
@@ -53,6 +59,7 @@ class EarbudTapReader {
   ///   - a `next` press reports a double at once, and drops a press still waiting
   ///   - a second `media` press inside [window] reports one double and no single
   ///   - a lone `media` press reports a single after [window]
+  ///   - a `media` press within [echoWindow] after a `next` press reports nothing
   void press( MediaButton button ) {
     switch ( button ) {
       case MediaButton.previous:
@@ -60,8 +67,11 @@ class EarbudTapReader {
       case MediaButton.next:
         _pending?.cancel();
         _pending = null;
+        _echo?.cancel();
+        _echo = Timer( echoWindow, () => _echo = null );
         onGesture( EarbudGesture.double );
       case MediaButton.media:
+        if ( _echo != null ) return;
         final waiting = _pending;
         if ( waiting != null ) {
           waiting.cancel();
@@ -80,6 +90,8 @@ class EarbudTapReader {
   void dispose() {
     _pending?.cancel();
     _pending = null;
+    _echo?.cancel();
+    _echo = null;
   }
 }
 
