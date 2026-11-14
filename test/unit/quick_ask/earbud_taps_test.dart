@@ -1,6 +1,7 @@
 /// Earbud presses become a tap or a double tap, each doing what its on-screen button does.
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
@@ -184,6 +185,45 @@ void main() {
       verify( () => player.stop() ).called( 1 );
       verify( () => player.play( any() ) ).called( 1 );
       expect( built, 1 );
+    } );
+
+    test( 'a stop while the player is still being built leaves the silence stopped', () async {
+      final building = Completer<void>();
+      when( () => player.setAudioContext( any() ) ).thenAnswer( ( _ ) => building.future );
+      final starting = stream.start();
+      await pumpEventQueue();
+      verify( () => player.setAudioContext( any() ) ).called( 1 );
+      final stopping = stream.stop();
+      expect( stream.isOn, isFalse );
+      building.complete();
+      await starting;
+      await stopping;
+      verifyInOrder( [ () => player.play( any() ), () => player.stop() ] );
+    } );
+
+    test( 'start, stop and start in one turn collapse to one play, with no stop', () async {
+      await Future.wait( [ stream.start(), stream.stop(), stream.start() ] );
+      expect( stream.isOn, isTrue );
+      expect( built, 1 );
+      verify( () => player.play( any() ) ).called( 1 );
+      verifyNever( () => player.stop() );
+    } );
+
+    test( 'start and stop in one turn never build or play', () async {
+      await Future.wait( [ stream.start(), stream.stop() ] );
+      expect( built, 0 );
+      expect( stream.isOn, isFalse );
+    } );
+
+    test( 'a failed start does not block the next call', () async {
+      var fail = true;
+      when( () => player.play( any() ) ).thenAnswer( ( _ ) async { if ( fail ) throw StateError( 'no audio' ); } );
+      await expectLater( stream.start(), throwsStateError );
+      fail = false;
+      await stream.stop();
+      await stream.start();
+      verify( () => player.play( any() ) ).called( 2 );
+      expect( stream.isOn, isTrue );
     } );
 
     test( 'stop before any start touches no player', () async {

@@ -48,10 +48,15 @@ class ToneCuePlayer implements HandsFreeCuePlayer {
 /// With only the 60 ms ready cue played, Android sent earbud taps to another app's stopped session.
 /// A media stream that keeps playing makes this the app that played media last, as a playing podcast does.
 /// It takes no audio focus, so it pauses nothing and nothing pauses it.
+///
+/// Start and stop run one at a time, in call order.
+/// So a stop that arrives while the player is still being built still leaves the silence stopped.
 class SilentKeepAlive implements ClaimKeepAlive {
   final AudioPlayer Function() _create;
-  AudioPlayer? _player;
-  bool         _on = false;
+  AudioPlayer?  _player;
+  bool          _want    = false;
+  bool          _playing = false;
+  Future<void>  _queue   = Future<void>.value();
 
   static final Uint8List _silence = CueTones.silence();
 
@@ -60,22 +65,37 @@ class SilentKeepAlive implements ClaimKeepAlive {
   /// The player is built on the first [start], after `AudioService.init` has run.
   SilentKeepAlive( { AudioPlayer Function()? create } ) : _create = create ?? AudioPlayer.new;
 
-  /// Whether the silence is meant to be playing.
-  bool get isOn => _on;
+  /// Whether the silence is meant to be playing: the last call was [start].
+  bool get isOn => _want;
 
   @override
-  Future<void> start() async {
-    if ( _on ) return;
-    _on = true;
-    final player = _player ??= await _build();
-    await player.play( BytesSource( _silence ) );
+  Future<void> start() {
+    _want = true;
+    return _enqueue();
   }
 
   @override
-  Future<void> stop() async {
-    if ( !_on ) return;
-    _on = false;
-    await _player?.stop();
+  Future<void> stop() {
+    _want = false;
+    return _enqueue();
+  }
+
+  /// Runs [_apply] after every earlier call has finished, even one that failed.
+  Future<void> _enqueue() => _queue = _queue.catchError( ( Object _ ) {} ).then( ( _ ) => _apply() );
+
+  /// Brings the player to the state the latest call asked for.
+  ///
+  /// Does nothing when the player is in that state already.
+  Future<void> _apply() async {
+    if ( _want == _playing ) return;
+    if ( _want ) {
+      final player = _player ??= await _build();
+      await player.play( BytesSource( _silence ) );
+      _playing = true;
+    } else {
+      await _player?.stop();
+      _playing = false;
+    }
   }
 
   Future<AudioPlayer> _build() async {
