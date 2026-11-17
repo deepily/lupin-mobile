@@ -1,6 +1,19 @@
 # TODO
 
-## Resume here: 2026-11-14 close (Tiffany)
+## Resume here: 2026-11-16 close (Tiffany)
+
+The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`, which is ready for the PR to main tomorrow morning. Owed work is in the store.
+
+- [ ] Morning: run the full `python3 tool/merge_gate.py --base main` (it includes the suite and AC-G2) in the main checkout, then open the PR.
+- [ ] After the PR merges: re-ask Rick about the mobile scheduled-jobs accordion (row `e8e21514`, chase 18 Nov).
+- [ ] Housekeeping: remove the three merged worktrees, and decide on branch `wip-repin-notification-bloc-2026.11.09` (`718a205`).
+
+### Decisions Log — 2026-11-16 (session `34977a92`, Tiffany)
+
+- Rick: build the mobile scheduled-jobs accordion "After the PR" (card answer).
+- Tiffany: allowed the analyzer ignore in `ask_spoken_stream_test.dart`. It is an unchanged `avoid_print` on a diagnostic line.
+
+## Earlier: 2026-11-14 close (Tiffany)
 
 The working branch is `wip-v0.2.3-2026.11.04-tracking-lupin`, pushed at this session end. The APK is "2026.11.14 build 3" (`7f05939`, FCM). Owed work is in the store.
 

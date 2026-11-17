@@ -15,6 +15,23 @@ Most recent entries (2026-10-09 onward) are retained below.
 
 ---
 
+## 2026.11.16 | Session `34977a92` (Tiffany): ready for the PR to main
+
+The work came from Rick's broadcast `e499b960`, which asked what blocks a PR to main tomorrow morning. Skeleton crew was off, but no seats were spawned and no code changed.
+
+- **Readiness**: the branch is clean and pushed, 73 commits ahead of main and 0 behind.
+  - The full suite passed: 3401 tests, 2 skipped.
+  - The quick merge gate passed with `--allow-ignores`.
+  - The APK was built 23 s after the last client merge, `7f05939`.
+- **Merge gate**:
+  - The analyzer flagged `test/unit/queue/ask_spoken_stream_test.dart`, because the range changes a file that carries an ignore. That ignore is an unchanged `avoid_print` on a diagnostic line, and I allowed it.
+  - I read the gate-input changes. The CI workflow edits come from Rick's CI ruling (row `23c5580e`). The AC-G2 baseline file was recaptured (rows `eb149168` and `c643b1b0`).
+- **Rows**:
+  - `e1778814`: moved from queued to blocked on Cheech's Phase 1 (`dbbe93a0`).
+  - The Phase 2 rows (`adc98845`, `4adc2850`, `032ee125`, `4ebc3c6e`): chase moved to 20 Nov, because `dbbe93a0` waits on Rick until then.
+  - Accordion row `e8e21514`: Rick chose "After the PR", and the chase is set for 18 Nov.
+- **Housekeeping, nothing done**: three worktrees are merged and clean. Branch `wip-repin-notification-bloc-2026.11.09` holds one unmerged work-in-progress commit, `718a205`, which the re-pin merge appears to have replaced.
+
 ## 2026.11.14 | Session `925e1e93` (Tiffany): earbud taps work on the Pixel, status report podcast
 
 The work came from Rick's broadcast `f31b417e` and then by voice. Skeleton crew was on until he lifted it in the afternoon; no seats were spawned, and two read-only review subagents were used. Nothing is pushed before this session end.
